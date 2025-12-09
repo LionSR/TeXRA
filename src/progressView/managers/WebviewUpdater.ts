@@ -6,7 +6,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { PersistedUsageStats } from '@agent/types/UsageTypes';
 
 import {
   STREAM_STATUS,
@@ -115,7 +115,7 @@ export class WebviewUpdater {
     extras?: {
       runInstructions?: Record<string, InstructionUpdate>;
       activeRunId?: string | null;
-      runUsage?: Record<string, TokenUsageStats>;
+      runUsage?: Record<string, PersistedUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
     options?: {
@@ -233,7 +233,7 @@ export class WebviewUpdater {
    */
   updateUsage(
     stream: StreamTabId,
-    usageByRun: Record<string, TokenUsageStats>,
+    usageByRun: Record<string, PersistedUsageStats>,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_USAGE,
@@ -249,7 +249,7 @@ export class WebviewUpdater {
   updateRunUsage(
     stream: StreamTabId,
     runId: string,
-    usage: TokenUsageStats,
+    usage: PersistedUsageStats,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_RUN_USAGE,

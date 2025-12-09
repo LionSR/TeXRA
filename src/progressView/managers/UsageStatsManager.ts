@@ -4,7 +4,10 @@ import { z } from 'zod';
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Types - import canonical type (schema defines structure)
-import { type TokenUsageStats } from '@agent/types/UsageTypes';
+import {
+  type PersistedUsageStats,
+  PersistedUsageStatsSchema,
+} from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -21,35 +24,61 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
+/** Coerces optional number, defaulting non-finite values to undefined */
+const OptionalFiniteNumber = z
+  .union([z.number(), z.undefined()])
+  .transform((n) => (n !== undefined && Number.isFinite(n) ? n : undefined));
+
 /**
- * Schema for parsing TokenUsageStats with safe number coercion.
+ * Schema for parsing PersistedUsageStats with safe number coercion.
  * Extends the canonical schema shape with coercion for persistence resilience.
+ * Supports both legacy (3-field) and extended (10-field) formats.
  */
-const TokenUsageStatsParsingSchema = z
+const PersistedUsageStatsParsingSchema = z
   .object({
+    // Required fields (always present)
     inputTokens: FiniteNumber,
     outputTokens: FiniteNumber,
     cost: FiniteNumber,
+    // Extended fields (optional, may not be present in legacy data)
+    responseTimeMs: OptionalFiniteNumber,
+    cachedInputTokens: OptionalFiniteNumber,
+    cacheCreationTokens: OptionalFiniteNumber,
+    percentageCached: OptionalFiniteNumber,
+    reasoningTokens: OptionalFiniteNumber,
+    toolUsePromptTokens: OptionalFiniteNumber,
+    serverToolRequests: OptionalFiniteNumber,
   })
-  .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+  .catch({
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    responseTimeMs: undefined,
+    cachedInputTokens: undefined,
+    cacheCreationTokens: undefined,
+    percentageCached: undefined,
+    reasoningTokens: undefined,
+    toolUsePromptTokens: undefined,
+    serverToolRequests: undefined,
+  });
 
-// Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
+// Compile-time assertion: ensure parsing schema produces type compatible with PersistedUsageStats
 type _AssertSchemaCompatible =
-  z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
+  z.infer<typeof PersistedUsageStatsParsingSchema> extends PersistedUsageStats
     ? true
     : never;
 const _assertCompatible: _AssertSchemaCompatible = true;
 
 /** Checks if usage stats are all zeros (effectively empty) */
-function isEmptyUsage(usage: TokenUsageStats): boolean {
+function isEmptyUsage(usage: PersistedUsageStats): boolean {
   return (
     usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
   );
 }
 
-/** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
+/** Schema for run map format: { runId: PersistedUsageStats } */
 const UsageDataSchema = createSingleValueRunMapSchema(
-  TokenUsageStatsParsingSchema,
+  PersistedUsageStatsParsingSchema,
   {
     isEmpty: isEmptyUsage,
   },
@@ -59,7 +88,7 @@ const UsageDataSchema = createSingleValueRunMapSchema(
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
  */
-type RunUsageMap = Map<string, TokenUsageStats>;
+type RunUsageMap = Map<string, PersistedUsageStats>;
 
 /** Stream ID used for migrated legacy data */
 const LEGACY_MIGRATION_STREAM = '_legacy_migrated_' as StreamTabId;
@@ -84,11 +113,11 @@ export class UsageStatsManager extends PersistentMapManager<
   async setRunUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
-    usage: TokenUsageStats,
+    usage: PersistedUsageStats,
   ): Promise<void> {
-    const normalized = TokenUsageStatsParsingSchema.parse(usage);
+    const normalized = PersistedUsageStatsParsingSchema.parse(usage);
     const current =
-      this.items.get(stream) ?? new Map<string, TokenUsageStats>();
+      this.items.get(stream) ?? new Map<string, PersistedUsageStats>();
     if (
       normalized.inputTokens === 0 &&
       normalized.outputTokens === 0 &&
@@ -137,9 +166,10 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Get total usage across all runs for a stream
+   * Get total usage across all runs for a stream.
+   * Returns aggregate totals; extended metrics are summed where available.
    */
-  getStreamTotals(stream: StreamTabId): TokenUsageStats | undefined {
+  getStreamTotals(stream: StreamTabId): PersistedUsageStats | undefined {
     const runs = this.items.get(stream);
     if (!runs || runs.size === 0) {
       return undefined;
@@ -148,14 +178,65 @@ export class UsageStatsManager extends PersistentMapManager<
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let responseTimeMs = 0;
+    let cachedInputTokens = 0;
+    let cacheCreationTokens = 0;
+    let reasoningTokens = 0;
+    let toolUsePromptTokens = 0;
+    let serverToolRequests = 0;
+    let hasExtendedMetrics = false;
 
     for (const usage of runs.values()) {
       inputTokens += usage.inputTokens;
       outputTokens += usage.outputTokens;
       cost += usage.cost;
+      if (usage.responseTimeMs !== undefined) {
+        responseTimeMs += usage.responseTimeMs;
+        hasExtendedMetrics = true;
+      }
+      if (usage.cachedInputTokens !== undefined) {
+        cachedInputTokens += usage.cachedInputTokens;
+        hasExtendedMetrics = true;
+      }
+      if (usage.cacheCreationTokens !== undefined) {
+        cacheCreationTokens += usage.cacheCreationTokens;
+        hasExtendedMetrics = true;
+      }
+      if (usage.reasoningTokens !== undefined) {
+        reasoningTokens += usage.reasoningTokens;
+        hasExtendedMetrics = true;
+      }
+      if (usage.toolUsePromptTokens !== undefined) {
+        toolUsePromptTokens += usage.toolUsePromptTokens;
+        hasExtendedMetrics = true;
+      }
+      if (usage.serverToolRequests !== undefined) {
+        serverToolRequests += usage.serverToolRequests;
+        hasExtendedMetrics = true;
+      }
     }
 
-    return { inputTokens, outputTokens, cost };
+    // Calculate percentageCached from aggregated values
+    const totalCacheableTokens = cachedInputTokens + cacheCreationTokens;
+    const percentageCached =
+      hasExtendedMetrics && totalCacheableTokens > 0
+        ? (cachedInputTokens / totalCacheableTokens) * 100
+        : undefined;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      ...(hasExtendedMetrics && {
+        responseTimeMs: responseTimeMs || undefined,
+        cachedInputTokens: cachedInputTokens || undefined,
+        cacheCreationTokens: cacheCreationTokens || undefined,
+        percentageCached,
+        reasoningTokens: reasoningTokens || undefined,
+        toolUsePromptTokens: toolUsePromptTokens || undefined,
+        serverToolRequests: serverToolRequests || undefined,
+      }),
+    };
   }
 
   /**
@@ -169,7 +250,9 @@ export class UsageStatsManager extends PersistentMapManager<
    * Set all usage statistics (used during loading)
    */
   setAll(
-    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
+    stats:
+      | Map<StreamTabId, RunUsageMap>
+      | Map<StreamTabId, PersistedUsageStats>,
   ): void {
     const normalized: Map<StreamTabId, RunUsageMap> = new Map();
 
@@ -183,7 +266,7 @@ export class UsageStatsManager extends PersistentMapManager<
         continue;
       }
 
-      const usage = TokenUsageStatsParsingSchema.parse(value);
+      const usage = PersistedUsageStatsParsingSchema.parse(value);
       if (
         usage.inputTokens === 0 &&
         usage.outputTokens === 0 &&
@@ -201,22 +284,74 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Calculate total usage across all streams
+   * Calculate total usage across all streams.
+   * Returns aggregate totals; extended metrics are summed where available.
    */
-  getTotalUsage(): TokenUsageStats {
+  getTotalUsage(): PersistedUsageStats {
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let responseTimeMs = 0;
+    let cachedInputTokens = 0;
+    let cacheCreationTokens = 0;
+    let reasoningTokens = 0;
+    let toolUsePromptTokens = 0;
+    let serverToolRequests = 0;
+    let hasExtendedMetrics = false;
 
     for (const usage of this.items.values()) {
       for (const runUsage of usage.values()) {
         inputTokens += runUsage.inputTokens;
         outputTokens += runUsage.outputTokens;
         cost += runUsage.cost;
+        if (runUsage.responseTimeMs !== undefined) {
+          responseTimeMs += runUsage.responseTimeMs;
+          hasExtendedMetrics = true;
+        }
+        if (runUsage.cachedInputTokens !== undefined) {
+          cachedInputTokens += runUsage.cachedInputTokens;
+          hasExtendedMetrics = true;
+        }
+        if (runUsage.cacheCreationTokens !== undefined) {
+          cacheCreationTokens += runUsage.cacheCreationTokens;
+          hasExtendedMetrics = true;
+        }
+        if (runUsage.reasoningTokens !== undefined) {
+          reasoningTokens += runUsage.reasoningTokens;
+          hasExtendedMetrics = true;
+        }
+        if (runUsage.toolUsePromptTokens !== undefined) {
+          toolUsePromptTokens += runUsage.toolUsePromptTokens;
+          hasExtendedMetrics = true;
+        }
+        if (runUsage.serverToolRequests !== undefined) {
+          serverToolRequests += runUsage.serverToolRequests;
+          hasExtendedMetrics = true;
+        }
       }
     }
 
-    return { inputTokens, outputTokens, cost };
+    // Calculate percentageCached from aggregated values
+    const totalCacheableTokens = cachedInputTokens + cacheCreationTokens;
+    const percentageCached =
+      hasExtendedMetrics && totalCacheableTokens > 0
+        ? (cachedInputTokens / totalCacheableTokens) * 100
+        : undefined;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      ...(hasExtendedMetrics && {
+        responseTimeMs: responseTimeMs || undefined,
+        cachedInputTokens: cachedInputTokens || undefined,
+        cacheCreationTokens: cacheCreationTokens || undefined,
+        percentageCached,
+        reasoningTokens: reasoningTokens || undefined,
+        toolUsePromptTokens: toolUsePromptTokens || undefined,
+        serverToolRequests: serverToolRequests || undefined,
+      }),
+    };
   }
 
   /**
@@ -275,7 +410,7 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     const totals = legacy.usageAccumulator.totals;
-    const usage: TokenUsageStats = TokenUsageStatsParsingSchema.parse({
+    const usage: PersistedUsageStats = PersistedUsageStatsParsingSchema.parse({
       inputTokens: totals.totalInputTokens ?? 0,
       outputTokens: totals.totalOutputTokens ?? 0,
       cost: totals.totalCost ?? 0,
@@ -294,7 +429,7 @@ export class UsageStatsManager extends PersistentMapManager<
     // Store under legacy migration identifiers
     const existing =
       this.items.get(LEGACY_MIGRATION_STREAM) ??
-      new Map<string, TokenUsageStats>();
+      new Map<string, PersistedUsageStats>();
     existing.set(LEGACY_MIGRATION_RUN_ID, usage);
     this.items.set(LEGACY_MIGRATION_STREAM, existing);
 

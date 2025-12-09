@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { PersistedUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
@@ -56,7 +56,7 @@ export interface ProgressEventPayloads {
   clearMissingOutputs: StreamTabId;
   setTaskState: SetTaskStatePayload;
   updateStreamUsage: RunScopedPayload & {
-    usage: TokenUsageStats;
+    usage: PersistedUsageStats;
   };
   showRetryRequest: RetryRequestPrompt;
   resolveRetryRequest: { streamId: StreamTabId };

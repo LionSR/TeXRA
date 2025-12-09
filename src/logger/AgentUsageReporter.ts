@@ -1,6 +1,9 @@
 // Local imports - agent types
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+import {
+  type ExtendedTokenUsageStats,
+  toPersistedUsageStats,
+} from '@agent/types/UsageTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Internal imports
@@ -40,12 +43,8 @@ export class AgentUsageReporter {
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
 
-    // Pass through usage without modification
-    const usage = {
-      inputTokens: stats.inputTokens,
-      outputTokens: stats.outputTokens,
-      cost: stats.cost,
-    };
+    // Convert to persisted format, preserving all extended metrics
+    const usage = toPersistedUsageStats(stats);
 
     // storageKey is THE single source of truth - no fallbacks, no round-trips
     bus.emit('updateStreamUsage', {

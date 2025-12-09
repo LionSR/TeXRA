@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { PersistedUsageStats } from '@agent/types/UsageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
@@ -40,10 +40,33 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, usage, storageKey }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            const normalizedUsage: TokenUsageStats = {
+            // Normalize required fields and preserve optional extended metrics
+            const normalizedUsage: PersistedUsageStats = {
               inputTokens: Number(usage.inputTokens ?? 0),
               outputTokens: Number(usage.outputTokens ?? 0),
               cost: Number(usage.cost ?? 0),
+              // Preserve extended metrics when available
+              ...(usage.responseTimeMs !== undefined && {
+                responseTimeMs: Number(usage.responseTimeMs),
+              }),
+              ...(usage.cachedInputTokens !== undefined && {
+                cachedInputTokens: Number(usage.cachedInputTokens),
+              }),
+              ...(usage.cacheCreationTokens !== undefined && {
+                cacheCreationTokens: Number(usage.cacheCreationTokens),
+              }),
+              ...(usage.percentageCached !== undefined && {
+                percentageCached: Number(usage.percentageCached),
+              }),
+              ...(usage.reasoningTokens !== undefined && {
+                reasoningTokens: Number(usage.reasoningTokens),
+              }),
+              ...(usage.toolUsePromptTokens !== undefined && {
+                toolUsePromptTokens: Number(usage.toolUsePromptTokens),
+              }),
+              ...(usage.serverToolRequests !== undefined && {
+                serverToolRequests: Number(usage.serverToolRequests),
+              }),
             };
 
             // storageKey is THE single source of truth - no fallbacks
