@@ -2,8 +2,11 @@
  * Shared logging interfaces used by the logger and progress view.
  */
 
+import type { TaskGroupStatus } from '@common/constants/streamStatus';
+
 // Local imports
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';
+import type { LogLevel, MessageType } from './messageTypes';
 
 export interface TaskGroup {
   /** Unique identifier for the group */
@@ -15,7 +18,7 @@ export interface TaskGroup {
   /** Unix timestamp (ms) when the group ended */
   endTime?: number;
   /** Current status of the group */
-  status: 'running' | 'error' | 'stopped' | 'ready';
+  status: TaskGroupStatus;
   /** Parent group ID for nested groups */
   parentGroupId?: TaskGroupId;
 }
@@ -26,27 +29,13 @@ export interface LogMessageData {
   /** Raw message text */
   text: string;
   /** Severity level */
-  level: 'error' | 'warn' | 'info' | 'debug';
+  level: LogLevel;
   /** Unix timestamp (ms) */
   timestamp: number;
   /** Optional group association */
   groupId?: TaskGroupId;
   /** Optional message category */
-  messageType?:
-    | 'default'
-    | 'scratchpad'
-    | 'thinking'
-    | 'fileList'
-    | 'missingOutputs'
-    | 'latexdiff'
-    | 'statistics'
-    | 'modelResponse'
-    | 'toolUse'
-    | 'webSearch'
-    | 'userMessage'
-    | 'progressStatus'
-    | 'error'
-    | 'internal';
+  messageType?: MessageType;
   /** Whether verbose details should be displayed */
   verbose?: boolean;
   /** Optional structured data associated with the entry */
