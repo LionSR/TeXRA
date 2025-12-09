@@ -30,7 +30,7 @@ export abstract class BaseViewContentProvider {
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
-    private readonly moduleDescriptors: ModuleDescriptor[] = [],
+    private readonly moduleDescriptors: readonly ModuleDescriptor[] = [],
   ) {
     this.logger = logger;
     this.channel = `${viewName}ContentProvider`;
