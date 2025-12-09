@@ -36,7 +36,10 @@ export class BannerManager extends BaseUIManager {
         break;
     }
 
-    element.style.setProperty('display', 'block');
+    // Getting started banner uses block layout; others use flex for button alignment
+    const displayStyle =
+      id === ELEMENT_IDS.GETTING_STARTED_BANNER ? 'block' : 'flex';
+    element.style.setProperty('display', displayStyle);
   }
 
   /**
