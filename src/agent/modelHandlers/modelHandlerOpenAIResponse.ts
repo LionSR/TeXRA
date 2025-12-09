@@ -48,7 +48,7 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
-  extractDomain,
+  buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
@@ -1599,37 +1599,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Emit web search result to progress view during streaming.
-   * Extracts query and sources from the OpenAI web search item.
+   * Uses shared helper for consistent WebSearchResult construction.
    */
   private emitOpenAIWebSearch(item: ResponseFunctionWebSearch): void {
-    // Extract action with query and sources if available
-    const action = (
-      item as ResponseFunctionWebSearch & {
-        action?: ResponseFunctionWebSearch.Search;
-      }
-    ).action;
-
-    const query = action?.query ?? '';
-    const sources = action?.sources ?? [];
-
-    const entries = sources.map((s) => ({
-      url: s.url,
-      title: '',
-      domain: extractDomain(s.url),
-    }));
-
-    this.emitWebSearchResult({
-      query,
-      results: entries,
-      provider: 'openai',
-      callId: item.id,
-      status:
-        item.status === 'completed'
-          ? 'completed'
-          : item.status === 'failed'
-            ? 'failed'
-            : 'in_progress',
-    });
+    this.emitWebSearchResult(buildOpenAIWebSearchResult(item));
   }
 
   /**
