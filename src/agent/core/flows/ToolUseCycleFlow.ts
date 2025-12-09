@@ -37,6 +37,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -464,7 +465,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
-      if (formatted.trim().length > 0) {
+      if (isNonEmptyString(formatted)) {
         options.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.THINKING,
@@ -862,10 +863,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
-      if (
-        typeof execResult.result.userInstruction === 'string' &&
-        execResult.result.userInstruction.trim().length > 0
-      ) {
+      if (isNonEmptyString(execResult.result.userInstruction)) {
         await options.modelHandler.createUserFollowUpMessages(
           state.messages,
           execResult.result.userInstruction,
