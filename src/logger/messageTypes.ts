@@ -6,6 +6,8 @@ export const MESSAGE_TYPES = {
   LATEXDIFF: 'latexdiff',
   STATISTICS: 'statistics',
   TOOL_USE: 'toolUse',
+  /** Web search results from native provider tools (Anthropic, OpenAI, Google) */
+  WEB_SEARCH: 'webSearch',
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',

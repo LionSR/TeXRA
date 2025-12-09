@@ -43,7 +43,10 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
-import type { WebSearchResult } from './types/ServerToolTypes';
+import type {
+  ServerToolExtractionResult,
+  WebSearchResult,
+} from './types/ServerToolTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -182,6 +185,21 @@ export abstract class ModelHandler<
   protected createOutputStream() {
     return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
+    });
+  }
+
+  /**
+   * Emit web search result to progress view during streaming.
+   * This allows search results to appear in correct order based on when
+   * they occurred in the response, rather than being logged after streaming.
+   */
+  protected emitWebSearchResult(result: WebSearchResult): void {
+    if (!this.progressViewEnabled) {
+      return;
+    }
+    this.logger.info('', {
+      messageType: MESSAGE_TYPES.WEB_SEARCH,
+      data: result,
     });
   }
 
@@ -601,19 +619,6 @@ export abstract class ModelHandler<
   abstract extractToolUse(responseObject: Resp): T[];
 
   /**
-   * Extracts web search results from provider responses.
-   * Default implementation returns empty array (no native web search support).
-   * Override in handlers that support native/server-side web search.
-   *
-   * @param responseObject The raw response object from the model
-   * @returns Array of web search results (empty if none or not supported)
-   */
-  extractWebSearchResults(_responseObject: Resp): WebSearchResult[] {
-    // Default: no native web search support
-    return [];
-  }
-
-  /**
    * Build a provider-specific follow-up message containing a tool result.
    *
    * @param client - Provider client (for file uploads if supported)
@@ -643,6 +648,15 @@ export abstract class ModelHandler<
   /** Build a simple assistant message from text. */
   abstract createAssistantMessage(text: string): M;
 
+  /**
+   * Extract all server tool data in a single pass.
+   * Default implementation returns empty results.
+   * Override in handlers that support server tools.
+   */
+  extractServerToolData(_responseObject: Resp): ServerToolExtractionResult {
+    return { webSearchResults: [], contentBlocks: [] };
+  }
+
   /** Check if stop reason signals end-turn. */
   public isEndTurnStop(reason: ProviderStopReason): boolean {
     return (
@@ -651,5 +665,14 @@ export abstract class ModelHandler<
       String(reason).toLowerCase() === 'end_turn' ||
       String(reason).toLowerCase() === 'endturn'
     );
+  }
+
+  /**
+   * Extract assistant content blocks from a response, excluding tool_use blocks.
+   * Default implementation returns empty array for providers without this concept.
+   * Override in handlers that support structured content blocks (e.g., Anthropic).
+   */
+  extractAssistantContent(_responseObject: Resp): unknown[] {
+    return [];
   }
 }
