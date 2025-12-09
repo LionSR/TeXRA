@@ -68,9 +68,8 @@ export async function extractFigurePathsFromLatex(
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
     for (const p of paths) {
-      const normalizedPath = path.normalize(
-        path.join(latexDir, p.replace(/^\/+|\/+$/g, '')),
-      );
+      // path.join already normalizes the result
+      const normalizedPath = path.join(latexDir, p.replace(/^\/+|\/+$/g, ''));
       graphicspaths.push(normalizedPath);
     }
 
@@ -91,7 +90,8 @@ export async function extractFigurePathsFromLatex(
         const figPath = match[1];
         let found = false;
         for (const basePath of graphicspaths) {
-          const normPath = path.normalize(path.join(basePath, figPath));
+          // path.join already normalizes the result
+          const normPath = path.join(basePath, figPath);
           // Try with common extensions if no extension is provided
           const extensions = figPath.includes('.')
             ? ['']

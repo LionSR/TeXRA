@@ -51,7 +51,8 @@ export class LatexMediaManager {
       if (trimmed.length === 0) {
         continue;
       }
-      const absolutePath = path.normalize(path.join(baseDir, trimmed));
+      // path.join already normalizes the result
+      const absolutePath = path.join(baseDir, trimmed);
       // Convert to FileLocation using pathToLocation (boundary conversion)
       targetLocations.add(pathToLocation(absolutePath));
     }

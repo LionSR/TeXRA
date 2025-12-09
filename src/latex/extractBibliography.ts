@@ -64,8 +64,8 @@ function normalizeBibPath(baseDir: string, target: string): string {
   }
 
   const withExtension = trimmed.endsWith('.bib') ? trimmed : `${trimmed}.bib`;
-  const resolved = path.normalize(path.join(baseDir, withExtension));
-  return resolved;
+  // path.join already normalizes the result
+  return path.join(baseDir, withExtension);
 }
 
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
