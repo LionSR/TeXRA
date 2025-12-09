@@ -8,7 +8,10 @@ import {
   ExecutionIdSchema,
   StorageKeySchema,
 } from '@agent/types/IdentifierTypes';
-import type { TaskGroup } from '@logger/LogTypes';
+import {
+  TaskGroupStatusSchema,
+  type TaskGroupStatus,
+} from '@common/constants/streamStatus';
 
 /**
  * Re-export from types.ts to break circular dependency:
@@ -22,15 +25,8 @@ export {
   type RetryRequestPrompt,
 } from './types';
 
-/** Task group status - must match TaskGroup['status'] from LogTypes */
-const TASK_GROUP_STATUSES = [
-  'running',
-  'error',
-  'stopped',
-  'ready',
-] as const satisfies readonly TaskGroup['status'][];
-export const TaskGroupStatusSchema = z.enum(TASK_GROUP_STATUSES);
-export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
+// Re-export TaskGroupStatusSchema from single source of truth
+export { TaskGroupStatusSchema, type TaskGroupStatus };
 
 /** Payload for adding a new task group */
 export const AddTaskGroupPayloadSchema = z.strictObject({
