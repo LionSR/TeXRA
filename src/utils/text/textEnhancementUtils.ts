@@ -14,6 +14,7 @@ import type { TaskState } from '@logger/TaskState';
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
+import { isNonEmptyString, getTrimmedOrDefault } from '@utils/core';
 
 // Local file imports
 import xmlUtils from './xmlUtils';
@@ -68,7 +69,7 @@ export function buildFileContextFromTaskState(
     value: string | null | undefined,
     key: keyof FileContext,
   ) => {
-    if (typeof value === 'string' && value.trim().length > 0) {
+    if (isNonEmptyString(value)) {
       (context[key] as string) = value;
     }
   };
@@ -203,10 +204,7 @@ ${text}`;
         'model.instructionPolishModel',
         DEFAULT_POLISH_MODEL,
       );
-      const modelName =
-        typeof configuredModel === 'string' && configuredModel.trim().length > 0
-          ? configuredModel.trim()
-          : DEFAULT_POLISH_MODEL;
+      const modelName = getTrimmedOrDefault(configuredModel, DEFAULT_POLISH_MODEL);
       const modelConfig = MODEL_CONFIGS[modelName];
 
       if (!modelConfig) {
@@ -303,10 +301,7 @@ ${text}`;
         };
       }
 
-      if (
-        typeof extractedText !== 'string' ||
-        extractedText.trim().length === 0
-      ) {
+      if (!isNonEmptyString(extractedText)) {
         const warningMessage =
           'Instruction polishing model returned no plain text.';
         logger.warn(CHANNEL, warningMessage);
