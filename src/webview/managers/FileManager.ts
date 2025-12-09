@@ -166,7 +166,6 @@ export class FileManager {
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
-    const webviewView = this.getWebview();
     const files = await fileLister.list('input');
     await this.postFileUpdate('Base', files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
@@ -175,15 +174,7 @@ export class FileManager {
         : undefined,
     });
 
-    // Show getting started banner when workspace has no input files
-    if (webviewView) {
-      webviewView.webview.postMessage({
-        command:
-          files.length === 0
-            ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-            : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-      });
-    }
+    this.updateGettingStartedBanner(files.length === 0);
   }
 
   async handleRequestDefaultOutputFiles(
@@ -281,8 +272,6 @@ export class FileManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const webviewView = this.getWebview();
-
     const refreshedFiles = {
       input: await fileLister.list('input'),
       reference: await fileLister.list('reference'),
@@ -296,15 +285,7 @@ export class FileManager {
 
     await this.updateBaseFileSelect();
 
-    // Check if workspace is empty (no input files) and show getting started banner
-    if (webviewView) {
-      const isEmpty = refreshedFiles.input.length === 0;
-      webviewView.webview.postMessage({
-        command: isEmpty
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
-      });
-    }
+    this.updateGettingStartedBanner(refreshedFiles.input.length === 0);
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
@@ -561,6 +542,18 @@ export class FileManager {
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
       preserveBaseFile: true,
+    });
+  }
+
+  private updateGettingStartedBanner(isEmpty: boolean): void {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
+    webviewView.webview.postMessage({
+      command: isEmpty
+        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 
