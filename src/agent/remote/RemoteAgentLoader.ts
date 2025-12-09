@@ -127,6 +127,19 @@ export class RemoteAgentLoader {
             } catch (error) {
               logger.warn(CHANNEL, 'Failed to read error response body');
             }
+
+            // Provide more helpful error message for storage-related failures
+            if (
+              response.status === 500 &&
+              errorText.includes('Failed to load agent configuration')
+            ) {
+              throw new Error(
+                `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+                  `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+                  `Please contact the TeXRA team if this agent should be available.`,
+              );
+            }
+
             throw new Error(
               `Failed to load agent: ${response.statusText} - ${errorText}`,
             );
