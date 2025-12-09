@@ -622,7 +622,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Per Anthropic docs: each block has an index corresponding to final content array
         // We track the index of ANY block, not just text, to properly detect gaps
         const state = {
-          outputStream: null as ReturnType<ModelHandler['createOutputStream']> | null,
+          outputStream: null as ReturnType<
+            ModelHandler['createOutputStream']
+          > | null,
           lastBlockIndex: -1, // Index of most recent block (any type)
           // Track web search: tool_use_id → { index, accumulated input JSON }
           pendingSearches: new Map<string, { index: number; input: string }>(),
@@ -681,11 +683,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
               let query = '';
               if (searchData?.input) {
                 try {
-                  const parsed = JSON.parse(searchData.input) as { query?: string };
+                  const parsed = JSON.parse(searchData.input) as {
+                    query?: string;
+                  };
                   query = parsed.query ?? '';
                 } catch {
                   // Partial JSON, try to extract query
-                  const match = searchData.input.match(/"query"\s*:\s*"([^"]+)"/);
+                  const match = searchData.input.match(
+                    /"query"\s*:\s*"([^"]+)"/,
+                  );
                   if (match) {
                     query = match[1];
                   }
