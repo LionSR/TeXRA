@@ -38,8 +38,7 @@ export class AgentHistoryManager {
     executionId: ExecutionId,
     config: AgentConfig,
   ): Promise<void> {
-    const normalizedConfig = parseAgentConfig(config);
-    if (!normalizedConfig.session) {
+    if (!config.session) {
       throw new Error(
         'Agent history cannot store configs without session metadata.',
       );
@@ -48,7 +47,7 @@ export class AgentHistoryManager {
     const historyItem: AgentHistoryItem = {
       id: executionId,
       timestamp: new Date().toISOString(),
-      agentConfig: normalizedConfig,
+      agentConfig: config,
     };
 
     const history = await this.getHistory();

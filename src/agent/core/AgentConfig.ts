@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent components
-import { AgentType, resolveAgentSessionDescriptor } from './AgentDataclass';
+import { AgentType } from './AgentDataclass';
 import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
@@ -76,21 +76,16 @@ const AgentConfigBaseSchema = z
     }
   });
 
-export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
-  const descriptor = resolveAgentSessionDescriptor(
-    config.session?.agentType ?? config.agentType,
-    config.session?.agentCategory,
-  );
+/**
+ * Agent configuration schema.
+ *
+ * Note: The `session` field is populated by the execution layer after loading
+ * the agent's YAML settings. The authoritative session descriptor comes from
+ * the agent definition, not from input hints. See `prepareAgentInstance()`.
+ */
+export const AgentConfigSchema = AgentConfigBaseSchema;
 
-  return {
-    ...config,
-    agentType: descriptor.agentType,
-    session: descriptor,
-  };
-});
-
-export type AgentConfig = z.output<typeof AgentConfigSchema>;
-export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 
 /**
  * Parse arbitrary input into a canonical {@link AgentConfig} instance.
