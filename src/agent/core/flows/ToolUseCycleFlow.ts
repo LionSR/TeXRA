@@ -479,6 +479,34 @@ class ToolUseProcessNode<C> extends BaseNode<
       stopReason,
     } = options.modelHandler.extractResponse(state.response, '');
 
+    // Single extraction for all server tool data (single source of truth)
+    const serverToolData = options.modelHandler.extractServerToolData(
+      state.response,
+    );
+
+    // Log web search results to progress view
+    // Skip when streaming - handlers emit during streaming for correct order
+    if (!useStreaming) {
+      for (const searchResult of serverToolData.webSearchResults) {
+        options.logger.info('', {
+          groupId,
+          messageType: MESSAGE_TYPES.WEB_SEARCH,
+          data: searchResult,
+        });
+      }
+    }
+
+    // Cache content blocks for use in follow-up messages
+    // Always assign to clear stale blocks from previous responses
+    store.workspace.serverToolContent.contentBlocks =
+      serverToolData.contentBlocks;
+
+    // Store full assistant content (excluding tool_use) to preserve original order
+    // This is used in createToolUseFollowUpMessages for correct message building
+    // Uses provider-agnostic extraction method
+    store.workspace.serverToolContent.lastAssistantContent =
+      options.modelHandler.extractAssistantContent(state.response);
+
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
         groupId,
@@ -511,10 +539,15 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       state.toolCalls = undefined;
+      // End turn - just preserve text. Server tool content (web_search) was already
+      // logged to progress view and is not needed in message history when stopping.
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
       }
+      // Clear ephemeral state so stale data isn't used in subsequent requests
+      store.workspace.resetServerToolContent();
+      store.workspace.resetReasoning();
       state.shouldStop = true;
       return {
         skipped: false,
