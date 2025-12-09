@@ -366,4 +366,13 @@ export interface IModelHandler<
    * Determine if the stop reason represents an end-turn marker.
    */
   isEndTurnStop(reason: ProviderStopReason): boolean;
+
+  /**
+   * Extract assistant content blocks from a response, excluding tool_use blocks.
+   * Used to preserve original order when building follow-up messages.
+   *
+   * @param responseObject - The raw API response
+   * @returns Array of content blocks suitable for message building, or empty array if not supported
+   */
+  extractAssistantContent(responseObject: Resp): unknown[];
 }
