@@ -205,24 +205,15 @@ export function resolveAgent(
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 
-  // Remote agents have no local path but still support _multiple variants
+  // Remote agents have no local path - variant resolution is handled by RemoteAgentLoader.
+  // The multiplePath field is only used for UI indicator (data-multiple="true").
+  // RemoteAgentLoader.loadRemoteAgent() handles the preferMultiple logic internally.
   if (entry.source === 'remote') {
-    // If preferMultiple and _multiple variant exists, return the _multiple name
-    if (preferMultiple && entry.multiplePath) {
-      return {
-        entry,
-        definitionPath: '',
-        resolvedName: `${entry.name}${MULTIPLE_SUFFIX}`,
-        usedFallback: false,
-      };
-    }
-    // Fallback: requested _multiple but not available
-    const usedFallback = preferMultiple && !entry.multiplePath;
     return {
       entry,
       definitionPath: '',
       resolvedName: entry.name,
-      usedFallback,
+      usedFallback: false,
     };
   }
 
