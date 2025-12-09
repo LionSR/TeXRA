@@ -9,7 +9,7 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
-import { isString, isObject, isArray } from '@utils/core';
+import { isString, isObject } from '@utils/core';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 const CHANNEL = 'xmlUtils';
@@ -220,7 +220,7 @@ function normalizePandocReferences(text: string): string {
  * Uses centralized type guards for cleaner type checking.
  */
 function getObjectStructure(obj: unknown): string {
-  if (isArray(obj)) {
+  if (Array.isArray(obj)) {
     return `Array(${obj.length})`;
   }
   if (isObject(obj)) {
@@ -423,7 +423,7 @@ export function extractContentFromXMLbyTagMultiple(
       const container = root[documentTag];
       if (isObject(container) && 'document' in container) {
         const documents = container.document;
-        if (isArray(documents)) {
+        if (Array.isArray(documents)) {
           return documents.map((doc) => ({
             content:
               (doc as Record<string, unknown>).content?.toString().trim() ?? '',
