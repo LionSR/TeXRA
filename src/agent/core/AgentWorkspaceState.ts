@@ -1,6 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
+
 /**
  * Thinking block from reasoning models.
  * This represents the internal reasoning/thinking output from models like Claude Sonnet 4.
@@ -181,6 +183,46 @@ export class ReasoningCacheState {
   }
 }
 
+/**
+ * Cache for server tool content blocks (e.g., web_search results from Anthropic).
+ * These blocks need to be preserved in the assistant message when local tools are also present.
+ *
+ * **EPHEMERAL STATE**: This state is intentionally NOT serialized to snapshots.
+ * Server tool content is only relevant within a single tool use cycle and is automatically
+ * cleared after being consumed by `createToolUseFollowUpMessages()` or when the end-turn
+ * branch is taken. It does not need to survive state restoration since:
+ * 1. The response object containing the content is not persisted
+ * 2. Upon restoration, the model will generate fresh server tool content if needed
+ * 3. Stale content would cause duplicate blocks in conversation history
+ */
+export class ServerToolContentState {
+  /**
+   * Server tool content blocks extracted from the model response.
+   * These include server_tool_use, web_search_tool_result (Anthropic),
+   * and web_search_call (OpenAI) blocks.
+   * Cleared after being consumed by createToolUseFollowUpMessages().
+   */
+  public contentBlocks: ServerToolContentBlock[] = [];
+
+  /**
+   * Full assistant content blocks from the last response, excluding tool_use.
+   * Preserves original order for building correct follow-up messages.
+   * Includes: thinking, text, server_tool_use, web_search_tool_result blocks.
+   * Cleared after being consumed by createToolUseFollowUpMessages().
+   *
+   * Typed as unknown[] because content block types differ across providers:
+   * - Anthropic: ContentBlockParam (thinking, text, server_tool_use, etc.)
+   * - OpenAI: ResponseInputItem (message, function_call, web_search_call, etc.)
+   * Each handler casts to provider-specific types when consuming.
+   */
+  public lastAssistantContent: unknown[] = [];
+
+  reset(): void {
+    this.contentBlocks = [];
+    this.lastAssistantContent = [];
+  }
+}
+
 export class DocumentStatsState {
   public texcountStats: string | null = null;
 
@@ -239,9 +281,14 @@ export class AgentWorkspaceState {
   public readonly reasoning = new ReasoningCacheState();
   public readonly document = new DocumentStatsState();
   public readonly interactions = new FileInteractionState();
+  public readonly serverToolContent = new ServerToolContentState();
 
   resetReasoning(): void {
     this.reasoning.reset();
+  }
+
+  resetServerToolContent(): void {
+    this.serverToolContent.reset();
   }
 
   toJSON(): AgentWorkspaceSnapshot {

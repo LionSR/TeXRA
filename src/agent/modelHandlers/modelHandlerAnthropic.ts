@@ -82,8 +82,10 @@ import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
-  type WebSearchResult,
+  isAnthropicServerToolContent,
+  type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
+import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -98,6 +100,7 @@ import type {
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
+  BetaRawMessageStreamEvent,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
@@ -116,6 +119,8 @@ import type {
   DocumentBlockParam,
   ThinkingBlockParam,
   RedactedThinkingBlockParam,
+  ServerToolUseBlock,
+  WebSearchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -595,27 +600,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
         };
       }
 
+      const streamHandler = new AnthropicStreamHandler(
+        this.logger,
+        {
+          outputEnabled: this.isOutputStreamingEnabled(),
+          progressViewEnabled: this.progressViewEnabled,
+        },
+        {
+          createThinkingStream: () => this.createThinkingStream(),
+          createOutputStream: () => this.createOutputStream(),
+        },
+      );
+
       try {
-        const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : undefined;
-        stream.on('thinking', (delta: string) => {
-          thinking.append(delta);
-        });
-        stream.on('text', (delta: string) => {
-          output?.append(delta);
-        });
+        streamHandler.attachToStream(stream);
 
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        // Extract text manually instead of using finalText() which throws
-        // when response contains only thinking + tool_use blocks with no text
-        const finalOutput = extractTextFromContent(response.content);
-        if (output) output.finalize(finalOutput);
+
+        // Store thinking blocks for API conversation continuation
+        this.processThinkingBlock(response);
       } finally {
+        // Always finalize stream handler to prevent memory leaks on error
+        streamHandler.finalize();
         cleanupAbortListener?.();
       }
     } else {
@@ -1703,17 +1710,42 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Extract native web search results from Anthropic response.
-   * Anthropic's web_search server tool returns WebSearchToolResultBlock.
+   * Extract all server tool data in a single pass.
+   * Returns both normalized results for display and raw content blocks for context.
+   * Single source of truth for Anthropic server tool extraction.
    */
-  override extractWebSearchResults(
+  override extractServerToolData(
     responseObject: BetaMessage,
-  ): WebSearchResult[] {
+  ): ServerToolExtractionResult {
+    if (!Array.isArray(responseObject?.content)) {
+      return { webSearchResults: [], contentBlocks: [] };
+    }
+
+    // Extract content blocks that need to be preserved
+    // Filter for server tool content (server_tool_use, web_search_tool_result)
+    // Cast needed because BetaContentBlock has slightly different types than the regular API
+    const contentBlocks = responseObject.content.filter(
+      isAnthropicServerToolContent,
+    ) as (ServerToolUseBlock | WebSearchToolResultBlock)[];
+
+    // Extract normalized web search results for display
+    const webSearchResults = extractAnthropicWebSearchResults(
+      responseObject.content,
+    );
+
+    return { webSearchResults, contentBlocks };
+  }
+
+  /**
+   * Extract assistant content blocks from an Anthropic response, excluding tool_use blocks.
+   * Preserves thinking, text, server_tool_use, and web_search_tool_result blocks.
+   */
+  override extractAssistantContent(responseObject: BetaMessage): unknown[] {
     if (!Array.isArray(responseObject?.content)) {
       return [];
     }
 
-    return extractAnthropicWebSearchResults(responseObject.content);
+    return responseObject.content.filter((block) => block.type !== 'tool_use');
   }
 
   async createToolUseFollowUpMessages(
@@ -1725,23 +1757,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
     text?: string,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
-    if (
-      this.capabilities.supportsReasoning &&
-      workspaceState?.reasoning.thinkingBlocks &&
-      workspaceState.reasoning.thinkingBlocks.length > 0
-    ) {
-      // Anthropic models expect thinking blocks before text
-      // Include thinking blocks from workspace state as SDK thinking params
+
+    // Use stored assistant content if available - preserves original order from API
+    // This includes: thinking, text, server_tool_use, web_search_tool_result blocks
+    if (workspaceState?.serverToolContent.lastAssistantContent.length) {
       content.push(
-        ...(workspaceState.reasoning
-          .thinkingBlocks as AnthropicThinkingContentParam[]),
+        ...(workspaceState.serverToolContent
+          .lastAssistantContent as ContentBlockParam[]),
       );
-      // Clear cached thinking so the next response can store fresh blocks
+      // Clear all stores after consuming to prevent duplicates
+      workspaceState.resetServerToolContent();
       workspaceState.resetReasoning();
+    } else {
+      // Fall back to reconstructing from separate stores (legacy/non-streaming path)
+      if (
+        this.capabilities.supportsReasoning &&
+        workspaceState?.reasoning.thinkingBlocks &&
+        workspaceState.reasoning.thinkingBlocks.length > 0
+      ) {
+        content.push(
+          ...(workspaceState.reasoning
+            .thinkingBlocks as AnthropicThinkingContentParam[]),
+        );
+        workspaceState.resetReasoning();
+      }
+      if (workspaceState?.serverToolContent.contentBlocks.length) {
+        const anthropicBlocks = workspaceState.serverToolContent.contentBlocks
+          .filter(isAnthropicServerToolContent)
+          .map((block) => block as ContentBlockParam);
+        content.push(...anthropicBlocks);
+        workspaceState.resetServerToolContent();
+      }
+      if (text) {
+        content.push({ type: 'text', text });
+      }
     }
-    if (text) {
-      content.push({ type: 'text', text });
-    }
+
+    // Add tool_use block at the end
     const toolInput = call.raw.input ?? {};
     content.push({
       type: 'tool_use',
