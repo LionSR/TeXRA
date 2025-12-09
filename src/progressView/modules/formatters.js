@@ -842,9 +842,14 @@ export class LogEntryFormatter {
   }
 
   /**
-   * Format web search results from native provider tools (Anthropic, OpenAI, Google)
+   * Format web search results from native provider tools (Anthropic, OpenAI)
    * @private
    * @param {Object} normalizedPayload - Payload containing structured WebSearchResult
+   * @param {Object} normalizedPayload.structured - Structured web search data
+   * @param {string} [normalizedPayload.structured.query] - Search query
+   * @param {Array<{url?: string, title?: string, domain?: string, snippet?: string, pageAge?: string}>} [normalizedPayload.structured.results] - Search result entries
+   * @param {'anthropic'|'openai'} [normalizedPayload.structured.provider] - Provider that executed the search
+   * @param {'in_progress'|'completed'|'failed'} [normalizedPayload.structured.status] - Search status
    * @param {string} logId - Log entry ID
    * @param {string} groupId - Group ID
    * @param {string} timestamp - Timestamp
