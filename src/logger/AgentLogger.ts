@@ -18,7 +18,7 @@ import * as logger from './logUtils';
 import { MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
-import type { MessageType } from './messageTypes';
+import type { EndGroupStatus, MessageType } from './messageTypes';
 import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
@@ -30,8 +30,8 @@ export interface LoggerScopeOptions {
    * clutter the UI with nested groups.
    */
   skip?: boolean;
-  successStatus?: 'stopped' | 'error';
-  errorStatus?: 'stopped' | 'error';
+  successStatus?: EndGroupStatus;
+  errorStatus?: EndGroupStatus;
   id?: string;
 }
 
@@ -73,7 +73,7 @@ export interface AgentLogStage {
    * Explicitly finalizes the stage with the provided status. Safe to call
    * multiple times; subsequent calls are ignored.
    */
-  end(status?: 'stopped' | 'error'): void;
+  end(status?: EndGroupStatus): void;
   /**
    * Creates a nested child stage beneath the current stage.
    */
@@ -91,8 +91,8 @@ class AgentLogStageHandle implements AgentLogStage {
     private readonly config: {
       id?: string;
       skip: boolean;
-      successStatus: 'stopped' | 'error';
-      errorStatus: 'stopped' | 'error';
+      successStatus: EndGroupStatus;
+      errorStatus: EndGroupStatus;
       parentGroupId?: string;
     },
   ) {}
@@ -133,7 +133,7 @@ class AgentLogStageHandle implements AgentLogStage {
     }
   }
 
-  end(status: 'stopped' | 'error' = 'stopped'): void {
+  end(status: EndGroupStatus = 'stopped'): void {
     if (this.config.skip || !this.config.id || this.ended) {
       return;
     }
@@ -570,7 +570,7 @@ export class AgentLogger {
     );
   }
 
-  endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
+  endGroup(groupId: string, status: EndGroupStatus = 'stopped'): void {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
