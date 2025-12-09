@@ -46,6 +46,8 @@ interface AnthropicStreamState {
   pendingSearches: Map<string, { index: number; input: string }>;
   /** Track emitted search IDs to prevent duplicate logging in flow */
   emittedSearchIds: Set<string>;
+  /** Flag to prevent processing events after finalize */
+  finalized: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export class AnthropicStreamHandler {
     lastBlockIndex: -1,
     pendingSearches: new Map(),
     emittedSearchIds: new Set(),
+    finalized: false,
   };
 
   constructor(
@@ -114,8 +117,12 @@ export class AnthropicStreamHandler {
   /**
    * Finalizes all remaining streams and clears state.
    * Call this after stream.finalMessage() completes.
+   * Sets finalized flag to prevent processing any subsequent events.
    */
   finalize(): void {
+    // Set flag first to prevent processing any events that arrive during cleanup
+    this.state.finalized = true;
+
     // Finalize any remaining thinking streams
     for (const s of this.thinkingStreams.values()) {
       s.finalize();
@@ -133,8 +140,14 @@ export class AnthropicStreamHandler {
 
   /**
    * Handles a single stream event.
+   * Ignores events if handler has been finalized.
    */
   private handleStreamEvent(event: BetaRawMessageStreamEvent): void {
+    // Ignore events after finalization to prevent processing stale events
+    if (this.state.finalized) {
+      return;
+    }
+
     if (event.type === 'content_block_start') {
       this.handleBlockStart(event);
     } else if (event.type === 'content_block_delta') {
