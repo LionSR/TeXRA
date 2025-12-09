@@ -10,7 +10,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - persistence
-import { ToolUseSessionManager } from './ToolUseSessionManager';
+import { ToolUseSessionManager } from './ToolUseSnapshotCache';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
 import {
   ToolUseSessionPersistence,
