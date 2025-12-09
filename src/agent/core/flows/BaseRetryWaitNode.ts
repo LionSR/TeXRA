@@ -136,18 +136,18 @@ class RetryWaitNode<
     const streamId = this.accessors.getStreamId(shared, this._params);
     const logger = this.accessors.getLogger(shared, this._params);
 
+    // Clear error in both cases:
+    // - Retry: start fresh for the new attempt
+    // - Cancel: distinguishes user cancellation (no error) from error failure
+    clearRetryError(retryState);
+
     if (execRes === 'retry') {
-      clearRetryError(retryState);
       logger.debug('Manual retry triggered');
       bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
       return FlowTransition.MANUAL_RETRY;
     }
 
-    // User cancelled - clear the error since the user chose to stop
-    // This distinguishes user cancellation from error failure:
-    // - User cancelled: shouldStop=true, lastError=undefined
-    // - Error failure: shouldStop=true, lastError exists
-    clearRetryError(retryState);
+    // User cancelled
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
