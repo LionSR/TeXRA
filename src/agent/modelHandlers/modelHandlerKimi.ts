@@ -46,7 +46,14 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
   /**
    * Override createResponse to preprocess messages for Kimi models.
-   * Note: processThinkingBlock is inherited from ModelHandlerOpenAI which
+   *
+   * Note: This handler does NOT use the getMessageNormalizationOptions() hook
+   * because Kimi thinking models require additional custom logic:
+   * - Conditional `thinking: true` parameter
+   * - Custom streaming aggregation for reasoning_content
+   * - Different request structure for thinking vs regular models
+   *
+   * processThinkingBlock is inherited from ModelHandlerOpenAI which
    * already handles reasoning_content extraction via extractReasoningFromMessage().
    */
   async createResponse(
