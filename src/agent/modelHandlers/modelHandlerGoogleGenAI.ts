@@ -75,10 +75,6 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
-import {
-  extractGoogleGroundingResults,
-  type WebSearchResult,
-} from './types/ServerToolTypes';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -1166,22 +1162,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       raw: call,
       thoughtSignature,
     }));
-  }
-
-  /**
-   * Extract grounding results from Google GenAI response.
-   * Google uses groundingMetadata for search results when GoogleSearch tool is enabled.
-   */
-  override extractWebSearchResults(
-    responseObject: GenerateContentResponse,
-  ): WebSearchResult[] {
-    const candidate = responseObject?.candidates?.[0];
-    if (!candidate) {
-      return [];
-    }
-
-    const result = extractGoogleGroundingResults(candidate);
-    return result ? [result] : [];
   }
 
   /**
