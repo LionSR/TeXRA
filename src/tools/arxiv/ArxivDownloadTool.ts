@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
-import { formatToolOutput, toPosixPath } from '@tools/utils';
+import { formatToolOutput } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { toPosixPath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
