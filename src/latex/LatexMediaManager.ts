@@ -175,7 +175,7 @@ export class LatexMediaManager {
         // Convert relative paths (relative to input file directory) to FileLocation
         // pathToLocation gives us both absolutePath (for resolution) and relativePath (for display)
         const baseDir = path.dirname(file.absolutePath);
-        const fileLocations = result.value.map((relativePath) => {
+        const fileLocations: FileLocation[] = result.value.map((relativePath) => {
           const absolutePath = path.normalize(path.join(baseDir, relativePath));
           return pathToLocation(absolutePath);
         });

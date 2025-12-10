@@ -771,16 +771,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
         // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
         // including external paths outside the workspace
         const location = pathToLocation(candidate);
-        // Check for duplicates using hasFile method (compares absolute paths)
+        // Skip if already in media files (addMediaFiles also deduplicates, but
+        // checking here avoids unnecessary existence checks for known files)
         if (store.workspace.media.hasFile(location.absolutePath)) {
           continue;
         }
-        // Check if already in toAdd list
-        if (toAdd.some((loc) => loc.absolutePath === location.absolutePath)) {
-          continue;
-        }
         try {
-          const exists = await WorkspaceFS.exists(candidate);
+          const exists = await WorkspaceFS.exists(location.absolutePath);
           if (exists) {
             toAdd.push(location);
           }
@@ -789,6 +786,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         }
       }
       if (toAdd.length > 0) {
+        // addMediaFiles handles deduplication within toAdd
         store.workspace.media.addMediaFiles(toAdd);
       }
     }
