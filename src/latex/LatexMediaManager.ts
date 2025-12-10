@@ -297,9 +297,7 @@ export class LatexMediaManager {
     }
 
     if (extraMediaFiles.length > 0) {
-      workspaceState.media.addMediaFiles(
-        extraMediaFiles.map(toFileLocation),
-      );
+      workspaceState.media.addMediaFiles(extraMediaFiles.map(toFileLocation));
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
