@@ -544,3 +544,18 @@ export function pathToLocation(target: string): FileLocation {
 
   return createExternalLocation(normalized);
 }
+
+/**
+ * Get a display-friendly path for a file location.
+ * For workspace files, returns the relative path (e.g., "logos/mpq-logo.pdf").
+ * For external files, returns just the basename.
+ *
+ * This provides a human-readable path suitable for showing to users or models,
+ * while absolutePath should be used for actual file operations.
+ */
+export function getDisplayPath(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return location.relativePath;
+  }
+  return path.basename(location.absolutePath);
+}
