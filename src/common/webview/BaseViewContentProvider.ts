@@ -101,7 +101,7 @@ export abstract class BaseViewContentProvider {
   /** Convert an array of descriptors into a URI record */
   protected buildUriRecord(
     webview: vscode.Webview,
-    descriptors: ModuleDescriptor[],
+    descriptors: readonly ModuleDescriptor[],
   ): Record<string, vscode.Uri> {
     return descriptors.reduce<Record<string, vscode.Uri>>((acc, d) => {
       acc[d.key] = this.getWebviewUri(webview, d.path);

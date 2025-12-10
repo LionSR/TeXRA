@@ -1,14 +1,14 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Local imports - agent utilities
-import { PromptBuilder } from '@agent/utils/PromptBuilder';
+// Local imports - prompt utilities
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 // Type imports
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
+import { PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {
   const baseSetting: AgentWorkflowSetting = {
