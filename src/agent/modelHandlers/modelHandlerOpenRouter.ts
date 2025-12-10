@@ -71,7 +71,9 @@ const extractTextFromReasoningDetails = (
  * - reasoning_details: array of objects (OpenRouter normalized format)
  * - reasoning_content: string (native DeepSeek/other models)
  */
-const extractOpenRouterReasoningDelta = (chunk: ChatCompletionChunk): string => {
+const extractOpenRouterReasoningDelta = (
+  chunk: ChatCompletionChunk,
+): string => {
   const choice = chunk.choices[0];
   if (!choice) return '';
 

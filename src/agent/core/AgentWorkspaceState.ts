@@ -361,8 +361,7 @@ export class AgentWorkspaceState {
 
     // Restore media files, converting legacy strings to FileLocation
     const restoredMediaFiles: FileLocation[] = snapshot.media.files.map(
-      (entry) =>
-        typeof entry === 'string' ? pathToLocation(entry) : entry,
+      (entry) => (typeof entry === 'string' ? pathToLocation(entry) : entry),
     );
     state.media.addMediaFiles(restoredMediaFiles);
 
