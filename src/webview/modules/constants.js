@@ -106,6 +106,7 @@ export const ELEMENT_IDS = {
   DEPENDENCY_BANNER: 'dependencyBanner',
   DEPENDENCY_RECHECK_BUTTON: 'dependencyRecheckButton',
   DEPENDENCY_DISMISS_BUTTON: 'dependencyDismissButton',
+  GETTING_STARTED_BANNER: 'gettingStartedBanner',
   SESSION_TYPE_TOGGLE: 'sessionTypeToggle',
   WORKFLOW_AGENT_SELECT: 'workflowAgent',
   TOOL_USE_AGENT_SELECT: 'toolUseAgent',

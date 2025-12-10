@@ -4,10 +4,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
-import { K_SLICE } from '@utils/config';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { executeRequest } from './utils/requestExecutor';
@@ -48,64 +45,16 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   }
 
   /**
-   * Process thinking blocks for Moonshot models
-   * @param responseObject The raw response object from the model
-   * @param workspaceState Optional workspaceState to update with the thinking block
-   * @returns The extracted reasoning_content or null if none
-   */
-  processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
-  ): string | null {
-    if (!responseObject) {
-      return null;
-    }
-
-    // Extract reasoning content from Moonshot Kimi thinking model response
-    let reasoningContent = null;
-
-    if (
-      responseObject.choices &&
-      responseObject.choices.length > 0 &&
-      responseObject.choices[0].message
-    ) {
-      const message = responseObject.choices[0].message;
-
-      if (message.reasoning_content) {
-        reasoningContent = message.reasoning_content;
-        this.logger.debug(
-          'Found reasoning_content in choices[0].message.reasoning_content',
-        );
-
-        // If workspaceState is provided and we have reasoning content,
-        // store it in the workspaceState for future use (similar to Anthropic thinking blocks)
-        if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-          // Create a thinking block in the same format as Anthropic for consistency
-          const thinkingBlock = {
-            type: 'thinking',
-            thinking: reasoningContent,
-          };
-
-          workspaceState.reasoning.thinkingBlocks = [thinkingBlock];
-          workspaceState.reasoning.thinkingAdded = true;
-        }
-      }
-    }
-
-    if (!reasoningContent) {
-      return null;
-    }
-
-    // Log preview of thinking content
-    this.logger.debug(
-      `Kimi thinking content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-    );
-
-    return reasoningContent;
-  }
-
-  /**
-   * Override createResponse to preprocess messages for Kimi models
+   * Override createResponse to preprocess messages for Kimi models.
+   *
+   * Note: This handler does NOT use the getMessageNormalizationOptions() hook
+   * because Kimi thinking models require additional custom logic:
+   * - Conditional `thinking: true` parameter
+   * - Custom streaming aggregation for reasoning_content
+   * - Different request structure for thinking vs regular models
+   *
+   * processThinkingBlock is inherited from ModelHandlerOpenAI which
+   * already handles reasoning_content extraction via extractReasoningFromMessage().
    */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
@@ -247,20 +196,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     });
   }
 
-  /**
-   * Creates media content formatted for Kimi models
-   * Overrides the parent method to handle Kimi-specific formatting
-   */
-  createMediaContent(mediaMessage: MediaEntry[]): any[] {
-    return mediaMessage.flatMap((media): any[] => {
-      if (media.media_category === 'image') {
-        return this.buildStandardVisionParts(media);
-      } else {
-        this.logger.warn(
-          `Unsupported media category for Kimi: ${media.media_category}`,
-        );
-        return [];
-      }
-    });
-  }
+  // Note: createMediaContent is inherited from ModelHandlerOpenAI which
+  // already handles images via buildStandardVisionParts() and logs
+  // appropriate warnings for unsupported media categories.
 }
