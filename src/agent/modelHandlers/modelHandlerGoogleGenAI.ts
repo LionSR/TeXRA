@@ -63,7 +63,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, getDisplayPath } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -626,7 +626,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
@@ -636,7 +636,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
@@ -656,7 +656,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createRoundMessages(
     messages: Content[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<Content[]> {
     const roundParts: Part[] = [];
 
@@ -665,7 +665,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
@@ -706,7 +706,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return createModelContent(createPartFromText(text));
   }
 
-  override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
+  override async createMediaMessage(
+    mediaFiles: FileLocation[],
+  ): Promise<Part[]> {
     if (!mediaFiles || mediaFiles.length === 0 || !this.supportsFileUploads()) {
       return [];
     }
