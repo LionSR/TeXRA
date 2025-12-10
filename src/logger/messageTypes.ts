@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
+import type { TaskGroupStatus } from '@common/constants/streamStatus';
+
 /**
  * Log level constants - single source of truth for severity levels.
+ * Ordered from most to least critical.
  */
 export const LOG_LEVELS = {
   ERROR: 'error',
@@ -20,8 +23,9 @@ export const LogLevelSchema = z.enum([
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
- * End group status - used when finalizing log groups.
+ * End group status - terminal states used when finalizing log groups.
  * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
+ * This is a strict subset of TaskGroupStatus (only terminal states).
  */
 export const END_GROUP_STATUS = {
   ERROR: 'error',
@@ -34,6 +38,15 @@ export const EndGroupStatusSchema = z.enum([
 ]);
 
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
+
+/**
+ * Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
+ * This ensures type compatibility when assigning EndGroupStatus to TaskGroupStatus fields.
+ */
+type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
+  ? true
+  : never;
+const _assertEndGroupStatusSubset: _AssertEndGroupStatusSubset = true;
 
 /**
  * Message type constants - single source of truth for log message categories.
