@@ -487,7 +487,7 @@ export class ModelHandlerOpenAI<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<any[]> {
     const messages: any[] = [];
@@ -578,7 +578,7 @@ export class ModelHandlerOpenAI<
   async createRoundMessages(
     messages: any[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
 
