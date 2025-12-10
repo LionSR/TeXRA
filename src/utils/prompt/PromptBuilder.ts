@@ -1,14 +1,40 @@
 // Local imports - agent
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { loadTexraRules } from '@frontend/files/rules';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
-import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
-import { TOOL_USE_INSTRUCTIONS } from './toolUsePrompt';
 
 type PromptBuilderSetting = Pick<AgentWorkflowSetting, 'prefills'>;
+
+/** Instructions appended to tool-use agent prompts */
+const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
+When using a tool, follow the JSON schema exactly and include all required properties.
+Always produce valid JSON when calling a tool.
+Prefer using tools over asking the user to take manual actions.
+If you say you will perform an action, immediately call the corresponding tool.
+Never mention tool names when speaking to the user.
+Do not call tools that are not provided or any multi_tool_use variants.
+Call tools sequentially and wait for the output before calling another.
+</tool_use_instructions>`;
+
+/**
+ * Combine the base system prompt with optional rules from `.texrarules`.
+ *
+ * @param systemPrompt Base system prompt template
+ * @param userVars Variables for template rendering
+ * @returns Full system prompt string
+ */
+export async function getSystemPromptWithRules(
+  systemPrompt: string,
+  userVars: Record<string, any>,
+): Promise<string> {
+  const basePrompt = await renderPrompt(systemPrompt, userVars);
+  const rules = await loadTexraRules();
+  return rules ? `${basePrompt}\n${rules}` : basePrompt;
+}
 
 /**
  * Centralises prompt construction logic for multi-round agents.

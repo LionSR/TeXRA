@@ -166,6 +166,7 @@ export class MainViewProvider
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = {
       enableScripts: true,
+      enableCommandUris: true,
       localResourceRoots: getSharedLocalResourceRoots(this.context, 'webview'),
     };
 

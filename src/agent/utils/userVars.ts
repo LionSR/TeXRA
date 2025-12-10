@@ -10,12 +10,9 @@ import {
   AgentPrompt,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import {
-  getXmlFormatFromFiles,
-  getListOfFiles,
-} from '@agent/utils/promptUtils';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
+import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
