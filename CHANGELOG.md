@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
   real-time search results displayed in the progress view during streaming.
 - Introduced a new **Web Search** tool-use agent optimized for research queries
   that leverage provider-native search capabilities.
+- Added **OpenAI deep research models** (`o3-deep-research`, `o4-mini-deep-research`)
+  for extended reasoning tasks.
+- Updated **DeepSeek models to V3.2** with streaming reasoning support via
+  OpenRouter.
 - Added **getting started guidance** that appears when opening an empty folder,
   helping new users bootstrap their first project.
 
@@ -23,6 +27,8 @@ All notable changes to this project will be documented in this file.
   agents.
 - Improved content block ordering in Anthropic streaming responses, fixing
   issues with interleaved thinking and text blocks.
+- Fixed figure path resolution for input files located in subdirectories.
+- Fixed `\input` path compatibility by normalizing leading `./` prefixes.
 - User-cancelled requests no longer trigger automatic retries.
 - Fixed banner display issues when refreshing the webview input.
 
@@ -31,7 +37,8 @@ All notable changes to this project will be documented in this file.
 - Refactored internal HTTP status handling using the `http-status-codes`
   package for better maintainability.
 - Consolidated prompt utilities and Zod schemas for improved type safety.
-- Updated core dependencies: Anthropic SDK 0.71.2, KaTeX 0.16.27, winston 3.19.0.
+- Updated core dependencies: Anthropic SDK 0.71.2, Google GenAI 1.32.0,
+  KaTeX 0.16.27, winston 3.19.0.
 
 ## [0.34.8] - 2025-12-04
 
