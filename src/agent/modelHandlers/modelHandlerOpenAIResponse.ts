@@ -135,14 +135,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * @returns false if background mode is enabled, otherwise delegates to base
    */
   public override getStreamingConfig(): boolean {
+    if (this.isBackgroundModeActive()) {
+      return false;
+    }
+    return super.getStreamingConfig();
+  }
+
+  /**
+   * Check if background mode is active for this handler.
+   * Background mode is enabled when the config toggle is on AND
+   * this model/agent is eligible for background execution.
+   */
+  public override isBackgroundModeActive(): boolean {
     const useBackgroundResponses = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
       false,
     );
-    if (useBackgroundResponses && this.isBackgroundModeEligible()) {
-      return false;
-    }
-    return super.getStreamingConfig();
+    return useBackgroundResponses && this.isBackgroundModeEligible();
   }
 
   protected override backgroundModeSupported = true;
