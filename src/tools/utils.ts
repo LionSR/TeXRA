@@ -4,10 +4,14 @@ import * as path from 'path';
 // Third-party imports
 import { Minimatch } from 'minimatch';
 
-// Local imports - tools
+// Local imports - common
 import { toErrorMessage } from '@common/errors';
+
+// Local imports - tools
 import { ToolError, type ToolFileAttachment } from '@tools/result';
-import { toPosixPath } from '@tools/pathUtils';
+
+// Local imports - core utilities
+import { getPathSegments, isNonEmptyString, toPosixPath } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 /**
@@ -61,7 +65,8 @@ export function resolveWorkspaceRelativePath(
   const normalizedRelative =
     relativeCandidate === '' ? '.' : path.normalize(relativeCandidate);
 
-  const segments = normalizedRelative.split(path.sep).filter(Boolean);
+  // Use centralized path segment extraction
+  const segments = getPathSegments(normalizedRelative);
   if (segments.some((segment) => segment === '..')) {
     throw new ToolError('Path must stay within the workspace.');
   }
@@ -98,8 +103,6 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
 }
-
-export { toPosixPath } from '@tools/pathUtils';
 
 // Re-export gitignore utilities from standalone module
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
@@ -157,7 +160,7 @@ export async function buildFileAttachment({
   includeBase64 = false,
   maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
 }: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
-  if (!filePath || filePath.trim().length === 0) {
+  if (!isNonEmptyString(filePath)) {
     throw new ToolError('Attachment path must be provided.');
   }
 

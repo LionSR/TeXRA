@@ -18,6 +18,9 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
+// Local imports - core utilities
+import { getPathSegments } from '@utils/core';
+
 // Local file imports
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
@@ -187,7 +190,8 @@ function shouldSkipRelocation(relativePath: string): boolean {
     return false;
   }
 
-  const segments = relativePath.split(path.sep).filter(Boolean);
+  // Use centralized path segment extraction
+  const segments = getPathSegments(relativePath);
   if (segments.length === 0) {
     return false;
   }
