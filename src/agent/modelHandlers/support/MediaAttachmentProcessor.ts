@@ -17,23 +17,34 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ModelCapabilities } from '@model/ModelConfig';
 
 // Internal imports
-import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
+import {
+  AbsoluteFS,
+  getMimeType,
+  getDisplayPath,
+  type FileLocation,
+} from '@utils/files';
 
+/**
+ * Result of loading a media file.
+ * @property path - Display path for logging/UI (workspace-relative for workspace files,
+ *   basename for external files). NOT the absolute path used for file operations.
+ * @property ok - Whether the file was successfully loaded
+ */
 export type MediaFileResult = { path: string; ok: boolean };
 
-export type ProcessImageResult = {
+type ProcessImageResult = {
   kind: 'image';
   mediaType: string;
   data: string | string[];
 };
 
-export type ProcessAudioResult = {
+type ProcessAudioResult = {
   kind: 'audio';
   mediaType: string;
   data: string;
 };
 
-export type ProcessedMediaResult = ProcessImageResult | ProcessAudioResult;
+type ProcessedMediaResult = ProcessImageResult | ProcessAudioResult;
 
 interface MediaAttachmentProcessorOptions {
   getCapabilities: () => ModelCapabilities;
@@ -58,7 +69,7 @@ export class MediaAttachmentProcessor {
     return this.options.isOpenAIProvider();
   }
 
-  public async processImage(
+  private async processImage(
     mediaFile: string,
     ext: string,
   ): Promise<ProcessImageResult> {
@@ -105,7 +116,7 @@ export class MediaAttachmentProcessor {
     return { kind: 'image', mediaType, data: mediaData };
   }
 
-  public async processAudio(
+  private async processAudio(
     mediaFile: string,
     ext: string,
   ): Promise<ProcessAudioResult> {
@@ -133,7 +144,7 @@ export class MediaAttachmentProcessor {
     return { kind: 'audio', mediaType, data: mediaData };
   }
 
-  public async processMedia(
+  private async processMedia(
     mediaFile: string,
     fileExtension: string,
   ): Promise<ProcessedMediaResult> {
@@ -144,14 +155,14 @@ export class MediaAttachmentProcessor {
   }
 
   public async loadEntries(
-    mediaFiles: string[],
+    mediaFiles: FileLocation[],
   ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
     if (mediaFiles.length === 0) {
       return { entries: [], results: [] };
     }
 
     const settledResults = await Promise.allSettled(
-      mediaFiles.map((mediaFile) => this.loadMediaEntry(mediaFile)),
+      mediaFiles.map((location) => this.loadMediaEntry(location)),
     );
 
     const entries: MediaEntry[] = [];
@@ -168,12 +179,13 @@ export class MediaAttachmentProcessor {
         }
       } else {
         const reason = settledResult.reason;
-        const mediaFile = mediaFiles[index];
+        const location = mediaFiles[index];
+        const displayPath = getDisplayPath(location);
         this.logger.error(
-          `Failed to load media entry for ${mediaFile}: ${getSdkErrorMessage(reason)}`,
+          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
           { data: reason },
         );
-        results.push({ path: mediaFile, ok: false });
+        results.push({ path: displayPath, ok: false });
       }
     });
 
@@ -193,14 +205,15 @@ export class MediaAttachmentProcessor {
   }
 
   private async loadMediaEntry(
-    mediaFile: string,
+    location: FileLocation,
   ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
-    const absolutePath = this.resolveAbsolutePath(mediaFile);
+    const absolutePath = location.absolutePath;
+    const displayPath = getDisplayPath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {
-      this.logger.error(`File not found: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
+      this.logger.error(`File not found: ${displayPath}`);
+      return { result: { path: displayPath, ok: false } };
     }
 
     let fileSize: number;
@@ -210,26 +223,26 @@ export class MediaAttachmentProcessor {
     } catch (err) {
       const message = toErrorMessage(err);
       this.logger.error(
-        `Unable to read file info for ${mediaFile}: ${message}`,
+        `Unable to read file info for ${displayPath}: ${message}`,
       );
-      return { result: { path: mediaFile, ok: false } };
+      return { result: { path: displayPath, ok: false } };
     }
 
     if (fileSize === 0) {
-      this.logger.warn(`Skipping empty media file: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
+      this.logger.warn(`Skipping empty media file: ${displayPath}`);
+      return { result: { path: displayPath, ok: false } };
     }
 
-    const fileExtension = path.extname(mediaFile).toLowerCase();
+    const fileExtension = path.extname(absolutePath).toLowerCase();
 
     try {
-      const processed = await this.processMedia(mediaFile, fileExtension);
+      const processed = await this.processMedia(absolutePath, fileExtension);
       this.logger.debug(
-        `Processed ${processed.kind}: ${mediaFile}, type: ${processed.mediaType}`,
+        `Processed ${processed.kind}: ${displayPath}, type: ${processed.mediaType}`,
       );
 
       const entry = this.createEntriesForProcessedMedia(
-        mediaFile,
+        displayPath,
         absolutePath,
         fileExtension,
         processed,
@@ -237,21 +250,15 @@ export class MediaAttachmentProcessor {
 
       return {
         entry,
-        result: { path: mediaFile, ok: true },
+        result: { path: displayPath, ok: true },
       };
     } catch (err) {
       this.logger.error(
-        `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
+        `Failed to process media ${displayPath}: ${getSdkErrorMessage(err)}`,
         { data: err },
       );
-      return { result: { path: mediaFile, ok: false } };
+      return { result: { path: displayPath, ok: false } };
     }
-  }
-
-  private resolveAbsolutePath(mediaFile: string): string {
-    return path.isAbsolute(mediaFile)
-      ? mediaFile
-      : WorkspaceFS.fullPath(mediaFile);
   }
 
   private shouldReturnNativePdf(
