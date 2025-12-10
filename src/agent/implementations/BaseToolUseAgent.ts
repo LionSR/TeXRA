@@ -13,7 +13,6 @@ import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
-import { buildInitialToolUsePrompts } from '@agent/utils/PromptBuilder';
 import {
   createToolUseRunFlow,
   type ToolUseRunShared,
@@ -42,6 +41,7 @@ import type { ToolDefinition } from '@model';
 
 // Internal imports - use IToolRegistry from core (single source of truth)
 import { getDefaultToolRegistry } from '@tools/registry';
+import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 // Local file imports
 import { BaseAgent } from './BaseAgent';
