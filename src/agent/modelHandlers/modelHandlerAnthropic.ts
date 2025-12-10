@@ -67,6 +67,7 @@ import type { FileLocation } from '@utils/files';
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -911,7 +912,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<MessageParam[]> {
     const trimmedPrefix = userPrefix.trim();
@@ -967,7 +968,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createRoundMessages(
     messages: MessageParam[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<MessageParam[]> {
     // Create content list for the new round message
     const roundContent: ContentBlockParam[] = [];
@@ -1839,7 +1840,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const textPieces: string[] = [];
-    if (typeof result.output === 'string' && result.output.trim().length > 0) {
+    if (isNonEmptyString(result.output)) {
       textPieces.push(result.output);
     }
     textPieces.push(JSON.stringify(sanitizedResult, null, 2));

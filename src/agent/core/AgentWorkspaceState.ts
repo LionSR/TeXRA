@@ -2,6 +2,11 @@
 import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
+import {
+  FileLocationSchema,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 
 /**
  * Thinking block from reasoning models.
@@ -158,14 +163,37 @@ export class FileInteractionState {
 }
 
 export class MediaAttachmentState {
-  public readonly files: string[] = [];
+  public readonly files: FileLocation[] = [];
+  /** Set of absolute paths for O(1) deduplication lookups */
+  private readonly pathSet = new Set<string>();
 
-  addMediaFiles(paths: string[]): void {
-    for (const path of paths) {
-      if (!this.files.includes(path)) {
-        this.files.push(path);
-      }
+  /**
+   * Add a single media file to the attachment state.
+   * Used internally and during deserialization.
+   */
+  private addFile(location: FileLocation): void {
+    if (!this.pathSet.has(location.absolutePath)) {
+      this.pathSet.add(location.absolutePath);
+      this.files.push(location);
     }
+  }
+
+  /**
+   * Add media files to the attachment state.
+   * Deduplicates by absolute path using O(1) Set lookups.
+   */
+  addMediaFiles(locations: FileLocation[]): void {
+    for (const location of locations) {
+      this.addFile(location);
+    }
+  }
+
+  /**
+   * Check if a file is already in the media list by absolute path.
+   * O(1) lookup using internal Set.
+   */
+  hasFile(absolutePath: string): boolean {
+    return this.pathSet.has(absolutePath);
   }
 }
 
@@ -239,6 +267,15 @@ export const ThinkingBlockSchema = z.object({
 });
 
 /**
+ * Schema for media files that handles both legacy (string[]) and new (FileLocation[]) formats.
+ * Legacy snapshots stored plain strings; new snapshots store FileLocation objects.
+ */
+const MediaFileEntrySchema = z.union([
+  z.string(), // Legacy format: plain path string
+  FileLocationSchema, // New format: FileLocation object
+]);
+
+/**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
@@ -247,7 +284,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
     lastResponse: z.string(),
     accumulatedOutput: z.string(),
   }),
-  media: z.object({ files: z.array(z.string()) }),
+  media: z.object({ files: z.array(MediaFileEntrySchema) }),
   reasoning: z.object({
     thinkingBlocks: z.array(ThinkingBlockSchema),
     thinkingAdded: z.boolean(),
@@ -321,7 +358,13 @@ export class AgentWorkspaceState {
 
     state.assembly.lastResponse = snapshot.assembly.lastResponse;
     state.assembly.accumulatedOutput = snapshot.assembly.accumulatedOutput;
-    state.media.files.push(...snapshot.media.files);
+
+    // Restore media files, converting legacy strings to FileLocation
+    const restoredMediaFiles: FileLocation[] = snapshot.media.files.map(
+      (entry) => (typeof entry === 'string' ? pathToLocation(entry) : entry),
+    );
+    state.media.addMediaFiles(restoredMediaFiles);
+
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
     state.document.texcountStats = snapshot.document.texcountStats;

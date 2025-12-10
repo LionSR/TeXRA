@@ -1,6 +1,8 @@
 // Third-party imports
 import { countTokens } from 'gpt-tokenizer';
 import OpenAI from 'openai';
+
+// Local imports - core utilities
 import {
   ChatCompletion,
   ChatCompletionChunk,
@@ -41,6 +43,7 @@ import type { ToolDefinition } from '@model';
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
+import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -487,7 +490,7 @@ export class ModelHandlerOpenAI<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<any[]> {
     const messages: any[] = [];
@@ -578,7 +581,7 @@ export class ModelHandlerOpenAI<
   async createRoundMessages(
     messages: any[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
 
@@ -1171,7 +1174,7 @@ export class ModelHandlerOpenAI<
     message: Record<string, unknown> | undefined,
   ): string | null {
     const reasoning = message?.reasoning_content;
-    if (typeof reasoning === 'string' && reasoning.trim()) {
+    if (isNonEmptyString(reasoning)) {
       return reasoning;
     }
     return null;

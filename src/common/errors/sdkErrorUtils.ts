@@ -30,6 +30,9 @@ import {
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
 } from 'openai';
 
+// Local imports - core utilities
+import { extractErrorMessage, isObject, isString } from '@utils/core';
+
 /**
  * Structured representation of a provider HTTP failure.
  */
@@ -220,7 +223,8 @@ function matchNativeMessageError(
   }
 
   return {
-    message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
+    message:
+      entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
     retryable: entry.retryable,
   };
@@ -262,7 +266,7 @@ function matchNativeHttpError(
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Known SDK error types without status codes are unusual (SDK errors typically
@@ -303,7 +307,7 @@ function pickStatus(value: unknown): number | undefined {
 }
 
 function detectStatusCode(err: unknown): number | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -321,7 +325,7 @@ function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
   }
 
@@ -340,7 +344,7 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -348,7 +352,7 @@ function detectProvider(err: unknown): string | undefined {
     constructor?: { name?: string };
   };
 
-  if (candidate.provider) {
+  if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
@@ -379,7 +383,7 @@ function detectProvider(err: unknown): string | undefined {
  * OpenAI uses 'request_id', Anthropic uses 'request_id' in headers.
  */
 function detectRequestId(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -390,12 +394,12 @@ function detectRequestId(err: unknown): string | undefined {
   };
 
   // OpenAI SDK: request_id property
-  if (typeof candidate.request_id === 'string' && candidate.request_id) {
+  if (isString(candidate.request_id) && candidate.request_id) {
     return candidate.request_id;
   }
 
   // Alternative casing
-  if (typeof candidate.requestId === 'string' && candidate.requestId) {
+  if (isString(candidate.requestId) && candidate.requestId) {
     return candidate.requestId;
   }
 
@@ -405,20 +409,6 @@ function detectRequestId(err: unknown): string | undefined {
     if (headerRequestId) {
       return headerRequestId;
     }
-  }
-
-  return undefined;
-}
-
-function extractMessage(err: unknown): string | undefined {
-  if (err instanceof Error && typeof err.message === 'string') {
-    const trimmed = err.message.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  if (typeof err === 'string') {
-    const trimmed = err.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
   }
 
   return undefined;
@@ -460,7 +450,7 @@ export function formatProviderHttpError(
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Unrecognized errors without status codes reached the fallback path.
