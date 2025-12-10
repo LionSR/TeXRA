@@ -484,21 +484,21 @@ class ResponseProcessNode<C> extends BaseNode<
         store.workspace,
       );
       const useStreaming = options.modelHandler.getStreamingConfig();
-      const isBackgroundMode = options.modelHandler.isBackgroundModeActive();
 
-      // For non-streaming mode, emit thinking/scratchpad to progress view
-      // Skip for background mode - content arrives all at once after polling
-      if (thinkingContent && !useStreaming && !isBackgroundMode) {
+      // For non-streaming mode, emit thinking to progress view
+      // (streaming mode already shows it progressively via streams)
+      if (thinkingContent && !useStreaming) {
         options.logger.info(thinkingContent, {
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
 
+      // Scratchpad is always extracted from final response, not streamed
       const scratchpad = await xmlUtils.extractScratchpad(
         newResponse,
         'scratchpad',
       );
-      if (scratchpad && !isBackgroundMode) {
+      if (scratchpad) {
         options.logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
         });
