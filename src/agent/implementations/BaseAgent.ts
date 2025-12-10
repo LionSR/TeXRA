@@ -30,7 +30,11 @@ import type {
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
-import { MESSAGE_TYPES, type EndGroupStatus } from '@logger/messageTypes';
+import {
+  END_GROUP_STATUS,
+  MESSAGE_TYPES,
+  type EndGroupStatus,
+} from '@logger/messageTypes';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
 
@@ -313,7 +317,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    * End the current run group.
    * @param status Status to mark for the group
    */
-  protected endRunStage(status: EndGroupStatus = 'stopped'): void {
+  protected endRunStage(status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
     if (!this.runStage) {
       return;
     }

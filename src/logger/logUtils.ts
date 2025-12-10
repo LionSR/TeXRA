@@ -5,6 +5,9 @@ import { randomUUID } from 'crypto';
 // Local imports - logger
 import { registry } from './LogChannelRegistry';
 
+// Local imports - constants
+import { END_GROUP_STATUS } from './messageTypes';
+
 // Type imports
 import type { EndGroupStatus } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
@@ -176,7 +179,7 @@ export function startGroup(
 export function endGroup(
   channel: string,
   groupId: string,
-  status: EndGroupStatus = 'stopped',
+  status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   isAgent = false,
 ): void {
   const transport = getTransport(channel, isAgent);
