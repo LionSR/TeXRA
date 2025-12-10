@@ -63,6 +63,8 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 export interface OpenAIResponseToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
+  /** Whether the model supports function calling. Defaults to true. */
+  supportsFunctionCalling?: boolean;
 }
 
 /** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
@@ -70,7 +72,8 @@ export function toOpenAIResponseTools(
   defs: ToolDefinition[],
   options: OpenAIResponseToolOptions = {},
 ): OpenAIResponseTool[] {
-  const { supportsNativeWebSearch = false } = options;
+  const { supportsNativeWebSearch = false, supportsFunctionCalling = true } =
+    options;
   const tools: OpenAIResponseTool[] = [];
 
   for (const d of defs) {
@@ -79,6 +82,15 @@ export function toOpenAIResponseTools(
       tools.push({
         type: 'web_search',
       } as WebSearchTool);
+      continue;
+    }
+
+    // Deep research models only support native tools (web_search, code_interpreter,
+    // file_search, mcp) and do NOT support function calling. When function calling
+    // is disabled, skip all remaining tools - they cannot be converted to function
+    // format, and native conversion for tools other than web_search is not yet
+    // implemented.
+    if (!supportsFunctionCalling) {
       continue;
     }
 
