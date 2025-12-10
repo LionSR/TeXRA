@@ -208,10 +208,11 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
-    // Use OpenRouter if model requires it or if explicitly configured
+    // Models requiring direct API access (e.g., deep research) bypass OpenRouter
     const useOpenRouter =
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false);
+      !this.config.requiresResponsesAPI &&
+      (this.config.openRouterOnly ||
+        getConfig<boolean>('texra.model.useOpenRouter', false));
 
     if (useOpenRouter) {
       try {
@@ -242,6 +243,7 @@ export abstract class ModelHandler<
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
       customBaseUrl: this.config.baseUrl,
+      requiresResponsesAPI: this.config.requiresResponsesAPI,
       logger: this.logger,
     });
   }
