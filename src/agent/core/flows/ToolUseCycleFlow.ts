@@ -36,11 +36,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import {
-  AbsoluteFS,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
+import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
