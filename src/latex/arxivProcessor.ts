@@ -4,6 +4,7 @@ import { pipeline } from 'node:stream/promises';
 
 // Third-party imports
 import axios from 'axios';
+import { StatusCodes } from 'http-status-codes';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
@@ -58,11 +59,11 @@ export class ArxivSourceProcessor {
         timeout,
       });
 
-      if (response.status === 404) {
+      if (response.status === StatusCodes.NOT_FOUND) {
         throw new Error('Source not available for this arXiv ID');
       }
 
-      if (response.status !== 200) {
+      if (response.status !== StatusCodes.OK) {
         throw new Error(`Failed to download: HTTP ${response.status}`);
       }
 

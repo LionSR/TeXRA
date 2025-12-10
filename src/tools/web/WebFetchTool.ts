@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 
 // Third-party imports
 import axios from 'axios';
+import { StatusCodes } from 'http-status-codes';
 import TurndownService from 'turndown';
 import { z } from 'zod';
 
@@ -83,7 +84,8 @@ export class WebFetchTool extends defineTool({
         maxRedirects: 5,
         maxContentLength: 10 * 1024 * 1024,
         maxBodyLength: 10 * 1024 * 1024,
-        validateStatus: (status) => status >= 200 && status < 400,
+        validateStatus: (status) =>
+          status >= StatusCodes.OK && status < StatusCodes.BAD_REQUEST,
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
