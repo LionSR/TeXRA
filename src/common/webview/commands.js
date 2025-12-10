@@ -89,6 +89,8 @@ export const MAIN_VIEW_COMMANDS = {
   SHOW_DEPENDENCY_BANNER: 'showDependencyBanner',
   HIDE_DEPENDENCY_BANNER: 'hideDependencyBanner',
   UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
+  SHOW_GETTING_STARTED_BANNER: 'showGettingStartedBanner',
+  HIDE_GETTING_STARTED_BANNER: 'hideGettingStartedBanner',
 
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',

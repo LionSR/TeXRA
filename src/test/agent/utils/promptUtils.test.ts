@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 import * as path from 'path';
 
-// Local imports - agent
-import { writePromptToXml } from '@agent/utils/promptUtils';
-// Local imports - storage
+// Local imports - prompt utilities
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { writePromptToXml } from '@utils/prompt';
+// Local imports - storage
 // Internal imports
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 
