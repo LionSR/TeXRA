@@ -603,12 +603,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (convertedTools.length > 0) {
         params.tools = convertedTools;
         params.tool_choice = 'auto';
-
-        // Include web search sources in response when native web search is enabled
-        if (this.capabilities.supportsNativeWebSearch) {
-          params.include = ['web_search_call.action.sources'];
-        }
       }
+    }
+
+    // Include web search sources in response when native web search is enabled.
+    // This is set outside the tools block because deep research models use
+    // native web search even when no explicit tools are passed.
+    if (this.capabilities.supportsNativeWebSearch) {
+      params.include = ['web_search_call.action.sources'];
     }
 
     if (this.capabilities.supportsReasoning) {
