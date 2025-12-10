@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -20,6 +22,7 @@ import {
   type AgentRunShared,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 // Schema export for serialization reference (runtime uses class instances)
 export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
@@ -35,12 +38,26 @@ type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
 
 type ToolUseCycleExecResult = NodeExecResult<void>;
 
-export type ToolUseRunPhase =
-  | 'idle'
-  | 'init'
-  | 'prepare'
-  | 'cycle'
-  | 'finalize';
+/**
+ * Tool use run phase - single source of truth for tool-use agent flow phases.
+ */
+export const TOOL_USE_RUN_PHASE = {
+  IDLE: 'idle',
+  INIT: 'init',
+  PREPARE: 'prepare',
+  CYCLE: 'cycle',
+  FINALIZE: 'finalize',
+} as const;
+
+export const ToolUseRunPhaseSchema = z.enum([
+  TOOL_USE_RUN_PHASE.IDLE,
+  TOOL_USE_RUN_PHASE.INIT,
+  TOOL_USE_RUN_PHASE.PREPARE,
+  TOOL_USE_RUN_PHASE.CYCLE,
+  TOOL_USE_RUN_PHASE.FINALIZE,
+]);
+
+export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
 
 export type ToolUseRunLifecycle = AgentLifecycleState<ToolUseRunPhase>;
 
@@ -208,11 +225,13 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   const cycleNode = new ToolUseCycleNode<C>();
   const finalizeNode = createAgentFinalizeNode<
     ToolUseRunShared<C>,
-    'error' | 'stopped'
+    EndGroupStatus
   >({
     finalizePhase: 'finalize',
     computeStatus: ({ lifecycle }) =>
-      lifecycle.status === 'error' ? 'error' : 'stopped',
+      lifecycle.status === 'error'
+        ? END_GROUP_STATUS.ERROR
+        : END_GROUP_STATUS.STOPPED,
     runFinalize: async ({ hooks }, status) => {
       await hooks.clearPersistedSnapshot();
       await hooks.end(status);
