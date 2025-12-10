@@ -7,17 +7,41 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local file imports
-import {
-  ModelHandlerOpenAI,
-  extractReasoningDelta,
-} from './modelHandlerOpenAI';
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
+  ChatCompletionChunk,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
+
+/**
+ * Extracts reasoning delta from streaming chunks for OpenRouter.
+ * Checks both reasoning_details (DeepSeek V3.2) and reasoning_content (others).
+ */
+const extractOpenRouterReasoningDelta = (chunk: ChatCompletionChunk): string => {
+  const choice = chunk.choices[0];
+  if (!choice) return '';
+
+  const delta = choice.delta as {
+    reasoning_details?: string;
+    reasoning_content?: string;
+  };
+
+  // Try reasoning_details first (DeepSeek V3.2 via OpenRouter)
+  if ('reasoning_details' in delta && delta.reasoning_details) {
+    return delta.reasoning_details;
+  }
+
+  // Fall back to reasoning_content (other models)
+  if ('reasoning_content' in delta && delta.reasoning_content) {
+    return delta.reasoning_content;
+  }
+
+  return '';
+};
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -89,7 +113,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         ? this.createOutputStream()
         : undefined;
       for await (const chunk of stream) {
-        const reasoningDelta = extractReasoningDelta(chunk);
+        const reasoningDelta = extractOpenRouterReasoningDelta(chunk);
         const contentDelta = chunk.choices[0]?.delta?.content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
         if (contentDelta) output?.append(contentDelta);
