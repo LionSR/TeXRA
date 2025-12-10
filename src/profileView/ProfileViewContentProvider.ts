@@ -8,7 +8,10 @@ import { BaseViewContentProvider } from '@common/webview';
 const PROFILE_VIEW_MODULES = [
   { key: 'profileViewStateUri', path: 'modules/profileViewState.js' },
   { key: 'agentsTableUri', path: 'modules/uiManagers/AgentsTable.js' },
-  { key: 'profileEventsUri', path: 'modules/uiManagers/ProfileEventsManager.js' },
+  {
+    key: 'profileEventsUri',
+    path: 'modules/uiManagers/ProfileEventsManager.js',
+  },
 ] as const;
 
 export class ProfileViewContentProvider extends BaseViewContentProvider {
