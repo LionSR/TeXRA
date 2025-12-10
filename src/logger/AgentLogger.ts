@@ -570,7 +570,10 @@ export class AgentLogger {
     );
   }
 
-  endGroup(groupId: string, status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
+  endGroup(
+    groupId: string,
+    status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
+  ): void {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
