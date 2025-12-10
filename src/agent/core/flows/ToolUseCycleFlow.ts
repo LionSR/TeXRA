@@ -768,21 +768,21 @@ class ToolUseDispatchNode<C> extends BaseNode<
         if (typeof candidate !== 'string' || candidate.trim() === '') {
           continue;
         }
-        // Normalize to absolute path for consistent duplicate detection
-        // Tool results may provide relative or absolute paths
-        const absoluteCandidate = WorkspaceFS.fullPath(candidate);
+        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
+        // including external paths outside the workspace
+        const location = pathToLocation(candidate);
         // Check for duplicates using hasFile method (compares absolute paths)
-        if (store.workspace.media.hasFile(absoluteCandidate)) {
+        if (store.workspace.media.hasFile(location.absolutePath)) {
           continue;
         }
         // Check if already in toAdd list
-        if (toAdd.some((loc) => loc.absolutePath === absoluteCandidate)) {
+        if (toAdd.some((loc) => loc.absolutePath === location.absolutePath)) {
           continue;
         }
         try {
           const exists = await WorkspaceFS.exists(candidate);
           if (exists) {
-            toAdd.push(pathToLocation(absoluteCandidate));
+            toAdd.push(location);
           }
         } catch {
           // Ignore errors when checking existence
