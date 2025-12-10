@@ -40,10 +40,9 @@ import {
 // Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import { PromptBuilder } from '@agent/utils/PromptBuilder';
-import { writePromptToXml } from '@agent/utils/promptUtils';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import { PromptBuilder, writePromptToXml } from '@utils/prompt';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
