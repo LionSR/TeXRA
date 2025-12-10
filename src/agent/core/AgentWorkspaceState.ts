@@ -2,6 +2,11 @@
 import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
+import {
+  FileLocationSchema,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 
 /**
  * Thinking block from reasoning models.
@@ -158,14 +163,28 @@ export class FileInteractionState {
 }
 
 export class MediaAttachmentState {
-  public readonly files: string[] = [];
+  public readonly files: FileLocation[] = [];
 
-  addMediaFiles(paths: string[]): void {
-    for (const path of paths) {
-      if (!this.files.includes(path)) {
-        this.files.push(path);
+  /**
+   * Add media files to the attachment state.
+   * Deduplicates by absolute path.
+   */
+  addMediaFiles(locations: FileLocation[]): void {
+    for (const location of locations) {
+      const isDuplicate = this.files.some(
+        (existing) => existing.absolutePath === location.absolutePath,
+      );
+      if (!isDuplicate) {
+        this.files.push(location);
       }
     }
+  }
+
+  /**
+   * Check if a file is already in the media list by absolute path.
+   */
+  hasFile(absolutePath: string): boolean {
+    return this.files.some((f) => f.absolutePath === absolutePath);
   }
 }
 
@@ -239,6 +258,15 @@ export const ThinkingBlockSchema = z.object({
 });
 
 /**
+ * Schema for media files that handles both legacy (string[]) and new (FileLocation[]) formats.
+ * Legacy snapshots stored plain strings; new snapshots store FileLocation objects.
+ */
+const MediaFileEntrySchema = z.union([
+  z.string(), // Legacy format: plain path string
+  FileLocationSchema, // New format: FileLocation object
+]);
+
+/**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
@@ -247,7 +275,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
     lastResponse: z.string(),
     accumulatedOutput: z.string(),
   }),
-  media: z.object({ files: z.array(z.string()) }),
+  media: z.object({ files: z.array(MediaFileEntrySchema) }),
   reasoning: z.object({
     thinkingBlocks: z.array(ThinkingBlockSchema),
     thinkingAdded: z.boolean(),
@@ -321,7 +349,18 @@ export class AgentWorkspaceState {
 
     state.assembly.lastResponse = snapshot.assembly.lastResponse;
     state.assembly.accumulatedOutput = snapshot.assembly.accumulatedOutput;
-    state.media.files.push(...snapshot.media.files);
+
+    // Restore media files, converting legacy strings to FileLocation
+    for (const entry of snapshot.media.files) {
+      if (typeof entry === 'string') {
+        // Legacy format: convert string path to FileLocation
+        state.media.files.push(pathToLocation(entry));
+      } else {
+        // New format: already a FileLocation
+        state.media.files.push(entry);
+      }
+    }
+
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
     state.document.texcountStats = snapshot.document.texcountStats;

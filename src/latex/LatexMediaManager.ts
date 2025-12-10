@@ -145,7 +145,7 @@ export class LatexMediaManager {
     );
     compileResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
-        workspaceState.media.addMediaFiles([result.value]);
+        workspaceState.media.addMediaFiles([pathToLocation(result.value)]);
       }
     });
   }
@@ -172,14 +172,14 @@ export class LatexMediaManager {
           `Extracted ${result.value.length} figures from ${file.absolutePath}`,
           { groupId: activeGroupId },
         );
-        // Convert relative paths (relative to input file directory) to absolute paths
-        // This is necessary because MediaAttachmentProcessor resolves relative paths
-        // from the workspace root, not from each input file's subdirectory
+        // Convert relative paths (relative to input file directory) to FileLocation
+        // pathToLocation gives us both absolutePath (for resolution) and relativePath (for display)
         const baseDir = path.dirname(file.absolutePath);
-        const absolutePaths = result.value.map((relativePath) =>
-          path.normalize(path.join(baseDir, relativePath)),
-        );
-        workspaceState.media.addMediaFiles(absolutePaths);
+        const fileLocations = result.value.map((relativePath) => {
+          const absolutePath = path.normalize(path.join(baseDir, relativePath));
+          return pathToLocation(absolutePath);
+        });
+        workspaceState.media.addMediaFiles(fileLocations);
         mirrorTasks.push(
           this.mirrorFigureDependencies(file, result.value, activeGroupId),
         );
@@ -206,10 +206,8 @@ export class LatexMediaManager {
         result.value &&
         result.value.length > 0
       ) {
-        // Convert FileLocation[] to string[] for legacy media attachment API
-        workspaceState.media.addMediaFiles(
-          result.value.map((loc) => loc.absolutePath),
-        );
+        // TikZ compilation already returns FileLocation[]
+        workspaceState.media.addMediaFiles(result.value);
       }
     });
     if (logSummary) {
@@ -263,7 +261,9 @@ export class LatexMediaManager {
     }
 
     if (extraMediaFiles.length > 0) {
-      workspaceState.media.addMediaFiles(extraMediaFiles);
+      workspaceState.media.addMediaFiles(
+        extraMediaFiles.map((f) => pathToLocation(f)),
+      );
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
