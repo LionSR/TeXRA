@@ -167,6 +167,15 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Indicates whether background mode is active for this handler.
+   * Background mode runs requests asynchronously and polls for completion.
+   * Override in handlers that support background execution.
+   */
+  public isBackgroundModeActive(): boolean {
+    return false;
+  }
+
+  /**
    * Enables or disables Progress view updates.
    */
   public setProgressViewEnabled(enabled: boolean): void {

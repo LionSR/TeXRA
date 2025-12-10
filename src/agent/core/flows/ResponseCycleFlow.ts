@@ -35,7 +35,6 @@ import { getSystemPromptWithRules } from '@utils/prompt';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -486,15 +485,15 @@ class ResponseProcessNode<C> extends BaseNode<
       );
       const useStreaming = options.modelHandler.getStreamingConfig();
 
+      // For non-streaming mode, emit thinking to progress view
+      // (streaming mode already shows it progressively via streams)
       if (thinkingContent && !useStreaming) {
-        const formatted = await xmlUtils.formatContent(thinkingContent);
-        if (isNonEmptyString(formatted)) {
-          options.logger.info(formatted, {
-            messageType: MESSAGE_TYPES.THINKING,
-          });
-        }
+        options.logger.info(thinkingContent, {
+          messageType: MESSAGE_TYPES.THINKING,
+        });
       }
 
+      // Scratchpad is always extracted from final response, not streamed
       const scratchpad = await xmlUtils.extractScratchpad(
         newResponse,
         'scratchpad',
@@ -502,13 +501,6 @@ class ResponseProcessNode<C> extends BaseNode<
       if (scratchpad) {
         options.logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
-        });
-      }
-
-      if (newResponse && !useStreaming) {
-        const formattedResponse = await xmlUtils.formatContent(newResponse);
-        options.logger.info(formattedResponse, {
-          messageType: MESSAGE_TYPES.INTERNAL,
         });
       }
 
