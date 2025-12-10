@@ -6,9 +6,14 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 
-// Common capabilities for OpenAI deep research models
-// Note: Deep research models only support web search, file search, MCP, and code interpreter.
-// Function calling is not supported.
+// Common capabilities for OpenAI deep research models.
+//
+// Tool capability combinations:
+// - Deep research: supportsFunctionCalling=false, supportsNativeWebSearch=true
+//   Only native tools (web_search, file_search, mcp, code_interpreter) are supported.
+//   Function calling tools are rejected with HTTP 400.
+// - Standard models: supportsFunctionCalling=true, supportsNativeWebSearch varies
+//   Function calling tools are converted normally. Native web_search used if supported.
 const OPENAI_DEEP_RESEARCH_DEFAULT_CAPABILITIES: ModelCapabilities = {
   ...DEFAULT_MODEL_CAPABILITIES,
   supportsFunctionCalling: false,
