@@ -272,8 +272,8 @@ export class BannerManager extends BaseUIManager {
       return;
     }
 
-    // Clear existing content
-    textContainer.innerHTML = '';
+    // Clear existing content safely
+    textContainer.replaceChildren();
 
     // Build the message with command links
     const introText = document.createTextNode(
