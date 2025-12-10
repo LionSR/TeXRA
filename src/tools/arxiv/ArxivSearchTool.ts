@@ -1,5 +1,12 @@
 // Third-party imports
-import { all, and, category as catQuery } from 'arxiv-client';
+import {
+  all,
+  and,
+  author as authorQuery,
+  title as titleQuery,
+  abstract as abstractQuery,
+  category as catQuery,
+} from 'arxiv-client';
 import { z } from 'zod';
 
 // Local imports - latex
@@ -18,9 +25,13 @@ import { defineTool } from '@tools/core/define';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
+const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
 
 const ArxivSearchInputSchema = z.strictObject({
   query: z.string(),
+  field: SearchFieldSchema.optional().describe(
+    'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
+  ),
   categories: z.array(z.string()).optional(),
   maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).optional(),
   start: z.int().min(0).optional(),
@@ -33,7 +44,7 @@ export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
 export class ArxivSearchTool extends defineTool({
   name: 'arxiv_search',
   description:
-    'Search arXiv for papers and return basic metadata for each hit.',
+    'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',
   schema: ArxivSearchInputSchema,
 }) {
   protected async execute(input: ArxivSearchInput) {
@@ -42,13 +53,28 @@ export class ArxivSearchTool extends defineTool({
       throw new ToolError('Search query cannot be empty.');
     }
 
+    // Select the query function based on the field parameter
+    const searchField = input.field ?? 'all';
+    const fieldQueryFn = (term: string) => {
+      switch (searchField) {
+        case 'author':
+          return authorQuery(term);
+        case 'title':
+          return titleQuery(term);
+        case 'abstract':
+          return abstractQuery(term);
+        default:
+          return all(term);
+      }
+    };
+
     // Build query using arxiv-client query builder
     const terms = Array.from(
       trimmedQuery.matchAll(/"([^"]+)"|\S+/g),
       (match) => match[1] ?? match[0],
     );
 
-    const termQueries = terms.map((term) => all(term));
+    const termQueries = terms.map((term) => fieldQueryFn(term));
     let query = termQueries.length === 1 ? termQueries[0] : and(...termQueries);
 
     // Add category filters if provided
@@ -117,14 +143,16 @@ export class ArxivSearchTool extends defineTool({
 
     const payload = {
       query: trimmedQuery,
+      field: searchField,
       start: input.start ?? 0,
       count: results.length,
       totalResults: null, // arxiv-client doesn't expose totalResults
       results,
     };
 
+    const fieldLabel = searchField !== 'all' ? ` (${searchField})` : '';
     return toolResult({
-      summary: `Found ${results.length} arXiv result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
+      summary: `Found ${results.length} arXiv result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
     });
   }
