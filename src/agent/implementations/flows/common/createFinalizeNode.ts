@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode } from '@agent/node';
 
+// Local imports - constants
+import { END_GROUP_STATUS } from '@logger/messageTypes';
+
 // Internal imports
 import { finalizeLifecycle } from './finalizeLifecycle';
 import { setLifecyclePhase } from './lifecycle';
@@ -151,7 +154,9 @@ export function createStandardFinalizeNode<
   return createAgentFinalizeNode<Shared, 'error' | 'stopped'>({
     finalizePhase: options.finalizePhase,
     computeStatus: ({ lifecycle }) =>
-      lifecycle.error || lifecycle.status === 'error' ? 'error' : 'stopped',
+      lifecycle.error || lifecycle.status === 'error'
+        ? END_GROUP_STATUS.ERROR
+        : END_GROUP_STATUS.STOPPED,
     runFinalize: async (context, status) => {
       if (options.beforeEnd) {
         await options.beforeEnd(context);
