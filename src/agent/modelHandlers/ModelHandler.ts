@@ -370,7 +370,7 @@ export abstract class ModelHandler<
    * @returns Array of media content objects in provider-specific format
    */
   public async createMediaMessage(
-    mediaFiles: string[],
+    mediaFiles: FileLocation[],
   ): Promise<ReturnType<typeof this.createMediaContent>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
@@ -481,7 +481,7 @@ export abstract class ModelHandler<
   abstract initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<M[]>;
 
@@ -492,7 +492,7 @@ export abstract class ModelHandler<
   abstract createRoundMessages(
     messages: M[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<M[]>;
 
   /**
