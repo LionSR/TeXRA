@@ -34,14 +34,12 @@ export class ModelFactory {
    * @throws Error if provider is unsupported
    */
   static createHandler(config: ModelConfig): ModelHandler {
-    // Deep research models (names containing 'deep-research') only support the
-    // Responses API and must bypass OpenRouter even if configured
-    const isDeepResearchModel = config.fullName.includes('deep-research');
-    if (config.provider === ModelProvider.OPENAI && isDeepResearchModel) {
-      logger.debug(
-        CHANNEL,
-        'Using OpenAI Responses API Handler for deep research model',
-      );
+    // Models requiring Responses API (e.g., deep research) must bypass OpenRouter
+    if (
+      config.provider === ModelProvider.OPENAI &&
+      config.requiresResponsesAPI
+    ) {
+      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
       return new ModelHandlerOpenAIResponse(config);
     }
 
