@@ -36,7 +36,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, pathToLocation, type FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -762,20 +762,24 @@ class ToolUseDispatchNode<C> extends BaseNode<
     });
 
     if (result.files && result.files.length > 0) {
-      const existing = store.workspace.media.files;
-      const toAdd: string[] = [];
+      const toAdd: FileLocation[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
         if (typeof candidate !== 'string' || candidate.trim() === '') {
           continue;
         }
-        if (existing.includes(candidate) || toAdd.includes(candidate)) {
+        // Check for duplicates using hasFile method
+        if (store.workspace.media.hasFile(candidate)) {
+          continue;
+        }
+        // Check if already in toAdd list
+        if (toAdd.some((loc) => loc.absolutePath === candidate)) {
           continue;
         }
         try {
           const exists = await WorkspaceFS.exists(candidate);
           if (exists) {
-            toAdd.push(candidate);
+            toAdd.push(pathToLocation(candidate));
           }
         } catch {
           // Ignore errors when checking existence

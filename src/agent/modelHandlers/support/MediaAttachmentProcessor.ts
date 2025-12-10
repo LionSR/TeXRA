@@ -17,7 +17,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ModelCapabilities } from '@model/ModelConfig';
 
 // Internal imports
-import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
+import { AbsoluteFS, getMimeType, type FileLocation } from '@utils/files';
 
 export type MediaFileResult = { path: string; ok: boolean };
 
@@ -144,14 +144,14 @@ export class MediaAttachmentProcessor {
   }
 
   public async loadEntries(
-    mediaFiles: string[],
+    mediaFiles: FileLocation[],
   ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
     if (mediaFiles.length === 0) {
       return { entries: [], results: [] };
     }
 
     const settledResults = await Promise.allSettled(
-      mediaFiles.map((mediaFile) => this.loadMediaEntry(mediaFile)),
+      mediaFiles.map((location) => this.loadMediaEntry(location)),
     );
 
     const entries: MediaEntry[] = [];
@@ -168,12 +168,13 @@ export class MediaAttachmentProcessor {
         }
       } else {
         const reason = settledResult.reason;
-        const mediaFile = mediaFiles[index];
+        const location = mediaFiles[index];
+        const displayPath = this.getDisplayPath(location);
         this.logger.error(
-          `Failed to load media entry for ${mediaFile}: ${getSdkErrorMessage(reason)}`,
+          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
           { data: reason },
         );
-        results.push({ path: mediaFile, ok: false });
+        results.push({ path: displayPath, ok: false });
       }
     });
 
@@ -193,14 +194,15 @@ export class MediaAttachmentProcessor {
   }
 
   private async loadMediaEntry(
-    mediaFile: string,
+    location: FileLocation,
   ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
-    const absolutePath = this.resolveAbsolutePath(mediaFile);
+    const absolutePath = location.absolutePath;
+    const displayPath = this.getDisplayPath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {
-      this.logger.error(`File not found: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
+      this.logger.error(`File not found: ${displayPath}`);
+      return { result: { path: displayPath, ok: false } };
     }
 
     let fileSize: number;
@@ -210,26 +212,26 @@ export class MediaAttachmentProcessor {
     } catch (err) {
       const message = toErrorMessage(err);
       this.logger.error(
-        `Unable to read file info for ${mediaFile}: ${message}`,
+        `Unable to read file info for ${displayPath}: ${message}`,
       );
-      return { result: { path: mediaFile, ok: false } };
+      return { result: { path: displayPath, ok: false } };
     }
 
     if (fileSize === 0) {
-      this.logger.warn(`Skipping empty media file: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
+      this.logger.warn(`Skipping empty media file: ${displayPath}`);
+      return { result: { path: displayPath, ok: false } };
     }
 
-    const fileExtension = path.extname(mediaFile).toLowerCase();
+    const fileExtension = path.extname(absolutePath).toLowerCase();
 
     try {
-      const processed = await this.processMedia(mediaFile, fileExtension);
+      const processed = await this.processMedia(absolutePath, fileExtension);
       this.logger.debug(
-        `Processed ${processed.kind}: ${mediaFile}, type: ${processed.mediaType}`,
+        `Processed ${processed.kind}: ${displayPath}, type: ${processed.mediaType}`,
       );
 
       const entry = this.createEntriesForProcessedMedia(
-        mediaFile,
+        displayPath,
         absolutePath,
         fileExtension,
         processed,
@@ -237,21 +239,27 @@ export class MediaAttachmentProcessor {
 
       return {
         entry,
-        result: { path: mediaFile, ok: true },
+        result: { path: displayPath, ok: true },
       };
     } catch (err) {
       this.logger.error(
-        `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
+        `Failed to process media ${displayPath}: ${getSdkErrorMessage(err)}`,
         { data: err },
       );
-      return { result: { path: mediaFile, ok: false } };
+      return { result: { path: displayPath, ok: false } };
     }
   }
 
-  private resolveAbsolutePath(mediaFile: string): string {
-    return path.isAbsolute(mediaFile)
-      ? mediaFile
-      : WorkspaceFS.fullPath(mediaFile);
+  /**
+   * Get a display-friendly path for a file location.
+   * For workspace files, returns the relative path (e.g., "logos/mpq-logo.pdf").
+   * For external files, returns just the basename.
+   */
+  private getDisplayPath(location: FileLocation): string {
+    if (location.kind === 'workspace' || location.kind === 'runStorage') {
+      return location.relativePath;
+    }
+    return path.basename(location.absolutePath);
   }
 
   private shouldReturnNativePdf(
