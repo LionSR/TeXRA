@@ -20,6 +20,17 @@ import { compileLatex2Pdf } from './texTools';
 import { getTeXCountStats } from './texcount';
 
 /**
+ * Flexible input type that accepts either a string path or FileLocation.
+ * Provides API consistency while maintaining caller convenience.
+ */
+type PathInput = string | FileLocation;
+
+/** Convert PathInput to FileLocation, handling both string and FileLocation inputs */
+function toFileLocation(input: PathInput): FileLocation {
+  return typeof input === 'string' ? pathToLocation(input) : input;
+}
+
+/**
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
@@ -161,32 +172,50 @@ export class LatexMediaManager {
 
     const mirrorTasks: Promise<void>[] = [];
 
-    figureResults.forEach((result, idx) => {
+    for (let idx = 0; idx < figureResults.length; idx++) {
+      const result = figureResults[idx];
       if (
-        result.status === 'fulfilled' &&
-        result.value &&
-        result.value.length > 0
+        result.status !== 'fulfilled' ||
+        !result.value ||
+        result.value.length === 0
       ) {
-        const file = files[idx];
-        this.logger.debug(
-          `Extracted ${result.value.length} figures from ${file.absolutePath}`,
-          { groupId: activeGroupId },
-        );
-        // result.value contains paths relative to the LaTeX file's directory.
-        // We first resolve them to absolute paths by joining with baseDir,
-        // then convert to FileLocation (which provides both absolutePath for
-        // file operations and relativePath for user display).
-        const baseDir = path.dirname(file.absolutePath);
-        const fileLocations: FileLocation[] = result.value.map((relativePath) => {
-          const absolutePath = path.normalize(path.join(baseDir, relativePath));
-          return pathToLocation(absolutePath);
-        });
-        workspaceState.media.addMediaFiles(fileLocations);
-        mirrorTasks.push(
-          this.mirrorFigureDependencies(file, result.value, activeGroupId),
-        );
+        continue;
       }
-    });
+
+      const file = files[idx];
+      this.logger.debug(
+        `Extracted ${result.value.length} figures from ${file.absolutePath}`,
+        { groupId: activeGroupId },
+      );
+
+      // result.value contains paths relative to the LaTeX file's directory.
+      // We first resolve them to absolute paths by joining with baseDir,
+      // then convert to FileLocation (which provides both absolutePath for
+      // file operations and relativePath for user display).
+      const baseDir = path.dirname(file.absolutePath);
+      const fileLocations: FileLocation[] = [];
+
+      for (const relativePath of result.value) {
+        const absolutePath = path.normalize(path.join(baseDir, relativePath));
+        const location = pathToLocation(absolutePath);
+
+        // Debug validation: warn if extracted figure path doesn't exist
+        // This helps catch figure extraction issues early
+        const exists = await flexibleFS.exists(location);
+        if (!exists) {
+          this.logger.debug(
+            `Extracted figure path does not exist: ${absolutePath} (from ${file.absolutePath})`,
+            { groupId: activeGroupId },
+          );
+        }
+        fileLocations.push(location);
+      }
+
+      workspaceState.media.addMediaFiles(fileLocations);
+      mirrorTasks.push(
+        this.mirrorFigureDependencies(file, result.value, activeGroupId),
+      );
+    }
 
     if (mirrorTasks.length > 0) {
       await Promise.all(mirrorTasks);
@@ -234,7 +263,7 @@ export class LatexMediaManager {
       includeFigureExtraction: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
-      extraMediaFiles?: string[];
+      extraMediaFiles?: PathInput[];
       logTikzSummary?: boolean;
     },
   ): Promise<void> {
@@ -264,7 +293,7 @@ export class LatexMediaManager {
 
     if (extraMediaFiles.length > 0) {
       workspaceState.media.addMediaFiles(
-        extraMediaFiles.map((f) => pathToLocation(f)),
+        extraMediaFiles.map(toFileLocation),
       );
     }
 
@@ -289,16 +318,16 @@ export class LatexMediaManager {
    * Process input files to extract figures, compile TikZ pictures and PDFs.
    * Adds resulting media paths to the provided AgentWorkspaceState.
    *
-   * @param extraMediaFiles - Additional media file paths to include (as strings).
-   *   These are typically user-provided paths from agent config (mediaFile, mediaFiles).
-   *   Kept as string[] for caller convenience; converted to FileLocation internally.
+   * @param extraMediaFiles - Additional media files to include.
+   *   Accepts both string paths and FileLocation objects for API flexibility.
+   *   Typically user-provided paths from agent config (mediaFile, mediaFiles).
    */
   async processInputFiles(
     inputFiles: FileLocation[],
     workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
-    extraMediaFiles: string[] = [],
+    extraMediaFiles: PathInput[] = [],
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: true,
