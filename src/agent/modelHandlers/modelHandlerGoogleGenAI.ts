@@ -706,7 +706,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return createModelContent(createPartFromText(text));
   }
 
-  override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
+  override async createMediaMessage(
+    mediaFiles: FileLocation[],
+  ): Promise<Part[]> {
     if (!mediaFiles || mediaFiles.length === 0 || !this.supportsFileUploads()) {
       return [];
     }
