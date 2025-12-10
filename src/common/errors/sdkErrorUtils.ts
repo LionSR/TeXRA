@@ -57,25 +57,6 @@ export interface ProviderHttpErrorDetails {
 }
 
 /**
- * Custom descriptions for HTTP status codes used in error messages.
- * Status text/titles are obtained via getReasonPhrase() from http-status-codes.
- */
-const HTTP_STATUS_DESCRIPTIONS: Record<number, string> = {
-  [StatusCodes.BAD_REQUEST]: 'Invalid parameters',
-  [StatusCodes.UNAUTHORIZED]: 'Invalid API key',
-  [StatusCodes.PAYMENT_REQUIRED]: 'Insufficient credits',
-  [StatusCodes.FORBIDDEN]: 'Permission denied',
-  [StatusCodes.NOT_FOUND]: 'Resource not found',
-  [StatusCodes.CONFLICT]: 'Conflict error',
-  [StatusCodes.UNPROCESSABLE_ENTITY]: 'Unprocessable entity',
-  [StatusCodes.TOO_MANY_REQUESTS]: 'Rate limit exceeded',
-  [StatusCodes.INTERNAL_SERVER_ERROR]: 'Provider error',
-  [StatusCodes.BAD_GATEWAY]: 'Provider error',
-  [StatusCodes.SERVICE_UNAVAILABLE]: 'No available providers',
-  [StatusCodes.GATEWAY_TIMEOUT]: 'Provider timeout',
-};
-
-/**
  * Safely get the reason phrase for a status code.
  * Returns undefined if the status code is not recognized.
  */
@@ -278,7 +259,7 @@ function matchNativeHttpError(
   const statusText = detectStatusText(err, statusCode);
   const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
-    ? HTTP_STATUS_DESCRIPTIONS[statusCode]
+    ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
@@ -476,7 +457,7 @@ export function formatProviderHttpError(
   const requestId = detectRequestId(err);
 
   const fallbackMessage = statusCode
-    ? HTTP_STATUS_DESCRIPTIONS[statusCode]
+    ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
