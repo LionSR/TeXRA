@@ -34,6 +34,17 @@ export class ModelFactory {
    * @throws Error if provider is unsupported
    */
   static createHandler(config: ModelConfig): ModelHandler {
+    // Deep research models (names containing 'deep-research') only support the
+    // Responses API and must bypass OpenRouter even if configured
+    const isDeepResearchModel = config.fullName.includes('deep-research');
+    if (config.provider === ModelProvider.OPENAI && isDeepResearchModel) {
+      logger.debug(
+        CHANNEL,
+        'Using OpenAI Responses API Handler for deep research model',
+      );
+      return new ModelHandlerOpenAIResponse(config);
+    }
+
     // Use OpenRouter if model requires it or if explicitly configured in toolConfig
     const useOpenRouter =
       config.openRouterOnly ||
@@ -53,17 +64,13 @@ export class ModelFactory {
     }
 
     // Check for OpenAI Responses API usage
-    // Deep research models only support the Responses API
     const useOpenAIResponsesAPI = getConfig<boolean>(
       'texra.model.useOpenAIResponsesAPI',
       false,
     );
-    const isDeepResearchModel = config.fullName.includes('deep-research');
     if (
       config.provider === ModelProvider.OPENAI &&
-      (useOpenAIResponsesAPI ||
-        config.fullName.startsWith('gpt-oss') ||
-        isDeepResearchModel)
+      (useOpenAIResponsesAPI || config.fullName.startsWith('gpt-oss'))
     ) {
       logger.debug(
         CHANNEL,
