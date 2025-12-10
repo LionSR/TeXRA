@@ -397,7 +397,9 @@ export class ModelHandlerOpenAI<
    *
    * @returns Normalization options, or undefined to skip normalization
    */
-  protected getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions | undefined {
+  protected getMessageNormalizationOptions():
+    | NormalizeOpenAIMessageContentOptions
+    | undefined {
     return undefined; // Default: no normalization
   }
 

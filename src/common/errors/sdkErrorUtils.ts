@@ -70,7 +70,10 @@ const HTTP_STATUS_INFO: Record<number, { title: string; description: string }> =
     429: { title: 'Too Many Requests', description: 'Rate limit exceeded' },
     500: { title: 'Internal Server Error', description: 'Provider error' },
     502: { title: 'Bad Gateway', description: 'Provider error' },
-    503: { title: 'Service Unavailable', description: 'No available providers' },
+    503: {
+      title: 'Service Unavailable',
+      description: 'No available providers',
+    },
     504: { title: 'Gateway Timeout', description: 'Provider timeout' },
   };
 
