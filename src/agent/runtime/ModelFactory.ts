@@ -53,13 +53,17 @@ export class ModelFactory {
     }
 
     // Check for OpenAI Responses API usage
+    // Deep research models only support the Responses API
     const useOpenAIResponsesAPI = getConfig<boolean>(
       'texra.model.useOpenAIResponsesAPI',
       false,
     );
+    const isDeepResearchModel = config.fullName.includes('deep-research');
     if (
       config.provider === ModelProvider.OPENAI &&
-      (useOpenAIResponsesAPI || config.fullName.startsWith('gpt-oss'))
+      (useOpenAIResponsesAPI ||
+        config.fullName.startsWith('gpt-oss') ||
+        isDeepResearchModel)
     ) {
       logger.debug(
         CHANNEL,
