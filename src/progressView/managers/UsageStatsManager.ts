@@ -41,19 +41,23 @@ const DisplayUsageStatsParsingSchema = z
     outputTokens: FiniteNumber,
     cost: FiniteNumber,
     // Extended fields - preserved for display
+    responseTimeMs: OptionalFiniteNumber,
     cachedInputTokens: OptionalFiniteNumber,
     cacheCreationTokens: OptionalFiniteNumber,
     percentageCached: OptionalFiniteNumber,
     reasoningTokens: OptionalFiniteNumber,
+    toolUsePromptTokens: OptionalFiniteNumber,
   })
   .catch({
     inputTokens: 0,
     outputTokens: 0,
     cost: 0,
+    responseTimeMs: undefined,
     cachedInputTokens: undefined,
     cacheCreationTokens: undefined,
     percentageCached: undefined,
     reasoningTokens: undefined,
+    toolUsePromptTokens: undefined,
   });
 
 // Compile-time assertion: ensure parsing schema produces type compatible with DisplayUsageStats

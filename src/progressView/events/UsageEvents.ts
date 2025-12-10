@@ -46,6 +46,9 @@ export function createUsageEvents(
               outputTokens: Number(usage.outputTokens ?? 0),
               cost: Number(usage.cost ?? 0),
               // Preserve extended metrics when present
+              ...(usage.responseTimeMs !== undefined && {
+                responseTimeMs: Number(usage.responseTimeMs),
+              }),
               ...(usage.cachedInputTokens !== undefined && {
                 cachedInputTokens: Number(usage.cachedInputTokens),
               }),
@@ -57,6 +60,9 @@ export function createUsageEvents(
               }),
               ...(usage.reasoningTokens !== undefined && {
                 reasoningTokens: Number(usage.reasoningTokens),
+              }),
+              ...(usage.toolUsePromptTokens !== undefined && {
+                toolUsePromptTokens: Number(usage.toolUsePromptTokens),
               }),
             };
 

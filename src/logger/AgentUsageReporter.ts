@@ -46,6 +46,9 @@ export class AgentUsageReporter {
       outputTokens: stats.outputTokens,
       cost: stats.cost,
       // Preserve extended metrics for display
+      ...(stats.responseTimeMs !== undefined && {
+        responseTimeMs: stats.responseTimeMs,
+      }),
       ...(stats.cachedInputTokens !== undefined && {
         cachedInputTokens: stats.cachedInputTokens,
       }),
@@ -57,6 +60,9 @@ export class AgentUsageReporter {
       }),
       ...(stats.reasoningTokens !== undefined && {
         reasoningTokens: stats.reasoningTokens,
+      }),
+      ...(stats.toolUsePromptTokens !== undefined && {
+        toolUsePromptTokens: stats.toolUsePromptTokens,
       }),
     };
 

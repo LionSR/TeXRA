@@ -51,10 +51,12 @@ export const DisplayUsageStatsSchema = ExtendedTokenUsageStatsSchema.pick({
   inputTokens: true,
   outputTokens: true,
   cost: true,
+  responseTimeMs: true,
   cachedInputTokens: true,
   cacheCreationTokens: true,
   percentageCached: true,
   reasoningTokens: true,
+  toolUsePromptTokens: true,
 });
 
 export type DisplayUsageStats = z.infer<typeof DisplayUsageStatsSchema>;
