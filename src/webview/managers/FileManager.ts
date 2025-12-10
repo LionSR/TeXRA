@@ -117,8 +117,7 @@ export class FileManager {
   async handleRequestInputFile(
     message: RequestInputFileMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
+    if (!this.getWebview()) {
       return;
     }
     const refreshedInputFiles =
@@ -128,6 +127,8 @@ export class FileManager {
     await this.postFileUpdate('Input', refreshedInputFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
+
+    this.updateGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
@@ -173,6 +174,8 @@ export class FileManager {
         ? { preserveBaseFile: true }
         : undefined,
     });
+
+    this.updateGettingStartedBanner(files.length === 0);
   }
 
   async handleRequestDefaultOutputFiles(
@@ -282,6 +285,8 @@ export class FileManager {
     });
 
     await this.updateBaseFileSelect();
+
+    this.updateGettingStartedBanner(refreshedFiles.input.length === 0);
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
@@ -538,6 +543,18 @@ export class FileManager {
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
       preserveBaseFile: true,
+    });
+  }
+
+  private updateGettingStartedBanner(isEmpty: boolean): void {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
+    webviewView.webview.postMessage({
+      command: isEmpty
+        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

@@ -101,6 +101,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         ),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
         webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
+      [MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER]: () =>
+        bannerManager.showBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
+      [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
       /**
        * Handles SET_MODEL_OPTIONS command to update the model dropdown.
        *
