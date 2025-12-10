@@ -62,13 +62,13 @@ export class WebSearchTool extends defineTool({
     }
 
     // Extract from RelatedTopics (including nested Topics)
-    const extractTopics = (
-      topics: DuckDuckGoResult[],
-      limit: number,
-    ): void => {
+    const extractTopics = (topics: DuckDuckGoResult[], limit: number): void => {
       for (const item of topics) {
         if (results.length >= limit) break;
-        if (typeof item.Text === 'string' && typeof item.FirstURL === 'string') {
+        if (
+          typeof item.Text === 'string' &&
+          typeof item.FirstURL === 'string'
+        ) {
           results.push(`${item.Text} (${item.FirstURL})`);
         }
         // Handle nested topic groups
