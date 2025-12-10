@@ -21,7 +21,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   deepseek: {
     name: 'deepseek',
     fullName: 'deepseek-chat',
-    openrouterFullName: 'deepseek/deepseek-chat-v3.1',
+    openrouterFullName: 'deepseek/deepseek-v3.2',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 8192,
     contextWindow: 128000,
@@ -36,10 +36,11 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   },
   // DeepSeek-V3.2 (Thinking Mode)
   // Context: 128K, Max output: 64K, Supports: JSON Output, Tool Calls, Chat Prefix Completion
+  // OpenRouter: use reasoning: { enabled: true } parameter
   deepseekT: {
     name: 'deepseekT',
     fullName: 'deepseek-reasoner',
-    openrouterFullName: 'deepseek/deepseek-reasoner-v3.1',
+    openrouterFullName: 'deepseek/deepseek-v3.2',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 65536,
     contextWindow: 128000,
