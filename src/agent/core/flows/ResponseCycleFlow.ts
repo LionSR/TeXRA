@@ -35,7 +35,6 @@ import { getSystemPromptWithRules } from '@utils/prompt';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -485,30 +484,23 @@ class ResponseProcessNode<C> extends BaseNode<
         store.workspace,
       );
       const useStreaming = options.modelHandler.getStreamingConfig();
+      const isBackgroundMode = options.modelHandler.isBackgroundModeActive();
 
-      if (thinkingContent && !useStreaming) {
-        const formatted = await xmlUtils.formatContent(thinkingContent);
-        if (isNonEmptyString(formatted)) {
-          options.logger.info(formatted, {
-            messageType: MESSAGE_TYPES.THINKING,
-          });
-        }
+      // For non-streaming mode, emit thinking/scratchpad to progress view
+      // Skip for background mode - content arrives all at once after polling
+      if (thinkingContent && !useStreaming && !isBackgroundMode) {
+        options.logger.info(thinkingContent, {
+          messageType: MESSAGE_TYPES.THINKING,
+        });
       }
 
       const scratchpad = await xmlUtils.extractScratchpad(
         newResponse,
         'scratchpad',
       );
-      if (scratchpad) {
+      if (scratchpad && !isBackgroundMode) {
         options.logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
-        });
-      }
-
-      if (newResponse && !useStreaming) {
-        const formattedResponse = await xmlUtils.formatContent(newResponse);
-        options.logger.info(formattedResponse, {
-          messageType: MESSAGE_TYPES.INTERNAL,
         });
       }
 
