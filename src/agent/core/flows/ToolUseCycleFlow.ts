@@ -36,7 +36,11 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import { WorkspaceFS, pathToLocation, type FileLocation } from '@utils/files';
+import {
+  AbsoluteFS,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -777,7 +781,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
           continue;
         }
         try {
-          const exists = await WorkspaceFS.exists(location.absolutePath);
+          // Use AbsoluteFS for file existence check to support external paths
+          // (MediaAttachmentProcessor uses the same pattern at line 212)
+          const exists = await AbsoluteFS.exists(location.absolutePath);
           if (exists) {
             toAdd.push(location);
           }
