@@ -21,11 +21,23 @@ const PROGRESS_VIEW_MODULES = [
   { key: 'eventsUri', path: 'modules/uiManagers/EventsManager.js' },
   { key: 'placeholderUri', path: 'modules/uiManagers/Placeholder.js' },
   { key: 'runSelectorUri', path: 'modules/uiManagers/RunSelector.js' },
-  { key: 'instructionPanelUri', path: 'modules/uiManagers/InstructionPanel.js' },
-  { key: 'followUpInputManagerUri', path: 'modules/uiManagers/FollowUpInputManager.js' },
-  { key: 'approvalRequestsUri', path: 'modules/uiManagers/ApprovalRequests.js' },
+  {
+    key: 'instructionPanelUri',
+    path: 'modules/uiManagers/InstructionPanel.js',
+  },
+  {
+    key: 'followUpInputManagerUri',
+    path: 'modules/uiManagers/FollowUpInputManager.js',
+  },
+  {
+    key: 'approvalRequestsUri',
+    path: 'modules/uiManagers/ApprovalRequests.js',
+  },
   { key: 'retryRequestsUri', path: 'modules/uiManagers/RetryRequests.js' },
-  { key: 'baseUIRequestManagerUri', path: 'modules/uiManagers/BaseUIRequestManager.js' },
+  {
+    key: 'baseUIRequestManagerUri',
+    path: 'modules/uiManagers/BaseUIRequestManager.js',
+  },
 ] as const;
 
 export class ProgressViewContentProvider extends BaseViewContentProvider {
