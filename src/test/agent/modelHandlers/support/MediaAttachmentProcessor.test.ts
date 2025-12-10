@@ -22,7 +22,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelCapabilities,
 } from '@model/ModelConfig';
-import { AbsoluteFS } from '@utils/files';
+import { AbsoluteFS, pathToLocation, getDisplayPath } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {
   channelId: string;
@@ -171,15 +171,17 @@ describe('MediaAttachmentProcessor', () => {
 
   it('processes PDF fixtures using native ingestion when supported', async () => {
     const pdfPath = await createPdfFixture();
+    const pdfLocation = pathToLocation(pdfPath);
+    const displayPath = getDisplayPath(pdfLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(logger, {
       supportsVision: true,
       supportsNativePdf: true,
     });
 
-    const { entries, results } = await processor.loadEntries([pdfPath]);
+    const { entries, results } = await processor.loadEntries([pdfLocation]);
 
-    assert.deepEqual(results, [{ path: pdfPath, ok: true }]);
+    assert.deepEqual(results, [{ path: displayPath, ok: true }]);
     assert.equal(entries.length, 1, 'expected a single PDF entry');
 
     const [entry] = entries;
@@ -200,6 +202,8 @@ describe('MediaAttachmentProcessor', () => {
 
   it('processes native audio fixtures into audio media entries', async () => {
     const audioPath = createAudioFixture();
+    const audioLocation = pathToLocation(audioPath);
+    const displayPath = getDisplayPath(audioLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(
       logger,
@@ -209,9 +213,9 @@ describe('MediaAttachmentProcessor', () => {
       false,
     );
 
-    const { entries, results } = await processor.loadEntries([audioPath]);
+    const { entries, results } = await processor.loadEntries([audioLocation]);
 
-    assert.deepEqual(results, [{ path: audioPath, ok: true }]);
+    assert.deepEqual(results, [{ path: displayPath, ok: true }]);
     assert.equal(entries.length, 1, 'expected a single audio entry');
 
     const [entry] = entries;
@@ -227,13 +231,15 @@ describe('MediaAttachmentProcessor', () => {
 
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = createEmptyFixture();
+    const emptyLocation = pathToLocation(emptyPath);
+    const displayPath = getDisplayPath(emptyLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(logger, { supportsVision: true });
 
-    const { entries, results } = await processor.loadEntries([emptyPath]);
+    const { entries, results } = await processor.loadEntries([emptyLocation]);
 
     assert.equal(entries.length, 0, 'empty files should not yield entries');
-    assert.deepEqual(results, [{ path: emptyPath, ok: false }]);
+    assert.deepEqual(results, [{ path: displayPath, ok: false }]);
 
     processor.logResults(results);
     assert.equal(stub.fileListEntries.length, 1, 'should log failed media');
