@@ -164,6 +164,9 @@ export interface IModelHandler<
   /** Check if output streaming is enabled. */
   isOutputStreamingEnabled(): boolean;
 
+  /** Check if background mode is active for this handler. */
+  isBackgroundModeActive(): boolean;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 
