@@ -13,19 +13,43 @@ const MAIN_VIEW_MODULES = [
   { key: 'webviewStateModuleUri', path: 'modules/mainViewState.js' },
   { key: 'themeHandlersUri', path: 'modules/handlers/themeHandlers.js' },
   { key: 'fileMessageHandlersUri', path: 'modules/handlers/fileHandlers.js' },
-  { key: 'recordingHandlersUri', path: 'modules/handlers/recordingHandlers.js' },
+  {
+    key: 'recordingHandlersUri',
+    path: 'modules/handlers/recordingHandlers.js',
+  },
   { key: 'eventBusUri', path: 'modules/eventBus.js' },
   { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
   { key: 'fileSelectUri', path: 'modules/uiManagers/FileSelect.js' },
   { key: 'baseUIManagerUri', path: 'modules/uiManagers/BaseUIManager.js' },
-  { key: 'fileInputManagerUri', path: 'modules/uiManagers/FileInputManager.js' },
-  { key: 'actionButtonManagerUri', path: 'modules/uiManagers/ActionButtonManager.js' },
-  { key: 'settingsButtonManagerUri', path: 'modules/uiManagers/SettingsButtonManager.js' },
+  {
+    key: 'fileInputManagerUri',
+    path: 'modules/uiManagers/FileInputManager.js',
+  },
+  {
+    key: 'actionButtonManagerUri',
+    path: 'modules/uiManagers/ActionButtonManager.js',
+  },
+  {
+    key: 'settingsButtonManagerUri',
+    path: 'modules/uiManagers/SettingsButtonManager.js',
+  },
   { key: 'bannerManagerUri', path: 'modules/uiManagers/BannerManager.js' },
-  { key: 'recordingManagerUri', path: 'modules/uiManagers/RecordingManager.js' },
-  { key: 'instructionManagerUri', path: 'modules/uiManagers/InstructionManager.js' },
-  { key: 'outputFilesManagerUri', path: 'modules/uiManagers/OutputFilesManager.js' },
-  { key: 'latexdiffManagerUri', path: 'modules/uiManagers/LatexdiffManager.js' },
+  {
+    key: 'recordingManagerUri',
+    path: 'modules/uiManagers/RecordingManager.js',
+  },
+  {
+    key: 'instructionManagerUri',
+    path: 'modules/uiManagers/InstructionManager.js',
+  },
+  {
+    key: 'outputFilesManagerUri',
+    path: 'modules/uiManagers/OutputFilesManager.js',
+  },
+  {
+    key: 'latexdiffManagerUri',
+    path: 'modules/uiManagers/LatexdiffManager.js',
+  },
 ] as const;
 
 export class MainViewContentProvider extends BaseViewContentProvider {
