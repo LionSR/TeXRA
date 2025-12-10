@@ -32,6 +32,21 @@ export interface ProxyConfig {
   logger?: { debug: (message: string) => void };
 }
 
+/**
+ * Determines whether OpenRouter should be used for API routing.
+ * Models with requiresResponsesAPI bypass OpenRouter even if globally enabled.
+ */
+export function shouldUseOpenRouter(config: {
+  requiresResponsesAPI?: boolean;
+  openRouterOnly: boolean;
+}): boolean {
+  return (
+    !config.requiresResponsesAPI &&
+    (config.openRouterOnly ||
+      getConfig<boolean>('texra.model.useOpenRouter', false))
+  );
+}
+
 export function resolveBaseUrl(config: ProxyConfig): string | null {
   // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
   if (config.customBaseUrl) {
@@ -41,11 +56,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     return config.customBaseUrl;
   }
 
-  // Models requiring direct API access (e.g., deep research) bypass OpenRouter
-  const useOpenRouter =
-    !config.requiresResponsesAPI &&
-    (config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false));
+  const useOpenRouter = shouldUseOpenRouter(config);
   const useImprovedConnection = getConfig<boolean>(
     'texra.model.useImprovedConnection',
     false,
