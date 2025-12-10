@@ -193,22 +193,27 @@ export class LatexMediaManager {
       // then convert to FileLocation (which provides both absolutePath for
       // file operations and relativePath for user display).
       const baseDir = path.dirname(file.absolutePath);
-      const fileLocations: FileLocation[] = [];
-
-      for (const relativePath of result.value) {
+      const fileLocations = result.value.map((relativePath) => {
         const absolutePath = path.normalize(path.join(baseDir, relativePath));
-        const location = pathToLocation(absolutePath);
+        return pathToLocation(absolutePath);
+      });
 
-        // Debug validation: warn if extracted figure path doesn't exist
-        // This helps catch figure extraction issues early
-        const exists = await flexibleFS.exists(location);
+      // Debug validation: batch existence checks for performance
+      // This helps catch figure extraction issues early
+      const existenceChecks = await Promise.all(
+        fileLocations.map(async (loc) => ({
+          loc,
+          exists: await flexibleFS.exists(loc),
+        })),
+      );
+
+      for (const { loc, exists } of existenceChecks) {
         if (!exists) {
           this.logger.debug(
-            `Extracted figure path does not exist: ${absolutePath} (from ${file.absolutePath})`,
+            `Extracted figure path does not exist: ${loc.absolutePath} (from ${file.absolutePath})`,
             { groupId: activeGroupId },
           );
         }
-        fileLocations.push(location);
       }
 
       workspaceState.media.addMediaFiles(fileLocations);
