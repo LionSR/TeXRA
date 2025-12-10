@@ -2,9 +2,12 @@
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
+// Local imports - core utilities
+
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { isNonEmptyString } from '@utils/core';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -71,7 +74,9 @@ const extractTextFromReasoningDetails = (
  * - reasoning_details: array of objects (OpenRouter normalized format)
  * - reasoning_content: string (native DeepSeek/other models)
  */
-const extractOpenRouterReasoningDelta = (chunk: ChatCompletionChunk): string => {
+const extractOpenRouterReasoningDelta = (
+  chunk: ChatCompletionChunk,
+): string => {
   const choice = chunk.choices[0];
   if (!choice) return '';
 
@@ -222,8 +227,8 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     if (!reasoning) {
       return null;
     }
-    if (typeof reasoning === 'string') {
-      return reasoning.trim() || null;
+    if (isNonEmptyString(reasoning)) {
+      return reasoning;
     }
 
     return null;

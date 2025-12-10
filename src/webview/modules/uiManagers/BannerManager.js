@@ -287,9 +287,18 @@ export class BannerManager extends BaseUIManager {
         command: 'texra.openGettingStarted',
         text: 'opening the getting started walkthrough',
       },
-      { command: 'texra.createSampleProject', text: 'creating a sample project' },
-      { command: 'texra.cloneOverleafProject', text: 'cloning an Overleaf project' },
-      { command: 'texra.downloadArXivSource', text: 'downloading an arXiv source' },
+      {
+        command: 'texra.createSampleProject',
+        text: 'creating a sample project',
+      },
+      {
+        command: 'texra.cloneOverleafProject',
+        text: 'cloning an Overleaf project',
+      },
+      {
+        command: 'texra.downloadArXivSource',
+        text: 'downloading an arXiv source',
+      },
     ];
 
     links.forEach((link, index) => {

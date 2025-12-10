@@ -35,6 +35,7 @@ import type { FileLocation } from '@utils/files';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleepWithAbort } from '@utils/helpers';
 import { flexibleFS } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -210,7 +211,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
@@ -281,7 +282,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createRoundMessages(
     messages: ResponseInputItem[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<ResponseInputItem[]> {
     const roundContent: ResponseInputMessageContentList = [];
 
@@ -1396,12 +1397,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       finalResult.attachmentSummary = formatAttachmentSummary(attachments);
     }
 
-    const primaryText =
-      typeof result.output === 'string' && result.output.trim().length > 0
-        ? result.output
-        : typeof result.summary === 'string'
-          ? result.summary
-          : undefined;
+    const primaryText = isNonEmptyString(result.output)
+      ? result.output
+      : isNonEmptyString(result.summary)
+        ? result.summary
+        : undefined;
     const summaryPayload = JSON.stringify(finalResult, null, 2);
     const combinedText = primaryText
       ? `${primaryText}\n\n${summaryPayload}`
