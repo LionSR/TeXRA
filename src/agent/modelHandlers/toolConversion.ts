@@ -58,19 +58,6 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 }
 
 /**
- * Native tool types supported by OpenAI Responses API deep research models.
- * These models ONLY support these tools and reject function calling tools.
- * See: https://platform.openai.com/docs/guides/tools-deep-research
- */
-export const OPENAI_DEEP_RESEARCH_NATIVE_TOOLS = new Set([
-  'web_search',
-  'web_search_preview',
-  'code_interpreter',
-  'file_search',
-  'mcp',
-]);
-
-/**
  * Options for OpenAI Responses API tool conversion.
  */
 export interface OpenAIResponseToolOptions {
@@ -99,12 +86,12 @@ export function toOpenAIResponseTools(
     }
 
     // Deep research models only support native tools (web_search, code_interpreter,
-    // file_search, mcp). Skip function tools when function calling is not supported.
+    // file_search, mcp) and do NOT support function calling. When function calling
+    // is disabled, skip all remaining tools - they cannot be converted to function
+    // format, and native conversion for tools other than web_search is not yet
+    // implemented.
     if (!supportsFunctionCalling) {
-      // Skip tools that aren't in the native tools set for deep research models
-      if (!OPENAI_DEEP_RESEARCH_NATIVE_TOOLS.has(d.name)) {
-        continue;
-      }
+      continue;
     }
 
     // Standard function tools
