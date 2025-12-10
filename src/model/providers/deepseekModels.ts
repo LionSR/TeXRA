@@ -15,6 +15,17 @@ const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsVision: false,
 };
 
+/**
+ * DeepSeek model configurations.
+ *
+ * Model name conventions:
+ * - fullName: Model name for native DeepSeek API (e.g., 'deepseek-chat', 'deepseek-reasoner')
+ * - openrouterFullName: Model name for OpenRouter API (e.g., 'deepseek/deepseek-v3.2')
+ *
+ * For V3.2, both deepseek and deepseekT use the same OpenRouter model ('deepseek/deepseek-v3.2').
+ * The difference is that deepseekT has supportsReasoning: true, which triggers
+ * the reasoning: { enabled: true } parameter via OpenRouter.
+ */
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   // DeepSeek-V3.2 (Non-thinking Mode)
   // Context: 128K, Max output: 8K, Supports: JSON Output, Tool Calls, Chat Prefix Completion, FIM
