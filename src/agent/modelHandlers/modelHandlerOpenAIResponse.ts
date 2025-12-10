@@ -594,14 +594,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenAIResponseTools(tools, {
+      const convertedTools = toOpenAIResponseTools(tools, {
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+        supportsFunctionCalling: this.capabilities.supportsFunctionCalling,
       });
-      params.tool_choice = 'auto';
+      // Only set tools if there are any after filtering (deep research models
+      // strip unsupported function tools, potentially leaving an empty array)
+      if (convertedTools.length > 0) {
+        params.tools = convertedTools;
+        params.tool_choice = 'auto';
 
-      // Include web search sources in response when native web search is enabled
-      if (this.capabilities.supportsNativeWebSearch) {
-        params.include = ['web_search_call.action.sources'];
+        // Include web search sources in response when native web search is enabled
+        if (this.capabilities.supportsNativeWebSearch) {
+          params.include = ['web_search_call.action.sources'];
+        }
       }
     }
 
