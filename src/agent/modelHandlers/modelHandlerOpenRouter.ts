@@ -43,19 +43,24 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       extra_headers: { 'X-Title': 'TeXRA.ai' },
     };
 
-    // Reasoning parameters might vary depending on the underlying model via OpenRouter
-    // The `reasoning` and `include_reasoning` parameters are specific to some models like O1
+    // Reasoning parameters vary by model via OpenRouter:
+    // - O1-style models: use reasoning.effort parameter
+    // - DeepSeek V3.2: use reasoning.enabled parameter
     if (this.config.capabilities.supportsReasoning) {
       if (
         this.config.capabilities.supportsReasoningEffort &&
         this.config.capabilities.reasoningEffort
       ) {
+        // O1-style models with effort levels
         kwargs.reasoning = {
           effort: this.validateReasoningEffort(
             this.config.capabilities.reasoningEffort,
           ),
         };
         kwargs.include_reasoning = true;
+      } else {
+        // DeepSeek V3.2 and similar models - just enable reasoning
+        kwargs.reasoning = { enabled: true };
       }
     }
 
@@ -121,13 +126,15 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   }
 
   /**
-   * OpenRouter uses 'reasoning' field instead of 'reasoning_content'.
+   * OpenRouter may use 'reasoning' or 'reasoning_details' field.
+   * DeepSeek V3.2 via OpenRouter returns 'reasoning_details'.
    * Also handles object values by converting to JSON.
    */
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
-    const reasoning = message?.reasoning;
+    // Try both field names - reasoning_details (DeepSeek) and reasoning (others)
+    const reasoning = message?.reasoning_details ?? message?.reasoning;
     if (!reasoning) {
       return null;
     }
