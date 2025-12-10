@@ -20,7 +20,6 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
-import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 // Local imports - logging
@@ -32,6 +31,7 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
+import { getSystemPromptWithRules } from '@utils/prompt';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
