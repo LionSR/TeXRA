@@ -681,7 +681,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       if (this.modelHandler.capabilities.supportsVision) {
         if (
           this.agentConfig.mediaFile &&
-          !workspaceState.media.files.includes(this.agentConfig.mediaFile)
+          !workspaceState.media.hasFile(this.agentConfig.mediaFile)
         ) {
           extraMedia.push(this.agentConfig.mediaFile);
         }

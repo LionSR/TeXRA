@@ -626,7 +626,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
@@ -636,7 +636,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => this.getDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
@@ -656,7 +656,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createRoundMessages(
     messages: Content[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<Content[]> {
     const roundParts: Part[] = [];
 
@@ -665,7 +665,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => this.getDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
@@ -680,6 +680,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     messages.push(createUserContent(roundParts));
     return messages;
+  }
+
+  /**
+   * Get a display-friendly path for a file location.
+   * For workspace files, returns the relative path. For external files, returns basename.
+   */
+  private getDisplayPath(location: FileLocation): string {
+    if (location.kind === 'workspace' || location.kind === 'runStorage') {
+      return location.relativePath;
+    }
+    return path.basename(location.absolutePath);
   }
 
   async createUserFollowUpMessages(

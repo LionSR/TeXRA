@@ -911,7 +911,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<MessageParam[]> {
     const trimmedPrefix = userPrefix.trim();
@@ -967,7 +967,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createRoundMessages(
     messages: MessageParam[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<MessageParam[]> {
     // Create content list for the new round message
     const roundContent: ContentBlockParam[] = [];
