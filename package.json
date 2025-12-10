@@ -1634,6 +1634,7 @@
     "gpt-tokenizer": "^3.4.0",
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
+    "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.16.27",
     "markdown-it": "^14.1.0",
