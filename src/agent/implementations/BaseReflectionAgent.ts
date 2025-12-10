@@ -679,11 +679,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const extraMedia: string[] = [];
 
       if (this.modelHandler.capabilities.supportsVision) {
-        if (
-          this.agentConfig.mediaFile &&
-          !workspaceState.media.hasFile(this.agentConfig.mediaFile)
-        ) {
-          extraMedia.push(this.agentConfig.mediaFile);
+        if (this.agentConfig.mediaFile) {
+          // Convert to absolute path for hasFile check (mediaFile from config may be relative)
+          const mediaLocation = this.fileService.createLocation(
+            this.agentConfig.mediaFile,
+          );
+          if (!workspaceState.media.hasFile(mediaLocation.absolutePath)) {
+            extraMedia.push(this.agentConfig.mediaFile);
+          }
         }
         if (this.agentConfig.mediaFiles.length > 0) {
           extraMedia.push(...this.agentConfig.mediaFiles);

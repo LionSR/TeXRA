@@ -15,6 +15,7 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 import * as configModule from '@utils/config';
+import { pathToLocation } from '@utils/files';
 
 // Type imports
 import type {
@@ -106,7 +107,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ] as ContentBlockParam[]);
 
     const messages = await handler.initializeMessages('', 'request text', [
-      'sample.pdf',
+      pathToLocation('/tmp/sample.pdf'),
     ]);
 
     const content = messages[0].content as ContentBlock[];
@@ -238,7 +239,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ] as ContentBlockParam[]);
 
     const messages = await handler.initializeMessages('prefix text', '', [
-      'diagram.png',
+      pathToLocation('/tmp/diagram.png'),
     ]);
 
     const content = messages[0].content as ContentBlockParam[];
