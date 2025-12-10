@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 import {
   AgentSetting,
@@ -99,9 +100,9 @@ export class RemoteAgentLoader {
         });
 
         if (!response.ok) {
-          if (response.status === 401) {
+          if (response.status === StatusCodes.UNAUTHORIZED) {
             throw new Error('Session expired. Sign in again to continue.');
-          } else if (response.status === 404) {
+          } else if (response.status === StatusCodes.NOT_FOUND) {
             // If not found and we have more candidates to try, continue to next
             if (candidateName !== candidateNames[candidateNames.length - 1]) {
               logger.debug(
@@ -116,7 +117,7 @@ export class RemoteAgentLoader {
             throw new Error(
               `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
             );
-          } else if (response.status === 403) {
+          } else if (response.status === StatusCodes.FORBIDDEN) {
             throw new Error(
               `Access denied to agent "${agentName}". Upgrade your account for access.`,
             );
@@ -130,7 +131,7 @@ export class RemoteAgentLoader {
 
             // Provide more helpful error message for storage-related failures
             if (
-              response.status === 500 &&
+              response.status === StatusCodes.INTERNAL_SERVER_ERROR &&
               errorText.includes('Failed to load agent configuration')
             ) {
               throw new Error(
