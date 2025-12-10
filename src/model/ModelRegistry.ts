@@ -11,6 +11,7 @@
 import { ModelConfig } from './ModelConfig';
 import {
   ANTHROPIC_MODELS,
+  OPENAI_DEEP_RESEARCH_MODELS,
   OPENAI_REASONING_MODELS,
   OPENAI_MODELS,
   GOOGLE_MODELS,
@@ -28,6 +29,7 @@ import {
  */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   ...ANTHROPIC_MODELS,
+  ...OPENAI_DEEP_RESEARCH_MODELS,
   ...OPENAI_REASONING_MODELS,
   ...OPENAI_MODELS,
   ...GOOGLE_MODELS,
