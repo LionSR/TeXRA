@@ -317,7 +317,9 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    * End the current run group.
    * @param status Status to mark for the group
    */
-  protected endRunStage(status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
+  protected endRunStage(
+    status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
+  ): void {
     if (!this.runStage) {
       return;
     }
