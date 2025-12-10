@@ -9,7 +9,12 @@ export function toPosixPath(relativePath: string): string {
   if (!relativePath || relativePath === '.') {
     return '.';
   }
-  return relativePath.trim().replace(/\\/g, '/').split(PATH_SEPARATORS).filter(Boolean).join('/');
+  return relativePath
+    .trim()
+    .replace(/\\/g, '/')
+    .split(PATH_SEPARATORS)
+    .filter(Boolean)
+    .join('/');
 }
 
 /** Get path segments as an array. */
@@ -20,7 +25,7 @@ export function getPathSegments(input: string): string[] {
   return toPosixPath(input).split('/').filter(Boolean);
 }
 
-/** Normalize a path for LaTeX \input commands. */
+/** Normalize a path for LaTeX \input commands (strips leading ./). */
 export function normalizeLatexPath(value: string): string {
   if (!value) {
     return '';
@@ -29,5 +34,7 @@ export function normalizeLatexPath(value: string): string {
   if (!trimmed) {
     return '';
   }
-  return toPosixPath(trimmed);
+  const posix = toPosixPath(trimmed);
+  // Strip leading ./ for LaTeX compatibility
+  return posix.startsWith('./') ? posix.slice(2) : posix;
 }
