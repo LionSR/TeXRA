@@ -36,7 +36,11 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import { WorkspaceFS } from '@utils/files';
+import {
+  AbsoluteFS,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -762,26 +766,27 @@ class ToolUseDispatchNode<C> extends BaseNode<
     });
 
     if (result.files && result.files.length > 0) {
-      const existing = store.workspace.media.files;
-      const toAdd: string[] = [];
+      const toAdd: FileLocation[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
         if (typeof candidate !== 'string' || candidate.trim() === '') {
           continue;
         }
-        if (existing.includes(candidate) || toAdd.includes(candidate)) {
-          continue;
-        }
+        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
+        // including external paths outside the workspace
+        const location = pathToLocation(candidate);
         try {
-          const exists = await WorkspaceFS.exists(candidate);
+          // Use AbsoluteFS for file existence check to support external paths
+          const exists = await AbsoluteFS.exists(location.absolutePath);
           if (exists) {
-            toAdd.push(candidate);
+            toAdd.push(location);
           }
         } catch {
           // Ignore errors when checking existence
         }
       }
       if (toAdd.length > 0) {
+        // addMediaFiles handles deduplication (both within toAdd and against existing files)
         store.workspace.media.addMediaFiles(toAdd);
       }
     }

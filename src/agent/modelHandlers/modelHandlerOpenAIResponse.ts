@@ -210,7 +210,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
@@ -281,7 +281,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createRoundMessages(
     messages: ResponseInputItem[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<ResponseInputItem[]> {
     const roundContent: ResponseInputMessageContentList = [];
 
