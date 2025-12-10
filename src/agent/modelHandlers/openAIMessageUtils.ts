@@ -1,9 +1,5 @@
-// (none needed)
-
-// (none needed)
-
-// Local imports - utilities
-import { convertContentToString } from '@agent/utils/text/messageUtils';
+// Local imports - core utilities
+import { contentToString as convertContentToString } from '@utils/core';
 
 /** Options for normalizing OpenAI-style chat messages. */
 export interface NormalizeOpenAIMessageContentOptions {
