@@ -44,8 +44,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     };
 
     // Reasoning parameters vary by model via OpenRouter:
-    // - O1-style models: use reasoning.effort parameter
-    // - DeepSeek V3.2: use reasoning.enabled parameter
+    // - O1-style models: use reasoning.effort + include_reasoning
+    // - DeepSeek V3.2: use reasoning.enabled (no include_reasoning needed,
+    //   reasoning_details is returned automatically when enabled)
     if (this.config.capabilities.supportsReasoning) {
       if (
         this.config.capabilities.supportsReasoningEffort &&
@@ -138,10 +139,16 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     if (!reasoning) {
       return null;
     }
-    if (typeof reasoning === 'string' && reasoning.trim()) {
-      return reasoning;
+    if (typeof reasoning === 'string') {
+      return reasoning.trim() || null;
     }
-    // If reasoning is an object, convert to string
+    // If reasoning is an object, check if it's empty before converting
+    if (
+      typeof reasoning === 'object' &&
+      Object.keys(reasoning as object).length === 0
+    ) {
+      return null;
+    }
     const reasoningStr = JSON.stringify(reasoning);
     return reasoningStr.trim() || null;
   }
