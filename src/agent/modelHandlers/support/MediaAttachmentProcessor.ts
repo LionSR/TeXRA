@@ -32,19 +32,19 @@ import {
  */
 export type MediaFileResult = { path: string; ok: boolean };
 
-export type ProcessImageResult = {
+type ProcessImageResult = {
   kind: 'image';
   mediaType: string;
   data: string | string[];
 };
 
-export type ProcessAudioResult = {
+type ProcessAudioResult = {
   kind: 'audio';
   mediaType: string;
   data: string;
 };
 
-export type ProcessedMediaResult = ProcessImageResult | ProcessAudioResult;
+type ProcessedMediaResult = ProcessImageResult | ProcessAudioResult;
 
 interface MediaAttachmentProcessorOptions {
   getCapabilities: () => ModelCapabilities;
@@ -69,7 +69,7 @@ export class MediaAttachmentProcessor {
     return this.options.isOpenAIProvider();
   }
 
-  public async processImage(
+  private async processImage(
     mediaFile: string,
     ext: string,
   ): Promise<ProcessImageResult> {
@@ -116,7 +116,7 @@ export class MediaAttachmentProcessor {
     return { kind: 'image', mediaType, data: mediaData };
   }
 
-  public async processAudio(
+  private async processAudio(
     mediaFile: string,
     ext: string,
   ): Promise<ProcessAudioResult> {
@@ -144,7 +144,7 @@ export class MediaAttachmentProcessor {
     return { kind: 'audio', mediaType, data: mediaData };
   }
 
-  public async processMedia(
+  private async processMedia(
     mediaFile: string,
     fileExtension: string,
   ): Promise<ProcessedMediaResult> {
