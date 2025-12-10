@@ -775,14 +775,8 @@ class ToolUseDispatchNode<C> extends BaseNode<
         // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
         // including external paths outside the workspace
         const location = pathToLocation(candidate);
-        // Skip if already in media files (addMediaFiles also deduplicates, but
-        // checking here avoids unnecessary existence checks for known files)
-        if (store.workspace.media.hasFile(location.absolutePath)) {
-          continue;
-        }
         try {
           // Use AbsoluteFS for file existence check to support external paths
-          // (MediaAttachmentProcessor uses the same pattern at line 212)
           const exists = await AbsoluteFS.exists(location.absolutePath);
           if (exists) {
             toAdd.push(location);
@@ -792,7 +786,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         }
       }
       if (toAdd.length > 0) {
-        // addMediaFiles handles deduplication within toAdd
+        // addMediaFiles handles deduplication (both within toAdd and against existing files)
         store.workspace.media.addMediaFiles(toAdd);
       }
     }
