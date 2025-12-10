@@ -51,6 +51,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsReasoningEffort: false,
       supportsFunctionCalling: true,
+      supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
