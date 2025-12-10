@@ -36,7 +36,8 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -464,7 +465,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
-      if (formatted.trim().length > 0) {
+      if (isNonEmptyString(formatted)) {
         options.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.THINKING,
@@ -762,26 +763,27 @@ class ToolUseDispatchNode<C> extends BaseNode<
     });
 
     if (result.files && result.files.length > 0) {
-      const existing = store.workspace.media.files;
-      const toAdd: string[] = [];
+      const toAdd: FileLocation[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
         if (typeof candidate !== 'string' || candidate.trim() === '') {
           continue;
         }
-        if (existing.includes(candidate) || toAdd.includes(candidate)) {
-          continue;
-        }
+        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
+        // including external paths outside the workspace
+        const location = pathToLocation(candidate);
         try {
-          const exists = await WorkspaceFS.exists(candidate);
+          // Use AbsoluteFS for file existence check to support external paths
+          const exists = await AbsoluteFS.exists(location.absolutePath);
           if (exists) {
-            toAdd.push(candidate);
+            toAdd.push(location);
           }
         } catch {
           // Ignore errors when checking existence
         }
       }
       if (toAdd.length > 0) {
+        // addMediaFiles handles deduplication (both within toAdd and against existing files)
         store.workspace.media.addMediaFiles(toAdd);
       }
     }
@@ -861,10 +863,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
-      if (
-        typeof execResult.result.userInstruction === 'string' &&
-        execResult.result.userInstruction.trim().length > 0
-      ) {
+      if (isNonEmptyString(execResult.result.userInstruction)) {
         await options.modelHandler.createUserFollowUpMessages(
           state.messages,
           execResult.result.userInstruction,

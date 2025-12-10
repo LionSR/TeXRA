@@ -7,9 +7,11 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - core utilities
+import { normalizeLatexPath, getPathSegments } from '@utils/core';
+
 // Local file imports
 import { flexibleFS } from './flexibleFS';
-import { pathToLocation } from './taskRunStorage';
 import type { FileLocation } from './taskRunStorage';
 
 /**
@@ -98,34 +100,12 @@ export function createFileMapping(
  */
 const TEX_EXTENSION_REGEX = /\.tex$/i;
 
-function normalizeLatexPath(value: string): string {
-  if (!value) {
-    return value;
-  }
-
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return '';
-  }
-
-  const normalized = path.posix.normalize(trimmed.replace(/\\/g, '/'));
-  return normalized.startsWith('./') ? normalized.slice(2) : normalized;
-}
-
 function hasTexExtension(value: string): boolean {
   return TEX_EXTENSION_REGEX.test(value);
 }
 
 function removeTexExtension(value: string): string {
   return value.replace(TEX_EXTENSION_REGEX, '');
-}
-
-function getPathSegments(filePath: string): string[] {
-  return path
-    .normalize(filePath)
-    .split(path.sep)
-    .filter((segment) => segment !== '');
 }
 
 /**

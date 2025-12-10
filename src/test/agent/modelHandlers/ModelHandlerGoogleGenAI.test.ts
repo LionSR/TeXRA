@@ -25,6 +25,7 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
+import { pathToLocation, type FileLocation } from '@utils/files';
 
 // Type imports
 import type {
@@ -225,7 +226,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
   it('builds media entries once and delegates upload inside createMediaMessage', async () => {
     const uploadedEntries: MediaEntry[][] = [];
-    const loadCalls: string[][] = [];
+    const loadCalls: FileLocation[][] = [];
     const loggedResults: Array<Array<{ path: string; ok: boolean }>> = [];
 
     class RecordingHandler extends ModelHandlerGoogleGenAI {
@@ -251,7 +252,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
     const handlerMediaProcessor = handler as unknown as {
       mediaProcessor: {
-        loadEntries: (mediaFiles: string[]) => Promise<{
+        loadEntries: (mediaFiles: FileLocation[]) => Promise<{
           entries: MediaEntry[];
           results: Array<{ path: string; ok: boolean }>;
         }>;
@@ -268,7 +269,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       );
 
     handlerMediaProcessor.mediaProcessor.loadEntries = async (
-      mediaFiles: string[],
+      mediaFiles: FileLocation[],
     ) => {
       loadCalls.push(mediaFiles);
       return {
@@ -290,9 +291,12 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       originalLogResults(results);
     };
 
-    const parts = await handler.createMediaMessage(['doc.pdf']);
+    const docLocation = pathToLocation('/tmp/doc.pdf');
+    const parts = await handler.createMediaMessage([docLocation]);
 
-    assert.deepEqual(loadCalls, [['doc.pdf']]);
+    assert.equal(loadCalls.length, 1, 'loadEntries should be called once');
+    assert.equal(loadCalls[0].length, 1, 'should pass one media file');
+    assert.equal(loadCalls[0][0].absolutePath, '/tmp/doc.pdf');
     assert.deepEqual(parts, [
       createPartFromUri('files/doc', 'application/pdf'),
     ]);
