@@ -1,3 +1,56 @@
+import { z } from 'zod';
+
+import type { TaskGroupStatus } from '@common/constants/streamStatus';
+
+/**
+ * Log level constants - single source of truth for severity levels.
+ * Ordered from most to least critical.
+ */
+export const LOG_LEVELS = {
+  ERROR: 'error',
+  WARN: 'warn',
+  INFO: 'info',
+  DEBUG: 'debug',
+} as const;
+
+export const LogLevelSchema = z.enum([
+  LOG_LEVELS.ERROR,
+  LOG_LEVELS.WARN,
+  LOG_LEVELS.INFO,
+  LOG_LEVELS.DEBUG,
+]);
+
+export type LogLevel = z.infer<typeof LogLevelSchema>;
+
+/**
+ * End group status - terminal states used when finalizing log groups.
+ * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
+ * This is a strict subset of TaskGroupStatus (only terminal states).
+ */
+export const END_GROUP_STATUS = {
+  ERROR: 'error',
+  STOPPED: 'stopped',
+} as const;
+
+export const EndGroupStatusSchema = z.enum([
+  END_GROUP_STATUS.ERROR,
+  END_GROUP_STATUS.STOPPED,
+]);
+
+export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
+
+/**
+ * Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
+ * This ensures type compatibility when assigning EndGroupStatus to TaskGroupStatus fields.
+ */
+type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
+  ? true
+  : never;
+const _assertEndGroupStatusSubset: _AssertEndGroupStatusSubset = true;
+
+/**
+ * Message type constants - single source of truth for log message categories.
+ */
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
   SCRATCHPAD: 'scratchpad',
@@ -18,4 +71,21 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
+export const MessageTypeSchema = z.enum([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.SCRATCHPAD,
+  MESSAGE_TYPES.FILE_LIST,
+  MESSAGE_TYPES.MISSING_OUTPUTS,
+  MESSAGE_TYPES.LATEXDIFF,
+  MESSAGE_TYPES.STATISTICS,
+  MESSAGE_TYPES.TOOL_USE,
+  MESSAGE_TYPES.WEB_SEARCH,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+  MESSAGE_TYPES.USER_MESSAGE,
+  MESSAGE_TYPES.PROGRESS_STATUS,
+  MESSAGE_TYPES.ERROR,
+  MESSAGE_TYPES.INTERNAL,
+  MESSAGE_TYPES.DEFAULT,
+]);
+
+export type MessageType = z.infer<typeof MessageTypeSchema>;
