@@ -99,7 +99,7 @@ export class LatexMediaManager {
       file.absolutePath.toLowerCase().endsWith('.tex'),
     );
     const compileResults = await Promise.allSettled(
-      texFiles.map(async (file) => {
+      texFiles.map(async (file): Promise<FileLocation | undefined> => {
         const buildDir = path.join(path.dirname(file.absolutePath), 'build');
         await flexibleFS.ensureDir(pathToLocation(buildDir));
         const compiled = await compileLatex2Pdf(
@@ -119,7 +119,7 @@ export class LatexMediaManager {
               const stats = await flexibleFS.stat(pdfLocation);
               if (stats.size === 0) {
                 this.logger.warn(
-                  `Compiled PDF is empty for ${file.absolutePath}: ${pdfFile}`,
+                  `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
                   { groupId: activeGroupId },
                 );
                 return undefined;
@@ -127,17 +127,17 @@ export class LatexMediaManager {
             } catch (err) {
               const message = toErrorMessage(err);
               this.logger.error(
-                `Failed to stat compiled PDF ${pdfFile}: ${message}`,
+                `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${message}`,
                 { groupId: activeGroupId },
               );
               return undefined;
             }
 
             this.logger.info(
-              `Compiled PDF for ${file.absolutePath}: ${pdfFile}`,
+              `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
               { groupId: activeGroupId },
             );
-            return pdfFile;
+            return pdfLocation;
           }
         }
         return undefined;
@@ -145,7 +145,7 @@ export class LatexMediaManager {
     );
     compileResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
-        workspaceState.media.addMediaFiles([pathToLocation(result.value)]);
+        workspaceState.media.addMediaFiles([result.value]);
       }
     });
   }
@@ -172,8 +172,10 @@ export class LatexMediaManager {
           `Extracted ${result.value.length} figures from ${file.absolutePath}`,
           { groupId: activeGroupId },
         );
-        // Convert relative paths (relative to input file directory) to FileLocation
-        // pathToLocation gives us both absolutePath (for resolution) and relativePath (for display)
+        // result.value contains paths relative to the LaTeX file's directory.
+        // We first resolve them to absolute paths by joining with baseDir,
+        // then convert to FileLocation (which provides both absolutePath for
+        // file operations and relativePath for user display).
         const baseDir = path.dirname(file.absolutePath);
         const fileLocations: FileLocation[] = result.value.map((relativePath) => {
           const absolutePath = path.normalize(path.join(baseDir, relativePath));
