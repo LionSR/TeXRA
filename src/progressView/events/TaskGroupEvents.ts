@@ -43,6 +43,10 @@ export function createTaskGroupEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
+    debugLog(
+      `addTaskGroup: groupId=${data.groupId}, name=${data.groupName}, parentGroupId=${data.parentGroupId ?? 'none'}, stream=${data.stream}`,
+    );
+
     withErrorBoundary('failed to handle addTaskGroup', async () => {
       const {
         stream,
@@ -90,6 +94,10 @@ export function createTaskGroupEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
+    debugLog(
+      `updateTaskGroup: groupId=${data.groupId}, status=${data.status}, stream=${data.stream}`,
+    );
+
     withErrorBoundary('failed to handle updateTaskGroup', async () => {
       const update: TaskGroupUpdatePayload = {
         stream: data.stream,
@@ -102,7 +110,13 @@ export function createTaskGroupEvents(
 
       await state.taskGroups.updateGroup(update);
 
-      if (updater.isAvailable() && data.stream === state.activeStream) {
+      const shouldSendToWebview =
+        updater.isAvailable() && data.stream === state.activeStream;
+      debugLog(
+        `updateTaskGroup: shouldSendToWebview=${shouldSendToWebview}, activeStream=${state.activeStream}`,
+      );
+
+      if (shouldSendToWebview) {
         updater.updateTaskGroup(update);
       }
     });
