@@ -63,7 +63,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, getDisplayPath } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -636,7 +636,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((loc) => this.getDisplayPath(loc))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
@@ -665,7 +665,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((loc) => this.getDisplayPath(loc))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
@@ -680,17 +680,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     messages.push(createUserContent(roundParts));
     return messages;
-  }
-
-  /**
-   * Get a display-friendly path for a file location.
-   * For workspace files, returns the relative path. For external files, returns basename.
-   */
-  private getDisplayPath(location: FileLocation): string {
-    if (location.kind === 'workspace' || location.kind === 'runStorage') {
-      return location.relativePath;
-    }
-    return path.basename(location.absolutePath);
   }
 
   async createUserFollowUpMessages(
