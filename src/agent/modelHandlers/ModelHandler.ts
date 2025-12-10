@@ -25,7 +25,10 @@ import { getConfig } from '@utils/config';
 // Local file imports
 import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
-import { resolveBaseUrl } from './support/ProxyConfigResolver';
+import {
+  resolveBaseUrl,
+  shouldUseOpenRouter,
+} from './support/ProxyConfigResolver';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -208,12 +211,7 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
-    // Use OpenRouter if model requires it or if explicitly configured
-    const useOpenRouter =
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false);
-
-    if (useOpenRouter) {
+    if (shouldUseOpenRouter(this.config)) {
       try {
         return await SecretManager.getApiKey('openRouter');
       } catch (err) {
@@ -242,6 +240,7 @@ export abstract class ModelHandler<
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
       customBaseUrl: this.config.baseUrl,
+      requiresResponsesAPI: this.config.requiresResponsesAPI,
       logger: this.logger,
     });
   }
