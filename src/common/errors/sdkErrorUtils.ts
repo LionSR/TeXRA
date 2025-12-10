@@ -223,7 +223,8 @@ function matchNativeMessageError(
   }
 
   return {
-    message: entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
+    message:
+      entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
     retryable: entry.retryable,
   };

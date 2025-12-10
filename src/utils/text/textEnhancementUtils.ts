@@ -14,7 +14,7 @@ import type { TaskState } from '@logger/TaskState';
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
-import { isNonEmptyString, getTrimmedOrDefault } from '@utils/core';
+import { isNonEmptyString } from '@utils/core';
 
 // Local file imports
 import xmlUtils from './xmlUtils';
@@ -204,7 +204,9 @@ ${text}`;
         'model.instructionPolishModel',
         DEFAULT_POLISH_MODEL,
       );
-      const modelName = getTrimmedOrDefault(configuredModel, DEFAULT_POLISH_MODEL);
+      const modelName = isNonEmptyString(configuredModel)
+        ? configuredModel.trim()
+        : DEFAULT_POLISH_MODEL;
       const modelConfig = MODEL_CONFIGS[modelName];
 
       if (!modelConfig) {

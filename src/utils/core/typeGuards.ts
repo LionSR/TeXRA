@@ -12,7 +12,9 @@ interface ContentItem {
 
 export type MessageContent = string | ContentItem[];
 
-function isTextContentItem(item: unknown): item is { type: 'text'; text: string } {
+function isTextContentItem(
+  item: unknown,
+): item is { type: 'text'; text: string } {
   return (
     item !== null &&
     typeof item === 'object' &&
