@@ -5,9 +5,9 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - log
-import { renderPrompt } from '@agent/utils/promptUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { renderPrompt } from '@utils/prompt';
 import {
   flexibleFS,
   TaskRunFileService,
