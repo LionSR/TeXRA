@@ -54,7 +54,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'deepseek/deepseek-v3.2',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 65536,
-    contextWindow: 128000,
+    contextWindow: 163840,
     inputPrice: 0.28,
     outputPrice: 0.42,
     capabilities: {
@@ -67,7 +67,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     openRouterOnly: false,
   },
   // DeepSeek-V3.2-Speciale (Thinking Mode Only)
-  // Context: 128K, Max output: 128K, No Tool Calls, No JSON Output, No Chat Prefix Completion
+  // Context: 163.84K, Max output: 128K, No Tool Calls, No JSON Output, No Chat Prefix Completion
   // Available until December 15, 2025
   'deepseekT+': {
     name: 'deepseekT+',
@@ -75,7 +75,7 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     openrouterFullName: 'deepseek/deepseek-v3.2-speciale',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 131072,
-    contextWindow: 128000,
+    contextWindow: 163840,
     inputPrice: 0.28,
     outputPrice: 0.42,
     capabilities: {
