@@ -115,7 +115,9 @@ class MainViewDomHandler extends BaseDomHandler {
     });
 
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON, 'click', () => {
-      const sessionType = normalizeSessionType(mainViewState.get()?.sessionType);
+      const sessionType = normalizeSessionType(
+        mainViewState.get()?.sessionType,
+      );
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
         sessionType,

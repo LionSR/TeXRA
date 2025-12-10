@@ -34,6 +34,15 @@ export class ModelFactory {
    * @throws Error if provider is unsupported
    */
   static createHandler(config: ModelConfig): ModelHandler {
+    // Models requiring Responses API (e.g., deep research) must bypass OpenRouter
+    if (
+      config.provider === ModelProvider.OPENAI &&
+      config.requiresResponsesAPI
+    ) {
+      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
+      return new ModelHandlerOpenAIResponse(config);
+    }
+
     // Use OpenRouter if model requires it or if explicitly configured in toolConfig
     const useOpenRouter =
       config.openRouterOnly ||
