@@ -17,7 +17,12 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ModelCapabilities } from '@model/ModelConfig';
 
 // Internal imports
-import { AbsoluteFS, getMimeType, type FileLocation } from '@utils/files';
+import {
+  AbsoluteFS,
+  getMimeType,
+  getDisplayPath,
+  type FileLocation,
+} from '@utils/files';
 
 export type MediaFileResult = { path: string; ok: boolean };
 
@@ -169,7 +174,7 @@ export class MediaAttachmentProcessor {
       } else {
         const reason = settledResult.reason;
         const location = mediaFiles[index];
-        const displayPath = this.getDisplayPath(location);
+        const displayPath = getDisplayPath(location);
         this.logger.error(
           `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
           { data: reason },
@@ -197,7 +202,7 @@ export class MediaAttachmentProcessor {
     location: FileLocation,
   ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
     const absolutePath = location.absolutePath;
-    const displayPath = this.getDisplayPath(location);
+    const displayPath = getDisplayPath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {
@@ -248,18 +253,6 @@ export class MediaAttachmentProcessor {
       );
       return { result: { path: displayPath, ok: false } };
     }
-  }
-
-  /**
-   * Get a display-friendly path for a file location.
-   * For workspace files, returns the relative path (e.g., "logos/mpq-logo.pdf").
-   * For external files, returns just the basename.
-   */
-  private getDisplayPath(location: FileLocation): string {
-    if (location.kind === 'workspace' || location.kind === 'runStorage') {
-      return location.relativePath;
-    }
-    return path.basename(location.absolutePath);
   }
 
   private shouldReturnNativePdf(

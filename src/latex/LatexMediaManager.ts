@@ -286,6 +286,10 @@ export class LatexMediaManager {
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs.
    * Adds resulting media paths to the provided AgentWorkspaceState.
+   *
+   * @param extraMediaFiles - Additional media file paths to include (as strings).
+   *   These are typically user-provided paths from agent config (mediaFile, mediaFiles).
+   *   Kept as string[] for caller convenience; converted to FileLocation internally.
    */
   async processInputFiles(
     inputFiles: FileLocation[],
