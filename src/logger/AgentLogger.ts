@@ -15,7 +15,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
-import { MESSAGE_TYPES } from './messageTypes';
+import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
 import type { EndGroupStatus, MessageType } from './messageTypes';
@@ -133,7 +133,7 @@ class AgentLogStageHandle implements AgentLogStage {
     }
   }
 
-  end(status: EndGroupStatus = 'stopped'): void {
+  end(status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
     if (this.config.skip || !this.config.id || this.ended) {
       return;
     }
@@ -570,7 +570,7 @@ export class AgentLogger {
     );
   }
 
-  endGroup(groupId: string, status: EndGroupStatus = 'stopped'): void {
+  endGroup(groupId: string, status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
