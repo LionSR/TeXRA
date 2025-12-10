@@ -164,27 +164,36 @@ export class FileInteractionState {
 
 export class MediaAttachmentState {
   public readonly files: FileLocation[] = [];
+  /** Set of absolute paths for O(1) deduplication lookups */
+  private readonly pathSet = new Set<string>();
+
+  /**
+   * Add a single media file to the attachment state.
+   * Used internally and during deserialization.
+   */
+  private addFile(location: FileLocation): void {
+    if (!this.pathSet.has(location.absolutePath)) {
+      this.pathSet.add(location.absolutePath);
+      this.files.push(location);
+    }
+  }
 
   /**
    * Add media files to the attachment state.
-   * Deduplicates by absolute path.
+   * Deduplicates by absolute path using O(1) Set lookups.
    */
   addMediaFiles(locations: FileLocation[]): void {
     for (const location of locations) {
-      const isDuplicate = this.files.some(
-        (existing) => existing.absolutePath === location.absolutePath,
-      );
-      if (!isDuplicate) {
-        this.files.push(location);
-      }
+      this.addFile(location);
     }
   }
 
   /**
    * Check if a file is already in the media list by absolute path.
+   * O(1) lookup using internal Set.
    */
   hasFile(absolutePath: string): boolean {
-    return this.files.some((f) => f.absolutePath === absolutePath);
+    return this.pathSet.has(absolutePath);
   }
 }
 
@@ -351,15 +360,11 @@ export class AgentWorkspaceState {
     state.assembly.accumulatedOutput = snapshot.assembly.accumulatedOutput;
 
     // Restore media files, converting legacy strings to FileLocation
-    for (const entry of snapshot.media.files) {
-      if (typeof entry === 'string') {
-        // Legacy format: convert string path to FileLocation
-        state.media.files.push(pathToLocation(entry));
-      } else {
-        // New format: already a FileLocation
-        state.media.files.push(entry);
-      }
-    }
+    const restoredMediaFiles: FileLocation[] = snapshot.media.files.map(
+      (entry) =>
+        typeof entry === 'string' ? pathToLocation(entry) : entry,
+    );
+    state.media.addMediaFiles(restoredMediaFiles);
 
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
