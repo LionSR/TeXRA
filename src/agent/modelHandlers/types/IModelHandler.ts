@@ -198,7 +198,7 @@ export interface IModelHandler<
   initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<M[]>;
 
@@ -206,7 +206,7 @@ export interface IModelHandler<
   createRoundMessages(
     messages: M[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<M[]>;
 
   /** Format media content for provider APIs. */

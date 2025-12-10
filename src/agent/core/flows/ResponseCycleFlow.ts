@@ -35,6 +35,7 @@ import { getSystemPromptWithRules } from '@utils/prompt';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -487,7 +488,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
       if (thinkingContent && !useStreaming) {
         const formatted = await xmlUtils.formatContent(thinkingContent);
-        if (formatted.trim().length > 0) {
+        if (isNonEmptyString(formatted)) {
           options.logger.info(formatted, {
             messageType: MESSAGE_TYPES.THINKING,
           });

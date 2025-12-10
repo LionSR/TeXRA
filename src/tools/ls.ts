@@ -10,9 +10,9 @@ import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
   formatToolOutput,
-  toPosixPath,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
+import { toPosixPath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
