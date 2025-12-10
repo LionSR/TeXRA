@@ -99,6 +99,7 @@ export class VSCodeTransport extends Transport {
 
     group.endTime = Date.now();
     group.status = status;
+
     this.emitGroupFinished({
       stream: this.streamName,
       groupId,
