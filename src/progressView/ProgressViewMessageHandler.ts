@@ -33,6 +33,7 @@ import {
   ProgressViewApprovalActions,
 } from '@tools/approval/toolEditApproval';
 import { pathToLocation } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import {
@@ -625,13 +626,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       ? taskState.agentConfig.outputFiles
       : [];
     for (const file of declaredOutputs) {
-      if (typeof file === 'string' && file.trim().length > 0) {
+      if (isNonEmptyString(file)) {
         allFiles.add(file);
       }
     }
 
     for (const file of generatedPaths) {
-      if (file.trim().length > 0) {
+      if (isNonEmptyString(file)) {
         allFiles.add(file);
       }
     }
