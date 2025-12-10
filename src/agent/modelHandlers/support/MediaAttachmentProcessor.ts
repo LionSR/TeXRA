@@ -24,6 +24,12 @@ import {
   type FileLocation,
 } from '@utils/files';
 
+/**
+ * Result of loading a media file.
+ * @property path - Display path for logging/UI (workspace-relative for workspace files,
+ *   basename for external files). NOT the absolute path used for file operations.
+ * @property ok - Whether the file was successfully loaded
+ */
 export type MediaFileResult = { path: string; ok: boolean };
 
 export type ProcessImageResult = {
