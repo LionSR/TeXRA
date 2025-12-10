@@ -1,5 +1,5 @@
 // Third-party imports
-import { ReasonPhrases, StatusCodes } from 'http-status-codes';
+import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
   APIConnectionError as AnthropicConnectionError,
   APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
@@ -57,59 +57,35 @@ export interface ProviderHttpErrorDetails {
 }
 
 /**
- * HTTP status information - single source of truth for status titles and descriptions.
+ * Custom descriptions for HTTP status codes used in error messages.
+ * Status text/titles are obtained via getReasonPhrase() from http-status-codes.
  */
-const HTTP_STATUS_INFO: Record<number, { title: string; description: string }> =
-  {
-    [StatusCodes.BAD_REQUEST]: {
-      title: ReasonPhrases.BAD_REQUEST,
-      description: 'Invalid parameters',
-    },
-    [StatusCodes.UNAUTHORIZED]: {
-      title: ReasonPhrases.UNAUTHORIZED,
-      description: 'Invalid API key',
-    },
-    [StatusCodes.PAYMENT_REQUIRED]: {
-      title: ReasonPhrases.PAYMENT_REQUIRED,
-      description: 'Insufficient credits',
-    },
-    [StatusCodes.FORBIDDEN]: {
-      title: ReasonPhrases.FORBIDDEN,
-      description: 'Permission denied',
-    },
-    [StatusCodes.NOT_FOUND]: {
-      title: ReasonPhrases.NOT_FOUND,
-      description: 'Resource not found',
-    },
-    [StatusCodes.CONFLICT]: {
-      title: ReasonPhrases.CONFLICT,
-      description: 'Conflict error',
-    },
-    [StatusCodes.UNPROCESSABLE_ENTITY]: {
-      title: ReasonPhrases.UNPROCESSABLE_ENTITY,
-      description: 'Unprocessable entity',
-    },
-    [StatusCodes.TOO_MANY_REQUESTS]: {
-      title: ReasonPhrases.TOO_MANY_REQUESTS,
-      description: 'Rate limit exceeded',
-    },
-    [StatusCodes.INTERNAL_SERVER_ERROR]: {
-      title: ReasonPhrases.INTERNAL_SERVER_ERROR,
-      description: 'Provider error',
-    },
-    [StatusCodes.BAD_GATEWAY]: {
-      title: ReasonPhrases.BAD_GATEWAY,
-      description: 'Provider error',
-    },
-    [StatusCodes.SERVICE_UNAVAILABLE]: {
-      title: ReasonPhrases.SERVICE_UNAVAILABLE,
-      description: 'No available providers',
-    },
-    [StatusCodes.GATEWAY_TIMEOUT]: {
-      title: ReasonPhrases.GATEWAY_TIMEOUT,
-      description: 'Provider timeout',
-    },
-  };
+const HTTP_STATUS_DESCRIPTIONS: Record<number, string> = {
+  [StatusCodes.BAD_REQUEST]: 'Invalid parameters',
+  [StatusCodes.UNAUTHORIZED]: 'Invalid API key',
+  [StatusCodes.PAYMENT_REQUIRED]: 'Insufficient credits',
+  [StatusCodes.FORBIDDEN]: 'Permission denied',
+  [StatusCodes.NOT_FOUND]: 'Resource not found',
+  [StatusCodes.CONFLICT]: 'Conflict error',
+  [StatusCodes.UNPROCESSABLE_ENTITY]: 'Unprocessable entity',
+  [StatusCodes.TOO_MANY_REQUESTS]: 'Rate limit exceeded',
+  [StatusCodes.INTERNAL_SERVER_ERROR]: 'Provider error',
+  [StatusCodes.BAD_GATEWAY]: 'Provider error',
+  [StatusCodes.SERVICE_UNAVAILABLE]: 'No available providers',
+  [StatusCodes.GATEWAY_TIMEOUT]: 'Provider timeout',
+};
+
+/**
+ * Safely get the reason phrase for a status code.
+ * Returns undefined if the status code is not recognized.
+ */
+function safeGetReasonPhrase(statusCode: number): string | undefined {
+  try {
+    return getReasonPhrase(statusCode);
+  } catch {
+    return undefined;
+  }
+}
 
 type ErrorConstructor<T extends Error = Error> = abstract new (
   ...args: never[]
@@ -302,7 +278,7 @@ function matchNativeHttpError(
   const statusText = detectStatusText(err, statusCode);
   const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
-    ? HTTP_STATUS_INFO[statusCode]?.description
+    ? HTTP_STATUS_DESCRIPTIONS[statusCode]
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
@@ -365,7 +341,7 @@ function detectStatusText(
   statusCode?: number,
 ): string | undefined {
   if (!err || typeof err !== 'object') {
-    return statusCode ? HTTP_STATUS_INFO[statusCode]?.title : undefined;
+    return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
   }
 
   const candidate = err as {
@@ -378,7 +354,7 @@ function detectStatusText(
     candidate.statusText ??
     candidate.response?.statusText ??
     candidate.error?.statusText ??
-    (statusCode ? HTTP_STATUS_INFO[statusCode]?.title : undefined)
+    (statusCode ? safeGetReasonPhrase(statusCode) : undefined)
   );
 }
 
@@ -500,7 +476,7 @@ export function formatProviderHttpError(
   const requestId = detectRequestId(err);
 
   const fallbackMessage = statusCode
-    ? HTTP_STATUS_INFO[statusCode]?.description
+    ? HTTP_STATUS_DESCRIPTIONS[statusCode]
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
