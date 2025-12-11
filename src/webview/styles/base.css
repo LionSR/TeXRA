@@ -128,6 +128,14 @@ vscode-option[data-requires-key='true'] {
   background-color: var(--vscode-input-background);
 }
 
+/* Red × indicator for missing API keys.
+   Overrides parent opacity/font-style so the ✗ stands out clearly. */
+.api-key-missing {
+  color: var(--vscode-errorForeground);
+  opacity: 1;
+  font-style: normal;
+}
+
 vscode-option[data-multiple='true'] {
   font-family: codicon, var(--vscode-font-family);
 }
