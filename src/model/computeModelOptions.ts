@@ -31,8 +31,8 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 
 /**
  * Compute model <vscode-option> tags based on available API keys.
- * Models missing a required key receive a "✗" label and attributes so the
- * webview can handle API key setup prompts.
+ * Models missing a required key receive data-requires-key="true" so the
+ * webview can handle API key setup prompts and display a red ✗ indicator.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
@@ -66,7 +66,8 @@ export async function computeModelOptions(): Promise<string> {
         available = true;
       }
 
-      const label = available ? model : `${model} ✗`;
+      // Client-side adds the ✗ indicator based on data-requires-key attribute
+      const label = model;
       const requiresKeyAttr = available
         ? ''
         : ' data-requires-key="true" class="disabled-option disabled-model"';
