@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
-import deepmerge from 'deepmerge';
 import {
   AgentSetting,
   AgentPrompt,
@@ -9,7 +8,7 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { isMultipleVariant, getMultipleName } from '@agent/index/agentRegistry';
+import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -66,12 +65,22 @@ export class RemoteAgentLoader {
 
     const preferMultiple = options?.preferMultiple ?? false;
 
-    // Build candidate names: if preferMultiple, try _multiple variant first
+    // Build candidate names:
+    // - If preferMultiple: try _multiple first, then base as fallback
+    // - If not preferMultiple: use agentName as-is (already resolved by registry)
     const candidateNames: string[] = [];
+
     if (preferMultiple) {
-      candidateNames.push(getMultipleName(agentName));
+      const multipleName = getMultipleName(agentName);
+      candidateNames.push(multipleName);
+      // Add base as fallback if different
+      const baseName = getBaseName(agentName);
+      if (baseName !== multipleName) {
+        candidateNames.push(baseName);
+      }
+    } else {
+      candidateNames.push(agentName);
     }
-    candidateNames.push(agentName);
 
     logger.info(
       CHANNEL,
@@ -165,39 +174,11 @@ export class RemoteAgentLoader {
         const parsed = yaml.parse(yamlContent);
         const validated = AgentDefinitionSchema.parse(parsed);
 
-        // Extract settings and prompts, handling inheritance if specified
-        let settings: Partial<AgentSetting> = validated.settings || {};
-        let prompts: Partial<AgentPrompt> = validated.prompts || {};
-
-        // Handle inheritance: if the agent inherits from a parent, load and merge
-        const parent = validated.inherits;
-        if (parent) {
-          logger.debug(
-            CHANNEL,
-            `Remote agent "${candidateName}" inherits from "${parent}", loading parent`,
-          );
-          try {
-            // Load parent agent (recursively handles nested inheritance)
-            // Parent resolution never uses preferMultiple to keep inherited prompts consistent
-            const parentConfig = await this.loadRemoteAgent(parent, {
-              preferMultiple: false,
-            });
-
-            // Merge child settings/prompts with parent (child overrides parent)
-            settings = deepmerge(parentConfig.settings, settings, {
-              arrayMerge: (_d, s) => s,
-            });
-            prompts = deepmerge(parentConfig.prompts, prompts, {
-              arrayMerge: (_d, s) => s,
-            });
-          } catch (err) {
-            const errorMessage =
-              err instanceof Error ? err.message : String(err);
-            throw new Error(
-              `Failed to load parent agent "${parent}" for "${candidateName}": ${errorMessage}`,
-            );
-          }
-        }
+        // Extract settings and prompts
+        // Note: Remote agents are expected to be self-contained (no inheritance).
+        // If inherits field is present, it's ignored - merge should happen on upload.
+        const settings: Partial<AgentSetting> = validated.settings || {};
+        const prompts: Partial<AgentPrompt> = validated.prompts || {};
 
         // Resolve tool names to definitions
         if (Array.isArray(settings.tools)) {
