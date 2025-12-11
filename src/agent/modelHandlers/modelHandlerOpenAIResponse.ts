@@ -51,6 +51,7 @@ import { ModelHandler } from './ModelHandler';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
+  hasOpenAIWebSearchData,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
@@ -682,7 +683,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           if (
             this.isWebSearchItem(item) &&
             !state.emittedWebSearchIds.has(item.id) &&
-            this.hasWebSearchData(item)
+            hasOpenAIWebSearchData(item)
           ) {
             // Finalize thinking if we have content (in case in_progress didn't fire)
             if (state.hasThinkingContent) {
@@ -1613,17 +1614,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     item: ResponseOutputItem,
   ): item is ResponseFunctionWebSearch {
     return item.type === 'web_search_call';
-  }
-
-  /**
-   * Check if a web search item has meaningful data (action field with query).
-   * During streaming, web search items may be emitted without the action field,
-   * which results in empty searches being displayed. We skip those and let the
-   * fallback from the final response handle them.
-   */
-  private hasWebSearchData(item: ResponseFunctionWebSearch): boolean {
-    const searchItem = item as { action?: { query?: string } };
-    return Boolean(searchItem.action?.query);
   }
 
   /**
