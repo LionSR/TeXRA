@@ -261,8 +261,8 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 272000,
     contextWindow: 400000,
-    inputPrice: 17.5,
-    outputPrice: 140.0,
+    inputPrice: 21.0,
+    outputPrice: 168.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.1,
