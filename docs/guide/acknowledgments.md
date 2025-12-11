@@ -12,8 +12,8 @@ Your feedback and potential acknowledgments help support the continued developme
 
 If TeXRA helps you publish faster, graduate sooner, or simply reduces your LaTeX-induced stress levels, consider supporting its development:
 
-- [**Sponsor on GitHub**](https://github.com/sponsors/YOUR_USERNAME) <!-- Replace with actual sponsor link -->
-- [**Buy Me a Coffee**](https://www.buymeacoffee.com/YOUR_USERNAME) <!-- Replace with actual BMC link -->
+- [**Sponsor on GitHub**](https://github.com/sponsors/texra-ai)
+- [**Buy Me a Coffee**](https://buymeacoffee.com/texra.ai)
 
 ## Conceptual Background & References
 
