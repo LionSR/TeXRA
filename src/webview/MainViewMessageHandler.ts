@@ -203,7 +203,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
         // Reuse existing setApiKey command with provider parameter
         if (m?.provider) {
-          await safeExecuteCommand('texra.setApiKey', m.provider);
+          await safeExecuteCommand('texra.setApiKey', [m.provider]);
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
