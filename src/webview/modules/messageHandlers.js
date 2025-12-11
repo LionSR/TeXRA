@@ -327,13 +327,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateModelOption(opt) {
-    const { provider, context, cost } = opt.dataset;
+    const { provider, context, cost, requiresKey } = opt.dataset;
     const modelName =
       opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
 
     // Get provider decorator for the icon
     const decorator = getModelProviderDecorator(provider);
-    const displayLabel = `${decorator.unicode} ${modelName}`;
 
     // Build tooltip with provider info
     const hints = [];
@@ -341,8 +340,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (context) hints.push(`Context: ${context}`);
     if (cost) hints.push(`Cost: ${cost}`);
 
-    // Set text content with provider icon
-    opt.textContent = displayLabel;
+    // Set content with provider icon, adding red ✗ via DOM if key is missing
+    opt.textContent = `${decorator.unicode} ${modelName}`;
+    if (requiresKey === 'true') {
+      const span = document.createElement('span');
+      span.className = 'api-key-missing';
+      span.textContent = ' ✗';
+      opt.appendChild(span);
+    }
 
     if (hints.length > 0) {
       opt.title = hints.join(' | ');
