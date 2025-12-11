@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
+import deepmerge from 'deepmerge';
 import {
   AgentSetting,
   AgentPrompt,
@@ -164,9 +165,39 @@ export class RemoteAgentLoader {
         const parsed = yaml.parse(yamlContent);
         const validated = AgentDefinitionSchema.parse(parsed);
 
-        // Extract settings and prompts
-        const settings: Partial<AgentSetting> = validated.settings || {};
-        const prompts: Partial<AgentPrompt> = validated.prompts || {};
+        // Extract settings and prompts, handling inheritance if specified
+        let settings: Partial<AgentSetting> = validated.settings || {};
+        let prompts: Partial<AgentPrompt> = validated.prompts || {};
+
+        // Handle inheritance: if the agent inherits from a parent, load and merge
+        const parent = validated.inherits;
+        if (parent) {
+          logger.debug(
+            CHANNEL,
+            `Remote agent "${candidateName}" inherits from "${parent}", loading parent`,
+          );
+          try {
+            // Load parent agent (recursively handles nested inheritance)
+            // Parent resolution never uses preferMultiple to keep inherited prompts consistent
+            const parentConfig = await this.loadRemoteAgent(parent, {
+              preferMultiple: false,
+            });
+
+            // Merge child settings/prompts with parent (child overrides parent)
+            settings = deepmerge(parentConfig.settings, settings, {
+              arrayMerge: (_d, s) => s,
+            });
+            prompts = deepmerge(parentConfig.prompts, prompts, {
+              arrayMerge: (_d, s) => s,
+            });
+          } catch (err) {
+            const errorMessage =
+              err instanceof Error ? err.message : String(err);
+            throw new Error(
+              `Failed to load parent agent "${parent}" for "${candidateName}": ${errorMessage}`,
+            );
+          }
+        }
 
         // Resolve tool names to definitions
         if (Array.isArray(settings.tools)) {
