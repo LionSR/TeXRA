@@ -105,6 +105,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         bannerManager.showBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
       [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) =>
+        bannerManager.showBanner(ELEMENT_IDS.LOGIN_BANNER, m),
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.LOGIN_BANNER),
       /**
        * Handles SET_MODEL_OPTIONS command to update the model dropdown.
        *
