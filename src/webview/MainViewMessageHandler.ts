@@ -21,6 +21,7 @@ import {
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
+import { getAuthStatus, AUTH_COMMANDS } from '@/auth/authCommands';
 
 // Local file imports
 import {
@@ -279,6 +280,32 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           });
         }
       },
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
+        await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
+        // After sign in, hide the banner
+        const view = this.getActiveView();
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
+      },
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
+        // Save dismissal preference
+        await setConfig('ui.showLoginBanner', false);
+        const view = this.getActiveView();
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
+      },
 
       // Recording commands
       [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
@@ -427,6 +454,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         options: agentOptions,
       });
+
+      // Check if user is authenticated and show login banner if not
+      const showLoginBanner = getConfig<boolean>('texra.ui.showLoginBanner', true);
+      if (showLoginBanner) {
+        const authStatus = await getAuthStatus();
+        if (!authStatus.authenticated) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+          });
+        }
+      }
     } catch (error) {
       this.logger.error(
         this.channel,
