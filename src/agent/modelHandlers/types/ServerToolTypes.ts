@@ -281,7 +281,9 @@ export function buildOpenAIWebSearchResult(
  * During streaming, web search items may be emitted without the action field,
  * which results in empty searches being displayed. Use this to filter them out.
  */
-export function hasOpenAIWebSearchData(item: ResponseFunctionWebSearch): boolean {
+export function hasOpenAIWebSearchData(
+  item: ResponseFunctionWebSearch,
+): boolean {
   const searchItem = item as ResponseFunctionWebSearchWithAction;
   return Boolean(searchItem.action?.query);
 }
