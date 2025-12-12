@@ -34,6 +34,7 @@ const PROGRESS_VIEW_MODULES = [
     path: 'modules/uiManagers/ApprovalRequests.js',
   },
   { key: 'retryRequestsUri', path: 'modules/uiManagers/RetryRequests.js' },
+  { key: 'todoListUri', path: 'modules/uiManagers/TodoList.js' },
   {
     key: 'baseUIRequestManagerUri',
     path: 'modules/uiManagers/BaseUIRequestManager.js',

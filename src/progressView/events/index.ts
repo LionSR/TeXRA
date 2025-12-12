@@ -22,6 +22,7 @@ export {
   TaskGroupEventsModule,
   createTaskGroupEvents,
 } from './TaskGroupEvents';
+export { TodoEventsModule, createTodoEvents } from './TodoEvents';
 export { ProgressEventBusLike } from './types';
 export type { StreamStatus } from '@eventBus/ProgressEventBus';
 export { UsageEventsModule, createUsageEvents } from './UsageEvents';
