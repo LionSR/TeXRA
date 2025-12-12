@@ -280,8 +280,9 @@ export class ProgressEventHandler {
     });
 
     // Refresh todos for the stream (ephemeral state)
+    // Always send todos if defined (including empty array to clear stale UI)
     const todos = this.state.getTodos(stream);
-    if (todos && todos.length > 0) {
+    if (todos !== undefined) {
       this.webviewUpdater.updateTodos(stream, todos);
     }
 
