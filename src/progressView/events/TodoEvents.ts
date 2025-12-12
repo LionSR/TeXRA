@@ -41,10 +41,14 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );
 
-    withErrorBoundary('failed to handle updateTodos', async () => {
+    // Error boundary wraps the handler but we don't need async operations
+    withErrorBoundary('failed to handle updateTodos', () => {
       const { stream, todos } = data;
 
-      // Only send to webview if it's the active stream
+      // Always store todos in state for persistence across stream switches
+      state.setTodos(stream, todos);
+
+      // Send to webview if it's the active stream and webview is available
       const shouldSendToWebview =
         updater.isAvailable() && stream === state.activeStream;
 
