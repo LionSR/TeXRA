@@ -98,23 +98,21 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * and no OAuth flow is currently active.
    */
   private async handleMagicLinkCallback(uri: vscode.Uri): Promise<void> {
-    // Skip if another handler is already processing (OAuth flow active)
+    // Atomically claim processing - must be first check to prevent race
     if (this.isProcessingCallback) {
       return;
     }
-
-    // Check if we already have a session
-    const existingSession = await this.context.secrets.get(
-      SupabaseAuthProvider.SESSION_KEY,
-    );
-    if (existingSession) {
-      return;
-    }
-
-    // Set flag to prevent race conditions
     this.isProcessingCallback = true;
 
     try {
+      // Check if we already have a session (after claiming the lock)
+      const existingSession = await this.context.secrets.get(
+        SupabaseAuthProvider.SESSION_KEY,
+      );
+      if (existingSession) {
+        return;
+      }
+
       const result = await this.parseCallbackAndCreateSession(uri);
 
       if (!result.success) {
@@ -125,27 +123,38 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      // Store the session
-      await this.context.secrets.store(
-        SupabaseAuthProvider.SESSION_KEY,
-        JSON.stringify(result.session),
-      );
+      // Store session and notify - wrapped in try to ensure cleanup on partial failure
+      try {
+        await this.context.secrets.store(
+          SupabaseAuthProvider.SESSION_KEY,
+          JSON.stringify(result.session),
+        );
 
-      // Notify VS Code of the new session
-      this._onDidChangeSessions.fire({
-        added: [this.toVSCodeSession(result.session)],
-        removed: [],
-        changed: [],
-      });
+        this._onDidChangeSessions.fire({
+          added: [this.toVSCodeSession(result.session)],
+          removed: [],
+          changed: [],
+        });
 
-      void vscode.window.showInformationMessage(
-        `Signed in as ${result.session.account.label}`,
-      );
+        void vscode.window.showInformationMessage(
+          `Signed in as ${result.session.account.label}`,
+        );
 
-      logger.info(
-        'SupabaseAuthProvider',
-        `Magic link sign-in successful for ${result.session.account.label}`,
-      );
+        logger.info(
+          'SupabaseAuthProvider',
+          `Magic link sign-in successful for ${result.session.account.label}`,
+        );
+      } catch (storeError) {
+        const errorMsg =
+          storeError instanceof Error ? storeError.message : String(storeError);
+        logger.error(
+          'SupabaseAuthProvider',
+          `Failed to store session: ${errorMsg}`,
+        );
+        void vscode.window.showErrorMessage(
+          `Sign-in failed: Could not save session`,
+        );
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(

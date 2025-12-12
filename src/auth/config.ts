@@ -66,6 +66,18 @@ export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 /**
+ * Display labels and icons for OAuth providers.
+ * Used in the sign-in QuickPick menu.
+ */
+export const OAUTH_PROVIDER_LABELS: Record<
+  OAuthProvider,
+  { label: string; icon: string }
+> = {
+  github: { label: 'GitHub', icon: '$(github)' },
+  google: { label: 'Google', icon: '$(globe)' },
+};
+
+/**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.
  */
