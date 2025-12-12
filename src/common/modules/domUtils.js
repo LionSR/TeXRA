@@ -290,3 +290,17 @@ export function waitForElement(selector, options = {}) {
 
   return { promise, dispose };
 }
+
+/**
+ * Set the data-expanded attribute on a parent element matching the selector.
+ * Used for CSS-based visibility toggling without fragile style attribute checks.
+ * @param {HTMLElement} element - The child element to start searching from.
+ * @param {string} selector - CSS selector for the parent element.
+ * @param {boolean} isExpanded - Whether the section is expanded.
+ */
+export function setExpandedState(element, selector, isExpanded) {
+  const parent = element?.closest(selector);
+  if (parent) {
+    parent.dataset.expanded = isExpanded ? 'true' : 'false';
+  }
+}

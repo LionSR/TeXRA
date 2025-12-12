@@ -3,6 +3,7 @@ import {
   addEventListenerSafely,
   safeGetElementById,
   setChevronIcon,
+  setExpandedState,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
@@ -105,12 +106,7 @@ export class FileList {
       const container = safeGetElementById(`${listId}Container`);
       if (container) {
         container.style.display = 'block';
-
-        // Set data-expanded on parent .file-select for CSS styling
-        const fileSelect = container.closest('.file-select');
-        if (fileSelect) {
-          fileSelect.dataset.expanded = 'true';
-        }
+        setExpandedState(container, '.file-select', true);
       }
     }
     this._save();
@@ -129,12 +125,7 @@ export class FileList {
     if (!container || !toggleIcon) return;
     container.style.display = isVisible ? 'block' : 'none';
     setChevronIcon(toggleIcon, isVisible);
-
-    // Set data-expanded on parent .file-select for CSS styling
-    const fileSelect = container.closest('.file-select');
-    if (fileSelect) {
-      fileSelect.dataset.expanded = isVisible ? 'true' : 'false';
-    }
+    setExpandedState(container, '.file-select', isVisible);
   }
 
   /** Toggle visibility of a file list container */
@@ -158,12 +149,7 @@ export class FileList {
     if (toggleIconDiv) {
       setChevronIcon(toggleIconDiv, false);
     }
-
-    // Remove data-expanded from parent .file-select
-    const fileSelect = container.closest('.file-select');
-    if (fileSelect) {
-      fileSelect.dataset.expanded = 'false';
-    }
+    setExpandedState(container, '.file-select', false);
 
     if (shouldSave) {
       this._save();
