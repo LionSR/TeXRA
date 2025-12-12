@@ -678,7 +678,7 @@ The codebase has **significant layering violations** where lower-level modules i
 
 #### Recommended Fixes
 
-1. **Extract shared types to `@types/`** module that all layers can depend on
+1. **Extract shared types to `@shared/`** module that all layers can depend on (✅ DONE)
 2. **Create `@core/` module** for shared interfaces (ITool, IAgent, etc.)
 3. **Move `SecretManager` to `@common/`** or create `@secrets/` module
 4. **Extract `capitalize()` to `@utils/text/`** (trivial fix)
@@ -686,8 +686,8 @@ The codebase has **significant layering violations** where lower-level modules i
    - `@logger/core/` - no dependencies
    - `@logger/agent/` - agent-specific logging
 6. **Resolve @agent ↔ @tools circular dependency:**
-   - Move `ITool`, `ToolDefinition`, `ToolResult` to `@types/tools/`
-   - Tools should only depend on `@types/`, not `@agent/`
+   - Move `ITool`, `ToolDefinition`, `ToolResult` to `@shared/tools` (✅ interfaces moved)
+   - Tools should only depend on `@shared/`, not `@agent/`
 
 ---
 
@@ -1249,13 +1249,39 @@ DEPENDENCY RULE: All arrows point DOWN (inward)
 
 ### Implementation Roadmap (Minimal Round-Trips)
 
-| Phase | Files Changed | Violations Fixed | Effort |
-|-------|---------------|------------------|--------|
-| **1. Create @types/** | 6 new + ~30 import updates | 24 (60%) | 2-3 hours |
-| **2. Break @agent↔@tools cycle** | 4 files | 10 (25%) | 1 hour |
-| **3. Inject SecretManager** | 8 files | 4 (10%) | 1-2 hours |
-| **4. UI callback interface** | 6 files | 6 (15%) | 1-2 hours |
-| **Total** | ~50 files | 40+ violations | **5-8 hours** |
+| Phase | Files Changed | Violations Fixed | Effort | Status |
+|-------|---------------|------------------|--------|--------|
+| **1. Create @shared/** | 7 new + 5 import updates | 24 (60%) | 2-3 hours | ✅ DONE |
+| **2. Break @agent↔@tools cycle** | 4 files | 10 (25%) | 1 hour | ⏳ Pending |
+| **3. Inject SecretManager** | 8 files | 4 (10%) | 1-2 hours | ⏳ Pending |
+| **4. UI callback interface** | 6 files | 6 (15%) | 1-2 hours | ⏳ Pending |
+| **Total** | ~50 files | 40+ violations | **5-8 hours** | |
+
+> **Note:** Phase 1 was renamed from `@types/` to `@shared/` to avoid conflict with TypeScript's
+> built-in `@types/*` package resolution (which caused TS6137 errors).
+
+### Phase 1 Implementation Details (Completed)
+
+**Files Created in `src/types/`:**
+- `identifiers.ts` - StreamTabId, ExecutionId, StorageKey schemas
+- `agent.ts` - AgentType, AgentCategory enums and derivation functions
+- `tools.ts` - ITool, IToolRegistry interfaces, ToolResult schemas
+- `usage.ts` - TokenUsageStats, ExtendedTokenUsageStats schemas
+- `status.ts` - STREAM_STATUS constants and schemas
+- `callbacks.ts` - ISecretProvider, IAgentUICallbacks interfaces
+- `index.ts` - Barrel export
+
+**Files Modified (re-export for backward compatibility):**
+- `src/agent/types/IdentifierTypes.ts` → re-exports from `@shared/identifiers`
+- `src/agent/types/UsageTypes.ts` → re-exports from `@shared/usage`
+- `src/agent/core/AgentDataclass.ts` → re-exports from `@shared/agent`
+- `src/agent/core/ToolTypes.ts` → re-exports from `@shared/tools`
+- `src/common/constants/streamStatus.ts` → re-exports from `@shared/status`
+
+**tsconfig.json:**
+```json
+"@shared/*": ["src/types/*"]
+```
 
 ---
 
