@@ -13,6 +13,7 @@ import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
+import { TodoList } from './uiManagers/TodoList.js';
 import { UsageSummary } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { vscode } from '@common/webviewContext.js';
@@ -39,6 +40,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       followUpInput: new FollowUpInputManager(vscode),
       approvalRequests: new ApprovalRequests(),
       retryRequests: new RetryRequests(),
+      todoList: new TodoList(),
     });
   }
 }
