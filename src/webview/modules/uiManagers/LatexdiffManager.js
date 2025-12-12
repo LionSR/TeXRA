@@ -25,6 +25,12 @@ export class LatexdiffManager {
 
       container.style.display = shouldShow ? 'block' : 'none';
       setChevronIcon(toggleIcon, shouldShow);
+
+      // Set data-expanded on parent .latexdiffs-section for CSS styling
+      const section = container.closest('.latexdiffs-section');
+      if (section) {
+        section.dataset.expanded = shouldShow ? 'true' : 'false';
+      }
     }
   }
 
@@ -35,10 +41,17 @@ export class LatexdiffManager {
     if (!container || !toggleIcon) return;
 
     const isVisible = container.style.display !== 'none';
-    container.style.display = isVisible ? 'none' : 'block';
-    setChevronIcon(toggleIcon, !isVisible);
+    const newVisible = !isVisible;
+    container.style.display = newVisible ? 'block' : 'none';
+    setChevronIcon(toggleIcon, newVisible);
 
-    this.state.update({ latexdiffsVisible: !isVisible });
+    // Set data-expanded on parent .latexdiffs-section for CSS styling
+    const section = container.closest('.latexdiffs-section');
+    if (section) {
+      section.dataset.expanded = newVisible ? 'true' : 'false';
+    }
+
+    this.state.update({ latexdiffsVisible: newVisible });
     this.state.save();
   }
 }
