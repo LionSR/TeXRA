@@ -259,15 +259,7 @@ export class DocumentStatsState {
   }
 }
 
-// Re-export todo types from single source of truth (eventBus/schemas)
-export {
-  TodoStatusSchema,
-  TodoItemSchema,
-  type TodoStatus,
-  type TodoItem,
-} from '@eventBus/schemas';
-
-// Import for internal use in this file
+// Import todo schemas from single source of truth (eventBus/schemas)
 import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 
 /**
