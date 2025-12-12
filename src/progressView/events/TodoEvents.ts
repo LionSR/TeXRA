@@ -6,6 +6,9 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
+// Local imports - constants
+import { TODO_STATUS } from '@eventBus/schemas';
+
 // Local file imports
 import type {
   BaseEventShared,
@@ -36,7 +39,7 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
     updater: WebviewUpdater,
   ): void => {
     const todoCount = data.todos.length;
-    const inProgress = data.todos.filter((t) => t.status === 'in_progress').length;
+    const inProgress = data.todos.filter((t) => t.status === TODO_STATUS.IN_PROGRESS).length;
     debugLog(
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );
