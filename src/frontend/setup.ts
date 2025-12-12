@@ -228,7 +228,7 @@ export async function configureLatexSettings() {
           '-synctex=1',
           '-interaction=nonstopmode',
           '-file-line-error',
-          '%DOC%',
+          '%DOCFILE%',
           '-pdf',
           '-f',
         ],
