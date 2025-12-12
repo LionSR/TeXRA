@@ -1,450 +1,312 @@
-# SDK Utilities Analysis for TeXRA
+# SDK Utilities Analysis for TeXRA - Deep Analysis
 
-This document identifies native SDK helpers, methods, types, and schemas that could replace custom implementations for better maintainability and reduced code.
+This document provides a thorough analysis of SDK utilities vs. custom implementations in TeXRA, based on line-by-line code review.
 
 ## Executive Summary
 
-After deep analysis of the SDKs used in TeXRA, several opportunities for code reduction were identified:
+After deep code analysis comparing actual implementations with SDK capabilities:
 
-| SDK | Current Usage | Opportunities Found |
-|-----|--------------|---------------------|
-| @anthropic-ai/sdk | Good | 8 major opportunities |
-| openai | Good | 7 major opportunities |
-| @google/genai | Moderate | 5 opportunities |
-| zod | Excellent | 4 enhancement opportunities |
-| @modelcontextprotocol/sdk | Limited | 3 opportunities |
+| SDK | Total Custom Lines | Actually Replaceable | Reason |
+|-----|-------------------|---------------------|--------|
+| @anthropic-ai/sdk | ~2,500 | ~40-60 lines (2-3%) | Most is necessary application logic |
+| openai | ~3,150 | ~135-170 lines (4-5%) | Stream events, type guards |
+| @google/genai | ~800 | ~15 lines | Already using SDK well |
+| zod | Excellent usage | N/A | Minor enhancements only |
+| Error handling | ~900 | ~0 lines | Well-architected, SDK-native |
 
----
-
-## 1. Anthropic SDK (`@anthropic-ai/sdk` v0.71.2)
-
-### Currently Used
-- Basic types: `MessageParam`, `StopReason`, `ToolUseBlock`
-- Stream events: `BetaRawMessageStreamEvent`
-- Server tools: `ServerToolUseBlock`, `WebSearchToolResultBlock`
-
-### Underutilized Features
-
-#### 1.1 Token Counting API
-**SDK provides:** `client.messages.countTokens()`
-```typescript
-// SDK native
-const count = await client.messages.countTokens({
-  model: 'claude-sonnet-4-20250514',
-  messages: [{ role: 'user', content: 'Hello' }],
-});
-console.log(count.input_tokens);
-```
-**Current:** Uses `gpt-tokenizer` for estimates
-**Impact:** More accurate token counting for Claude models
-
-#### 1.2 MessageStream Event Helpers
-**SDK provides:** `MessageStream` class with built-in event handling
-```typescript
-// SDK native
-const stream = client.messages.stream({ ... });
-stream.on('text', (text) => console.log(text));
-stream.on('thinking', (thinking) => console.log(thinking));
-stream.on('inputJson', (json) => console.log(json));
-const finalMessage = await stream.finalMessage();
-const finalText = await stream.finalText();
-```
-**Current:** Manual event parsing in `AnthropicStreamHandler.ts` (354 lines)
-**Impact:** Could reduce stream handling code by ~50%
-
-#### 1.3 ToolRunner / BetaToolRunner
-**SDK provides:** Automatic tool execution loop with context compaction
-```typescript
-// SDK native - handles full tool loop
-const runner = client.beta.messages.runTools({
-  model: 'claude-sonnet-4-20250514',
-  tools: [{ name: 'read_file', ... }],
-  messages: [...],
-}).on('tool_use', (toolUse) => executeLocalTool(toolUse));
-
-const finalMessage = await runner.finalMessage();
-```
-**Current:** Custom tool-use loop in agent implementations
-**Impact:** Could simplify agentic flows significantly
-
-#### 1.4 File Upload Utilities
-**SDK provides:** `toFile()` function for various input types
-```typescript
-import { toFile } from '@anthropic-ai/sdk';
-// Converts Blob, Response, ReadStream, AsyncIterable to File
-const file = await toFile(blob, 'image.png');
-```
-**Current:** Manual file handling
-**Impact:** Cleaner file handling code
-
-#### 1.5 APIPromise Utilities
-**SDK provides:** `withResponse()` for request ID tracking
-```typescript
-const { data, response, request_id } = await client.messages.create({ ... }).withResponse();
-```
-**Current:** Manual response handling
-**Impact:** Better debugging and request tracking
-
-#### 1.6 Batch Processing API
-**SDK provides:** Native batch API for bulk operations
-```typescript
-const batch = await client.messages.batches.create({
-  requests: [{ custom_id: '1', params: { ... } }, ...]
-});
-```
-**Current:** Sequential requests
-**Impact:** More efficient bulk processing
-
-#### 1.7 Base64 Encoding Utilities
-**SDK provides:** `toBase64()`, `fromBase64()`, `encodeUTF8()`, `decodeUTF8()`
-```typescript
-import { toBase64, fromBase64 } from '@anthropic-ai/sdk/internal/utils/bytes';
-```
-**Current:** Uses Node.js Buffer directly
-**Impact:** Cross-environment compatibility
-
-#### 1.8 Error Type Granularity
-**SDK provides:** Specific error classes
-```typescript
-import {
-  RateLimitError,
-  AuthenticationError,
-  BadRequestError,
-  APIConnectionTimeoutError
-} from '@anthropic-ai/sdk';
-```
-**Current:** `src/common/errors/sdkErrorUtils.ts` handles some
-**Impact:** More granular error handling
+**Key Finding:** TeXRA's SDK usage is already well-optimized. Most "custom" code is legitimate application logic that SDKs don't provide.
 
 ---
 
-## 2. OpenAI SDK (`openai` v6.10.0)
+## 1. Anthropic SDK - Detailed Analysis
 
-### Currently Used
-- `ChatCompletionTool`, `FunctionDefinition`
-- `isAssistantMessage()` helper
-- `ContentDeltaEvent` for streaming
-- `ResponseStreamParams`, `Reasoning`, `ReasoningEffort`
-
-### Underutilized Features
-
-#### 2.1 Zod Integration for Structured Outputs
-**SDK provides:** Native Zod support
+### What TeXRA Already Uses Correctly
 ```typescript
-import { zodResponseFormat, zodFunction } from 'openai/helpers/zod';
-import { z } from 'zod';
-
-// Structured output with automatic parsing
-const completion = await client.beta.chat.completions.parse({
-  model: 'gpt-4o',
-  messages: [...],
-  response_format: zodResponseFormat(MySchema, 'my_schema'),
-});
-console.log(completion.choices[0].message.parsed); // Typed!
-
-// Tool with Zod schema
-const tool = zodFunction({
-  name: 'get_weather',
-  parameters: z.object({ location: z.string() }),
-});
+// Direct SDK usage (optimal)
+import { Anthropic, toFile } from '@anthropic-ai/sdk';
+await client.beta.messages.stream(options);     // ✓ Native streaming
+await stream.finalMessage();                     // ✓ SDK method
+await client.beta.messages.countTokens(...);    // ✓ Native token counting
+await client.beta.files.upload(...);            // ✓ Native file upload
 ```
-**Current:** Manual JSON Schema conversion in `tools/core/define.ts`
-**Impact:** Type-safe structured outputs, less conversion code
 
-#### 2.2 ChatCompletionStream Events
-**SDK provides:** Rich event system
+### Why Custom Code Cannot Be Replaced
+
+#### Cache Control Management (~100 lines)
+**SDK provides:** `CacheControlEphemeral` type
+**SDK does NOT provide:** Cache control lifecycle management
 ```typescript
-const stream = client.beta.chat.completions.stream({ ... });
-stream.on('content.delta', (delta) => { ... });
-stream.on('tool_calls.function.arguments.delta', (delta) => { ... });
-stream.on('refusal.delta', (delta) => { ... });
-
-// Convert for frontend
-const readableStream = stream.toReadableStream();
-```
-**Current:** Manual stream parsing
-**Impact:** Cleaner streaming code
-
-#### 2.3 ChatCompletionRunner for Tool Loops
-**SDK provides:** Automatic tool execution
-```typescript
-import { ChatCompletionStreamingRunner } from 'openai/lib/ChatCompletionStreamingRunner';
-
-const runner = ChatCompletionStreamingRunner.runTools(client, {
-  model: 'gpt-4o',
-  tools: [...],
-  messages: [...],
-});
-runner.on('functionToolCall', (call) => { ... });
-const result = await runner.finalChatCompletion();
-```
-**Current:** Custom tool loops
-**Impact:** Reduced boilerplate for tool-use agents
-
-#### 2.4 Input Token Counting
-**SDK provides:** Pre-request token estimation
-```typescript
-const count = await client.responses.inputTokens.count({
-  model: 'gpt-4o',
-  input: [...],
-  tools: [...],
-});
-```
-**Current:** External tokenizer estimates
-**Impact:** Accurate cost estimation
-
-#### 2.5 Type Guards
-**SDK provides:** Built-in type guards
-```typescript
-import { isAssistantMessage, isToolMessage, isPresent } from 'openai/lib/chatCompletionUtils';
-```
-**Current:** Custom type guards in `ServerToolTypes.ts`
-**Impact:** Could supplement existing guards
-
-#### 2.6 Webhook Verification
-**SDK provides:** Signature verification
-```typescript
-import { Webhooks } from 'openai/resources';
-const event = Webhooks.unwrap(payload, headers, secret);
-```
-**Current:** Not needed currently but available for future use
-
-#### 2.7 allSettledWithThrow Utility
-**SDK provides:** Promise utility
-```typescript
-import { allSettledWithThrow } from 'openai/lib/Util';
-// Like Promise.allSettled but throws on any rejection
-```
-**Current:** Manual Promise handling
-**Impact:** Cleaner async code
-
----
-
-## 3. Google GenAI SDK (`@google/genai` v1.33.0)
-
-### Currently Used
-- `FinishReason` enum
-- Basic generation types
-
-### Underutilized Features
-
-#### 3.1 Content Creation Helpers
-**SDK provides:** Factory functions
-```typescript
-import {
-  createPartFromText,
-  createPartFromBase64,
-  createPartFromUri,
-  createUserContent,
-  createModelContent,
-  createPartFromFunctionCall,
-  createPartFromFunctionResponse,
-} from '@google/genai';
-
-const content = createUserContent([
-  createPartFromText('Describe this image'),
-  createPartFromBase64(base64Data, 'image/png'),
-]);
-```
-**Current:** Manual content construction
-**Impact:** Cleaner message building
-
-#### 3.2 Response Getters
-**SDK provides:** Built-in accessors
-```typescript
-const response = await model.generateContent(...);
-console.log(response.text);           // Concatenated text
-console.log(response.functionCalls);  // All function calls
-console.log(response.data);           // Inline data
-```
-**Current:** Manual content extraction
-**Impact:** Simpler response handling
-
-#### 3.3 Chat History Management
-**SDK provides:** `Chat` class with history
-```typescript
-const chat = model.startChat({ history: [...] });
-const response = await chat.sendMessage('Hello');
-const history = chat.getHistory();
-```
-**Current:** Manual history tracking
-**Impact:** Built-in conversation management
-
-#### 3.4 File Upload/Download
-**SDK provides:** File management
-```typescript
-const file = await genai.files.upload({
-  file: '/path/to/file.pdf',
-  config: { mimeType: 'application/pdf' },
-});
-await genai.files.download({ file: file.name, downloadPath: './out.pdf' });
-```
-**Current:** Manual file handling
-**Impact:** Simpler media handling
-
-#### 3.5 Native Schema Type
-**SDK provides:** Full JSON Schema interface
-```typescript
-import type { Schema } from '@google/genai/dist/genai';
-// Already used in ToolDefinition.ts - good!
-```
-**Status:** Already properly used
-
----
-
-## 4. Zod (`zod` v4.1.13)
-
-### Currently Used (Excellent)
-- Schema-first types with `z.infer<>`
-- `z.discriminatedUnion()` for type unions
-- `toJSONSchema()` for tool definitions
-- `.transform()`, `.superRefine()` for validation
-
-### Enhancement Opportunities
-
-#### 4.1 `z.nativeEnum()` for SDK Enums
-**Location:** `src/agent/modelHandlers/types/StopReasonTypes.ts`
-```typescript
-// Current (lines 9-20)
-export const OPENAI_CHAT_FINISH = {
-  STOP: 'stop',
-  LENGTH: 'length',
-  // ...
-} as const;
-export type OpenAIChatFinishReason = (typeof OPENAI_CHAT_FINISH_REASONS)[number] | null;
-
-// Could use z.nativeEnum()
-const OpenAIChatFinishSchema = z.nativeEnum(OPENAI_CHAT_FINISH);
-type OpenAIChatFinishReason = z.infer<typeof OpenAIChatFinishSchema> | null;
-```
-**Impact:** Consistent schema-based validation
-
-#### 4.2 Replace Manual Type Guards with Zod
-**Location:** `src/agent/modelHandlers/types/ServerToolTypes.ts`
-```typescript
-// Current (lines 98-106)
-export function isAnthropicServerToolUse(block: unknown): block is ServerToolUseBlock {
-  return typeof block === 'object' && block !== null &&
-    (block as { type?: string }).type === 'server_tool_use';
+// TeXRA tracks which blocks have cache_control and enforces MAX_CACHE_CONTROLLED_BLOCKS = 4
+private setCacheControlTarget(block: CacheControlEligibleBlock): void {
+  if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
+    delete this.cacheControlledBlock.cache_control;  // Manual cleanup
+  }
+  block.cache_control = EPHEMERAL_CACHE_CONTROL;
+  this.cacheControlledBlock = block;
 }
-
-// Could use Zod schema with safeParse
-const ServerToolUseBlockSchema = z.object({
-  type: z.literal('server_tool_use'),
-  id: z.string(),
-  name: z.string(),
-  input: z.unknown(),
-});
-const isAnthropicServerToolUse = (block: unknown) =>
-  ServerToolUseBlockSchema.safeParse(block).success;
 ```
-**Impact:** Consistent validation, better error messages
+**Verdict:** Cannot replace - SDK only provides types, not state management
 
-#### 4.3 `.catch()` for Graceful Fallbacks
-**Current:** Manual safeParse with if-checks
+#### Beta Feature Tracking (~60 lines)
+**SDK provides:** `betas` array parameter
+**SDK does NOT provide:** Beta string constants (they change over time)
 ```typescript
-// Could simplify with .catch()
-const result = schema.catch(defaultValue).parse(data);
+const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
+const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
+const INTERLEAVED_THINKING_BETA: AnthropicBeta = 'interleaved-thinking-2025-05-14';
+```
+**Verdict:** Cannot replace - application must track beta versions
+
+#### Streaming State Machine (AnthropicStreamHandler.ts - 354 lines)
+**SDK provides:** `stream.on('streamEvent', ...)` raw events
+**SDK does NOT provide:** Multi-block coordination, consecutive text merging, web search JSON accumulation
+
+```typescript
+// TeXRA handles interleaved blocks: thinking → text → server_tool → text
+// SDK only emits raw events - coordination is application responsibility
+interface AnthropicStreamState {
+  outputStream: Stream | null;
+  lastBlockIndex: number;
+  pendingSearches: Map<string, { index: number; input: string }>;
+  emittedSearchIds: Set<string>;
+  finalized: boolean;
+}
+```
+**Verdict:** Cannot replace - SDK emits events but doesn't manage state
+
+#### Token Adjustment Algorithm (~50 lines)
+**SDK provides:** `countTokens()` result
+**SDK does NOT provide:** Max tokens adjustment based on context window
+```typescript
+// TeXRA adjusts max_tokens AND thinking budget proportionally
+if (effectiveContextWindow - inputTokens < options.max_tokens) {
+  options.max_tokens = Math.max(0, effectiveContextWindow - inputTokens - 10);
+  if (options.thinking?.type === 'enabled') {
+    options.thinking.budget_tokens = Math.floor(options.max_tokens * 0.5);
+  }
+}
+```
+**Verdict:** Cannot replace - business logic specific to TeXRA
+
+#### Thinking Block Persistence (~80 lines)
+**SDK provides:** `ThinkingBlock` type in response
+**SDK does NOT provide:** Cross-turn thinking block preservation
+```typescript
+// TeXRA stores thinking blocks for conversation continuation
+workspaceState.reasoning.thinkingBlocks = thinkingBlocks;
+// Later reattaches them to follow-up messages
+assistantMessage.content.push(...thinkingBlocks);
+```
+**Verdict:** Cannot replace - SDK doesn't manage conversation state
+
+### What Could Potentially Be Optimized (~40-60 lines)
+
+1. **Type guards** (lines 142-173) - Could be inlined but reduces readability
+2. **Tool call mapping** (lines 1697-1710) - Could extract to shared utility
+3. **Web search result parsing** - Could share with OpenAI handler
+
+**Net realistic savings:** 40-60 lines (2-3% of 2,500 lines)
+
+---
+
+## 2. OpenAI SDK - Detailed Analysis
+
+### What TeXRA Already Uses Correctly
+```typescript
+import OpenAI from 'openai';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';  // ✓ SDK helper
+stream.on('content.delta', onContentDelta);   // ✓ SDK streaming
+stream.on('chunk', onChunk);                   // ✓ SDK streaming
 ```
 
-#### 4.4 `.brand()` for Branded Types
-**Location:** `src/utils/files/taskRunStorage.ts`
-```typescript
-// Current
-export type StorageKey = string & { readonly __brand: 'StorageKey' };
+### Actually Replaceable Code (~135-170 lines)
 
-// Could use Zod's brand
-const StorageKeySchema = z.string().regex(...).brand<'StorageKey'>();
+#### 1. Stream Event Type Guards (~50 lines reducible)
+**Current:** Custom type guard functions
+```typescript
+private isReasoningDeltaEvent(event: ResponseStreamEvent):
+  event is ResponseReasoningTextDeltaEvent | ... {
+  return event.type === 'response.reasoning_text.delta' ||
+         event.type === 'response.reasoning_summary_text.delta';
+}
+```
+**SDK Alternative:** TypeScript discriminated unions work directly
+```typescript
+// No custom guards needed - TypeScript narrows based on event.type
+if (event.type === 'response.reasoning_text.delta') {
+  // TypeScript knows event.delta exists
+}
+```
+**Verdict:** Can remove ~50 lines of type guards
+
+#### 2. Tool Argument Parsing (~35 lines reducible)
+**Current:** Manual JSON parsing with fallback
+```typescript
+protected parseArguments(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try { return JSON.parse(raw); }
+  catch { return raw; }
+}
+```
+**SDK Alternative:** `zodFunction()` with auto-parsing
+```typescript
+import { zodFunction } from 'openai/helpers/zod';
+const tool = zodFunction({ name: 'read_file', parameters: ReadInputSchema });
+// SDK auto-parses arguments
+```
+**Caveat:** Requires converting existing schemas - medium effort
+
+#### 3. Additional Type Guards (~10-15 lines)
+```typescript
+// Could add SDK guards
+import { isToolMessage, isPresent } from 'openai/lib/chatCompletionUtils';
+```
+
+### What Cannot Be Replaced
+
+#### Token Counting (~60 lines)
+**SDK provides:** Nothing for Chat Completions API
+**Current:** Uses `gpt-tokenizer` library - correct approach
+
+#### Background Response Polling (~160 lines)
+**SDK provides:** Low-level `responses.retrieve()`
+**SDK does NOT provide:** High-level polling helper with retry logic
+**Verdict:** Cannot replace - necessary for Responses API background mode
+
+#### DeepSeek Reasoning Extraction (~40 lines)
+**SDK provides:** Nothing - DeepSeek format not in SDK schema
+**Current:** Custom extraction from `reasoning_content` field
+**Verdict:** Cannot replace until SDK adds DeepSeek support
+
+---
+
+## 3. Tool Definition System - Already Optimal
+
+### Current Implementation
+```typescript
+// src/tools/core/define.ts
+export function defineTool<T>(def: { name, description, schema: ZodType<T> }) {
+  const baseDefinition: ToolDefinition = {
+    name: def.name,
+    description: def.description,
+    parameters: toJSONSchema(def.schema, {
+      target: 'draft-2020-12',
+      unrepresentable: 'any',
+      io: 'input',
+    }),
+  };
+  // Returns abstract class for inheritance
+}
+```
+
+### Why This Is Better Than SDK Alternatives
+
+| Aspect | TeXRA Approach | SDK Alternative | Winner |
+|--------|---------------|-----------------|--------|
+| Multi-provider | Single definition → adapts to all | Provider-specific | TeXRA |
+| Validation | Built-in Zod validation | Manual | TeXRA |
+| Error diagnostics | ZodError issues extraction | None | TeXRA |
+| Inheritance | Abstract class pattern | None | TeXRA |
+
+**Verdict:** Current approach is cleaner than SDK's `zodFunction()` for multi-provider support
+
+---
+
+## 4. Error Handling - Already Optimal
+
+### Current Architecture
+```typescript
+// src/common/errors/sdkErrorUtils.ts
+// Imports ALL SDK error types from Anthropic, OpenAI, Google
+// Classifies by retryability and status code
+// Uses WeakMap for context enrichment (non-invasive)
+
+export function formatProviderHttpError(err: unknown): ProviderHttpErrorDetails {
+  // Handles: RateLimitError, AuthenticationError, BadRequestError,
+  //          APIConnectionTimeoutError, etc. from ALL providers
+}
+```
+
+### Why No Replacement Needed
+
+1. **Already uses SDK error classes** - imports all specific error types
+2. **Adds value** - unified classification across providers
+3. **Clean pattern** - WeakMap enrichment, log-at-boundary principle
+4. **Retry logic** - separated into flow layer (PocketFlow nodes)
+
+**Minor enhancement opportunity:** Add specific helpers like `isRateLimitError()` for convenience (~20 lines of new code, not reduction)
+
+---
+
+## 5. Type Definitions - Mostly Optimal
+
+### Types That Add Genuine Value (KEEP)
+- `ProviderMessage` - Union of 4 SDK message types (convenience)
+- `ServerToolContentBlock` - Union of server tool blocks across providers
+- `WebSearchResultEntry` / `WebSearchResult` - Normalized search results
+- `SdkToolCall` discriminated union - Provider-tagged tool calls
+
+### One Simplification Opportunity (~15 lines)
+**File:** `src/agent/modelHandlers/types/StopReasonTypes.ts`
+```typescript
+// Current: Manual array of all FinishReason values
+export const GOOGLE_FINISH_REASONS = [
+  FinishReason.FINISH_REASON_UNSPECIFIED,
+  FinishReason.STOP,
+  // ... 11 more values
+] as const;
+export type GoogleFinishReason = (typeof GOOGLE_FINISH_REASONS)[number];
+
+// Simpler: Use SDK type directly (constant only used for type extraction)
+export type GoogleFinishReason = FinishReason;
 ```
 
 ---
 
-## 5. MCP SDK (`@modelcontextprotocol/sdk` v1.24.3)
+## Revised Recommendations
 
-### Currently Used
-- Basic MCP types
+### Actually Feasible Improvements
 
-### Underutilized Features
+| Change | Lines Reduced | Effort | Risk |
+|--------|--------------|--------|------|
+| Remove ResponseStream type guards | ~50 | Low | Low |
+| Use `zodFunction()` for tool definitions | ~35 | Medium | Medium |
+| Add `isToolMessage()`, `isPresent()` | ~10 | Low | Low |
+| Simplify `GoogleFinishReason` | ~15 | Low | Low |
+| **TOTAL** | **~110** | | |
 
-#### 5.1 Tool Name Validation
-**SDK provides:** Built-in validation
-```typescript
-import { validateToolName, validateAndWarnToolName } from '@modelcontextprotocol/sdk/shared/toolNameValidation';
+### Not Recommended (Original Analysis Was Incorrect)
 
-const { isValid, warnings } = validateToolName('my_tool');
-```
-**Current:** No explicit tool name validation
-**Impact:** Better tool naming consistency
-
-#### 5.2 Zod-to-JSON-Schema Compatibility
-**SDK provides:** Cross-version Zod support
-```typescript
-import { toJsonSchemaCompat, safeParse, safeParseAsync } from '@modelcontextprotocol/sdk/server/zod-compat';
-```
-**Current:** Direct Zod usage
-**Impact:** Better Zod v3/v4 compatibility
-
-#### 5.3 Native Tool Registration
-**SDK provides:** `McpServer.registerTool()`
-```typescript
-const tool = server.registerTool('my_tool', {
-  description: '...',
-  inputSchema: MyZodSchema,
-  outputSchema: OutputSchema,
-}, async (args) => { ... });
-
-tool.disable();  // Runtime control
-tool.update({ description: 'new desc' });
-```
-**Current:** Custom tool registration
-**Impact:** Standard MCP tool lifecycle
+| Original Suggestion | Why Not Feasible |
+|--------------------|------------------|
+| Replace AnthropicStreamHandler with MessageStream | SDK doesn't handle multi-block coordination |
+| Use ToolRunner/BetaToolRunner | TeXRA needs custom tool execution, state management |
+| Replace token counting | Already using native APIs where available |
+| Replace file upload orchestration | SDK only provides upload, not MIME validation/buffer lifecycle |
 
 ---
 
-## Recommendations by Priority
+## Conclusion
 
-### High Priority (Significant Code Reduction)
+**TeXRA's SDK usage is already well-optimized.** The codebase correctly uses:
+- Native streaming APIs
+- Native token counting
+- Native file upload
+- SDK error types
+- SDK message types
 
-1. **Anthropic MessageStream** - Replace `AnthropicStreamHandler.ts` (354 lines) with SDK's event-based streaming
-2. **OpenAI zodResponseFormat/zodFunction** - Eliminate manual JSON Schema conversion in tool definitions
-3. **Token Counting APIs** - Use native `countTokens()` from Anthropic/OpenAI instead of estimates
+The ~2,500+ lines of "custom" code in model handlers are **legitimate application logic** that SDKs don't provide:
+- Multi-block streaming coordination
+- Thinking block persistence across turns
+- Cache control lifecycle management
+- Token adjustment algorithms
+- Provider-specific beta feature tracking
 
-### Medium Priority (Code Quality)
-
-4. **Type Guards with Zod** - Replace manual type guards in `ServerToolTypes.ts` with Zod schemas
-5. **Content Creation Helpers (Google)** - Use `createPartFromText()`, etc. for cleaner code
-6. **Error Type Handling** - Use SDK-specific error classes for granular handling
-
-### Lower Priority (Future Considerations)
-
-7. **ToolRunner/ChatCompletionRunner** - Consider for future agentic loop simplification
-8. **Batch Processing** - For bulk operations if needed
-9. **MCP Tool Registration** - If MCP server functionality expands
-
----
-
-## Files Most Affected
-
-| File | Lines | Potential Reduction |
-|------|-------|---------------------|
-| `src/agent/modelHandlers/support/AnthropicStreamHandler.ts` | 354 | ~150 lines |
-| `src/agent/modelHandlers/types/ServerToolTypes.ts` | 387 | ~100 lines |
-| `src/agent/modelHandlers/types/StopReasonTypes.ts` | 111 | ~30 lines |
-| `src/tools/core/define.ts` | 33 | ~10 lines (with zodFunction) |
-| Various model handlers | ~2000 | ~200 lines total |
-
-**Estimated Total Code Reduction:** 400-500 lines with improved type safety
+**Realistic code reduction: ~110 lines** (not the 400-500 originally estimated), primarily from:
+- Removing redundant TypeScript type guards (~50 lines)
+- Adopting `zodFunction()` pattern (~35 lines)
+- Minor type simplifications (~25 lines)
 
 ---
 
-## Next Steps
-
-1. Create feature branch for SDK utility adoption
-2. Start with high-priority items (MessageStream, zodFunction)
-3. Add tests to verify behavior parity
-4. Gradually migrate lower-priority items
-5. Update documentation
-
----
-
-*Generated: 2025-12-12*
+*Deep analysis completed: 2025-12-12*
