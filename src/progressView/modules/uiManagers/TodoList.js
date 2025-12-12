@@ -3,23 +3,24 @@ import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - shared helpers
 import { safeGetElementById } from '@common/domUtils.js';
+import { TODO_STATUS } from '@common/constants/todoStatus';
 
 /**
  * Status icons for todo items.
  */
 const STATUS_ICONS = {
-  pending: 'circle-outline',
-  in_progress: 'loading~spin',
-  completed: 'pass-filled',
+  [TODO_STATUS.PENDING]: 'circle-outline',
+  [TODO_STATUS.IN_PROGRESS]: 'loading~spin',
+  [TODO_STATUS.COMPLETED]: 'pass-filled',
 };
 
 /**
  * Status classes for styling.
  */
 const STATUS_CLASSES = {
-  pending: 'todo-item--pending',
-  in_progress: 'todo-item--in-progress',
-  completed: 'todo-item--completed',
+  [TODO_STATUS.PENDING]: 'todo-item--pending',
+  [TODO_STATUS.IN_PROGRESS]: 'todo-item--in-progress',
+  [TODO_STATUS.COMPLETED]: 'todo-item--completed',
 };
 
 /**
@@ -89,14 +90,15 @@ export class TodoList {
     item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
 
     const icon = document.createElement('i');
-    const iconClass = STATUS_ICONS[todo.status] || STATUS_ICONS.pending;
+    const iconClass =
+      STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
     icon.className = `codicon codicon-${iconClass} todo-item__icon`;
     item.appendChild(icon);
 
     const content = document.createElement('span');
     content.className = 'todo-item__content';
     content.textContent =
-      todo.status === 'in_progress' ? todo.activeForm : todo.content;
+      todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
     item.appendChild(content);
 
     return item;
