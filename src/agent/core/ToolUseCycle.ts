@@ -15,7 +15,7 @@ import * as path from 'path';
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
-import { withTodoContext, type TodoItem } from '@tools/todo';
+import type { TodoItem } from '@agent/core/AgentWorkspaceState';
 import { pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -54,53 +54,43 @@ export interface ToolUseCycleInput<C = unknown> {
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,
 ): Promise<void> {
-  const { options } = input;
+  const { options, store } = input;
   const { context } = options;
 
-  // Create todo update callback to emit changes to the progress view
-  const onTodoUpdate = (todos: TodoItem[]): void => {
+  // Set up todo update callback to emit changes to the progress view
+  // This callback is invoked when the todo_write tool updates todos
+  store.workspace.todos.setOnUpdate((todos: TodoItem[]) => {
     bus.emit('updateTodos', {
       stream: context.streamId,
       executionId: context.executionId,
       todos,
     });
+  });
+
+  // Shared state contains only mutable data that flows through nodes.
+  // Services (options, store) are injected via setParams().
+  const shared: ToolUseCycleShared<C> = {
+    state: {
+      messages: input.messages,
+      shouldStop: false,
+      response: undefined,
+      responseTime: undefined,
+      toolCalls: undefined,
+      text: undefined,
+      stopReason: undefined,
+    } satisfies ToolUseCycleState,
+    retryState: createRetryState(),
   };
 
-  // Wrap the entire cycle with todo context so the todo_write tool can update state
-  await withTodoContext(
-    {
-      streamId: context.streamId,
-      executionId: context.executionId,
-      todos: [],
-      onUpdate: onTodoUpdate,
-    },
-    async () => {
-      // Shared state contains only mutable data that flows through nodes.
-      // Services (options, store) are injected via setParams().
-      const shared: ToolUseCycleShared<C> = {
-        state: {
-          messages: input.messages,
-          shouldStop: false,
-          response: undefined,
-          responseTime: undefined,
-          toolCalls: undefined,
-          text: undefined,
-          stopReason: undefined,
-        } satisfies ToolUseCycleState,
-        retryState: createRetryState(),
-      };
+  const flow = createToolUseCycleFlow<C>();
+  // Inject immutable services via params (PocketFlow pattern)
+  flow.setParams({
+    services: { options: input.options, store: input.store },
+  });
+  await flow.run(shared);
 
-      const flow = createToolUseCycleFlow<C>();
-      // Inject immutable services via params (PocketFlow pattern)
-      flow.setParams({
-        services: { options: input.options, store: input.store },
-      });
-      await flow.run(shared);
-
-      // Emit edited files to the progress view
-      emitEditedFiles(input);
-    },
-  );
+  // Emit edited files to the progress view
+  emitEditedFiles(input);
 }
 
 /**

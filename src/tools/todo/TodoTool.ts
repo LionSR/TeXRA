@@ -10,16 +10,12 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { TodoItem, TodoStatus } from '@agent/core/AgentWorkspaceState';
 import { toolResult, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-// Local file imports
-import {
-  getCurrentTodoContext,
-  updateTodos,
-  type TodoItem,
-  type TodoStatus,
-} from './TodoContext';
+// Type imports
 
 /**
  * Schema for a single todo item input.
@@ -92,19 +88,22 @@ Best practices:
   schema: TodoWriteInputSchema,
 }) {
   protected async execute(input: TodoWriteInput): Promise<ToolResult> {
-    const context = getCurrentTodoContext();
+    const context = getCurrentToolFileInteractionContext();
 
-    if (!context) {
-      // No context available - still store todos but warn
+    if (!context?.todoState) {
+      // No context available - still format output but warn
       return toolResult({
         summary: 'Updated todo list (no active session)',
         output: this.formatTodoList(input.todos),
-        diagnostics: { warning: 'No active todo context - todos may not persist' },
+        diagnostics: {
+          warning: 'No active todo context - todos may not persist',
+        },
       });
     }
 
-    // Update the todos in context
-    updateTodos(input.todos);
+    // Update the todos in workspace state
+    // This triggers the onUpdate callback which emits events to the UI
+    context.todoState.updateTodos(input.todos);
 
     // Format output for the model
     const output = this.formatTodoList(input.todos);
