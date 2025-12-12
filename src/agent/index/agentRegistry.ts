@@ -442,6 +442,14 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       // If only _multiple exists without a base, use full name as the entry name
       const entryName = base ? baseName : primary.name;
 
+      // Determine category from agentCategory (new) or agentType (legacy)
+      const isToolUse =
+        primary.agentCategory === 'toolUse' ||
+        primary.agentCategory === AgentCategory.ToolUse;
+      const category = isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow;
+      // Derive agentType from category (toolUse category -> ToolUse type, otherwise CoT)
+      const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
+
       entries.push({
         name: entryName,
         source: 'remote' as AgentSource,
@@ -449,11 +457,8 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         // Set multiplePath to indicate _multiple variant exists (for UI indicator)
         // Use the multiple variant's name as a truthy marker
         multiplePath: base && multiple ? multiple.name : undefined,
-        category:
-          primary.agentType === 'toolUse'
-            ? AgentCategory.ToolUse
-            : AgentCategory.Workflow,
-        agentType: mapAgentType(primary.agentType),
+        category,
+        agentType,
         description: primary.description,
         visibility: primary.visibility,
       });
