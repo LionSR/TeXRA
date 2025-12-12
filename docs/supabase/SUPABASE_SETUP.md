@@ -199,6 +199,7 @@ CREATE TABLE remote_agents (
   description TEXT,
   storage_path TEXT NOT NULL,
   visibility TEXT DEFAULT 'researcher' CHECK (visibility IN ('public', 'researcher', 'whitelist')),
+  agent_type TEXT DEFAULT 'CoT' CHECK (agent_type IN ('CoT', 'direct', 'toolUse')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -533,12 +534,13 @@ The extension will now use the configured credentials. Users don't need to confi
 In **SQL Editor**, run:
 
 ```sql
-INSERT INTO remote_agents (name, description, storage_path, visibility)
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_type)
 VALUES (
   'advanced-researcher',
   'AI-powered research assistant for academic papers',
   'researcher/advanced-researcher.yaml',
-  'researcher'
+  'researcher',
+  'CoT'
 );
 ```
 
