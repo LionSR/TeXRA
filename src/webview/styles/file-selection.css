@@ -104,8 +104,6 @@ vscode-toolbar-container.file-select-actions {
 }
 
 /* When toggled (input is visible), make the label more prominent */
-.file-select-label-group[data-expanded='true'] .optional-label,
-.file-select-label-group[data-expanded='true'] .toggle-icon,
 .file-select[data-expanded='true'] .optional-label,
 .file-select[data-expanded='true'] .toggle-icon {
   color: var(--vscode-foreground);
