@@ -318,33 +318,38 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       await vscode.env.openExternal(vscode.Uri.parse(data.url));
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'TeXRA Authentication',
-          cancellable: true,
-        },
-        async (progress, token) => {
-          progress.report({ message: 'Waiting for authentication...' });
-          const session = await this.waitForSession(token);
-          if (!session) {
-            throw new Error(
-              'Authentication cancelled or timed out. Try again.',
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'TeXRA Authentication',
+            cancellable: true,
+          },
+          async (progress, token) => {
+            progress.report({ message: 'Waiting for authentication...' });
+            const session = await this.waitForSession(token);
+            if (!session) {
+              throw new Error(
+                'Authentication cancelled or timed out. Try again.',
+              );
+            }
+            await this.context.secrets.store(
+              SupabaseAuthProvider.SESSION_KEY,
+              JSON.stringify(session),
             );
-          }
-          await this.context.secrets.store(
-            SupabaseAuthProvider.SESSION_KEY,
-            JSON.stringify(session),
-          );
-          this._onDidChangeSessions.fire({
-            added: [this.toVSCodeSession(session)],
-            removed: [],
-            changed: [],
-          });
+            this._onDidChangeSessions.fire({
+              added: [this.toVSCodeSession(session)],
+              removed: [],
+              changed: [],
+            });
 
-          return this.toVSCodeSession(session);
-        },
-      );
+            return this.toVSCodeSession(session);
+          },
+        );
+      } finally {
+        // Reset flag after OAuth flow completes (success or failure)
+        this.isProcessingCallback = false;
+      }
       const sessions = await this.getSessions();
       if (sessions.length === 0) {
         throw new Error('Session creation failed. Try signing in again.');
@@ -400,10 +405,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       let isCleanedUp = false;
       let cancellationListener: vscode.Disposable | undefined = undefined;
 
-      const cleanup = () => {
+      const cleanupListeners = () => {
         if (isCleanedUp) return;
         isCleanedUp = true;
-        this.isProcessingCallback = false;
         clearTimeout(timeoutHandle);
         subscription.dispose();
         cancellationListener?.dispose();
@@ -411,7 +415,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
-          cleanup();
+          cleanupListeners();
 
           try {
             const result = await this.parseCallbackAndCreateSession(uri);
@@ -423,10 +427,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
                   `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
                 );
               }
+              this.isProcessingCallback = false;
               reject(new Error(`OAuth error: ${result.error}. Try again.`));
               return;
             }
 
+            // Keep flag true until fully resolved - reset happens after session is stored
             resolve(result.session);
           } catch (error) {
             const errorMsg =
@@ -435,24 +441,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               'SupabaseAuthProvider',
               `Error processing OAuth callback: ${errorMsg}`,
             );
+            this.isProcessingCallback = false;
             reject(error);
           }
         },
       );
 
       const timeoutHandle = setTimeout(() => {
-        cleanup();
+        cleanupListeners();
+        this.isProcessingCallback = false;
         reject(new Error('Authentication timed out. Try again.'));
       }, timeout);
 
       if (cancellationToken.isCancellationRequested) {
-        cleanup();
+        cleanupListeners();
+        this.isProcessingCallback = false;
         resolve(null);
         return;
       }
 
       cancellationListener = cancellationToken.onCancellationRequested(() => {
-        cleanup();
+        cleanupListeners();
+        this.isProcessingCallback = false;
         resolve(null);
       });
     });
