@@ -292,15 +292,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-        // After sign in, hide the banner
-        const view = this.getActiveView();
-        view?.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        });
+        // Only hide banner if sign-in was successful
+        const authStatus = await getAuthStatus();
+        if (authStatus.authenticated) {
+          const view = this.getActiveView();
+          view?.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+          });
+        }
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
         // Save dismissal preference
-        await setConfig('ui.showLoginBanner', false);
+        await setConfig('texra.ui.showLoginBanner', false);
         const view = this.getActiveView();
         view?.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
