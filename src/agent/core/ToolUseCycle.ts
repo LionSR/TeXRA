@@ -87,7 +87,14 @@ export async function runToolUseCycle<C = unknown>(
   flow.setParams({
     services: { options: input.options, store: input.store },
   });
-  await flow.run(shared);
+
+  try {
+    await flow.run(shared);
+  } finally {
+    // Clear the todo update callback to prevent memory leaks
+    // The callback holds references to context that would otherwise be GC'd
+    store.workspace.todos.clearOnUpdate();
+  }
 
   // Emit edited files to the progress view
   emitEditedFiles(input);
