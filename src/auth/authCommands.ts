@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
-import { OAUTH_PROVIDERS, type OAuthProvider, getExtensionId } from './config';
+import {
+  OAUTH_PROVIDERS,
+  OAUTH_PROVIDER_LABELS,
+  type OAuthProvider,
+  getExtensionId,
+} from './config';
 
 /**
  * Command identifiers for auth-related commands.
@@ -29,13 +34,6 @@ export function initializeProfileViewProvider(
   }
   return profileViewProvider;
 }
-
-/** Provider display names and icons for the selection UI */
-const PROVIDER_LABELS: Record<OAuthProvider, { label: string; icon: string }> =
-  {
-    github: { label: 'GitHub', icon: '$(github)' },
-    google: { label: 'Google', icon: '$(globe)' },
-  };
 
 /** Auth method type including OAuth providers and email */
 type AuthMethod = OAuthProvider | 'email';
@@ -73,8 +71,8 @@ export async function signIn(): Promise<void> {
     const signInOptions: SignInOption[] = [
       // OAuth providers
       ...OAUTH_PROVIDERS.map((provider) => ({
-        label: `${PROVIDER_LABELS[provider].icon} ${PROVIDER_LABELS[provider].label}`,
-        description: `Sign in with ${PROVIDER_LABELS[provider].label}`,
+        label: `${OAUTH_PROVIDER_LABELS[provider].icon} ${OAUTH_PROVIDER_LABELS[provider].label}`,
+        description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
         method: provider as AuthMethod,
       })),
       // Email magic link option
