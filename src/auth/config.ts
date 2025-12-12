@@ -84,26 +84,16 @@ export const PERMISSIONS = {
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 /**
- * User group information returned from the database.
- */
-export interface UserGroup {
-  id: string;
-  name: string;
-  displayName: string;
-  permissions: string[];
-  priority: number;
-}
-
-/**
- * User's authorization context including groups and permissions.
+ * User's authorization context.
+ * Permissions are stored directly in the profiles table.
  */
 export interface UserAuthContext {
-  /** All groups the user belongs to */
-  groups: UserGroup[];
-  /** Flattened list of all permissions from all groups */
+  /** User's permissions from profiles.permissions column */
   permissions: string[];
-  /** Primary group (highest priority) - for backwards compatibility */
+  /** User's tier from profiles.tier column (for display) */
   primaryGroup: string;
+  /** @deprecated Kept for compatibility, always empty in simplified model */
+  groups: never[];
 }
 
 /**
