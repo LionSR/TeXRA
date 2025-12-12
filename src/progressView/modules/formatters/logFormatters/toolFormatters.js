@@ -11,10 +11,7 @@ import {
   wrapInPre,
   buildFileListRender,
 } from '../htmlBuilders.js';
-import {
-  normalizeToolUseLog,
-  stringifyForDisplay,
-} from '../normalizers.js';
+import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
 
 /**
@@ -51,7 +48,12 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @returns {HTMLElement|null} Tool use element or null
  */
 export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
-  const toolElement = createToolElement(logId, groupId, timestamp, 'codicon-wrench');
+  const toolElement = createToolElement(
+    logId,
+    groupId,
+    timestamp,
+    'codicon-wrench',
+  );
   if (!toolElement) return null;
 
   const { element, headerLabel, iconElem, contentElem } = toolElement;
@@ -69,15 +71,8 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const {
-    parsed,
-    toolName,
-    summaryText,
-    errorText,
-    outputText,
-    input,
-    files,
-  } = normalizedToolLog;
+  const { parsed, toolName, summaryText, errorText, outputText, input, files } =
+    normalizedToolLog;
 
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
@@ -115,10 +110,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
     sections.push(
-      buildToolUseSection(
-        'Output:',
-        wrapInPre(outputText, 'tool-output-full'),
-      ),
+      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
     );
   }
 
@@ -145,7 +137,12 @@ export const formatWebSearch = (
   groupId,
   timestamp,
 ) => {
-  const toolElement = createToolElement(logId, groupId, timestamp, 'codicon-globe');
+  const toolElement = createToolElement(
+    logId,
+    groupId,
+    timestamp,
+    'codicon-globe',
+  );
   if (!toolElement) return null;
 
   const { element, headerLabel, iconElem, contentElem } = toolElement;
