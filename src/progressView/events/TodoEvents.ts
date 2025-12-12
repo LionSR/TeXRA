@@ -44,7 +44,9 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );
 
-    // Error boundary wraps the handler but we don't need async operations
+    // Note: Unlike TaskGroupEvents which uses async handlers for stream initialization,
+    // TodoEvents uses sync handlers since there are no async operations needed.
+    // The error boundary still catches thrown errors synchronously.
     withErrorBoundary('failed to handle updateTodos', () => {
       const { stream, todos } = data;
 

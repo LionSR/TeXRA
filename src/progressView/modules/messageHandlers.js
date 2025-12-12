@@ -905,7 +905,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   handleUpdateTodos(message) {
     const { stream, todos } = message;
-    if (!stream) {
+    if (!stream || !Array.isArray(todos)) {
       return;
     }
 
