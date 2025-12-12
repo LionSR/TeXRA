@@ -60,9 +60,9 @@ export function isSupabaseConfigured(): boolean {
 
 /**
  * Supported OAuth providers for TeXRA authentication.
- * All providers are supported - no need for user configuration.
+ * Users can choose between GitHub and Google during sign-in.
  */
-export const OAUTH_PROVIDERS = ['github', 'google', 'gitlab'] as const;
+export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 // ============================================================================
@@ -137,6 +137,18 @@ export function hasAllPermissions(
 }
 
 /**
+ * Display labels and icons for OAuth providers.
+ * Used in the sign-in QuickPick menu.
+ */
+export const OAUTH_PROVIDER_LABELS: Record<
+  OAuthProvider,
+  { label: string; icon: string }
+> = {
+  github: { label: 'GitHub', icon: '$(github)' },
+  google: { label: 'Google', icon: '$(globe)' },
+};
+
+/**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.
  */
@@ -173,3 +185,14 @@ export function setRuntimeExtensionId(id: string): void {
 export function getExtensionId(): string {
   return runtimeExtensionId ?? EXTENSION_ID;
 }
+
+/**
+ * Get the OAuth callback URI for redirects.
+ * Used by both OAuth and magic link flows.
+ */
+export function getAuthCallbackUri(uriScheme: string): string {
+  return `${uriScheme}://${getExtensionId()}/auth-callback`;
+}
+
+/** Timeout for waiting for OAuth callback (2 minutes in ms) */
+export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
