@@ -3,6 +3,8 @@
  *
  * These constants define the possible states of a todo item.
  * This is the JavaScript version for webview ES modules.
+ *
+ * @sync Keep in sync with src/eventBus/schemas.ts TODO_STATUS
  */
 
 export const TODO_STATUS = {
