@@ -201,7 +201,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 120.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.25,
+      supportsAutoPromptCaching: false,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
@@ -222,7 +222,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.25,
+      cacheDiscountFactor: 0.1,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
@@ -243,7 +243,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.25,
+      cacheDiscountFactor: 0.1,
       reasoningEffort: ReasoningEffort.NONE,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
@@ -265,7 +265,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 168.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.1,
+      supportsAutoPromptCaching: false,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
@@ -307,7 +307,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 2.0,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.25,
+      cacheDiscountFactor: 0.1,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
@@ -328,7 +328,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     outputPrice: 0.4,
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
-      cacheDiscountFactor: 0.25,
+      cacheDiscountFactor: 0.1,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
