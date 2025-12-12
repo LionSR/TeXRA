@@ -19,6 +19,15 @@ import { updateConfig } from '@utils/config';
 const MODEL_LIST_VERSION = 2;
 
 /**
+ * Legacy agent files that should be deleted from GlobalStorage.
+ * These agents have moved to remote-only and should not exist locally.
+ */
+const LEGACY_AGENT_FILES = [
+  'agents/generic.yaml',
+  'agents/generic_multiple.yaml',
+];
+
+/**
  * Copies default agent files from the extension resources to the global storage directory
  * @param context The extension context
  */
@@ -54,6 +63,21 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Start recursive copy from root
     await copyDirToFS(resourcesPath, 'agents', GlobalStorageFS);
     await copyDirToFS(resourcesToolUse, 'tool_use_agents', GlobalStorageFS);
+
+    // Clean up legacy agent files that have moved to remote-only
+    for (const legacyFile of LEGACY_AGENT_FILES) {
+      try {
+        if (await GlobalStorageFS.exists(legacyFile)) {
+          await GlobalStorageFS.delete(legacyFile);
+          logger.info('extension', `Deleted legacy agent file: ${legacyFile}`);
+        }
+      } catch (err) {
+        logger.warn(
+          'extension',
+          `Failed to delete legacy agent file ${legacyFile}: ${err}`,
+        );
+      }
+    }
 
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
