@@ -279,6 +279,12 @@ export class ProgressEventHandler {
       });
     });
 
+    // Refresh todos for the stream (ephemeral state)
+    const todos = this.state.getTodos(stream);
+    if (todos && todos.length > 0) {
+      this.webviewUpdater.updateTodos(stream, todos);
+    }
+
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);

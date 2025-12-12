@@ -283,6 +283,14 @@ export class TodoState {
   }
 
   /**
+   * Clear the update callback.
+   * Should be called when disposing resources to prevent memory leaks.
+   */
+  clearOnUpdate(): void {
+    this._onUpdate = undefined;
+  }
+
+  /**
    * Update the entire todo list.
    * Triggers the onUpdate callback if set.
    */
