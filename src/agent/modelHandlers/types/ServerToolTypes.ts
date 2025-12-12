@@ -16,7 +16,10 @@ import type {
   WebSearchToolResultBlock,
   WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { ResponseFunctionWebSearch } from 'openai/resources/responses/responses';
+import type {
+  ResponseFunctionWebSearch,
+  ResponseReasoningItem,
+} from 'openai/resources/responses/responses';
 
 // ============================================================================
 // Web Search Result Types
@@ -64,12 +67,14 @@ export interface WebSearchResult {
  * These blocks need to be preserved in conversation context for follow-up messages.
  *
  * - Anthropic: ServerToolUseBlock (the call) and WebSearchToolResultBlock (the result)
- * - OpenAI: ResponseFunctionWebSearch (combined call/result)
+ * - OpenAI: ResponseFunctionWebSearch (combined call/result) and ResponseReasoningItem
+ *   (reasoning items must be included when web_search_call references them)
  */
 export type ServerToolContentBlock =
   | ServerToolUseBlock
   | WebSearchToolResultBlock
-  | ResponseFunctionWebSearch;
+  | ResponseFunctionWebSearch
+  | ResponseReasoningItem;
 
 /**
  * Combined result from server tool extraction.
@@ -126,6 +131,33 @@ export function isOpenAIWebSearchCall(
     item !== null &&
     (item as { type?: string }).type === 'web_search_call'
   );
+}
+
+/**
+ * Type guard for OpenAI reasoning item.
+ * Uses SDK's ResponseReasoningItem type for proper typing.
+ * Reasoning items must be preserved when web_search_call references them.
+ */
+export function isOpenAIReasoningItem(
+  item: unknown,
+): item is ResponseReasoningItem {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    (item as { type?: string }).type === 'reasoning'
+  );
+}
+
+/**
+ * Type guard for OpenAI server tool content blocks.
+ * Checks if an item is either a web search call or reasoning item.
+ * Used to identify content that needs to be preserved in conversation context.
+ * Reasoning items must be included when web_search_call references them.
+ */
+export function isOpenAIServerToolContent(
+  item: unknown,
+): item is ResponseFunctionWebSearch | ResponseReasoningItem {
+  return isOpenAIWebSearchCall(item) || isOpenAIReasoningItem(item);
 }
 
 /**
@@ -274,6 +306,18 @@ export function buildOpenAIWebSearchResult(
     callId: searchItem.id,
     status,
   };
+}
+
+/**
+ * Check if a web search item has meaningful data (action field with query).
+ * During streaming, web search items may be emitted without the action field,
+ * which results in empty searches being displayed. Use this to filter them out.
+ */
+export function hasOpenAIWebSearchData(
+  item: ResponseFunctionWebSearch,
+): boolean {
+  const searchItem = item as ResponseFunctionWebSearchWithAction;
+  return Boolean(searchItem.action?.query);
 }
 
 /**

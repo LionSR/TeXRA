@@ -51,6 +51,9 @@ import { ModelHandler } from './ModelHandler';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
+  hasOpenAIWebSearchData,
+  isOpenAIReasoningItem,
+  isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
@@ -631,9 +634,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (includeSummary) {
         reasoning.summary = 'auto';
       }
-      if (this.capabilities.supportsReasoningEffort) {
-        const effort: ReasoningEffort = 'high';
-        reasoning.effort = effort;
+      if (
+        this.capabilities.supportsReasoningEffort &&
+        this.capabilities.reasoningEffort &&
+        this.capabilities.reasoningEffort !== 'none'
+      ) {
+        reasoning.effort = this.capabilities.reasoningEffort;
       }
       params.reasoning = reasoning;
     }
@@ -681,7 +687,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           const item = event.item;
           if (
             this.isWebSearchItem(item) &&
-            !state.emittedWebSearchIds.has(item.id)
+            !state.emittedWebSearchIds.has(item.id) &&
+            hasOpenAIWebSearchData(item)
           ) {
             // Finalize thinking if we have content (in case in_progress didn't fire)
             if (state.hasThinkingContent) {
@@ -1335,6 +1342,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Extract all server tool data in a single pass.
    * Returns both normalized results for display and raw content blocks for context.
    * Single source of truth for OpenAI Responses API server tool extraction.
+   *
+   * Note: We include reasoning items ONLY when they immediately precede a
+   * web_search_call item. This satisfies two API requirements:
+   * - "web_search_call was provided without its required 'reasoning' item"
+   * - "reasoning was provided without its required following item"
+   *
+   * Reasoning items followed by function_call are NOT included here because
+   * function_call items are handled separately by the tool use flow.
    */
   override extractServerToolData(
     response: Response,
@@ -1345,7 +1360,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Extract content blocks that need to be preserved
-    const contentBlocks = output.filter(isOpenAIWebSearchCall);
+    // Only include reasoning items that are immediately followed by web_search_call
+    // to satisfy both API requirements (reasoning needs following item, web_search needs preceding reasoning)
+    const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
+      [];
+    for (let i = 0; i < output.length; i++) {
+      const item = output[i];
+      if (isOpenAIWebSearchCall(item)) {
+        // Check if there's a reasoning item immediately before this web_search_call
+        if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
+          contentBlocks.push(output[i - 1] as ResponseReasoningItem);
+        }
+        contentBlocks.push(item);
+      }
+    }
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
@@ -1366,12 +1394,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
-    // Include server tool content blocks (web_search_call) from workspace state
-    // These need to be preserved when both server and local tools are in the same response
+    // Include server tool content blocks (reasoning, web_search_call) from workspace state
+    // These need to be preserved when both server and local tools are in the same response.
+    // Reasoning items must be included when web_search_call references them.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
-      // Filter to only OpenAI web search blocks for type safety
+      // Filter to only OpenAI server tool content (reasoning + web_search_call)
       const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-        .filter(isOpenAIWebSearchCall)
+        .filter(isOpenAIServerToolContent)
         .map((block) => block as ResponseInputItem);
       messages.push(...openaiBlocks);
       // Clear after consuming to prevent duplicates - use reset method for consistency
@@ -1643,7 +1672,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     for (const item of output) {
-      if (this.isWebSearchItem(item) && !alreadyEmitted.has(item.id)) {
+      if (
+        this.isWebSearchItem(item) &&
+        !alreadyEmitted.has(item.id) &&
+        hasOpenAIWebSearchData(item)
+      ) {
         this.emitOpenAIWebSearch(item);
         alreadyEmitted.add(item.id);
       }

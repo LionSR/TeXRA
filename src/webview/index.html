@@ -66,7 +66,7 @@
     <div class="content-wrapper">
       <div class="main-content">
         <div class="file-selection-group">
-          <div class="file-select">
+          <div class="file-select" data-expanded="false">
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <vscode-toolbar-button
@@ -124,16 +124,19 @@
                 ></span>
                 <vscode-toolbar-button
                   id="addOpenedInputFilesButton"
+                  class="file-action-button"
                   icon="folder-opened"
                   label="Add opened files as input"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyInputFilesButton"
+                  class="file-action-button"
                   icon="trash"
                   label="Empty"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="selectInputFilesButton"
+                  class="file-action-button"
                   icon="add"
                   label="Add"
                 ></vscode-toolbar-button>
@@ -152,7 +155,7 @@
               </div>
             </div>
           </div>
-          <div class="file-select">
+          <div class="file-select" data-expanded="false">
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <vscode-toolbar-button
@@ -185,16 +188,19 @@
                 ></span>
                 <vscode-toolbar-button
                   id="addOpenedReferenceFilesButton"
+                  class="file-action-button"
                   icon="folder-opened"
                   label="Add opened files as reference"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyReferenceFilesButton"
+                  class="file-action-button"
                   icon="trash"
                   label="Empty"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="selectReferenceFilesButton"
+                  class="file-action-button"
                   icon="add"
                   label="Add"
                 ></vscode-toolbar-button>
@@ -213,7 +219,7 @@
               </div>
             </div>
           </div>
-          <div class="file-select">
+          <div class="file-select" data-expanded="false">
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <vscode-toolbar-button
@@ -246,16 +252,19 @@
                 ></span>
                 <vscode-toolbar-button
                   id="addOpenedAuxiliaryFilesButton"
+                  class="file-action-button"
                   icon="folder-opened"
                   label="Add opened files as auxiliary"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyAuxiliaryFilesButton"
+                  class="file-action-button"
                   icon="trash"
                   label="Empty"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="selectAuxiliaryFilesButton"
+                  class="file-action-button"
                   icon="add"
                   label="Add"
                 ></vscode-toolbar-button>
@@ -274,7 +283,7 @@
               </div>
             </div>
           </div>
-          <div class="file-select">
+          <div class="file-select" data-expanded="false">
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <vscode-toolbar-button
@@ -330,11 +339,13 @@
                 ></span>
                 <vscode-toolbar-button
                   id="emptyMediaFilesButton"
+                  class="file-action-button"
                   icon="trash"
                   label="Empty"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="selectMediaFilesButton"
+                  class="file-action-button"
                   icon="add"
                   label="Add"
                 ></vscode-toolbar-button>
@@ -353,13 +364,13 @@
               </div>
             </div>
           </div>
-          <div class="file-select">
+          <div class="file-select" data-expanded="false">
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <span
                   id="toggleOutputFiles"
                   class="toggle-icon"
-                  title="Show or hide additional files for the agent’s output"
+                  title="Show or hide additional files for the agent's output"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
                 <span
@@ -371,11 +382,13 @@
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
                   id="emptyOutputFilesButton"
+                  class="file-action-button"
                   icon="trash"
                   label="Empty"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="selectOutputFilesButton"
+                  class="file-action-button"
                   icon="add"
                   label="Add"
                 ></vscode-toolbar-button>
@@ -569,7 +582,7 @@
             >
             <vscode-toolbar-button
               id="dependencyDismissButton"
-              class="secondary"
+              class="btn-secondary"
               title="Dismiss (can be re-enabled in settings)"
               icon="close"
               >Dismiss</vscode-toolbar-button
@@ -585,9 +598,39 @@
         >
           <span class="getting-started-text"></span>
         </div>
+
+        <!-- Login Banner -->
+        <div id="loginBanner" class="login-banner" style="display: none">
+          <div class="login-banner-content">
+            <span class="login-banner-icon"
+              ><i class="codicon codicon-sparkle"></i
+            ></span>
+            <div class="login-banner-text">
+              <span class="login-banner-title"
+                >Unlock powerful remote agents</span
+              >
+              <span class="login-banner-description"
+                >Sign in to access advanced AI agents for research and
+                writing.</span
+              >
+            </div>
+          </div>
+          <div class="actions">
+            <vscode-button id="loginBannerButton" appearance="primary">
+              <span slot="start" class="codicon codicon-sign-in"></span>
+              Sign In
+            </vscode-button>
+            <vscode-toolbar-button
+              id="loginBannerDismissButton"
+              icon="close"
+              title="Dismiss (can be re-enabled in settings)"
+              aria-label="Dismiss login banner"
+            ></vscode-toolbar-button>
+          </div>
+        </div>
       </div>
 
-      <div class="latexdiffs-section">
+      <div class="latexdiffs-section" data-expanded="false">
         <div class="file-select-header">
           <div class="file-select-label-group">
             <span id="toggleLatexdiffs" class="toggle-icon" title="LaTeXDiffs">

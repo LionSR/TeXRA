@@ -8,6 +8,7 @@
 export const DEFAULT_CONTEXT_WINDOW = 128000;
 
 export enum ReasoningEffort {
+  XHIGH = 'xhigh',
   HIGH = 'high',
   MEDIUM = 'medium',
   LOW = 'low',
