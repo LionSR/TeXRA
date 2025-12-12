@@ -1645,7 +1645,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     for (const item of output) {
-      if (this.isWebSearchItem(item) && !alreadyEmitted.has(item.id)) {
+      if (
+        this.isWebSearchItem(item) &&
+        !alreadyEmitted.has(item.id) &&
+        hasOpenAIWebSearchData(item)
+      ) {
         this.emitOpenAIWebSearch(item);
         alreadyEmitted.add(item.id);
       }
