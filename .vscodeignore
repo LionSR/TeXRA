@@ -64,6 +64,8 @@ CLAUDE.md
 
 !src/progressView/modules/uiManagers/*.js
 !src/progressView/modules/handlers/*.js
+!src/progressView/modules/formatters/*.js
+!src/progressView/modules/formatters/logFormatters/*.js
 !src/progressView/modules/*.js
 !src/progressView/styles/*.css
 !src/progressView/*.js

@@ -8,7 +8,7 @@ import {
 import { progressViewDomHandler } from './domHandlers.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
-import { getSharedLogEntryFormatter } from './formatters.js';
+import { getSharedLogEntryFormatter } from './formatters/index.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
@@ -199,6 +199,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
       [COMMANDS.RECORDING_STOPPED]: () => this.handleRecordingStopped(),
       [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
+      [COMMANDS.UPDATE_TODOS]: (m) => this.handleUpdateTodos(m),
     };
   }
 
@@ -286,12 +287,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.status.update(STREAM_STATUS.READY);
       dom.instructionPanel.hide();
       dom.runSelector.clear();
+      dom.todoList.clear();
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
+      state.clearAllTodos();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
+      // Refresh todos for the active stream
+      const todos = state.getTodos(message.activeStream);
+      dom.todoList.update(todos || []);
     }
 
     this._refreshInstructionForActiveRun();
@@ -833,12 +839,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunFiles(message.stream);
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
+      state.clearTodos(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
         dom.runSelector.clear();
+        dom.todoList.clear();
       }
     }
 
@@ -856,7 +864,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunFiles();
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
+    state.clearAllTodos();
     dom.runSelector.clear();
+    dom.todoList.clear();
     this._updatePlaceholderVisibility();
   }
 
@@ -886,6 +896,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleRecordingError() {
     dom.followUpInput.setRecording(false);
+  }
+
+  /**
+   * Handle UPDATE_TODOS command from extension host.
+   * Updates the todo list display for the specified stream.
+   * @param {{ stream: string, todos: Array<{content: string, status: string, activeForm: string}> }} message
+   */
+  handleUpdateTodos(message) {
+    const { stream, todos } = message;
+    if (!stream || !Array.isArray(todos)) {
+      return;
+    }
+
+    // Always store todos in state for persistence
+    state.setTodos(stream, todos);
+
+    // Only update DOM if this is the active stream
+    if (stream === state.activeStream) {
+      dom.todoList.update(todos);
+    }
   }
 }
 
