@@ -37,29 +37,4 @@ vscode-split-layout {
   overflow: hidden;
 }
 
-/* Animations */
-/* Animation for status indicator */
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: var(--opacity-subtle);
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: var(--opacity-full);
-  }
-  100% {
-    transform: scale(1);
-    opacity: var(--opacity-subtle);
-  }
-}
-
-/* Animation for running indicator */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* Animations moved to common.css as pulse-scale, pulse-fade, and spin */

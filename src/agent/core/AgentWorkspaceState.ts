@@ -259,6 +259,66 @@ export class DocumentStatsState {
   }
 }
 
+// Import todo schemas from single source of truth (eventBus/schemas)
+import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
+
+/**
+ * State for managing todo items during tool-use sessions.
+ * Provides task tracking and progress visibility for agents.
+ */
+export class TodoState {
+  private _todos: TodoItem[] = [];
+  private _onUpdate?: (todos: TodoItem[]) => void;
+
+  get todos(): TodoItem[] {
+    return this._todos;
+  }
+
+  /**
+   * Set the callback to be called when todos are updated.
+   * Used to emit events to the progress view.
+   */
+  setOnUpdate(callback: (todos: TodoItem[]) => void): void {
+    this._onUpdate = callback;
+  }
+
+  /**
+   * Clear the update callback.
+   * Should be called when disposing resources to prevent memory leaks.
+   */
+  clearOnUpdate(): void {
+    this._onUpdate = undefined;
+  }
+
+  /**
+   * Update the entire todo list.
+   * Triggers the onUpdate callback if set.
+   */
+  updateTodos(todos: TodoItem[]): void {
+    this._todos = todos;
+    this._onUpdate?.(todos);
+  }
+
+  /**
+   * Clear all todos.
+   */
+  reset(): void {
+    this._todos = [];
+  }
+
+  toJSON(): { todos: TodoItem[] } {
+    return { todos: [...this._todos] };
+  }
+
+  static fromJSON(data: { todos?: TodoItem[] } | null): TodoState {
+    const state = new TodoState();
+    if (data?.todos) {
+      state._todos = [...data.todos];
+    }
+    return state;
+  }
+}
+
 export const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
@@ -306,6 +366,12 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
       readFiles: [],
       edits: [],
     }),
+  todos: z
+    .object({
+      todos: z.array(TodoItemSchema),
+    })
+    .optional()
+    .prefault({ todos: [] }),
 });
 
 export type AgentWorkspaceSnapshot = z.infer<
@@ -319,6 +385,7 @@ export class AgentWorkspaceState {
   public readonly document = new DocumentStatsState();
   public readonly interactions = new FileInteractionState();
   public readonly serverToolContent = new ServerToolContentState();
+  public readonly todos = new TodoState();
 
   resetReasoning(): void {
     this.reasoning.reset();
@@ -345,6 +412,7 @@ export class AgentWorkspaceState {
         texcountStats: this.document.texcountStats,
       },
       interactions: this.interactions.toJSON(),
+      todos: this.todos.toJSON(),
     };
   }
 
@@ -378,6 +446,12 @@ export class AgentWorkspaceState {
     const restored = FileInteractionState.fromJSON(interactions);
     // Replace the default instance with the restored state
     (state as any).interactions = restored;
+
+    // Restore todos
+    const todosData = snapshot.todos ?? { todos: [] };
+    const restoredTodos = TodoState.fromJSON(todosData);
+    (state as any).todos = restoredTodos;
+
     return state;
   }
 }

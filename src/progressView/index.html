@@ -47,6 +47,7 @@
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/uiManagers/ApprovalRequests.js": "${approvalRequestsUri}",
           "./modules/uiManagers/RetryRequests.js": "${retryRequestsUri}",
+          "./modules/uiManagers/TodoList.js": "${todoListUri}",
           "./modules/uiManagers/BaseUIRequestManager.js": "${baseUIRequestManagerUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
@@ -64,6 +65,7 @@
           "@common/stringUtils.js": "${stringUtilsUri}",
           "@common/pathUtils.js": "${pathUtilsUri}",
           "@common/constants/streamStatus": "${streamStatusUri}",
+          "@common/constants/todoStatus": "${todoStatusUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "he": "https://esm.sh/he@1.2.0",
@@ -177,6 +179,18 @@
             class="log-container"
           ></vscode-scrollable>
           <div id="generatedFiles" class="files-container"></div>
+          <div
+            id="todoListContainer"
+            class="todo-list-container"
+            hidden
+            aria-hidden="true"
+          >
+            <div class="todo-list__header">
+              <i class="codicon codicon-tasklist"></i>
+              <span>Task Progress</span>
+            </div>
+            <div id="todoList" class="todo-list"></div>
+          </div>
           <div class="usage-summary-footer" hidden>
             <span id="runSummary" class="run-summary"></span>
           </div>
