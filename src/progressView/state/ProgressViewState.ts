@@ -35,6 +35,7 @@ import {
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { getConfig } from '@utils/config';
+import type { TodoItem } from '@eventBus/schemas';
 
 /**
  * Core state management for the progress view.
@@ -80,6 +81,12 @@ export class ProgressViewState {
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
   private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
+  /**
+   * Ephemeral todos storage keyed by stream ID.
+   * Todos are stored here so they can be replayed when switching streams.
+   * Not persisted - session-only state that's also stored in AgentWorkspaceState.
+   */
+  private _todos: Map<StreamTabId, TodoItem[]> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -196,6 +203,36 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  // Todo management (ephemeral, non-persistent)
+  /**
+   * Set todos for a stream.
+   * Stores todos so they can be replayed when switching streams.
+   */
+  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
+    this._todos.set(stream, todos);
+  }
+
+  /**
+   * Get todos for a stream.
+   */
+  getTodos(stream: StreamTabId): TodoItem[] | undefined {
+    return this._todos.get(stream);
+  }
+
+  /**
+   * Clear todos for a stream.
+   */
+  clearTodos(stream: StreamTabId): void {
+    this._todos.delete(stream);
+  }
+
+  /**
+   * Clear all todos across all streams.
+   */
+  clearAllTodos(): void {
+    this._todos.clear();
   }
 
   setActiveRunId(stream: StreamTabId, runId: string | null): void {
@@ -494,6 +531,7 @@ export class ProgressViewState {
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
     this.clearActiveRun(stream);
+    this.clearTodos(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -520,6 +558,7 @@ export class ProgressViewState {
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this._todos.clear();
     this._activeRunIds.clear();
     this._activeStream = '';
     this.saveActiveStream();

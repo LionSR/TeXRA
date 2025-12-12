@@ -28,6 +28,7 @@ import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
+import type { TodoItem } from '@eventBus/schemas';
 
 // Logger imports
 // Type imports
@@ -336,6 +337,17 @@ export class WebviewUpdater {
     this.sendMessage({
       command: COMMANDS.UPDATE_TASK_GROUP,
       update,
+    });
+  }
+
+  /**
+   * Update the todo list for a stream
+   */
+  updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_TODOS,
+      stream,
+      todos,
     });
   }
 

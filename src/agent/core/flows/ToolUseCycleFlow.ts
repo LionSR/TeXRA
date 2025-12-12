@@ -22,7 +22,10 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
+import type {
+  FileInteractionState,
+  TodoState,
+} from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 import {
@@ -668,6 +671,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     call: SdkToolCall,
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
+    todoState: TodoState,
   ): Promise<ToolExecutionResult> {
     const tool = options.toolRegistry.get(call.name);
     let result: ToolResult;
@@ -683,6 +687,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         result = await withToolFileInteractionContext(
           {
             tracker,
+            todoState,
             streamId: options.logger.channelId,
             executionId: options.context.executionId,
             toolCallId: call.callId,
@@ -806,11 +811,17 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { calls } = execRes.value;
     const assistantText = state.text ?? '';
     const tracker = store.workspace.interactions;
+    const todoState = store.workspace.todos;
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
     for (const call of calls) {
-      const execResult = await this.executeToolCall(call, options, tracker);
+      const execResult = await this.executeToolCall(
+        call,
+        options,
+        tracker,
+        todoState,
+      );
       execResults.push(execResult);
 
       // Log each tool execution as it completes
