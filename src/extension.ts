@@ -10,7 +10,11 @@ import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
-import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
+import {
+  copyDefaultAgents,
+  configureLatexSettings,
+  refreshModelListIfNeeded,
+} from '@frontend/setup';
 import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
@@ -103,6 +107,9 @@ export async function activate(context: vscode.ExtensionContext) {
   // Copy default agents BEFORE initializing the agent index
   // This ensures built-in agents are available when the index scans directories
   await copyDefaultAgents(context);
+
+  // Refresh model list to defaults if version changed (adds new models for existing users)
+  await refreshModelListIfNeeded();
 
   // Initialize agent index (single source of truth for agent metadata)
   const { loadAgents } = await import('@agent/index');
