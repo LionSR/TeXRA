@@ -251,7 +251,7 @@ export class BannerManager extends BaseUIManager {
     nameSpan.textContent = label;
 
     const button = document.createElement('vscode-toolbar-button');
-    button.className = 'secondary dependency-install-button';
+    button.className = 'btn-secondary dependency-install-button';
     button.textContent = 'Install';
     button.setAttribute('icon', 'cloud-download');
     button.dataset.tool = tool;

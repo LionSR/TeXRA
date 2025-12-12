@@ -50,23 +50,6 @@ body {
   height: var(--height-button);
 }
 
-/* Input field - uses common.css styles */
-
-/* Section header - extended from common.css */
-.section-header {
-  font-size: var(--font-size-lg);
-  font-weight: bold;
-  margin-top: var(--spacing-small);
-  padding-bottom: var(--spacing-small);
-  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
-  line-height: 1.5;
-}
-
-.section-header .codicon {
-  margin-right: var(--spacing-small);
-  vertical-align: text-bottom;
-}
-
 /* Icon styling - extends common clickable */
 .codicon.clickable:hover {
   color: var(--button-hover-background);
