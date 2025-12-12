@@ -1,6 +1,7 @@
 -- Migration: Flexible Permissions & Agent Categories
 -- 1. Adds permissions array to profiles table
 -- 2. Adds agent_category to remote_agents table
+-- 3. Drops visibility CHECK constraint for extensibility
 
 -- ============================================================================
 -- STEP 1: Add permissions column to profiles
@@ -9,13 +10,28 @@ ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
 
 -- ============================================================================
--- STEP 1b: Add agent_category column to remote_agents
+-- STEP 1b: Drop visibility CHECK constraint to allow extensible values
+-- ============================================================================
+-- This enables adding new visibility levels (e.g., 'enterprise') without schema changes
+ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_visibility_check;
+
+-- ============================================================================
+-- STEP 1c: Add agent_category column to remote_agents
 -- ============================================================================
 -- Values: 'workflow' (default) or 'toolUse'
 -- This is the user-facing category, not the implementation detail (CoT/direct)
 ALTER TABLE remote_agents
 ADD COLUMN IF NOT EXISTS agent_category TEXT DEFAULT 'workflow'
 CHECK (agent_category IN ('workflow', 'toolUse'));
+
+-- ============================================================================
+-- STEP 1d: Migrate existing agent_type values to agent_category
+-- ============================================================================
+-- toolUse agent_type -> toolUse category
+-- CoT/direct agent_type -> workflow category (default)
+UPDATE remote_agents
+SET agent_category = 'toolUse'
+WHERE agent_type = 'toolUse' AND (agent_category IS NULL OR agent_category = 'workflow');
 
 -- ============================================================================
 -- STEP 2: Migrate existing tiers to permissions
