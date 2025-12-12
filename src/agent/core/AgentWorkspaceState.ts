@@ -259,22 +259,16 @@ export class DocumentStatsState {
   }
 }
 
-/**
- * Status of a todo item.
- */
-export type TodoStatus = 'pending' | 'in_progress' | 'completed';
+// Re-export todo types from single source of truth (eventBus/schemas)
+export {
+  TodoStatusSchema,
+  TodoItemSchema,
+  type TodoStatus,
+  type TodoItem,
+} from '@eventBus/schemas';
 
-/**
- * Schema for a single todo item.
- */
-export interface TodoItem {
-  /** The task description in imperative form (e.g., "Run tests") */
-  content: string;
-  /** Current status of the task */
-  status: TodoStatus;
-  /** Present continuous form shown during execution (e.g., "Running tests") */
-  activeForm: string;
-}
+// Import for internal use in this file
+import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 
 /**
  * State for managing todo items during tool-use sessions.
@@ -374,13 +368,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
     }),
   todos: z
     .object({
-      todos: z.array(
-        z.object({
-          content: z.string(),
-          status: z.enum(['pending', 'in_progress', 'completed']),
-          activeForm: z.string(),
-        }),
-      ),
+      todos: z.array(TodoItemSchema),
     })
     .optional()
     .prefault({ todos: [] }),
