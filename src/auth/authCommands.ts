@@ -6,7 +6,7 @@ import {
   OAUTH_PROVIDERS,
   OAUTH_PROVIDER_LABELS,
   type OAuthProvider,
-  getExtensionId,
+  getAuthCallbackUri,
 } from './config';
 
 /**
@@ -148,12 +148,11 @@ async function signInWithEmail(): Promise<void> {
 
   try {
     const supabase = SupabaseClient.getClient();
-    const redirectTo = `${vscode.env.uriScheme}://${getExtensionId()}/auth-callback`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: redirectTo,
+        emailRedirectTo: getAuthCallbackUri(vscode.env.uriScheme),
       },
     });
 
