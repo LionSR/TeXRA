@@ -27,7 +27,7 @@
       "@profileView/*": ["src/profileView/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
-      "@types/*": ["src/types/*"],
+      "@shared/*": ["src/types/*"],
       "@eventBus/*": ["src/eventBus/*"]
     },
     "moduleResolution": "node",

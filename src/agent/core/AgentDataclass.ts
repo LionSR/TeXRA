@@ -1,62 +1,25 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Shared types - import for local use
+import { AgentType, AgentCategory, type AgentSessionDescriptor } from '@shared/agent';
+
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
 
-// Local imports - session schema (imported for local use, re-exported below)
-import type { AgentSessionDescriptor } from './AgentSessionSchema';
+// Re-export shared types from @shared/agent (single source of truth)
+// New code should import directly from '@shared/agent'
+export {
+  AgentType,
+  AgentCategory,
+  deriveAgentCategory,
+  resolveAgentSessionDescriptor,
+  type AgentSessionDescriptor,
+} from '@shared/agent';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
-
-/** Enum defining possible agent types */
-export enum AgentType {
-  CoT = 'CoT',
-  Direct = 'direct',
-  ToolUse = 'toolUse',
-}
-
-/**
- * Canonical session categories used throughout the extension UI.
- * Workflow sessions represent traditional direct/CoT executions while
- * toolUse isolates interactive tool panels.
- */
-export enum AgentCategory {
-  Workflow = 'workflow',
-  ToolUse = 'toolUse',
-}
-
-// Re-export AgentSessionDescriptor from schema (single source of truth)
-// Note: The type is derived from AgentSessionDescriptorSchema in AgentSessionSchema.ts
-export type { AgentSessionDescriptor } from './AgentSessionSchema';
-
-/**
- * Derive the canonical {@link AgentCategory} from a specific agent type.
- * Defaults to {@link AgentCategory.Workflow} when the type is unknown.
- */
-export function deriveAgentCategory(
-  agentType?: AgentType | null,
-): AgentCategory {
-  return agentType === AgentType.ToolUse
-    ? AgentCategory.ToolUse
-    : AgentCategory.Workflow;
-}
-
-/**
- * Resolve canonical session metadata from optional hints.
- */
-export function resolveAgentSessionDescriptor(
-  agentType?: AgentType | null,
-  categoryHint?: AgentCategory | null,
-): AgentSessionDescriptor {
-  const agentCategory = categoryHint ?? deriveAgentCategory(agentType);
-  return {
-    agentType: agentType ?? undefined,
-    agentCategory,
-  };
-}
 
 /**
  * Base schema shared by workflow and tool-use agent settings. Individual

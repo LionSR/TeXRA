@@ -1,103 +1,36 @@
 /**
  * Core tool type definitions for the agent system.
  *
- * This module provides the SINGLE SOURCE OF TRUTH for tool-related interfaces
- * used across the agent and tools packages. It defines:
- *
- * 1. ITool - Interface contract for all tool implementations
- * 2. IToolRegistry - Interface for tool lookup and enumeration
- * 3. Re-exports of ToolResult and related types from tools/result
+ * This module re-exports shared tool interfaces from @shared/tools and provides
+ * the MapToolRegistry implementation. The interfaces (ITool, IToolRegistry) are
+ * now in @shared/tools to break circular dependencies between @agent and @tools.
  *
  * This enables:
  * - Dependency injection (agents accept IToolRegistry instead of concrete types)
+ * - Breaking circular dependencies between @agent and @tools
  * - Cleaner separation between agent core and tool implementations
  * - Testability (mock registries can be injected)
  */
 
-// Import types for local use in interfaces
-import type { ToolDefinition as ToolDefinitionType } from '@model/ToolDefinition';
-import type { ToolResult as ToolResultType } from '@tools/result';
-
-// Re-export tool result types from canonical location
+// Re-export shared types from @shared/tools (SSOT for interfaces)
+// New code should import directly from '@shared/tools'
 export type {
+  ITool,
+  IToolRegistry,
   ToolResult,
+  ToolDefinition,
+  ToolFileAttachment,
   ErrorDiagnostics,
   DiagnosticsPayload,
-  ToolFileAttachment,
-} from '@tools/result';
+  LineChanges,
+  EditRecord,
+} from '@shared/tools';
+
+// Import for local use in implementation
+import type { ITool, IToolRegistry } from '@shared/tools';
+
+// Re-export factory functions from @tools/result (implementations stay there)
 export { toolResult, cliResult, ToolError } from '@tools/result';
-
-// Re-export ToolDefinition from model
-export type { ToolDefinition } from '@model/ToolDefinition';
-
-/**
- * Interface contract for tool implementations.
- *
- * All tools must implement this interface to be usable in the agent system.
- * BaseTool provides the canonical implementation with Zod validation.
- */
-export interface ITool {
-  /** Tool definition containing name, description, and parameter schema */
-  readonly definition: ToolDefinitionType;
-
-  /**
-   * Execute the tool with the given input.
-   *
-   * Implementations should:
-   * 1. Validate the input
-   * 2. Execute the tool logic
-   * 3. Return a ToolResult (success or error)
-   *
-   * @param rawInput - The raw input to validate and process
-   * @returns Promise resolving to a ToolResult
-   */
-  call(rawInput: unknown): Promise<ToolResultType>;
-}
-
-/**
- * Interface for tool registries that provide tool lookup and enumeration.
- *
- * This abstraction allows:
- * - Dependency injection of custom tool sets
- * - Filtering tools at runtime
- * - Testing with mock tools
- */
-export interface IToolRegistry {
-  /** Number of tools in the registry */
-  readonly size: number;
-
-  /**
-   * Get a tool by name.
-   * @param name - The tool name
-   * @returns The tool if found, undefined otherwise
-   */
-  get(name: string): ITool | undefined;
-
-  /**
-   * Check if a tool exists in the registry.
-   * @param name - The tool name
-   * @returns True if the tool exists
-   */
-  has(name: string): boolean;
-
-  /**
-   * Get all tool names in the registry.
-   * @returns Iterator of tool names
-   */
-  keys(): IterableIterator<string>;
-
-  /**
-   * Get all tools in the registry.
-   * @returns Iterator of tool values
-   */
-  values(): IterableIterator<ITool>;
-
-  /**
-   * Get all tools in the registry.
-   * @returns Iterator of [name, tool] pairs
-   */
-  entries(): IterableIterator<[string, ITool]>;
-}
 
 /**
  * Simple implementation of IToolRegistry backed by a Map or Record.
