@@ -285,25 +285,35 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         const view = this.getActiveView();
         view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: async (m) => {
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: async () => {
         /* Banner handled client-side */
         const view = this.getActiveView();
-        view?.webview.postMessage(m);
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
       },
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
-        await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-        // Only hide banner if sign-in was successful
-        const authStatus = await getAuthStatus();
-        if (authStatus.authenticated) {
-          const view = this.getActiveView();
-          view?.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-          });
+        try {
+          await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
+          // Only hide banner if sign-in was successful
+          const authStatus = await getAuthStatus();
+          if (authStatus.authenticated) {
+            const view = this.getActiveView();
+            view?.webview.postMessage({
+              command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+            });
+          }
+        } catch (error) {
+          // Sign-in was cancelled or failed - banner remains visible
+          this.logger.debug(
+            this.channel,
+            `Sign-in from banner failed: ${toErrorMessage(error)}`,
+          );
         }
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
         // Save dismissal preference
-        await setConfig('texra.ui.showLoginBanner', false);
+        await setConfig('ui.showLoginBanner', false);
         const view = this.getActiveView();
         view?.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
@@ -459,7 +469,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       });
 
       // Check if user is authenticated and show login banner if not
-      const showLoginBanner = getConfig<boolean>('texra.ui.showLoginBanner', true);
+      const showLoginBanner = getConfig<boolean>('ui.showLoginBanner', true);
       if (showLoginBanner) {
         const authStatus = await getAuthStatus();
         if (!authStatus.authenticated) {
