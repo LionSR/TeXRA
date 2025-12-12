@@ -10,7 +10,7 @@ import { TODO_STATUS } from '@common/constants/todoStatus';
  */
 const STATUS_ICONS = {
   [TODO_STATUS.PENDING]: 'circle-outline',
-  [TODO_STATUS.IN_PROGRESS]: 'loading~spin',
+  [TODO_STATUS.IN_PROGRESS]: 'loading',
   [TODO_STATUS.COMPLETED]: 'pass-filled',
 };
 
@@ -90,9 +90,14 @@ export class TodoList {
     item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
 
     const icon = document.createElement('i');
-    const iconClass =
-      STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
-    icon.className = `codicon codicon-${iconClass} todo-item__icon`;
+    let iconClass = STATUS_ICONS[todo.status];
+    if (!iconClass) {
+      console.warn(`[TodoList] Unknown todo status: "${todo.status}", using pending icon`);
+      iconClass = STATUS_ICONS[TODO_STATUS.PENDING];
+    }
+    // Add 'spin' as separate class for in-progress animation (codicon pattern)
+    const spinClass = todo.status === TODO_STATUS.IN_PROGRESS ? ' spin' : '';
+    icon.className = `codicon codicon-${iconClass}${spinClass} todo-item__icon`;
     item.appendChild(icon);
 
     const content = document.createElement('span');
