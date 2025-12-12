@@ -1,13 +1,15 @@
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
-import { FileInteractionState } from '@agent/core/AgentWorkspaceState';
+import { FileInteractionState, TodoState } from '@agent/core/AgentWorkspaceState';
 
 export interface ToolFileInteractionContext {
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   toolCallId?: string;
   tracker: FileInteractionState;
+  /** Todo state for managing task lists. Optional for backward compatibility. */
+  todoState?: TodoState;
 }
 
 const contextStack: ToolFileInteractionContext[] = [];
