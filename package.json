@@ -40,7 +40,6 @@
               "type": "string"
             },
             "default": [
-              "generic",
               "correct",
               "polish",
               "draw",
