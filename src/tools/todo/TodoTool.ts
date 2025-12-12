@@ -21,6 +21,7 @@ const logger = new AgentLogger('TodoWriteTool');
 
 // Import todo schemas from single source of truth
 import {
+  TODO_STATUS,
   TodoItemSchema,
   type TodoItem,
   type TodoStatus,
@@ -104,13 +105,13 @@ Best practices:
     // Format output for the model
     const output = this.formatTodoList(input.todos);
     const inProgressCount = input.todos.filter(
-      (t) => t.status === 'in_progress',
+      (t) => t.status === TODO_STATUS.IN_PROGRESS,
     ).length;
     const completedCount = input.todos.filter(
-      (t) => t.status === 'completed',
+      (t) => t.status === TODO_STATUS.COMPLETED,
     ).length;
     const pendingCount = input.todos.filter(
-      (t) => t.status === 'pending',
+      (t) => t.status === TODO_STATUS.PENDING,
     ).length;
 
     const summary = `Todo list updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
@@ -136,7 +137,7 @@ Best practices:
       const statusIcon = this.getStatusIcon(todo.status);
       const statusLabel = this.getStatusLabel(todo.status);
       lines.push(`${i + 1}. ${statusIcon} [${statusLabel}] ${todo.content}`);
-      if (todo.status === 'in_progress') {
+      if (todo.status === TODO_STATUS.IN_PROGRESS) {
         lines.push(`   → ${todo.activeForm}...`);
       }
     }
@@ -149,11 +150,11 @@ Best practices:
    */
   private getStatusIcon(status: TodoStatus): string {
     switch (status) {
-      case 'pending':
+      case TODO_STATUS.PENDING:
         return '○';
-      case 'in_progress':
+      case TODO_STATUS.IN_PROGRESS:
         return '◐';
-      case 'completed':
+      case TODO_STATUS.COMPLETED:
         return '●';
     }
   }
@@ -163,11 +164,11 @@ Best practices:
    */
   private getStatusLabel(status: TodoStatus): string {
     switch (status) {
-      case 'pending':
+      case TODO_STATUS.PENDING:
         return 'PENDING';
-      case 'in_progress':
+      case TODO_STATUS.IN_PROGRESS:
         return 'IN PROGRESS';
-      case 'completed':
+      case TODO_STATUS.COMPLETED:
         return 'COMPLETED';
     }
   }
