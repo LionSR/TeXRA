@@ -68,17 +68,5 @@
 
 /* Recording button states - icon change is enough, no red background needed */
 #recordInstructionButton.recording .codicon-stop-circle {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-  100% {
-    opacity: 1;
-  }
+  animation: pulse-fade 1.5s ease-in-out infinite;
 }
