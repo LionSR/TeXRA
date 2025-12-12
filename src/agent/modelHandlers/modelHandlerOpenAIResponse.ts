@@ -52,6 +52,7 @@ import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
   hasOpenAIWebSearchData,
+  isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
@@ -1337,6 +1338,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Extract all server tool data in a single pass.
    * Returns both normalized results for display and raw content blocks for context.
    * Single source of truth for OpenAI Responses API server tool extraction.
+   *
+   * Note: We include both reasoning items AND web_search_call items because
+   * OpenAI's API requires reasoning items when web_search_call references them.
+   * Error: "Item 'ws_...' of type 'web_search_call' was provided without its
+   * required 'reasoning' item: 'rs_...'."
    */
   override extractServerToolData(
     response: Response,
@@ -1347,7 +1353,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Extract content blocks that need to be preserved
-    const contentBlocks = output.filter(isOpenAIWebSearchCall);
+    // Includes both reasoning items and web_search_call items because
+    // web_search_call may depend on preceding reasoning items
+    const contentBlocks = output.filter(isOpenAIServerToolContent);
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
@@ -1368,12 +1376,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
-    // Include server tool content blocks (web_search_call) from workspace state
-    // These need to be preserved when both server and local tools are in the same response
+    // Include server tool content blocks (reasoning, web_search_call) from workspace state
+    // These need to be preserved when both server and local tools are in the same response.
+    // Reasoning items must be included when web_search_call references them.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
-      // Filter to only OpenAI web search blocks for type safety
+      // Filter to only OpenAI server tool content (reasoning + web_search_call)
       const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-        .filter(isOpenAIWebSearchCall)
+        .filter(isOpenAIServerToolContent)
         .map((block) => block as ResponseInputItem);
       messages.push(...openaiBlocks);
       // Clear after consuming to prevent duplicates - use reset method for consistency
