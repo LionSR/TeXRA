@@ -3,7 +3,7 @@ import { ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
 import {
   TaskGroupHeaderFormatter,
   getSharedLogEntryFormatter,
-} from './formatters.js';
+} from './formatters/index.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
