@@ -1,7 +1,11 @@
 // Local imports - webview
 import { ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
-import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  setChevronIcon,
+  setExpandedState,
+} from '@common/domUtils.js';
 
 const LATEXDIFF_CONTENT_ID = ELEMENT_IDS.LATEXDIFFS_CONTENT;
 const TOGGLE_LATEXDIFFS_ID = ELEMENT_IDS.TOGGLE_LATEXDIFFS;
@@ -25,6 +29,7 @@ export class LatexdiffManager {
 
       container.style.display = shouldShow ? 'block' : 'none';
       setChevronIcon(toggleIcon, shouldShow);
+      setExpandedState(container, '.latexdiffs-section', shouldShow);
     }
   }
 
@@ -35,10 +40,12 @@ export class LatexdiffManager {
     if (!container || !toggleIcon) return;
 
     const isVisible = container.style.display !== 'none';
-    container.style.display = isVisible ? 'none' : 'block';
-    setChevronIcon(toggleIcon, !isVisible);
+    const newVisible = !isVisible;
+    container.style.display = newVisible ? 'block' : 'none';
+    setChevronIcon(toggleIcon, newVisible);
+    setExpandedState(container, '.latexdiffs-section', newVisible);
 
-    this.state.update({ latexdiffsVisible: !isVisible });
+    this.state.update({ latexdiffsVisible: newVisible });
     this.state.save();
   }
 }

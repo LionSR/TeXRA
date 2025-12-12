@@ -3,7 +3,11 @@ import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
-import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  setChevronIcon,
+  setExpandedState,
+} from '@common/domUtils.js';
 
 const INPUT_FILE_ID = INPUT_FILE;
 const OUTPUT_FILES_ID = ELEMENT_IDS.OUTPUT_FILES;
@@ -95,6 +99,7 @@ export class OutputFilesManager {
 
       container.style.display = shouldShow ? 'block' : 'none';
       setChevronIcon(toggleIcon, shouldShow);
+      setExpandedState(container, '.file-select', shouldShow);
     }
   }
 }

@@ -24,6 +24,7 @@
   padding-top: var(--spacing-small);
   border-top: 1px solid var(--vscode-widget-border);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--spacing-small);
 }
@@ -37,4 +38,24 @@
   color: var(--vscode-descriptionForeground);
   opacity: 0.8;
   font-style: italic;
+}
+
+/* Hint for fixing XML and resuming */
+.xml-link-container .xml-fix-hint {
+  flex-basis: 100%;
+  margin-top: var(--spacing-tiny);
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+}
+
+.xml-link-container .xml-fix-hint .codicon {
+  opacity: 1;
+  color: var(--vscode-textLink-foreground);
+}
+
+.xml-link-container .xml-fix-hint strong {
+  color: var(--vscode-textLink-foreground);
 }
