@@ -23,6 +23,7 @@ import {
   setElementDisabled,
   isSelectLikeElement,
   getSelectOptionElements,
+  setExpandedState,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { WebviewStateManager } from '@common/webviewState.js';
@@ -233,6 +234,7 @@ export class MainViewState {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
         setChevronIcon(toggleLatexdiffs, visible);
+        setExpandedState(latexdiffsContent, '.latexdiffs-section', visible);
       }
 
       this.applySessionType(normalizedSessionType, { skipSave: true });
