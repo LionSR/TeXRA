@@ -121,14 +121,6 @@ const WORKFLOW_TOOLBAR = [
     className: 'run-button run-again-button toolbar-button--hidden',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
-    icon: 'refresh',
-    command: COMMANDS.RETRY_STREAM_REQUEST,
-    title: 'Retry the last failed API request',
-    className: 'retry-button',
-    disabled: true,
-  },
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
   {
@@ -160,14 +152,6 @@ const WORKFLOW_TOOLBAR = [
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
-  {
-    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
-    icon: 'refresh',
-    command: COMMANDS.RETRY_STREAM_REQUEST,
-    title: 'Retry the last failed API request',
-    className: 'retry-button',
-    disabled: true,
-  },
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
