@@ -199,6 +199,7 @@ CREATE TABLE remote_agents (
   description TEXT,
   storage_path TEXT NOT NULL,
   visibility TEXT DEFAULT 'researcher' CHECK (visibility IN ('public', 'researcher', 'whitelist')),
+  agent_type TEXT DEFAULT 'CoT' CHECK (agent_type IN ('CoT', 'direct', 'toolUse')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -385,17 +386,24 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Verify user
+    // User client: uses user's JWT for auth verification and RLS-protected queries
+    // This ensures RLS policies on remote_agents table are enforced
+    const userClient = createClient(supabaseUrl, serviceRoleKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Admin client: uses only SERVICE_ROLE_KEY for storage operations
+    // This bypasses bucket policies (safe because we already verify access via RLS)
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // Verify user with their JWT
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await userClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
@@ -412,8 +420,9 @@ serve(async (req) => {
       });
     }
 
-    // Fetch agent metadata (RLS enforces access control)
-    const { data: agent, error: agentError } = await supabase
+    // Fetch agent metadata using userClient (RLS enforces access control)
+    // RLS policies check user tier/whitelist - unauthorized users won't see the agent
+    const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
       .select('id, name, description, storage_path')
       .eq('name', agentName)
@@ -431,8 +440,9 @@ serve(async (req) => {
       );
     }
 
-    // Fetch YAML from storage (RLS policy enforces access)
-    const { data: fileData, error: storageError } = await supabase.storage
+    // Fetch YAML from storage using adminClient (bypasses bucket policies)
+    // Safe because access was already verified via RLS on remote_agents table
+    const { data: fileData, error: storageError } = await adminClient.storage
       .from('agent-configs')
       .download(agent.storage_path);
 
@@ -533,12 +543,13 @@ The extension will now use the configured credentials. Users don't need to confi
 In **SQL Editor**, run:
 
 ```sql
-INSERT INTO remote_agents (name, description, storage_path, visibility)
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_type)
 VALUES (
   'advanced-researcher',
   'AI-powered research assistant for academic papers',
   'researcher/advanced-researcher.yaml',
-  'researcher'
+  'researcher',
+  'CoT'
 );
 ```
 
