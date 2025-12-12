@@ -39,7 +39,9 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
     updater: WebviewUpdater,
   ): void => {
     const todoCount = data.todos.length;
-    const inProgress = data.todos.filter((t) => t.status === TODO_STATUS.IN_PROGRESS).length;
+    const inProgress = data.todos.filter(
+      (t) => t.status === TODO_STATUS.IN_PROGRESS,
+    ).length;
     debugLog(
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );

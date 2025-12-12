@@ -92,7 +92,9 @@ export class TodoList {
     const icon = document.createElement('i');
     let iconClass = STATUS_ICONS[todo.status];
     if (!iconClass) {
-      console.warn(`[TodoList] Unknown todo status: "${todo.status}", using pending icon`);
+      console.warn(
+        `[TodoList] Unknown todo status: "${todo.status}", using pending icon`,
+      );
       iconClass = STATUS_ICONS[TODO_STATUS.PENDING];
     }
     // Add 'spin' as separate class for in-progress animation (codicon pattern)
