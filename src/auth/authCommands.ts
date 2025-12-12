@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
+import { OAUTH_PROVIDERS, type OAuthProvider } from './config';
 
 /**
  * Command identifiers for auth-related commands.
@@ -29,6 +30,13 @@ export function initializeProfileViewProvider(
   return profileViewProvider;
 }
 
+/** Provider display names and icons for the selection UI */
+const PROVIDER_LABELS: Record<OAuthProvider, { label: string; icon: string }> =
+  {
+    github: { label: 'GitHub', icon: '$(github)' },
+    google: { label: 'Google', icon: '$(globe)' },
+  };
+
 /**
  * Command to sign in to TeXRA account.
  */
@@ -51,10 +59,26 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Request authentication (will trigger SupabaseAuthProvider.createSession)
+    // Show provider selection
+    const providerItems = OAUTH_PROVIDERS.map((provider) => ({
+      label: `${PROVIDER_LABELS[provider].icon} ${PROVIDER_LABELS[provider].label}`,
+      description: `Sign in with ${PROVIDER_LABELS[provider].label}`,
+      provider,
+    }));
+
+    const selected = await vscode.window.showQuickPick(providerItems, {
+      placeHolder: 'Choose a sign-in method',
+      title: 'TeXRA Sign In',
+    });
+
+    if (!selected) {
+      return; // User cancelled
+    }
+
+    // Request authentication with selected provider passed via scopes
     const session = await vscode.authentication.getSession(
       'texra-supabase',
-      [],
+      [`provider:${selected.provider}`],
       {
         createIfNone: true,
       },
