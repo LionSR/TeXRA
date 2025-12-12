@@ -64,7 +64,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       name: string;
       description: string;
       visibility: string;
-      agentType?: string;
+      category?: string;
     }> = [];
 
     const canAccessRemoteAgents = hasPermission(
@@ -80,7 +80,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         name: entry.name,
         description: entry.description || '',
         visibility: entry.visibility || 'researcher',
-        agentType: entry.agentType || 'CoT',
+        category: entry.category || 'workflow',
       }));
     }
 
