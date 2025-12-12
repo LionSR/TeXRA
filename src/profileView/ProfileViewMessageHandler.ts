@@ -16,6 +16,7 @@ import {
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
+import { PERMISSIONS, hasPermission } from '@/auth/config';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
@@ -49,15 +50,16 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         authenticated: false,
         user: null,
         tier: 'free',
+        permissions: [],
         remoteAgents: [],
       });
       return;
     }
 
     const user = await SupabaseClient.getUser();
-    const tier = await SupabaseClient.getUserTier();
+    const authContext = await SupabaseClient.getUserAuthContext();
 
-    // Fetch remote agents if user has researcher tier
+    // Fetch remote agents if user has permission
     let remoteAgents: Array<{
       name: string;
       description: string;
@@ -65,7 +67,12 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       agentType?: string;
     }> = [];
 
-    if (tier === 'researcher') {
+    const canAccessRemoteAgents = hasPermission(
+      authContext.permissions,
+      PERMISSIONS.ACCESS_REMOTE_AGENTS,
+    );
+
+    if (canAccessRemoteAgents) {
       // Refresh agent cache to ensure remote agents are loaded after authentication
       await loadAgents();
       const entries = getAgentsBySource('remote' as AgentSource);
@@ -84,7 +91,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier,
+      tier: authContext.primaryGroup, // Backwards compatibility
+      permissions: authContext.permissions,
       remoteAgents,
     });
   }
