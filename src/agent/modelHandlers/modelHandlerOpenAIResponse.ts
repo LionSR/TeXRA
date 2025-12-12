@@ -51,6 +51,7 @@ import { ModelHandler } from './ModelHandler';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
+  hasOpenAIWebSearchData,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
@@ -681,7 +682,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           const item = event.item;
           if (
             this.isWebSearchItem(item) &&
-            !state.emittedWebSearchIds.has(item.id)
+            !state.emittedWebSearchIds.has(item.id) &&
+            hasOpenAIWebSearchData(item)
           ) {
             // Finalize thinking if we have content (in case in_progress didn't fire)
             if (state.hasThinkingContent) {
@@ -1643,7 +1645,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     for (const item of output) {
-      if (this.isWebSearchItem(item) && !alreadyEmitted.has(item.id)) {
+      if (
+        this.isWebSearchItem(item) &&
+        !alreadyEmitted.has(item.id) &&
+        hasOpenAIWebSearchData(item)
+      ) {
         this.emitOpenAIWebSearch(item);
         alreadyEmitted.add(item.id);
       }
