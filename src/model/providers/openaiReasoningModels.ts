@@ -271,6 +271,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
       supportsNativeCodeExecution: true,
       supportsVision: true,
       supportsNativePdf: true,
+      reasoningEffort: ReasoningEffort.XHIGH,
     } satisfies ModelCapabilities,
     requiresResponsesAPI: true,
     openRouterOnly: false,
