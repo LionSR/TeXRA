@@ -966,6 +966,336 @@ src/agent/implementations/DirectAgent.ts          # handleOutput
 src/agent/implementations/CoTAgent.ts             # handleOutput
 ```
 
+---
+
+## 7. CLEAN SOLUTION: Minimal Changes to Fix Architecture
+
+### Root Cause Analysis
+
+The 40+ violations stem from **3 root causes**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ROOT CAUSE BREAKDOWN                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ROOT CAUSE 1: Shared Types in Wrong Layer (60% of issues)  ││
+│  │                                                             ││
+│  │ Types like StreamTabId, AgentType, ITool are defined in    ││
+│  │ @agent but needed by @tools, @logger, @eventBus            ││
+│  │                                                             ││
+│  │ SOLUTION: Extract to @types/ (compile-time only change)    ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ROOT CAUSE 2: Singleton Service Coupling (25% of issues)   ││
+│  │                                                             ││
+│  │ Services like SecretManager, agentDirectories are imported ││
+│  │ directly instead of injected                                ││
+│  │                                                             ││
+│  │ SOLUTION: Dependency injection via interfaces              ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ROOT CAUSE 3: UI Functions in Business Logic (15%)         ││
+│  │                                                             ││
+│  │ Functions like showInstructionWithSuppress called from     ││
+│  │ agent runtime instead of command layer                      ││
+│  │                                                             ││
+│  │ SOLUTION: Callback interfaces for UI operations            ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Import Classification Matrix
+
+| Import | Type | Runtime? | Violation? | Fix |
+|--------|------|----------|------------|-----|
+| `import type { StreamTabId }` | Type-only | No | **Safe** | Keep |
+| `import { AgentType }` | Enum | Yes | **Mild** | Move to @types/ |
+| `import { createToolRegistry }` | Factory | Yes | **Medium** | Move to @types/ |
+| `import { SecretManager }` | Singleton | Yes | **Severe** | Inject |
+| `import { showInstruction }` | UI Function | Yes | **Severe** | Callback |
+
+---
+
+### Phase 1: Create `@types/` Layer (Fixes 60% - ~24 violations)
+
+**One-time setup that fixes most issues:**
+
+```
+NEW: src/types/
+├── identifiers.ts      # StreamTabId, ExecutionId, StorageKey
+├── agent.ts            # AgentType, AgentCategory, AgentSessionDescriptor
+├── tools.ts            # ITool, IToolRegistry, ToolResult, ToolDefinition
+├── usage.ts            # TokenUsageStats, ExtendedTokenUsageStats
+├── output.ts           # OutputFileInfo, FileLocation
+└── index.ts            # Barrel export
+```
+
+**What moves:**
+```typescript
+// FROM: src/agent/types/IdentifierTypes.ts
+// TO:   src/types/identifiers.ts
+
+// FROM: src/agent/core/AgentDataclass.ts (enums only)
+// TO:   src/types/agent.ts
+
+// FROM: src/agent/core/ToolTypes.ts (interfaces only)
+// TO:   src/types/tools.ts
+
+// FROM: src/agent/types/UsageTypes.ts
+// TO:   src/types/usage.ts
+
+// FROM: src/agent/output/types.ts
+// TO:   src/types/output.ts
+```
+
+**tsconfig.json addition:**
+```json
+{
+  "paths": {
+    "@types/*": ["src/types/*"]  // Add this
+  }
+}
+```
+
+**Impact:** All `import type { ... } from '@agent/...'` become `import type { ... } from '@types/...'`
+
+---
+
+### Phase 2: Break Circular Dependency (Fixes @agent ↔ @tools)
+
+**Current problem in `src/agent/core/ToolTypes.ts:19,28`:**
+```typescript
+import type { ToolResult as ToolResultType } from '@tools/result';  // ← Creates cycle
+export { toolResult, cliResult, ToolError } from '@tools/result';   // ← Creates cycle
+```
+
+**Solution: Move interfaces UP, keep implementations DOWN**
+
+```
+BEFORE:                              AFTER:
+@agent/core/ToolTypes.ts             @types/tools.ts
+  ├── ITool (interface)        →       ├── ITool (interface)
+  ├── IToolRegistry (interface)→       ├── IToolRegistry (interface)
+  ├── ToolResult (re-export)   ✗       └── ToolResult (type only)
+  └── toolResult() (re-export) ✗
+                                     @tools/result.ts
+@tools/core/base.ts                    └── toolResult() (stays here)
+  └── imports ITool from @agent ✗
+                                     @tools/core/base.ts
+                                       └── imports ITool from @types ✓
+```
+
+**Result:** No more circular dependency. Types flow down, implementations stay in place.
+
+---
+
+### Phase 3: Dependency Injection for Singletons (Fixes 25% - ~10 violations)
+
+#### 3.1 SecretManager
+
+**Current (6 files import this):**
+```typescript
+// src/agent/modelHandlers/ModelHandler.ts:12
+import { SecretManager } from '@frontend/secretManager';
+
+// Used as:
+const apiKey = await SecretManager.getApiKey(this.config.provider);
+```
+
+**Solution: Inject via config**
+```typescript
+// Add to AgentConfig or create ISecretProvider
+export interface ISecretProvider {
+  getApiKey(provider: ApiProvider): Promise<string | undefined>;
+}
+
+// ModelHandler constructor accepts it
+class ModelHandler {
+  constructor(
+    private config: ModelConfig,
+    private secrets: ISecretProvider  // ← Injected
+  ) {}
+}
+```
+
+#### 3.2 agentDirectories
+
+**Current:**
+```typescript
+// src/agent/index/agentRegistry.ts:26
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+```
+
+**Solution: Inject via initialization**
+```typescript
+// Create interface in @types/
+export interface IAgentDirectories {
+  builtIn(): Promise<string>;
+  custom(): Promise<string>;
+}
+
+// Registry accepts it
+export function initializeAgentRegistry(dirs: IAgentDirectories): void { ... }
+```
+
+---
+
+### Phase 4: Callback Interfaces for UI (Fixes 15% - ~6 violations)
+
+**Current (agent calls UI directly):**
+```typescript
+// src/agent/runtime/executeAgent.ts:41
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// src/agent/output/OutputHandler.ts:17-18
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+```
+
+**Solution: UI callback interface**
+```typescript
+// src/types/callbacks.ts (NEW)
+export interface IAgentUICallbacks {
+  showInstruction(key: string, message: string): Promise<boolean>;
+  openBuildDisplay(file: string): Promise<void>;
+  showError(message: string): Promise<void>;
+}
+
+// Agent execution accepts callbacks
+export interface AgentExecutionContext {
+  config: AgentConfig;
+  ui: IAgentUICallbacks;  // ← Injected by command layer
+  secrets: ISecretProvider;
+}
+```
+
+**Command layer provides implementation:**
+```typescript
+// src/commands/agent/executeCommand.ts
+const uiCallbacks: IAgentUICallbacks = {
+  showInstruction: showInstructionWithSuppress,
+  openBuildDisplay: openBuildDisplayIfTex,
+  showError: (msg) => vscode.window.showErrorMessage(msg),
+};
+
+await executeAgent({ config, ui: uiCallbacks, secrets: SecretManager });
+```
+
+---
+
+### Clean Architecture After Changes
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLEAN ARCHITECTURE                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│   │  commands/  │  │  webview/   │  │progressView/│  ENTRY      │
+│   │             │  │             │  │             │  POINTS     │
+│   │ Provides:   │  │             │  │             │             │
+│   │ - UI cbs    │  │             │  │             │             │
+│   │ - Secrets   │  │             │  │             │             │
+│   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+│          │                │                │                     │
+│          ▼                ▼                ▼                     │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │                      @agent/                               │ │
+│   │  Accepts: ISecretProvider, IAgentUICallbacks               │ │
+│   │  Uses: @types/* for all shared types                       │ │
+│   └─────────────────────────┬─────────────────────────────────┘ │
+│                             │                                    │
+│          ┌──────────────────┼──────────────────┐                │
+│          ▼                  ▼                  ▼                 │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│   │   @model/   │    │   @tools/   │    │   @latex/   │         │
+│   │             │    │             │    │             │         │
+│   │ Uses:       │    │ Uses:       │    │ Uses:       │         │
+│   │ @types/*    │    │ @types/*    │    │ @types/*    │         │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
+│          │                  │                  │                 │
+│          ▼                  ▼                  ▼                 │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │                      @types/                               │ │
+│   │  Pure types, interfaces, enums - NO implementations       │ │
+│   │  - identifiers.ts (StreamTabId, ExecutionId)              │ │
+│   │  - agent.ts (AgentType, AgentCategory)                    │ │
+│   │  - tools.ts (ITool, IToolRegistry, ToolResult type)       │ │
+│   │  - callbacks.ts (ISecretProvider, IAgentUICallbacks)      │ │
+│   └─────────────────────────┬─────────────────────────────────┘ │
+│                             │                                    │
+│                             ▼                                    │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │              @utils/ @common/ @logger/                     │ │
+│   │              (pure utilities, no @agent imports)           │ │
+│   └───────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+DEPENDENCY RULE: All arrows point DOWN (inward)
+- Upper layers can import from lower layers
+- Lower layers NEVER import from upper layers
+- @types/ is the foundation - imported by everyone
+```
+
+---
+
+### Implementation Roadmap (Minimal Round-Trips)
+
+| Phase | Files Changed | Violations Fixed | Effort |
+|-------|---------------|------------------|--------|
+| **1. Create @types/** | 6 new + ~30 import updates | 24 (60%) | 2-3 hours |
+| **2. Break @agent↔@tools cycle** | 4 files | 10 (25%) | 1 hour |
+| **3. Inject SecretManager** | 8 files | 4 (10%) | 1-2 hours |
+| **4. UI callback interface** | 6 files | 6 (15%) | 1-2 hours |
+| **Total** | ~50 files | 40+ violations | **5-8 hours** |
+
+---
+
+### Quick Wins (Can Do Immediately)
+
+| Fix | Files | Time | Impact |
+|-----|-------|------|--------|
+| Move `capitalize()` to `@utils/text/` | 2 files | 5 min | Fixes @replacement→@frontend |
+| Create `@types/identifiers.ts` | 1 new + 15 updates | 30 min | Fixes 15 violations |
+| Add `ISecretProvider` interface | 1 new + 6 updates | 30 min | Decouples @agent from @frontend |
+
+---
+
+### Files to Create
+
+```typescript
+// src/types/identifiers.ts
+export type StreamTabId = string & { readonly __brand: 'StreamTabId' };
+export type ExecutionId = string & { readonly __brand: 'ExecutionId' };
+export type StorageKey = string & { readonly __brand: 'StorageKey' };
+
+// src/types/agent.ts
+export enum AgentType { CoT = 'CoT', Direct = 'direct', ToolUse = 'toolUse' }
+export enum AgentCategory { Workflow = 'workflow', ToolUse = 'toolUse' }
+
+// src/types/tools.ts
+export interface ITool { ... }
+export interface IToolRegistry { ... }
+export type ToolResult = { ... };
+
+// src/types/callbacks.ts
+export interface ISecretProvider {
+  getApiKey(provider: string): Promise<string | undefined>;
+}
+export interface IAgentUICallbacks {
+  showInstruction(key: string, message: string): Promise<boolean>;
+  openBuildDisplay(file: string): Promise<void>;
+}
+```
+
 ### Files with Dependency Violations (by severity)
 
 **🔴 CRITICAL - Circular Dependencies:**
