@@ -161,7 +161,7 @@ async function signInWithEmail(): Promise<void> {
     }
 
     void vscode.window.showInformationMessage(
-      `Magic link sent to ${email}. Check your inbox and click the link to sign in.`,
+      `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
