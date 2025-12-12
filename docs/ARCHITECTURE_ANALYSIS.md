@@ -425,48 +425,269 @@ interface ToolUseSessionContext {
 
 ---
 
-### 🟡 MEDIUM: Dependency Direction Violation
+### 🟠 HIGH: Extensive Dependency Direction Violations
 
-**Location:** `src/common/webview/BaseViewContentProvider.ts:6`
+The codebase has **significant layering violations** where lower-level modules import from higher-level modules, creating tight coupling and circular dependency risks.
 
-```typescript
-// VIOLATION: common/ imports from frontend/
-import { buildWebviewHtml } from '@frontend/webview/html';
-```
+#### Expected Layering (Top → Bottom)
 
 ```
-                CORRECT LAYERING:
-        ┌─────────────────────────────┐
-        │        frontend/            │
-        │   (extension-host specific) │
-        └──────────────┬──────────────┘
-                       │ imports
-                       ▼
-        ┌─────────────────────────────┐
-        │         common/             │
-        │    (shared backend code)    │
-        └──────────────┬──────────────┘
-                       │ imports
-                       ▼
-        ┌─────────────────────────────┐
-        │          utils/             │
-        │    (low-level utilities)    │
-        └─────────────────────────────┘
-
-
-                ACTUAL (VIOLATED):
-        ┌─────────────────────────────┐
-        │        frontend/            │
-        └──────────────┬──────────────┘
-                       ▲
-                       │ WRONG DIRECTION
-        ┌──────────────┴──────────────┐
-        │         common/             │
-        │ BaseViewContentProvider.ts  │
-        └─────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    EXPECTED DEPENDENCY FLOW                      │
+│                                                                  │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│   │  commands/  │  │  webview/   │  │progressView/│  TOP LAYER  │
+│   │             │  │             │  │ historyView/│  (UI/Entry) │
+│   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+│          │                │                │                     │
+│          ▼                ▼                ▼                     │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │                      agent/                                │ │
+│   │               (core business logic)                        │ │
+│   └─────────────────────────┬─────────────────────────────────┘ │
+│                             │                                    │
+│          ┌──────────────────┼──────────────────┐                │
+│          ▼                  ▼                  ▼                 │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
+│   │   model/    │    │   tools/    │    │   latex/    │         │
+│   │             │    │             │    │             │         │
+│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘         │
+│          │                  │                  │                 │
+│          ▼                  ▼                  ▼                 │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │                     frontend/                              │ │
+│   │              (extension-host services)                     │ │
+│   └─────────────────────────┬─────────────────────────────────┘ │
+│                             │                                    │
+│                             ▼                                    │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │                      common/                               │ │
+│   │                 (shared backend code)                      │ │
+│   └─────────────────────────┬─────────────────────────────────┘ │
+│                             │                                    │
+│                             ▼                                    │
+│   ┌───────────────────────────────────────────────────────────┐ │
+│   │           utils/ / logger/ / eventBus/                     │ │
+│   │                 (pure utilities)                           │ │  BOTTOM
+│   └───────────────────────────────────────────────────────────┘ │  LAYER
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Fix:** Move `buildWebviewHtml` to `common/webview/` or move `BaseViewContentProvider` to `frontend/`.
+---
+
+#### Violation Category 1: @agent imports @frontend (6 files)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `agent/index/agentRegistry.ts:26` | `@frontend/agents/AgentDirectoryManager` | Agent layer depends on frontend |
+| `agent/runtime/executeAgent.ts:41` | `@frontend/ui/instruction` | Runtime depends on UI |
+| `agent/modelHandlers/ModelHandler.ts:12` | `@frontend/secretManager` | Core handler needs secrets |
+| `agent/output/OutputHandler.ts:17-18` | `@frontend/latex/openBuild`, `@frontend/ui/instruction` | Output depends on UI |
+| `agent/utils/userVars.ts:13` | `@frontend/files/vars` | Agent utils depends on frontend |
+
+**Impact:** Agent system cannot be tested or used without frontend. Creates hidden UI dependencies in business logic.
+
+---
+
+#### Violation Category 2: @model imports @frontend (1 file)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `model/computeModelOptions.ts:4` | `@frontend/secretManager` | Model config depends on secrets |
+
+**Impact:** Model configuration cannot be computed without frontend initialization.
+
+---
+
+#### Violation Category 3: @common imports @frontend (1 file)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `common/webview/BaseViewContentProvider.ts:6` | `@frontend/webview/html` | Common depends on frontend |
+
+**Impact:** Shared webview base class pulls in frontend-specific code.
+
+---
+
+#### Violation Category 4: @utils imports @frontend (1 file)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `utils/prompt/PromptBuilder.ts:4` | `@frontend/files/rules` | Utility depends on frontend file rules |
+
+**Impact:** Prompt building cannot be done without frontend initialization.
+
+---
+
+#### Violation Category 5: @common imports @agent (3 files)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `common/constants/runIds.ts:14` | `@agent/types/IdentifierTypes` | Constants depend on agent types |
+| `common/history/AgentHistoryManager.ts:5,7` | `@agent/core/AgentConfig`, `@agent/types/IdentifierTypes` | History manager depends on agent |
+
+**Impact:** Common layer tightly coupled to agent layer.
+
+---
+
+#### Violation Category 6: @replacement imports @frontend (1 file)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `replacement/helpers.ts:5` | `@frontend/ui/messageUtils` | Just for `capitalize()` function |
+
+**Impact:** Replacement engine pulls in UI utilities for a simple string function.
+
+---
+
+#### Violation Category 7: Circular Dependency - @agent ↔ @tools
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CIRCULAR DEPENDENCY                           │
+│                                                                  │
+│     ┌─────────────────────┐      ┌─────────────────────┐        │
+│     │      @agent/        │◄─────│      @tools/        │        │
+│     │                     │      │                     │        │
+│     │  - core/ToolTypes   │      │  - registry.ts      │        │
+│     │  - toolUse/*        │      │  - fileInteractions │        │
+│     │  - types/*          │      │  - todo/TodoTool    │        │
+│     │                     │─────►│  - core/base        │        │
+│     │  Uses: getDefault   │      │  - approval/*       │        │
+│     │    ToolRegistry()   │      │                     │        │
+│     │  Uses: ToolFile     │      │  Uses: ITool,       │        │
+│     │    Attachment       │      │    ToolDefinition,  │        │
+│     └─────────────────────┘      │    toolResult       │        │
+│                                  └─────────────────────┘        │
+│                                                                  │
+│  @agent imports from @tools:                                     │
+│  - BaseToolUseAgent.ts:43 → getDefaultToolRegistry               │
+│  - modelHandlerAnthropic.ts:64 → ToolFileAttachment              │
+│  - modelHandlerOpenAI.ts:45 → ToolFileAttachment                 │
+│  - ModelHandler.ts:22 → ToolFileAttachment                       │
+│  - core/ToolTypes.ts:19 → ToolResult                             │
+│  - core/flows/ToolUseCycleFlow.ts:41 → withToolEditApprovalCtx   │
+│                                                                  │
+│  @tools imports from @agent:                                     │
+│  - registry.ts:2-3 → ITool, IToolRegistry, createToolRegistry    │
+│  - fileInteractions.ts:2 → getCurrentToolFileInteractionContext  │
+│  - todo/TodoTool.ts:13 → getCurrentToolFileInteractionContext    │
+│  - core/base.ts:7-8 → ITool, ToolDefinition, toolResult          │
+│  - approval/*.ts → StreamTabId, ExecutionId                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Impact:** Cannot load one module without the other. Affects tree-shaking, testing isolation, and build order.
+
+---
+
+#### Violation Category 8: @logger imports @agent (5 imports)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `logger/AgentUsageReporter.ts:2-4` | `@agent/types/*`, `@agent/core/AgentDataclass` | Logger depends on agent types |
+| `logger/AgentLogger.ts:5` | `@agent/types/UsageTypes` | Logger depends on agent |
+| `logger/streamUtils.ts:5-8` | `@agent/index`, `@agent/core/AgentDataclass`, `@agent/types/*` | Stream utils depend on agent |
+| `logger/TaskState.ts:2` | `@agent/core/AgentConfig` | Task state depends on agent config |
+
+**Impact:** Logger cannot function without agent system. Creates initialization order dependencies.
+
+---
+
+#### Violation Category 9: @eventBus imports @agent, @logger, @common
+
+| File | Imports |
+|------|---------|
+| `eventBus/types.ts:5` | `@agent/types/IdentifierTypes` |
+| `eventBus/ProgressEventBus.ts:5-11` | `@agent/*` (4 imports), `@common/*` (1), `@logger/*` (2) |
+
+**Impact:** Event bus depends on multiple higher layers. Should only depend on utils.
+
+---
+
+#### Violation Category 10: @latex imports @agent (6 imports)
+
+| File | Import | Issue |
+|------|--------|-------|
+| `latex/latexdiff.ts:8` | `@agent/output/types` | LaTeX diff depends on agent types |
+| `latex/textConnection.ts:6-7` | `@agent/modelHandlers/*` | Text connection uses model handlers directly |
+| `latex/LatexMediaManager.ts:5-6` | `@agent/core/*` | Media manager depends on agent core |
+| `latex/latexdiff/diffCommandExecutor.ts:2` | `@agent/types/ResultTypes` | Diff executor depends on agent |
+
+**Impact:** LaTeX processing cannot be extracted or tested without agent system.
+
+---
+
+#### Bidirectional Dependencies (common ↔ utils)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  BIDIRECTIONAL DEPENDENCY                        │
+│                                                                  │
+│     ┌─────────────────────┐      ┌─────────────────────┐        │
+│     │      @common/       │◄─────│      @utils/        │        │
+│     │                     │      │                     │        │
+│     │  - errors/          │      │  - commandUtils.ts  │        │
+│     │                     │─────►│  - xmlUtils.ts      │        │
+│     │  Uses: getConfig,   │      │  - promptUtils.ts   │        │
+│     │    extractError     │      │  - execUtils.ts     │        │
+│     │                     │      │  - taskRunStorage   │        │
+│     │  files/fileTypeUtils│      │  - fileMappingUtils │        │
+│     │  errors/sdkError    │      │  - textEnhancement  │        │
+│     └─────────────────────┘      └─────────────────────┘        │
+│                                                                  │
+│  @common imports from @utils:                                    │
+│  - files/fileTypeUtils.ts:5 → getConfig                          │
+│  - errors/sdkErrorUtils.ts:34 → extractErrorMessage, isObject    │
+│                                                                  │
+│  @utils imports from @common:                                    │
+│  - commandUtils.ts:5 → showLoggedErrorMessage                    │
+│  - xmlUtils.ts:7 → toErrorMessage                                │
+│  - promptUtils.ts:11 → toErrorMessage                            │
+│  - execUtils.ts:9 → toErrorMessage                               │
+│  - taskRunStorage.ts:15 → toErrorMessage                         │
+│  - fileMappingUtils.ts:5 → toErrorMessage                        │
+│  - textEnhancementUtils.ts:9 → getSdkErrorMessage                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Impact:** Cannot establish clear layer hierarchy. Both depend on each other.
+
+---
+
+#### Summary: Dependency Violation Counts
+
+| Source Module | Violating Imports | Severity |
+|---------------|-------------------|----------|
+| `@agent → @frontend` | 6 files | 🟠 HIGH |
+| `@agent ↔ @tools` | 10+ files (circular) | 🔴 CRITICAL |
+| `@logger → @agent` | 5 files | 🟠 HIGH |
+| `@eventBus → @agent` | 5+ imports | 🟠 HIGH |
+| `@latex → @agent` | 6 imports | 🟡 MEDIUM |
+| `@common ↔ @utils` | 9 files (bidirectional) | 🟡 MEDIUM |
+| `@model → @frontend` | 1 file | 🟡 MEDIUM |
+| `@common → @frontend` | 1 file | 🟡 MEDIUM |
+| `@utils → @frontend` | 1 file | 🟡 MEDIUM |
+| `@replacement → @frontend` | 1 file | ⚪ LOW |
+| `@common → @agent` | 3 files | 🟡 MEDIUM |
+
+**Total Violations: 40+ import statements across 30+ files**
+
+---
+
+#### Recommended Fixes
+
+1. **Extract shared types to `@types/`** module that all layers can depend on
+2. **Create `@core/` module** for shared interfaces (ITool, IAgent, etc.)
+3. **Move `SecretManager` to `@common/`** or create `@secrets/` module
+4. **Extract `capitalize()` to `@utils/text/`** (trivial fix)
+5. **Split `@logger/` into:**
+   - `@logger/core/` - no dependencies
+   - `@logger/agent/` - agent-specific logging
+6. **Resolve @agent ↔ @tools circular dependency:**
+   - Move `ITool`, `ToolDefinition`, `ToolResult` to `@types/tools/`
+   - Tools should only depend on `@types/`, not `@agent/`
 
 ---
 
@@ -715,7 +936,9 @@ class NoValidationStrategy implements OutputValidationStrategy { ... }
 | Duplicate Code Patterns | 3 | 0 |
 | FS Abstractions | 7+ | 3-4 |
 | State Systems | 3 | 1 unified |
-| Dependency Violations | 1 | 0 |
+| **Dependency Violations** | **40+ imports across 30+ files** | **0** |
+| Circular Dependencies | 1 critical (@agent ↔ @tools) | 0 |
+| Upward Layer Violations | 10 categories | 0 |
 
 ---
 
@@ -741,4 +964,42 @@ src/agent/modelHandlers/modelHandlerAnthropic.ts  # normalizeUsage
 src/agent/modelHandlers/modelHandlerGoogleGenAI.ts # normalizeUsage
 src/agent/implementations/DirectAgent.ts          # handleOutput
 src/agent/implementations/CoTAgent.ts             # handleOutput
+```
+
+### Files with Dependency Violations (by severity)
+
+**🔴 CRITICAL - Circular Dependencies:**
+```
+src/agent/core/ToolTypes.ts              # imports @tools/result
+src/agent/implementations/BaseToolUseAgent.ts  # imports @tools/registry
+src/tools/registry.ts                    # imports @agent/core/ToolTypes
+src/tools/core/base.ts                   # imports @agent/core/ToolTypes
+```
+
+**🟠 HIGH - Agent Layer Violations:**
+```
+src/agent/index/agentRegistry.ts         # imports @frontend/agents
+src/agent/runtime/executeAgent.ts        # imports @frontend/ui
+src/agent/modelHandlers/ModelHandler.ts  # imports @frontend/secretManager
+src/agent/output/OutputHandler.ts        # imports @frontend/latex, @frontend/ui
+src/agent/utils/userVars.ts              # imports @frontend/files
+```
+
+**🟠 HIGH - Logger/EventBus Violations:**
+```
+src/logger/AgentUsageReporter.ts         # imports @agent/types, @agent/core
+src/logger/AgentLogger.ts                # imports @agent/types
+src/logger/streamUtils.ts                # imports @agent/index, @agent/core
+src/logger/TaskState.ts                  # imports @agent/core
+src/eventBus/ProgressEventBus.ts         # imports @agent/*, @common/*, @logger/*
+```
+
+**🟡 MEDIUM - Other Violations:**
+```
+src/model/computeModelOptions.ts         # imports @frontend/secretManager
+src/common/webview/BaseViewContentProvider.ts  # imports @frontend/webview
+src/utils/prompt/PromptBuilder.ts        # imports @frontend/files
+src/replacement/helpers.ts               # imports @frontend/ui (just for capitalize)
+src/latex/textConnection.ts              # imports @agent/modelHandlers
+src/latex/LatexMediaManager.ts           # imports @agent/core
 ```
