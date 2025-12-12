@@ -134,8 +134,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       if (!result.success) {
         if (result.isAuthError) {
           void vscode.window.showErrorMessage(`Sign-in failed: ${result.error}`);
+        } else {
+          // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
+          logger.debug(
+            'SupabaseAuthProvider',
+            `Magic link callback ignored: ${result.error}`,
+          );
         }
-        // Non-auth errors (missing tokens) are silently ignored - might be different callback type
         return;
       }
 
@@ -345,6 +350,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         );
       }
 
+      // Set flag BEFORE opening URL to prevent race with fast callbacks
+      this.isProcessingCallback = true;
+
       await vscode.env.openExternal(vscode.Uri.parse(data.url));
       await vscode.window.withProgress(
         {
@@ -417,6 +425,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /**
    * Wait for OAuth callback from URI handler.
+   * Note: isProcessingCallback must be set by caller before invoking this method.
    * @param cancellationToken - Token to cancel the wait
    */
   private async waitForSession(
@@ -425,9 +434,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (!this.uriHandler) {
       throw new Error('OAuth handler not initialized. Restart the extension.');
     }
-
-    // Set flag to prevent magic link handler from processing
-    this.isProcessingCallback = true;
 
     return new Promise((resolve, reject) => {
       let isCleanedUp = false;
@@ -441,6 +447,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         cancellationListener?.dispose();
       };
 
+      // Flag reset is handled by createSession's finally block
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
           cleanupListeners();
@@ -455,12 +462,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
                   `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
                 );
               }
-              this.isProcessingCallback = false;
               reject(new Error(`OAuth error: ${result.error}. Try again.`));
               return;
             }
 
-            // Keep flag true until fully resolved - reset happens after session is stored
             resolve(result.session);
           } catch (error) {
             const errorMsg =
@@ -469,7 +474,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               'SupabaseAuthProvider',
               `Error processing OAuth callback: ${errorMsg}`,
             );
-            this.isProcessingCallback = false;
             reject(error);
           }
         },
@@ -477,20 +481,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       const timeoutHandle = setTimeout(() => {
         cleanupListeners();
-        this.isProcessingCallback = false;
         reject(new Error('Authentication timed out. Try again.'));
       }, AUTH_CALLBACK_TIMEOUT_MS);
 
       if (cancellationToken.isCancellationRequested) {
         cleanupListeners();
-        this.isProcessingCallback = false;
         resolve(null);
         return;
       }
 
       cancellationListener = cancellationToken.onCancellationRequested(() => {
         cleanupListeners();
-        this.isProcessingCallback = false;
         resolve(null);
       });
     });
