@@ -129,7 +129,9 @@ export const buildFileLink = (filePath, displayName) => {
  * @returns {string} HTML string for list item
  */
 export const buildDetailItem = (iconClass, content, options = {}) => {
-  const titleAttr = options.title ? ` title="${encodeHtml(options.title)}"` : '';
+  const titleAttr = options.title
+    ? ` title="${encodeHtml(options.title)}"`
+    : '';
   const runAttr = options.runId
     ? ` data-run-id="${encodeHtml(options.runId)}"`
     : '';
