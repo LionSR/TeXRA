@@ -25,7 +25,10 @@ export {
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter.js';
 
 // Re-export markdown renderer
-export { getMarkdownRenderer, processMarkdownContent } from './markdownRenderer.js';
+export {
+  getMarkdownRenderer,
+  processMarkdownContent,
+} from './markdownRenderer.js';
 
 // Import formatters for composition
 import { normalizeStructuredContent } from './normalizers.js';
@@ -35,7 +38,10 @@ import {
   safeFormat,
   resolveOpenState,
 } from './baseLogFormatter.js';
-import { getMarkdownRenderer, processMarkdownContent } from './markdownRenderer.js';
+import {
+  getMarkdownRenderer,
+  processMarkdownContent,
+} from './markdownRenderer.js';
 import { EMOJI_BY_LEVEL } from './constants.js';
 import { encodeHtml } from '@common/htmlEncoding.js';
 
@@ -44,7 +50,10 @@ import {
   formatBannerContent,
   formatModelResponse,
 } from './logFormatters/bannerFormatters.js';
-import { formatToolUse, formatWebSearch } from './logFormatters/toolFormatters.js';
+import {
+  formatToolUse,
+  formatWebSearch,
+} from './logFormatters/toolFormatters.js';
 import {
   formatFileList,
   formatMissingOutputs,
