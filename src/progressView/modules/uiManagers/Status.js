@@ -33,7 +33,6 @@ export class Status {
           ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.RETRY_REQUEST_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -47,7 +46,6 @@ export class Status {
           ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.RETRY_REQUEST_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -67,7 +65,6 @@ export class Status {
           ELEMENT_IDS.STOP_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-          ELEMENT_IDS.RETRY_REQUEST_BTN,
         ],
       },
     };
