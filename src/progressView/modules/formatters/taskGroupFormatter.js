@@ -5,7 +5,11 @@
 import { createFromTemplate } from '@common/templateUtils.js';
 import { STREAM_STATUS, GROUP_DOM_IDS } from '../constants.js';
 import { TaskGroupLevel } from './taskGroupLevel.js';
-import { getDateTimeFormatter, getTimeFormatter, formatDuration } from './timestampUtils.js';
+import {
+  getDateTimeFormatter,
+  getTimeFormatter,
+  formatDuration,
+} from './timestampUtils.js';
 
 /**
  * Formats task group headers.
@@ -19,9 +23,10 @@ export class TaskGroupHeaderFormatter {
   create(group) {
     const startDate = new Date(group.startTime);
     const level = this._getGroupLevel(group);
-    const formatter = level === TaskGroupLevel.ROOT
-      ? getDateTimeFormatter()
-      : getTimeFormatter();
+    const formatter =
+      level === TaskGroupLevel.ROOT
+        ? getDateTimeFormatter()
+        : getTimeFormatter();
     const formattedStartTime = level.formatTime(startDate, formatter);
 
     const header = createFromTemplate('groupHeaderTemplate');
