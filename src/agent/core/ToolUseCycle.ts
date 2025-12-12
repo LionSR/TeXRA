@@ -15,8 +15,8 @@ import * as path from 'path';
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { TodoItem } from '@agent/core/AgentWorkspaceState';
 import { pathToLocation } from '@utils/files';
+import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
