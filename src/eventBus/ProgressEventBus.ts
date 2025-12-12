@@ -15,6 +15,7 @@ import type {
   UpdateTaskGroupPayload,
   RunScopedPayload,
   TaskGroupStatus,
+  UpdateTodosPayload,
 } from './schemas';
 
 // Re-export for consumers that import from this module
@@ -63,6 +64,7 @@ export interface ProgressEventPayloads {
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
+  updateTodos: UpdateTodosPayload;
   extensionDeactivating: undefined;
 }
 

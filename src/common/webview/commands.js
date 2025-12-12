@@ -173,6 +173,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   ADD_TASK_GROUP: 'addTaskGroup',
   UPDATE_TASK_GROUP: 'updateTaskGroup',
 
+  // Todo List
+  UPDATE_TODOS: 'updateTodos',
+
   // Status and files
   UPDATE_STATUS: 'updateStatus',
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
