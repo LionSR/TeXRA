@@ -208,10 +208,10 @@ vscode-toolbar-button {
    ========================================================================== */
 
 /* Secondary button style - less prominent than primary */
-.secondary {
+.btn-secondary {
   opacity: var(--opacity-normal);
 }
 
-.secondary:hover {
+.btn-secondary:hover {
   opacity: var(--opacity-full);
 }
