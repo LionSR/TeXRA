@@ -585,6 +585,36 @@
         >
           <span class="getting-started-text"></span>
         </div>
+
+        <!-- Login Banner -->
+        <div id="loginBanner" class="login-banner" style="display: none">
+          <div class="login-banner-content">
+            <span class="login-banner-icon"
+              ><i class="codicon codicon-sparkle"></i
+            ></span>
+            <div class="login-banner-text">
+              <span class="login-banner-title"
+                >Unlock powerful remote agents</span
+              >
+              <span class="login-banner-description"
+                >Sign in to access advanced AI agents for research and
+                writing.</span
+              >
+            </div>
+          </div>
+          <div class="actions">
+            <vscode-button id="loginBannerButton" appearance="primary">
+              <span slot="start" class="codicon codicon-sign-in"></span>
+              Sign In
+            </vscode-button>
+            <vscode-toolbar-button
+              id="loginBannerDismissButton"
+              icon="close"
+              title="Dismiss (can be re-enabled in settings)"
+              aria-label="Dismiss login banner"
+            ></vscode-toolbar-button>
+          </div>
+        </div>
       </div>
 
       <div class="latexdiffs-section">

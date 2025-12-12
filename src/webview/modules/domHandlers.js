@@ -138,6 +138,18 @@ class MainViewDomHandler extends BaseDomHandler {
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
       });
     });
+
+    this.addListener(ELEMENT_IDS.LOGIN_BANNER_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.LOGIN_BANNER_DISMISS_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER,
+      });
+    });
   }
 
   cleanupUI() {
