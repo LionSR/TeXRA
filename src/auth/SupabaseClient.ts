@@ -5,7 +5,7 @@ import {
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
-import type { UserGroup, UserAuthContext } from './config';
+import type { UserAuthContext } from './config';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -153,8 +153,8 @@ export class SupabaseClient {
   }
 
   /**
-   * Get the user's full authorization context including groups and permissions.
-   * This is the preferred method for permission checks.
+   * Get the user's authorization context including permissions.
+   * Fetches permissions directly from profiles table.
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
     const defaultContext: UserAuthContext = {
@@ -175,67 +175,33 @@ export class SupabaseClient {
         refresh_token: tokens.refreshToken,
       });
 
-      // Fetch user's group memberships with group details
+      // Fetch tier and permissions from profiles
       const { data, error } = await client
-        .from('user_group_memberships')
-        .select(
-          `
-          user_groups (
-            id,
-            name,
-            display_name,
-            permissions,
-            priority
-          )
-        `,
-        )
-        .order('user_groups(priority)', { ascending: false });
+        .from('profiles')
+        .select('tier, permissions')
+        .single();
 
-      if (error) {
+      if (error || !data) {
         logger.error(
           'SupabaseClient',
-          `Error fetching user groups: ${error.message}`,
+          `Error fetching profile: ${error?.message || 'No data'}`,
         );
-        // Fall back to legacy tier check
-        return this.getLegacyAuthContext();
+        return defaultContext;
       }
 
-      if (!data || data.length === 0) {
-        // No group memberships found, try legacy tier
-        return this.getLegacyAuthContext();
+      const tier = (data.tier as string) || 'free';
+      let permissions = (data.permissions as string[]) || [];
+
+      // If permissions column is empty, fall back to tier-based permissions
+      if (permissions.length === 0 && tier === 'researcher') {
+        permissions = ['access_remote_agents', 'access_researcher_visibility'];
       }
 
-      // Transform data to UserGroup format
-      const groups: UserGroup[] = data
-        .map((membership) => {
-          const group = membership.user_groups as unknown as {
-            id: string;
-            name: string;
-            display_name: string;
-            permissions: string[];
-            priority: number;
-          };
-          if (!group) return null;
-          return {
-            id: group.id,
-            name: group.name,
-            displayName: group.display_name,
-            permissions: group.permissions || [],
-            priority: group.priority || 0,
-          };
-        })
-        .filter((g): g is UserGroup => g !== null);
-
-      // Flatten all permissions (deduplicated)
-      const permissions = [
-        ...new Set(groups.flatMap((g) => g.permissions)),
-      ];
-
-      // Primary group is the one with highest priority
-      const primaryGroup =
-        groups.length > 0 ? groups[0].name : 'free';
-
-      return { groups, permissions, primaryGroup };
+      return {
+        groups: [], // Simplified - no groups table
+        permissions,
+        primaryGroup: tier,
+      };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
@@ -248,7 +214,6 @@ export class SupabaseClient {
 
   /**
    * Get user's permissions as a flat array.
-   * Convenience method for simple permission checks.
    */
   static async getUserPermissions(): Promise<string[]> {
     const context = await this.getUserAuthContext();
@@ -261,56 +226,6 @@ export class SupabaseClient {
   static async hasPermission(permission: string): Promise<boolean> {
     const permissions = await this.getUserPermissions();
     return permissions.includes(permission);
-  }
-
-  /**
-   * Legacy fallback: get auth context from profiles.tier column.
-   * Used when user_groups tables don't exist yet.
-   */
-  private static async getLegacyAuthContext(): Promise<UserAuthContext> {
-    const defaultContext: UserAuthContext = {
-      groups: [],
-      permissions: [],
-      primaryGroup: 'free',
-    };
-
-    try {
-      const client = this.getClient();
-      const { data, error } = await client
-        .from('profiles')
-        .select('tier')
-        .single();
-
-      if (error || !data) {
-        return defaultContext;
-      }
-
-      const tier = (data.tier as string) || 'free';
-
-      // Map legacy tiers to permissions
-      if (tier === 'researcher') {
-        return {
-          groups: [
-            {
-              id: 'legacy-researcher',
-              name: 'researcher',
-              displayName: 'Researcher Access',
-              permissions: [
-                'access_remote_agents',
-                'access_researcher_visibility',
-              ],
-              priority: 10,
-            },
-          ],
-          permissions: ['access_remote_agents', 'access_researcher_visibility'],
-          primaryGroup: 'researcher',
-        };
-      }
-
-      return defaultContext;
-    } catch {
-      return defaultContext;
-    }
   }
 
   /**
