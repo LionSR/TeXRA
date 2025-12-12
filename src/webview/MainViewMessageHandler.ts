@@ -468,15 +468,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         options: agentOptions,
       });
 
-      // Check if user is authenticated and show login banner if not
+      // Check if user is authenticated and show/hide login banner accordingly
       const showLoginBanner = getConfig<boolean>('ui.showLoginBanner', true);
-      if (showLoginBanner) {
-        const authStatus = await getAuthStatus();
-        if (!authStatus.authenticated) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
-          });
-        }
+      const authStatus = await getAuthStatus();
+      if (showLoginBanner && !authStatus.authenticated) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+        });
+      } else if (authStatus.authenticated) {
+        // Hide banner if user signed in through other means (account menu, etc.)
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
       }
     } catch (error) {
       this.logger.error(
