@@ -55,6 +55,104 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Set URI handler for OAuth callbacks. */
   setUriHandler(handler: SupabaseUriHandler): void {
     this.uriHandler = handler;
+
+    // Set up persistent listener for magic link callbacks
+    // This handles cases where user clicks magic link outside of active OAuth flow
+    handler.onDidReceiveCallback(async (uri) => {
+      await this.handleMagicLinkCallback(uri);
+    });
+  }
+
+  /**
+   * Handle magic link callback when user clicks email link.
+   * This runs for all auth callbacks, but only processes if no session exists.
+   */
+  private async handleMagicLinkCallback(uri: vscode.Uri): Promise<void> {
+    // Check if we already have a session (OAuth flow handles its own callbacks)
+    const existingSession = await this.context.secrets.get(
+      SupabaseAuthProvider.SESSION_KEY,
+    );
+    if (existingSession) {
+      // Session already exists, likely handled by OAuth flow
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams(uri.fragment);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const expiresIn = params.get('expires_in');
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
+
+      if (error) {
+        void vscode.window.showErrorMessage(
+          `Sign-in failed: ${errorDescription || error}`,
+        );
+        return;
+      }
+
+      if (!accessToken || !refreshToken) {
+        // No tokens - might be a different type of callback
+        return;
+      }
+
+      // Verify user and create session
+      const supabase = SupabaseClient.getClient();
+      const { data, error: userError } =
+        await supabase.auth.getUser(accessToken);
+
+      if (userError || !data.user) {
+        void vscode.window.showErrorMessage(
+          `Sign-in verification failed: ${userError?.message || 'Unknown error'}`,
+        );
+        return;
+      }
+
+      const expiresAt = expiresIn
+        ? Date.now() + parseInt(expiresIn) * 1000
+        : Date.now() + 3600000;
+
+      const session: SupabaseSession = {
+        id: data.user.id,
+        accessToken,
+        refreshToken,
+        account: {
+          id: data.user.id,
+          label: data.user.email || data.user.id,
+        },
+        expiresAt,
+      };
+
+      // Store the session
+      await this.context.secrets.store(
+        SupabaseAuthProvider.SESSION_KEY,
+        JSON.stringify(session),
+      );
+
+      // Notify VS Code of the new session
+      this._onDidChangeSessions.fire({
+        added: [this.toVSCodeSession(session)],
+        removed: [],
+        changed: [],
+      });
+
+      void vscode.window.showInformationMessage(
+        `Signed in as ${data.user.email || 'unknown user'}`,
+      );
+
+      logger.info(
+        'SupabaseAuthProvider',
+        `Magic link sign-in successful for ${data.user.email}`,
+      );
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error processing magic link callback: ${errorMsg}`,
+      );
+      void vscode.window.showErrorMessage(`Sign-in failed: ${errorMsg}`);
+    }
   }
 
   /** Get sessions from secure storage. */
