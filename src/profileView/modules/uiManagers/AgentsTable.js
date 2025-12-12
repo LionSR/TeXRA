@@ -6,6 +6,22 @@ import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
 /**
+ * Permission constant for accessing remote agents.
+ * Matches PERMISSIONS.ACCESS_REMOTE_AGENTS from config.ts
+ */
+const PERMISSION_ACCESS_REMOTE_AGENTS = 'access_remote_agents';
+
+/**
+ * Check if a permission array includes a specific permission.
+ * @param {string[]} permissions - Array of permission strings
+ * @param {string} permission - Permission to check for
+ * @returns {boolean}
+ */
+function hasPermission(permissions, permission) {
+  return Array.isArray(permissions) && permissions.includes(permission);
+}
+
+/**
  * Manages the agents table rendering and interactions.
  */
 export class AgentsTable {
@@ -31,8 +47,13 @@ export class AgentsTable {
 
   /**
    * Render the profile view with the given data.
+   * @param {boolean} authenticated - Whether the user is authenticated
+   * @param {object} user - User object with email and id
+   * @param {string} tier - Primary group name (for backwards compatibility / display)
+   * @param {string[]} permissions - Array of permission strings
+   * @param {Array} remoteAgents - Array of remote agent objects
    */
-  render(authenticated, user, tier, remoteAgents) {
+  render(authenticated, user, tier, permissions, remoteAgents) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);
@@ -71,24 +92,32 @@ export class AgentsTable {
     if (userEmail) userEmail.textContent = user?.email || 'N/A';
     if (userId) userId.textContent = user?.id || '';
 
-    // Update tier badge
+    // Update tier badge (shows primary group for display)
     const tierBadge = safeGetElementById(ELEMENT_IDS.USER_TIER);
     if (tierBadge) {
       tierBadge.textContent = tier;
       tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier}`;
     }
 
-    // Update tier message
+    // Update tier message based on permissions (not hardcoded tier check)
     const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
     if (tierMessage) {
-      tierMessage.textContent =
-        tier === 'researcher'
-          ? LABELS.TIER_RESEARCHER_MESSAGE
-          : LABELS.TIER_FREE_MESSAGE;
+      const canAccessRemote = hasPermission(
+        permissions,
+        PERMISSION_ACCESS_REMOTE_AGENTS,
+      );
+      tierMessage.textContent = canAccessRemote
+        ? LABELS.TIER_RESEARCHER_MESSAGE
+        : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show/hide remote agents section based on tier
-    if (tier === 'researcher') {
+    // Show/hide remote agents section based on permission (not tier)
+    const canAccessRemoteAgents = hasPermission(
+      permissions,
+      PERMISSION_ACCESS_REMOTE_AGENTS,
+    );
+
+    if (canAccessRemoteAgents) {
       remoteAgentsSection.style.display = 'block';
 
       if (remoteAgents && remoteAgents.length > 0) {
