@@ -57,6 +57,14 @@ async function handleSelectionFallback(
 }
 
 /**
+ * Small delay to allow webview to initialize after focus.
+ * This helps ensure the webview's message handlers are ready.
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Select an agent in the main webview's dropdown.
  * This is the single source of truth for agent selection across the extension.
  *
@@ -81,8 +89,12 @@ export async function selectAgentInMainView(
   // Format agent value as source:name for dropdown selection
   const agentValue = createKey(source as AgentSource, agentName);
 
-  // Focus the main view first
+  // Focus the main view first - this reveals it and triggers initialization if needed
   await vscode.commands.executeCommand('texra.mainView.focus');
+
+  // Small delay to ensure webview has time to initialize if it was just revealed
+  // This helps prevent race conditions where the message arrives before handlers are ready
+  await delay(100);
 
   try {
     const webviewView = await vscode.commands.executeCommand<
@@ -95,6 +107,11 @@ export async function selectAgentInMainView(
       const sessionType =
         entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 
+      logger.info(
+        CHANNEL,
+        `Selecting agent "${agentName}" (${agentValue}) in ${sessionType} dropdown`,
+      );
+
       // Send SET_SELECTED_AGENT message to set just the agent selector value
       // This avoids triggering full state restoration which would clear other fields
       webviewView.webview.postMessage({
@@ -105,7 +122,7 @@ export async function selectAgentInMainView(
 
       if (showSuccessMessage) {
         void vscode.window.showInformationMessage(
-          `Agent "${agentName}" is now selected.`,
+          `Agent "${agentName}" is now selected in the main view.`,
         );
       }
 
