@@ -11,8 +11,13 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { AgentLogger } from '@logger/AgentLogger';
 import { toolResult, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+
+// Local imports - logging
+
+const logger = new AgentLogger('TodoWriteTool');
 
 // Import todo schemas from single source of truth
 import {
@@ -79,7 +84,10 @@ Best practices:
     const context = getCurrentToolFileInteractionContext();
 
     if (!context?.todoState) {
-      // No context available - still format output but warn
+      // No context available - log warning and still format output
+      logger.warn(
+        'todo_write called without todoState in context - todos will not persist or display in UI',
+      );
       return toolResult({
         summary: 'Updated todo list (no active session)',
         output: this.formatTodoList(input.todos),
