@@ -11,31 +11,19 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { TodoItem, TodoStatus } from '@agent/core/AgentWorkspaceState';
 import { toolResult, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-// Type imports
-
-/**
- * Schema for a single todo item input.
- */
-const TodoItemSchema = z.strictObject({
-  /** The task description in imperative form (e.g., "Run tests", "Fix bug") */
-  content: z.string().min(1).describe('Task description in imperative form'),
-  /** Current status: pending, in_progress, or completed */
-  status: z
-    .enum(['pending', 'in_progress', 'completed'])
-    .describe('Current status of the task'),
-  /** Present continuous form shown during execution (e.g., "Running tests") */
-  activeForm: z
-    .string()
-    .min(1)
-    .describe('Present continuous form for display during execution'),
-});
+// Import todo schemas from single source of truth
+import {
+  TodoItemSchema,
+  type TodoItem,
+  type TodoStatus,
+} from '@eventBus/schemas';
 
 /**
  * Schema for the todo_write tool input.
+ * Uses TodoItemSchema from eventBus/schemas as single source of truth.
  */
 const TodoWriteInputSchema = z.strictObject({
   /** The complete updated todo list */
