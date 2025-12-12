@@ -1160,6 +1160,7 @@ export class LogEntryFormatter {
           <span>Open XML to check tag consistency:</span>
           <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
           ${tagInfo}
+          <div class="xml-fix-hint">After fixing, click <i class="codicon codicon-debug-rerun"></i> <strong>Resume</strong> to re-process</div>
         </div>`;
     }
 
