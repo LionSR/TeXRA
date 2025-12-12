@@ -336,11 +336,18 @@ export class BannerManager extends BaseUIManager {
       '.login-banner-description',
     );
 
-    if (titleElement && config?.title) {
+    if (!(titleElement && descriptionElement)) {
+      console.warn(
+        '[BannerManager] Login banner missing title or description element',
+      );
+      return;
+    }
+
+    if (config?.title) {
       titleElement.textContent = config.title;
     }
 
-    if (descriptionElement && config?.description) {
+    if (config?.description) {
       descriptionElement.textContent = config.description;
     }
   }
