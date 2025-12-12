@@ -52,6 +52,7 @@ import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
   hasOpenAIWebSearchData,
+  isOpenAIReasoningItem,
   isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
@@ -1339,10 +1340,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Returns both normalized results for display and raw content blocks for context.
    * Single source of truth for OpenAI Responses API server tool extraction.
    *
-   * Note: We include both reasoning items AND web_search_call items because
-   * OpenAI's API requires reasoning items when web_search_call references them.
-   * Error: "Item 'ws_...' of type 'web_search_call' was provided without its
-   * required 'reasoning' item: 'rs_...'."
+   * Note: We include reasoning items ONLY when they immediately precede a
+   * web_search_call item. This satisfies two API requirements:
+   * - "web_search_call was provided without its required 'reasoning' item"
+   * - "reasoning was provided without its required following item"
+   *
+   * Reasoning items followed by function_call are NOT included here because
+   * function_call items are handled separately by the tool use flow.
    */
   override extractServerToolData(
     response: Response,
@@ -1353,9 +1357,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Extract content blocks that need to be preserved
-    // Includes both reasoning items and web_search_call items because
-    // web_search_call may depend on preceding reasoning items
-    const contentBlocks = output.filter(isOpenAIServerToolContent);
+    // Only include reasoning items that are immediately followed by web_search_call
+    // to satisfy both API requirements (reasoning needs following item, web_search needs preceding reasoning)
+    const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
+      [];
+    for (let i = 0; i < output.length; i++) {
+      const item = output[i];
+      if (isOpenAIWebSearchCall(item)) {
+        // Check if there's a reasoning item immediately before this web_search_call
+        if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
+          contentBlocks.push(output[i - 1] as ResponseReasoningItem);
+        }
+        contentBlocks.push(item);
+      }
+    }
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
