@@ -5,7 +5,8 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
-  getExtensionId,
+  getAuthCallbackUri,
+  AUTH_CALLBACK_TIMEOUT_MS,
   type OAuthProvider,
 } from './config';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -63,6 +64,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   public readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
   private uriHandler: SupabaseUriHandler | null = null;
+  private uriHandlerSubscription: vscode.Disposable | null = null;
   private refreshPromise: Promise<SupabaseSession | null> | null = null;
   /** Flag to prevent race conditions between OAuth and magic link handlers */
   private isProcessingCallback = false;
@@ -81,15 +83,29 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return this.instance;
   }
 
-  /** Set URI handler for OAuth callbacks. */
+  /**
+   * Set URI handler for OAuth callbacks.
+   * @param handler - The URI handler to use for auth callbacks
+   */
   setUriHandler(handler: SupabaseUriHandler): void {
+    // Dispose previous subscription if any
+    this.uriHandlerSubscription?.dispose();
+
     this.uriHandler = handler;
 
     // Set up persistent listener for magic link callbacks
     // This handles cases where user clicks magic link outside of active OAuth flow
-    handler.onDidReceiveCallback(async (uri) => {
+    this.uriHandlerSubscription = handler.onDidReceiveCallback(async (uri) => {
       await this.handleMagicLinkCallback(uri);
     });
+  }
+
+  /**
+   * Dispose resources when provider is deactivated.
+   */
+  dispose(): void {
+    this.uriHandlerSubscription?.dispose();
+    this._onDidChangeSessions.dispose();
   }
 
   /**
@@ -299,7 +315,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /** Create authentication session via OAuth. */
+  /**
+   * Create authentication session via OAuth.
+   * @param scopes - Scopes array, may contain provider hint as "provider:github"
+   */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
@@ -316,7 +335,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${vscode.env.uriScheme}://${getExtensionId()}/auth-callback`,
+          redirectTo: getAuthCallbackUri(vscode.env.uriScheme),
         },
       });
 
@@ -327,38 +346,34 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       await vscode.env.openExternal(vscode.Uri.parse(data.url));
-      try {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'TeXRA Authentication',
-            cancellable: true,
-          },
-          async (progress, token) => {
-            progress.report({ message: 'Waiting for authentication...' });
-            const session = await this.waitForSession(token);
-            if (!session) {
-              throw new Error(
-                'Authentication cancelled or timed out. Try again.',
-              );
-            }
-            await this.context.secrets.store(
-              SupabaseAuthProvider.SESSION_KEY,
-              JSON.stringify(session),
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'TeXRA Authentication',
+          cancellable: true,
+        },
+        async (progress, token) => {
+          progress.report({ message: 'Waiting for authentication...' });
+          const session = await this.waitForSession(token);
+          if (!session) {
+            throw new Error(
+              'Authentication cancelled or timed out. Try again.',
             );
-            this._onDidChangeSessions.fire({
-              added: [this.toVSCodeSession(session)],
-              removed: [],
-              changed: [],
-            });
+          }
+          await this.context.secrets.store(
+            SupabaseAuthProvider.SESSION_KEY,
+            JSON.stringify(session),
+          );
+          this._onDidChangeSessions.fire({
+            added: [this.toVSCodeSession(session)],
+            removed: [],
+            changed: [],
+          });
 
-            return this.toVSCodeSession(session);
-          },
-        );
-      } finally {
-        // Reset flag after OAuth flow completes (success or failure)
-        this.isProcessingCallback = false;
-      }
+          return this.toVSCodeSession(session);
+        },
+      );
+
       const sessions = await this.getSessions();
       if (sessions.length === 0) {
         throw new Error('Session creation failed. Try signing in again.');
@@ -368,6 +383,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const message = error instanceof Error ? error.message : 'Unknown error';
       void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
       throw error;
+    } finally {
+      // Reset flag after entire OAuth flow completes (success or failure)
+      this.isProcessingCallback = false;
     }
   }
 
@@ -397,15 +415,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /** Wait for OAuth callback. */
+  /**
+   * Wait for OAuth callback from URI handler.
+   * @param cancellationToken - Token to cancel the wait
+   */
   private async waitForSession(
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
     if (!this.uriHandler) {
       throw new Error('OAuth handler not initialized. Restart the extension.');
     }
-
-    const timeout = 120000; // 2 minutes
 
     // Set flag to prevent magic link handler from processing
     this.isProcessingCallback = true;
@@ -460,7 +479,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         cleanupListeners();
         this.isProcessingCallback = false;
         reject(new Error('Authentication timed out. Try again.'));
-      }, timeout);
+      }, AUTH_CALLBACK_TIMEOUT_MS);
 
       if (cancellationToken.isCancellationRequested) {
         cleanupListeners();
