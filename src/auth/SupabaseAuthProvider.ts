@@ -4,9 +4,15 @@ import { SupabaseClient } from './SupabaseClient';
 import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
-  getExtensionId,
+  OAUTH_PROVIDERS,
+  getAuthCallbackUri,
+  AUTH_CALLBACK_TIMEOUT_MS,
+  type OAuthProvider,
 } from './config';
 import type { SupabaseUriHandler } from './UriHandler';
+
+/** Default session expiry time in milliseconds (1 hour) */
+const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 /** Session data stored in VS Code SecretStorage. */
 interface SupabaseSession {
@@ -18,6 +24,30 @@ interface SupabaseSession {
     label: string; // email or user ID
   };
   expiresAt: number; // timestamp
+}
+
+/** Result of parsing auth callback URI */
+interface CallbackParseResult {
+  success: true;
+  session: SupabaseSession;
+}
+
+interface CallbackParseError {
+  success: false;
+  error: string;
+  isAuthError?: boolean;
+}
+
+type CallbackResult = CallbackParseResult | CallbackParseError;
+
+/**
+ * Type guard to check if a string is a valid OAuth provider.
+ */
+function isOAuthProvider(value: string | undefined): value is OAuthProvider {
+  return (
+    value !== undefined &&
+    OAUTH_PROVIDERS.includes(value as OAuthProvider)
+  );
 }
 
 /**
@@ -34,7 +64,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   public readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
   private uriHandler: SupabaseUriHandler | null = null;
+  private uriHandlerSubscription: vscode.Disposable | null = null;
   private refreshPromise: Promise<SupabaseSession | null> | null = null;
+  /** Flag to prevent race conditions between OAuth and magic link handlers */
+  private isProcessingCallback = false;
 
   constructor(private context: vscode.ExtensionContext) {
     SupabaseClient.initialize(
@@ -50,9 +83,169 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return this.instance;
   }
 
-  /** Set URI handler for OAuth callbacks. */
+  /**
+   * Set URI handler for OAuth callbacks.
+   * @param handler - The URI handler to use for auth callbacks
+   */
   setUriHandler(handler: SupabaseUriHandler): void {
+    // Dispose previous subscription if any
+    this.uriHandlerSubscription?.dispose();
+
     this.uriHandler = handler;
+
+    // Set up persistent listener for magic link callbacks
+    // This handles cases where user clicks magic link outside of active OAuth flow
+    this.uriHandlerSubscription = handler.onDidReceiveCallback(async (uri) => {
+      await this.handleMagicLinkCallback(uri);
+    });
+  }
+
+  /**
+   * Dispose resources when provider is deactivated.
+   */
+  dispose(): void {
+    this.uriHandlerSubscription?.dispose();
+    this._onDidChangeSessions.dispose();
+  }
+
+  /**
+   * Handle magic link callback when user clicks email link.
+   * This runs for all auth callbacks, but only processes if no session exists
+   * and no OAuth flow is currently active.
+   */
+  private async handleMagicLinkCallback(uri: vscode.Uri): Promise<void> {
+    // Atomically claim processing - must be first check to prevent race
+    if (this.isProcessingCallback) {
+      return;
+    }
+    this.isProcessingCallback = true;
+
+    try {
+      // Check if we already have a session (after claiming the lock)
+      const existingSession = await this.context.secrets.get(
+        SupabaseAuthProvider.SESSION_KEY,
+      );
+      if (existingSession) {
+        return;
+      }
+
+      const result = await this.parseCallbackAndCreateSession(uri);
+
+      if (!result.success) {
+        if (result.isAuthError) {
+          void vscode.window.showErrorMessage(`Sign-in failed: ${result.error}`);
+        } else {
+          // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
+          logger.debug(
+            'SupabaseAuthProvider',
+            `Magic link callback ignored: ${result.error}`,
+          );
+        }
+        return;
+      }
+
+      // Store session and notify - wrapped in try to ensure cleanup on partial failure
+      try {
+        await this.context.secrets.store(
+          SupabaseAuthProvider.SESSION_KEY,
+          JSON.stringify(result.session),
+        );
+
+        this._onDidChangeSessions.fire({
+          added: [this.toVSCodeSession(result.session)],
+          removed: [],
+          changed: [],
+        });
+
+        void vscode.window.showInformationMessage(
+          `Signed in as ${result.session.account.label}`,
+        );
+
+        logger.info(
+          'SupabaseAuthProvider',
+          `Magic link sign-in successful for ${result.session.account.label}`,
+        );
+      } catch (storeError) {
+        const errorMsg =
+          storeError instanceof Error ? storeError.message : String(storeError);
+        logger.error(
+          'SupabaseAuthProvider',
+          `Failed to store session: ${errorMsg}`,
+        );
+        void vscode.window.showErrorMessage(
+          `Sign-in failed: Could not save session`,
+        );
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error processing magic link callback: ${errorMsg}`,
+      );
+      void vscode.window.showErrorMessage(`Sign-in failed: ${errorMsg}`);
+    } finally {
+      this.isProcessingCallback = false;
+    }
+  }
+
+  /**
+   * Parse auth callback URI and create a session.
+   * Shared logic for both OAuth and magic link flows.
+   */
+  private async parseCallbackAndCreateSession(
+    uri: vscode.Uri,
+  ): Promise<CallbackResult> {
+    const params = new URLSearchParams(uri.fragment);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const expiresIn = params.get('expires_in');
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    if (error) {
+      return {
+        success: false,
+        error: errorDescription || error,
+        isAuthError: true,
+      };
+    }
+
+    if (!accessToken || !refreshToken) {
+      return {
+        success: false,
+        error: 'Missing tokens in callback',
+      };
+    }
+
+    // Verify user with Supabase
+    const supabase = SupabaseClient.getClient();
+    const { data, error: userError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (userError || !data.user) {
+      return {
+        success: false,
+        error: userError?.message || 'User verification failed',
+        isAuthError: true,
+      };
+    }
+
+    const expiresAt = expiresIn
+      ? Date.now() + parseInt(expiresIn) * 1000
+      : Date.now() + DEFAULT_SESSION_EXPIRY_MS;
+
+    const session: SupabaseSession = {
+      id: data.user.id,
+      accessToken,
+      refreshToken,
+      account: {
+        id: data.user.id,
+        label: data.user.email || data.user.id,
+      },
+      expiresAt,
+    };
+
+    return { success: true, session };
   }
 
   /** Get sessions from secure storage. */
@@ -127,17 +320,27 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /** Create authentication session via OAuth. */
+  /**
+   * Create authentication session via OAuth.
+   * @param scopes - Scopes array, may contain provider hint as "provider:github"
+   */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
     try {
       const supabase = SupabaseClient.getClient();
 
+      // Extract provider from scopes (format: "provider:github" or "provider:google")
+      const providerScope = scopes.find((s) => s.startsWith('provider:'));
+      const requestedProvider = providerScope?.split(':')[1];
+      const provider = isOAuthProvider(requestedProvider)
+        ? requestedProvider
+        : DEFAULT_OAUTH_PROVIDER;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: DEFAULT_OAUTH_PROVIDER,
+        provider,
         options: {
-          redirectTo: `${vscode.env.uriScheme}://${getExtensionId()}/auth-callback`,
+          redirectTo: getAuthCallbackUri(vscode.env.uriScheme),
         },
       });
 
@@ -146,6 +349,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           `OAuth initialization failed: ${error?.message || 'Unknown error'}. Try again.`,
         );
       }
+
+      // Set flag BEFORE opening URL to prevent race with fast callbacks
+      this.isProcessingCallback = true;
 
       await vscode.env.openExternal(vscode.Uri.parse(data.url));
       await vscode.window.withProgress(
@@ -175,6 +381,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           return this.toVSCodeSession(session);
         },
       );
+
       const sessions = await this.getSessions();
       if (sessions.length === 0) {
         throw new Error('Session creation failed. Try signing in again.');
@@ -184,6 +391,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const message = error instanceof Error ? error.message : 'Unknown error';
       void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
       throw error;
+    } finally {
+      // Reset flag after entire OAuth flow completes (success or failure)
+      this.isProcessingCallback = false;
     }
   }
 
@@ -213,7 +423,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /** Wait for OAuth callback. */
+  /**
+   * Wait for OAuth callback from URI handler.
+   * Note: isProcessingCallback must be set by caller before invoking this method.
+   * @param cancellationToken - Token to cancel the wait
+   */
   private async waitForSession(
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
@@ -221,77 +435,38 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       throw new Error('OAuth handler not initialized. Restart the extension.');
     }
 
-    const timeout = 120000; // 2 minutes
-    const startTime = Date.now();
-
     return new Promise((resolve, reject) => {
       let isCleanedUp = false;
       let cancellationListener: vscode.Disposable | undefined = undefined;
 
-      const cleanup = () => {
+      const cleanupListeners = () => {
         if (isCleanedUp) return;
         isCleanedUp = true;
         clearTimeout(timeoutHandle);
         subscription.dispose();
         cancellationListener?.dispose();
       };
+
+      // Flag reset is handled by createSession's finally block
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
-          cleanup();
+          cleanupListeners();
 
           try {
-            const params = new URLSearchParams(uri.fragment);
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-            const expiresIn = params.get('expires_in');
-            const tokenType = params.get('token_type');
-            const error = params.get('error');
-            const errorDescription = params.get('error_description');
-            if (error) {
-              reject(
-                new Error(
-                  `OAuth error: ${error} - ${errorDescription || 'Unknown error'}`,
-                ),
-              );
+            const result = await this.parseCallbackAndCreateSession(uri);
+
+            if (!result.success) {
+              if (result.error === 'Missing tokens in callback') {
+                logger.error(
+                  'SupabaseAuthProvider',
+                  `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
+                );
+              }
+              reject(new Error(`OAuth error: ${result.error}. Try again.`));
               return;
             }
 
-            if (!accessToken || !refreshToken) {
-              logger.error(
-                'SupabaseAuthProvider',
-                `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
-              );
-              reject(new Error('OAuth callback missing tokens. Try again.'));
-              return;
-            }
-            const supabase = SupabaseClient.getClient();
-            const { data, error: userError } =
-              await supabase.auth.getUser(accessToken);
-
-            if (userError || !data.user) {
-              reject(
-                new Error(
-                  `User verification failed: ${userError?.message || 'Unknown error'}. Try again.`,
-                ),
-              );
-              return;
-            }
-            const expiresAt = expiresIn
-              ? Date.now() + parseInt(expiresIn) * 1000
-              : Date.now() + 3600000; // Default 1 hour
-
-            const session: SupabaseSession = {
-              id: data.user.id,
-              accessToken,
-              refreshToken,
-              account: {
-                id: data.user.id,
-                label: data.user.email || data.user.id,
-              },
-              expiresAt,
-            };
-
-            resolve(session);
+            resolve(result.session);
           } catch (error) {
             const errorMsg =
               error instanceof Error ? error.message : String(error);
@@ -303,18 +478,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           }
         },
       );
+
       const timeoutHandle = setTimeout(() => {
-        cleanup();
+        cleanupListeners();
         reject(new Error('Authentication timed out. Try again.'));
-      }, timeout);
+      }, AUTH_CALLBACK_TIMEOUT_MS);
+
       if (cancellationToken.isCancellationRequested) {
-        cleanup();
+        cleanupListeners();
         resolve(null);
         return;
       }
 
       cancellationListener = cancellationToken.onCancellationRequested(() => {
-        cleanup();
+        cleanupListeners();
         resolve(null);
       });
     });
@@ -333,6 +510,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     return this.refreshPromise;
   }
+
   private async _refreshSession(
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
@@ -354,10 +532,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           id: data.session.user.id,
           label: data.session.user.email || data.session.user.id,
         },
-        // If expires_at is missing, default to 1 hour from now to avoid immediate expiration
         expiresAt: data.session.expires_at
           ? data.session.expires_at * 1000
-          : Date.now() + 3600000,
+          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
       };
 
       // Update stored session
@@ -376,6 +553,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return null;
     }
   }
+
   private toVSCodeSession(
     session: SupabaseSession,
   ): vscode.AuthenticationSession {
