@@ -259,6 +259,72 @@ export class DocumentStatsState {
   }
 }
 
+/**
+ * Status of a todo item.
+ */
+export type TodoStatus = 'pending' | 'in_progress' | 'completed';
+
+/**
+ * Schema for a single todo item.
+ */
+export interface TodoItem {
+  /** The task description in imperative form (e.g., "Run tests") */
+  content: string;
+  /** Current status of the task */
+  status: TodoStatus;
+  /** Present continuous form shown during execution (e.g., "Running tests") */
+  activeForm: string;
+}
+
+/**
+ * State for managing todo items during tool-use sessions.
+ * Provides task tracking and progress visibility for agents.
+ */
+export class TodoState {
+  private _todos: TodoItem[] = [];
+  private _onUpdate?: (todos: TodoItem[]) => void;
+
+  get todos(): TodoItem[] {
+    return this._todos;
+  }
+
+  /**
+   * Set the callback to be called when todos are updated.
+   * Used to emit events to the progress view.
+   */
+  setOnUpdate(callback: (todos: TodoItem[]) => void): void {
+    this._onUpdate = callback;
+  }
+
+  /**
+   * Update the entire todo list.
+   * Triggers the onUpdate callback if set.
+   */
+  updateTodos(todos: TodoItem[]): void {
+    this._todos = todos;
+    this._onUpdate?.(todos);
+  }
+
+  /**
+   * Clear all todos.
+   */
+  reset(): void {
+    this._todos = [];
+  }
+
+  toJSON(): { todos: TodoItem[] } {
+    return { todos: [...this._todos] };
+  }
+
+  static fromJSON(data: { todos?: TodoItem[] } | null): TodoState {
+    const state = new TodoState();
+    if (data?.todos) {
+      state._todos = [...data.todos];
+    }
+    return state;
+  }
+}
+
 export const ThinkingBlockSchema = z.object({
   type: z.string(),
   thinking: z.string().optional(),
@@ -306,6 +372,18 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
       readFiles: [],
       edits: [],
     }),
+  todos: z
+    .object({
+      todos: z.array(
+        z.object({
+          content: z.string(),
+          status: z.enum(['pending', 'in_progress', 'completed']),
+          activeForm: z.string(),
+        }),
+      ),
+    })
+    .optional()
+    .prefault({ todos: [] }),
 });
 
 export type AgentWorkspaceSnapshot = z.infer<
@@ -319,6 +397,7 @@ export class AgentWorkspaceState {
   public readonly document = new DocumentStatsState();
   public readonly interactions = new FileInteractionState();
   public readonly serverToolContent = new ServerToolContentState();
+  public readonly todos = new TodoState();
 
   resetReasoning(): void {
     this.reasoning.reset();
@@ -345,6 +424,7 @@ export class AgentWorkspaceState {
         texcountStats: this.document.texcountStats,
       },
       interactions: this.interactions.toJSON(),
+      todos: this.todos.toJSON(),
     };
   }
 
@@ -378,6 +458,12 @@ export class AgentWorkspaceState {
     const restored = FileInteractionState.fromJSON(interactions);
     // Replace the default instance with the restored state
     (state as any).interactions = restored;
+
+    // Restore todos
+    const todosData = snapshot.todos ?? { todos: [] };
+    const restoredTodos = TodoState.fromJSON(todosData);
+    (state as any).todos = restoredTodos;
+
     return state;
   }
 }
