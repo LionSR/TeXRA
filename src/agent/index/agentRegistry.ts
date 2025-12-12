@@ -85,13 +85,6 @@ export interface ResolvedAgent {
 /** Suffix for multiple-output agent variants. */
 export const MULTIPLE_SUFFIX = '_multiple';
 
-/**
- * Agents that should only be loaded from remote, not from built-in YAML files.
- * These agents are skipped during local scanning to ensure the remote version
- * is used, even if local files exist from older extension versions.
- */
-const REMOTE_ONLY_AGENTS = new Set(['generic']);
-
 // =============================================================================
 // STATE
 // =============================================================================
@@ -299,18 +292,6 @@ async function scanDirectory(
     const entries: AgentEntry[] = [];
 
     for (const [name, paths] of grouped) {
-      // Skip remote-only agents to ensure remote version takes precedence
-      if (
-        (source === 'builtIn' || source === 'builtInToolUse') &&
-        REMOTE_ONLY_AGENTS.has(name)
-      ) {
-        logger.debug(
-          CHANNEL,
-          `Skipping remote-only agent "${name}" from ${source}`,
-        );
-        continue;
-      }
-
       const entry = await scanYaml(name, paths.base, paths.multiple, source);
       if (entry) entries.push(entry);
     }
