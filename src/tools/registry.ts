@@ -25,6 +25,7 @@ import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
+import { TodoWriteTool } from './todo';
 
 /**
  * Default tool instances as a plain Record.
@@ -54,6 +55,7 @@ const DEFAULT_TOOLS: Record<string, ITool> = {
   texcount: new TexcountTool(),
   web_fetch: new WebFetchTool(),
   web_search: new WebSearchTool(),
+  todo_write: new TodoWriteTool(),
 };
 
 /** Singleton IToolRegistry instance for the default tools. */

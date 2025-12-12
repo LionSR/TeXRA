@@ -58,3 +58,26 @@ export const RunScopedPayloadSchema = z.strictObject({
   executionId: ExecutionIdSchema.optional(),
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
+
+/** Status of a todo item */
+export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed']);
+export type TodoStatus = z.infer<typeof TodoStatusSchema>;
+
+/** Schema for a single todo item */
+export const TodoItemSchema = z.strictObject({
+  /** The task description in imperative form */
+  content: z.string().min(1),
+  /** Current status of the task */
+  status: TodoStatusSchema,
+  /** Present continuous form shown during execution */
+  activeForm: z.string().min(1),
+});
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+
+/** Payload for updating todos in a stream */
+export const UpdateTodosPayloadSchema = z.strictObject({
+  stream: StreamTabIdSchema,
+  executionId: ExecutionIdSchema.optional(),
+  todos: z.array(TodoItemSchema),
+});
+export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
