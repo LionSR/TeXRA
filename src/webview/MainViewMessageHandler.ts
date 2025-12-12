@@ -20,8 +20,8 @@ import {
   getToolDocsCommand,
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
+import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
-import { getAuthStatus, AUTH_COMMANDS } from '@/auth/authCommands';
 
 // Local file imports
 import {
