@@ -32,6 +32,9 @@ export class BannerManager extends BaseUIManager {
       case ELEMENT_IDS.GETTING_STARTED_BANNER:
         this._setupGettingStartedBanner(element);
         break;
+      case ELEMENT_IDS.LOGIN_BANNER:
+        this._setupLoginBanner(element, config);
+        break;
       default:
         break;
     }
@@ -317,6 +320,36 @@ export class BannerManager extends BaseUIManager {
     });
 
     textContainer.appendChild(document.createTextNode('.'));
+  }
+
+  /**
+   * Configure login banner.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   * @param {object} config - Configuration object
+   * @param {string} [config.title] - Optional custom title
+   * @param {string} [config.description] - Optional custom description
+   */
+  _setupLoginBanner(element, config) {
+    const titleElement = element.querySelector('.login-banner-title');
+    const descriptionElement = element.querySelector(
+      '.login-banner-description',
+    );
+
+    if (!(titleElement && descriptionElement)) {
+      console.warn(
+        '[BannerManager] Login banner missing title or description element',
+      );
+      return;
+    }
+
+    if (config?.title) {
+      titleElement.textContent = config.title;
+    }
+
+    if (config?.description) {
+      descriptionElement.textContent = config.description;
+    }
   }
 }
 
