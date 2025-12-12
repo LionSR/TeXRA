@@ -408,6 +408,38 @@ export class TaskRunFileService {
   }
 
   /**
+   * Create a FileLocation for raw/intermediate output files (e.g., XML scratchpad).
+   * ALWAYS routes to run storage when executionId is available, regardless of
+   * the user's storageMode setting. This keeps intermediate artifacts isolated
+   * from the user's workspace.
+   *
+   * Falls back to workspace location only when no executionId is available.
+   *
+   * @param relativePath - Workspace-relative path (e.g., "paper__agent__r0_model.xml")
+   * @returns FileLocation (runStorage if executionId available, workspace otherwise)
+   */
+  public createRawOutputLocation(relativePath: string): FileLocation {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
+      return createExternalLocation(relativePath);
+    }
+
+    const normalized = relativePath ? path.normalize(relativePath) : '';
+
+    // Always route to run storage when executionId is available
+    const executionId = this.activeExecutionId;
+    if (executionId) {
+      const runDir = getRunDir(executionId);
+      const runAbsolute = path.join(runDir, normalized);
+      return createRunStorageLocation(runAbsolute, normalized, executionId);
+    }
+
+    // Fallback to workspace when no execution context
+    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
+  }
+
+  /**
    * Create a FileLocation from a workspace-relative path, with run-storage awareness.
    * This is the preferred method for creating output file locations.
    *
