@@ -116,7 +116,8 @@ export async function refreshModelListIfNeeded(): Promise<void> {
     if (isConfigExplicitlySet('texra.models')) {
       // User has customized - merge new defaults into their list
       const currentModels =
-        vscode.workspace.getConfiguration('texra').get<string[]>('models') ?? [];
+        vscode.workspace.getConfiguration('texra').get<string[]>('models') ??
+        [];
 
       const modelsToAdd = DEFAULT_MODELS.filter(
         (model) => !currentModels.includes(model),
@@ -153,7 +154,10 @@ export async function refreshModelListIfNeeded(): Promise<void> {
       });
     }
 
-    await globalSM.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION);
+    await globalSM.update(
+      GlobalStateKey.MODEL_LIST_VERSION,
+      MODEL_LIST_VERSION,
+    );
     logger.info('extension', 'Model list refresh completed successfully');
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
