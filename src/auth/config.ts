@@ -65,6 +65,77 @@ export function isSupabaseConfigured(): boolean {
 export const OAUTH_PROVIDERS = ['github', 'google', 'gitlab'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
+// ============================================================================
+// User Groups & Permissions
+// ============================================================================
+
+/**
+ * Known permissions used in the system.
+ * New permissions can be added to the database without code changes,
+ * but these constants provide type safety for common checks.
+ */
+export const PERMISSIONS = {
+  /** Access to remote agents feature */
+  ACCESS_REMOTE_AGENTS: 'access_remote_agents',
+  /** Access to agents with 'researcher' visibility */
+  ACCESS_RESEARCHER_VISIBILITY: 'access_researcher_visibility',
+} as const;
+
+export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+/**
+ * User group information returned from the database.
+ */
+export interface UserGroup {
+  id: string;
+  name: string;
+  displayName: string;
+  permissions: string[];
+  priority: number;
+}
+
+/**
+ * User's authorization context including groups and permissions.
+ */
+export interface UserAuthContext {
+  /** All groups the user belongs to */
+  groups: UserGroup[];
+  /** Flattened list of all permissions from all groups */
+  permissions: string[];
+  /** Primary group (highest priority) - for backwards compatibility */
+  primaryGroup: string;
+}
+
+/**
+ * Check if a permission array includes a specific permission.
+ */
+export function hasPermission(
+  permissions: string[],
+  permission: string,
+): boolean {
+  return permissions.includes(permission);
+}
+
+/**
+ * Check if a permission array includes any of the specified permissions.
+ */
+export function hasAnyPermission(
+  permissions: string[],
+  requiredPermissions: string[],
+): boolean {
+  return requiredPermissions.some((p) => permissions.includes(p));
+}
+
+/**
+ * Check if a permission array includes all of the specified permissions.
+ */
+export function hasAllPermissions(
+  permissions: string[],
+  requiredPermissions: string[],
+): boolean {
+  return requiredPermissions.every((p) => permissions.includes(p));
+}
+
 /**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.

@@ -22,6 +22,7 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       authenticated: message.authenticated,
       user: message.user,
       tier: message.tier,
+      permissions: message.permissions || [],
       remoteAgents: message.remoteAgents,
     });
 
@@ -30,6 +31,7 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       message.authenticated,
       message.user,
       message.tier,
+      message.permissions || [],
       message.remoteAgents,
     );
   }
