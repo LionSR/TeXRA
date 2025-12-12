@@ -21,7 +21,8 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  visibility: 'public' | 'researcher' | 'whitelist';
+  /** Visibility level - determines required permission for access */
+  visibility: string;
   agentType?: string;
 }
 
