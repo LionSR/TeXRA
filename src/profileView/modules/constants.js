@@ -43,5 +43,5 @@ export const LABELS = {
 
 // Default values
 export const DEFAULTS = {
-  AGENT_TYPE: 'CoT',
+  AGENT_CATEGORY: 'workflow',
 };

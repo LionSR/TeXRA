@@ -189,10 +189,10 @@ export class AgentsTable {
     const agentName = row.querySelector('.agent-name');
     if (agentName) agentName.textContent = agent.name;
 
-    // Set agent type badge
+    // Set agent category badge (workflow or toolUse)
     const typeBadge = row.querySelector('.type-badge');
     if (typeBadge) {
-      typeBadge.textContent = agent.agentType || DEFAULTS.AGENT_TYPE;
+      typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
     }
 
     // Set description

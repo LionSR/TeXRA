@@ -1,12 +1,21 @@
--- Migration: Flexible Permissions (Simplified)
--- Adds permissions array directly to profiles table
--- No new tables needed - just one column addition
+-- Migration: Flexible Permissions & Agent Categories
+-- 1. Adds permissions array to profiles table
+-- 2. Adds agent_category to remote_agents table
 
 -- ============================================================================
 -- STEP 1: Add permissions column to profiles
 -- ============================================================================
 ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
+
+-- ============================================================================
+-- STEP 1b: Add agent_category column to remote_agents
+-- ============================================================================
+-- Values: 'workflow' (default) or 'toolUse'
+-- This is the user-facing category, not the implementation detail (CoT/direct)
+ALTER TABLE remote_agents
+ADD COLUMN IF NOT EXISTS agent_category TEXT DEFAULT 'workflow'
+CHECK (agent_category IN ('workflow', 'toolUse'));
 
 -- ============================================================================
 -- STEP 2: Migrate existing tiers to permissions
