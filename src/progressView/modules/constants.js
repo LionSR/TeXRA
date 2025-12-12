@@ -109,27 +109,20 @@ const WORKFLOW_TOOLBAR = [
     id: ELEMENT_IDS.RUN_NEW_BTN,
     icon: 'debug-start',
     command: COMMANDS.RUN_NEW,
-    title: 'Start a new run for this task',
+    title: 'Start a fresh run (discards previous outputs)',
     className: 'run-button run-new-button',
     disabled: true,
   },
   {
     id: ELEMENT_IDS.RUN_AGAIN_BTN,
-    icon: 'debug-rerun',
+    icon: 'debug-continue',
     command: COMMANDS.RUN_AGAIN,
-    title: 'Resume the last run from saved outputs',
+    title: 'Resume from saved outputs (continues where it left off)',
     className: 'run-button run-again-button toolbar-button--hidden',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
-    icon: 'refresh',
-    command: COMMANDS.RETRY_STREAM_REQUEST,
-    title: 'Retry the last failed request for this stream',
-    className: 'retry-button',
-    disabled: true,
-  },
   RESTORE_STATE_BUTTON,
+  { ...OPEN_TASK_STORAGE_BUTTON },
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
@@ -159,14 +152,6 @@ const WORKFLOW_TOOLBAR = [
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
-  {
-    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
-    icon: 'refresh',
-    command: COMMANDS.RETRY_STREAM_REQUEST,
-    title: 'Retry the last failed request for this stream',
-    className: 'retry-button',
-    disabled: true,
-  },
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
