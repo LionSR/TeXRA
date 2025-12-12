@@ -114,3 +114,14 @@ export function setRuntimeExtensionId(id: string): void {
 export function getExtensionId(): string {
   return runtimeExtensionId ?? EXTENSION_ID;
 }
+
+/**
+ * Get the OAuth callback URI for redirects.
+ * Used by both OAuth and magic link flows.
+ */
+export function getAuthCallbackUri(uriScheme: string): string {
+  return `${uriScheme}://${getExtensionId()}/auth-callback`;
+}
+
+/** Timeout for waiting for OAuth callback (2 minutes in ms) */
+export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
