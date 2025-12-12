@@ -277,6 +277,16 @@ export function buildOpenAIWebSearchResult(
 }
 
 /**
+ * Check if a web search item has meaningful data (action field with query).
+ * During streaming, web search items may be emitted without the action field,
+ * which results in empty searches being displayed. Use this to filter them out.
+ */
+export function hasOpenAIWebSearchData(item: ResponseFunctionWebSearch): boolean {
+  const searchItem = item as ResponseFunctionWebSearchWithAction;
+  return Boolean(searchItem.action?.query);
+}
+
+/**
  * Extract web search results from OpenAI Responses API output.
  * Uses SDK's ResponseFunctionWebSearch type for proper typing.
  *
