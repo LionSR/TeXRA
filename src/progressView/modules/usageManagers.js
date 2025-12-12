@@ -1,6 +1,6 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from './constants.js';
-import { formatTokens } from './formatters.js';
+import { formatTokens } from './formatters/index.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 

@@ -39,6 +39,7 @@ import {
   type ApprovalEventsModule,
   type ApprovalEventsShared,
 } from './ApprovalEvents';
+import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -53,6 +54,7 @@ export class ProgressEventHandler {
   private readonly logEvents: LogEventsModule;
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
+  private readonly todoEvents: TodoEventsModule;
   private readonly retryEvents: RetryEventsModule;
   private readonly approvalEvents: ApprovalEventsModule;
 
@@ -98,6 +100,10 @@ export class ProgressEventHandler {
         this.initializeStreamForTaskGroup(stream),
       debugLog: (message) => this.logger.debug(message),
     });
+    this.todoEvents = createTodoEvents({
+      withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
+      debugLog: (message) => this.logger.debug(message),
+    });
     this.retryEvents = createRetryEventsModule({
       withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
       showRetryRequest: callbacks.showRetryRequest,
@@ -134,6 +140,9 @@ export class ProgressEventHandler {
     );
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
+    );
+    disposables.push(
+      ...this.todoEvents.register(bus, this.state, this.webviewUpdater),
     );
     disposables.push(...this.retryEvents.register(bus));
     disposables.push(...this.approvalEvents.register(bus));
@@ -269,6 +278,13 @@ export class ProgressEventHandler {
         rounds,
       });
     });
+
+    // Refresh todos for the stream (ephemeral state)
+    // Always send todos if defined (including empty array to clear stale UI)
+    const todos = this.state.getTodos(stream);
+    if (todos !== undefined) {
+      this.webviewUpdater.updateTodos(stream, todos);
+    }
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;

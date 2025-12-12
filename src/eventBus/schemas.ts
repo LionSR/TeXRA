@@ -58,3 +58,41 @@ export const RunScopedPayloadSchema = z.strictObject({
   executionId: ExecutionIdSchema.optional(),
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
+
+/**
+ * Todo status constants - single source of truth for todo item states.
+ * Used by tool-use agents for task tracking.
+ */
+export const TODO_STATUS = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+} as const;
+
+/** Status of a todo item */
+export const TodoStatusSchema = z
+  .enum([TODO_STATUS.PENDING, TODO_STATUS.IN_PROGRESS, TODO_STATUS.COMPLETED])
+  .describe('Current status of the task');
+export type TodoStatus = z.infer<typeof TodoStatusSchema>;
+
+/** Schema for a single todo item (single source of truth for all todo schemas) */
+export const TodoItemSchema = z.strictObject({
+  /** The task description in imperative form */
+  content: z.string().min(1).describe('Task description in imperative form'),
+  /** Current status of the task */
+  status: TodoStatusSchema,
+  /** Present continuous form shown during execution */
+  activeForm: z
+    .string()
+    .min(1)
+    .describe('Present continuous form for display during execution'),
+});
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+
+/** Payload for updating todos in a stream */
+export const UpdateTodosPayloadSchema = z.strictObject({
+  stream: StreamTabIdSchema,
+  executionId: ExecutionIdSchema.optional(),
+  todos: z.array(TodoItemSchema),
+});
+export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;

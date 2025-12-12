@@ -16,6 +16,7 @@ import * as path from 'path';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
 import { pathToLocation } from '@utils/files';
+import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -53,6 +54,19 @@ export interface ToolUseCycleInput<C = unknown> {
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,
 ): Promise<void> {
+  const { options, store } = input;
+  const { context } = options;
+
+  // Set up todo update callback to emit changes to the progress view
+  // This callback is invoked when the todo_write tool updates todos
+  store.workspace.todos.setOnUpdate((todos: TodoItem[]) => {
+    bus.emit('updateTodos', {
+      stream: context.streamId,
+      executionId: context.executionId,
+      todos,
+    });
+  });
+
   // Shared state contains only mutable data that flows through nodes.
   // Services (options, store) are injected via setParams().
   const shared: ToolUseCycleShared<C> = {
@@ -70,8 +84,17 @@ export async function runToolUseCycle<C = unknown>(
 
   const flow = createToolUseCycleFlow<C>();
   // Inject immutable services via params (PocketFlow pattern)
-  flow.setParams({ services: { options: input.options, store: input.store } });
-  await flow.run(shared);
+  flow.setParams({
+    services: { options: input.options, store: input.store },
+  });
+
+  try {
+    await flow.run(shared);
+  } finally {
+    // Clear the todo update callback to prevent memory leaks
+    // The callback holds references to context that would otherwise be GC'd
+    store.workspace.todos.clearOnUpdate();
+  }
 
   // Emit edited files to the progress view
   emitEditedFiles(input);

@@ -91,6 +91,10 @@ export const MAIN_VIEW_COMMANDS = {
   UPDATE_DEPENDENCY_REMINDER_SETTING: 'updateDependencyReminderSetting',
   SHOW_GETTING_STARTED_BANNER: 'showGettingStartedBanner',
   HIDE_GETTING_STARTED_BANNER: 'hideGettingStartedBanner',
+  SHOW_LOGIN_BANNER: 'showLoginBanner',
+  HIDE_LOGIN_BANNER: 'hideLoginBanner',
+  SIGN_IN_FROM_BANNER: 'signInFromBanner',
+  DISMISS_LOGIN_BANNER: 'dismissLoginBanner',
 
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
@@ -168,6 +172,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Task Groups
   ADD_TASK_GROUP: 'addTaskGroup',
   UPDATE_TASK_GROUP: 'updateTaskGroup',
+
+  // Todo List
+  UPDATE_TODOS: 'updateTodos',
 
   // Status and files
   UPDATE_STATUS: 'updateStatus',
