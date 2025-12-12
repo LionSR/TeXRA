@@ -60,9 +60,9 @@ export function isSupabaseConfigured(): boolean {
 
 /**
  * Supported OAuth providers for TeXRA authentication.
- * All providers are supported - no need for user configuration.
+ * Users can choose between GitHub and Google during sign-in.
  */
-export const OAUTH_PROVIDERS = ['github', 'google', 'gitlab'] as const;
+export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 /**
