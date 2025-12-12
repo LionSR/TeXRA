@@ -95,6 +95,12 @@ export class OutputFilesManager {
 
       container.style.display = shouldShow ? 'block' : 'none';
       setChevronIcon(toggleIcon, shouldShow);
+
+      // Set data-expanded on parent .file-select for CSS styling
+      const fileSelect = container.closest('.file-select');
+      if (fileSelect) {
+        fileSelect.dataset.expanded = shouldShow ? 'true' : 'false';
+      }
     }
   }
 }
