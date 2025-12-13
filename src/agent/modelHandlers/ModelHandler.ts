@@ -25,7 +25,10 @@ import { getConfig } from '@utils/config';
 // Local file imports
 import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
-import { resolveBaseUrl, shouldUseOpenRouter } from './support/ProxyConfigResolver';
+import {
+  resolveBaseUrl,
+  shouldUseOpenRouter,
+} from './support/ProxyConfigResolver';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
 import {
