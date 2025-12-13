@@ -4,6 +4,24 @@
  * Server-side keys allow Ultra tier users to access AI models without
  * providing their own API keys. The keys are stored as Supabase Edge
  * Function secrets and accessed via the relay function.
+ *
+ * INITIALIZATION REQUIREMENTS:
+ * ----------------------------
+ * The `canUseServerSideKeys()` async function MUST be called at least once
+ * before `shouldUseServerSideKeysSync()` will return true. This is because:
+ *
+ * 1. `canUseServerSideKeys()` performs the async authentication and tier check
+ * 2. It caches the result in `lastKnownAccessResult`
+ * 3. `shouldUseServerSideKeysSync()` uses this cached value for sync decisions
+ *
+ * Call Sequence:
+ * - `canUseServerSideKeys()` is called in `computeModelOptions()` when rendering
+ *   the model dropdown, which primes the cache
+ * - `shouldUseServerSideKeysSync()` is then safe to call from sync functions
+ *   like `resolveBaseUrl()` and `getApiKey()`
+ *
+ * If `canUseServerSideKeys()` hasn't been called, `shouldUseServerSideKeysSync()`
+ * will return false, causing fallback to normal API key behavior.
  */
 
 import { getConfig } from '@utils/config';
@@ -107,9 +125,16 @@ export async function canUseServerSideKeys(): Promise<boolean> {
  * 2. The provider is supported
  * 3. A previous async check (canUseServerSideKeys) confirmed access
  *
+ * PREREQUISITE: canUseServerSideKeys() must have been called and completed
+ * before this function will return true. This typically happens when:
+ * - computeModelOptions() renders the model dropdown
+ * - Any other code path that calls canUseServerSideKeys() first
+ *
  * If canUseServerSideKeys() hasn't been called yet or returned false,
  * this will return false to ensure URL routing and API key retrieval
- * stay synchronized.
+ * stay synchronized. This is intentional - it causes safe fallback to
+ * normal API key behavior rather than sending requests to the relay
+ * that would fail authentication.
  *
  * This synchronous function is needed because getBaseUrl() is synchronous.
  */
