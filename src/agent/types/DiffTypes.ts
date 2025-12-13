@@ -2,11 +2,11 @@
  * Diff statistic schema used for file comparisons.
  * Derives from LineChangesSchema (single source of truth) with optional fields.
  */
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - tools (single source of truth)
 import { LineChangesSchema } from '@tools/result';
-
-// Third-party imports
-import type { z } from 'zod';
 
 /**
  * Schema for diff statistics - partial version of LineChanges.

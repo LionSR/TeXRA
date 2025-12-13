@@ -56,13 +56,10 @@ export type LogMessageData = z.infer<typeof LogMessageDataSchema>;
 
 /**
  * Log message update schema - partial update for existing log entries.
- * Derives from LogMessageDataSchema using composition.
+ * All fields optional except id (required for identifying the entry to update).
  */
-export const LogMessageUpdateSchema = LogMessageDataSchema.pick({
+export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
   id: true,
-}).extend({
-  // Optional fields that can be updated
-  ...LogMessageDataSchema.omit({ id: true }).partial().shape,
 });
 
 export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;
