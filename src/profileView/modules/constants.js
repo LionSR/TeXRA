@@ -34,7 +34,7 @@ export const CLASS_NAMES = {
 // Text labels and messages
 export const LABELS = {
   TIER_FREE_MESSAGE:
-    'Upgrade to Max or Ultra tier to access premium remote agents.',
+    'Join the research access program to access premium remote agents.',
   TIER_PREMIUM_MESSAGE: 'You have access to premium remote agents.',
   NO_AGENTS_MESSAGE:
     'No remote agents available. Contact support@texra.ai for assistance.',
