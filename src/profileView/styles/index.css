@@ -194,9 +194,9 @@ h2 {
 }
 
 .multi-output-badge.not-supported {
-  background: var(--vscode-descriptionForeground);
-  color: var(--vscode-editor-background);
-  opacity: 0.6;
+  background: var(--vscode-input-background);
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
 }
 
 /* Select button */
