@@ -20,6 +20,8 @@ export function defineTool<T>(def: {
       unrepresentable: 'any',
       io: 'input',
     }) as Record<string, unknown>,
+    // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
+    zodSchema: def.schema,
   };
 
   abstract class GeneratedTool extends BaseTool<T> {

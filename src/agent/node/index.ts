@@ -1,3 +1,5 @@
+import { sleep } from '@utils/helpers';
+
 type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
@@ -108,8 +110,7 @@ class Node<
         const isAborted = this.signal?.aborted === true;
         if (this.currentRetry === this.maxRetries - 1 || isAborted)
           return await this.execFallback(prepRes, e as Error);
-        if (this.wait > 0)
-          await new Promise((resolve) => setTimeout(resolve, this.wait * 1000));
+        if (this.wait > 0) await sleep(this.wait * 1000);
       }
     }
     return undefined;
