@@ -89,13 +89,27 @@ export interface UserAuthContext {
 }
 
 /**
- * Check if user has access to a specific visibility level.
+ * Tier values for future server-side API key access.
+ */
+export type UserTier = 'free' | 'Max' | 'Ultra';
+
+/**
+ * Check if user has access to an agent's visibility levels.
+ * Returns true if:
+ * - Agent visibility includes 'public', OR
+ * - There's any overlap between agent visibility and user permissions
  */
 export function hasVisibilityAccess(
   permissions: string[],
-  visibility: string,
+  visibility: string | string[],
 ): boolean {
-  return visibility === 'public' || permissions.includes(visibility);
+  const visibilityArray = Array.isArray(visibility) ? visibility : [visibility];
+  // Public agents are always accessible
+  if (visibilityArray.includes('public')) {
+    return true;
+  }
+  // Check for any overlap between visibility and permissions
+  return visibilityArray.some((v) => permissions.includes(v));
 }
 
 /**

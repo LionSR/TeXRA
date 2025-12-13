@@ -65,7 +65,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     const remoteAgents = entries.map((entry) => ({
       name: entry.name,
       description: entry.description || '',
-      visibility: entry.visibility || 'public',
+      visibility: entry.visibility || ['public'],
       category: entry.category || 'workflow',
     }));
 
