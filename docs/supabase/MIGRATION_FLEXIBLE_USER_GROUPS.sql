@@ -1,68 +1,66 @@
 -- Migration: Flexible Permissions & Agent Categories
--- 1. Adds permissions array to profiles table
--- 2. Adds agent_category to remote_agents table
--- 3. Drops visibility CHECK constraint for extensibility
+-- 1. Adds permissions array to profiles (visibility values user can access)
+-- 2. Adds agent_category to remote_agents (workflow/toolUse)
+-- 3. Removes agent_type, drops visibility CHECK constraint
 
 -- ============================================================================
 -- STEP 1: Add permissions column to profiles
 -- ============================================================================
+-- Permissions are just visibility values: 'researcher', 'math', 'cs', etc.
+-- User can see agents where visibility = ANY(permissions)
 ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
 
 -- ============================================================================
--- STEP 1b: Drop visibility CHECK constraint to allow extensible values
+-- STEP 2: Drop constraints for extensibility
 -- ============================================================================
--- This enables adding new visibility levels (e.g., 'enterprise') without schema changes
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_visibility_check;
+ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_agent_type_check;
 
 -- ============================================================================
--- STEP 1c: Add agent_category column to remote_agents
+-- STEP 3: Add agent_category, drop agent_type
 -- ============================================================================
--- Values: 'workflow' (default) or 'toolUse'
--- This is the user-facing category, not the implementation detail (CoT/direct)
 ALTER TABLE remote_agents
 ADD COLUMN IF NOT EXISTS agent_category TEXT DEFAULT 'workflow'
 CHECK (agent_category IN ('workflow', 'toolUse'));
 
--- ============================================================================
--- STEP 1d: Migrate existing agent_type values to agent_category
--- ============================================================================
--- toolUse agent_type -> toolUse category
--- CoT/direct agent_type -> workflow category (default)
+-- Migrate existing agent_type='toolUse' to agent_category='toolUse'
 UPDATE remote_agents
 SET agent_category = 'toolUse'
-WHERE agent_type = 'toolUse' AND (agent_category IS NULL OR agent_category = 'workflow');
+WHERE agent_type = 'toolUse';
+
+-- Drop agent_type column (optional - can keep for backwards compat)
+-- ALTER TABLE remote_agents DROP COLUMN IF EXISTS agent_type;
 
 -- ============================================================================
--- STEP 2: Migrate existing tiers to permissions
+-- STEP 4: Migrate existing tier='researcher' to permissions
 -- ============================================================================
 UPDATE profiles
-SET permissions = ARRAY['access_remote_agents', 'access_researcher_visibility']
+SET permissions = ARRAY['researcher']
 WHERE tier = 'researcher' AND (permissions IS NULL OR permissions = '{}');
 
 -- ============================================================================
--- STEP 3: Create helper function for permission checks
+-- STEP 5: Create helper function for permission checks
 -- ============================================================================
-CREATE OR REPLACE FUNCTION user_has_permission(required_permission TEXT)
+CREATE OR REPLACE FUNCTION user_has_visibility_access(required_visibility TEXT)
 RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
+  SELECT required_visibility = 'public' OR EXISTS (
     SELECT 1 FROM profiles
     WHERE user_id = auth.uid()
-      AND required_permission = ANY(permissions)
+      AND required_visibility = ANY(permissions)
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- ============================================================================
--- STEP 4: Update remote_agents RLS policy
+-- STEP 6: Update remote_agents RLS policy
 -- ============================================================================
 DROP POLICY IF EXISTS "Users can view allowed agents" ON remote_agents;
 
--- Dynamic permission check: visibility -> 'access_{visibility}_visibility'
 CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
   USING (
     visibility = 'public' OR
-    user_has_permission('access_' || visibility || '_visibility') OR
+    visibility = ANY((SELECT permissions FROM profiles WHERE user_id = auth.uid())) OR
     EXISTS (
       SELECT 1 FROM agent_whitelist
       WHERE agent_id = id AND user_id = auth.uid()
@@ -70,7 +68,7 @@ CREATE POLICY "Users can view allowed agents"
   );
 
 -- ============================================================================
--- STEP 5: Update storage RLS policy
+-- STEP 7: Update storage RLS policy
 -- ============================================================================
 DROP POLICY IF EXISTS "Researcher access users can read agent configs" ON storage.objects;
 DROP POLICY IF EXISTS "Users can read allowed agent configs" ON storage.objects;
@@ -81,7 +79,7 @@ USING (
   bucket_id = 'agent-configs' AND
   (
     (storage.foldername(name))[1] = 'public' OR
-    user_has_permission('access_' || (storage.foldername(name))[1] || '_visibility') OR
+    (storage.foldername(name))[1] = ANY((SELECT permissions FROM profiles WHERE user_id = auth.uid())) OR
     EXISTS (
       SELECT 1 FROM agent_whitelist aw
       JOIN remote_agents ra ON aw.agent_id = ra.id
@@ -92,28 +90,26 @@ USING (
 );
 
 -- ============================================================================
--- STEP 6: Verify
+-- STEP 8: Verify
 -- ============================================================================
 SELECT email, tier, permissions FROM profiles LIMIT 10;
+SELECT name, visibility, agent_category FROM remote_agents LIMIT 10;
 
 -- ============================================================================
 -- USAGE EXAMPLES
 -- ============================================================================
 
--- Grant a user access to remote agents:
--- UPDATE profiles SET permissions = array_append(permissions, 'access_remote_agents')
+-- Grant user access to 'researcher' visibility agents:
+-- UPDATE profiles SET permissions = array_append(permissions, 'researcher')
 -- WHERE email = 'user@example.com';
 
--- Grant multiple permissions:
--- UPDATE profiles SET permissions = permissions || ARRAY['access_remote_agents', 'access_researcher_visibility']
+-- Grant access to multiple visibility levels:
+-- UPDATE profiles SET permissions = ARRAY['researcher', 'math', 'cs']
 -- WHERE email = 'user@example.com';
 
--- Revoke a permission:
--- UPDATE profiles SET permissions = array_remove(permissions, 'access_remote_agents')
--- WHERE email = 'user@example.com';
+-- Add a new agent for mathematicians:
+-- INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
+-- VALUES ('proof-assistant', 'Helps with proofs', 'math/proof.yaml', 'math', 'workflow');
+-- Then grant users: UPDATE profiles SET permissions = array_append(permissions, 'math') WHERE ...
 
--- Add a new visibility level (e.g., 'enterprise'):
--- 1. Set agent visibility: UPDATE remote_agents SET visibility = 'enterprise' WHERE name = 'my-agent';
--- 2. Grant permission: UPDATE profiles SET permissions = array_append(permissions, 'access_enterprise_visibility')
---    WHERE email = 'user@example.com';
--- No code changes needed!
+-- Note: 'tier' column is reserved for future server-side API key access
