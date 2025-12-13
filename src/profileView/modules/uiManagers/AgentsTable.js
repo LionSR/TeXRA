@@ -90,7 +90,7 @@ export class AgentsTable {
       const hasAnyPermissions =
         Array.isArray(permissions) && permissions.length > 0;
       tierMessage.textContent = hasAnyPermissions
-        ? LABELS.TIER_RESEARCHER_MESSAGE
+        ? LABELS.TIER_PREMIUM_MESSAGE
         : LABELS.TIER_FREE_MESSAGE;
     }
 

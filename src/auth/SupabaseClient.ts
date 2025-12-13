@@ -184,12 +184,7 @@ export class SupabaseClient {
       }
 
       const tier = (data.tier as string) || 'free';
-      let permissions = (data.permissions as string[]) || [];
-
-      // Legacy fallback: if permissions empty and tier='researcher', grant 'researcher' visibility
-      if (permissions.length === 0 && tier === 'researcher') {
-        permissions = ['researcher'];
-      }
+      const permissions = (data.permissions as string[]) || [];
 
       return {
         permissions,
