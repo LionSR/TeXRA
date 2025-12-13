@@ -68,6 +68,10 @@ WHERE visibility_old IS NOT NULL;
 -- Drop old column
 ALTER TABLE remote_agents DROP COLUMN visibility_old;
 
+-- Add GIN indexes for array overlap performance
+CREATE INDEX IF NOT EXISTS idx_remote_agents_visibility ON remote_agents USING GIN(visibility);
+CREATE INDEX IF NOT EXISTS idx_profiles_permissions ON profiles USING GIN(permissions);
+
 -- ============================================================================
 -- STEP 7: Add agent_category column
 -- ============================================================================
@@ -146,13 +150,19 @@ USING (
 -- ============================================================================
 -- STEP 11: Fix nested visibility arrays (if migration ran incorrectly)
 -- ============================================================================
--- If visibility shows [[["public"]]] instead of ["public"], fix it:
+-- If visibility shows [[["public"]]] instead of ["public"], fix it.
+-- NOTE: These fixes extract the inner array to preserve all elements.
+-- For 3D arrays like [[['math', 'cs']]], visibility[1][1] gives ['math', 'cs']
+-- For 2D arrays like [['math', 'cs']], visibility[1] gives ['math', 'cs']
+
+-- Fix 3D arrays: [[['a', 'b']]] -> ['a', 'b']
 UPDATE remote_agents
-SET visibility = ARRAY[visibility[1][1][1]]
+SET visibility = visibility[1][1]
 WHERE array_ndims(visibility) = 3;
 
+-- Fix 2D arrays: [['a', 'b']] -> ['a', 'b']
 UPDATE remote_agents
-SET visibility = ARRAY[visibility[1][1]]
+SET visibility = visibility[1]
 WHERE array_ndims(visibility) = 2;
 
 -- ============================================================================
