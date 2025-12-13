@@ -112,6 +112,13 @@ CREATE POLICY "Users can view allowed agents"
 -- ============================================================================
 -- STEP 10: Update storage RLS policy
 -- ============================================================================
+-- NOTE: This storage policy is defense-in-depth only.
+-- Primary access control is on remote_agents table (using array overlap &&).
+-- The Edge Function verifies access via remote_agents RLS first, then uses
+-- an admin client to bypass storage RLS. Store agents in a folder matching
+-- their primary visibility level (e.g., researcher/agent.yaml for an agent
+-- with visibility = ['researcher', 'math']).
+
 -- Drop ALL existing storage policies
 DROP POLICY IF EXISTS "Researcher access users can read agent configs" ON storage.objects;
 DROP POLICY IF EXISTS "Users can read allowed agent configs" ON storage.objects;
@@ -124,7 +131,7 @@ USING (
   (
     -- Public folder
     (storage.foldername(name))[1] = 'public' OR
-    -- Folder matches any of user's permissions (use @> contains operator)
+    -- Defense-in-depth: check if user has permission for folder
     (SELECT permissions FROM profiles WHERE user_id = auth.uid()) @> ARRAY[(storage.foldername(name))[1]] OR
     -- Whitelist access
     EXISTS (
