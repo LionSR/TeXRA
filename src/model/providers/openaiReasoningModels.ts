@@ -244,7 +244,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.1,
-      reasoningEffort: ReasoningEffort.NONE,
+      reasoningEffort: ReasoningEffort.HIGH,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
