@@ -180,7 +180,10 @@ export class AgentsTable {
       if (agent.supportsMultipleOutput) {
         icon.classList.add('codicon-check');
         multiOutputBadge.classList.add('supported');
-        multiOutputBadge.setAttribute('aria-label', 'Supports multiple outputs');
+        multiOutputBadge.setAttribute(
+          'aria-label',
+          'Supports multiple outputs',
+        );
       } else {
         icon.classList.add('codicon-close');
         multiOutputBadge.classList.add('not-supported');
