@@ -106,15 +106,27 @@ export type UserTier = 'free' | 'Max' | 'Ultra';
  */
 export function hasVisibilityAccess(
   permissions: string[],
-  visibility: string | string[],
+  visibility: string | string[] | undefined | null,
 ): boolean {
+  // Handle undefined/null visibility - treat as public
+  if (!visibility) {
+    return true;
+  }
   const visibilityArray = Array.isArray(visibility) ? visibility : [visibility];
+  // Filter out any undefined/null elements
+  const cleanedVisibility = visibilityArray.filter(
+    (v): v is string => typeof v === 'string',
+  );
+  // Empty visibility array is treated as public
+  if (cleanedVisibility.length === 0) {
+    return true;
+  }
   // Public agents are always accessible
-  if (visibilityArray.includes('public')) {
+  if (cleanedVisibility.includes('public')) {
     return true;
   }
   // Check for any overlap between visibility and permissions
-  return visibilityArray.some((v) => permissions.includes(v));
+  return cleanedVisibility.some((v) => permissions.includes(v));
 }
 
 /**

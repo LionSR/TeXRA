@@ -67,12 +67,12 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
-.tier-badge.Max {
+.tier-badge.max {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-.tier-badge.Ultra {
+.tier-badge.ultra {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
 }
@@ -161,16 +161,6 @@ h2 {
 .visibility-badge.public {
   background: var(--vscode-testing-iconPassed);
   color: white;
-}
-
-.visibility-badge.researcher {
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-}
-
-.visibility-badge.whitelist {
-  background: var(--vscode-inputValidation-warningBackground);
-  color: var(--vscode-inputValidation-warningForeground);
 }
 
 .visibility-badge.custom {

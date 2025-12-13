@@ -80,7 +80,8 @@ export class AgentsTable {
     const tierBadge = safeGetElementById(ELEMENT_IDS.USER_TIER);
     if (tierBadge) {
       tierBadge.textContent = tier;
-      tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier}`;
+      // Normalize tier to lowercase for CSS class consistency
+      tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
     }
 
     // Update tier message based on whether user has any permissions
