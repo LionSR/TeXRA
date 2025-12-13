@@ -14,7 +14,10 @@ import type {
   Schema,
   GoogleSearch,
 } from '@google/genai/dist/genai';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionTool,
+  ChatCompletionFunctionTool,
+} from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
   WebSearchTool,
@@ -73,6 +76,8 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
     }
 
     // Fallback to manual conversion for legacy definitions
+    // Cast to ChatCompletionFunctionTool since ToolDefinition.parameters
+    // is a union type that includes provider-specific schemas
     return {
       type: 'function',
       function: {
@@ -80,7 +85,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
         description: d.description,
         parameters: d.parameters,
       },
-    };
+    } as ChatCompletionFunctionTool;
   });
 }
 
