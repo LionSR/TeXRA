@@ -13,9 +13,15 @@ ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
 
 -- ============================================================================
--- STEP 2: Migrate existing tier='researcher' to permissions and Max tier
+-- STEP 2: Drop old tier constraint FIRST
 -- ============================================================================
--- Before changing tier constraint, migrate researcher users to have 'researcher' permission
+-- Must drop before changing tier values, as old constraint only allows ('free', 'researcher')
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_tier_check;
+
+-- ============================================================================
+-- STEP 3: Migrate existing tier='researcher' to permissions and Max tier
+-- ============================================================================
+-- Migrate researcher users to have 'researcher' permission
 UPDATE profiles
 SET permissions = ARRAY['researcher']
 WHERE tier = 'researcher' AND (permissions IS NULL OR permissions = '{}');
@@ -26,15 +32,14 @@ SET tier = 'Max'
 WHERE tier = 'researcher';
 
 -- ============================================================================
--- STEP 3: Update tier constraint to support free/Max/Ultra
+-- STEP 4: Add new tier constraint (free/Max/Ultra)
 -- ============================================================================
 -- Tier is for future server-side API key access levels
-ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_tier_check;
 ALTER TABLE profiles
 ADD CONSTRAINT profiles_tier_check CHECK (tier IN ('free', 'Max', 'Ultra'));
 
 -- ============================================================================
--- STEP 4: Drop old constraints and policies BEFORE modifying columns
+-- STEP 5: Drop old constraints and policies BEFORE modifying columns
 -- ============================================================================
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_visibility_check;
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_agent_type_check;
@@ -45,7 +50,7 @@ DROP POLICY IF EXISTS "Users can view public agents" ON remote_agents;
 DROP POLICY IF EXISTS "Researchers can view researcher agents" ON remote_agents;
 
 -- ============================================================================
--- STEP 5: Convert visibility from TEXT to TEXT[] (array)
+-- STEP 6: Convert visibility from TEXT to TEXT[] (array)
 -- ============================================================================
 -- This allows agents to be visible to multiple user groups
 -- First, rename old column
@@ -64,7 +69,7 @@ WHERE visibility_old IS NOT NULL;
 ALTER TABLE remote_agents DROP COLUMN visibility_old;
 
 -- ============================================================================
--- STEP 6: Add agent_category column
+-- STEP 7: Add agent_category column
 -- ============================================================================
 ALTER TABLE remote_agents
 ADD COLUMN IF NOT EXISTS agent_category TEXT DEFAULT 'workflow'
@@ -76,7 +81,7 @@ SET agent_category = 'toolUse'
 WHERE agent_type = 'toolUse';
 
 -- ============================================================================
--- STEP 7: Create helper function for permission checks
+-- STEP 8: Create helper function for permission checks
 -- ============================================================================
 CREATE OR REPLACE FUNCTION user_has_visibility_access(required_visibility TEXT[])
 RETURNS BOOLEAN AS $$
@@ -88,7 +93,7 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- ============================================================================
--- STEP 8: Create new remote_agents RLS policy
+-- STEP 9: Create new remote_agents RLS policy
 -- ============================================================================
 CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
@@ -105,7 +110,7 @@ CREATE POLICY "Users can view allowed agents"
   );
 
 -- ============================================================================
--- STEP 9: Update storage RLS policy
+-- STEP 10: Update storage RLS policy
 -- ============================================================================
 -- Drop ALL existing storage policies
 DROP POLICY IF EXISTS "Researcher access users can read agent configs" ON storage.objects;
@@ -132,7 +137,7 @@ USING (
 );
 
 -- ============================================================================
--- STEP 10: Verify
+-- STEP 11: Verify
 -- ============================================================================
 SELECT email, tier, permissions FROM profiles LIMIT 10;
 SELECT name, visibility, agent_category FROM remote_agents LIMIT 10;
