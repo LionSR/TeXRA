@@ -1,6 +1,6 @@
 // Third-party imports
 import { toJSONSchema } from 'zod';
-import { zodFunction, zodResponsesFunction } from 'openai/helpers/zod';
+import { zodFunction } from 'openai/helpers/zod';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -55,6 +55,9 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
  * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which:
  * - Converts Zod schema to JSON Schema using SDK's optimized conversion
  * - Enables strict mode for better type safety
+ *
+ * Note: zodFunction() may throw for invalid schemas - this is intentional fail-fast
+ * behavior since invalid tool schemas are programming errors caught during development.
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d) => {
@@ -94,9 +97,12 @@ export interface OpenAIResponseToolOptions {
 /**
  * Convert generic ToolDefinition objects to OpenAI Responses API tool format.
  *
- * When a tool has a zodSchema, uses OpenAI's native zodResponsesFunction() helper which:
- * - Converts Zod schema to JSON Schema using SDK's optimized conversion
- * - Enables strict mode for better type safety
+ * NOTE: We intentionally don't use zodResponsesFunction() here because it enables
+ * strict mode, which requires all parameters to be required. Tools like Wolfram
+ * have optional fields, so we must use strict: false for the Responses API.
+ *
+ * When a tool has a zodSchema, we use Zod's native toJSONSchema() for conversion
+ * while keeping strict: false for compatibility with optional parameters.
  */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
@@ -124,30 +130,20 @@ export function toOpenAIResponseTools(
       continue;
     }
 
-    // Use native SDK Zod conversion when schema is available
-    // zodResponsesFunction() returns AutoParseableResponseTool which extends FunctionTool
-    // with additional parsing metadata - structurally compatible with OpenAIResponseTool
-    if (d.zodSchema) {
-      tools.push(
-        zodResponsesFunction({
-          name: d.name,
-          description: d.description,
-          parameters: d.zodSchema,
-        }) as OpenAIResponseTool,
-      );
-      continue;
-    }
+    // Use native Zod conversion when schema is available, but keep strict: false
+    // to support tools with optional parameters (e.g., Wolfram timeout field)
+    const params = d.zodSchema
+      ? (toJSONSchema(d.zodSchema) as Record<string, unknown> | null)
+      : ((d.parameters ?? null) as Record<string, unknown> | null);
 
-    // Fallback to manual conversion for legacy definitions
-    const params = (d.parameters ?? null) as Record<string, unknown> | null;
     tools.push({
       type: 'function',
       name: d.name,
       description: d.description,
       parameters: params,
       // Setting strict=true requires an explicit `required` array covering all
-      // parameters. The Wolfram tool uses optional fields, so disable strict
-      // validation to avoid schema errors from the OpenAI Responses API.
+      // parameters. Tools with optional fields need strict: false to avoid
+      // OpenAI Responses API schema errors.
       strict: false,
     } as FunctionTool);
   }
