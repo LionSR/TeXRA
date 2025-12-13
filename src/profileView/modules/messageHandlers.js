@@ -27,13 +27,13 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
     });
 
     // Update UI
-    profileViewDomHandler.agentsTable.render(
-      message.authenticated,
-      message.user,
-      message.tier,
-      message.permissions || [],
-      message.remoteAgents,
-    );
+    profileViewDomHandler.agentsTable.render({
+      authenticated: message.authenticated,
+      user: message.user,
+      tier: message.tier,
+      permissions: message.permissions || [],
+      remoteAgents: message.remoteAgents,
+    });
   }
 }
 
