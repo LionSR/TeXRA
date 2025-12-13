@@ -465,8 +465,8 @@ serve(async (req) => {
         config: yamlContent,
         name: agent.name,
         description: agent.description,
-        visibility: agent.visibility,        // string[] - array of groups
-        agentCategory: agent.agent_category,  // 'workflow' or 'toolUse'
+        visibility: agent.visibility, // string[] - array of groups
+        agentCategory: agent.agent_category, // 'workflow' or 'toolUse'
       }),
       {
         status: 200,
@@ -577,6 +577,7 @@ VALUES (
 ```
 
 Notes:
+
 - `visibility` is an array - agents can be visible to multiple groups
 - `agent_category` can be `'workflow'` (multi-turn) or `'toolUse'` (single-turn with tools)
 
