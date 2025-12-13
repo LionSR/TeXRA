@@ -1,5 +1,5 @@
 // Third-party imports
-import { z } from 'zod';
+import { z, type ZodType } from 'zod';
 
 // Third-party imports - provider tool definitions
 import type { FunctionDefinition } from 'openai/resources/shared';
@@ -19,10 +19,20 @@ export const ToolDefinitionSchema = z.strictObject({
 /**
  * Generic tool definition used across model providers. The parameters field
  * aligns with OpenAI, Anthropic and Google Gemini function schemas.
+ *
+ * When zodSchema is provided, SDK-native Zod helpers can be used for conversion,
+ * avoiding manual JSON Schema transformation and enabling SDK-specific optimizations.
  */
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema> & {
   parameters?:
     | FunctionDefinition['parameters']
     | AnthropicTool['input_schema']
     | GeminiSchema;
+  /**
+   * Original Zod schema for SDK-native Zod support.
+   * When present, conversion functions can use SDK helpers like:
+   * - OpenAI: zodFunction() / zodResponsesFunction()
+   * - Anthropic: betaZodTool() pattern (z.toJSONSchema)
+   */
+  zodSchema?: ZodType;
 };
