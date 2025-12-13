@@ -95,16 +95,20 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     ];
 
     // Direct mapping: \mathrm{op} -> \op and \text{op} -> \op
-    mathOperators.forEach((op) => {
-      // Common variants
-      patterns[`\\mathrm{${op}}`] = `\\${op}`;
-      patterns[`\\text{${op}}`] = `\\${op}`;
-      patterns[`\\mbox{${op}}`] = `\\${op}`;
-      patterns[`\\textrm{${op}}`] = `\\${op}`;
-      patterns[`{\\rm ${op}}`] = `\\${op}`;
-      patterns[`_\\op`] = `_{\\${op}}`;
-      patterns[`^\\op`] = `^{\\${op}}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        mathOperators.flatMap((op) => [
+          [`\\mathrm{${op}}`, `\\${op}`],
+          [`\\text{${op}}`, `\\${op}`],
+          [`\\mbox{${op}}`, `\\${op}`],
+          [`\\textrm{${op}}`, `\\${op}`],
+          [`{\\rm ${op}}`, `\\${op}`],
+          [`_\\op`, `_{\\${op}}`],
+          [`^\\op`, `^{\\${op}}`],
+        ]),
+      ),
+    };
 
     // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})
     // These allow direct subscript/superscript like P_\cmd
@@ -112,18 +116,22 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const textCommands = ['sys', 'bath', 'tot', 'const', 'discrete', 'decoder', 'encoder', 'pool', 'data', 'mar', 'model', 'prior', 'target', 'full', 'observed', 'accept', 'aux', 'eq', 'st', 'nc', 'irr', 'rev', 'hkp', 'adi', 'nadi', 'exc', 'pos', 'head', 'PE', 'class', 'window', 'Output', 'FFN', 'Strat', 'Ito', 'diss'];
 
     // Direct mapping: \text{cmd} -> \cmd
-    textCommands.forEach((cmd) => {
-      // Common variants
-      patterns[`\\text{${cmd}}`] = `\\${cmd}`;
-      patterns[`\\mathrm{${cmd}}`] = `\\${cmd}`;
-      patterns[`\\mbox{${cmd}}`] = `\\${cmd}`;
-      patterns[`\\textrm{${cmd}}`] = `\\${cmd}`;
-      patterns[`{\\rm ${cmd}}`] = `\\${cmd}`;
-      patterns[`_{\\${cmd}}`] = `_\\${cmd}`;
-      patterns[`^{\\${cmd}}`] = `^\\${cmd}`;
-      patterns[`_{${cmd}}`] = `_\\${cmd}`;
-      patterns[`^{${cmd}}`] = `^\\${cmd}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        textCommands.flatMap((cmd) => [
+          [`\\text{${cmd}}`, `\\${cmd}`],
+          [`\\mathrm{${cmd}}`, `\\${cmd}`],
+          [`\\mbox{${cmd}}`, `\\${cmd}`],
+          [`\\textrm{${cmd}}`, `\\${cmd}`],
+          [`{\\rm ${cmd}}`, `\\${cmd}`],
+          [`_{\\${cmd}}`, `_\\${cmd}`],
+          [`^{\\${cmd}}`, `^\\${cmd}`],
+          [`_{${cmd}}`, `_\\${cmd}`],
+          [`^{${cmd}}`, `^\\${cmd}`],
+        ]),
+      ),
+    };
 
     // prettier-ignore
     const symbolOperators = [
@@ -134,10 +142,15 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       'bu', 'ta'
     ];
     // these variables might occur as lower indices, but they do not need {..}
-    symbolOperators.forEach((op) => {
-      patterns[`_{\\${op}}`] = `_\\${op}`;
-      patterns[`^{\\${op}}`] = `^\\${op}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        symbolOperators.flatMap((op) => [
+          [`_{\\${op}}`, `_\\${op}`],
+          [`^{\\${op}}`, `^\\${op}`],
+        ]),
+      ),
+    };
 
     // ====================================================================
     // Auto-generated differential notation patterns
@@ -159,16 +172,19 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const fractionDiffVariables = ['t', 'x', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'S'];
 
     // Generate patterns for each variable
-    fractionDiffVariables.forEach((variable) => {
-      // Handle cases like {dx} -> {\\dd x}
-      patterns[`{d${variable}}`] = `{\\dd${variable}}`;
-
-      // Handle cases like \\frac{dx} -> \\frac{\\dd x}
-      patterns[`\\frac{d${variable}`] = `\\frac{\\dd${variable}`;
-
-      // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
-      patterns[`\\frac{d}{d${variable}}`] = `\\frac{\\dd}{\\dd${variable}}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        fractionDiffVariables.flatMap((variable) => [
+          // Handle cases like {dx} -> {\\dd x}
+          [`{d${variable}}`, `{\\dd${variable}}`],
+          // Handle cases like \\frac{dx} -> \\frac{\\dd x}
+          [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
+          // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
+          [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
+        ]),
+      ),
+    };
 
     // Integration patterns
     patterns['\\int d\\'] = '\\int \\dd\\';
@@ -346,20 +362,30 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
       ' ',
     );
-    tildeGreekLetters.forEach((letter) => {
-      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
-      patterns[`\\tilde{\\${letter}}`] = `\\t${shortcut}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        tildeGreekLetters.map((letter) => [
+          `\\tilde{\\${letter}}`,
+          `\\t${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+        ]),
+      ),
+    };
 
     // Tilde with boldsymbol+Greek
     // Example: \tilde{\boldsymbol{\zeta}} -> \tbze
     const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
       ' ',
     );
-    tildeGreekBoldLetters.forEach((letter) => {
-      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
-      patterns[`\\tilde{\\boldsymbol{\\${letter}}}`] = `\\tb${shortcut}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        tildeGreekBoldLetters.map((letter) => [
+          `\\tilde{\\boldsymbol{\\${letter}}}`,
+          `\\tb${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+        ]),
+      ),
+    };
 
     // Hat variables
     // Example: \hat{H} -> \hH
@@ -372,10 +398,15 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Hat with Greek letters
     // Example: \hat{\sigma} -> \hsg
     const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
-    hatGreekLetters.forEach((letter) => {
-      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
-      patterns[`\\hat{\\${letter}}`] = `\\h${shortcut}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        hatGreekLetters.map((letter) => [
+          `\\hat{\\${letter}}`,
+          `\\h${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+        ]),
+      ),
+    };
 
     // Hat with mathbf
     // Example: \hat{\mathbf{n}} -> \hbn
@@ -394,10 +425,15 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Hat with boldsymbol+Greek
     // Example: \hat{\boldsymbol{\zeta}} -> \hbze
     const hatBoldsymbolLetters = 'zeta'.split(' ');
-    hatBoldsymbolLetters.forEach((letter) => {
-      const shortcut = GREEK_LETTER_SHORTCUTS[letter] || letter;
-      patterns[`\\hat{\\boldsymbol{\\${letter}}}`] = `\\hb${shortcut}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        hatBoldsymbolLetters.map((letter) => [
+          `\\hat{\\boldsymbol{\\${letter}}}`,
+          `\\hb${GREEK_LETTER_SHORTCUTS[letter] || letter}`,
+        ]),
+      ),
+    };
 
     // Fix for extra backslashes in bold symbols
     // Automatically generate fixes for lowercase bold letters (e.g., \\ba -> \ba)
@@ -415,18 +451,29 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Fix for double backslashes in custom commands
     // Examples: \\bet -> \bet, \\bbf -> \bbf
     const customShortcutFixes = ['bet', 'bze', 'cP', 'Om', 'bbf'];
-    customShortcutFixes.forEach((shortcut) => {
-      patterns[`\\\\${shortcut}`] = `\\${shortcut}`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        customShortcutFixes.map((shortcut) => [
+          `\\\\${shortcut}`,
+          `\\${shortcut}`,
+        ]),
+      ),
+    };
 
     // Convert functions to simpler forms (e.g., F_/G_)
     // Examples: \F_ -> F_, \G( -> G(
     const functionNames = ['F', 'G'];
-    functionNames.forEach((name) => {
-      patterns[`\\${name}_`] = `${name}_`;
-      patterns[`\\${name}^`] = `${name}^`;
-      patterns[`\\${name}(`] = `${name}(`;
-    });
+    patterns = {
+      ...patterns,
+      ...Object.fromEntries(
+        functionNames.flatMap((name) => [
+          [`\\${name}_`, `${name}_`],
+          [`\\${name}^`, `${name}^`],
+          [`\\${name}(`, `${name}(`],
+        ]),
+      ),
+    };
 
     return patterns;
   })(),
