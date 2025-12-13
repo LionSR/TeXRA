@@ -45,11 +45,13 @@ supabase secrets set DASHSCOPE_API_KEY="sk-..."
 ### 3. Verify Deployment
 
 The function will be available at:
+
 ```
 https://your-project.supabase.co/functions/v1/relay/{provider}/{...path}
 ```
 
 Example for OpenAI:
+
 ```
 https://your-project.supabase.co/functions/v1/relay/openai/v1/chat/completions
 ```
@@ -69,6 +71,7 @@ https://your-project.supabase.co/functions/v1/relay/openai/v1/chat/completions
 ```
 
 Examples:
+
 - `/relay/openai/v1/chat/completions`
 - `/relay/anthropic/v1/messages`
 - `/relay/google/v1beta/models/gemini-pro:generateContent`
@@ -91,6 +94,7 @@ Users must enable the experimental setting in VS Code:
 ```
 
 When enabled:
+
 1. Models from supported providers will show as available (no API key warning)
 2. Requests will be routed through the relay
 3. User's JWT will be used for authentication
@@ -112,15 +116,15 @@ curl -X POST \
 
 ## Error Responses
 
-| Status | Error | Description |
-|--------|-------|-------------|
-| 400 | Invalid path | URL doesn't match expected format |
-| 400 | Unsupported provider | Provider not in supported list |
-| 401 | Missing authorization | No Authorization header |
-| 401 | Invalid token | JWT is invalid or expired |
-| 403 | Profile not found | User has no profile record |
-| 403 | Ultra tier required | User is not Ultra tier |
-| 503 | API key not configured | Server doesn't have API key for provider |
+| Status | Error                  | Description                              |
+| ------ | ---------------------- | ---------------------------------------- |
+| 400    | Invalid path           | URL doesn't match expected format        |
+| 400    | Unsupported provider   | Provider not in supported list           |
+| 401    | Missing authorization  | No Authorization header                  |
+| 401    | Invalid token          | JWT is invalid or expired                |
+| 403    | Profile not found      | User has no profile record               |
+| 403    | Ultra tier required    | User is not Ultra tier                   |
+| 503    | API key not configured | Server doesn't have API key for provider |
 
 ## Future Enhancements
 

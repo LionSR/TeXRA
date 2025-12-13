@@ -65,7 +65,10 @@ export async function computeModelOptions(): Promise<string> {
       }
 
       // Check if the provider requires an API key (only if not already available via server-side)
-      if (!available && SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+      if (
+        !available &&
+        SecretManager.API_PROVIDERS.includes(provider as ApiProvider)
+      ) {
         try {
           available = await SecretManager.apiKeyExists(provider as ApiProvider);
         } catch (error) {
