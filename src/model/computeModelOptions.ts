@@ -73,8 +73,9 @@ export async function computeModelOptions(): Promise<string> {
           available = false;
         }
       } else if (!available) {
-        // Models from providers that don't require API keys (like copilot) are always available
-        available = provider.toLowerCase() === 'copilot';
+        // Models from providers that don't require API keys (not in API_PROVIDERS)
+        // are always available (e.g., OTHERS, COPILOT)
+        available = true;
       }
 
       // Check OpenRouter availability only if not already available and model supports it

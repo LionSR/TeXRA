@@ -14,6 +14,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Provider configurations
+// Note: baseUrl should NOT include trailing paths like /v1 since the full path
+// comes from the client request. The relay URL structure is:
+// /relay/{provider}/{...apiPath}
+// Example: /relay/openai/v1/chat/completions -> https://api.openai.com/v1/chat/completions
 const PROVIDER_CONFIGS: Record<
   string,
   { baseUrl: string; authType: 'bearer' | 'x-api-key' | 'x-goog-api-key'; envKey: string }
@@ -34,6 +38,7 @@ const PROVIDER_CONFIGS: Record<
     envKey: 'GOOGLE_API_KEY',
   },
   xai: {
+    // Note: xAI API expects /v1 in the path, which comes from the client
     baseUrl: 'https://api.x.ai',
     authType: 'bearer',
     envKey: 'XAI_API_KEY',
@@ -44,11 +49,13 @@ const PROVIDER_CONFIGS: Record<
     envKey: 'DEEPSEEK_API_KEY',
   },
   moonshot: {
+    // Note: Moonshot API expects /v1 in the path, which comes from the client
     baseUrl: 'https://api.moonshot.cn',
     authType: 'bearer',
     envKey: 'MOONSHOT_API_KEY',
   },
   dashscope: {
+    // Note: DashScope API expects /compatible-mode/v1 in the path, which comes from the client
     baseUrl: 'https://dashscope-intl.aliyuncs.com',
     authType: 'bearer',
     envKey: 'DASHSCOPE_API_KEY',
