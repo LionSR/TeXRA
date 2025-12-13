@@ -50,40 +50,43 @@ Remote agents work just like built-in agents:
 Remote agents are marked with a cloud icon (☁️) in the agent selector to distinguish them from local agents.
 :::
 
-## Researcher Access Program
+## Research Access Program
 
-The **Researcher Access Program** provides access to advanced remote agents specifically designed for academic research and professional writing. These agents include:
+The **Research Access Program** provides access to specialized remote agents designed for academic research and professional writing. Program members get access to:
 
-- **Specialized domain agents**: Agents fine-tuned for specific research fields
+- **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, etc.)
 - **Advanced reasoning capabilities**: Multi-step analysis and complex document processing
 - **Beta features**: Early access to experimental agents and capabilities
 - **Priority improvements**: Your feedback directly influences agent development
 
+Different agents may be available to different research groups based on their domain and needs.
+
 ### Joining the Program
 
-The Researcher Access Program is available to active researchers, academics, and technical writers. To join:
+The Research Access Program is available to active researchers, academics, and technical writers. To join:
 
 1. **Sign in** to TeXRA using your institutional or professional email
 2. **Contact us** at [contact@texra.ai](mailto:contact@texra.ai) with:
    - Your name and affiliation
-   - Brief description of your research or writing needs
+   - Brief description of your research area
    - How you plan to use remote agents
 
-We'll review your application and grant access within 1-2 business days.
+We'll review your application and grant appropriate access within 1-2 business days.
 
-::: tip Free Access
-TeXRA is committed to supporting academic research. The Researcher Access Program is **free for qualifying researchers and students**. We do not charge for remote agent access.
+::: tip Free for Researchers
+TeXRA is committed to supporting academic research. The Research Access Program is **free for qualifying researchers and students**. We do not charge for remote agent access.
 :::
 
 ## Managing Your Account
 
 ### View Your Profile
 
-Check your account status and tier:
+Check your account status and available agents:
 
 1. Open Command Palette
 2. Run: **TeXRA: View Profile**
-3. View your email, user ID, and access tier
+3. View your email, user ID, and access level
+4. Browse remote agents available to you
 
 ### Sign Out
 
