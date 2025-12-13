@@ -24,13 +24,9 @@ export {
 export function generateBackslashFixes(commands: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  commands.forEach((cmd) => {
-    patterns[`\\\\${cmd}`] = `\\${cmd}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    commands.map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]),
+  );
 }
 
 /**
@@ -75,13 +71,9 @@ export function generateGroupedBackslashFixes(commandGroups: {
 export function generateTripleBackslashFixes(commands: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  commands.forEach((cmd) => {
-    patterns[`\\\\\\${cmd}`] = `\\${cmd}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    commands.map((cmd) => [`\\\\\\${cmd}`, `\\${cmd}`]),
+  );
 }
 
 /**
@@ -90,20 +82,17 @@ export function generateTripleBackslashFixes(commands: string[]): {
 export function generateBackslashFixesWithCase(commands: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  commands.forEach((cmd) => {
-    // Lowercase version
-    patterns[`\\\\${cmd}`] = `\\${cmd}`;
-
-    // Only capitalize the first letter if it makes sense for the command
-    if (/^[a-z]/.test(cmd)) {
-      const capitalizedCmd = capitalize(cmd);
-      patterns[`\\\\${capitalizedCmd}`] = `\\${capitalizedCmd}`;
-    }
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    commands.flatMap((cmd) => {
+      const entries: [string, string][] = [[`\\\\${cmd}`, `\\${cmd}`]];
+      // Only capitalize the first letter if it makes sense for the command
+      if (/^[a-z]/.test(cmd)) {
+        const capitalizedCmd = capitalize(cmd);
+        entries.push([`\\\\${capitalizedCmd}`, `\\${capitalizedCmd}`]);
+      }
+      return entries;
+    }),
+  );
 }
 
 /**
@@ -112,58 +101,46 @@ export function generateBackslashFixesWithCase(commands: string[]): {
 export function generateXmlLatexConversions(environments: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  environments.forEach((env) => {
-    // XML to LaTeX
-    patterns[`<${env}>`] = `\\begin{${env}}`;
-    patterns[`</${env}>`] = `\\end{${env}}`;
-
-    // XML with begin to LaTeX
-    patterns[`<begin{${env}}>`] = `\\begin{${env}}`;
-    patterns[`</begin{${env}}>`] = `\\end{${env}}`;
-
-    // XML with end to LaTeX
-    patterns[`<end{${env}}>`] = `\\end{${env}}`;
-    patterns[`</end{${env}}>`] = `\\end{${env}}`;
-
-    // XML with braces to LaTeX
-    patterns[`<${env}}`] = `\\begin{${env}}`;
-    patterns[`</${env}}`] = `\\end{${env}}`;
-
-    patterns[`</${env}\n`] = `\\end{${env}}\n`;
-    patterns[`</${env}}\n`] = `\\end{${env}}\n`;
-
-    // XML begin tags incorrectly closed with leading slash
-    patterns[`</begin{${env}}`] = `\\begin{${env}}`;
-    patterns[`</begin{${env}}\n`] = `\\begin{${env}}\n`;
-    patterns[`</begin{${env}`] = `\\begin{${env}}`;
-
-    // LaTeX with incorrect XML ending
-    patterns[`\\end{${env}>}`] = `\\end{${env}}`;
-    patterns[`\\end{${env}>`] = `\\end{${env}}`;
-
-    // LaTeX with incorrect labels
-    patterns[`\\begin{-${env}}`] = `\\begin{${env}}`;
-    patterns[`\\end{-${env}}`] = `\\end{${env}}`;
-
-    // LaTeX with incorrect XML ending
-    patterns[`\\begin${env}`] = `\\begin{${env}}`;
-    patterns[`\\end${env}`] = `\\end{${env}}`;
-
-    // LaTeX with duplicated begin/end keywords
-    patterns[`\\begin{begin{${env}}`] = `\\begin{${env}}`;
-    patterns[`\\begin{begin{${env}}}`] = `\\begin{${env}}`;
-    patterns[`\\begin{\\begin{${env}}`] = `\\begin{${env}}`;
-    patterns[`\\begin{\\begin{${env}}}`] = `\\begin{${env}}`;
-
-    patterns[`\\end{end{${env}}`] = `\\end{${env}}`;
-    patterns[`\\end{end{${env}}}`] = `\\end{${env}}`;
-    patterns[`\\end{\\end{${env}}`] = `\\end{${env}}`;
-    patterns[`\\end{\\end{${env}}}`] = `\\end{${env}}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    environments.flatMap((env) => [
+      // XML to LaTeX
+      [`<${env}>`, `\\begin{${env}}`],
+      [`</${env}>`, `\\end{${env}}`],
+      // XML with begin to LaTeX
+      [`<begin{${env}}>`, `\\begin{${env}}`],
+      [`</begin{${env}}>`, `\\end{${env}}`],
+      // XML with end to LaTeX
+      [`<end{${env}}>`, `\\end{${env}}`],
+      [`</end{${env}}>`, `\\end{${env}}`],
+      // XML with braces to LaTeX
+      [`<${env}}`, `\\begin{${env}}`],
+      [`</${env}}`, `\\end{${env}}`],
+      [`</${env}\n`, `\\end{${env}}\n`],
+      [`</${env}}\n`, `\\end{${env}}\n`],
+      // XML begin tags incorrectly closed with leading slash
+      [`</begin{${env}}`, `\\begin{${env}}`],
+      [`</begin{${env}}\n`, `\\begin{${env}}\n`],
+      [`</begin{${env}`, `\\begin{${env}}`],
+      // LaTeX with incorrect XML ending
+      [`\\end{${env}>}`, `\\end{${env}}`],
+      [`\\end{${env}>`, `\\end{${env}}`],
+      // LaTeX with incorrect labels
+      [`\\begin{-${env}}`, `\\begin{${env}}`],
+      [`\\end{-${env}}`, `\\end{${env}}`],
+      // LaTeX with incorrect XML ending
+      [`\\begin${env}`, `\\begin{${env}}`],
+      [`\\end${env}`, `\\end{${env}}`],
+      // LaTeX with duplicated begin/end keywords
+      [`\\begin{begin{${env}}`, `\\begin{${env}}`],
+      [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
+      [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
+      [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
+      [`\\end{end{${env}}`, `\\end{${env}}`],
+      [`\\end{end{${env}}}`, `\\end{${env}}`],
+      [`\\end{\\end{${env}}`, `\\end{${env}}`],
+      [`\\end{\\end{${env}}}`, `\\end{${env}}`],
+    ]),
+  );
 }
 
 /**
@@ -172,21 +149,18 @@ export function generateXmlLatexConversions(environments: string[]): {
 export function generateLatexToXmlConversions(tags: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  tags.forEach((tag) => {
-    // LaTeX to XML
-    patterns[`\\begin{${tag}}`] = `<${tag}>`;
-    patterns[`\\end{${tag}}`] = `</${tag}>`;
-
-    // LaTeX with '>' at the end to XML
-    patterns[`\\begin{${tag}>}`] = `<${tag}>`;
-    patterns[`\\begin{${tag}>`] = `<${tag}>`;
-    patterns[`\\end{${tag}>}`] = `</${tag}>`;
-    patterns[`\\end{${tag}>`] = `</${tag}>`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    tags.flatMap((tag) => [
+      // LaTeX to XML
+      [`\\begin{${tag}}`, `<${tag}>`],
+      [`\\end{${tag}}`, `</${tag}>`],
+      // LaTeX with '>' at the end to XML
+      [`\\begin{${tag}>}`, `<${tag}>`],
+      [`\\begin{${tag}>`, `<${tag}>`],
+      [`\\end{${tag}>}`, `</${tag}>`],
+      [`\\end{${tag}>`, `</${tag}>`],
+    ]),
+  );
 }
 
 /**
@@ -195,13 +169,9 @@ export function generateLatexToXmlConversions(tags: string[]): {
 export function generateEnvironmentBracesFixes(environments: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  environments.forEach((env) => {
-    patterns[`{\\${env}}`] = `{${env}}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    environments.map((env) => [`{\\${env}}`, `{${env}}`]),
+  );
 }
 
 /**
@@ -211,16 +181,14 @@ export function generateSectionSpacingFixes(
   environments: string[],
   sectionTypes: string[],
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  environments.forEach((env) => {
-    sectionTypes.forEach((sectionType) => {
-      patterns[`\\end{${env}}\n\\${sectionType}`] =
-        `\\end{${env}}\n\n\n\\${sectionType}`;
-    });
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    environments.flatMap((env) =>
+      sectionTypes.map((sectionType) => [
+        `\\end{${env}}\n\\${sectionType}`,
+        `\\end{${env}}\n\n\n\\${sectionType}`,
+      ]),
+    ),
+  );
 }
 
 /**
@@ -230,10 +198,8 @@ export function generateSectionSpacingFixes(
 export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  sectionTypes.forEach((sectionType) => {
-    const invalidEndings = [
+  return Object.fromEntries(
+    sectionTypes.flatMap((sectionType) => [
       `\\end{${sectionType}}`,
       `\\end{${sectionType}*}`,
       `\\end {${sectionType}}`,
@@ -245,14 +211,8 @@ export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
       `\\end{${sectionType}* }`,
       `\\end { ${sectionType} }`,
       `\\end { ${sectionType}* }`,
-    ];
-
-    invalidEndings.forEach((ending) => {
-      patterns[ending] = '';
-    });
-  });
-
-  return patterns;
+    ].map((ending) => [ending, ''])),
+  );
 }
 
 /**
@@ -261,20 +221,20 @@ export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
 export function generateReferenceSpacing(referenceTypes: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  referenceTypes.forEach((type) => {
-    patterns[`${type} \\ref{`] = `${type}~\\ref{`;
-
-    // Also handle capitalized versions
-    if (/^[a-z]/.test(type)) {
-      const capitalizedType = capitalize(type);
-      patterns[`${capitalizedType} \\ref{`] = `${capitalizedType}~\\ref{`;
-      patterns[`${capitalizedType}\\ref{`] = `${capitalizedType}~\\ref{`;
-    }
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    referenceTypes.flatMap((type) => {
+      const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
+      // Also handle capitalized versions
+      if (/^[a-z]/.test(type)) {
+        const capitalizedType = capitalize(type);
+        entries.push(
+          [`${capitalizedType} \\ref{`, `${capitalizedType}~\\ref{`],
+          [`${capitalizedType}\\ref{`, `${capitalizedType}~\\ref{`],
+        );
+      }
+      return entries;
+    }),
+  );
 }
 
 /**
@@ -283,14 +243,12 @@ export function generateReferenceSpacing(referenceTypes: string[]): {
 export function generateEnvironmentSpacingFixes(environments: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  environments.forEach((env) => {
-    patterns[`\n\n\\begin{${env}}`] = `\n\\begin{${env}}`;
-    patterns[`\\end{${env}}\n\n`] = `\\end{${env}}\n`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    environments.flatMap((env) => [
+      [`\n\n\\begin{${env}}`, `\n\\begin{${env}}`],
+      [`\\end{${env}}\n\n`, `\\end{${env}}\n`],
+    ]),
+  );
 }
 
 /**
@@ -299,15 +257,13 @@ export function generateEnvironmentSpacingFixes(environments: string[]): {
 export function generateEnvironmentLinebreakFixes(environments: string[]): {
   [key: string]: string;
 } {
-  const patterns: { [key: string]: string } = {};
-
-  environments.forEach((env) => {
-    patterns[`\n\n\\end{${env}}`] = `\n\\end{${env}}`;
-    patterns[`\n    \n\\end{${env}}`] = `\n\\end{${env}}`;
-    patterns[`\n\t\n\\end{${env}}`] = `\n\\end{${env}}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    environments.flatMap((env) => [
+      [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
+      [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
+      [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
+    ]),
+  );
 }
 
 /**
@@ -335,15 +291,14 @@ export function generateDecoratedMathShortcuts(
   symbols: string[],
   shortcutPrefix: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  decorators.forEach((decorator) => {
-    symbols.forEach((symbol) => {
-      patterns[`\\${decorator}{\\${symbol}}`] = `\\${shortcutPrefix}${symbol}`;
-    });
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    decorators.flatMap((decorator) =>
+      symbols.map((symbol) => [
+        `\\${decorator}{\\${symbol}}`,
+        `\\${shortcutPrefix}${symbol}`,
+      ]),
+    ),
+  );
 }
 
 /**
@@ -354,13 +309,12 @@ export function generateMathFontShortcuts(
   fontCmd: string,
   shortcutPrefix: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  letters.forEach((letter) => {
-    patterns[`\\${fontCmd}{${letter}}`] = `\\${shortcutPrefix}${letter}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    letters.map((letter) => [
+      `\\${fontCmd}{${letter}}`,
+      `\\${shortcutPrefix}${letter}`,
+    ]),
+  );
 }
 
 /**
@@ -371,13 +325,12 @@ export function generateBoldBackslashFixes(
   prefix: string,
   letters: string[],
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  letters.forEach((letter) => {
-    patterns[`\\\\${prefix}${letter}`] = `\\${prefix}${letter}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    letters.map((letter) => [
+      `\\\\${prefix}${letter}`,
+      `\\${prefix}${letter}`,
+    ]),
+  );
 }
 
 /**
@@ -391,13 +344,12 @@ export function generateDecoratorShortcuts(
   letters: string[],
   prefix: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  letters.forEach((letter) => {
-    patterns[`\\${decorator}{${letter}}`] = `\\${prefix}${letter}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    letters.map((letter) => [
+      `\\${decorator}{${letter}}`,
+      `\\${prefix}${letter}`,
+    ]),
+  );
 }
 
 /**
@@ -413,16 +365,18 @@ export function generateNestedDecoratorShortcuts(
   outerPrefix: string,
   innerPrefix: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  letters.forEach((letter) => {
-    // Handle uppercase/lowercase differences
-    const displayLetter = /^[A-Z]/.test(letter) ? letter : letter.toLowerCase();
-    patterns[`\\${outerDecorator}{\\${innerCommand}{${displayLetter}}}`] =
-      `\\${outerPrefix}${innerPrefix}${displayLetter}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    letters.map((letter) => {
+      // Handle uppercase/lowercase differences
+      const displayLetter = /^[A-Z]/.test(letter)
+        ? letter
+        : letter.toLowerCase();
+      return [
+        `\\${outerDecorator}{\\${innerCommand}{${displayLetter}}}`,
+        `\\${outerPrefix}${innerPrefix}${displayLetter}`,
+      ];
+    }),
+  );
 }
 
 /**
@@ -453,13 +407,9 @@ export function generateVectorShortcuts(
   letters: string[],
   prefix: string = 'v',
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  letters.forEach((letter) => {
-    patterns[`\\vec{${letter}}`] = `\\${prefix}${letter}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    letters.map((letter) => [`\\vec{${letter}}`, `\\${prefix}${letter}`]),
+  );
 }
 
 /**
@@ -476,19 +426,18 @@ export function generateTextCommandNormalization(
   targetCommand: string = 'text',
   variant?: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
   // Define all possible variants if none specified
   const allVariants = ['mathrm', 'mbox', 'textrm'];
   const variantsToUse = variant ? [variant] : allVariants;
 
-  variantsToUse.forEach((v) => {
-    terms.forEach((term) => {
-      patterns[`\\${v}{${term}}`] = `\\${targetCommand}{${term}}`;
-    });
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    variantsToUse.flatMap((v) =>
+      terms.map((term) => [
+        `\\${v}{${term}}`,
+        `\\${targetCommand}{${term}}`,
+      ]),
+    ),
+  );
 }
 
 /**
@@ -500,20 +449,18 @@ export function generateLegacyTextCommandNormalization(
   targetCommand: string,
   variant?: string,
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
   const allVariants = ['rm', 'bf', 'cal'];
   const variantsToUse = variant ? [variant] : allVariants;
 
-  variantsToUse.forEach((v) => {
-    terms.forEach((term) => {
-      patterns[`{\\${v} ${term}}`] = `\\${targetCommand}{${term}}`;
-      // Handle {\rm{X}} style
-      patterns[`{\\${v}{${term}}}`] = `\\${targetCommand}{${term}}`;
-    });
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    variantsToUse.flatMap((v) =>
+      terms.flatMap((term) => [
+        [`{\\${v} ${term}}`, `\\${targetCommand}{${term}}`],
+        // Handle {\rm{X}} style
+        [`{\\${v}{${term}}}`, `\\${targetCommand}{${term}}`],
+      ]),
+    ),
+  );
 }
 
 /**
@@ -541,19 +488,16 @@ export function generateDifferentialSpacing(
   variables: string[],
   spaceChar: string = '~',
 ): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  // For each variable, generate spacing rules
-  variables.forEach((variable) => {
-    // Handle ' d\x ' case - adding space at end
-    patterns[` d\\${variable} `] = ` d\\${variable}${spaceChar}`;
-    // Handle with comma
-    patterns[`\\dd\\${variable}\\,`] = `\\dd\\${variable}${spaceChar}`;
-    // Handle differential replacement
-    patterns[`{d\\${variable}}`] = `{\\dd\\${variable}}`;
-  });
-
-  return patterns;
+  return Object.fromEntries(
+    variables.flatMap((variable) => [
+      // Handle ' d\x ' case - adding space at end
+      [` d\\${variable} `, ` d\\${variable}${spaceChar}`],
+      // Handle with comma
+      [`\\dd\\${variable}\\,`, `\\dd\\${variable}${spaceChar}`],
+      // Handle differential replacement
+      [`{d\\${variable}}`, `{\\dd\\${variable}}`],
+    ]),
+  );
 }
 
 /**
