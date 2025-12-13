@@ -242,7 +242,7 @@ export async function viewProfile(): Promise<void> {
 export async function getAuthStatus(): Promise<{
   authenticated: boolean;
   email?: string;
-  tier?: 'free' | 'researcher';
+  tier?: string;
 }> {
   const isAuth = await SupabaseClient.isAuthenticated();
   if (!isAuth) {
