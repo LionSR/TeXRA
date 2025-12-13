@@ -1,4 +1,8 @@
 // Third-party imports
+import { toJSONSchema } from 'zod';
+import { zodFunction, zodResponsesFunction } from 'openai/helpers/zod';
+
+// Type imports
 import type { ToolDefinition } from '@model';
 import type {
   Tool as AnthropicTool,
@@ -45,16 +49,34 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   web_search: 'web_search_20250305',
 } as const;
 
-/** Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format. */
+/**
+ * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
+ *
+ * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which:
+ * - Converts Zod schema to JSON Schema using SDK's optimized conversion
+ * - Enables strict mode for better type safety
+ */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    function: {
-      name: d.name,
-      description: d.description,
-      parameters: d.parameters,
-    },
-  }));
+  return defs.map((d) => {
+    // Use native SDK Zod conversion when schema is available
+    if (d.zodSchema) {
+      return zodFunction({
+        name: d.name,
+        description: d.description,
+        parameters: d.zodSchema,
+      }) as unknown as ChatCompletionTool;
+    }
+
+    // Fallback to manual conversion for legacy definitions
+    return {
+      type: 'function',
+      function: {
+        name: d.name,
+        description: d.description,
+        parameters: d.parameters,
+      },
+    };
+  });
 }
 
 /**
@@ -67,7 +89,13 @@ export interface OpenAIResponseToolOptions {
   supportsFunctionCalling?: boolean;
 }
 
-/** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
+/**
+ * Convert generic ToolDefinition objects to OpenAI Responses API tool format.
+ *
+ * When a tool has a zodSchema, uses OpenAI's native zodResponsesFunction() helper which:
+ * - Converts Zod schema to JSON Schema using SDK's optimized conversion
+ * - Enables strict mode for better type safety
+ */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
   options: OpenAIResponseToolOptions = {},
@@ -94,7 +122,19 @@ export function toOpenAIResponseTools(
       continue;
     }
 
-    // Standard function tools
+    // Use native SDK Zod conversion when schema is available
+    if (d.zodSchema) {
+      tools.push(
+        zodResponsesFunction({
+          name: d.name,
+          description: d.description,
+          parameters: d.zodSchema,
+        }) as unknown as OpenAIResponseTool,
+      );
+      continue;
+    }
+
+    // Fallback to manual conversion for legacy definitions
     const params = (d.parameters ?? null) as Record<string, unknown> | null;
     tools.push({
       type: 'function',
@@ -119,7 +159,13 @@ export interface AnthropicToolOptions {
   supportsNativeWebSearch?: boolean;
 }
 
-/** Convert generic ToolDefinition objects to Anthropic Tool format. */
+/**
+ * Convert generic ToolDefinition objects to Anthropic Tool format.
+ *
+ * When a tool has a zodSchema, uses Zod's native toJSONSchema() which:
+ * - Converts Zod schema directly to JSON Schema
+ * - Uses the same conversion pattern as Anthropic's betaZodTool() helper
+ */
 export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
@@ -141,6 +187,18 @@ export function toAnthropicTools(
       }
     }
 
+    // Use native Zod conversion when schema is available
+    // This mirrors the Anthropic SDK's betaZodTool() implementation
+    if (d.zodSchema) {
+      const jsonSchema = toJSONSchema(d.zodSchema, { reused: 'ref' });
+      return {
+        name: d.name,
+        description: d.description,
+        input_schema: jsonSchema as AnthropicTool['input_schema'],
+      } as ToolUnion;
+    }
+
+    // Fallback to pre-converted parameters for legacy definitions
     const params = d.parameters as AnthropicTool['input_schema'] | undefined;
     return {
       name: d.name,
@@ -158,6 +216,7 @@ export function toAnthropicTools(
  * functionDeclarations - this is a Live API only feature.
  * See: https://ai.google.dev/gemini-api/docs/live-tools
  *
+ * When a tool has a zodSchema, uses Zod's native toJSONSchema() for conversion.
  * All tools (including web_search) are converted to function declarations.
  *
  * @param defs Tool definitions to convert
@@ -169,11 +228,23 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
 
   // Convert all tools to function declarations
   // Native googleSearch is disabled until Live API support is added
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Schema | undefined,
-  }));
+  const declarations: FunctionDeclaration[] = defs.map((d) => {
+    // Use native Zod conversion when schema is available
+    if (d.zodSchema) {
+      return {
+        name: d.name,
+        description: d.description,
+        parameters: toJSONSchema(d.zodSchema) as Schema | undefined,
+      };
+    }
+
+    // Fallback to pre-converted parameters for legacy definitions
+    return {
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Schema | undefined,
+    };
+  });
 
   return [{ functionDeclarations: declarations }];
 }
