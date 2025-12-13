@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
@@ -19,6 +20,16 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
+
+/** Schema for remote agent data sent to webview (used for type inference only) */
+const RemoteAgentPayloadSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  visibility: z.array(z.string()),
+  category: z.nativeEnum(AgentCategory),
+  supportsMultipleOutput: z.boolean(),
+});
+type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
 
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -62,11 +73,12 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     // All authenticated users can see agents matching their visibility access
     await loadAgents();
     const entries = getAgentsBySource('remote' as AgentSource);
-    const remoteAgents = entries.map((entry) => ({
+    const remoteAgents: RemoteAgentPayload[] = entries.map((entry) => ({
       name: entry.name,
       description: entry.description || '',
       visibility: entry.visibility || ['public'],
-      category: entry.category || 'workflow',
+      category: entry.category || AgentCategory.Workflow,
+      supportsMultipleOutput: !!entry.multiplePath,
     }));
 
     await webview.postMessage({
