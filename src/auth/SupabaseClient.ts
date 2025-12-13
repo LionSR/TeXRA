@@ -5,7 +5,11 @@ import {
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
-import type { UserAuthContext, UserTier } from './config';
+import {
+  type UserAuthContext,
+  type UserTier,
+  UserAuthContextSchema,
+} from './config';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -143,12 +147,7 @@ export class SupabaseClient {
    */
   static async getUserTier(): Promise<UserTier> {
     const authContext = await this.getUserAuthContext();
-    const tier = authContext.tier;
-    // Validate tier is a known value, default to 'free'
-    if (tier === 'free' || tier === 'Max' || tier === 'Ultra') {
-      return tier;
-    }
-    return 'free';
+    return authContext.tier;
   }
 
   /**
@@ -188,15 +187,21 @@ export class SupabaseClient {
         return defaultContext;
       }
 
-      const tier = typeof data.tier === 'string' ? data.tier : 'free';
-      const permissions = Array.isArray(data.permissions)
-        ? data.permissions
-        : [];
+      // Validate and parse with Zod schema, fallback to defaults for invalid fields
+      const result = UserAuthContextSchema.safeParse({
+        tier: data.tier ?? 'free',
+        permissions: data.permissions ?? [],
+      });
 
-      return {
-        permissions,
-        tier,
-      };
+      if (!result.success) {
+        logger.warn(
+          'SupabaseClient',
+          `Invalid profile data: ${result.error.message}`,
+        );
+        return defaultContext;
+      }
+
+      return result.data;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
@@ -213,14 +218,6 @@ export class SupabaseClient {
   static async getUserPermissions(): Promise<string[]> {
     const context = await this.getUserAuthContext();
     return context.permissions;
-  }
-
-  /**
-   * Check if user has a specific permission.
-   */
-  static async hasPermission(permission: string): Promise<boolean> {
-    const permissions = await this.getUserPermissions();
-    return permissions.includes(permission);
   }
 
   /**

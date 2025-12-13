@@ -31,13 +31,14 @@ export class AgentsTable {
 
   /**
    * Render the profile view with the given data.
-   * @param {boolean} authenticated - Whether the user is authenticated
-   * @param {object} user - User object with email and id
-   * @param {string} tier - Primary group name (for backwards compatibility / display)
-   * @param {string[]} permissions - Array of permission strings
-   * @param {Array} remoteAgents - Array of remote agent objects
+   * @param {Object} options - Render options
+   * @param {boolean} options.authenticated - Whether the user is authenticated
+   * @param {object} options.user - User object with email and id
+   * @param {string} options.tier - Primary group name (for backwards compatibility / display)
+   * @param {string[]} options.permissions - Array of permission strings
+   * @param {Array} options.remoteAgents - Array of remote agent objects
    */
-  render(authenticated, user, tier, permissions, remoteAgents) {
+  render({ authenticated, user, tier, permissions, remoteAgents }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);

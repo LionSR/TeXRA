@@ -6,6 +6,7 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
+import { z } from 'zod';
 
 /**
  * Supabase configuration interface
@@ -78,20 +79,22 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
  */
 
 /**
+ * Tier values for server-side API key access.
+ */
+export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
+export type UserTier = z.infer<typeof UserTierSchema>;
+
+/**
  * User's authorization context.
  * Permissions are visibility values stored in profiles.permissions column.
  */
-export interface UserAuthContext {
+export const UserAuthContextSchema = z.object({
   /** Visibility values user can access: ['researcher', 'math', etc.] */
-  permissions: string[];
+  permissions: z.array(z.string()),
   /** User's tier (reserved for future API key access) */
-  tier: string;
-}
-
-/**
- * Tier values for future server-side API key access.
- */
-export type UserTier = 'free' | 'Max' | 'Ultra';
+  tier: UserTierSchema,
+});
+export type UserAuthContext = z.infer<typeof UserAuthContextSchema>;
 
 /**
  * Check if user has access to an agent's visibility levels.
