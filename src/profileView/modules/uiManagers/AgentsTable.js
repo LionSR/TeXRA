@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES, DEFAULTS } from '../constants.js';
+import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -121,7 +121,8 @@ export class AgentsTable {
     thead.innerHTML = `
       <tr>
         <th>Agent</th>
-        <th>Type</th>
+        <th>Category</th>
+        <th>Multi-Output</th>
         <th>Description</th>
         <th>Visibility</th>
         <th>Action</th>
@@ -166,9 +167,26 @@ export class AgentsTable {
     if (agentName) agentName.textContent = agent.name;
 
     // Set agent category badge (workflow or toolUse)
-    const typeBadge = row.querySelector('.type-badge');
-    if (typeBadge) {
-      typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
+    const categoryBadge = row.querySelector('.category-badge');
+    if (categoryBadge) {
+      categoryBadge.textContent = agent.category;
+    }
+
+    // Set multi-output badge with codicon and aria-label for accessibility
+    const multiOutputBadge = row.querySelector('.multi-output-badge');
+    if (multiOutputBadge) {
+      const icon = document.createElement('span');
+      icon.className = 'codicon';
+      if (agent.supportsMultipleOutput) {
+        icon.classList.add('codicon-check');
+        multiOutputBadge.classList.add('supported');
+        multiOutputBadge.setAttribute('aria-label', 'Supports multiple outputs');
+      } else {
+        icon.classList.add('codicon-close');
+        multiOutputBadge.classList.add('not-supported');
+        multiOutputBadge.setAttribute('aria-label', 'Single output only');
+      }
+      multiOutputBadge.appendChild(icon);
     }
 
     // Set description
