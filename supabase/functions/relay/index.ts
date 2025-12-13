@@ -78,6 +78,44 @@ const corsHeaders = {
 };
 
 /**
+ * Extract JWT token from request headers.
+ *
+ * Different SDK clients send the "API key" (which is actually the JWT when using
+ * server-side keys) in different headers:
+ * - OpenAI SDK: Authorization: Bearer {token}
+ * - Anthropic SDK: x-api-key: {token}
+ * - Google SDK: x-goog-api-key: {token}
+ *
+ * This function checks all possible locations and extracts the JWT.
+ */
+function extractJwtFromHeaders(req: Request): string | null {
+  // Check Authorization header first (OpenAI style)
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader) {
+    // Handle "Bearer {token}" format
+    if (authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+    // Handle raw token
+    return authHeader;
+  }
+
+  // Check x-api-key (Anthropic style)
+  const xApiKey = req.headers.get('x-api-key');
+  if (xApiKey) {
+    return xApiKey;
+  }
+
+  // Check x-goog-api-key (Google style)
+  const googApiKey = req.headers.get('x-goog-api-key');
+  if (googApiKey) {
+    return googApiKey;
+  }
+
+  return null;
+}
+
+/**
  * Parse the URL path to extract provider and API path.
  * Expected format: /relay/{provider}/{...apiPath}
  */
@@ -131,10 +169,11 @@ serve(async (req: Request) => {
       );
     }
 
-    // 3. Validate authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization' }), {
+    // 3. Extract JWT from request headers
+    // Different SDKs send the token in different headers (Authorization, x-api-key, etc.)
+    const jwtToken = extractJwtFromHeaders(req);
+    if (!jwtToken) {
+      return new Response(JSON.stringify({ error: 'Missing authorization token' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -144,8 +183,9 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+    // Create client with the extracted JWT in Authorization header format
     const userClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: `Bearer ${jwtToken}` } },
     });
 
     const {
