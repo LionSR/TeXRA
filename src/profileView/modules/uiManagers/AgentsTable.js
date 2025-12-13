@@ -121,7 +121,8 @@ export class AgentsTable {
     thead.innerHTML = `
       <tr>
         <th>Agent</th>
-        <th>Type</th>
+        <th>Category</th>
+        <th>Multi-Output</th>
         <th>Description</th>
         <th>Visibility</th>
         <th>Action</th>
@@ -169,6 +170,18 @@ export class AgentsTable {
     const typeBadge = row.querySelector('.type-badge');
     if (typeBadge) {
       typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
+    }
+
+    // Set multi-output badge
+    const multiOutputBadge = row.querySelector('.multi-output-badge');
+    if (multiOutputBadge) {
+      if (agent.supportsMultipleOutput) {
+        multiOutputBadge.textContent = 'Yes';
+        multiOutputBadge.classList.add('supported');
+      } else {
+        multiOutputBadge.textContent = 'No';
+        multiOutputBadge.classList.add('not-supported');
+      }
     }
 
     // Set description
