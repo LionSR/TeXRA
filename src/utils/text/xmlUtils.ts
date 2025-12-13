@@ -269,17 +269,10 @@ export function extractTextFromTag(
   inputContent: string,
   documentTag: string,
 ): string {
-  // This will find all matches of the tag
+  // Find all matches and get the last one using matchAll
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
-
-  // Variables to track the last match
-  let lastContent = '';
-  let match;
-
-  // Find all matches and keep the last one
-  while ((match = regex.exec(inputContent)) !== null) {
-    lastContent = match[1];
-  }
+  const matches = Array.from(inputContent.matchAll(regex));
+  const lastContent = matches.at(-1)?.[1] ?? '';
 
   // Use centralized CDATA removal
   return removeCDATA(lastContent);
