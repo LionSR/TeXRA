@@ -13,16 +13,16 @@ ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
 
 -- ============================================================================
--- STEP 2: Migrate existing tier='researcher' to permissions FIRST
+-- STEP 2: Migrate existing tier='researcher' to permissions and Max tier
 -- ============================================================================
 -- Before changing tier constraint, migrate researcher users to have 'researcher' permission
 UPDATE profiles
 SET permissions = ARRAY['researcher']
 WHERE tier = 'researcher' AND (permissions IS NULL OR permissions = '{}');
 
--- Now reset tier to 'free' for all researcher users (permission is what matters now)
+-- Upgrade researcher users to Max tier (they get API key access)
 UPDATE profiles
-SET tier = 'free'
+SET tier = 'Max'
 WHERE tier = 'researcher';
 
 -- ============================================================================
@@ -34,10 +34,15 @@ ALTER TABLE profiles
 ADD CONSTRAINT profiles_tier_check CHECK (tier IN ('free', 'Max', 'Ultra'));
 
 -- ============================================================================
--- STEP 4: Drop old constraints for extensibility
+-- STEP 4: Drop old constraints and policies BEFORE modifying columns
 -- ============================================================================
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_visibility_check;
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_agent_type_check;
+
+-- Drop ALL existing RLS policies that depend on visibility column
+DROP POLICY IF EXISTS "Users can view allowed agents" ON remote_agents;
+DROP POLICY IF EXISTS "Users can view public agents" ON remote_agents;
+DROP POLICY IF EXISTS "Researchers can view researcher agents" ON remote_agents;
 
 -- ============================================================================
 -- STEP 5: Convert visibility from TEXT to TEXT[] (array)
@@ -83,13 +88,8 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- ============================================================================
--- STEP 8: Update remote_agents RLS policy
+-- STEP 8: Create new remote_agents RLS policy
 -- ============================================================================
--- Drop ALL existing policies to ensure clean state
-DROP POLICY IF EXISTS "Users can view allowed agents" ON remote_agents;
-DROP POLICY IF EXISTS "Users can view public agents" ON remote_agents;
-DROP POLICY IF EXISTS "Researchers can view researcher agents" ON remote_agents;
-
 CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
   USING (
@@ -159,6 +159,6 @@ SELECT name, visibility, agent_category FROM remote_agents LIMIT 10;
 
 -- Tier values (for future API key access):
 -- 'free' - default, no API key access
--- 'Max' - mid-tier API key access
+-- 'Max' - mid-tier API key access (former researchers)
 -- 'Ultra' - full API key access
 -- UPDATE profiles SET tier = 'Max' WHERE email = 'user@example.com';
