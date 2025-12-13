@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.10] - 2025-12-13
+
+### Features
+
+- Added **GPT-5.2** (`gpt52`, `gpt52pro`) to the default model list with xhigh
+  reasoning effort support for extended problem-solving tasks.
+- Introduced **flexible user groups** with permission-based access control,
+  supporting multi-group visibility and tier levels (Max/Ultra) for remote
+  agents.
+- Added a **todo list UI** in the progress view for tool-use agents, letting
+  you track task progress during agent workflows.
+
+### Bug Fixes
+
+- Resolved duplicate sign-in messages caused by authentication race conditions.
+- Fixed profile view agent selection reliability when switching between
+  remote agents.
+- OpenAI streaming now correctly includes reasoning items when web search
+  results reference them.
+
 ## [0.34.9] - 2025-12-10
 
 ### Features
