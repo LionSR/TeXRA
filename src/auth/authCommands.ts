@@ -242,7 +242,7 @@ export async function viewProfile(): Promise<void> {
 export async function getAuthStatus(): Promise<{
   authenticated: boolean;
   email?: string;
-  tier?: 'free' | 'researcher';
+  tier?: string;
 }> {
   const isAuth = await SupabaseClient.isAuthenticated();
   if (!isAuth) {
@@ -273,7 +273,7 @@ export async function showAccountMenu(): Promise<void> {
         {
           label: '$(sign-in) Sign In',
           description:
-            'Sign in to access remote agents via the researcher access program',
+            'Sign in to access remote agents via the research access program',
           action: 'signIn' as const,
         },
       ];
