@@ -329,8 +329,8 @@ USING (
   (
     -- Public agents (in public/ folder)
     (storage.foldername(name))[1] = 'public' OR
-    -- Visibility-based access (folder name matches a permission)
-    (storage.foldername(name))[1] = ANY((SELECT permissions FROM profiles WHERE user_id = auth.uid())) OR
+    -- Visibility-based access (permissions array contains folder name)
+    (SELECT permissions FROM profiles WHERE user_id = auth.uid()) @> ARRAY[(storage.foldername(name))[1]] OR
     -- Whitelisted agents
     EXISTS (
       SELECT 1 FROM agent_whitelist aw

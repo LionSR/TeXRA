@@ -124,8 +124,8 @@ USING (
   (
     -- Public folder
     (storage.foldername(name))[1] = 'public' OR
-    -- Folder matches any of user's permissions
-    (storage.foldername(name))[1] = ANY((SELECT permissions FROM profiles WHERE user_id = auth.uid())) OR
+    -- Folder matches any of user's permissions (use @> contains operator)
+    (SELECT permissions FROM profiles WHERE user_id = auth.uid()) @> ARRAY[(storage.foldername(name))[1]] OR
     -- Whitelist access
     EXISTS (
       SELECT 1 FROM agent_whitelist aw
