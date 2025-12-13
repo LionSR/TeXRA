@@ -67,6 +67,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       description: entry.description || '',
       visibility: entry.visibility || ['public'],
       category: entry.category || 'workflow',
+      supportsMultipleOutput: !!entry.multiplePath,
     }));
 
     await webview.postMessage({
