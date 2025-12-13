@@ -70,10 +70,9 @@ function normalizeBibPath(baseDir: string, target: string): string {
 
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
   const paths = new Set<string>();
-  let match: RegExpExecArray | null;
   const directivePattern = createDirectivePattern();
 
-  while ((match = directivePattern.exec(content)) !== null) {
+  for (const match of content.matchAll(directivePattern)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const normalized = normalizeBibPath(baseDir, raw);
@@ -88,10 +87,9 @@ function collectBibliographyPaths(baseDir: string, content: string): string[] {
 
 function collectCitationKeys(content: string): string[] {
   const keys = new Set<string>();
-  let match: RegExpExecArray | null;
   const citationPattern = createCitationPattern();
 
-  while ((match = citationPattern.exec(content)) !== null) {
+  for (const match of content.matchAll(citationPattern)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const key = raw.trim();

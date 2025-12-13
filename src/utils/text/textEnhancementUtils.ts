@@ -121,15 +121,15 @@ export async function polishTextWithAI(
 
       // Add files section header if there are any files
       const hasFiles =
-        fileContext.inputFile ||
-        (fileContext.inputFiles && fileContext.inputFiles.length > 0) ||
-        fileContext.referenceFile ||
-        (fileContext.referenceFiles && fileContext.referenceFiles.length > 0) ||
-        fileContext.auxiliaryFile ||
-        (fileContext.auxiliaryFiles && fileContext.auxiliaryFiles.length > 0) ||
-        fileContext.mediaFile ||
-        (fileContext.mediaFiles && fileContext.mediaFiles.length > 0) ||
-        (fileContext.outputFiles && fileContext.outputFiles.length > 0);
+        !!fileContext.inputFile ||
+        (fileContext.inputFiles?.length ?? 0) > 0 ||
+        !!fileContext.referenceFile ||
+        (fileContext.referenceFiles?.length ?? 0) > 0 ||
+        !!fileContext.auxiliaryFile ||
+        (fileContext.auxiliaryFiles?.length ?? 0) > 0 ||
+        !!fileContext.mediaFile ||
+        (fileContext.mediaFiles?.length ?? 0) > 0 ||
+        (fileContext.outputFiles?.length ?? 0) > 0;
 
       if (hasFiles) {
         fileContextString += '\nFiles in the task:\n';
