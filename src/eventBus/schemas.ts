@@ -12,6 +12,7 @@ import {
   TaskGroupStatusSchema,
   type TaskGroupStatus,
 } from '@common/constants/streamStatus';
+import { TaskGroupSchema } from '@logger/LogTypes';
 
 /**
  * Re-export from types.ts to break circular dependency:
@@ -28,15 +29,23 @@ export {
 // Re-export TaskGroupStatusSchema from single source of truth
 export { TaskGroupStatusSchema, type TaskGroupStatus };
 
-/** Payload for adding a new task group */
+/**
+ * Payload for adding a new task group.
+ * Uses TaskGroupSchema fields via composition (field names differ for API clarity).
+ */
 export const AddTaskGroupPayloadSchema = z.strictObject({
   stream: StreamTabIdSchema,
+  // Renamed from TaskGroup.id for payload clarity
   groupId: z.string().min(1),
+  // Renamed from TaskGroup.name for payload clarity
   groupName: z.string(),
-  startTime: z.number(),
-  status: TaskGroupStatusSchema,
-  endTime: z.number().optional(),
-  parentGroupId: z.string().optional(),
+  // Fields from TaskGroupSchema (same names)
+  ...TaskGroupSchema.pick({
+    startTime: true,
+    status: true,
+    endTime: true,
+    parentGroupId: true,
+  }).shape,
 });
 export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
 
