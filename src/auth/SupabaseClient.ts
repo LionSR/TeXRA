@@ -5,6 +5,11 @@ import {
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
+import {
+  type UserAuthContext,
+  type UserTier,
+  UserAuthContextSchema,
+} from './config';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -137,12 +142,28 @@ export class SupabaseClient {
   }
 
   /**
-   * Get user tier (free or researcher).
+   * Get user tier from the database.
+   * Returns the actual tier value: 'free', 'Max', or 'Ultra'.
    */
-  static async getUserTier(): Promise<'free' | 'researcher'> {
+  static async getUserTier(): Promise<UserTier> {
+    const authContext = await this.getUserAuthContext();
+    return authContext.tier;
+  }
+
+  /**
+   * Get the user's authorization context including permissions.
+   * Permissions are visibility values the user can access.
+   * Tier is reserved for future API key access levels.
+   */
+  static async getUserAuthContext(): Promise<UserAuthContext> {
+    const defaultContext: UserAuthContext = {
+      permissions: [],
+      tier: 'free',
+    };
+
     const tokens = await this.getSessionTokens();
     if (!tokens) {
-      return 'free';
+      return defaultContext;
     }
 
     try {
@@ -152,22 +173,51 @@ export class SupabaseClient {
         refresh_token: tokens.refreshToken,
       });
 
+      // Fetch tier and permissions from profiles
       const { data, error } = await client
         .from('profiles')
-        .select('tier')
+        .select('tier, permissions')
         .single();
 
       if (error || !data) {
-        const errorMsg = error?.message || 'Unknown error';
-        logger.error('SupabaseClient', `Error fetching user tier: ${errorMsg}`);
-        return 'free';
+        logger.error(
+          'SupabaseClient',
+          `Error fetching profile: ${error?.message || 'No data'}`,
+        );
+        return defaultContext;
       }
-      return (data.tier as 'free' | 'researcher') || 'free';
+
+      // Validate and parse with Zod schema, fallback to defaults for invalid fields
+      const result = UserAuthContextSchema.safeParse({
+        tier: data.tier ?? 'free',
+        permissions: data.permissions ?? [],
+      });
+
+      if (!result.success) {
+        logger.warn(
+          'SupabaseClient',
+          `Invalid profile data: ${result.error.message}`,
+        );
+        return defaultContext;
+      }
+
+      return result.data;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseClient', `Error getting user tier: ${errorMsg}`);
-      return 'free';
+      logger.error(
+        'SupabaseClient',
+        `Error getting user auth context: ${errorMsg}`,
+      );
+      return defaultContext;
     }
+  }
+
+  /**
+   * Get user's permissions as a flat array.
+   */
+  static async getUserPermissions(): Promise<string[]> {
+    const context = await this.getUserAuthContext();
+    return context.permissions;
   }
 
   /**
