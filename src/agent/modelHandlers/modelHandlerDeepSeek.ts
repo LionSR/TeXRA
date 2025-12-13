@@ -220,20 +220,14 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
     // with reasoning_content field that OpenAI's types don't know about
-    const messages: ChatCompletionMessageParam[] = [
-      callMsg as ChatCompletionMessageParam,
-    ];
+    // Build tool result messages (results are already sanitized by source)
+    const toolResultMessages = toolCalls.map((call, i) => ({
+      role: 'tool' as const,
+      tool_call_id: call.id,
+      content: JSON.stringify(results[i]),
+    }));
 
-    // Add individual tool result messages (results are already sanitized by source)
-    for (let i = 0; i < toolCalls.length; i++) {
-      messages.push({
-        role: 'tool' as const,
-        tool_call_id: toolCalls[i].id,
-        content: JSON.stringify(results[i]),
-      });
-    }
-
-    return messages;
+    return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
   }
 
   /**
