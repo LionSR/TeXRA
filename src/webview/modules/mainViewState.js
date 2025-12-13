@@ -352,11 +352,26 @@ export class MainViewState {
       selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
       selectEl.tabIndex = isActive ? 0 : -1;
       if (isActive && !selectEl.value) {
-        const fallback = getSelectDefaultValue(
-          selectId,
-          getSessionDefaultAgent(normalized),
-        );
-        safeSetElementValue(selectId, fallback);
+        // Check stored state first - DOM might not be updated yet for custom elements
+        // (vscode-single-select may not synchronously update .value)
+        const storedState = this.stateManager.getState() || {};
+        const stateKey =
+          normalized === SESSION_TYPES.TOOL_USE
+            ? 'toolUseAgent'
+            : 'workflowAgent';
+        const storedValue = storedState[stateKey];
+
+        if (storedValue) {
+          // DOM is stale but we have a stored value - use it
+          safeSetElementValue(selectId, storedValue);
+        } else {
+          // Truly empty - apply default
+          const fallback = getSelectDefaultValue(
+            selectId,
+            getSessionDefaultAgent(normalized),
+          );
+          safeSetElementValue(selectId, fallback);
+        }
       }
     });
 

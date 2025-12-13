@@ -279,8 +279,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         mainViewState.update({ [stateKey]: targetValue });
 
         // NOW switch session type UI (shows correct dropdown, updates radio buttons)
-        // The value is already set, so applySessionType won't override with default
-        mainViewState.applySessionType(targetSessionType);
+        // Pass skipSave: true since we already updated state via mainViewState.update()
+        // This prevents save() from reading stale DOM values for custom elements
+        mainViewState.applySessionType(targetSessionType, { skipSave: true });
 
         // Decorate the placeholder option if it was just created
         // Re-query options since _setAgentValue may have added a new option
