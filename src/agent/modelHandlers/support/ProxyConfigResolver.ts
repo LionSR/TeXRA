@@ -2,8 +2,7 @@ import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
 import {
-  isServerSideKeysSettingEnabled,
-  isProviderSupportedForServerSideKeys,
+  shouldUseServerSideKeysSync,
   getRelayBaseUrl,
 } from '@auth/serverSideKeyAccess';
 
@@ -34,20 +33,7 @@ export interface ProxyConfig {
   openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
   requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
-  useServerSideKeys?: boolean; // Use server-side API keys via relay (experimental)
   logger?: { debug: (message: string) => void };
-}
-
-/**
- * Check if server-side keys should be used for routing.
- * This is a synchronous check of the setting only - actual tier validation
- * happens at request time in the relay Edge Function.
- */
-export function shouldUseServerSideKeysForRouting(provider: ModelProvider): boolean {
-  if (!isServerSideKeysSettingEnabled()) {
-    return false;
-  }
-  return isProviderSupportedForServerSideKeys(provider.toLowerCase());
 }
 
 /**
@@ -92,11 +78,13 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // IMPORTANT: This path is MUTUALLY EXCLUSIVE with proxy.texra.ai.
   // When server-side keys are enabled, we use the Supabase Edge Function relay
   // which handles everything directly - no intermediate proxy is used.
-  // Actual tier validation happens at request time in the relay Edge Function.
-  if (
-    config.useServerSideKeys ||
-    shouldUseServerSideKeysForRouting(config.provider)
-  ) {
+  //
+  // shouldUseServerSideKeysSync checks:
+  // 1. Setting is enabled
+  // 2. Provider is supported
+  // 3. A prior async check (canUseServerSideKeys) confirmed Ultra tier access
+  // This ensures URL routing and API key retrieval stay synchronized.
+  if (shouldUseServerSideKeysSync(config.provider)) {
     const relayUrl = getRelayBaseUrl(config.provider);
     config.logger?.debug(
       `Using server-side keys relay for ${config.provider}: ${relayUrl}`,

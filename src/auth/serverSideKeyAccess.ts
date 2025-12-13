@@ -27,10 +27,12 @@ export const SERVER_SIDE_PROVIDERS = [
 export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
 
 /**
- * Cache for server-side key access check to avoid repeated database calls.
- * Cached for 5 minutes.
+ * Cache for server-side key access check.
+ * Uses Promise-based caching to avoid race conditions.
  */
-let accessCache: { result: boolean; timestamp: number } | null = null;
+let accessCachePromise: Promise<boolean> | null = null;
+let accessCacheTimestamp: number = 0;
+let lastKnownAccessResult: boolean = false;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
@@ -44,7 +46,25 @@ export function isServerSideKeysSettingEnabled(): boolean {
  * Clear the access cache. Call this when user signs in/out.
  */
 export function clearServerSideKeyAccessCache(): void {
-  accessCache = null;
+  accessCachePromise = null;
+  accessCacheTimestamp = 0;
+  lastKnownAccessResult = false;
+}
+
+/**
+ * Internal function to fetch access status.
+ */
+async function fetchAccessStatus(): Promise<boolean> {
+  const isAuthenticated = await SupabaseClient.isAuthenticated();
+  if (!isAuthenticated) {
+    lastKnownAccessResult = false;
+    return false;
+  }
+
+  const tier = await SupabaseClient.getUserTier();
+  const hasAccess = tier === 'Ultra';
+  lastKnownAccessResult = hasAccess;
+  return hasAccess;
 }
 
 /**
@@ -56,32 +76,57 @@ export function clearServerSideKeyAccessCache(): void {
  * 3. User must have Ultra tier
  *
  * Results are cached for 5 minutes to avoid repeated database calls.
+ * Uses Promise-based caching to prevent race conditions.
  */
 export async function canUseServerSideKeys(): Promise<boolean> {
   // Check setting first (fast, no network)
   if (!isServerSideKeysSettingEnabled()) {
+    lastKnownAccessResult = false;
     return false;
   }
 
-  // Check cache
-  if (accessCache && Date.now() - accessCache.timestamp < CACHE_TTL_MS) {
-    return accessCache.result;
+  const now = Date.now();
+
+  // Check if cache is still valid
+  if (accessCachePromise && now - accessCacheTimestamp < CACHE_TTL_MS) {
+    return accessCachePromise;
   }
 
-  // Check authentication and tier
-  const isAuthenticated = await SupabaseClient.isAuthenticated();
-  if (!isAuthenticated) {
-    accessCache = { result: false, timestamp: Date.now() };
+  // Create new cache entry (Promise-based to prevent race conditions)
+  accessCacheTimestamp = now;
+  accessCachePromise = fetchAccessStatus();
+
+  return accessCachePromise;
+}
+
+/**
+ * Synchronous check if server-side keys should be used for routing.
+ *
+ * IMPORTANT: This only returns true if:
+ * 1. The setting is enabled
+ * 2. The provider is supported
+ * 3. A previous async check (canUseServerSideKeys) confirmed access
+ *
+ * If canUseServerSideKeys() hasn't been called yet or returned false,
+ * this will return false to ensure URL routing and API key retrieval
+ * stay synchronized.
+ *
+ * This synchronous function is needed because getBaseUrl() is synchronous.
+ */
+export function shouldUseServerSideKeysSync(provider: string): boolean {
+  // Setting must be enabled
+  if (!isServerSideKeysSettingEnabled()) {
     return false;
   }
 
-  const tier = await SupabaseClient.getUserTier();
-  const hasAccess = tier === 'Ultra';
+  // Provider must be supported
+  if (!isProviderSupportedForServerSideKeys(provider)) {
+    return false;
+  }
 
-  // Cache the result
-  accessCache = { result: hasAccess, timestamp: Date.now() };
-
-  return hasAccess;
+  // Must have confirmed access from a prior async check
+  // This ensures routing and API key decisions are synchronized
+  return lastKnownAccessResult === true;
 }
 
 /**
