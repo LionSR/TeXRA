@@ -168,8 +168,8 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Type badges */
-.type-badge {
+/* Category badges */
+.category-badge {
   display: inline-block;
   padding: 2px var(--spacing-small);
   border-radius: var(--border-radius-small);
