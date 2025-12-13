@@ -16,7 +16,6 @@ import {
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
-import { PERMISSIONS, hasPermission } from '@/auth/config';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
@@ -59,30 +58,16 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
 
-    // Fetch remote agents if user has permission
-    let remoteAgents: Array<{
-      name: string;
-      description: string;
-      visibility: string;
-      category?: string;
-    }> = [];
-
-    const canAccessRemoteAgents = hasPermission(
-      authContext.permissions,
-      PERMISSIONS.ACCESS_REMOTE_AGENTS,
-    );
-
-    if (canAccessRemoteAgents) {
-      // Refresh agent cache to ensure remote agents are loaded after authentication
-      await loadAgents();
-      const entries = getAgentsBySource('remote' as AgentSource);
-      remoteAgents = entries.map((entry) => ({
-        name: entry.name,
-        description: entry.description || '',
-        visibility: entry.visibility || 'researcher',
-        category: entry.category || 'workflow',
-      }));
-    }
+    // Fetch remote agents - RLS filters based on user's permissions
+    // All authenticated users can see agents matching their visibility access
+    await loadAgents();
+    const entries = getAgentsBySource('remote' as AgentSource);
+    const remoteAgents = entries.map((entry) => ({
+      name: entry.name,
+      description: entry.description || '',
+      visibility: entry.visibility || 'public',
+      category: entry.category || 'workflow',
+    }));
 
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -91,7 +76,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier: authContext.primaryGroup, // Backwards compatibility
+      tier: authContext.tier,
       permissions: authContext.permissions,
       remoteAgents,
     });

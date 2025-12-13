@@ -70,60 +70,32 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 // ============================================================================
 
 /**
- * Known permissions used in the system.
- * New permissions can be added to the database without code changes,
- * but these constants provide type safety for common checks.
+ * Permissions are just visibility values that the user can access.
+ * E.g., ['researcher', 'math', 'cs'] means user can see agents with those visibility levels.
+ * 'public' agents are always visible to authenticated users.
+ *
+ * Note: 'tier' column is reserved for future server-side API key access.
  */
-export const PERMISSIONS = {
-  /** Access to remote agents feature */
-  ACCESS_REMOTE_AGENTS: 'access_remote_agents',
-  /** Access to agents with 'researcher' visibility */
-  ACCESS_RESEARCHER_VISIBILITY: 'access_researcher_visibility',
-} as const;
-
-export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 /**
  * User's authorization context.
- * Permissions are stored directly in the profiles table.
+ * Permissions are visibility values stored in profiles.permissions column.
  */
 export interface UserAuthContext {
-  /** User's permissions from profiles.permissions column */
+  /** Visibility values user can access: ['researcher', 'math', etc.] */
   permissions: string[];
-  /** User's tier from profiles.tier column (for display) */
-  primaryGroup: string;
-  /** @deprecated Kept for compatibility, always empty in simplified model */
-  groups: never[];
+  /** User's tier (reserved for future API key access) */
+  tier: string;
 }
 
 /**
- * Check if a permission array includes a specific permission.
+ * Check if user has access to a specific visibility level.
  */
-export function hasPermission(
+export function hasVisibilityAccess(
   permissions: string[],
-  permission: string,
+  visibility: string,
 ): boolean {
-  return permissions.includes(permission);
-}
-
-/**
- * Check if a permission array includes any of the specified permissions.
- */
-export function hasAnyPermission(
-  permissions: string[],
-  requiredPermissions: string[],
-): boolean {
-  return requiredPermissions.some((p) => permissions.includes(p));
-}
-
-/**
- * Check if a permission array includes all of the specified permissions.
- */
-export function hasAllPermissions(
-  permissions: string[],
-  requiredPermissions: string[],
-): boolean {
-  return requiredPermissions.every((p) => permissions.includes(p));
+  return visibility === 'public' || permissions.includes(visibility);
 }
 
 /**
