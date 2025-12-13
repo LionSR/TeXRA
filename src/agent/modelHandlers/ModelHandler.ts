@@ -25,12 +25,9 @@ import { getConfig } from '@utils/config';
 // Local file imports
 import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
-import {
-  resolveBaseUrl,
-  shouldUseOpenRouter,
-  shouldUseServerSideKeysForRouting,
-} from './support/ProxyConfigResolver';
+import { resolveBaseUrl, shouldUseOpenRouter } from './support/ProxyConfigResolver';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -225,7 +222,10 @@ export abstract class ModelHandler<
    */
   public async getApiKey(): Promise<string> {
     // Check if server-side keys should be used (experimental feature for Ultra users)
-    if (shouldUseServerSideKeysForRouting(this.config.provider)) {
+    // shouldUseServerSideKeysSync returns true only if a prior canUseServerSideKeys()
+    // check confirmed the user has Ultra tier access. This ensures URL routing
+    // (via resolveBaseUrl) and API key retrieval stay synchronized.
+    if (shouldUseServerSideKeysSync(this.config.provider)) {
       const accessToken = await SupabaseClient.getAccessToken();
       if (accessToken) {
         this.logger.debug(
@@ -233,9 +233,10 @@ export abstract class ModelHandler<
         );
         return accessToken;
       }
-      // Fall through to normal API key retrieval if not authenticated
-      this.logger.debug(
-        'Server-side keys enabled but not authenticated, falling back to local keys',
+      // This should not happen if shouldUseServerSideKeysSync returned true,
+      // but fall through to normal API key retrieval just in case
+      this.logger.warn(
+        'Server-side keys check passed but no access token available, falling back to local keys',
       );
     }
 
