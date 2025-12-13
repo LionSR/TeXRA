@@ -172,7 +172,7 @@ export class AgentsTable {
       typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
     }
 
-    // Set multi-output badge with codicon
+    // Set multi-output badge with codicon and aria-label for accessibility
     const multiOutputBadge = row.querySelector('.multi-output-badge');
     if (multiOutputBadge) {
       const icon = document.createElement('span');
@@ -180,9 +180,11 @@ export class AgentsTable {
       if (agent.supportsMultipleOutput) {
         icon.classList.add('codicon-check');
         multiOutputBadge.classList.add('supported');
+        multiOutputBadge.setAttribute('aria-label', 'Supports multiple outputs');
       } else {
         icon.classList.add('codicon-close');
         multiOutputBadge.classList.add('not-supported');
+        multiOutputBadge.setAttribute('aria-label', 'Single output only');
       }
       multiOutputBadge.appendChild(icon);
     }
