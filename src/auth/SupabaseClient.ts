@@ -5,7 +5,7 @@ import {
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
-import type { UserAuthContext } from './config';
+import type { UserAuthContext, UserTier } from './config';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -141,9 +141,14 @@ export class SupabaseClient {
    * Get user tier from the database.
    * Returns the actual tier value: 'free', 'Max', or 'Ultra'.
    */
-  static async getUserTier(): Promise<string> {
+  static async getUserTier(): Promise<UserTier> {
     const authContext = await this.getUserAuthContext();
-    return authContext.tier;
+    const tier = authContext.tier;
+    // Validate tier is a known value, default to 'free'
+    if (tier === 'free' || tier === 'Max' || tier === 'Ultra') {
+      return tier;
+    }
+    return 'free';
   }
 
   /**
