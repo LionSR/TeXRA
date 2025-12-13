@@ -183,8 +183,10 @@ export class SupabaseClient {
         return defaultContext;
       }
 
-      const tier = (data.tier as string) || 'free';
-      const permissions = (data.permissions as string[]) || [];
+      const tier = typeof data.tier === 'string' ? data.tier : 'free';
+      const permissions = Array.isArray(data.permissions)
+        ? data.permissions
+        : [];
 
       return {
         permissions,
