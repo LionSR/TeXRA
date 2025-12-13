@@ -20,8 +20,8 @@
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { ExecutionId } from '@shared/identifiers';
 
 /**
  * Base state interface shared by all cycle flows.

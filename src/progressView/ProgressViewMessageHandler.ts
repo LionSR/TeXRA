@@ -13,7 +13,6 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
@@ -40,6 +39,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import type { StreamTabId } from '@shared/identifiers';
 
 // Type imports
 import type { ProgressViewProvider } from './ProgressViewProvider';

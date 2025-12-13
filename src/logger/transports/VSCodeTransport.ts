@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
 // Local imports - logger
 import { getColorForLevel, serializeLogData } from '@logger/utils';
 import type { EndGroupStatus } from '@logger/messageTypes';
@@ -13,6 +12,7 @@ import type {
   LogGroupStartedEvent,
   LogMessageEvent,
 } from '@logger/types';
+import type { TaskGroupStatus } from '@shared/status';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;

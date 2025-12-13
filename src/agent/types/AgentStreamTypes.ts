@@ -1,5 +1,5 @@
-// Local types - agent
-import { AgentCategory } from '@agent/core/AgentDataclass';
+// Shared types
+import { AgentCategory } from '@shared/agent';
 
 /**
  * Allowed filter values for agent streams in the ProgressBoard.

@@ -1,6 +1,6 @@
 // Local imports - agent
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@shared/identifiers';
 
 const registry = new Map<StreamTabId, BaseToolUseAgent>();
 

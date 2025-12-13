@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
+import type { TaskGroupStatus } from '@shared/status';
 
 /**
  * Log level constants - single source of truth for severity levels.

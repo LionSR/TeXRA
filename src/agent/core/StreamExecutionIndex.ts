@@ -1,5 +1,5 @@
 // Local imports - agent identifiers
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 interface StreamExecutionEntry<T> {
   streamId: StreamTabId;

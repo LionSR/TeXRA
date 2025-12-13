@@ -8,7 +8,7 @@ import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessag
 // Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 

@@ -3,10 +3,11 @@ import { ZodError, type ZodType } from 'zod';
 
 // Local imports - common
 
-// Local imports - core tool types (single source of truth)
-import type { ITool, ToolDefinition, ToolResult } from '@agent/core/ToolTypes';
+// Shared types
+// Local imports - tool result factory
 import { toolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
+import type { ITool, ToolDefinition, ToolResult } from '@shared/tools';
 
 /**
  * Abstract base class for tool implementations.

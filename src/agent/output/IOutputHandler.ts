@@ -1,5 +1,4 @@
 // Local imports - agent
-import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local file imports
@@ -12,6 +11,7 @@ import {
   RoundFileMapping,
   RoundOutput,
 } from './types';
+import type { StorageKey } from '@shared/identifiers';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {

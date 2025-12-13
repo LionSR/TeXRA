@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - agent coordination
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
@@ -17,6 +16,7 @@ import {
   type ResumeAgentResult,
   type ToolUseSessionSnapshot,
 } from './ToolUseSessionPersistence';
+import type { StreamTabId } from '@shared/identifiers';
 
 const logger = new AgentLogger('ToolUseFollowUpCoordinator');
 

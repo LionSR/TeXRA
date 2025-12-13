@@ -12,7 +12,6 @@ import * as vscode from 'vscode';
 import * as difflib from 'difflib';
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { toolResult, type ToolResult } from '@tools/result';
@@ -23,6 +22,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
+import type { StreamTabId } from '@shared/identifiers';
 
 export interface ToolEditApprovalRequest {
   path: string;

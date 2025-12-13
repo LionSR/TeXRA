@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -19,6 +18,7 @@ import { WebviewUpdater } from './managers';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
+import type { StreamTabId, StorageKey } from '@shared/identifiers';
 
 // Types
 

@@ -9,7 +9,7 @@ import { z } from 'zod';
 import {
   ExecutionIdSchema,
   type ExecutionId,
-} from '@agent/types/IdentifierTypes';
+} from '@shared/identifiers';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';

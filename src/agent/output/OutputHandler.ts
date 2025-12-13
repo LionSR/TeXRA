@@ -2,16 +2,15 @@
 import * as path from 'path';
 
 // Local imports - agent components
-import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
+import { AgentType } from '@shared/agent';
 import {
   AgentSetting,
-  AgentType,
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -48,6 +47,7 @@ import {
 } from './types';
 import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
+import type { StorageKey } from '@shared/identifiers';
 
 // Type imports
 import type { IOutputHandler } from './IOutputHandler';

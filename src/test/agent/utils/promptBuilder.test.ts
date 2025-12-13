@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - prompt utilities
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType } from '@shared/agent';
 // Type imports
 import type {
   AgentPrompt,

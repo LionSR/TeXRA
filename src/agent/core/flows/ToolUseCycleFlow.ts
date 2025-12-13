@@ -26,7 +26,6 @@ import type {
   FileInteractionState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
-import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 import {
   formatProviderHttpError,
@@ -54,6 +53,7 @@ import {
   applyFallbackResult,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
+import type { ToolResult } from '@shared/tools';
 import type {
   ToolUseCycleOptions,
   ToolUseCycleServices,

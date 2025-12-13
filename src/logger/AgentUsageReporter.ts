@@ -1,13 +1,13 @@
 // Local imports - agent types
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@shared/agent';
 
 // Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - logger
 import { AgentLogger } from './AgentLogger';
+import type { ExtendedTokenUsageStats } from '@shared/usage';
+import type { StorageKey, StreamTabId } from '@shared/identifiers';
 
 /**
  * Bridges usage statistics from model handlers into log transport events.

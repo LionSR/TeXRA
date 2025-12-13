@@ -2,13 +2,7 @@
 import { randomUUID } from 'crypto';
 
 // Local imports - agent types
-import type {
-  ExecutionId,
-  ExecutionIdentity,
-  StorageKey,
-  StreamTabId,
-} from '@agent/types/IdentifierTypes';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@shared/agent';
 import { normalizeRunId } from '@common/constants/runIds';
 
 // Local imports - logger
@@ -18,6 +12,12 @@ import {
   type AgentLoggerStageOptions,
 } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
+import type {
+  ExecutionId,
+  ExecutionIdentity,
+  StorageKey,
+  StreamTabId,
+} from '@shared/identifiers';
 
 export interface AgentExecutionContextInit {
   streamId: StreamTabId;

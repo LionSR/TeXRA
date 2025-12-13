@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { AgentType } from '@agent/core/AgentDataclass';
+import { AgentType } from '@shared/agent';
 import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {

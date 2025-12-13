@@ -2,9 +2,9 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { TokenUsageStats } from '@shared/usage';
 
 // Local file imports
 import type {

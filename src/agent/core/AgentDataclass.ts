@@ -1,21 +1,11 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Shared types - import for local use
+// Shared types
 import { AgentType, AgentCategory, type AgentSessionDescriptor } from '@shared/agent';
 
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
-
-// Re-export shared types from @shared/agent (single source of truth)
-// New code should import directly from '@shared/agent'
-export {
-  AgentType,
-  AgentCategory,
-  deriveAgentCategory,
-  resolveAgentSessionDescriptor,
-  type AgentSessionDescriptor,
-} from '@shared/agent';
 
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;

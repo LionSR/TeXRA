@@ -7,11 +7,11 @@ import {
   StreamTabIdSchema,
   ExecutionIdSchema,
   StorageKeySchema,
-} from '@agent/types/IdentifierTypes';
+} from '@shared/identifiers';
 import {
   TaskGroupStatusSchema,
   type TaskGroupStatus,
-} from '@common/constants/streamStatus';
+} from '@shared/status';
 
 /**
  * Re-export from types.ts to break circular dependency:

@@ -5,13 +5,13 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import { AgentRunState } from '@agent/core/AgentState';
 
 // Type imports
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
-} from '@agent/types/UsageTypes';
+} from '@shared/usage';
 
 // Internal imports
-import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**
  * Handles recording usage statistics to the log and progress view.

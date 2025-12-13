@@ -2,7 +2,6 @@
 import { randomUUID } from 'crypto';
 
 // Local imports - events
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import {
@@ -16,6 +15,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
 import * as logger from './logUtils';
 import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
+import type { ExtendedTokenUsageStats } from '@shared/usage';
 
 // Type imports
 import type { EndGroupStatus, MessageType } from './messageTypes';

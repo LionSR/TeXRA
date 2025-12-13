@@ -3,8 +3,8 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent runtime
+import { AgentCategory, AgentType } from '@shared/agent';
 import type { ResolvedAgent } from '@agent/index';
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
 

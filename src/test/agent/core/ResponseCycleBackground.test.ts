@@ -5,20 +5,15 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentType, AgentCategory } from '@shared/agent';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-  AgentCategory,
-} from '@agent/core/AgentDataclass';
+import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 // Type imports
@@ -45,6 +40,7 @@ import {
 } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import * as latex from '@latex';
+import type { StreamTabId } from '@shared/identifiers';
 
 // Third-party types
 import type OpenAI from 'openai';

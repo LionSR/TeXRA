@@ -2,14 +2,11 @@
 import * as path from 'path';
 
 // Local imports - agent
+import { AgentType } from '@shared/agent';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';

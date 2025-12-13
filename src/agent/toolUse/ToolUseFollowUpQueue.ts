@@ -1,6 +1,6 @@
 // Local imports - logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { StreamTabId } from '@shared/identifiers';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
 const logger = new AgentLogger(CHANNEL);

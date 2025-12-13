@@ -1,7 +1,7 @@
 // Local imports - agent types
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { AgentCategory, AgentType } from '@shared/agent';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 export interface StreamUITraits {
   /** Canonical session grouping for the stream. */

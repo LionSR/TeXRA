@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
+import { AgentCategory } from '@shared/agent';
 import { createKey, getAgent, type AgentSource } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview';

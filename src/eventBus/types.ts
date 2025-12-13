@@ -2,7 +2,7 @@
  * Shared event bus types for breaking circular dependency with progressView.
  */
 import { z } from 'zod';
-import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
+import { StreamTabIdSchema } from '@shared/identifiers';
 
 /** Tool edit approval request prompt */
 export const ToolEditApprovalPromptSchema = z.strictObject({

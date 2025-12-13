@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports - logging
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
@@ -23,6 +22,7 @@ import {
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
+import type { ExecutionId } from '@shared/identifiers';
 
 /**
  * Persists tool-use session snapshots to disk. Runtime queue state lives in

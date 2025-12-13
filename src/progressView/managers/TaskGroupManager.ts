@@ -1,15 +1,15 @@
 // Local imports - identifiers and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
+import { STREAM_STATUS } from '@shared/status';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskGroup } from '@logger/LogTypes';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import type { StreamTabId } from '@shared/identifiers';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;

@@ -29,11 +29,11 @@ interface UploadedAnthropicAttachment {
 // Local imports - agent
 
 // Local imports - agent components
+import { AgentType } from '@shared/agent';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import {
   AgentSetting,
-  AgentType,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent components
-import { AgentType, resolveAgentSessionDescriptor } from './AgentDataclass';
+import { AgentType, resolveAgentSessionDescriptor } from '@shared/agent';
 import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 

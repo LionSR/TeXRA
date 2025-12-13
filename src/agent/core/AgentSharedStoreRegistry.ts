@@ -1,8 +1,8 @@
 // Local imports - agent state
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import { StreamExecutionIndex } from './StreamExecutionIndex';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 // Local file imports
-import { StreamExecutionIndex } from './StreamExecutionIndex';
 
 // Type imports
 import type { AgentSharedStore } from './AgentSharedStore';

@@ -10,10 +10,10 @@
  */
 
 // Local imports - agent types
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - core indexing
 import { StreamExecutionIndex } from '@agent/core/StreamExecutionIndex';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 // Local file imports - tool-use snapshots
 import type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';

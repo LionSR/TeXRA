@@ -34,8 +34,8 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { TaskRunFileService } from '@utils/files';
+import type { IToolRegistry } from '@shared/tools';
 
 // ============================================================================
 // CYCLE OPTIONS (single source of truth)

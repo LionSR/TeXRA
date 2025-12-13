@@ -2,9 +2,9 @@
  * Common constants shared across the codebase.
  *
  * This module provides a single source of truth for:
- * - Stream status values
  * - Run ID utilities
+ *
+ * Note: Stream status moved to @shared/status
  */
 
-export * from './streamStatus';
 export * from './runIds';

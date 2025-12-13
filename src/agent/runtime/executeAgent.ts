@@ -5,6 +5,15 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - agent components
+import { AgentType } from '@shared/agent';
+// Type imports
+// Internal imports
+import { STREAM_STATUS } from '@shared/status';
+import {
+  resolveAgent,
+  getMultipleName,
+  type ResolvedAgent,
+} from '@agent/index';
 import {
   DirectAgent,
   CoTAgent,
@@ -12,28 +21,18 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import {
-  resolveAgent,
-  getMultipleName,
-  type ResolvedAgent,
-} from '@agent/index';
-import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSetting,
-  AgentPrompt,
-  AgentType,
-  getAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
-import { IAgent } from '@agent/core/IAgent';
+import { ModelFactory } from '@agent/runtime/ModelFactory';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
-import { ModelFactory } from '@agent/runtime/ModelFactory';
-// Type imports
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-// Internal imports
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { IAgent } from '@agent/core/IAgent';
+import {
+  AgentSetting,
+  AgentPrompt,
+  getAgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -53,6 +52,7 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
+import type { StreamTabId, ExecutionId } from '@shared/identifiers';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);

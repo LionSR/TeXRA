@@ -1,9 +1,9 @@
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { EndGroupStatus } from '@logger/messageTypes';
-import type { AgentSessionDescriptor } from './AgentDataclass';
+import type { StreamTabId } from '@shared/identifiers';
+import type { AgentSessionDescriptor } from '@shared/agent';
 import type { AgentConfig } from './AgentConfig';
 
 /**

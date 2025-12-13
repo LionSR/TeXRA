@@ -1,4 +1,5 @@
 // Local imports - agent core
+import { STREAM_STATUS } from '@shared/status';
 import { AgentSharedStoreRegistry } from '@agent/core/AgentSharedStoreRegistry';
 // Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -14,7 +15,6 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 // Internal imports
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 
 export class ToolUseSessionLifecycle<C = unknown> {
   private readonly followUps: FollowUpQueue;

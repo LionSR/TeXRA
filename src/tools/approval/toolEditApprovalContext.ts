@@ -1,5 +1,5 @@
 // Local imports - agent types
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 export interface ToolEditApprovalContext {
   streamId?: StreamTabId;

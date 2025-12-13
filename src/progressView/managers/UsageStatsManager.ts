@@ -2,9 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - identifiers
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Types - import canonical type (schema defines structure)
-import { type TokenUsageStats } from '@agent/types/UsageTypes';
+import { type TokenUsageStats } from '@shared/usage';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -13,6 +12,7 @@ import {
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
+import type { StorageKey, StreamTabId } from '@shared/identifiers';
 
 // --- Zod Schemas for Usage Stats ---
 

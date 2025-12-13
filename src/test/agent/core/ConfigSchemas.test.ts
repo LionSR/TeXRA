@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
+import { AgentCategory } from '@shared/agent';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ToolConfigSchema } from '@agent/core/ToolConfig';
 
 describe('ToolConfigSchema', () => {

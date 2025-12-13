@@ -2,27 +2,26 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import { AgentType } from '@agent/core/AgentDataclass';
+import { AgentType } from '@shared/agent';
 // Type imports
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Internal imports
-import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import {
-  executeAgentWithLogging,
-  prepareAgentInstance,
-} from '@agent/runtime/executeAgent';
+// Type imports
+
+// Local imports - logging
+import { STREAM_STATUS } from '@shared/status';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from '@agent/runtime/AgentExecutionContext';
-// Type imports
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Local imports - logging
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import {
+  executeAgentWithLogging,
+  prepareAgentInstance,
+} from '@agent/runtime/executeAgent';
+import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getToolUsePersistenceEnabled } from '@utils/config';
@@ -41,6 +40,7 @@ import {
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);

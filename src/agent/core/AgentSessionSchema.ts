@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { AgentCategory, AgentType } from './AgentDataclass';
+import { AgentCategory, AgentType } from '@shared/agent';
 
 /**
  * Canonical schema for agent session descriptors shared across agent modules.

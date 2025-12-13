@@ -2,14 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent and usage types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@shared/agent';
+import { STREAM_STATUS } from '@shared/status';
+import type { OutputFileInfo } from '@agent/output/types';
 import { normalizeRunId } from '@common/constants/runIds';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -40,6 +38,8 @@ import {
   type ApprovalEventsShared,
 } from './ApprovalEvents';
 import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
+import type { TokenUsageStats } from '@shared/usage';
+import type { StreamTabId } from '@shared/identifiers';
 
 /**
  * Handles progress event bus subscriptions for the progress view.

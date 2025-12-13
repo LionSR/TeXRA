@@ -2,17 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent metadata
-import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
-// Type imports
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { resolveAgentSessionDescriptor, type AgentCategory, type AgentType } from '@shared/agent';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-} from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -36,6 +29,11 @@ import {
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { getConfig } from '@utils/config';
 import type { TodoItem } from '@eventBus/schemas';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+} from '@shared/identifiers';
 
 /**
  * Core state management for the progress view.

@@ -1,35 +1,17 @@
 /**
- * Core tool type definitions for the agent system.
+ * Core tool implementations for the agent system.
  *
- * This module re-exports shared tool interfaces from @shared/tools and provides
- * the MapToolRegistry implementation. The interfaces (ITool, IToolRegistry) are
- * now in @shared/tools to break circular dependencies between @agent and @tools.
- *
- * This enables:
- * - Dependency injection (agents accept IToolRegistry instead of concrete types)
- * - Breaking circular dependencies between @agent and @tools
- * - Cleaner separation between agent core and tool implementations
- * - Testability (mock registries can be injected)
+ * Types (ITool, IToolRegistry, ToolResult, etc.) are in @shared/tools.
+ * This module provides:
+ * - MapToolRegistry implementation
+ * - createToolRegistry factory
+ * - Re-exports of toolResult, cliResult, ToolError from @tools/result
  */
 
-// Re-export shared types from @shared/tools (SSOT for interfaces)
-// New code should import directly from '@shared/tools'
-export type {
-  ITool,
-  IToolRegistry,
-  ToolResult,
-  ToolDefinition,
-  ToolFileAttachment,
-  ErrorDiagnostics,
-  DiagnosticsPayload,
-  LineChanges,
-  EditRecord,
-} from '@shared/tools';
-
-// Import for local use in implementation
+// Shared types
 import type { ITool, IToolRegistry } from '@shared/tools';
 
-// Re-export factory functions from @tools/result (implementations stay there)
+// Re-export result factory functions
 export { toolResult, cliResult, ToolError } from '@tools/result';
 
 /**

@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - progress view
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
@@ -22,6 +21,7 @@ import {
   createRoundMapSchema,
   createRunMapSchema,
 } from '@progressView/persistence/schemaUtils';
+import type { StorageKey, StreamTabId } from '@shared/identifiers';
 
 // --- Zod Schemas for Output Files ---
 

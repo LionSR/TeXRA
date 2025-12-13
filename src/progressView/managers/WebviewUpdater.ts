@@ -2,16 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 import {
   STREAM_STATUS,
   type StreamStatus,
-} from '@common/constants/streamStatus';
+} from '@shared/status';
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
@@ -29,6 +27,8 @@ import type {
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
 import type { TodoItem } from '@eventBus/schemas';
+import type { TokenUsageStats } from '@shared/usage';
+import type { StreamTabId } from '@shared/identifiers';
 
 // Logger imports
 // Type imports

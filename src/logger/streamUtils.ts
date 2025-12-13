@@ -2,10 +2,10 @@
 import { randomUUID } from 'crypto';
 
 // Local imports
+import { AgentType } from '@shared/agent';
 import { getCleanAgentName, getMultipleName } from '@agent/index';
-import { AgentType } from '@agent/core/AgentDataclass';
 // Type imports
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@shared/identifiers';
 
 type StreamTabIdOptions = {
   agentType?: AgentType;

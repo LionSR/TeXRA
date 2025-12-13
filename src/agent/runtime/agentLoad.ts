@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - agent components
+import { AgentType } from '@shared/agent';
 import {
   resolveAgent,
   getBaseName,
@@ -18,7 +19,6 @@ import {
   AgentPrompt,
   AgentPromptSchema,
   AgentDefinitionSchema,
-  AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';

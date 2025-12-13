@@ -2,7 +2,7 @@
  * Shared logging interfaces used by the logger and progress view.
  */
 
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
+import type { TaskGroupStatus } from '@shared/status';
 
 // Local imports
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';

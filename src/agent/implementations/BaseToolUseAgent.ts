@@ -21,7 +21,6 @@ import {
 } from '@agent/implementations/flows/ToolUseRunFlow';
 // Type imports
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
@@ -36,8 +35,6 @@ import {
 import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Type imports
-import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { ToolDefinition } from '@model';
 
 // Internal imports - use IToolRegistry from core (single source of truth)
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -45,6 +42,8 @@ import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 // Local file imports
 import { BaseAgent } from './BaseAgent';
+import type { IToolRegistry, ToolDefinition } from '@shared/tools';
+import type { StreamTabId } from '@shared/identifiers';
 
 export interface BaseToolUseAgentOptions {
   /**

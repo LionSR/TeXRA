@@ -1,10 +1,7 @@
 // Local imports
+import { AgentCategory, type AgentSessionDescriptor } from '@shared/agent';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import {
-  AgentCategory,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
 
 // Type imports
 import type { FileType } from '@utils/config';

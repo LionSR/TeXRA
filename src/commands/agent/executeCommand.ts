@@ -11,9 +11,9 @@ import {
   executeAgent,
   resumeAgentExecution,
 } from '@agent/runtime/executeAgent';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
+import type { ExecutionId } from '@shared/identifiers';
 
 const CHANNEL = 'ExecuteCommand';
 

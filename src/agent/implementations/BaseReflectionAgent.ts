@@ -13,7 +13,6 @@ import {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
-import type { ExecutionId, StorageKey } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import {
@@ -55,6 +54,7 @@ import {
   type AgentFileLocation,
 } from '@utils/files';
 import { LatexMediaManager } from '@latex';
+import type { ExecutionId, StorageKey } from '@shared/identifiers';
 
 /**
  * Options for handling round output.

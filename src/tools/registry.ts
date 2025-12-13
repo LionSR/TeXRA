@@ -1,5 +1,5 @@
-// Local imports - core types
-import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
+// Shared types
+// Local imports - registry implementation
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - tools
@@ -26,6 +26,7 @@ import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
+import type { ITool, IToolRegistry } from '@shared/tools';
 
 /**
  * Default tool instances as a plain Record.

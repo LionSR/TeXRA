@@ -2,12 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
-import {
-  AgentCategory,
-  AgentPrompt,
-  AgentSetting,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType } from '@shared/agent';
+import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -21,7 +17,6 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpe
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecResult } from '@agent/types/ResultTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { createToolRegistry } from '@agent/core/ToolTypes';
@@ -33,6 +28,7 @@ import {
 } from '@model/ModelConfig';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
+import type { StreamTabId } from '@shared/identifiers';
 
 // Type imports
 import type OpenAI from 'openai';

@@ -5,10 +5,11 @@ import { Buffer } from 'node:buffer';
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
 // Local imports - agent
+import { AgentType } from '@shared/agent';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
-// Internal imports
-import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
+import { hasEndTag } from '@agent/core/AgentDataclass';
+// Shared types
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   type OpenAIAPIResponseUsage,

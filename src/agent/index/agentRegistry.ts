@@ -17,11 +17,8 @@ import * as yaml from 'yaml';
 import { z } from 'zod';
 import { encode as encodeHtml } from 'he';
 
-import {
-  AgentType,
-  AgentCategory,
-  AgentDefinitionSchema,
-} from '@agent/core/AgentDataclass';
+import { AgentType, AgentCategory } from '@shared/agent';
+import { AgentDefinitionSchema } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';

@@ -1,7 +1,8 @@
 // Local imports - agent components
+import { AgentType } from '@shared/agent';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentSetting } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
