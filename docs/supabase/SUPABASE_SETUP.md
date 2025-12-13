@@ -189,7 +189,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
-  tier TEXT DEFAULT 'free',
+  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'Max', 'Ultra')),
   permissions TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -232,7 +232,8 @@ CREATE TABLE usage_logs (
 -- Create indexes for performance
 CREATE INDEX idx_usage_logs_user ON usage_logs(user_id);
 CREATE INDEX idx_usage_logs_response ON usage_logs(response_id);
-CREATE INDEX idx_remote_agents_visibility ON remote_agents(visibility);
+CREATE INDEX idx_remote_agents_visibility ON remote_agents USING GIN(visibility);
+CREATE INDEX idx_profiles_permissions ON profiles USING GIN(permissions);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
