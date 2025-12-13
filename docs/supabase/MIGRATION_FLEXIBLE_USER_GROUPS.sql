@@ -3,6 +3,10 @@
 -- 2. Changes visibility to array (agent can be visible to multiple groups)
 -- 3. Adds agent_category to remote_agents (workflow/toolUse)
 -- 4. Adds tier constraint (free/Max/Ultra) for future API key access
+--
+-- NOTE: Tier names (Max/Ultra) are internal. In the UI, users see:
+-- - "research access program" for Max tier (researchers, academics)
+-- - Ultra is reserved for sponsors who engaged with TeXRA development
 
 -- ============================================================================
 -- STEP 1: Add permissions column to profiles
@@ -190,8 +194,8 @@ SELECT name, visibility, array_ndims(visibility) as dims, agent_category FROM re
 -- INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
 -- VALUES ('basic-assistant', 'Basic help', 'public/basic.yaml', ARRAY['public'], 'workflow');
 
--- Tier values (for future API key access):
+-- Tier values (internal names, for future API key access):
 -- 'free' - default, no API key access
--- 'Max' - mid-tier API key access (former researchers)
--- 'Ultra' - full API key access
+-- 'Max' - research access program members (researchers, academics)
+-- 'Ultra' - special sponsors who engaged with TeXRA development
 -- UPDATE profiles SET tier = 'Max' WHERE email = 'user@example.com';
