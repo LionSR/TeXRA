@@ -316,6 +316,12 @@ CREATE TRIGGER on_auth_user_created
 
 ### 2. Configure Storage RLS Policies
 
+> **Note:** This storage policy is defense-in-depth only. Primary access control is on the
+> `remote_agents` table (using array overlap `&&`). The Edge Function verifies access via
+> remote_agents RLS first, then uses an admin client to bypass storage RLS. Store agents
+> in a folder matching their primary visibility level (e.g., `researcher/agent.yaml` for
+> an agent with `visibility = ['researcher', 'math']`).
+
 1. Click on the `agent-configs` bucket
 2. Go to **Policies** tab
 3. Click "New Policy"
@@ -330,7 +336,8 @@ USING (
   (
     -- Public agents (in public/ folder)
     (storage.foldername(name))[1] = 'public' OR
-    -- Visibility-based access (permissions array contains folder name)
+    -- Defense-in-depth: check if user has permission for folder
+    -- Primary access control is on remote_agents table via Edge Function
     (SELECT permissions FROM profiles WHERE user_id = auth.uid()) @> ARRAY[(storage.foldername(name))[1]] OR
     -- Whitelisted agents
     EXISTS (

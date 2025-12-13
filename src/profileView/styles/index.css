@@ -173,6 +173,11 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
+.visibility-badge.custom {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
 /* Type badges */
 .type-badge {
   display: inline-block;
