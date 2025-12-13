@@ -59,12 +59,14 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d) => {
     // Use native SDK Zod conversion when schema is available
+    // zodFunction() returns AutoParseableTool which extends ChatCompletionFunctionTool
+    // with additional parsing metadata - structurally compatible with ChatCompletionTool
     if (d.zodSchema) {
       return zodFunction({
         name: d.name,
         description: d.description,
         parameters: d.zodSchema,
-      }) as unknown as ChatCompletionTool;
+      }) as ChatCompletionTool;
     }
 
     // Fallback to manual conversion for legacy definitions
@@ -123,13 +125,15 @@ export function toOpenAIResponseTools(
     }
 
     // Use native SDK Zod conversion when schema is available
+    // zodResponsesFunction() returns AutoParseableResponseTool which extends FunctionTool
+    // with additional parsing metadata - structurally compatible with OpenAIResponseTool
     if (d.zodSchema) {
       tools.push(
         zodResponsesFunction({
           name: d.name,
           description: d.description,
           parameters: d.zodSchema,
-        }) as unknown as OpenAIResponseTool,
+        }) as OpenAIResponseTool,
       );
       continue;
     }
