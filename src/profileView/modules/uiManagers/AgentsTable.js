@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES, DEFAULTS } from '../constants.js';
+import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -169,7 +169,7 @@ export class AgentsTable {
     // Set agent category badge (workflow or toolUse)
     const categoryBadge = row.querySelector('.category-badge');
     if (categoryBadge) {
-      categoryBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
+      categoryBadge.textContent = agent.category;
     }
 
     // Set multi-output badge with codicon and aria-label for accessibility
