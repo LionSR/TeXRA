@@ -6,6 +6,7 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
+import { z } from 'zod';
 
 /**
  * Supabase configuration interface
@@ -64,6 +65,72 @@ export function isSupabaseConfigured(): boolean {
  */
 export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
+// ============================================================================
+// User Groups & Permissions
+// ============================================================================
+
+/**
+ * Permissions are just visibility values that the user can access.
+ * E.g., ['researcher', 'math', 'cs'] means user can see agents with those visibility levels.
+ * 'public' agents are always visible to authenticated users.
+ *
+ * Note: 'tier' column is reserved for future server-side API key access.
+ */
+
+/**
+ * Tier values for server-side API key access.
+ */
+export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
+export type UserTier = z.infer<typeof UserTierSchema>;
+
+/**
+ * User's authorization context.
+ * Permissions are visibility values stored in profiles.permissions column.
+ */
+export const UserAuthContextSchema = z.object({
+  /** Visibility values user can access: ['researcher', 'math', etc.] */
+  permissions: z.array(z.string()),
+  /** User's tier (reserved for future API key access) */
+  tier: UserTierSchema,
+});
+export type UserAuthContext = z.infer<typeof UserAuthContextSchema>;
+
+/**
+ * Check if user has access to an agent's visibility levels.
+ * Returns true if:
+ * - Agent visibility includes 'public', OR
+ * - There's any overlap between agent visibility and user permissions
+ *
+ * Note: Server-side RLS handles primary access control. This function is for:
+ * - Client-side pre-filtering (e.g., UI hints before server roundtrip)
+ * - Testing and validation
+ * - Future use cases where client-side access checks are needed
+ */
+export function hasVisibilityAccess(
+  permissions: string[],
+  visibility: string | string[] | undefined | null,
+): boolean {
+  // Handle undefined/null visibility - treat as public
+  if (!visibility) {
+    return true;
+  }
+  const visibilityArray = Array.isArray(visibility) ? visibility : [visibility];
+  // Filter out any undefined/null elements
+  const cleanedVisibility = visibilityArray.filter(
+    (v): v is string => typeof v === 'string',
+  );
+  // Empty visibility array is treated as public
+  if (cleanedVisibility.length === 0) {
+    return true;
+  }
+  // Public agents are always accessible
+  if (cleanedVisibility.includes('public')) {
+    return true;
+  }
+  // Check for any overlap between visibility and permissions
+  return cleanedVisibility.some((v) => permissions.includes(v));
+}
 
 /**
  * Display labels and icons for OAuth providers.

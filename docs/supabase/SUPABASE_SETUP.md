@@ -8,7 +8,7 @@ TeXRA uses Supabase for:
 
 - **User Authentication** - OAuth login (GitHub, Google, GitLab)
 - **Remote Agents** - Secure storage and access control for agent configurations
-- **Permissions** - Tier-based access (free vs researcher access program)
+- **Permissions** - Flexible visibility-based access (users see agents matching their permissions)
 
 **Important**: Users authenticate to **TeXRA's official Supabase service**, not their own. This guide is for **extension maintainers** who need to set up the TeXRA backend.
 
@@ -184,22 +184,30 @@ Go to **SQL Editor** in Supabase dashboard and run this SQL:
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Profiles table (user metadata)
+-- tier: internal tier names for future API key access
+--   'free' - default, no API key access
+--   'Max' - research access program members (researchers, academics)
+--   'Ultra' - special sponsors who engaged with TeXRA development
+-- permissions: array of visibility values user can access (e.g., 'researcher', 'math', 'cs')
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
-  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'researcher')),
+  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'Max', 'Ultra')),
+  permissions TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Remote agents metadata table
+-- visibility: array of group names that can access the agent (e.g., ARRAY['math', 'cs'])
+-- agent_category: 'workflow' (multi-turn) or 'toolUse' (single-turn with tools)
 CREATE TABLE remote_agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL,
   description TEXT,
   storage_path TEXT NOT NULL,
-  visibility TEXT DEFAULT 'researcher' CHECK (visibility IN ('public', 'researcher', 'whitelist')),
-  agent_type TEXT DEFAULT 'CoT' CHECK (agent_type IN ('CoT', 'direct', 'toolUse')),
+  visibility TEXT[] DEFAULT ARRAY['public'],
+  agent_category TEXT DEFAULT 'workflow' CHECK (agent_category IN ('workflow', 'toolUse')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -227,7 +235,8 @@ CREATE TABLE usage_logs (
 -- Create indexes for performance
 CREATE INDEX idx_usage_logs_user ON usage_logs(user_id);
 CREATE INDEX idx_usage_logs_response ON usage_logs(response_id);
-CREATE INDEX idx_remote_agents_visibility ON remote_agents(visibility);
+CREATE INDEX idx_remote_agents_visibility ON remote_agents USING GIN(visibility);
+CREATE INDEX idx_profiles_permissions ON profiles USING GIN(permissions);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -247,15 +256,13 @@ CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = user_id);
 
--- Users can view agents based on visibility and tier
+-- Users can view agents based on visibility and permissions
+-- Uses array overlap (&&) to check if any visibility matches any permission
 CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
   USING (
-    visibility = 'public' OR
-    (visibility = 'researcher' AND EXISTS (
-      SELECT 1 FROM profiles
-      WHERE user_id = auth.uid() AND tier = 'researcher'
-    )) OR
+    'public' = ANY(visibility) OR
+    visibility && (SELECT permissions FROM profiles WHERE user_id = auth.uid()) OR
     EXISTS (
       SELECT 1 FROM agent_whitelist
       WHERE agent_id = id AND user_id = auth.uid()
@@ -312,6 +319,12 @@ CREATE TRIGGER on_auth_user_created
 
 ### 2. Configure Storage RLS Policies
 
+> **Note:** This storage policy is defense-in-depth only. Primary access control is on the
+> `remote_agents` table (using array overlap `&&`). The Edge Function verifies access via
+> remote_agents RLS first, then uses an admin client to bypass storage RLS. Store agents
+> in a folder matching their primary visibility level (e.g., `researcher/agent.yaml` for
+> an agent with `visibility = ['researcher', 'math']`).
+
 1. Click on the `agent-configs` bucket
 2. Go to **Policies** tab
 3. Click "New Policy"
@@ -319,21 +332,16 @@ CREATE TRIGGER on_auth_user_created
 5. Paste this policy:
 
 ```sql
-CREATE POLICY "Researcher access users can read agent configs"
+CREATE POLICY "Users can read allowed agent configs"
 ON storage.objects FOR SELECT
 USING (
   bucket_id = 'agent-configs' AND
   (
     -- Public agents (in public/ folder)
     (storage.foldername(name))[1] = 'public' OR
-    -- Researcher access agents (requires researcher tier)
-    (
-      (storage.foldername(name))[1] = 'researcher' AND
-      EXISTS (
-        SELECT 1 FROM profiles
-        WHERE user_id = auth.uid() AND tier = 'researcher'
-      )
-    ) OR
+    -- Defense-in-depth: check if user has permission for folder
+    -- Primary access control is on remote_agents table via Edge Function
+    (SELECT permissions FROM profiles WHERE user_id = auth.uid()) @> ARRAY[(storage.foldername(name))[1]] OR
     -- Whitelisted agents
     EXISTS (
       SELECT 1 FROM agent_whitelist aw
@@ -421,10 +429,10 @@ serve(async (req) => {
     }
 
     // Fetch agent metadata using userClient (RLS enforces access control)
-    // RLS policies check user tier/whitelist - unauthorized users won't see the agent
+    // RLS policies check user permissions/whitelist - unauthorized users won't see the agent
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
-      .select('id, name, description, storage_path')
+      .select('id, name, description, storage_path, visibility, agent_category')
       .eq('name', agentName)
       .single();
 
@@ -467,6 +475,8 @@ serve(async (req) => {
         config: yamlContent,
         name: agent.name,
         description: agent.description,
+        visibility: agent.visibility, // string[] - array of groups
+        agentCategory: agent.agent_category, // 'workflow' or 'toolUse'
       }),
       {
         status: 200,
@@ -532,10 +542,12 @@ The extension will now use the configured credentials. Users don't need to confi
 
 1. Create your agent YAML file locally (e.g., `advanced-researcher.yaml`)
 2. In Supabase dashboard, go to **Storage** → `agent-configs`
-3. Create folder structure:
-   - `public/` - for free agents
+3. Create folder structure matching visibility values:
+   - `public/` - for agents visible to all authenticated users
    - `researcher/` - for researcher access program agents
-   - `whitelist/` - for whitelisted agents
+   - `math/` - for mathematicians (custom visibility group)
+   - `cs/` - for computer scientists (custom visibility group)
+   - etc. (folder names should match the visibility value in the database)
 4. Upload your YAML file to the appropriate folder (e.g., `researcher/advanced-researcher.yaml`)
 
 ### 2. Add Agent Metadata to Database
@@ -543,31 +555,64 @@ The extension will now use the configured credentials. Users don't need to confi
 In **SQL Editor**, run:
 
 ```sql
-INSERT INTO remote_agents (name, description, storage_path, visibility, agent_type)
+-- Agent visible to 'researcher' group only
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
 VALUES (
   'advanced-researcher',
   'AI-powered research assistant for academic papers',
   'researcher/advanced-researcher.yaml',
-  'researcher',
-  'CoT'
+  ARRAY['researcher'],
+  'workflow'
+);
+
+-- Agent visible to BOTH math and cs groups
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
+VALUES (
+  'proof-assistant',
+  'Helps with mathematical proofs and algorithms',
+  'math/proof-assistant.yaml',
+  ARRAY['math', 'cs'],
+  'workflow'
+);
+
+-- Public agent (visible to all authenticated users)
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
+VALUES (
+  'basic-assistant',
+  'General purpose assistant',
+  'public/basic-assistant.yaml',
+  ARRAY['public'],
+  'workflow'
 );
 ```
+
+Notes:
+
+- `visibility` is an array - agents can be visible to multiple groups
+- `agent_category` can be `'workflow'` (multi-turn) or `'toolUse'` (single-turn with tools)
 
 ---
 
 ## Part 8: User Management
 
-### 1. Grant User Researcher Access
+### 1. Grant User Access to Visibility Groups
+
+Users can see agents where `visibility` matches any value in their `permissions` array.
 
 In **SQL Editor**:
 
 ```sql
--- Get user's ID first
-SELECT user_id, email FROM profiles;
+-- View all users
+SELECT user_id, email, permissions FROM profiles;
 
--- Grant specific user researcher access
+-- Grant user access to 'researcher' visibility agents
 UPDATE profiles
-SET tier = 'researcher'
+SET permissions = array_append(permissions, 'researcher')
+WHERE email = 'user@example.com';
+
+-- Grant multiple visibility levels at once
+UPDATE profiles
+SET permissions = ARRAY['researcher', 'math', 'cs']
 WHERE email = 'user@example.com';
 ```
 

@@ -49,33 +49,25 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         authenticated: false,
         user: null,
         tier: 'free',
+        permissions: [],
         remoteAgents: [],
       });
       return;
     }
 
     const user = await SupabaseClient.getUser();
-    const tier = await SupabaseClient.getUserTier();
+    const authContext = await SupabaseClient.getUserAuthContext();
 
-    // Fetch remote agents if user has researcher tier
-    let remoteAgents: Array<{
-      name: string;
-      description: string;
-      visibility: string;
-      agentType?: string;
-    }> = [];
-
-    if (tier === 'researcher') {
-      // Refresh agent cache to ensure remote agents are loaded after authentication
-      await loadAgents();
-      const entries = getAgentsBySource('remote' as AgentSource);
-      remoteAgents = entries.map((entry) => ({
-        name: entry.name,
-        description: entry.description || '',
-        visibility: entry.visibility || 'researcher',
-        agentType: entry.agentType || 'CoT',
-      }));
-    }
+    // Fetch remote agents - RLS filters based on user's permissions
+    // All authenticated users can see agents matching their visibility access
+    await loadAgents();
+    const entries = getAgentsBySource('remote' as AgentSource);
+    const remoteAgents = entries.map((entry) => ({
+      name: entry.name,
+      description: entry.description || '',
+      visibility: entry.visibility || ['public'],
+      category: entry.category || 'workflow',
+    }));
 
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -84,7 +76,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier,
+      tier: authContext.tier,
+      permissions: authContext.permissions,
       remoteAgents,
     });
   }
