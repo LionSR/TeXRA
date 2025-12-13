@@ -167,9 +167,9 @@ export class AgentsTable {
     if (agentName) agentName.textContent = agent.name;
 
     // Set agent category badge (workflow or toolUse)
-    const typeBadge = row.querySelector('.type-badge');
-    if (typeBadge) {
-      typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
+    const categoryBadge = row.querySelector('.category-badge');
+    if (categoryBadge) {
+      categoryBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
     }
 
     // Set multi-output badge with codicon and aria-label for accessibility
