@@ -257,7 +257,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
   gpt52pro: {
     name: 'gpt52pro',
     fullName: 'gpt-5.2-pro-2025-12-11',
-    openrouterFullName: 'openai/gpt-5.2-pro-2025-12-11',
+    openrouterFullName: 'openai/gpt-5.2-pro',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 128000,
     contextWindow: 400000,
@@ -279,7 +279,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
   gpt52: {
     name: 'gpt52',
     fullName: 'gpt-5.2-2025-12-11',
-    openrouterFullName: 'openai/gpt-5.2-2025-12-11',
+    openrouterFullName: 'openai/gpt-5.2',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 128000,
     contextWindow: 400000,
@@ -288,7 +288,7 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.1,
-      reasoningEffort: ReasoningEffort.NONE,
+      reasoningEffort: ReasoningEffort.XHIGH,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,
