@@ -20,6 +20,16 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
 
+/** Schema for remote agent data sent to webview */
+const RemoteAgentPayloadSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  visibility: z.array(z.string()),
+  category: z.string(),
+  supportsMultipleOutput: z.boolean(),
+});
+type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
+
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -62,7 +72,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     // All authenticated users can see agents matching their visibility access
     await loadAgents();
     const entries = getAgentsBySource('remote' as AgentSource);
-    const remoteAgents = entries.map((entry) => ({
+    const remoteAgents: RemoteAgentPayload[] = entries.map((entry) => ({
       name: entry.name,
       description: entry.description || '',
       visibility: entry.visibility || ['public'],
