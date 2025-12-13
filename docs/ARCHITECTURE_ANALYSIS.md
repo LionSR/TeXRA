@@ -1251,16 +1251,16 @@ DEPENDENCY RULE: All arrows point DOWN (inward)
 
 | Phase | Files Changed | Violations Fixed | Effort | Status |
 |-------|---------------|------------------|--------|--------|
-| **1. Create @shared/** | 7 new + 5 import updates | 24 (60%) | 2-3 hours | ✅ DONE |
-| **2. Break @agent↔@tools cycle** | 4 files | 10 (25%) | 1 hour | ⏳ Pending |
+| **1. Create @shared/** | 7 new + ~80 direct updates | 30+ (75%) | 3 hours | ✅ DONE |
+| **2. Break @agent↔@tools cycle** | 4 files | 5 (12%) | 1 hour | ⏳ Pending |
 | **3. Inject SecretManager** | 8 files | 4 (10%) | 1-2 hours | ⏳ Pending |
-| **4. UI callback interface** | 6 files | 6 (15%) | 1-2 hours | ⏳ Pending |
-| **Total** | ~50 files | 40+ violations | **5-8 hours** | |
+| **4. UI callback interface** | 6 files | 2 (3%) | 1-2 hours | ⏳ Pending |
+| **Total** | ~100 files | 40+ violations | **6-8 hours** | |
 
 > **Note:** Phase 1 was renamed from `@types/` to `@shared/` to avoid conflict with TypeScript's
 > built-in `@types/*` package resolution (which caused TS6137 errors).
 
-### Phase 1 Implementation Details (Completed)
+### Phase 1 Implementation Details (Completed - Direct Refactor)
 
 **Files Created in `src/types/`:**
 - `identifiers.ts` - StreamTabId, ExecutionId, StorageKey schemas
@@ -1271,17 +1271,29 @@ DEPENDENCY RULE: All arrows point DOWN (inward)
 - `callbacks.ts` - ISecretProvider, IAgentUICallbacks interfaces
 - `index.ts` - Barrel export
 
-**Files Modified (re-export for backward compatibility):**
-- `src/agent/types/IdentifierTypes.ts` → re-exports from `@shared/identifiers`
-- `src/agent/types/UsageTypes.ts` → re-exports from `@shared/usage`
-- `src/agent/core/AgentDataclass.ts` → re-exports from `@shared/agent`
-- `src/agent/core/ToolTypes.ts` → re-exports from `@shared/tools`
-- `src/common/constants/streamStatus.ts` → re-exports from `@shared/status`
+**Files Deleted (no re-exports - direct imports only):**
+- `src/agent/types/IdentifierTypes.ts` ❌ DELETED
+- `src/agent/types/UsageTypes.ts` ❌ DELETED
+- `src/common/constants/streamStatus.ts` ❌ DELETED
 
-**tsconfig.json:**
+**~80 Files Updated to Import Directly from @shared/:**
+- `@shared/identifiers` - StreamTabId, ExecutionId, StorageKey
+- `@shared/agent` - AgentType, AgentCategory, AgentSessionDescriptor
+- `@shared/tools` - ITool, IToolRegistry, ToolResult, ToolDefinition
+- `@shared/usage` - TokenUsageStats, ExtendedTokenUsageStats
+- `@shared/status` - STREAM_STATUS, StreamStatus
+
+**Config Files:**
 ```json
+// tsconfig.json
 "@shared/*": ["src/types/*"]
+
+// webpack.config.js
+'@shared': path.resolve(__dirname, 'src/types')
 ```
+
+This establishes true SSOT - types defined once in @shared/, imported
+directly everywhere, no intermediate re-export layers.
 
 ---
 
