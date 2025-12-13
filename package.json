@@ -58,7 +58,8 @@
             },
             "default": [
               "ask",
-              "chat"
+              "chat",
+              "research"
             ],
             "description": "List of tool-use agents shown in the dedicated dropdown",
             "scope": "resource"
