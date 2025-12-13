@@ -444,7 +444,9 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const isToolUse =
         primary.agentCategory === 'toolUse' ||
         primary.agentCategory === AgentCategory.ToolUse;
-      const category = isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow;
+      const category = isToolUse
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
       // Derive agentType from category (toolUse category -> ToolUse type, otherwise CoT)
       const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
 

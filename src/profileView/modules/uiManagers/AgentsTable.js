@@ -5,7 +5,6 @@ import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
-
 /**
  * Manages the agents table rendering and interactions.
  */
