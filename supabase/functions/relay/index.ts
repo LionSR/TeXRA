@@ -63,6 +63,13 @@ const PROVIDER_CONFIGS: Record<
 };
 
 // CORS headers
+// Note: VS Code extensions make requests from the extension host (Node.js process),
+// not from a browser context, so Origin headers aren't typically present.
+// The wildcard is used for:
+// 1. Development/testing scenarios
+// 2. Webview contexts (which have origins like vscode-webview://*)
+// Security is enforced via JWT validation, not CORS origin checking.
+// TODO: Consider restricting to specific origins in production if needed.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -257,9 +264,10 @@ serve(async (req: Request) => {
       headers: responseHeaders,
     });
   } catch (error) {
+    // Log full error server-side for debugging, but don't expose details to clients
     console.error('Relay error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: String(error) }),
+      JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
