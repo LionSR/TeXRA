@@ -21,8 +21,8 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  /** Visibility level - determines required permission for access */
-  visibility: string;
+  /** Visibility levels - array of groups that can access this agent */
+  visibility: string[];
   /** Agent category: 'workflow' or 'toolUse' */
   agentCategory?: string;
 }
@@ -220,7 +220,7 @@ export class RemoteAgentLoader {
             id: '',
             name: agentName,
             description: description || '',
-            visibility: 'researcher',
+            visibility: ['public'],
           },
         };
       } catch (error) {

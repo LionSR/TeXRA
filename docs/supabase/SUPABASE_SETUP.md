@@ -196,14 +196,14 @@ CREATE TABLE profiles (
 );
 
 -- Remote agents metadata table
--- visibility: any string value (e.g., 'public', 'researcher', 'math', 'cs')
+-- visibility: array of group names that can access the agent (e.g., ARRAY['math', 'cs'])
 -- agent_category: 'workflow' (multi-turn) or 'toolUse' (single-turn with tools)
 CREATE TABLE remote_agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT UNIQUE NOT NULL,
   description TEXT,
   storage_path TEXT NOT NULL,
-  visibility TEXT DEFAULT 'public',
+  visibility TEXT[] DEFAULT ARRAY['public'],
   agent_category TEXT DEFAULT 'workflow' CHECK (agent_category IN ('workflow', 'toolUse')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -253,11 +253,12 @@ CREATE POLICY "Users can update own profile"
   USING (auth.uid() = user_id);
 
 -- Users can view agents based on visibility and permissions
+-- Uses array overlap (&&) to check if any visibility matches any permission
 CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
   USING (
-    visibility = 'public' OR
-    visibility = ANY((SELECT permissions FROM profiles WHERE user_id = auth.uid())) OR
+    'public' = ANY(visibility) OR
+    visibility && (SELECT permissions FROM profiles WHERE user_id = auth.uid()) OR
     EXISTS (
       SELECT 1 FROM agent_whitelist
       WHERE agent_id = id AND user_id = auth.uid()
@@ -541,17 +542,40 @@ The extension will now use the configured credentials. Users don't need to confi
 In **SQL Editor**, run:
 
 ```sql
+-- Agent visible to 'researcher' group only
 INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
 VALUES (
   'advanced-researcher',
   'AI-powered research assistant for academic papers',
   'researcher/advanced-researcher.yaml',
-  'researcher',
+  ARRAY['researcher'],
+  'workflow'
+);
+
+-- Agent visible to BOTH math and cs groups
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
+VALUES (
+  'proof-assistant',
+  'Helps with mathematical proofs and algorithms',
+  'math/proof-assistant.yaml',
+  ARRAY['math', 'cs'],
+  'workflow'
+);
+
+-- Public agent (visible to all authenticated users)
+INSERT INTO remote_agents (name, description, storage_path, visibility, agent_category)
+VALUES (
+  'basic-assistant',
+  'General purpose assistant',
+  'public/basic-assistant.yaml',
+  ARRAY['public'],
   'workflow'
 );
 ```
 
-Note: `agent_category` can be `'workflow'` (multi-turn agents) or `'toolUse'` (single-turn with tools).
+Notes:
+- `visibility` is an array - agents can be visible to multiple groups
+- `agent_category` can be `'workflow'` (multi-turn) or `'toolUse'` (single-turn with tools)
 
 ---
 
