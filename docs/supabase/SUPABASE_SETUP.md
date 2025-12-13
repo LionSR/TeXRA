@@ -184,7 +184,10 @@ Go to **SQL Editor** in Supabase dashboard and run this SQL:
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Profiles table (user metadata)
--- tier: reserved for future API key access levels (free/Max/Ultra)
+-- tier: internal tier names for future API key access
+--   'free' - default, no API key access
+--   'Max' - research access program members (researchers, academics)
+--   'Ultra' - special sponsors who engaged with TeXRA development
 -- permissions: array of visibility values user can access (e.g., 'researcher', 'math', 'cs')
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
