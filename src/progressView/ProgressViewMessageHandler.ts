@@ -436,9 +436,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       ? this.provider.state.getRunOutputFiles(stream, { storageKey })
       : undefined;
 
-    // Trust stored executionId, don't extract from paths
-    const executionId =
-      resolvedRunId ?? this.provider.state.getExecutionId(stream);
+    // The stored executionId is the actual directory name in taskRuns/
+    // For workflow agents, storageKey differs from executionId (storageKey = task group ID)
+    // but files are always written to taskRuns/<executionId>/
+    const executionId = this.provider.state.getExecutionId(stream);
 
     try {
       let directoryToReveal: string | undefined;
