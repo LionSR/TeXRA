@@ -67,7 +67,8 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Build sign-in options: OAuth providers + email
+    // Build sign-in options: OAuth providers only
+    // Note: Email magic link option is disabled due to remote configuration issues
     const signInOptions: SignInOption[] = [
       // OAuth providers
       ...OAUTH_PROVIDERS.map((provider) => ({
@@ -75,12 +76,12 @@ export async function signIn(): Promise<void> {
         description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
         method: provider as AuthMethod,
       })),
-      // Email magic link option
-      {
-        label: '$(mail) Email',
-        description: 'Sign in with a magic link sent to your email',
-        method: 'email' as AuthMethod,
-      },
+      // Email magic link option - temporarily disabled
+      // {
+      //   label: '$(mail) Email',
+      //   description: 'Sign in with a magic link sent to your email',
+      //   method: 'email' as AuthMethod,
+      // },
     ];
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
