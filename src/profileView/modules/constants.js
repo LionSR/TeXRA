@@ -34,8 +34,8 @@ export const CLASS_NAMES = {
 // Text labels and messages
 export const LABELS = {
   TIER_FREE_MESSAGE:
-    'Join the research access program to access premium remote agents.',
-  TIER_PREMIUM_MESSAGE: 'You have access to premium remote agents.',
+    'Join the research access program to access more remote agents.',
+  TIER_PREMIUM_MESSAGE: 'You have access to remote agents.',
   NO_AGENTS_MESSAGE:
     'No remote agents available. Contact support@texra.ai for assistance.',
   NOT_AUTHENTICATED_MESSAGE: 'You are not signed in to TeXRA.',
