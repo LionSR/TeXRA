@@ -268,9 +268,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       const executionId = this.provider.state.getExecutionId(message.stream);
       const activeRunId = this.provider.state.getActiveRunId(message.stream);
-      // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
-      // Workflow agents store files under task group ID, NOT executionId
-      // Use normalizeRunId to brand as StorageKey at this boundary
+      // storageKey is for logical indexing (finding file metadata in progress view state).
+      // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
+      // Note: Physical file paths use executionId (see runId below), not storageKey.
       const storageKey = normalizeRunId(activeRunId ?? executionId);
       const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
         storageKey,
@@ -436,9 +436,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       ? this.provider.state.getRunOutputFiles(stream, { storageKey })
       : undefined;
 
-    // The stored executionId is the actual directory name in taskRuns/
-    // For workflow agents, storageKey differs from executionId (storageKey = task group ID)
-    // but files are always written to taskRuns/<executionId>/
+    // executionId is the physical directory name: taskRuns/<executionId>/
+    // For workflow agents, storageKey (task group ID) differs from executionId,
+    // but files are always written to the executionId directory.
     const executionId = this.provider.state.getExecutionId(stream);
 
     try {
@@ -448,7 +448,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         await ensureRunDir(executionId);
         directoryToReveal = getRunDir(executionId);
       } else if (runOutputs) {
-        // Fallback: find any output directory
+        // Defensive fallback: executionId and outputFiles are persisted independently,
+        // so edge cases (data migration, partial state) could leave files without executionId.
+        // Extract directory from actual file paths.
         for (const infos of runOutputs.values()) {
           for (const info of infos) {
             if (
