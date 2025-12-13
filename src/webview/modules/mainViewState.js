@@ -356,7 +356,9 @@ export class MainViewState {
         // (vscode-single-select may not synchronously update .value)
         const storedState = this.stateManager.getState() || {};
         const stateKey =
-          normalized === SESSION_TYPES.TOOL_USE ? 'toolUseAgent' : 'workflowAgent';
+          normalized === SESSION_TYPES.TOOL_USE
+            ? 'toolUseAgent'
+            : 'workflowAgent';
         const storedValue = storedState[stateKey];
 
         if (storedValue) {
