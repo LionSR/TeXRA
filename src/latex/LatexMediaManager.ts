@@ -172,13 +172,9 @@ export class LatexMediaManager {
 
     const mirrorTasks: Promise<void>[] = [];
 
-    for (let idx = 0; idx < figureResults.length; idx++) {
-      const result = figureResults[idx];
-      if (
-        result.status !== 'fulfilled' ||
-        !result.value ||
-        result.value.length === 0
-      ) {
+    // Process fulfilled results with non-empty values
+    for (const [idx, result] of figureResults.entries()) {
+      if (result.status !== 'fulfilled' || !result.value?.length) {
         continue;
       }
 
@@ -207,14 +203,14 @@ export class LatexMediaManager {
         })),
       );
 
-      for (const { loc, exists } of existenceChecks) {
-        if (!exists) {
+      existenceChecks
+        .filter(({ exists }) => !exists)
+        .forEach(({ loc }) =>
           this.logger.debug(
             `Extracted figure path does not exist: ${loc.absolutePath} (from ${file.absolutePath})`,
             { groupId: activeGroupId },
-          );
-        }
-      }
+          ),
+        );
 
       workspaceState.media.addMediaFiles(fileLocations);
       mirrorTasks.push(
@@ -236,16 +232,13 @@ export class LatexMediaManager {
     const tikzResults = await Promise.allSettled(
       files.map((file) => tikzPictureManager.compile(file)),
     );
-    tikzResults.forEach((result) => {
-      if (
-        result.status === 'fulfilled' &&
-        result.value &&
-        result.value.length > 0
-      ) {
-        // TikZ compilation already returns FileLocation[]
-        workspaceState.media.addMediaFiles(result.value);
-      }
-    });
+    // Add successful TikZ compilation results (filter fulfilled with non-empty values)
+    tikzResults
+      .filter(
+        (r): r is PromiseFulfilledResult<FileLocation[]> =>
+          r.status === 'fulfilled' && (r.value?.length ?? 0) > 0,
+      )
+      .forEach((r) => workspaceState.media.addMediaFiles(r.value));
     if (logSummary) {
       this.logger.debug(`Extracted ${tikzResults.length} TikZ figures`, {
         groupId: activeGroupId,
