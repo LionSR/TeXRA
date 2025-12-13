@@ -149,6 +149,20 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Debug: Log all incoming headers to understand what's being received
+    console.log('Incoming request headers:');
+    req.headers.forEach((value, key) => {
+      // Don't log full JWT tokens, just their presence
+      if (
+        key.toLowerCase().includes('key') ||
+        key.toLowerCase() === 'authorization'
+      ) {
+        console.log(`  ${key}: [present, length=${value.length}]`);
+      } else {
+        console.log(`  ${key}: ${value}`);
+      }
+    });
+
     // 1. Parse the request path
     const parsed = parseRequestPath(url.pathname);
     if (!parsed) {
