@@ -1370,24 +1370,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Build all function call parts (preserving thought signature on first call)
-    const callParts: Part[] = [];
-    if (text) {
-      callParts.push(createPartFromText(text));
-    }
-    for (const call of calls) {
-      callParts.push(this.buildFunctionCallPart(call));
-    }
+    const callParts: Part[] = [
+      ...(text ? [createPartFromText(text)] : []),
+      ...calls.map((call) => this.buildFunctionCallPart(call)),
+    ];
 
-    // Build all function response parts
-    const responseParts: Part[] = [];
-    for (let i = 0; i < calls.length; i++) {
-      const part = await this.buildFunctionResponsePart(
-        calls[i],
-        results[i],
-        attachmentsPerCall[i],
-      );
-      responseParts.push(part);
-    }
+    // Build all function response parts in parallel
+    const responseParts = await Promise.all(
+      calls.map((call, i) =>
+        this.buildFunctionResponsePart(call, results[i], attachmentsPerCall[i]),
+      ),
+    );
 
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
