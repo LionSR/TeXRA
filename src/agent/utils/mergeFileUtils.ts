@@ -38,7 +38,9 @@ export function extractAgentName(
     (part) => part.startsWith('r') && /^\d+$/.test(part.slice(1)),
   );
 
-  return roundIndex !== -1 ? partsAfterBase.slice(0, roundIndex).join('_') : null;
+  return roundIndex !== -1
+    ? partsAfterBase.slice(0, roundIndex).join('_')
+    : null;
 }
 
 /**
