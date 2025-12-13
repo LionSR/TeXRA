@@ -92,7 +92,11 @@ export const AgentSettingBaseSchema = z.strictObject({
   // Use custom validator that validates via schema but preserves ToolDefinition type
   // This bridges the gap between schema validation and TypeScript typing
   tools: z
-    .array(z.custom<ToolDefinition>((val) => ToolDefinitionSchema.safeParse(val).success))
+    .array(
+      z.custom<ToolDefinition>(
+        (val) => ToolDefinitionSchema.safeParse(val).success,
+      ),
+    )
     .prefault([]),
 });
 
