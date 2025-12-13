@@ -10,16 +10,19 @@ import type { Schema as GeminiSchema } from '@google/genai/dist/genai';
  * Zod schema for validating tool definitions from YAML configs and external sources.
  *
  * Note: The zodSchema field is a runtime-only property added by defineTool() and
- * is not part of this validation schema. It's only present on the TypeScript type.
+ * is not part of this validation schema. Using passthrough() allows runtime-only
+ * properties like zodSchema to pass validation without being stripped.
  */
-export const ToolDefinitionSchema = z.strictObject({
-  /** Name of the tool or function */
-  name: z.string(),
-  /** Optional description for the model */
-  description: z.string().optional(),
-  /** Parameter schema or provider specific metadata */
-  parameters: z.record(z.string(), z.unknown()).optional(),
-});
+export const ToolDefinitionSchema = z
+  .object({
+    /** Name of the tool or function */
+    name: z.string(),
+    /** Optional description for the model */
+    description: z.string().optional(),
+    /** Parameter schema or provider specific metadata */
+    parameters: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
 
 /**
  * Generic tool definition used across model providers. The parameters field
