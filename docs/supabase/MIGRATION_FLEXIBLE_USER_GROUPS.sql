@@ -151,19 +151,18 @@ USING (
 -- STEP 11: Fix nested visibility arrays (if migration ran incorrectly)
 -- ============================================================================
 -- If visibility shows [[["public"]]] instead of ["public"], fix it.
--- NOTE: These fixes extract the inner array to preserve all elements.
--- For 3D arrays like [[['math', 'cs']]], visibility[1][1] gives ['math', 'cs']
--- For 2D arrays like [['math', 'cs']], visibility[1] gives ['math', 'cs']
+-- NOTE: PostgreSQL array subscripts return scalars, so we use unnest/array_agg
+-- to properly flatten nested arrays while preserving all elements.
 
--- Fix 3D arrays: [[['a', 'b']]] -> ['a', 'b']
-UPDATE remote_agents
-SET visibility = visibility[1][1]
-WHERE array_ndims(visibility) = 3;
-
--- Fix 2D arrays: [['a', 'b']] -> ['a', 'b']
-UPDATE remote_agents
-SET visibility = visibility[1]
-WHERE array_ndims(visibility) = 2;
+-- Fix any nested arrays (2D or 3D) by flattening with unnest
+-- This handles both [['a', 'b']] and [[['a', 'b']]] cases
+UPDATE remote_agents ra
+SET visibility = (
+  SELECT array_agg(elem)
+  FROM unnest(ra.visibility) AS elem
+  WHERE elem IS NOT NULL
+)
+WHERE array_ndims(visibility) > 1;
 
 -- ============================================================================
 -- STEP 12: Verify
