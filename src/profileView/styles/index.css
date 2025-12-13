@@ -190,7 +190,7 @@ h2 {
 
 .multi-output-badge.supported {
   background: var(--vscode-testing-iconPassed);
-  color: white;
+  color: var(--vscode-button-foreground);
 }
 
 .multi-output-badge.not-supported {
