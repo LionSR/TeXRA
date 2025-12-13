@@ -452,9 +452,9 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         name: entryName,
         source: 'remote' as AgentSource,
         path: '',
-        // Set multiplePath to indicate _multiple variant exists (for UI indicator)
-        // Use the multiple variant's name as a truthy marker
-        multiplePath: base && multiple ? multiple.name : undefined,
+        // Set multiplePath to indicate multiple output support (for UI indicator)
+        // True if _multiple variant exists, or if this IS a _multiple-only agent
+        multiplePath: multiple ? multiple.name : undefined,
         category,
         agentType,
         description: primary.description,
