@@ -419,10 +419,10 @@ serve(async (req) => {
     }
 
     // Fetch agent metadata using userClient (RLS enforces access control)
-    // RLS policies check user tier/whitelist - unauthorized users won't see the agent
+    // RLS policies check user permissions/whitelist - unauthorized users won't see the agent
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
-      .select('id, name, description, storage_path')
+      .select('id, name, description, storage_path, visibility, agent_category')
       .eq('name', agentName)
       .single();
 
@@ -465,6 +465,8 @@ serve(async (req) => {
         config: yamlContent,
         name: agent.name,
         description: agent.description,
+        visibility: agent.visibility,        // string[] - array of groups
+        agentCategory: agent.agent_category,  // 'workflow' or 'toolUse'
       }),
       {
         status: 200,
