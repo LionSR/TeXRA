@@ -13,7 +13,20 @@ ALTER TABLE profiles
 ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}';
 
 -- ============================================================================
--- STEP 2: Update tier to support free/Max/Ultra
+-- STEP 2: Migrate existing tier='researcher' to permissions FIRST
+-- ============================================================================
+-- Before changing tier constraint, migrate researcher users to have 'researcher' permission
+UPDATE profiles
+SET permissions = ARRAY['researcher']
+WHERE tier = 'researcher' AND (permissions IS NULL OR permissions = '{}');
+
+-- Now reset tier to 'free' for all researcher users (permission is what matters now)
+UPDATE profiles
+SET tier = 'free'
+WHERE tier = 'researcher';
+
+-- ============================================================================
+-- STEP 3: Update tier constraint to support free/Max/Ultra
 -- ============================================================================
 -- Tier is for future server-side API key access levels
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_tier_check;
@@ -21,13 +34,13 @@ ALTER TABLE profiles
 ADD CONSTRAINT profiles_tier_check CHECK (tier IN ('free', 'Max', 'Ultra'));
 
 -- ============================================================================
--- STEP 3: Drop old constraints for extensibility
+-- STEP 4: Drop old constraints for extensibility
 -- ============================================================================
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_visibility_check;
 ALTER TABLE remote_agents DROP CONSTRAINT IF EXISTS remote_agents_agent_type_check;
 
 -- ============================================================================
--- STEP 4: Convert visibility from TEXT to TEXT[] (array)
+-- STEP 5: Convert visibility from TEXT to TEXT[] (array)
 -- ============================================================================
 -- This allows agents to be visible to multiple user groups
 -- First, rename old column
@@ -46,7 +59,7 @@ WHERE visibility_old IS NOT NULL;
 ALTER TABLE remote_agents DROP COLUMN visibility_old;
 
 -- ============================================================================
--- STEP 5: Add agent_category column
+-- STEP 6: Add agent_category column
 -- ============================================================================
 ALTER TABLE remote_agents
 ADD COLUMN IF NOT EXISTS agent_category TEXT DEFAULT 'workflow'
@@ -56,13 +69,6 @@ CHECK (agent_category IN ('workflow', 'toolUse'));
 UPDATE remote_agents
 SET agent_category = 'toolUse'
 WHERE agent_type = 'toolUse';
-
--- ============================================================================
--- STEP 6: Migrate existing tier='researcher' to permissions
--- ============================================================================
-UPDATE profiles
-SET permissions = ARRAY['researcher']
-WHERE tier = 'researcher' AND (permissions IS NULL OR permissions = '{}');
 
 -- ============================================================================
 -- STEP 7: Create helper function for permission checks
