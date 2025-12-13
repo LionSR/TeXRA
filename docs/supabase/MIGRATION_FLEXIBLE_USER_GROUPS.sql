@@ -137,10 +137,22 @@ USING (
 );
 
 -- ============================================================================
--- STEP 11: Verify
+-- STEP 11: Fix nested visibility arrays (if migration ran incorrectly)
+-- ============================================================================
+-- If visibility shows [[["public"]]] instead of ["public"], fix it:
+UPDATE remote_agents
+SET visibility = ARRAY[visibility[1][1][1]]
+WHERE array_ndims(visibility) = 3;
+
+UPDATE remote_agents
+SET visibility = ARRAY[visibility[1][1]]
+WHERE array_ndims(visibility) = 2;
+
+-- ============================================================================
+-- STEP 12: Verify
 -- ============================================================================
 SELECT email, tier, permissions FROM profiles LIMIT 10;
-SELECT name, visibility, agent_category FROM remote_agents LIMIT 10;
+SELECT name, visibility, array_ndims(visibility) as dims, agent_category FROM remote_agents LIMIT 10;
 
 -- ============================================================================
 -- USAGE EXAMPLES
