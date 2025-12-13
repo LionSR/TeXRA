@@ -11,6 +11,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
+// Local imports - utils
+import { sleep } from '@utils/helpers';
+
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
 
@@ -81,8 +84,12 @@ export async function selectAgentInMainView(
   // Format agent value as source:name for dropdown selection
   const agentValue = createKey(source as AgentSource, agentName);
 
-  // Focus the main view first
+  // Focus the main view first - this reveals it and triggers initialization if needed
   await vscode.commands.executeCommand('texra.mainView.focus');
+
+  // Small delay to ensure webview has time to initialize if it was just revealed
+  // This helps prevent race conditions where the message arrives before handlers are ready
+  await sleep(100);
 
   try {
     const webviewView = await vscode.commands.executeCommand<
@@ -95,6 +102,11 @@ export async function selectAgentInMainView(
       const sessionType =
         entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 
+      logger.info(
+        CHANNEL,
+        `Selecting agent "${agentName}" (${agentValue}) in ${sessionType} dropdown`,
+      );
+
       // Send SET_SELECTED_AGENT message to set just the agent selector value
       // This avoids triggering full state restoration which would clear other fields
       webviewView.webview.postMessage({
@@ -105,7 +117,7 @@ export async function selectAgentInMainView(
 
       if (showSuccessMessage) {
         void vscode.window.showInformationMessage(
-          `Agent "${agentName}" is now selected.`,
+          `Agent "${agentName}" is now selected in the main view.`,
         );
       }
 
