@@ -11,6 +11,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
+// Local imports - utils
+import { sleep } from '@utils/helpers';
+
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
 
@@ -57,14 +60,6 @@ async function handleSelectionFallback(
 }
 
 /**
- * Small delay to allow webview to initialize after focus.
- * This helps ensure the webview's message handlers are ready.
- */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
  * Select an agent in the main webview's dropdown.
  * This is the single source of truth for agent selection across the extension.
  *
@@ -94,7 +89,7 @@ export async function selectAgentInMainView(
 
   // Small delay to ensure webview has time to initialize if it was just revealed
   // This helps prevent race conditions where the message arrives before handlers are ready
-  await delay(100);
+  await sleep(100);
 
   try {
     const webviewView = await vscode.commands.executeCommand<
