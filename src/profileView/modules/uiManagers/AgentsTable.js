@@ -174,11 +174,15 @@ export class AgentsTable {
     const description = row.querySelector('.agent-description');
     if (description) description.textContent = agent.description;
 
-    // Set visibility badge
+    // Set visibility badge (handles both string and array)
     const visibilityBadge = row.querySelector('.visibility-badge');
     if (visibilityBadge) {
-      visibilityBadge.textContent = agent.visibility;
-      visibilityBadge.classList.add(agent.visibility);
+      const visibilityArray = Array.isArray(agent.visibility)
+        ? agent.visibility
+        : [agent.visibility];
+      visibilityBadge.textContent = visibilityArray.join(', ');
+      // Use first visibility value for CSS class
+      visibilityBadge.classList.add(visibilityArray[0] || 'public');
     }
 
     // Set up select button

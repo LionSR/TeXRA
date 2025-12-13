@@ -47,19 +47,17 @@ export type AgentSource = z.infer<typeof AgentSource>;
 /**
  * Remote agent visibility levels.
  *
- * Visibility determines who can access an agent. The permission required to access
- * an agent is derived from the visibility: 'access_{visibility}_visibility'
- * (e.g., visibility='researcher' requires 'access_researcher_visibility' permission).
+ * Visibility is an array of group names that can access the agent.
+ * User can access the agent if their permissions overlap with visibility.
  *
  * Common values:
- * - 'public': Available to all authenticated users
- * - 'researcher': Requires 'access_researcher_visibility' permission
- * - 'whitelist': Requires explicit whitelist entry (checked separately)
+ * - ['public']: Available to all authenticated users
+ * - ['researcher']: Requires 'researcher' in user's permissions
+ * - ['math', 'cs']: Available to users with 'math' OR 'cs' permission
  *
  * New visibility levels can be added in the database without code changes.
- * Just ensure the corresponding permission exists in user_groups.
  */
-export type RemoteVisibility = string;
+export type RemoteVisibility = string[];
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.
