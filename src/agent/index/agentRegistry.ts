@@ -44,8 +44,20 @@ export const AgentSource = z.enum([
 ]);
 export type AgentSource = z.infer<typeof AgentSource>;
 
-/** Remote agent visibility levels. */
-export type RemoteVisibility = 'public' | 'researcher' | 'whitelist';
+/**
+ * Remote agent visibility levels.
+ *
+ * Visibility is an array of group names that can access the agent.
+ * User can access the agent if their permissions overlap with visibility.
+ *
+ * Common values:
+ * - ['public']: Available to all authenticated users
+ * - ['researcher']: Requires 'researcher' in user's permissions
+ * - ['math', 'cs']: Available to users with 'math' OR 'cs' permission
+ *
+ * New visibility levels can be added in the database without code changes.
+ */
+export type RemoteVisibility = string[];
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.
@@ -428,6 +440,14 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       // If only _multiple exists without a base, use full name as the entry name
       const entryName = base ? baseName : primary.name;
 
+      // Determine category from agentCategory (new) or agentType (legacy)
+      const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
+      const category = isToolUse
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
+      // Derive agentType from category (toolUse category -> ToolUse type, otherwise CoT)
+      const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
+
       entries.push({
         name: entryName,
         source: 'remote' as AgentSource,
@@ -435,11 +455,8 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         // Set multiplePath to indicate _multiple variant exists (for UI indicator)
         // Use the multiple variant's name as a truthy marker
         multiplePath: base && multiple ? multiple.name : undefined,
-        category:
-          primary.agentType === 'toolUse'
-            ? AgentCategory.ToolUse
-            : AgentCategory.Workflow,
-        agentType: mapAgentType(primary.agentType),
+        category,
+        agentType,
         description: primary.description,
         visibility: primary.visibility,
       });

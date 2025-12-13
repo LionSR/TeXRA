@@ -67,6 +67,17 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
+.tier-badge.max {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.tier-badge.ultra {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+}
+
+/* Legacy: keep researcher for backwards compat */
 .tier-badge.researcher {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
@@ -152,14 +163,9 @@ h2 {
   color: white;
 }
 
-.visibility-badge.researcher {
+.visibility-badge.custom {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
-}
-
-.visibility-badge.whitelist {
-  background: var(--vscode-inputValidation-warningBackground);
-  color: var(--vscode-inputValidation-warningForeground);
 }
 
 /* Type badges */

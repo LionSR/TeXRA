@@ -21,8 +21,10 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  visibility: 'public' | 'researcher' | 'whitelist';
-  agentType?: string;
+  /** Visibility levels - array of groups that can access this agent */
+  visibility: string[];
+  /** Agent category: 'workflow' or 'toolUse' */
+  agentCategory?: string;
 }
 
 export interface RemoteAgentConfig {
@@ -218,7 +220,7 @@ export class RemoteAgentLoader {
             id: '',
             name: agentName,
             description: description || '',
-            visibility: 'researcher',
+            visibility: ['public'],
           },
         };
       } catch (error) {
@@ -274,7 +276,7 @@ export class RemoteAgentLoader {
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_type')
+        .select('id, name, description, visibility, agent_category')
         .order('name');
 
       if (error) {
@@ -288,7 +290,7 @@ export class RemoteAgentLoader {
         name: row.name,
         description: row.description,
         visibility: row.visibility,
-        agentType: row.agent_type,
+        agentCategory: row.agent_category,
       })) as RemoteAgentMetadata[];
     } catch (error) {
       const errorMessage =
@@ -320,7 +322,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility')
+        .select('id, name, description, visibility, agent_category')
         .eq('name', agentName)
         .single();
 
@@ -332,7 +334,13 @@ export class RemoteAgentLoader {
         return null;
       }
 
-      return data as RemoteAgentMetadata;
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        visibility: data.visibility,
+        agentCategory: data.agent_category,
+      } as RemoteAgentMetadata;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

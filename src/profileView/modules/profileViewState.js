@@ -11,6 +11,7 @@ class ProfileViewState {
     this._authenticated = false;
     this._user = null;
     this._tier = 'free';
+    this._permissions = [];
     this._remoteAgents = [];
   }
 
@@ -23,6 +24,7 @@ class ProfileViewState {
     this._authenticated = saved.authenticated ?? false;
     this._user = saved.user ?? null;
     this._tier = saved.tier ?? 'free';
+    this._permissions = saved.permissions ?? [];
     this._remoteAgents = saved.remoteAgents ?? [];
   }
 
@@ -34,6 +36,7 @@ class ProfileViewState {
       authenticated: this._authenticated,
       user: this._user,
       tier: this._tier,
+      permissions: this._permissions,
       remoteAgents: this._remoteAgents,
     });
   }
@@ -65,6 +68,15 @@ class ProfileViewState {
     this.save();
   }
 
+  get permissions() {
+    return this._permissions;
+  }
+
+  set permissions(value) {
+    this._permissions = value;
+    this.save();
+  }
+
   get remoteAgents() {
     return this._remoteAgents;
   }
@@ -81,6 +93,7 @@ class ProfileViewState {
     this._authenticated = data.authenticated;
     this._user = data.user;
     this._tier = data.tier;
+    this._permissions = data.permissions || [];
     this._remoteAgents = data.remoteAgents || [];
     this.save();
   }
