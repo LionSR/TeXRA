@@ -20,7 +20,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // Example: /relay/openai/v1/chat/completions -> https://api.openai.com/v1/chat/completions
 const PROVIDER_CONFIGS: Record<
   string,
-  { baseUrl: string; authType: 'bearer' | 'x-api-key' | 'x-goog-api-key'; envKey: string }
+  {
+    baseUrl: string;
+    authType: 'bearer' | 'x-api-key' | 'x-goog-api-key';
+    envKey: string;
+  }
 > = {
   openai: {
     baseUrl: 'https://api.openai.com',
@@ -119,7 +123,9 @@ function extractJwtFromHeaders(req: Request): string | null {
  * Parse the URL path to extract provider and API path.
  * Expected format: /relay/{provider}/{...apiPath}
  */
-function parseRequestPath(pathname: string): { provider: string; apiPath: string } | null {
+function parseRequestPath(
+  pathname: string,
+): { provider: string; apiPath: string } | null {
   // Remove /relay/ prefix and split
   const withoutPrefix = pathname.replace(/^\/relay\/?/, '');
   const parts = withoutPrefix.split('/');
@@ -147,7 +153,9 @@ serve(async (req: Request) => {
     const parsed = parseRequestPath(url.pathname);
     if (!parsed) {
       return new Response(
-        JSON.stringify({ error: 'Invalid path. Expected: /relay/{provider}/{apiPath}' }),
+        JSON.stringify({
+          error: 'Invalid path. Expected: /relay/{provider}/{apiPath}',
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -173,10 +181,13 @@ serve(async (req: Request) => {
     // Different SDKs send the token in different headers (Authorization, x-api-key, etc.)
     const jwtToken = extractJwtFromHeaders(req);
     if (!jwtToken) {
-      return new Response(JSON.stringify({ error: 'Missing authorization token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization token' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // 4. Validate user and check tier
@@ -216,7 +227,9 @@ serve(async (req: Request) => {
 
     if (profile.tier !== 'Ultra') {
       return new Response(
-        JSON.stringify({ error: 'Ultra tier required for server-side API keys' }),
+        JSON.stringify({
+          error: 'Ultra tier required for server-side API keys',
+        }),
         {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -306,12 +319,9 @@ serve(async (req: Request) => {
   } catch (error) {
     // Log full error server-side for debugging, but don't expose details to clients
     console.error('Relay error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
-    );
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
