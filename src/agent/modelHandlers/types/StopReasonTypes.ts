@@ -79,23 +79,11 @@ export const ANTHROPIC_STOP_REASONS = Object.values(ANTHROPIC_STOP);
 /** Anthropic stop reason type - derived from SDK's StopReason */
 export type AnthropicStopReason = AnthropicSDKStopReason;
 
-/** Finish reasons returned by Google's API. */
-export const GOOGLE_FINISH_REASONS = [
-  FinishReason.FINISH_REASON_UNSPECIFIED,
-  FinishReason.STOP,
-  FinishReason.MAX_TOKENS,
-  FinishReason.SAFETY,
-  FinishReason.RECITATION,
-  FinishReason.LANGUAGE,
-  FinishReason.OTHER,
-  FinishReason.BLOCKLIST,
-  FinishReason.PROHIBITED_CONTENT,
-  FinishReason.SPII,
-  FinishReason.MALFORMED_FUNCTION_CALL,
-  FinishReason.IMAGE_SAFETY,
-  FinishReason.UNEXPECTED_TOOL_CALL,
-] as const;
-export type GoogleFinishReason = (typeof GOOGLE_FINISH_REASONS)[number];
+/**
+ * Finish reasons returned by Google's API.
+ * Uses SDK's FinishReason enum directly as the single source of truth.
+ */
+export type GoogleFinishReason = FinishReason;
 
 /**
  * Union type covering all known provider stop reasons.

@@ -32,16 +32,15 @@ export function extractAgentName(
     return parts[1];
   }
 
-  // Complex format - collect parts until round number
-  const agentParts: string[] = [];
-  for (let i = 1; i < parts.length; i++) {
-    const part = parts[i];
-    if (part.startsWith('r') && /^\d+$/.test(part.slice(1))) {
-      return agentParts.join('_');
-    }
-    agentParts.push(part);
-  }
-  return null;
+  // Complex format - find round number index and join parts before it
+  const partsAfterBase = parts.slice(1);
+  const roundIndex = partsAfterBase.findIndex(
+    (part) => part.startsWith('r') && /^\d+$/.test(part.slice(1)),
+  );
+
+  return roundIndex !== -1
+    ? partsAfterBase.slice(0, roundIndex).join('_')
+    : null;
 }
 
 /**
