@@ -77,7 +77,7 @@ const PROVIDER_CONFIGS: Record<
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, anthropic-version, anthropic-beta, x-stainless-lang, x-stainless-package-version, x-stainless-os, x-stainless-arch, x-stainless-runtime, x-stainless-runtime-version',
+    'authorization, x-api-key, x-goog-api-key, x-client-info, apikey, content-type, anthropic-version, anthropic-beta, x-stainless-lang, x-stainless-package-version, x-stainless-os, x-stainless-arch, x-stainless-runtime, x-stainless-runtime-version',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
