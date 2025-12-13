@@ -138,17 +138,12 @@ export class SupabaseClient {
   }
 
   /**
-   * Get user tier (free or researcher).
-   * @deprecated Use getUserAuthContext() instead.
-   * This method is kept for backwards compatibility.
+   * Get user tier from the database.
+   * Returns the actual tier value: 'free', 'Max', or 'Ultra'.
    */
-  static async getUserTier(): Promise<'free' | 'researcher'> {
+  static async getUserTier(): Promise<string> {
     const authContext = await this.getUserAuthContext();
-    // Map tier to legacy values for backwards compatibility
-    if (authContext.tier === 'researcher') {
-      return 'researcher';
-    }
-    return 'free';
+    return authContext.tier;
   }
 
   /**
