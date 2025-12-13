@@ -78,8 +78,7 @@ export function applyLatexQuotesFormatting(text: string): string {
 
     // Restore tikzpicture environments
     const restoredContent = tikzEnvironments.reduce(
-      (content, env, i) =>
-        content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
+      (content, env, i) => content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
       processedContent,
     );
 

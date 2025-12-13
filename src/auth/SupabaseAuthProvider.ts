@@ -45,8 +45,7 @@ type CallbackResult = CallbackParseResult | CallbackParseError;
  */
 function isOAuthProvider(value: string | undefined): value is OAuthProvider {
   return (
-    value !== undefined &&
-    OAUTH_PROVIDERS.includes(value as OAuthProvider)
+    value !== undefined && OAUTH_PROVIDERS.includes(value as OAuthProvider)
   );
 }
 
@@ -133,7 +132,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!result.success) {
         if (result.isAuthError) {
-          void vscode.window.showErrorMessage(`Sign-in failed: ${result.error}`);
+          void vscode.window.showErrorMessage(
+            `Sign-in failed: ${result.error}`,
+          );
         } else {
           // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
           logger.debug(
@@ -219,8 +220,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     // Verify user with Supabase
     const supabase = SupabaseClient.getClient();
-    const { data, error: userError } =
-      await supabase.auth.getUser(accessToken);
+    const { data, error: userError } = await supabase.auth.getUser(accessToken);
 
     if (userError || !data.user) {
       return {

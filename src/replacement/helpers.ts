@@ -24,9 +24,7 @@ export {
 export function generateBackslashFixes(commands: string[]): {
   [key: string]: string;
 } {
-  return Object.fromEntries(
-    commands.map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]),
-  );
+  return Object.fromEntries(commands.map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]));
 }
 
 /**
@@ -199,19 +197,21 @@ export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
   [key: string]: string;
 } {
   return Object.fromEntries(
-    sectionTypes.flatMap((sectionType) => [
-      `\\end{${sectionType}}`,
-      `\\end{${sectionType}*}`,
-      `\\end {${sectionType}}`,
-      `\\end {${sectionType}*}`,
-      // Additional space variants
-      `\\end{ ${sectionType}}`,
-      `\\end{ ${sectionType}*}`,
-      `\\end{${sectionType} }`,
-      `\\end{${sectionType}* }`,
-      `\\end { ${sectionType} }`,
-      `\\end { ${sectionType}* }`,
-    ].map((ending) => [ending, ''])),
+    sectionTypes.flatMap((sectionType) =>
+      [
+        `\\end{${sectionType}}`,
+        `\\end{${sectionType}*}`,
+        `\\end {${sectionType}}`,
+        `\\end {${sectionType}*}`,
+        // Additional space variants
+        `\\end{ ${sectionType}}`,
+        `\\end{ ${sectionType}*}`,
+        `\\end{${sectionType} }`,
+        `\\end{${sectionType}* }`,
+        `\\end { ${sectionType} }`,
+        `\\end { ${sectionType}* }`,
+      ].map((ending) => [ending, '']),
+    ),
   );
 }
 
@@ -223,7 +223,9 @@ export function generateReferenceSpacing(referenceTypes: string[]): {
 } {
   return Object.fromEntries(
     referenceTypes.flatMap((type) => {
-      const entries: [string, string][] = [[`${type} \\ref{`, `${type}~\\ref{`]];
+      const entries: [string, string][] = [
+        [`${type} \\ref{`, `${type}~\\ref{`],
+      ];
       // Also handle capitalized versions
       if (/^[a-z]/.test(type)) {
         const capitalizedType = capitalize(type);
@@ -326,10 +328,7 @@ export function generateBoldBackslashFixes(
   letters: string[],
 ): { [key: string]: string } {
   return Object.fromEntries(
-    letters.map((letter) => [
-      `\\\\${prefix}${letter}`,
-      `\\${prefix}${letter}`,
-    ]),
+    letters.map((letter) => [`\\\\${prefix}${letter}`, `\\${prefix}${letter}`]),
   );
 }
 
@@ -432,10 +431,7 @@ export function generateTextCommandNormalization(
 
   return Object.fromEntries(
     variantsToUse.flatMap((v) =>
-      terms.map((term) => [
-        `\\${v}{${term}}`,
-        `\\${targetCommand}{${term}}`,
-      ]),
+      terms.map((term) => [`\\${v}{${term}}`, `\\${targetCommand}{${term}}`]),
     ),
   );
 }
