@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
@@ -20,12 +21,12 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
 
-/** Schema for remote agent data sent to webview */
+/** Schema for remote agent data sent to webview (used for type inference only) */
 const RemoteAgentPayloadSchema = z.object({
   name: z.string(),
   description: z.string(),
   visibility: z.array(z.string()),
-  category: z.string(),
+  category: z.nativeEnum(AgentCategory),
   supportsMultipleOutput: z.boolean(),
 });
 type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
@@ -76,7 +77,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       name: entry.name,
       description: entry.description || '',
       visibility: entry.visibility || ['public'],
-      category: entry.category || 'workflow',
+      category: entry.category || AgentCategory.Workflow,
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
