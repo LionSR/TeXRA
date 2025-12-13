@@ -28,7 +28,9 @@ import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,
+  shouldUseServerSideKeysForRouting,
 } from './support/ProxyConfigResolver';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -217,9 +219,26 @@ export abstract class ModelHandler<
 
   /**
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
+   * When server-side keys are enabled (experimental), returns the user's JWT token instead,
+   * which the relay Edge Function will use for authentication.
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
+    // Check if server-side keys should be used (experimental feature for Ultra users)
+    if (shouldUseServerSideKeysForRouting(this.config.provider)) {
+      const accessToken = await SupabaseClient.getAccessToken();
+      if (accessToken) {
+        this.logger.debug(
+          `Using server-side API keys via relay for ${this.config.provider}`,
+        );
+        return accessToken;
+      }
+      // Fall through to normal API key retrieval if not authenticated
+      this.logger.debug(
+        'Server-side keys enabled but not authenticated, falling back to local keys',
+      );
+    }
+
     if (shouldUseOpenRouter(this.config)) {
       try {
         return await SecretManager.getApiKey('openRouter');
