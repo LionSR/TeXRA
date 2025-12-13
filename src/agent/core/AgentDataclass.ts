@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - model types
-import { ToolDefinitionSchema } from '@model';
+import { ToolDefinitionSchema, type ToolDefinition } from '@model';
 
 // Local imports - session schema (imported for local use, re-exported below)
 import type { AgentSessionDescriptor } from './AgentSessionSchema';
@@ -89,7 +89,11 @@ export const AgentSettingBaseSchema = z.strictObject({
     )
     .prefault([]),
 
-  tools: z.array(ToolDefinitionSchema).prefault([]),
+  // Use custom validator that validates via schema but preserves ToolDefinition type
+  // This bridges the gap between schema validation and TypeScript typing
+  tools: z
+    .array(z.custom<ToolDefinition>((val) => ToolDefinitionSchema.safeParse(val).success))
+    .prefault([]),
 });
 
 /**
