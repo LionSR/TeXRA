@@ -9,7 +9,12 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 // Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type {
+  ModelConfig,
+  ModelCapabilities,
+  ReasoningEffort,
+  ToolDefinition,
+} from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 import type { ToolResultPayload } from '../utils/toolAttachmentUtils';
@@ -49,6 +54,8 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /** Optional override for reasoning effort (used by tool-use agents) */
+  reasoningEffortOverride?: ReasoningEffort;
 }
 
 /**

@@ -155,6 +155,7 @@ export class ModelHandlerOpenAI<
     systemPrompt?: string,
     endTag?: string,
     tools?: ToolDefinition[],
+    reasoningEffortOverride?: string,
   ): ChatCompletionRequestBase {
     const baseParams: ChatCompletionRequestBase = {
       model: this.config.fullName,
@@ -171,13 +172,17 @@ export class ModelHandlerOpenAI<
       baseParams.temperature = temperature;
     }
 
+    // Use override if provided, otherwise fall back to config
+    const effectiveReasoningEffort =
+      reasoningEffortOverride ?? this.config.capabilities.reasoningEffort;
+
     if (
       this.config.capabilities.supportsReasoning &&
       this.config.capabilities.supportsReasoningEffort &&
-      this.config.capabilities.reasoningEffort
+      effectiveReasoningEffort
     ) {
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        this.config.capabilities.reasoningEffort,
+        effectiveReasoningEffort,
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 
@@ -418,6 +423,7 @@ export class ModelHandlerOpenAI<
       endTag,
       signal,
       tools,
+      reasoningEffortOverride,
     } = options;
 
     // Apply message normalization if subclass specifies options
@@ -433,6 +439,7 @@ export class ModelHandlerOpenAI<
       systemPrompt,
       endTag,
       tools,
+      reasoningEffortOverride,
     );
 
     if (useStreaming) {

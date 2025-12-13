@@ -335,6 +335,7 @@ class ToolUseCallNode<C> extends Node<
         temperature: options.agentSetting.temperature ?? 0,
         signal: abortController.signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
+        reasoningEffortOverride: options.reasoningEffortOverride,
       });
 
       const responseTime = (Date.now() - start) / 1000;

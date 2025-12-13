@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { ReasoningEffort } from '@model/ModelConfig';
 import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
 export interface UserVariableChannels {
@@ -34,4 +35,6 @@ export interface AgentCycleBaseOptions<C = unknown> {
   client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
+  /** Optional override for reasoning effort (used by tool-use agents) */
+  reasoningEffortOverride?: ReasoningEffort;
 }

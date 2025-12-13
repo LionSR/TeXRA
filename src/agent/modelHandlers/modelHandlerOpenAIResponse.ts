@@ -537,8 +537,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
-    const { client, messages, temperature, systemPrompt, signal, tools } =
-      options;
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      signal,
+      tools,
+      reasoningEffortOverride,
+    } = options;
     const _endTag = options.endTag; // Unused but kept for compatibility
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
@@ -634,12 +641,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (includeSummary) {
         reasoning.summary = 'auto';
       }
+      // Use override if provided, otherwise fall back to config
+      const effectiveReasoningEffort =
+        reasoningEffortOverride ?? this.capabilities.reasoningEffort;
       if (
         this.capabilities.supportsReasoningEffort &&
-        this.capabilities.reasoningEffort &&
-        this.capabilities.reasoningEffort !== 'none'
+        effectiveReasoningEffort &&
+        effectiveReasoningEffort !== 'none'
       ) {
-        reasoning.effort = this.capabilities.reasoningEffort;
+        reasoning.effort = effectiveReasoningEffort;
       }
       params.reasoning = reasoning;
     }

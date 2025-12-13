@@ -110,7 +110,15 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<ChatCompletion> {
-    const { client, messages, temperature, endTag, signal, tools } = options;
+    const {
+      client,
+      messages,
+      temperature,
+      endTag,
+      signal,
+      tools,
+      reasoningEffortOverride,
+    } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
@@ -122,6 +130,10 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       extra_headers: { 'X-Title': 'TeXRA.ai' },
     };
 
+    // Use override if provided, otherwise fall back to config
+    const effectiveReasoningEffort =
+      reasoningEffortOverride ?? this.config.capabilities.reasoningEffort;
+
     // Reasoning parameters vary by model via OpenRouter:
     // - O1-style models: use reasoning.effort + include_reasoning
     // - DeepSeek V3.2: use reasoning.enabled (no include_reasoning needed,
@@ -129,13 +141,11 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     if (this.config.capabilities.supportsReasoning) {
       if (
         this.config.capabilities.supportsReasoningEffort &&
-        this.config.capabilities.reasoningEffort
+        effectiveReasoningEffort
       ) {
         // O1-style models with effort levels
         kwargs.reasoning = {
-          effort: this.validateReasoningEffort(
-            this.config.capabilities.reasoningEffort,
-          ),
+          effort: this.validateReasoningEffort(effectiveReasoningEffort),
         };
         kwargs.include_reasoning = true;
       } else {

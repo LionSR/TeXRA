@@ -3,6 +3,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 
 // Internal imports
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import { ModelProvider, ReasoningEffort } from '@model/ModelConfig';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 // Internal imports
@@ -290,12 +291,23 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       client,
     });
 
+    // Use medium reasoning effort for OpenAI models in tool-use mode
+    // to reduce latency and cost while maintaining quality
+    const capabilities = this.modelHandler.config.capabilities;
+    const isOpenAIReasoning =
+      this.modelHandler.config.provider === ModelProvider.OPENAI &&
+      capabilities.supportsReasoning &&
+      capabilities.supportsReasoningEffort;
+
     return {
       ...baseOptions,
       toolRegistry: this.toolRegistry,
       workspaceState: store.workspace,
       modelName: this.agentConfig.model,
       agentName: this.agentConfig.agent,
+      reasoningEffortOverride: isOpenAIReasoning
+        ? ReasoningEffort.MEDIUM
+        : undefined,
     };
   }
 
