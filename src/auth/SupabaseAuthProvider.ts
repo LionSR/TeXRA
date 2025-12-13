@@ -10,6 +10,7 @@ import {
   type OAuthProvider,
 } from './config';
 import type { SupabaseUriHandler } from './UriHandler';
+import { clearServerSideKeyAccessCache } from './serverSideKeyAccess';
 
 /** Default session expiry time in milliseconds (1 hour) */
 const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
@@ -151,6 +152,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           SupabaseAuthProvider.SESSION_KEY,
           JSON.stringify(result.session),
         );
+        // Clear server-side key access cache so it refetches with new auth state
+        clearServerSideKeyAccessCache();
 
         this._onDidChangeSessions.fire({
           added: [this.toVSCodeSession(result.session)],
@@ -372,6 +375,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             SupabaseAuthProvider.SESSION_KEY,
             JSON.stringify(session),
           );
+          // Clear server-side key access cache so it refetches with new auth state
+          clearServerSideKeyAccessCache();
           this._onDidChangeSessions.fire({
             added: [this.toVSCodeSession(session)],
             removed: [],
