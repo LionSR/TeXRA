@@ -98,6 +98,11 @@ export type UserTier = 'free' | 'Max' | 'Ultra';
  * Returns true if:
  * - Agent visibility includes 'public', OR
  * - There's any overlap between agent visibility and user permissions
+ *
+ * Note: Server-side RLS handles primary access control. This function is for:
+ * - Client-side pre-filtering (e.g., UI hints before server roundtrip)
+ * - Testing and validation
+ * - Future use cases where client-side access checks are needed
  */
 export function hasVisibilityAccess(
   permissions: string[],

@@ -180,8 +180,10 @@ export class AgentsTable {
         ? agent.visibility
         : [agent.visibility];
       visibilityBadge.textContent = visibilityArray.join(', ');
-      // Use first visibility value for CSS class
-      visibilityBadge.classList.add(visibilityArray[0] || 'public');
+      // Use first visibility value for CSS class, or 'custom' for non-public values
+      const firstVisibility = visibilityArray[0] || 'public';
+      const cssClass = firstVisibility === 'public' ? 'public' : 'custom';
+      visibilityBadge.classList.add(cssClass);
     }
 
     // Set up select button
