@@ -11,6 +11,7 @@ import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { AbsoluteFS, StorageFS } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import { THREE_DAYS_MS } from '@utils/config';
 import { getConfig } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -164,7 +165,7 @@ export async function stopRecordingAndTranscribe(
     activeRecordingPath = null;
 
     // Wait a bit for the file to be properly written
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await sleep(500);
 
     // Check if the file exists and has content
     if (!AbsoluteFS.existsSync(recordingPath)) {
