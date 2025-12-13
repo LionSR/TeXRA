@@ -1,9 +1,11 @@
-// (none)
-
 // Local imports - model utilities
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
+import {
+  canUseServerSideKeys,
+  isProviderSupportedForServerSideKeys,
+} from '@auth/serverSideKeyAccess';
 
 /**
  * Format context window number for display
@@ -33,10 +35,16 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * Compute model <vscode-option> tags based on available API keys.
  * Models missing a required key receive data-requires-key="true" so the
  * webview can handle API key setup prompts and display a red ✗ indicator.
+ *
+ * When server-side keys are enabled (experimental feature for Ultra users),
+ * models from supported providers are marked as available even without local keys.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
   const hasOpenRouter = await SecretManager.apiKeyExists('openRouter');
+
+  // Check if server-side API keys are available (Ultra tier + setting enabled)
+  const hasServerSideKeys = await canUseServerSideKeys();
 
   const optionTags = await Promise.all(
     models.map(async (model) => {
@@ -48,17 +56,25 @@ export async function computeModelOptions(): Promise<string> {
       const provider = config.provider;
       let available = false;
 
-      // Check if the provider requires an API key
-      if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+      // Check if server-side keys are available for this provider
+      if (
+        hasServerSideKeys &&
+        isProviderSupportedForServerSideKeys(provider.toLowerCase())
+      ) {
+        available = true;
+      }
+
+      // Check if the provider requires an API key (only if not already available via server-side)
+      if (!available && SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
         try {
           available = await SecretManager.apiKeyExists(provider as ApiProvider);
         } catch (error) {
           console.warn(`Failed to check API key for ${provider}:`, error);
           available = false;
         }
-      } else {
+      } else if (!available) {
         // Models from providers that don't require API keys (like copilot) are always available
-        available = true;
+        available = provider.toLowerCase() === 'copilot';
       }
 
       // Check OpenRouter availability only if not already available and model supports it

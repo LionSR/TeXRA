@@ -52,6 +52,7 @@ const extensionConfig = {
       '@tools': path.resolve(__dirname, 'src/tools'),
       '@types': path.resolve(__dirname, 'src/types'),
       '@eventBus': path.resolve(__dirname, 'src/eventBus'),
+      '@auth': path.resolve(__dirname, 'src/auth'),
     },
     fallback: {
       fs: false,

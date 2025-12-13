@@ -1,6 +1,11 @@
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
+import {
+  isServerSideKeysSettingEnabled,
+  isProviderSupportedForServerSideKeys,
+  getRelayBaseUrl,
+} from '@auth/serverSideKeyAccess';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
@@ -29,7 +34,20 @@ export interface ProxyConfig {
   openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
   requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
+  useServerSideKeys?: boolean; // Use server-side API keys via relay (experimental)
   logger?: { debug: (message: string) => void };
+}
+
+/**
+ * Check if server-side keys should be used for routing.
+ * This is a synchronous check of the setting only - actual tier validation
+ * happens at request time in the relay Edge Function.
+ */
+export function shouldUseServerSideKeysForRouting(provider: ModelProvider): boolean {
+  if (!isServerSideKeysSettingEnabled()) {
+    return false;
+  }
+  return isProviderSupportedForServerSideKeys(provider.toLowerCase());
 }
 
 /**
@@ -47,6 +65,20 @@ export function shouldUseOpenRouter(config: {
   );
 }
 
+/**
+ * Resolves the base URL for API requests.
+ *
+ * Priority order (mutually exclusive):
+ * 1. Custom base URL (per-model override)
+ * 2. Server-side keys relay (experimental, for Ultra users)
+ * 3. Improved connection proxy (proxy.texra.ai)
+ * 4. OpenRouter
+ * 5. Provider default URLs
+ *
+ * Note: Server-side keys and proxy.texra.ai are MUTUALLY EXCLUSIVE.
+ * When server-side keys are enabled, the relay handles everything
+ * and proxy.texra.ai is not used.
+ */
 export function resolveBaseUrl(config: ProxyConfig): string | null {
   // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
   if (config.customBaseUrl) {
@@ -55,6 +87,25 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     );
     return config.customBaseUrl;
   }
+
+  // Server-side keys via relay (experimental feature for Ultra users)
+  // IMPORTANT: This path is MUTUALLY EXCLUSIVE with proxy.texra.ai.
+  // When server-side keys are enabled, we use the Supabase Edge Function relay
+  // which handles everything directly - no intermediate proxy is used.
+  // Actual tier validation happens at request time in the relay Edge Function.
+  if (
+    config.useServerSideKeys ||
+    shouldUseServerSideKeysForRouting(config.provider)
+  ) {
+    const relayUrl = getRelayBaseUrl(config.provider);
+    config.logger?.debug(
+      `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
+    );
+    return relayUrl;
+  }
+
+  // Below this point: standard routing (proxy.texra.ai, OpenRouter, or direct)
+  // These paths are only used when server-side keys are NOT enabled.
 
   const useOpenRouter = shouldUseOpenRouter(config);
   const useImprovedConnection = getConfig<boolean>(
