@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
   agents.
 - Added a **todo list UI** in the progress view for tool-use agents, letting
   you track task progress during agent workflows.
+- Added **Research agent** for analytical derivations and scientific research
+  tasks.
+- Added **Search agent** to the default tool-use agents list for web search
+  workflows.
+- Profile view now displays a **multi-output support indicator** for agents
+  that support multiple outputs.
 
 ### Bug Fixes
 
@@ -21,6 +27,11 @@ All notable changes to this project will be documented in this file.
   remote agents.
 - OpenAI streaming now correctly includes reasoning items when web search
   results reference them.
+- Fixed agent selection race condition when switching session types.
+
+### Improvements
+
+- Updated OpenAI reasoning effort to HIGH for improved model performance.
 
 ## [0.34.9] - 2025-12-10
 
