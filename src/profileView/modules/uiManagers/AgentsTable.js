@@ -5,21 +5,6 @@ import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
-/**
- * Permission constant for accessing remote agents.
- * Matches PERMISSIONS.ACCESS_REMOTE_AGENTS from config.ts
- */
-const PERMISSION_ACCESS_REMOTE_AGENTS = 'access_remote_agents';
-
-/**
- * Check if a permission array includes a specific permission.
- * @param {string[]} permissions - Array of permission strings
- * @param {string} permission - Permission to check for
- * @returns {boolean}
- */
-function hasPermission(permissions, permission) {
-  return Array.isArray(permissions) && permissions.includes(permission);
-}
 
 /**
  * Manages the agents table rendering and interactions.
@@ -99,36 +84,26 @@ export class AgentsTable {
       tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier}`;
     }
 
-    // Update tier message based on permissions (not hardcoded tier check)
+    // Update tier message based on whether user has any permissions
     const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
     if (tierMessage) {
-      const canAccessRemote = hasPermission(
-        permissions,
-        PERMISSION_ACCESS_REMOTE_AGENTS,
-      );
-      tierMessage.textContent = canAccessRemote
+      const hasAnyPermissions =
+        Array.isArray(permissions) && permissions.length > 0;
+      tierMessage.textContent = hasAnyPermissions
         ? LABELS.TIER_RESEARCHER_MESSAGE
         : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show/hide remote agents section based on permission (not tier)
-    const canAccessRemoteAgents = hasPermission(
-      permissions,
-      PERMISSION_ACCESS_REMOTE_AGENTS,
-    );
+    // Show remote agents section for all authenticated users
+    // RLS filters which agents they can see based on permissions
+    remoteAgentsSection.style.display = 'block';
 
-    if (canAccessRemoteAgents) {
-      remoteAgentsSection.style.display = 'block';
-
-      if (remoteAgents && remoteAgents.length > 0) {
-        this.renderAgentsTable(remoteAgents);
-        noAgentsMessage.style.display = 'none';
-      } else {
-        if (this.container) this.container.innerHTML = '';
-        noAgentsMessage.style.display = 'block';
-      }
+    if (remoteAgents && remoteAgents.length > 0) {
+      this.renderAgentsTable(remoteAgents);
+      noAgentsMessage.style.display = 'none';
     } else {
-      remoteAgentsSection.style.display = 'none';
+      if (this.container) this.container.innerHTML = '';
+      noAgentsMessage.style.display = 'block';
     }
   }
 

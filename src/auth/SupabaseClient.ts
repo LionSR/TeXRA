@@ -139,14 +139,13 @@ export class SupabaseClient {
 
   /**
    * Get user tier (free or researcher).
-   * @deprecated Use getUserAuthContext() or getUserPermissions() instead for flexible permission checks.
+   * @deprecated Use getUserAuthContext() instead.
    * This method is kept for backwards compatibility.
    */
   static async getUserTier(): Promise<'free' | 'researcher'> {
     const authContext = await this.getUserAuthContext();
-    // Map primary group to legacy tier values
-    const tier = authContext.primaryGroup;
-    if (tier === 'researcher') {
+    // Map tier to legacy values for backwards compatibility
+    if (authContext.tier === 'researcher') {
       return 'researcher';
     }
     return 'free';
@@ -154,13 +153,13 @@ export class SupabaseClient {
 
   /**
    * Get the user's authorization context including permissions.
-   * Fetches permissions directly from profiles table.
+   * Permissions are visibility values the user can access.
+   * Tier is reserved for future API key access levels.
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
     const defaultContext: UserAuthContext = {
-      groups: [],
       permissions: [],
-      primaryGroup: 'free',
+      tier: 'free',
     };
 
     const tokens = await this.getSessionTokens();
@@ -192,15 +191,14 @@ export class SupabaseClient {
       const tier = (data.tier as string) || 'free';
       let permissions = (data.permissions as string[]) || [];
 
-      // If permissions column is empty, fall back to tier-based permissions
+      // Legacy fallback: if permissions empty and tier='researcher', grant 'researcher' visibility
       if (permissions.length === 0 && tier === 'researcher') {
-        permissions = ['access_remote_agents', 'access_researcher_visibility'];
+        permissions = ['researcher'];
       }
 
       return {
-        groups: [], // Simplified - no groups table
         permissions,
-        primaryGroup: tier,
+        tier,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
