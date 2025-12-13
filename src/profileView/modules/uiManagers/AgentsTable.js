@@ -172,16 +172,19 @@ export class AgentsTable {
       typeBadge.textContent = agent.category || DEFAULTS.AGENT_CATEGORY;
     }
 
-    // Set multi-output badge
+    // Set multi-output badge with codicon
     const multiOutputBadge = row.querySelector('.multi-output-badge');
     if (multiOutputBadge) {
+      const icon = document.createElement('span');
+      icon.className = 'codicon';
       if (agent.supportsMultipleOutput) {
-        multiOutputBadge.textContent = 'Yes';
+        icon.classList.add('codicon-check');
         multiOutputBadge.classList.add('supported');
       } else {
-        multiOutputBadge.textContent = 'No';
+        icon.classList.add('codicon-close');
         multiOutputBadge.classList.add('not-supported');
       }
+      multiOutputBadge.appendChild(icon);
     }
 
     // Set description
