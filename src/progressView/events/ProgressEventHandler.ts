@@ -315,14 +315,20 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      if (this.state.streamTabs.has(stream)) {
+      // When sorted by time, status changes may affect tab order (due to new log entries),
+      // so we need a full refresh. Otherwise use efficient targeted update.
+      const needsFullRefresh =
+        !this.state.streamTabs.has(stream) ||
+        this.state.streamSortOrder === 'time';
+
+      if (needsFullRefresh) {
+        this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      } else {
         // Targeted update: send status and latest timestamp for efficient DOM update
         const logs = this.state.streamTabs.getMessages(stream);
-        const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+        const lastTimestamp =
+          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
-      } else {
-        // New stream: need full updateStreams to create the tab
-        this.webviewUpdater.updateAll(this.state, this._streamStatus);
       }
 
       if (stream === this.state.activeStream) {
