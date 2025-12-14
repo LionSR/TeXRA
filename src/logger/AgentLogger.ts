@@ -323,6 +323,36 @@ export class AgentLogger {
   }
 
   /**
+   * Log files being loaded for a specific category (input, reference, auxiliary, media).
+   * Creates a FILE_LIST entry with a descriptive category label.
+   */
+  logFileCategory(
+    category: string,
+    files: Array<{ path: string; ok?: boolean }>,
+    groupId?: string,
+  ): void {
+    if (files.length === 0) {
+      return;
+    }
+
+    const loadedCount = files.filter((f) => f.ok !== false).length;
+    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
+
+    const entries = files.map((f) => ({
+      path: f.path,
+      ok: f.ok !== false,
+      source: category,
+      sourceDisplay: category,
+    }));
+
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: entries,
+    });
+  }
+
+  /**
    * Log missing output information.
    */
   missingOutputs(info: unknown, groupId?: string): void {
