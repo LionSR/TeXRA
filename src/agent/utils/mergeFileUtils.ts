@@ -76,3 +76,29 @@ export function parseFilenameParts(editedBase: string): FilenameParts {
 
   return { base, agent, roundNum, model };
 }
+
+/**
+ * Extracts agent suffix by comparing base and edited filenames.
+ * Use when the base filename contains underscores and simple parsing won't work.
+ *
+ * @example
+ * extractAgentSuffix(
+ *   "20251018_meeting_notes",
+ *   "20251018_meeting_notes_transcribe_r1_gemini"
+ * ) // returns "transcribe"
+ */
+export function extractAgentSuffix(
+  baseNameWithoutExt: string,
+  editedNameWithoutExt: string,
+): string | null {
+  if (!editedNameWithoutExt.startsWith(baseNameWithoutExt)) {
+    return null;
+  }
+
+  // Get suffix after base name, e.g., "_transcribe_r1_gemini3p"
+  const suffix = editedNameWithoutExt.slice(baseNameWithoutExt.length);
+
+  // Extract agent: everything between leading underscore and _r{digits}
+  const match = suffix.match(/^_(.+?)_r\d+/);
+  return match?.[1] ?? null;
+}
