@@ -321,13 +321,12 @@ export class WebviewUpdater {
     status: StreamStatus,
     lastTimestamp?: number,
   ): void {
-    const message: UpdateStreamStatusMessage = {
-      command: COMMANDS.UPDATE_STREAM_STATUS as 'updateStreamStatus',
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
       lastTimestamp,
-    };
-    this.sendMessage(message);
+    } satisfies Omit<UpdateStreamStatusMessage, 'command'> & { command: string });
   }
 
   /**
