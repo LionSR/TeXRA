@@ -375,10 +375,6 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
 
-    // Remove spaces inside formatting
-    '\\\\(?:textbf|textit|emph|underline|overbrace|underbrace|label)\\{\\s+([^}]*)\\s+\\}':
-      '\\$1{$2}',
-
     // Fix space before closing braces in commands (nearly universal style)
     // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
 
