@@ -87,15 +87,15 @@ TeXRA模型更新了不少。GPT-5.2出了，还有个xhigh推理模式做复杂
 
 ---
 
-7. 导师汇报（侧重：整体架构、稳定性、账号系统）
+7. 导师汇报（侧重：Research Agent、研究能力）
 
 老师好
 
 向您汇报一下TeXRA最近的进展。
 
-主要有几个方面：账号系统上线了，用户登录后可以使用云端配置好的Agent，不需要手动配置yaml文件了。稳定性经过重构，长文档处理更可靠。Progress Board重做了，支持分屏布局和follow-up对话。
+之前主要是润色和格式功能，现在研究辅助能力加强了很多。新增了Research Agent，可以做文献脉络分析、公式推导检查、方法对比这些。还能直接联网搜最新论文，arXiv源码一键下载。
 
-模型支持更新到GPT-5.2、Claude Opus 4.5、DeepSeek V3.2。
+账号系统也上线了，登录就能用云端配好的Agent，不用手动配置了。模型更新到GPT-5.2、Claude Opus 4.5这些。
 
 如果老师方便可以再体验一下，非常期待您的指导意见。
 
@@ -108,7 +108,9 @@ X老师好
 
 之前向您介绍过TeXRA，想跟您同步一下最近的更新。
 
-账号系统上线了，登录后可以使用云端配好的Agent（不需要再把yaml文件传来传去了）。新增了Research Agent做文献分析、Collect References整理参考文献、Clone Overleaf克隆项目。模型更新到GPT-5.2、Claude 4.5。稳定性也改进了很多。
+之前主要是润色和格式功能，现在研究辅助能力加强了很多。新增了Research Agent，可以做文献脉络分析、公式推导检查、不同方法的对比分析。还能直接联网搜最新文献，arXiv源码一键下载，Crossref查DOI。
+
+账号系统上线了，登录就能用云端配好的Agent，不用再把yaml文件传来传去了。模型更新到GPT-5.2、Claude 4.5。
 
 欢迎试用！有任何建议请随时告诉我。
 
@@ -184,15 +186,15 @@ Tool-use也增强了，Agent可以读写文件、搜索代码，改动前会让�
 
 老师好，向您汇报TeXRA项目近期进展。
 
-一、用户系统：上线了账号认证，支持云端Agent配置同步，用户无需手动配置yaml文件。
+相比之前主要的润色格式功能，现在研究辅助能力有了较大提升：
 
-二、Agent能力：新增Research Agent支持文献分析和公式推导；新增Search Agent支持联网搜索；集成arXiv源码下载和Crossref DOI查询工具。
+一、研究辅助：新增Research Agent，支持文献脉络分析、公式推导检查、方法对比分析；新增Search Agent支持联网检索最新文献；集成arXiv源码下载和Crossref DOI查询工具。
 
-三、工作流：新增Clone Overleaf命令克隆项目；Collect References整理参考文献；latexdiff支持数学公式markup选择。
+二、用户系统：上线账号认证，支持云端Agent配置同步，用户无需手动配置yaml文件。
 
-四、稳定性：重构核心架构，优化长文档处理，新增手动重试控制。
+三、工作流：Clone Overleaf克隆项目；Collect References整理参考文献；latexdiff支持数学公式markup选择。
 
-五、模型支持：更新至GPT-5.2、Claude Opus 4.5、DeepSeek V3.2，支持原生联网搜索和Thinking模式可视化。
+四、模型支持：更新至GPT-5.2、Claude Opus 4.5、DeepSeek V3.2，支持原生联网搜索和Thinking模式可视化。
 
 请老师指导。
 
@@ -254,13 +256,13 @@ TeXRA更新了不少。Tool-use增强了，Agent现在能读写文件、搜索�
 
 ---
 
-20. 写基金的老师（侧重：润色、格式）
+20. 写基金的老师（侧重：Research Agent、文献分析）
 
 老师好
 
-听说您最近在写基金？TeXRA可以帮忙润色和调格式。账号系统上线了，登录就能用云端配好的Agent。
+听说您最近在写基金？TeXRA现在研究辅助能力加强了很多。有个Research Agent可以帮忙做文献分析、梳理研究脉络，写立项依据的时候挺有用的。还能联网搜最新文献。
 
-稳定性也改进了很多，长文档处理更可靠。
+账号系统上线了，登录就能用云端配好的Agent。
 
 如果有需要可以试试
 
@@ -414,13 +416,13 @@ Camera ready改得怎么样？TeXRA可以帮忙调格式、整理参考文献。
 
 ---
 
-34. 访问学者/博后（侧重：Research Agent、专业功能）
+34. 访问学者/博后（侧重：Research Agent、研究能力）
 
 老师好
 
-我是XX组的学生。我做了一个LaTeX工具叫TeXRA，有个Research Agent可以帮忙做文献分析和公式推导检查。还能下载arXiv源码、整理参考文献。
+我是XX组的学生。我做了一个LaTeX工具叫TeXRA，除了基本的润色格式功能，研究辅助能力比较强。有个Research Agent可以做文献脉络分析、公式推导检查、不同方法的对比。还能联网搜最新文献，arXiv源码一键下载。
 
-您要是平时用LaTeX可以看看，有什么建议告诉我就行
+您要是有空可以看看，有什么建议告诉我就行
 
 
 ---
@@ -429,7 +431,7 @@ Camera ready改得怎么样？TeXRA可以帮忙调格式、整理参考文献。
 
 X老师好
 
-我是清华XX组的学生。我们做了一个LaTeX辅助工具叫TeXRA。主要功能包括：Research Agent做文献分析、Collect References整理参考文献、Clone Overleaf克隆项目。支持GPT-5.2、Claude 4.5等最新模型，也能联网搜索。
+我是清华XX组的学生。我们做了一个LaTeX辅助工具叫TeXRA。除了基本的润色格式功能，研究辅助能力比较强：Research Agent可以做文献脉络分析、公式推导检查、方法对比；能联网搜最新文献；arXiv源码一键下载；Crossref查DOI。支持GPT-5.2、Claude 4.5等最新模型。
 
 如果您或课题组同学有需要可以试用，有任何建议请随时告诉我
 
@@ -440,7 +442,7 @@ X老师好
 
 各位老师同学好
 
-我做了一个LaTeX辅助工具叫TeXRA。主要功能：Research Agent做文献分析、Collect References整理参考文献、Clone Overleaf克隆项目。支持最新模型和联网搜索。
+我做了一个LaTeX辅助工具叫TeXRA。除了润色格式，研究辅助能力比较强：Research Agent可以做文献脉络分析、公式推导检查；能联网搜最新文献；arXiv源码一键下载。支持GPT-5.2、Claude 4.5等最新模型。
 
 有需要的可以私我，也欢迎提意见
 
@@ -535,9 +537,9 @@ X老师好
 
 老师好
 
-我做了一个LaTeX辅助工具叫TeXRA，能帮忙润色论文、整理参考文献、做文献分析。账号登录就能用云端配好的Agent。
+我做了一个LaTeX辅助工具叫TeXRA。除了基本的润色格式功能，研究辅助能力比较强：有个Research Agent可以做文献脉络分析、公式推导检查、方法对比。还能联网搜最新文献，arXiv源码一键下载。
 
-您要是有空可以看看，有建议随时告诉我
+账号登录就能用云端配好的Agent。您要是有空可以看看
 
 
 ---
