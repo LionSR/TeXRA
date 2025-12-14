@@ -89,3 +89,29 @@ export const MessageTypeSchema = z.enum([
 ]);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
+
+/**
+ * Schema for FILE_LIST message data entries.
+ * Single source of truth for file list entry structure used by:
+ * - AgentLogger.fileList() and logFileCategory()
+ * - Progress view normalizers (normalizeFileListEntries)
+ * - userVars.ts LoadedFileEntry type
+ *
+ * Note: The normalizer defaults missing `source` to 'unknown', so it's optional here.
+ */
+export const FileListEntrySchema = z.object({
+  /** File path (absolute or relative) */
+  path: z.string(),
+  /** Whether the file was successfully loaded/found */
+  ok: z.boolean(),
+  /** Category source identifier (e.g., 'requiredFiles', 'Input Files'). Defaults to 'unknown' in normalizer. */
+  source: z.string().optional(),
+  /** Display label for the source (defaults to source if not provided) */
+  sourceDisplay: z.string().optional(),
+  /** Variable name if loaded for prompt variable substitution */
+  varName: z.string().optional(),
+  /** Whether this is an internal/bundled file */
+  internal: z.boolean().optional(),
+});
+
+export type FileListEntry = z.infer<typeof FileListEntrySchema>;
