@@ -325,6 +325,7 @@ export class AgentLogger {
   /**
    * Log files being loaded for a specific category (input, reference, auxiliary, media).
    * Creates a FILE_LIST entry with a descriptive category label.
+   * Empty arrays are handled gracefully (no-op).
    */
   logFileCategory(
     category: string,
@@ -335,12 +336,13 @@ export class AgentLogger {
       return;
     }
 
-    const loadedCount = files.filter((f) => f.ok !== false).length;
+    // Use explicit === true check: only count files where existence was confirmed
+    const loadedCount = files.filter((f) => f.ok === true).length;
     const summary = `Loading ${category} (${loadedCount}/${files.length})`;
 
     const entries = files.map((f) => ({
       path: f.path,
-      ok: f.ok !== false,
+      ok: f.ok === true,
       source: category,
       sourceDisplay: category,
     }));
