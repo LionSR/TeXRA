@@ -112,12 +112,12 @@ export class StreamTabs {
   }
 
   /**
-   * Update status for a single stream tab.
+   * Update status and/or timestamp for a single stream tab.
    * More efficient than full update() when only status changed.
    * @param {string} streamName - The stream to update
    * @param {string} status - New status value
    * @param {number} [lastTimestamp] - Optional timestamp for "last activity" display
-   * @returns {boolean} True if DOM was updated, false if tab not found
+   * @returns {boolean} True if tab was found and updated, false otherwise
    */
   updateStreamStatus(streamName, status, lastTimestamp) {
     if (!streamName) {
