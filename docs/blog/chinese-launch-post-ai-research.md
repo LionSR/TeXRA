@@ -1,6 +1,8 @@
 ---
 layout: page
 title: TeXRA：面向科学研究的 AI 工作流平台
+description: TeXRA AI 工作流平台介绍，面向科学研究者，提供可配置、可复现、可共享的自动化研究工作流
+date: 2024-12-14
 ---
 
 # TeXRA：面向科学研究的 AI 工作流平台
