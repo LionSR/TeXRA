@@ -172,25 +172,42 @@ async function getFileVars(
  * Log file categories with existence checking.
  * Each category is logged separately with a VS Code native file list message.
  * Uses tuple array for explicit ordering guarantee.
+ *
+ * Processes all categories in parallel for better performance, but logs
+ * them sequentially to preserve the expected UI display order.
  */
 async function logFileCategoriesWithExistence(
   logger: AgentLogger,
   categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
-  for (const [category, files] of categories) {
-    if (files.length === 0) {
-      continue;
+  // Process all categories in parallel for better performance
+  const results = await Promise.all(
+    categories.map(async ([category, files]) => {
+      if (files.length === 0) {
+        return { category, entries: [] };
+      }
+
+      // Explicit type annotation prevents type widening if WorkspaceFS.exists changes
+      const entries: Array<{ path: string; ok: boolean }> = await Promise.all(
+        files.map(async (filePath) => {
+          try {
+            return { path: filePath, ok: await WorkspaceFS.exists(filePath) };
+          } catch {
+            // Treat permission/access errors as non-existent
+            return { path: filePath, ok: false };
+          }
+        }),
+      );
+
+      return { category, entries };
+    }),
+  );
+
+  // Log sequentially to preserve UI display order
+  for (const { category, entries } of results) {
+    if (entries.length > 0) {
+      logger.logFileCategory(category, entries);
     }
-
-    // Explicit type annotation prevents type widening if WorkspaceFS.exists changes
-    const fileEntries: Array<{ path: string; ok: boolean }> = await Promise.all(
-      files.map(async (filePath) => ({
-        path: filePath,
-        ok: await WorkspaceFS.exists(filePath),
-      })),
-    );
-
-    logger.logFileCategory(category, fileEntries);
   }
 }
 
