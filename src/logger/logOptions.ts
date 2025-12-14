@@ -21,6 +21,8 @@ export interface LogOptions {
   messageType?: MessageType;
   /** Structured data for debug mode display */
   data?: unknown;
+  /** Stable ID for deduplication. If provided, replaces existing message with same ID. */
+  messageId?: string;
 }
 
 /**

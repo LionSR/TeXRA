@@ -214,6 +214,7 @@ export class AgentLogger {
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
+      messageId: options.messageId,
     });
   }
 
@@ -267,13 +268,21 @@ export class AgentLogger {
    *
    * @param message - Human-readable error description
    * @param errorData - Pre-structured error data
-   * @param groupId - Optional group ID for progress view
+   * @param options - Optional settings: groupId for progress view, messageId for deduplication
    */
-  logErrorData(message: string, errorData: unknown, groupId?: string): void {
+  logErrorData(
+    message: string,
+    errorData: unknown,
+    options?: { groupId?: string; messageId?: string } | string,
+  ): void {
+    // Support both old signature (groupId as string) and new signature (options object)
+    const opts =
+      typeof options === 'string' ? { groupId: options } : (options ?? {});
     this.error(message, {
-      groupId,
+      groupId: opts.groupId,
       messageType: MESSAGE_TYPES.ERROR,
       data: errorData,
+      messageId: opts.messageId,
     });
   }
 

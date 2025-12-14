@@ -36,7 +36,8 @@ export class ProgressViewSink implements LogEventSink {
     if (messageType === MESSAGE_TYPES.INTERNAL) {
       return;
     }
-    const id = randomUUID();
+    // Use provided messageId for deduplication, or generate a new UUID
+    const id = event.messageId ?? randomUUID();
     const timestamp = new Date(event.timestamp).getTime();
     const logMessage: LogMessageData = {
       id,

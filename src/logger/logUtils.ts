@@ -156,6 +156,7 @@ function logWithGroup(
     groupId: activeGroupId,
     messageType: options.messageType,
     data: options.data,
+    messageId: options.messageId,
   });
 }
 

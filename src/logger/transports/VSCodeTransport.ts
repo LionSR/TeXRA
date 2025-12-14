@@ -50,7 +50,7 @@ export class VSCodeTransport extends Transport {
   }
 
   log(info: any, callback: () => void): void {
-    const { level, message, timestamp, messageType } = info;
+    const { level, message, timestamp, messageType, messageId } = info;
     const structuredData = serializeLogData(info.data);
     const groupId = info.groupId ?? this.activeGroupId;
 
@@ -63,6 +63,7 @@ export class VSCodeTransport extends Transport {
       groupId,
       messageType,
       data: structuredData,
+      messageId,
     });
 
     callback();

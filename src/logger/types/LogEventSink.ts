@@ -11,6 +11,8 @@ export interface LogMessageEvent {
   groupId?: string;
   messageType?: MessageType;
   data?: unknown;
+  /** Optional stable ID for deduplication. If provided, replaces existing message with same ID. */
+  messageId?: string;
 }
 
 export interface LogGroupStartedEvent {

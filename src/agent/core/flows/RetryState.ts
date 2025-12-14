@@ -192,11 +192,23 @@ function formatErrorMessage(
 }
 
 /**
+ * Generates a stable ID for retry error deduplication.
+ * Uses logger's channel ID and operation name to create a consistent identifier
+ * that will cause subsequent retry errors to replace the previous one in the UI.
+ */
+function getRetryErrorId(logger: AgentLogger, operationName: string): string {
+  return `retry-error:${logger.channelId}:${operationName}`;
+}
+
+/**
  * Applies fallback result: records error, logs, and returns flow transition.
  * Called from post() after receiving FallbackResult from execFallback.
  *
  * This is the single source of truth for error logging (log at boundary principle).
  * The error context from enrichError() is included in the log message.
+ *
+ * Uses a stable messageId for retry errors so subsequent retry failures replace
+ * the previous error entry in the UI instead of accumulating duplicates.
  *
  * @param result - The fallback result from determineFallbackAction
  * @param state - The retry state to update
@@ -213,11 +225,15 @@ export function applyFallbackResult(
   // Record error in state for caller/UI access
   recordRetryError(state, result.error);
 
+  // Use a stable ID so subsequent retry errors replace the previous one
+  const messageId = getRetryErrorId(logger, operationName);
+
   switch (result.outcome) {
     case 'manual_retry':
       logger.logErrorData(
         formatErrorMessage(operationName, result.error),
         result.error,
+        { messageId },
       );
       return FlowTransition.AWAIT_RETRY;
 
@@ -225,6 +241,7 @@ export function applyFallbackResult(
       logger.logErrorData(
         formatErrorMessage(operationName, result.error, '(not retryable)'),
         result.error,
+        { messageId },
       );
       return FlowTransition.COMPLETE;
 
