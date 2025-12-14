@@ -310,6 +310,14 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
     // Note: For commands like \bze that should not be split, use:
     // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
     // This prevents latexdiff from splitting the command and its arguments
+
+    // === Fix escaped tildes in \DIFdel/\DIFadd commands ===
+    // The escaped tilde \~ is a tilde accent command that needs an argument.
+    // Inside \DIFdel{} it should be the non-breaking space character ~.
+    // Example: \DIFdel{\~}%DIFDELCMD → \DIFdel{~}%DIFDELCMD
+    '\\\\DIFdel\\{\\\\~\\}%DIFDELCMD': '\\DIFdel{~}%DIFDELCMD',
+    // Example: \DIFadd{\~}%DIFADDCMD → \DIFadd{~}%DIFADDCMD
+    '\\\\DIFadd\\{\\\\~\\}%DIFADDCMD': '\\DIFadd{~}%DIFADDCMD',
   },
 };
 
