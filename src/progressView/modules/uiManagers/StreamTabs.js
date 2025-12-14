@@ -116,9 +116,10 @@ export class StreamTabs {
    * More efficient than full update() when only status changed.
    * @param {string} streamName - The stream to update
    * @param {string} status - New status value
+   * @param {number} [lastTimestamp] - Optional timestamp for "last activity" display
    * @returns {boolean} True if DOM was updated, false if tab not found
    */
-  updateStreamStatus(streamName, status) {
+  updateStreamStatus(streamName, status, lastTimestamp) {
     if (!streamName) {
       return false;
     }
@@ -148,21 +149,28 @@ export class StreamTabs {
     }
 
     const statusEl = streamTab.querySelector('.tab-status');
-    if (!statusEl) {
-      return false;
+    if (statusEl) {
+      // Remove old status classes dynamically from STREAM_STATUS values
+      // This ensures the class list stays in sync with constants
+      Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
+      // READY means execution completed - display as stopped (no active indicator)
+      const normalizedStatus =
+        status === STREAM_STATUS.READY
+          ? STREAM_STATUS.STOPPED
+          : status || STREAM_STATUS.STOPPED;
+      statusEl.classList.add(normalizedStatus);
+      statusEl.dataset.status =
+        normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
     }
 
-    // Remove old status classes dynamically from STREAM_STATUS values
-    // This ensures the class list stays in sync with constants
-    Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
-    // READY means execution completed - display as stopped (no active indicator)
-    const normalizedStatus =
-      status === STREAM_STATUS.READY
-        ? STREAM_STATUS.STOPPED
-        : status || STREAM_STATUS.STOPPED;
-    statusEl.classList.add(normalizedStatus);
-    statusEl.dataset.status =
-      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+    // Update timestamp display if provided
+    if (lastTimestamp !== undefined) {
+      const lastActiveEl = streamTab.querySelector('.last-active');
+      if (lastActiveEl) {
+        lastActiveEl.textContent = formatRelativeTime(lastTimestamp);
+      }
+    }
+
     return true;
   }
 
