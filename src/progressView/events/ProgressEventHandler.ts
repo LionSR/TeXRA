@@ -315,11 +315,15 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Always do full stream list refresh when status changes.
-      // This ensures timestamps and sorting are updated, not just the status dot.
-      // Previously only updateStreamStatus was called for existing tabs, which
-      // left the "last activity" timestamps stale until the user clicked.
-      this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      if (this.state.streamTabs.has(stream)) {
+        // Targeted update: send status and latest timestamp for efficient DOM update
+        const logs = this.state.streamTabs.getMessages(stream);
+        const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
+      } else {
+        // New stream: need full updateStreams to create the tab
+        this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      }
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
