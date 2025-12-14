@@ -12,6 +12,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { FileListEntry } from '@logger/messageTypes';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -22,14 +23,13 @@ import { WorkspaceFS } from '@utils/files';
 export type UserVars = Record<string, unknown>;
 
 /**
- * Information about a loaded file
+ * Information about a loaded file for prompt variable substitution.
+ * Extends FileListEntry with required source and varName fields.
+ * Compatible with FileListEntry (can be passed to AgentLogger.fileList).
  */
-export type LoadedFileEntry = {
-  path: string;
-  ok: boolean;
-  varName: string;
+export type LoadedFileEntry = FileListEntry & {
   source: string;
-  internal?: boolean;
+  varName: string;
 };
 
 /**
