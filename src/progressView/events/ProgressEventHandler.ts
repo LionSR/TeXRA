@@ -315,14 +315,11 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Check if the stream tab exists before deciding update strategy
-      if (this.state.streamTabs.has(stream)) {
-        // Use targeted single-stream update for existing tabs
-        this.webviewUpdater.updateStreamStatus(stream, status);
-      } else {
-        // New stream: need full updateStreams to create the tab
-        this.webviewUpdater.updateAll(this.state, this._streamStatus);
-      }
+      // Always do full stream list refresh when status changes.
+      // This ensures timestamps and sorting are updated, not just the status dot.
+      // Previously only updateStreamStatus was called for existing tabs, which
+      // left the "last activity" timestamps stale until the user clicked.
+      this.webviewUpdater.updateAll(this.state, this._streamStatus);
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
