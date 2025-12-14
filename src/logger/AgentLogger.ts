@@ -18,7 +18,11 @@ import * as logger from './logUtils';
 import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
-import type { EndGroupStatus, MessageType } from './messageTypes';
+import type {
+  EndGroupStatus,
+  FileListEntry,
+  MessageType,
+} from './messageTypes';
 import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
@@ -312,8 +316,9 @@ export class AgentLogger {
 
   /**
    * Log a list of files that were processed.
+   * @param files - Array of FileListEntry objects conforming to FileListEntrySchema
    */
-  fileList(files: unknown[], groupId?: string): void {
+  fileList(files: FileListEntry[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
     this.info(summary, {
       groupId,
@@ -340,7 +345,7 @@ export class AgentLogger {
     const loadedCount = files.filter((f) => f.ok === true).length;
     const summary = `Loading ${category} (${loadedCount}/${files.length})`;
 
-    const entries = files.map((f) => ({
+    const entries: FileListEntry[] = files.map((f) => ({
       path: f.path,
       ok: f.ok === true,
       source: category,
