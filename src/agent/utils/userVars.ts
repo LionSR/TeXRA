@@ -115,12 +115,12 @@ async function getFileVars(
     ...agentConfig.mediaFiles,
   ].filter(Boolean) as string[];
 
-  // Log file categories being loaded
+  // Log file categories being loaded (processed sequentially to preserve UI display order)
   await logFileCategoriesWithExistence(logger, {
-    'input files': allInputFiles,
-    'reference files': allReferenceFiles,
-    'auxiliary files': allAuxiliaryFiles,
-    'media files': allMediaFiles,
+    'Input Files': allInputFiles,
+    'Reference Files': allReferenceFiles,
+    'Auxiliary Files': allAuxiliaryFiles,
+    'Media Files': allMediaFiles,
   });
 
   const singleFileMappings = {
