@@ -166,8 +166,8 @@ export class StreamTabs {
       updated = true;
     }
 
-    // Update timestamp display if provided
-    if (lastTimestamp !== undefined) {
+    // Update timestamp display if provided and valid (> 0 to avoid 1970 dates)
+    if (lastTimestamp !== undefined && lastTimestamp > 0) {
       const lastActiveEl = streamTab.querySelector('.last-active');
       if (lastActiveEl) {
         lastActiveEl.textContent = formatRelativeTime(lastTimestamp);
