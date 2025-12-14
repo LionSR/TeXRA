@@ -322,17 +322,14 @@ export class ProgressEventHandler {
         this.state.streamSortOrder === 'time';
 
       if (needsFullRefresh) {
+        // Full refresh - frontend handles main status update via handleUpdateStreams
         this.webviewUpdater.updateAll(this.state, this._streamStatus);
       } else {
-        // Targeted update: send status and latest timestamp for efficient DOM update
+        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
         const logs = this.state.streamTabs.getMessages(stream);
         const lastTimestamp =
           logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
-      }
-
-      if (stream === this.state.activeStream) {
-        this.webviewUpdater.updateStatus(status);
       }
     }
   }
