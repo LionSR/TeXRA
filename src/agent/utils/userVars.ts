@@ -116,12 +116,13 @@ async function getFileVars(
   ].filter(Boolean) as string[];
 
   // Log file categories being loaded (processed sequentially to preserve UI display order)
-  await logFileCategoriesWithExistence(logger, {
-    'Input Files': allInputFiles,
-    'Reference Files': allReferenceFiles,
-    'Auxiliary Files': allAuxiliaryFiles,
-    'Media Files': allMediaFiles,
-  });
+  // Using tuple array for explicit ordering guarantee
+  await logFileCategoriesWithExistence(logger, [
+    ['Input Files', allInputFiles],
+    ['Reference Files', allReferenceFiles],
+    ['Auxiliary Files', allAuxiliaryFiles],
+    ['Media Files', allMediaFiles],
+  ]);
 
   const singleFileMappings = {
     INPUT: agentConfig.inputFile,
@@ -170,17 +171,19 @@ async function getFileVars(
 /**
  * Log file categories with existence checking.
  * Each category is logged separately with a VS Code native file list message.
+ * Uses tuple array for explicit ordering guarantee.
  */
 async function logFileCategoriesWithExistence(
   logger: AgentLogger,
-  categories: Record<string, string[]>,
+  categories: Array<[category: string, files: string[]]>,
 ): Promise<void> {
-  for (const [category, files] of Object.entries(categories)) {
+  for (const [category, files] of categories) {
     if (files.length === 0) {
       continue;
     }
 
-    const fileEntries = await Promise.all(
+    // Explicit type annotation prevents type widening if WorkspaceFS.exists changes
+    const fileEntries: Array<{ path: string; ok: boolean }> = await Promise.all(
       files.map(async (filePath) => ({
         path: filePath,
         ok: await WorkspaceFS.exists(filePath),
