@@ -1,6 +1,11 @@
-TeXRA：为学术写作设计的 AI 工具平台
-
 ---
+layout: page
+title: TeXRA：为学术写作设计的 AI 工具平台
+---
+
+# TeXRA：为学术写作设计的 AI 工具平台
+
+## 当前工具的局限
 
 AI 工具越来越多，学术写作却没有变得明显更轻松。
 
@@ -10,6 +15,8 @@ Claude 擅长润色英文，GPT/DeepSeek 推理能力强，Gemini 能处理超�
 
 数学推导的问题更为严重。当你请求验证一个证明时，它可能会说"推导正确"，但你不知道这是不是只是基于文本模式的模式匹配，还是真正的数学验证。同样，当你请求查找参考文献时，它可能会生成看似合理但实际上并不存在的论文信息。这类错误在日常对话中可以容忍，在学术写作中则可能导致严重后果。
 
+## TeXRA 的设计理念
+
 TeXRA 试图解决这些问题。它是一个运行在 VS Code 中的工具平台，将多个大模型整合到统一的界面中，并针对学术写作的具体需求设计了专门的功能模块。
 
 在模型层面，TeXRA 支持主流的 AI 服务：Anthropic Claude、OpenAI GPT 系列及其推理模型、Google Gemini、DeepSeek、Moonshot、通义千问，以及通过 OpenRouter 接入的各类开源模型。用户使用自己的 API 密钥，数据直接发送到对应的服务商，不经过中间服务器。对于国内用户，DeepSeek 是一个值得考虑的选择：价格较低，无需特殊网络配置，V3.2 模型在各自的任务上都有不错的表现。
@@ -18,16 +25,26 @@ TeXRA 试图解决这些问题。它是一个运行在 VS Code 中的工具平�
 
 第二类是 Tool-Use Agent，支持交互式的多轮对话，并能调用外部工具完成复杂任务。Research Agent 集成了调用本地 Wolfram Language 的工具，可以执行符号运算、求解方程、进行数值验证。Chat Agent 可以审阅草稿并提供具体的修改建议，也可以搜索 arXiv 和 Crossref 数据库查找文献，返回的每一条引用都包含可验证的 DOI 和完整的 BibTeX 信息。Search Agent 则专门用于文献检索，支持学术数据库和网页搜索。
 
+## 设计原则
+
 设计 TeXRA 时，有坚持几个原则。
 
-修改必须透明。每次 AI 对文档的修改都会生成精确的差异对比，通过集成的 latexdiff 工具，用户可以看到每一处增删改动，包括数学公式中单个符号的变化。所有修改都需要用户确认后才会生效。
+**修改必须透明。** 每次 AI 对文档的修改都会生成精确的差异对比，通过集成的 latexdiff 工具，用户可以看到每一处增删改动，包括数学公式中单个符号的变化。所有修改都需要用户确认后才会生效。
 
-过程必须可追溯。每次运行都会记录使用的模型、消耗的 token 数量、完整的输入输出内容。用户可以查看 AI 在每一步是如何推理的。
+**过程必须可追溯。** 每次运行都会记录使用的模型、消耗的 token 数量、完整的输入输出内容。用户可以查看 AI 在每一步是如何推理的。
 
-数据必须安全。TeXRA 作为本地插件运行，论文内容只会发送到用户自己配置的 API 服务商，我们不收集、不存储任何用户的输入数据。
+**数据必须安全。** TeXRA 作为本地插件运行，论文内容只会发送到用户自己配置的 API 服务商，我们不收集、不存储任何用户的输入数据。
+
+## Overleaf 集成
 
 对于使用 Overleaf 的用户，TeXRA 提供了便捷的集成方案：通过 Git 将项目克隆到本地，使用 TeXRA 进行处理，然后推送回 Overleaf。插件内置了专门的克隆命令，只需输入项目地址和访问令牌即可完成配置。
 
-TeXRA 目前需要本地安装 TeX Live 或 MiKTeX 环境。项目地址和问题反馈请访问 GitHub。
+## 开始使用
+
+TeXRA 目前需要本地安装 TeX Live 或 MiKTeX 环境。
+
+- **GitHub**: [github.com/texra-ai/texra](https://github.com/texra-ai/texra)
+- **VS Code Marketplace**: [marketplace.visualstudio.com/items?itemName=texra-ai.texra](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
+- **文档**: [texra.dev](https://texra.dev)
 
 学术研究本身已经足够困难，我们希望工具能够真正提供帮助，而不是制造新的障碍。
