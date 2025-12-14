@@ -4,11 +4,17 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports
+import { extractAgentSuffix } from '@agent/utils';
 import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import {
+  flexibleFS,
+  createWorkspaceLocation,
+  createRunStorageLocation,
+  createExternalLocation,
+} from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
@@ -118,7 +124,8 @@ async function handleCompare(
 }
 
 /**
- * Handles accepting the content of the edited file and overwriting the base file
+ * Handles accepting the content of the edited file.
+ * If extensions differ, creates a new file instead of overwriting.
  */
 async function handleAcceptEdited(
   inputLocation: FileLocation,
@@ -149,15 +156,36 @@ async function handleAcceptEdited(
       return;
     }
 
-    // Read content from edited file
-    const editedContent = await flexibleFS.read(editedLocation);
+    const basePath = fileToUseLocation.absolutePath;
+    const editedPath = editedLocation.absolutePath;
+    const editedFileName = path.basename(editedPath);
+    const baseExt = path.extname(basePath).toLowerCase();
+    const editedExt = path.extname(editedPath).toLowerCase();
 
-    // Confirm with user
-    const baseFileName = path.basename(fileToUseLocation.absolutePath);
-    const editedFileName = path.basename(editedLocation.absolutePath);
+    // Determine target: new file if extensions differ, otherwise overwrite base
+    const { targetLocation, targetFileName, isNewFile } =
+      baseExt !== editedExt
+        ? getNewFileTarget(fileToUseLocation, editedPath)
+        : {
+            targetLocation: fileToUseLocation,
+            targetFileName: path.basename(basePath),
+            isNewFile: false,
+          };
+
+    // Check if new file would overwrite an existing file
+    const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
+
+    let confirmMessage: string;
+    if (isNewFile && targetExists) {
+      confirmMessage = `Extensions differ (${baseExt} vs ${editedExt}). This will overwrite existing '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
+    } else if (isNewFile) {
+      confirmMessage = `Extensions differ (${baseExt} vs ${editedExt}). This will create '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
+    } else {
+      confirmMessage = `This will overwrite '${targetFileName}' with content from '${editedFileName}'. Are you sure?`;
+    }
 
     const answer = await vscode.window.showWarningMessage(
-      `This will overwrite '${baseFileName}' with content from '${editedFileName}'. Are you sure?`,
+      confirmMessage,
       { modal: true },
       'Yes',
       'Cancel',
@@ -167,17 +195,16 @@ async function handleAcceptEdited(
       return;
     }
 
-    // Write content to base file
-    await flexibleFS.write(fileToUseLocation, editedContent);
+    const editedContent = await flexibleFS.read(editedLocation);
+    await flexibleFS.write(targetLocation, editedContent);
 
-    vscode.window.showInformationMessage(
-      `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
-    );
+    const successMessage =
+      isNewFile && !targetExists
+        ? `Successfully created '${targetFileName}' with content from '${editedFileName}'`
+        : `Successfully replaced '${targetFileName}' with content from '${editedFileName}'`;
 
-    logger.info(
-      CHANNEL,
-      `Copied content from ${editedFileName} to ${baseFileName}`,
-    );
+    vscode.window.showInformationMessage(successMessage);
+    logger.info(CHANNEL, successMessage);
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error accepting changes: ${toErrorMessage(err)}`,
@@ -187,6 +214,58 @@ async function handleAcceptEdited(
       `Error in handleAcceptEdited: ${toErrorMessage(err)}`,
     );
   }
+}
+
+/**
+ * Determines the target file when extensions differ.
+ * Creates filename: {baseName}_{agent}.{editedExt} or falls back to edited filename.
+ * Preserves the location kind (workspace/runStorage/external) from the base file.
+ */
+function getNewFileTarget(
+  baseLocation: FileLocation,
+  editedPath: string,
+): { targetLocation: FileLocation; targetFileName: string; isNewFile: true } {
+  const basePath = baseLocation.absolutePath;
+  const baseNameWithoutExt = path.parse(basePath).name;
+  const editedNameWithoutExt = path.parse(editedPath).name;
+  const editedExt = path.extname(editedPath);
+
+  const agentSuffix = extractAgentSuffix(baseNameWithoutExt, editedNameWithoutExt);
+  const targetFileName = agentSuffix
+    ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
+    : path.basename(editedPath);
+
+  const targetAbsolutePath = path.join(path.dirname(basePath), targetFileName);
+
+  // Preserve location kind from base file
+  let targetLocation: FileLocation;
+  switch (baseLocation.kind) {
+    case 'workspace': {
+      const targetRelativePath = path.join(
+        path.dirname(baseLocation.relativePath),
+        targetFileName,
+      );
+      targetLocation = createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
+      break;
+    }
+    case 'runStorage': {
+      const targetRelativePath = path.join(
+        path.dirname(baseLocation.relativePath),
+        targetFileName,
+      );
+      targetLocation = createRunStorageLocation(
+        targetAbsolutePath,
+        targetRelativePath,
+        baseLocation.executionId,
+      );
+      break;
+    }
+    case 'external':
+      targetLocation = createExternalLocation(targetAbsolutePath);
+      break;
+  }
+
+  return { targetLocation, targetFileName, isNewFile: true };
 }
 
 export const compareCommands = {
