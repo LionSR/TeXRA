@@ -217,11 +217,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.pendingFilterUpdate = false;
     }
     state.resetExecutionIdAvailability();
-    // Preserve existing statuses when updates omit them so errored streams
-    // remain marked as error instead of reverting to stopped
+    // Preserve ERROR status when updates omit status, so errored streams
+    // remain marked as error instead of reverting to stopped. Other statuses
+    // (like RUNNING) should not be preserved when omitted, as undefined means
+    // the stream has completed (READY status is deleted from the status map).
     const streams = (message.streams || []).map((s) => {
-      const status =
-        s.status !== undefined ? s.status : state.streamStatuses.get(s.name);
+      let status = s.status;
+      if (status === undefined) {
+        const cachedStatus = state.streamStatuses.get(s.name);
+        // Only preserve ERROR status; other statuses should not persist
+        status = cachedStatus === STREAM_STATUS.ERROR ? cachedStatus : undefined;
+      }
       if (status) {
         state.streamStatuses.set(s.name, status);
       } else {
@@ -298,6 +304,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       // Refresh todos for the active stream
       const todos = state.getTodos(message.activeStream);
       dom.todoList.update(todos || []);
+
+      // Auto-focus follow-up input when active stream is waiting for user input
+      if (streamStatus === STREAM_STATUS.WAITING) {
+        dom.followUpInput.focus({ scrollIntoView: true });
+      }
     }
 
     this._refreshInstructionForActiveRun();
@@ -595,6 +606,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Also update main status indicator if this is the active stream
     if (stream === state.activeStream) {
       dom.status.update(status || STREAM_STATUS.STOPPED);
+
+      // Auto-focus follow-up input when waiting for user input
+      if (status === STREAM_STATUS.WAITING) {
+        dom.followUpInput.focus({ scrollIntoView: true });
+      }
     }
   }
 
