@@ -566,7 +566,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * More efficient than UPDATE_STREAMS when only status changed.
    */
   handleUpdateStreamStatus(message) {
-    const { stream, status } = message;
+    const { stream, status, lastTimestamp } = message;
     if (!stream) {
       return;
     }
@@ -590,7 +590,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
-    dom.streamTabs.updateStreamStatus(stream, status);
+    dom.streamTabs.updateStreamStatus(stream, status, lastTimestamp);
   }
 
   handleUpdateUsage(message) {

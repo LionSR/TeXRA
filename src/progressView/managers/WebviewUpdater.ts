@@ -310,12 +310,18 @@ export class WebviewUpdater {
   /**
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
+   * @param lastTimestamp - Optional timestamp for updating "last activity" display
    */
-  updateStreamStatus(stream: StreamTabId, status: StreamStatus): void {
+  updateStreamStatus(
+    stream: StreamTabId,
+    status: StreamStatus,
+    lastTimestamp?: number,
+  ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
+      lastTimestamp,
     });
   }
 
