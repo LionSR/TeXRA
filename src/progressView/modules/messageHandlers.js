@@ -591,6 +591,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
     dom.streamTabs.updateStreamStatus(stream, status, lastTimestamp);
+
+    // Also update main status indicator if this is the active stream
+    if (stream === state.activeStream) {
+      dom.status.update(status || STREAM_STATUS.STOPPED);
+    }
   }
 
   handleUpdateUsage(message) {
