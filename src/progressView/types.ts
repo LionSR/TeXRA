@@ -47,7 +47,7 @@ export interface InstructionUpdate {
  * Used for efficient single-stream status updates without full list refresh.
  */
 export interface UpdateStreamStatusMessage {
-  command: 'UPDATE_STREAM_STATUS';
+  command: 'updateStreamStatus';
   stream: StreamTabId;
   status: StreamStatus;
   /** Optional timestamp for updating "last activity" display */

@@ -322,7 +322,7 @@ export class WebviewUpdater {
     lastTimestamp?: number,
   ): void {
     const message: UpdateStreamStatusMessage = {
-      command: 'UPDATE_STREAM_STATUS',
+      command: COMMANDS.UPDATE_STREAM_STATUS as 'updateStreamStatus',
       stream,
       status,
       lastTimestamp,
