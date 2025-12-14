@@ -91,6 +91,10 @@ function getSelectDefaultValue(selectId, fallback) {
 export class MainViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
+    // Guard flag to prevent save() during restore() - vscode-single-select
+    // fires 'change' events on programmatic value changes, which would trigger
+    // save() and capture partial/inconsistent DOM state
+    this._isRestoring = false;
   }
 
   get() {
@@ -150,6 +154,24 @@ export class MainViewState {
 
   /** Restore state from VS Code storage */
   restore() {
+    this._isRestoring = true;
+    let needsSaveAfter = false;
+    try {
+      needsSaveAfter = this._restoreImpl();
+    } finally {
+      this._isRestoring = false;
+    }
+    // If setDefaults() was called, its save() was skipped due to _isRestoring
+    // flag, so we need to save now after the flag is cleared
+    if (needsSaveAfter) {
+      this.save();
+    }
+  }
+
+  /**
+   * @returns {boolean} true if setDefaults() was called and needs a save after
+   */
+  _restoreImpl() {
     const previousState = this.stateManager.getState();
     if (previousState) {
       const defaults = {
@@ -238,15 +260,22 @@ export class MainViewState {
       }
 
       this.applySessionType(normalizedSessionType, { skipSave: true });
+      fileList.hideEmpty(MULTIPLE_SELECTIONS);
+      return false; // No save needed - state already exists
     } else {
       this.setDefaults();
+      fileList.hideEmpty(MULTIPLE_SELECTIONS);
+      return true; // setDefaults() save was skipped, needs save after
     }
-
-    fileList.hideEmpty(MULTIPLE_SELECTIONS);
   }
 
   /** Persist current UI state */
   save() {
+    // Skip save during restore to prevent capturing partial/inconsistent state
+    if (this._isRestoring) {
+      return;
+    }
+
     const state = {
       latexdiffsVisible:
         safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT)?.style.display ===
