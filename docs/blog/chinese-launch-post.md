@@ -1,6 +1,8 @@
 ---
 layout: page
 title: TeXRA：为学术写作设计的 AI 工具平台
+description: TeXRA 是一个运行在 VS Code 中的 AI 工具平台，专门为学术 LaTeX 写作设计，整合多个大模型并提供专业的 Workflow Agent 系统
+date: 2024-12-14
 ---
 
 # TeXRA：为学术写作设计的 AI 工具平台
