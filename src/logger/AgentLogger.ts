@@ -334,7 +334,7 @@ export class AgentLogger {
    */
   logFileCategory(
     category: string,
-    files: Array<{ path: string; ok?: boolean }>,
+    files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
     groupId?: string,
   ): void {
     if (files.length === 0) {
