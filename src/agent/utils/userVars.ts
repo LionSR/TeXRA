@@ -12,6 +12,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { FileListEntry } from '@logger/messageTypes';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -22,14 +23,13 @@ import { WorkspaceFS } from '@utils/files';
 export type UserVars = Record<string, unknown>;
 
 /**
- * Information about a loaded file
+ * Information about a loaded file for prompt variable substitution.
+ * Extends FileListEntry with required source and varName fields.
+ * Compatible with FileListEntry (can be passed to AgentLogger.fileList).
  */
-export type LoadedFileEntry = {
-  path: string;
-  ok: boolean;
-  varName: string;
+export type LoadedFileEntry = FileListEntry & {
   source: string;
-  internal?: boolean;
+  varName: string;
 };
 
 /**
@@ -64,7 +64,7 @@ export async function buildUserVars(
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
     ...getBasicVars(agentConfig, modelHandler),
-    ...(await getFileVars(agentConfig)),
+    ...(await getFileVars(agentConfig, logger)),
     ...requiredVars,
     ...patternVars,
     ...getOutputFilesOrder(agentConfig, agentSetting),
@@ -92,7 +92,10 @@ function getBasicVars(
   };
 }
 
-async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
+async function getFileVars(
+  agentConfig: AgentConfig,
+  logger: AgentLogger,
+): Promise<UserVars> {
   const userVars: UserVars = {};
 
   const allInputFiles = [
@@ -107,6 +110,19 @@ async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
     agentConfig.auxiliaryFile,
     ...agentConfig.auxiliaryFiles,
   ].filter(Boolean) as string[];
+  const allMediaFiles = [
+    agentConfig.mediaFile,
+    ...agentConfig.mediaFiles,
+  ].filter(Boolean) as string[];
+
+  // Log file categories being loaded (processed sequentially to preserve UI display order)
+  // Using tuple array for explicit ordering guarantee
+  await logFileCategoriesWithExistence(logger, [
+    ['Input Files', allInputFiles],
+    ['Reference Files', allReferenceFiles],
+    ['Auxiliary Files', allAuxiliaryFiles],
+    ['Media Files', allMediaFiles],
+  ]);
 
   const singleFileMappings = {
     INPUT: agentConfig.inputFile,
@@ -150,6 +166,49 @@ async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
   }
 
   return userVars;
+}
+
+/**
+ * Log file categories with existence checking.
+ * Each category is logged separately with a VS Code native file list message.
+ * Uses tuple array for explicit ordering guarantee.
+ *
+ * Processes all categories in parallel for better performance, but logs
+ * them sequentially to preserve the expected UI display order.
+ */
+async function logFileCategoriesWithExistence(
+  logger: AgentLogger,
+  categories: Array<[category: string, files: string[]]>,
+): Promise<void> {
+  // Process all categories in parallel for better performance
+  const results = await Promise.all(
+    categories.map(async ([category, files]) => {
+      if (files.length === 0) {
+        return { category, entries: [] };
+      }
+
+      // Explicit type annotation prevents type widening if WorkspaceFS.exists changes
+      const entries: Array<{ path: string; ok: boolean }> = await Promise.all(
+        files.map(async (filePath) => {
+          try {
+            return { path: filePath, ok: await WorkspaceFS.exists(filePath) };
+          } catch {
+            // Treat permission/access errors as non-existent
+            return { path: filePath, ok: false };
+          }
+        }),
+      );
+
+      return { category, entries };
+    }),
+  );
+
+  // Log sequentially to preserve UI display order
+  for (const { category, entries } of results) {
+    if (entries.length > 0) {
+      logger.logFileCategory(category, entries);
+    }
+  }
 }
 
 async function getRequiredFileVars(
