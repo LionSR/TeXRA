@@ -64,7 +64,7 @@ export async function buildUserVars(
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
     ...getBasicVars(agentConfig, modelHandler),
-    ...(await getFileVars(agentConfig)),
+    ...(await getFileVars(agentConfig, logger)),
     ...requiredVars,
     ...patternVars,
     ...getOutputFilesOrder(agentConfig, agentSetting),
@@ -92,7 +92,10 @@ function getBasicVars(
   };
 }
 
-async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
+async function getFileVars(
+  agentConfig: AgentConfig,
+  logger: AgentLogger,
+): Promise<UserVars> {
   const userVars: UserVars = {};
 
   const allInputFiles = [
@@ -107,6 +110,18 @@ async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
     agentConfig.auxiliaryFile,
     ...agentConfig.auxiliaryFiles,
   ].filter(Boolean) as string[];
+  const allMediaFiles = [
+    agentConfig.mediaFile,
+    ...agentConfig.mediaFiles,
+  ].filter(Boolean) as string[];
+
+  // Log file categories being loaded
+  await logFileCategoriesWithExistence(logger, {
+    'input files': allInputFiles,
+    'reference files': allReferenceFiles,
+    'auxiliary files': allAuxiliaryFiles,
+    'media files': allMediaFiles,
+  });
 
   const singleFileMappings = {
     INPUT: agentConfig.inputFile,
@@ -150,6 +165,30 @@ async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
   }
 
   return userVars;
+}
+
+/**
+ * Log file categories with existence checking.
+ * Each category is logged separately with a VS Code native file list message.
+ */
+async function logFileCategoriesWithExistence(
+  logger: AgentLogger,
+  categories: Record<string, string[]>,
+): Promise<void> {
+  for (const [category, files] of Object.entries(categories)) {
+    if (files.length === 0) {
+      continue;
+    }
+
+    const fileEntries = await Promise.all(
+      files.map(async (filePath) => ({
+        path: filePath,
+        ok: await WorkspaceFS.exists(filePath),
+      })),
+    );
+
+    logger.logFileCategory(category, fileEntries);
+  }
 }
 
 async function getRequiredFileVars(
