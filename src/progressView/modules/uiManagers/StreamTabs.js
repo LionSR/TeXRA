@@ -117,7 +117,7 @@ export class StreamTabs {
    * @param {string} streamName - The stream to update
    * @param {string} status - New status value
    * @param {number} [lastTimestamp] - Optional timestamp for "last activity" display
-   * @returns {boolean} True if tab was found and updated, false otherwise
+   * @returns {boolean} True if any DOM element was updated, false otherwise
    */
   updateStreamStatus(streamName, status, lastTimestamp) {
     if (!streamName) {
@@ -148,6 +148,8 @@ export class StreamTabs {
       return false;
     }
 
+    let updated = false;
+
     const statusEl = streamTab.querySelector('.tab-status');
     if (statusEl) {
       // Remove old status classes dynamically from STREAM_STATUS values
@@ -161,6 +163,7 @@ export class StreamTabs {
       statusEl.classList.add(normalizedStatus);
       statusEl.dataset.status =
         normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+      updated = true;
     }
 
     // Update timestamp display if provided
@@ -168,10 +171,11 @@ export class StreamTabs {
       const lastActiveEl = streamTab.querySelector('.last-active');
       if (lastActiveEl) {
         lastActiveEl.textContent = formatRelativeTime(lastTimestamp);
+        updated = true;
       }
     }
 
-    return true;
+    return updated;
   }
 
   /**
