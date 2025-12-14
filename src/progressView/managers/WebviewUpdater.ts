@@ -15,7 +15,11 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
+import type {
+  InstructionUpdate,
+  StreamTabInfo,
+  UpdateStreamStatusMessage,
+} from '@progressView/types';
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
@@ -317,12 +321,13 @@ export class WebviewUpdater {
     status: StreamStatus,
     lastTimestamp?: number,
   ): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_STREAM_STATUS,
+    const message: UpdateStreamStatusMessage = {
+      command: 'UPDATE_STREAM_STATUS',
       stream,
       status,
       lastTimestamp,
-    });
+    };
+    this.sendMessage(message);
   }
 
   /**
