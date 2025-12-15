@@ -112,13 +112,14 @@ export class StreamTabs {
   }
 
   /**
-   * Update status for a single stream tab.
+   * Update status and/or timestamp for a single stream tab.
    * More efficient than full update() when only status changed.
    * @param {string} streamName - The stream to update
    * @param {string} status - New status value
-   * @returns {boolean} True if DOM was updated, false if tab not found
+   * @param {number} [lastTimestamp] - Optional timestamp for "last activity" display
+   * @returns {boolean} True if any DOM element was updated, false otherwise
    */
-  updateStreamStatus(streamName, status) {
+  updateStreamStatus(streamName, status, lastTimestamp) {
     if (!streamName) {
       return false;
     }
@@ -147,23 +148,34 @@ export class StreamTabs {
       return false;
     }
 
+    let updated = false;
+
     const statusEl = streamTab.querySelector('.tab-status');
-    if (!statusEl) {
-      return false;
+    if (statusEl) {
+      // Remove old status classes dynamically from STREAM_STATUS values
+      // This ensures the class list stays in sync with constants
+      Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
+      // READY means execution completed - display as stopped (no active indicator)
+      const normalizedStatus =
+        status === STREAM_STATUS.READY
+          ? STREAM_STATUS.STOPPED
+          : status || STREAM_STATUS.STOPPED;
+      statusEl.classList.add(normalizedStatus);
+      statusEl.dataset.status =
+        normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+      updated = true;
     }
 
-    // Remove old status classes dynamically from STREAM_STATUS values
-    // This ensures the class list stays in sync with constants
-    Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
-    // READY means execution completed - display as stopped (no active indicator)
-    const normalizedStatus =
-      status === STREAM_STATUS.READY
-        ? STREAM_STATUS.STOPPED
-        : status || STREAM_STATUS.STOPPED;
-    statusEl.classList.add(normalizedStatus);
-    statusEl.dataset.status =
-      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
-    return true;
+    // Update timestamp display if provided and valid (> 0 to avoid 1970 dates)
+    if (lastTimestamp !== undefined && lastTimestamp > 0) {
+      const lastActiveEl = streamTab.querySelector('.last-active');
+      if (lastActiveEl) {
+        lastActiveEl.textContent = formatRelativeTime(lastTimestamp);
+        updated = true;
+      }
+    }
+
+    return updated;
   }
 
   /**
