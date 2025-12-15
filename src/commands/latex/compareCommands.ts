@@ -230,7 +230,10 @@ function getNewFileTarget(
   const editedNameWithoutExt = path.parse(editedPath).name;
   const editedExt = path.extname(editedPath);
 
-  const agentSuffix = extractAgentSuffix(baseNameWithoutExt, editedNameWithoutExt);
+  const agentSuffix = extractAgentSuffix(
+    baseNameWithoutExt,
+    editedNameWithoutExt,
+  );
   const targetFileName = agentSuffix
     ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
     : path.basename(editedPath);
@@ -245,7 +248,10 @@ function getNewFileTarget(
         path.dirname(baseLocation.relativePath),
         targetFileName,
       );
-      targetLocation = createWorkspaceLocation(targetAbsolutePath, targetRelativePath);
+      targetLocation = createWorkspaceLocation(
+        targetAbsolutePath,
+        targetRelativePath,
+      );
       break;
     }
     case 'runStorage': {
