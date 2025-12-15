@@ -134,6 +134,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Auto-focus follow-up input when status is WAITING.
+   * Extracted to avoid duplication in handleUpdateStreams and handleUpdateStreamStatus.
+   * @param {string} status - The stream status to check
+   */
+  _focusFollowUpIfWaiting(status) {
+    if (status === STREAM_STATUS.WAITING) {
+      dom.followUpInput.focus({ scrollIntoView: true });
+    }
+  }
+
+  /**
    * Update run-scoped metadata (instructions, usage, files) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
@@ -217,11 +228,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.pendingFilterUpdate = false;
     }
     state.resetExecutionIdAvailability();
-    // Preserve existing statuses when updates omit them so errored streams
-    // remain marked as error instead of reverting to stopped
+    // Preserve ERROR status when updates omit status, so errored streams
+    // remain marked as error instead of reverting to stopped. Other statuses
+    // (like RUNNING) should not be preserved when omitted, as undefined means
+    // the stream has completed (READY status is deleted from the status map).
     const streams = (message.streams || []).map((s) => {
-      const status =
-        s.status !== undefined ? s.status : state.streamStatuses.get(s.name);
+      let status = s.status;
+      if (status === undefined) {
+        const cachedStatus = state.streamStatuses.get(s.name);
+        // Only preserve ERROR status; other statuses should not persist
+        status =
+          cachedStatus === STREAM_STATUS.ERROR ? cachedStatus : undefined;
+      }
       if (status) {
         state.streamStatuses.set(s.name, status);
       } else {
@@ -298,6 +316,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       // Refresh todos for the active stream
       const todos = state.getTodos(message.activeStream);
       dom.todoList.update(todos || []);
+      this._focusFollowUpIfWaiting(streamStatus);
     }
 
     this._refreshInstructionForActiveRun();
@@ -566,7 +585,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * More efficient than UPDATE_STREAMS when only status changed.
    */
   handleUpdateStreamStatus(message) {
-    const { stream, status } = message;
+    const { stream, status, lastTimestamp } = message;
     if (!stream) {
       return;
     }
@@ -590,7 +609,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
-    dom.streamTabs.updateStreamStatus(stream, status);
+    dom.streamTabs.updateStreamStatus(stream, status, lastTimestamp);
+
+    // Also update main status indicator if this is the active stream
+    if (stream === state.activeStream) {
+      dom.status.update(status || STREAM_STATUS.STOPPED);
+      this._focusFollowUpIfWaiting(status);
+    }
   }
 
   handleUpdateUsage(message) {
