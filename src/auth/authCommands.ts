@@ -8,7 +8,6 @@ import {
   type OAuthProvider,
   getAuthCallbackUri,
 } from './config';
-import { clearServerSideKeyAccessCache } from './serverSideKeyAccess';
 
 /**
  * Command identifiers for auth-related commands.
@@ -209,9 +208,8 @@ export async function signOut(): Promise<void> {
     // Use authentication provider to properly sign out
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
+      // removeSession() handles cache clearing internally
       await authProvider.removeSession(session.id);
-      // Clear the server-side key access cache on sign out
-      clearServerSideKeyAccessCache();
       void vscode.window.showInformationMessage('Signed out successfully');
     } else {
       void vscode.window.showErrorMessage(
