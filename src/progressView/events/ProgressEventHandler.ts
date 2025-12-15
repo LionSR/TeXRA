@@ -329,6 +329,8 @@ export class ProgressEventHandler {
       } else {
         // Targeted update - frontend handles main status update via handleUpdateStreamStatus
         const logs = this.state.streamTabs.getMessages(stream);
+        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
+        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
         const lastTimestamp =
           logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);

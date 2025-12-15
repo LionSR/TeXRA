@@ -15,11 +15,7 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import type {
-  InstructionUpdate,
-  StreamTabInfo,
-  UpdateStreamStatusMessage,
-} from '@progressView/types';
+import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
@@ -326,7 +322,7 @@ export class WebviewUpdater {
       stream,
       status,
       lastTimestamp,
-    } satisfies Omit<UpdateStreamStatusMessage, 'command'> & { command: string });
+    });
   }
 
   /**
