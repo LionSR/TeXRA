@@ -310,6 +310,14 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: ReplacementCategory = {
     // Note: For commands like \bze that should not be split, use:
     // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
     // This prevents latexdiff from splitting the command and its arguments
+
+    // === Fix escaped tildes in \DIFdel/\DIFadd commands ===
+    // The escaped tilde \~ is a tilde accent command that needs an argument.
+    // Inside \DIFdel{} it should be the non-breaking space character ~.
+    // Example: \DIFdel{\~}%DIFDELCMD → \DIFdel{~}%DIFDELCMD
+    '\\\\DIFdel\\{\\\\~\\}%DIFDELCMD': '\\DIFdel{~}%DIFDELCMD',
+    // Example: \DIFadd{\~}%DIFADDCMD → \DIFadd{~}%DIFADDCMD
+    '\\\\DIFadd\\{\\\\~\\}%DIFADDCMD': '\\DIFadd{~}%DIFADDCMD',
   },
 };
 
@@ -374,10 +382,6 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
-
-    // Remove spaces inside formatting
-    '\\\\(?:textbf|textit|emph|underline|overbrace|underbrace|label)\\{\\s+([^}]*)\\s+\\}':
-      '\\$1{$2}',
 
     // Fix space before closing braces in commands (nearly universal style)
     // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
