@@ -25,6 +25,7 @@ We've had GPT-4 and Claude for two years. So why hasn't anyone solved LaTeX writ
 **Overleaf**: Doesn't have AI. Still requires manual editing.
 
 **The fundamental problem**: Research writing isn't code autocomplete. It's a multi-step workflow involving:
+
 - Document structure understanding (main file + references + auxiliaries)
 - Domain-specific validation (LaTeX linting, notation consistency)
 - Specialized transformations (paper → slides, extract TikZ, generate diffs)
@@ -43,7 +44,7 @@ Instead of one model trying to do everything, TeXRA has **domain-specific agents
 
 - **`correct` agent**: Fixes typos, notation inconsistencies, LaTeX errors. Enforces `chktex` compliance (non-breaking spaces in references, proper ellipsis, consistent math mode).
 
-- **`polish` agent**: Chain-of-thought reasoning for prose improvements. First drafts a plan in a `<scratchpad>`, implements changes, then *reflects* on what it did and refines further.
+- **`polish` agent**: Chain-of-thought reasoning for prose improvements. First drafts a plan in a `<scratchpad>`, implements changes, then _reflects_ on what it did and refines further.
 
 - **`draw` agent**: Generates publication-ready TikZ diagrams from descriptions. Handles complex layouts (neural network architectures, quantum circuits, flowcharts).
 
@@ -60,6 +61,7 @@ Each agent is **configured via YAML**—you can define new agents without touchi
 TeXRA isn't just prompting a model. It's a complete LaTeX processing pipeline:
 
 **Automatic TikZ handling**:
+
 ```
 User: "Make me a diagram of a neural network"
 TeXRA draw agent:
@@ -75,6 +77,7 @@ Every agent run automatically generates `latexdiff` output with configurable gra
 
 **Multi-file context awareness**:
 TeXRA reads your entire project:
+
 - `main.tex` (input file)
 - `references.bbl` (bibliography)
 - `commands.tex` (custom macros)
@@ -96,6 +99,7 @@ Academic writing demands **verifiability**. TeXRA treats every agent run as a sc
 - **Model A/B testing**: Run the same task with Claude Opus 4, OpenAI o3, and Gemini 2.5 Pro simultaneously. Compare outputs. Pick the best one.
 
 Example workflow:
+
 ```
 1. Select "polish_multiple" agent
 2. Instruction: "Improve introduction clarity and add transition sentences"
@@ -131,12 +135,14 @@ You control the economics. TeXRA tracks token usage and costs per run.
 **Setup**: You wrote a quantum computing paper. Sometimes you use `|ψ⟩`, sometimes `\ket{\psi}`. Some references say "Fig. 3", others "Figure~\ref{fig:bloch}".
 
 **With TeXRA**:
+
 1. Add your paper to Input, `commands.tex` to Auxiliary
 2. Choose `correct` agent with Claude Sonnet 4
 3. Instruction: "Standardize all quantum states to use `\ket{}` and `\bra{}` notation. Fix cross-references to use non-breaking spaces."
 4. Execute
 
 **Result (30 seconds later)**:
+
 - New `.tex` file with consistent notation
 - Latexdiff PDF showing every change
 - Log: "Changed 47 instances of `|...⟩` to `\ket{...}`, fixed 23 cross-references"
@@ -147,12 +153,14 @@ You control the economics. TeXRA tracks token usage and costs per run.
 **Setup**: You need to defend your work at a conference. You have a 25-page paper. You need 12 slides by Friday.
 
 **With TeXRA**:
+
 1. Select your paper as Input
 2. Choose `paper2slide` agent with Gemini 2.5 Pro
 3. Instruction: "Generate a 12-slide Beamer presentation focusing on the main theorem and experimental results."
 4. Execute
 
 **Result**:
+
 - Complete Beamer `.tex` file with:
   - Title slide
   - Motivation/problem statement (1-2 slides)
@@ -168,6 +176,7 @@ You control the economics. TeXRA tracks token usage and costs per run.
 **Setup**: Your LaTeX won't compile. You're getting cryptic errors about undefined references.
 
 **With TeXRA**:
+
 1. Open `chat` tool-use agent
 2. Message: "Why am I getting 'undefined reference' warnings?"
 3. Agent uses `grep` tool to search for `\ref{` patterns
@@ -186,6 +195,7 @@ What makes this possible? Four key architectural decisions:
 TeXRA agents don't just generate text. They **think, plan, execute, and reflect**.
 
 Example: `polish` agent workflow:
+
 ```
 1. Read full document + references + auxiliaries
 2. In <scratchpad>:
@@ -205,6 +215,7 @@ This chain-of-thought process produces **dramatically better** results than sing
 ### 2. Tool-Use Architecture
 
 Tool-use agents (`ask`, `chat`) run in an **agentic loop**:
+
 ```
 User request
   → Model plans tool usage
@@ -215,6 +226,7 @@ User request
 ```
 
 These agents can:
+
 - Search your entire codebase for notation patterns
 - Download arXiv papers and extract methodology
 - Run Wolfram Alpha queries for symbolic math
@@ -244,7 +256,7 @@ All agents are defined in YAML. Want a custom agent for your subfield? Create `m
 ```yaml
 name: quantum_polish
 settings:
-  agentType: cot  # Chain-of-thought
+  agentType: cot # Chain-of-thought
   outputExt: tex
 prompts:
   systemPrompt: |
@@ -264,12 +276,14 @@ Add it to your workspace, and it appears in the agent picker. No coding required
 **Research scientists** writing papers in LaTeX (physics, math, CS, engineering)
 
 **PhD students** who need to:
+
 - Iterate quickly on drafts
 - Generate slides for group meetings
 - Keep notation consistent across 100+ page theses
 - Respond to advisor feedback efficiently
 
 **Academic groups** who want:
+
 - Reproducible editing workflows
 - Shared agent configurations (everyone uses the same `polish` agent)
 - Cost tracking across projects
@@ -282,6 +296,7 @@ TeXRA represents a shift from **"AI as general tool"** to **"AI as domain specia
 Generic AI is like hiring a random person off the street to edit your paper. Sometimes they're helpful. Often they break your LaTeX, misunderstand your field, or give generic advice.
 
 TeXRA is like hiring a postdoc who:
+
 - Knows LaTeX inside-out (chktex rules, notation standards, TikZ compilation)
 - Understands research workflows (drafting, revision, slides, posters)
 - Works in your environment (VS Code, your files, your tools)
@@ -295,12 +310,14 @@ And unlike a postdoc, you can run 10 versions in parallel and pick the best one.
 **Install from VS Code Marketplace**: [texra-ai.texra](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra)
 
 **Quick start**:
+
 1. Run command: `TeXRA: Create Sample Project`
 2. Follow the interactive walkthrough
 3. Set your API keys (Anthropic, OpenAI, or Google)
 4. Execute your first agent
 
 **The sample project includes**:
+
 - Pre-configured LaTeX document
 - Example agents (correct, polish, draw)
 - Step-by-step guide
@@ -311,6 +328,7 @@ And unlike a postdoc, you can run 10 versions in parallel and pick the best one.
 ## What's Next
 
 We're actively building:
+
 - **Collaborative workflows**: Share agent runs with co-authors
 - **Multi-document projects**: Better support for books and theses
 - **Custom tool creation**: Define your own tools for agents
@@ -331,4 +349,4 @@ If you've ever spent hours fixing LaTeX notation, wrestling with TikZ compilatio
 
 **Built by researchers, for researchers.**
 
-*TeXRA: The first AI assistant that actually understands your research workflow.*
+_TeXRA: The first AI assistant that actually understands your research workflow._
