@@ -15,7 +15,7 @@ import * as difflib from 'difflib';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
-import { toolResult, type ToolResult } from '@tools/result';
+import { toolResult, type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
@@ -37,18 +37,13 @@ export interface ToolEditApprovalResult {
   userMessage?: string;
   appliedContent?: string;
   userPatch?: string;
-  lineChanges?: LineChangeSummary;
+  lineChanges?: LineChanges;
 }
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
 const REVEAL_TIMEOUT_MS = 1500;
-
-interface LineChangeSummary {
-  added: number;
-  removed: number;
-}
 
 interface PendingApprovalEntry {
   request: ToolEditApprovalRequest;
@@ -58,7 +53,7 @@ interface PendingApprovalEntry {
   proposedContent: string;
   title: string;
   streamId?: StreamTabId;
-  lineChanges: LineChangeSummary;
+  lineChanges: LineChanges;
   isSettled: () => boolean;
   settle: (result: ToolEditApprovalResult) => void;
 }
@@ -194,7 +189,7 @@ async function showProgressViewApprovalPrompt(
   requestId: string,
   request: ToolEditApprovalRequest,
   relativePath: string,
-  lineChanges: LineChangeSummary,
+  lineChanges: LineChanges,
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
   bus.emit('showToolEditApprovalPrompt', {
@@ -233,7 +228,7 @@ function countChangedLines(text: string): number {
 function computeLineChangeSummary(
   original: string,
   proposed: string,
-): LineChangeSummary {
+): LineChanges {
   if (original === proposed) {
     return { added: 0, removed: 0 };
   }

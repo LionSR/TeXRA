@@ -18,7 +18,11 @@ import * as logger from './logUtils';
 import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
-import type { EndGroupStatus, MessageType } from './messageTypes';
+import type {
+  EndGroupStatus,
+  FileListEntry,
+  MessageType,
+} from './messageTypes';
 import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
@@ -312,13 +316,46 @@ export class AgentLogger {
 
   /**
    * Log a list of files that were processed.
+   * @param files - Array of FileListEntry objects conforming to FileListEntrySchema
    */
-  fileList(files: unknown[], groupId?: string): void {
+  fileList(files: FileListEntry[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
     this.info(summary, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
       data: files,
+    });
+  }
+
+  /**
+   * Log files being loaded for a specific category (input, reference, auxiliary, media).
+   * Creates a FILE_LIST entry with a descriptive category label.
+   * Empty arrays are handled gracefully (no-op).
+   */
+  logFileCategory(
+    category: string,
+    files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
+    groupId?: string,
+  ): void {
+    if (files.length === 0) {
+      return;
+    }
+
+    // Use explicit === true check: only count files where existence was confirmed
+    const loadedCount = files.filter((f) => f.ok === true).length;
+    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
+
+    const entries: FileListEntry[] = files.map((f) => ({
+      path: f.path,
+      ok: f.ok === true,
+      source: category,
+      sourceDisplay: category,
+    }));
+
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: entries,
     });
   }
 
