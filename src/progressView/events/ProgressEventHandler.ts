@@ -306,26 +306,34 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
+    // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      // Status is not 'ready', so it's a valid active status
-      const nextStatus = status;
-      this._streamStatus.set(stream, nextStatus);
+      this._streamStatus.set(stream, status);
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Check if the stream tab exists before deciding update strategy
-      if (this.state.streamTabs.has(stream)) {
-        // Use targeted single-stream update for existing tabs
-        this.webviewUpdater.updateStreamStatus(stream, status);
-      } else {
-        // New stream: need full updateStreams to create the tab
-        this.webviewUpdater.updateAll(this.state, this._streamStatus);
-      }
+      // When sorted by time, status changes may affect tab order (due to new log entries),
+      // so we need a full refresh. Otherwise use efficient targeted update.
+      const needsFullRefresh =
+        !this.state.streamTabs.has(stream) ||
+        this.state.streamSortOrder === 'time';
 
-      if (stream === this.state.activeStream) {
-        this.webviewUpdater.updateStatus(status);
+      if (needsFullRefresh) {
+        // Include current status in refresh map so frontend displays it correctly.
+        // READY is deleted from _streamStatus but should still be shown to user.
+        const statusesForRefresh = new Map(this._streamStatus);
+        statusesForRefresh.set(stream, status);
+        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+      } else {
+        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
+        const logs = this.state.streamTabs.getMessages(stream);
+        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
+        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
+        const lastTimestamp =
+          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
   }
