@@ -99,7 +99,9 @@ async function fetchAccessStatus(): Promise<boolean> {
 export async function canUseServerSideKeys(): Promise<boolean> {
   // Check setting first (fast, no network)
   if (!isServerSideKeysSettingEnabled()) {
-    lastKnownAccessResult = false;
+    // Clear entire cache when setting is disabled to ensure fresh check when re-enabled
+    // This prevents stale cached promise from being used if setting is toggled back on
+    clearServerSideKeyAccessCache();
     return false;
   }
 
