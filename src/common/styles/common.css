@@ -139,3 +139,79 @@ vscode-toolbar-button {
   opacity: var(--opacity-subtle);
   font-size: var(--font-size-sm);
 }
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+/* Visibility */
+.hidden {
+  display: none;
+}
+
+.hidden.is-visible {
+  display: flex;
+}
+
+/* Text utilities */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+/* Pulse animation with scale - for status indicators */
+@keyframes pulse-scale {
+  0% {
+    transform: scale(1);
+    opacity: var(--opacity-subtle);
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: var(--opacity-full);
+  }
+  100% {
+    transform: scale(1);
+    opacity: var(--opacity-subtle);
+  }
+}
+
+/* Pulse animation with fade - for recording indicators */
+@keyframes pulse-fade {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Spin animation - for loading indicators */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   Button Variants
+   ========================================================================== */
+
+/* Secondary button style - less prominent than primary */
+.btn-secondary {
+  opacity: var(--opacity-normal);
+}
+
+.btn-secondary:hover {
+  opacity: var(--opacity-full);
+}

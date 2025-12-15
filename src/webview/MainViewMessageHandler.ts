@@ -20,6 +20,7 @@ import {
   getToolDocsCommand,
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
+import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 // Local file imports
@@ -203,7 +204,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
         // Reuse existing setApiKey command with provider parameter
         if (m?.provider) {
-          await safeExecuteCommand('texra.setApiKey', m.provider);
+          await safeExecuteCommand('texra.setApiKey', [m.provider]);
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
@@ -278,6 +279,45 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
             command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
           });
         }
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: async () => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
+      },
+      [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
+        try {
+          await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
+          // Only hide banner if sign-in was successful
+          const authStatus = await getAuthStatus();
+          if (authStatus.authenticated) {
+            const view = this.getActiveView();
+            view?.webview.postMessage({
+              command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+            });
+          }
+        } catch (error) {
+          // Sign-in was cancelled or failed - banner remains visible
+          this.logger.debug(
+            this.channel,
+            `Sign-in from banner failed: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
+        // Save dismissal preference
+        await setConfig('ui.showLoginBanner', false);
+        const view = this.getActiveView();
+        view?.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
       },
 
       // Recording commands
@@ -427,6 +467,20 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         options: agentOptions,
       });
+
+      // Check if user is authenticated and show/hide login banner accordingly
+      const showLoginBanner = getConfig<boolean>('ui.showLoginBanner', true);
+      const authStatus = await getAuthStatus();
+      if (showLoginBanner && !authStatus.authenticated) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+        });
+      } else if (authStatus.authenticated) {
+        // Hide banner if user signed in through other means (account menu, etc.)
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
+      }
     } catch (error) {
       this.logger.error(
         this.channel,

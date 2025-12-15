@@ -44,8 +44,20 @@ export const AgentSource = z.enum([
 ]);
 export type AgentSource = z.infer<typeof AgentSource>;
 
-/** Remote agent visibility levels. */
-export type RemoteVisibility = 'public' | 'researcher' | 'whitelist';
+/**
+ * Remote agent visibility levels.
+ *
+ * Visibility is an array of group names that can access the agent.
+ * User can access the agent if their permissions overlap with visibility.
+ *
+ * Common values:
+ * - ['public']: Available to all authenticated users
+ * - ['researcher']: Requires 'researcher' in user's permissions
+ * - ['math', 'cs']: Available to users with 'math' OR 'cs' permission
+ *
+ * New visibility levels can be added in the database without code changes.
+ */
+export type RemoteVisibility = string[];
 
 /**
  * Minimal agent metadata for dropdown display and path resolution.
@@ -205,7 +217,9 @@ export function resolveAgent(
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 
-  // Remote agents have no local path
+  // Remote agents have no local path - variant resolution is handled by RemoteAgentLoader.
+  // The multiplePath field is only used for UI indicator (data-multiple="true").
+  // RemoteAgentLoader.loadRemoteAgent() handles the preferMultiple logic internally.
   if (entry.source === 'remote') {
     return {
       entry,
@@ -215,7 +229,7 @@ export function resolveAgent(
     };
   }
 
-  // Handle _multiple variant
+  // Handle _multiple variant for local agents
   if (preferMultiple && entry.multiplePath) {
     return {
       entry,
@@ -394,18 +408,61 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
-    return remotes.map((r) => ({
-      name: r.name,
-      source: 'remote' as AgentSource,
-      path: '',
-      category:
-        r.agentType === 'toolUse'
-          ? AgentCategory.ToolUse
-          : AgentCategory.Workflow,
-      agentType: mapAgentType(r.agentType),
-      description: r.description,
-      visibility: r.visibility,
-    }));
+
+    // Group remote agents by base name (same pattern as local agents)
+    // This ensures consistency: both "criticize" and "criticize_multiple" from
+    // the database become a single entry with multiplePath set
+    const grouped = new Map<
+      string,
+      { base?: (typeof remotes)[0]; multiple?: (typeof remotes)[0] }
+    >();
+
+    for (const r of remotes) {
+      const isMultiple = isMultipleVariant(r.name);
+      const baseName = isMultiple ? getBaseName(r.name) : r.name;
+
+      const group = grouped.get(baseName) || {};
+      if (isMultiple) {
+        group.multiple = r;
+      } else {
+        group.base = r;
+      }
+      grouped.set(baseName, group);
+    }
+
+    // Build entries from grouped agents
+    const entries: AgentEntry[] = [];
+    for (const [baseName, { base, multiple }] of grouped) {
+      // Use base agent's metadata, or fall back to multiple if only _multiple exists
+      const primary = base || multiple;
+      if (!primary) continue;
+
+      // If only _multiple exists without a base, use full name as the entry name
+      const entryName = base ? baseName : primary.name;
+
+      // Determine category from agentCategory (new) or agentType (legacy)
+      const isToolUse = primary.agentCategory === AgentCategory.ToolUse;
+      const category = isToolUse
+        ? AgentCategory.ToolUse
+        : AgentCategory.Workflow;
+      // Derive agentType from category (toolUse category -> ToolUse type, otherwise CoT)
+      const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
+
+      entries.push({
+        name: entryName,
+        source: 'remote' as AgentSource,
+        path: '',
+        // Set multiplePath to indicate multiple output support (for UI indicator)
+        // True if _multiple variant exists, or if this IS a _multiple-only agent
+        multiplePath: multiple ? multiple.name : undefined,
+        category,
+        agentType,
+        description: primary.description,
+        visibility: primary.visibility,
+      });
+    }
+
+    return entries;
   } catch (err) {
     logger.warn(CHANNEL, `Failed to load remote agents: ${err}`);
     return [];

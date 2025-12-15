@@ -6,15 +6,12 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolFileAttachment } from '@tools/result';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 // Type imports
+import type { DeepSeekToolCall } from './types/IModelHandler';
 import type {
-  CreateResponseOptions,
-  DeepSeekToolCall,
-} from './types/IModelHandler';
-import type {
-  ChatCompletion,
   ChatCompletionMessageParam,
   ChatCompletionAssistantMessageParam,
 } from 'openai/resources/chat/completions';
@@ -223,43 +220,23 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
     // with reasoning_content field that OpenAI's types don't know about
-    const messages: ChatCompletionMessageParam[] = [
-      callMsg as ChatCompletionMessageParam,
-    ];
+    // Build tool result messages (results are already sanitized by source)
+    const toolResultMessages = toolCalls.map((call, i) => ({
+      role: 'tool' as const,
+      tool_call_id: call.id,
+      content: JSON.stringify(results[i]),
+    }));
 
-    // Add individual tool result messages (results are already sanitized by source)
-    for (let i = 0; i < toolCalls.length; i++) {
-      messages.push({
-        role: 'tool' as const,
-        tool_call_id: toolCalls[i].id,
-        content: JSON.stringify(results[i]),
-      });
-    }
-
-    return messages;
+    return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
   }
 
   /**
-   * Override createResponse to preprocess messages for Deepseek models
+   * DeepSeek requires merging consecutive roles and converting content to strings.
    */
-  async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
-  ): Promise<ChatCompletion> {
-    const { messages } = options;
-    // Preprocess messages to merge consecutive messages and convert content to strings
-    const processedMessages = this.prepareNormalizedMessages(
-      messages,
-      {
-        mergeConsecutiveRoles: true,
-        convertContentToString: true,
-      },
-      'Deepseek',
-    );
-
-    // Call the parent implementation with the processed messages
-    return super.createResponse({
-      ...options,
-      messages: processedMessages,
-    });
+  protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
+    return {
+      mergeConsecutiveRoles: true,
+      convertContentToString: true,
+    };
   }
 }

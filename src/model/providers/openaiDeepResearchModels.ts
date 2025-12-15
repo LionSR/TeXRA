@@ -6,12 +6,20 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 
-// Common capabilities for OpenAI reasoning models
+// Common capabilities for OpenAI deep research models.
+//
+// Tool capability combinations:
+// - Deep research: supportsFunctionCalling=false, supportsNativeWebSearch=true
+//   Only native tools (web_search, file_search, mcp, code_interpreter) are supported.
+//   Function calling tools are rejected with HTTP 400.
+// - Standard models: supportsFunctionCalling=true, supportsNativeWebSearch varies
+//   Function calling tools are converted normally. Native web_search used if supported.
 const OPENAI_DEEP_RESEARCH_DEFAULT_CAPABILITIES: ModelCapabilities = {
   ...DEFAULT_MODEL_CAPABILITIES,
+  supportsFunctionCalling: false,
   supportsAutoPromptCaching: true,
   cacheDiscountFactor: 0.25,
-  supportsReasoning: false,
+  supportsReasoning: true,
   supportsIntermDevMsgs: false,
   supportsVision: true,
   supportsNativeWebSearch: true,
@@ -34,6 +42,7 @@ export const OPENAI_DEEP_RESEARCH_MODELS: Record<string, ModelConfig> = {
       ...OPENAI_DEEP_RESEARCH_DEFAULT_CAPABILITIES,
     },
     openRouterOnly: false,
+    requiresResponsesAPI: true,
   },
   'o4-mini-deep-research': {
     name: 'o4-mini-deep-research',
@@ -48,5 +57,6 @@ export const OPENAI_DEEP_RESEARCH_MODELS: Record<string, ModelConfig> = {
       ...OPENAI_DEEP_RESEARCH_DEFAULT_CAPABILITIES,
     },
     openRouterOnly: false,
+    requiresResponsesAPI: true,
   },
 };

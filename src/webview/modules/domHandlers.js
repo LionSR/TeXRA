@@ -115,7 +115,9 @@ class MainViewDomHandler extends BaseDomHandler {
     });
 
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON, 'click', () => {
-      const sessionType = normalizeSessionType(mainViewState.get()?.sessionType);
+      const sessionType = normalizeSessionType(
+        mainViewState.get()?.sessionType,
+      );
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
         sessionType,
@@ -134,6 +136,18 @@ class MainViewDomHandler extends BaseDomHandler {
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_DOC_BUTTON, 'click', () => {
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.LOGIN_BANNER_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
+      });
+    });
+
+    this.addListener(ELEMENT_IDS.LOGIN_BANNER_DISMISS_BUTTON, 'click', () => {
+      vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER,
       });
     });
   }

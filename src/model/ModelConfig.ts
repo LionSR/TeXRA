@@ -8,6 +8,7 @@
 export const DEFAULT_CONTEXT_WINDOW = 128000;
 
 export enum ReasoningEffort {
+  XHIGH = 'xhigh',
   HIGH = 'high',
   MEDIUM = 'medium',
   LOW = 'low',
@@ -86,4 +87,5 @@ export interface ModelConfig {
   openRouterOnly: boolean; // Whether this model is only available through OpenRouter
   openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
   baseUrl?: string; // Custom base URL for this specific model (overrides provider default)
+  requiresResponsesAPI?: boolean; // Whether this model requires OpenAI Responses API (bypasses OpenRouter)
 }

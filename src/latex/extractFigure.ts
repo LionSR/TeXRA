@@ -22,22 +22,23 @@ function parseGraphicspath(content: string): string[] {
   // Pattern to extract individual paths from nested braces
   const pathPattern = /\{([^{}]+)\}/g;
 
-  let outerMatch;
-  while ((outerMatch = graphicspathPattern.exec(content)) !== null) {
-    const outerContent = outerMatch[1];
-    let pathMatch;
-    while ((pathMatch = pathPattern.exec(outerContent)) !== null) {
-      let path = pathMatch[1].trim();
-      // Ensure path has trailing slash
-      if (path && !path.endsWith('/')) {
-        path += '/';
-      }
-      if (path) {
-        paths.push(path);
-      }
-    }
-  }
+  // Use flatMap to process outer matches and extract inner paths
+  const extractedPaths = Array.from(
+    content.matchAll(graphicspathPattern),
+  ).flatMap((outerMatch) =>
+    Array.from(outerMatch[1].matchAll(pathPattern))
+      .map((pathMatch) => {
+        let p = pathMatch[1].trim();
+        // Ensure path has trailing slash
+        if (p && !p.endsWith('/')) {
+          p += '/';
+        }
+        return p;
+      })
+      .filter(Boolean),
+  );
 
+  paths.push(...extractedPaths);
   return paths;
 }
 
@@ -85,8 +86,7 @@ export async function extractFigurePathsFromLatex(
     const discovered = new Set<string>();
 
     for (const pattern of figurePatterns) {
-      let match;
-      while ((match = pattern.exec(processedLines)) !== null) {
+      for (const match of processedLines.matchAll(pattern)) {
         const figPath = match[1];
         let found = false;
         for (const basePath of graphicspaths) {

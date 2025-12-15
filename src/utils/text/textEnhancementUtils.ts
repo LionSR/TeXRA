@@ -14,6 +14,7 @@ import type { TaskState } from '@logger/TaskState';
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
+import { isNonEmptyString } from '@utils/core';
 
 // Local file imports
 import xmlUtils from './xmlUtils';
@@ -68,7 +69,7 @@ export function buildFileContextFromTaskState(
     value: string | null | undefined,
     key: keyof FileContext,
   ) => {
-    if (typeof value === 'string' && value.trim().length > 0) {
+    if (isNonEmptyString(value)) {
       (context[key] as string) = value;
     }
   };
@@ -120,15 +121,15 @@ export async function polishTextWithAI(
 
       // Add files section header if there are any files
       const hasFiles =
-        fileContext.inputFile ||
-        (fileContext.inputFiles && fileContext.inputFiles.length > 0) ||
-        fileContext.referenceFile ||
-        (fileContext.referenceFiles && fileContext.referenceFiles.length > 0) ||
-        fileContext.auxiliaryFile ||
-        (fileContext.auxiliaryFiles && fileContext.auxiliaryFiles.length > 0) ||
-        fileContext.mediaFile ||
-        (fileContext.mediaFiles && fileContext.mediaFiles.length > 0) ||
-        (fileContext.outputFiles && fileContext.outputFiles.length > 0);
+        !!fileContext.inputFile ||
+        (fileContext.inputFiles?.length ?? 0) > 0 ||
+        !!fileContext.referenceFile ||
+        (fileContext.referenceFiles?.length ?? 0) > 0 ||
+        !!fileContext.auxiliaryFile ||
+        (fileContext.auxiliaryFiles?.length ?? 0) > 0 ||
+        !!fileContext.mediaFile ||
+        (fileContext.mediaFiles?.length ?? 0) > 0 ||
+        (fileContext.outputFiles?.length ?? 0) > 0;
 
       if (hasFiles) {
         fileContextString += '\nFiles in the task:\n';
@@ -203,10 +204,9 @@ ${text}`;
         'model.instructionPolishModel',
         DEFAULT_POLISH_MODEL,
       );
-      const modelName =
-        typeof configuredModel === 'string' && configuredModel.trim().length > 0
-          ? configuredModel.trim()
-          : DEFAULT_POLISH_MODEL;
+      const modelName = isNonEmptyString(configuredModel)
+        ? configuredModel.trim()
+        : DEFAULT_POLISH_MODEL;
       const modelConfig = MODEL_CONFIGS[modelName];
 
       if (!modelConfig) {
@@ -303,10 +303,7 @@ ${text}`;
         };
       }
 
-      if (
-        typeof extractedText !== 'string' ||
-        extractedText.trim().length === 0
-      ) {
+      if (!isNonEmptyString(extractedText)) {
         const warningMessage =
           'Instruction polishing model returned no plain text.';
         logger.warn(CHANNEL, warningMessage);

@@ -2,6 +2,75 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.10] - 2025-12-13
+
+### Features
+
+- Added **GPT-5.2** (`gpt52`, `gpt52pro`) to the default model list with xhigh
+  reasoning effort support for extended problem-solving tasks.
+- Introduced **flexible user groups** with permission-based access control,
+  supporting multi-group visibility and tier levels (Max/Ultra) for remote
+  agents.
+- Added a **todo list UI** in the progress view for tool-use agents, letting
+  you track task progress during agent workflows.
+- Added **Research agent** for analytical derivations and scientific research
+  tasks.
+- Added **Search agent** to the default tool-use agents list for web search
+  workflows.
+- Profile view now displays a **multi-output support indicator** for agents
+  that support multiple outputs.
+
+### Bug Fixes
+
+- Resolved duplicate sign-in messages caused by authentication race conditions.
+- Fixed profile view agent selection reliability when switching between
+  remote agents.
+- OpenAI streaming now correctly includes reasoning items when web search
+  results reference them.
+- Fixed agent selection race condition when switching session types.
+
+### Improvements
+
+- Updated OpenAI reasoning effort to HIGH for improved model performance.
+
+## [0.34.9] - 2025-12-10
+
+### Features
+
+- Added **native web search** support for Anthropic and OpenAI models, with
+  real-time search results displayed in the progress view during streaming.
+- Introduced a new **Web Search** tool-use agent optimized for research queries
+  that leverage provider-native search capabilities.
+- Added **OpenAI deep research models** (`o3-deep-research`, `o4-mini-deep-research`)
+  for extended reasoning tasks.
+- Updated **DeepSeek models to V3.2** with streaming reasoning support via
+  OpenRouter.
+- Added **getting started guidance** that appears when opening an empty folder,
+  helping new users bootstrap their first project.
+
+### Bug Fixes
+
+- Fixed Windows path handling in progress view stream tabs, resolving duplicate
+  tab issues on Windows systems.
+- Agent selection now persists correctly when switching between sessions or when
+  the selected agent isn't in the current options list.
+- Remote agents with multiple output variants now group correctly like local
+  agents.
+- Improved content block ordering in Anthropic streaming responses, fixing
+  issues with interleaved thinking and text blocks.
+- Fixed figure path resolution for input files located in subdirectories.
+- Fixed `\input` path compatibility by normalizing leading `./` prefixes.
+- User-cancelled requests no longer trigger automatic retries.
+- Fixed banner display issues when refreshing the webview input.
+
+### Improvements
+
+- Refactored internal HTTP status handling using the `http-status-codes`
+  package for better maintainability.
+- Consolidated prompt utilities and Zod schemas for improved type safety.
+- Updated core dependencies: Anthropic SDK 0.71.2, Google GenAI 1.32.0,
+  KaTeX 0.16.27, winston 3.19.0.
+
 ## [0.34.8] - 2025-12-04
 
 ### Features

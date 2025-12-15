@@ -23,6 +23,7 @@ import {
   setElementDisabled,
   isSelectLikeElement,
   getSelectOptionElements,
+  setExpandedState,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { WebviewStateManager } from '@common/webviewState.js';
@@ -90,6 +91,10 @@ function getSelectDefaultValue(selectId, fallback) {
 export class MainViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
+    // Guard flag to prevent save() during restore() - vscode-single-select
+    // fires 'change' events on programmatic value changes, which would trigger
+    // save() and capture partial/inconsistent DOM state
+    this._isRestoring = false;
   }
 
   get() {
@@ -149,6 +154,24 @@ export class MainViewState {
 
   /** Restore state from VS Code storage */
   restore() {
+    this._isRestoring = true;
+    let needsSaveAfter = false;
+    try {
+      needsSaveAfter = this._restoreImpl();
+    } finally {
+      this._isRestoring = false;
+    }
+    // If setDefaults() was called, its save() was skipped due to _isRestoring
+    // flag, so we need to save now after the flag is cleared
+    if (needsSaveAfter) {
+      this.save();
+    }
+  }
+
+  /**
+   * @returns {boolean} true if setDefaults() was called and needs a save after
+   */
+  _restoreImpl() {
     const previousState = this.stateManager.getState();
     if (previousState) {
       const defaults = {
@@ -233,18 +256,26 @@ export class MainViewState {
         const visible = previousState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
         setChevronIcon(toggleLatexdiffs, visible);
+        setExpandedState(latexdiffsContent, '.latexdiffs-section', visible);
       }
 
       this.applySessionType(normalizedSessionType, { skipSave: true });
+      fileList.hideEmpty(MULTIPLE_SELECTIONS);
+      return false; // No save needed - state already exists
     } else {
       this.setDefaults();
+      fileList.hideEmpty(MULTIPLE_SELECTIONS);
+      return true; // setDefaults() save was skipped, needs save after
     }
-
-    fileList.hideEmpty(MULTIPLE_SELECTIONS);
   }
 
   /** Persist current UI state */
   save() {
+    // Skip save during restore to prevent capturing partial/inconsistent state
+    if (this._isRestoring) {
+      return;
+    }
+
     const state = {
       latexdiffsVisible:
         safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT)?.style.display ===
@@ -350,11 +381,26 @@ export class MainViewState {
       selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
       selectEl.tabIndex = isActive ? 0 : -1;
       if (isActive && !selectEl.value) {
-        const fallback = getSelectDefaultValue(
-          selectId,
-          getSessionDefaultAgent(normalized),
-        );
-        safeSetElementValue(selectId, fallback);
+        // Check stored state first - DOM might not be updated yet for custom elements
+        // (vscode-single-select may not synchronously update .value)
+        const storedState = this.stateManager.getState() || {};
+        const stateKey =
+          normalized === SESSION_TYPES.TOOL_USE
+            ? 'toolUseAgent'
+            : 'workflowAgent';
+        const storedValue = storedState[stateKey];
+
+        if (storedValue) {
+          // DOM is stale but we have a stored value - use it
+          safeSetElementValue(selectId, storedValue);
+        } else {
+          // Truly empty - apply default
+          const fallback = getSelectDefaultValue(
+            selectId,
+            getSessionDefaultAgent(normalized),
+          );
+          safeSetElementValue(selectId, fallback);
+        }
       }
     });
 

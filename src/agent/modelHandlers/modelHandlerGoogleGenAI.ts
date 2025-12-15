@@ -63,7 +63,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, getDisplayPath } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -75,10 +75,6 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
-import {
-  extractGoogleGroundingResults,
-  type WebSearchResult,
-} from './types/ServerToolTypes';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -630,7 +626,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
     const userContentParts: Part[] = [createPartFromText(userPrefix)];
@@ -640,7 +636,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
@@ -660,7 +656,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createRoundMessages(
     messages: Content[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<Content[]> {
     const roundParts: Part[] = [];
 
@@ -669,7 +665,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((filePath) => path.basename(filePath))
+          .map((loc) => getDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
@@ -710,7 +706,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return createModelContent(createPartFromText(text));
   }
 
-  override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
+  override async createMediaMessage(
+    mediaFiles: FileLocation[],
+  ): Promise<Part[]> {
     if (!mediaFiles || mediaFiles.length === 0 || !this.supportsFileUploads()) {
       return [];
     }
@@ -1169,22 +1167,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
-   * Extract grounding results from Google GenAI response.
-   * Google uses groundingMetadata for search results when GoogleSearch tool is enabled.
-   */
-  override extractWebSearchResults(
-    responseObject: GenerateContentResponse,
-  ): WebSearchResult[] {
-    const candidate = responseObject?.candidates?.[0];
-    if (!candidate) {
-      return [];
-    }
-
-    const result = extractGoogleGroundingResults(candidate);
-    return result ? [result] : [];
-  }
-
-  /**
    * Build a FunctionResponsePart for an attachment using SDK's native type.
    * FunctionResponsePart is the proper way to attach media to function responses
    * per the Google GenAI SDK design.
@@ -1388,24 +1370,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Build all function call parts (preserving thought signature on first call)
-    const callParts: Part[] = [];
-    if (text) {
-      callParts.push(createPartFromText(text));
-    }
-    for (const call of calls) {
-      callParts.push(this.buildFunctionCallPart(call));
-    }
+    const callParts: Part[] = [
+      ...(text ? [createPartFromText(text)] : []),
+      ...calls.map((call) => this.buildFunctionCallPart(call)),
+    ];
 
-    // Build all function response parts
-    const responseParts: Part[] = [];
-    for (let i = 0; i < calls.length; i++) {
-      const part = await this.buildFunctionResponsePart(
-        calls[i],
-        results[i],
-        attachmentsPerCall[i],
-      );
-      responseParts.push(part);
-    }
+    // Build all function response parts in parallel
+    const responseParts = await Promise.all(
+      calls.map((call, i) =>
+        this.buildFunctionResponsePart(call, results[i], attachmentsPerCall[i]),
+      ),
+    );
 
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);

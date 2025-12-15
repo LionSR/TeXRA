@@ -22,7 +22,10 @@ import {
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
-import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
+import type {
+  FileInteractionState,
+  TodoState,
+} from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 import {
@@ -36,7 +39,8 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -464,7 +468,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
-      if (formatted.trim().length > 0) {
+      if (isNonEmptyString(formatted)) {
         options.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.THINKING,
@@ -478,6 +482,34 @@ class ToolUseProcessNode<C> extends BaseNode<
       usage,
       stopReason,
     } = options.modelHandler.extractResponse(state.response, '');
+
+    // Single extraction for all server tool data (single source of truth)
+    const serverToolData = options.modelHandler.extractServerToolData(
+      state.response,
+    );
+
+    // Log web search results to progress view
+    // Skip when streaming - handlers emit during streaming for correct order
+    if (!useStreaming) {
+      for (const searchResult of serverToolData.webSearchResults) {
+        options.logger.info('', {
+          groupId,
+          messageType: MESSAGE_TYPES.WEB_SEARCH,
+          data: searchResult,
+        });
+      }
+    }
+
+    // Cache content blocks for use in follow-up messages
+    // Always assign to clear stale blocks from previous responses
+    store.workspace.serverToolContent.contentBlocks =
+      serverToolData.contentBlocks;
+
+    // Store full assistant content (excluding tool_use) to preserve original order
+    // This is used in createToolUseFollowUpMessages for correct message building
+    // Uses provider-agnostic extraction method
+    store.workspace.serverToolContent.lastAssistantContent =
+      options.modelHandler.extractAssistantContent(state.response);
 
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
@@ -511,10 +543,15 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       state.toolCalls = undefined;
+      // End turn - just preserve text. Server tool content (web_search) was already
+      // logged to progress view and is not needed in message history when stopping.
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
       }
+      // Clear ephemeral state so stale data isn't used in subsequent requests
+      store.workspace.resetServerToolContent();
+      store.workspace.resetReasoning();
       state.shouldStop = true;
       return {
         skipped: false,
@@ -634,6 +671,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     call: SdkToolCall,
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
+    todoState: TodoState,
   ): Promise<ToolExecutionResult> {
     const tool = options.toolRegistry.get(call.name);
     let result: ToolResult;
@@ -649,6 +687,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         result = await withToolFileInteractionContext(
           {
             tracker,
+            todoState,
             streamId: options.logger.channelId,
             executionId: options.context.executionId,
             toolCallId: call.callId,
@@ -729,26 +768,27 @@ class ToolUseDispatchNode<C> extends BaseNode<
     });
 
     if (result.files && result.files.length > 0) {
-      const existing = store.workspace.media.files;
-      const toAdd: string[] = [];
+      const toAdd: FileLocation[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
         if (typeof candidate !== 'string' || candidate.trim() === '') {
           continue;
         }
-        if (existing.includes(candidate) || toAdd.includes(candidate)) {
-          continue;
-        }
+        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
+        // including external paths outside the workspace
+        const location = pathToLocation(candidate);
         try {
-          const exists = await WorkspaceFS.exists(candidate);
+          // Use AbsoluteFS for file existence check to support external paths
+          const exists = await AbsoluteFS.exists(location.absolutePath);
           if (exists) {
-            toAdd.push(candidate);
+            toAdd.push(location);
           }
         } catch {
           // Ignore errors when checking existence
         }
       }
       if (toAdd.length > 0) {
+        // addMediaFiles handles deduplication (both within toAdd and against existing files)
         store.workspace.media.addMediaFiles(toAdd);
       }
     }
@@ -771,11 +811,17 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { calls } = execRes.value;
     const assistantText = state.text ?? '';
     const tracker = store.workspace.interactions;
+    const todoState = store.workspace.todos;
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
     for (const call of calls) {
-      const execResult = await this.executeToolCall(call, options, tracker);
+      const execResult = await this.executeToolCall(
+        call,
+        options,
+        tracker,
+        todoState,
+      );
       execResults.push(execResult);
 
       // Log each tool execution as it completes
@@ -828,10 +874,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
-      if (
-        typeof execResult.result.userInstruction === 'string' &&
-        execResult.result.userInstruction.trim().length > 0
-      ) {
+      if (isNonEmptyString(execResult.result.userInstruction)) {
         await options.modelHandler.createUserFollowUpMessages(
           state.messages,
           execResult.result.userInstruction,

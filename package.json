@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.34.9",
+  "version": "0.35.0",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -40,7 +40,6 @@
               "type": "string"
             },
             "default": [
-              "generic",
               "correct",
               "polish",
               "draw",
@@ -59,7 +58,9 @@
             },
             "default": [
               "ask",
-              "chat"
+              "chat",
+              "research",
+              "search"
             ],
             "description": "List of tool-use agents shown in the dedicated dropdown",
             "scope": "resource"
@@ -89,9 +90,13 @@
                 "o3-",
                 "o1pro",
                 "o1",
+                "o3-deep-research",
+                "o4-mini-deep-research",
                 "gptoss",
                 "gptoss-",
                 "gpt45",
+                "gpt52",
+                "gpt52pro",
                 "gpt51",
                 "gpt5",
                 "gpt5pro",
@@ -124,7 +129,8 @@
               "gemini3p",
               "sonnet45T",
               "opus45T",
-              "gpt51",
+              "gpt52",
+              "gpt52pro",
               "gpt41",
               "deepseekT",
               "kimi2T",
@@ -132,7 +138,7 @@
               "qwen3max",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus45T/opus45 (Claude Opus 4.5 Thinking/Regular), opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt51/gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5.1/5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini3p/gemini25p/gemini25f/gemini2fT (Gemini 3 Pro Preview, 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2+/kimi2T/kimi2T+ (Kimi Thinking/Vision/K2/K2 Turbo/K2 Thinking/K2 Thinking Turbo)",
+            "description": "List of available models. Model codes: opus45T/opus45 (Claude Opus 4.5 Thinking/Regular), opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), o3-deep-research/o4-mini-deep-research (OpenAI Deep Research with web search), gpt52/gpt52pro/gpt51/gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5.2/5.2 Pro/5.1/5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini3p/gemini25p/gemini25f/gemini2fT (Gemini 3 Pro Preview, 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2+/kimi2T/kimi2T+ (Kimi Thinking/Vision/K2/K2 Turbo/K2 Thinking/K2 Thinking Turbo)",
             "scope": "resource"
           },
           "texra.agentOutputs.storageMode": {
@@ -161,6 +167,12 @@
             "type": "boolean",
             "default": true,
             "description": "Show dependency check reminders in the main view when core dependencies are missing",
+            "scope": "resource"
+          },
+          "texra.ui.showLoginBanner": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show login banner prompting users to sign in for access to remote agents",
             "scope": "resource"
           }
         }
@@ -297,6 +309,9 @@
               "gptoss",
               "gptoss-",
               "gpt45",
+              "gpt52",
+              "gpt52pro",
+              "gpt51",
               "gpt5",
               "gpt5pro",
               "gpt5-",
@@ -804,6 +819,9 @@
               "sonnet4T",
               "gemini25p",
               "gemini25f",
+              "gpt52",
+              "gpt52pro",
+              "gpt51",
               "gpt5",
               "gpt5pro",
               "gpt5-",
@@ -818,6 +836,9 @@
               "Claude Sonnet 4T",
               "Gemini 2.5 Pro",
               "Gemini 2.5 Flash",
+              "OpenAI GPT-5.2",
+              "OpenAI GPT-5.2 Pro",
+              "OpenAI GPT-5.1",
               "OpenAI GPT-5",
               "OpenAI GPT-5 Pro",
               "OpenAI GPT-5-",
@@ -1566,19 +1587,19 @@
     "@typescript-eslint/parser": "^8.48.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^16.5.0",
-    "jsdom": "^27.2.0",
+    "jsdom": "^27.3.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
     "prettier": "^3.7.4",
-    "terser-webpack-plugin": "^5.3.14",
+    "terser-webpack-plugin": "^5.3.16",
     "ts-loader": "^9.5.4",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.1",
+    "typescript-eslint": "^8.49.0",
     "webpack": "^5.103.0",
     "webpack-cli": "^6.0.1"
   },
@@ -1611,14 +1632,14 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.1",
+    "@anthropic-ai/sdk": "^0.71.2",
     "@cantoo/pdf-lib": "^2.5.3",
-    "@google/genai": "^1.31.0",
+    "@google/genai": "^1.33.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
-    "@supabase/supabase-js": "^2.86.2",
+    "@supabase/supabase-js": "^2.87.1",
     "@vscode-elements/elements": "^2.3.1",
-    "@vscode/codicons": "^0.0.43",
+    "@vscode/codicons": "^0.0.44",
     "@vscode/markdown-it-katex": "^1.1.2",
     "arxiv-client": "^0.0.9",
     "axios": "^1.13.2",
@@ -1628,14 +1649,15 @@
     "difflib": "^0.2.4",
     "dotenv": "^17.2.3",
     "execa": "^9.6.1",
-    "fast-xml-parser": "^5.3.2",
+    "fast-xml-parser": "^5.3.3",
     "fs-extra": "^11.3.2",
     "glob": "^13.0.0",
     "gpt-tokenizer": "^3.4.0",
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
+    "http-status-codes": "^2.3.0",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.25",
+    "katex": "^0.16.27",
     "markdown-it": "^14.1.0",
     "markdown-it-highlightjs": "^4.2.0",
     "mime-types": "^3.0.1",
@@ -1649,8 +1671,8 @@
     "tar": "^7.5.2",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
-    "winston": "^3.18.3",
+    "winston": "^3.19.0",
     "yaml": "^2.8.2",
-    "zod": "^4.1.13"
+    "zod": "^4.2.0"
   }
 }

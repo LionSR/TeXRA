@@ -9,10 +9,28 @@ import { toErrorMessage } from '@common/errors';
 // Local imports - utils
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
+import { isString, isObject } from '@utils/core';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 const CHANNEL = 'xmlUtils';
 logger.initialize(CHANNEL);
+
+/**
+ * CDATA section pattern for removal.
+ * Single source of truth for CDATA handling.
+ */
+const CDATA_PATTERN = /<!\[CDATA\[([\s\S]*?)\]\]>/g;
+
+/**
+ * Remove CDATA sections from content.
+ * Centralized function to eliminate duplicate CDATA removal patterns.
+ *
+ * @param content - Content potentially containing CDATA sections
+ * @returns Content with CDATA wrappers removed
+ */
+export function removeCDATA(content: string): string {
+  return content.replace(CDATA_PATTERN, '$1');
+}
 
 // Cache pandoc availability check
 let pandocAvailable: boolean | null = null;
@@ -198,16 +216,17 @@ function normalizePandocReferences(text: string): string {
 }
 
 /**
- * Get a string representation of an object's structure without its values
+ * Get a string representation of an object's structure without its values.
+ * Uses centralized type guards for cleaner type checking.
  */
 function getObjectStructure(obj: unknown): string {
   if (Array.isArray(obj)) {
     return `Array(${obj.length})`;
   }
-  if (obj && typeof obj === 'object') {
+  if (isObject(obj)) {
     const keys = Object.keys(obj);
     const structure = keys.map((key) => {
-      const value = (obj as Record<string, unknown>)[key];
+      const value = obj[key];
       return `${key}: ${getObjectStructure(value)}`;
     });
     return `{${structure.join(', ')}}`;
@@ -250,21 +269,13 @@ export function extractTextFromTag(
   inputContent: string,
   documentTag: string,
 ): string {
-  // This will find all matches of the tag
+  // Find all matches and get the last one using matchAll
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
+  const matches = Array.from(inputContent.matchAll(regex));
+  const lastContent = matches.at(-1)?.[1] ?? '';
 
-  // Variables to track the last match
-  let lastContent = '';
-  let match;
-
-  // Find all matches and keep the last one
-  while ((match = regex.exec(inputContent)) !== null) {
-    lastContent = match[1];
-  }
-
-  // Remove CDATA sections if present
-  lastContent = lastContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
-  return lastContent;
+  // Use centralized CDATA removal
+  return removeCDATA(lastContent);
 }
 
 /**
@@ -285,7 +296,8 @@ export function extractLatexBetweenDocumentClass(
   if (!match) {
     return null;
   }
-  return match[0].replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+  // Use centralized CDATA removal
+  return removeCDATA(match[0]);
 }
 
 /**
@@ -297,7 +309,7 @@ export function extractMultipleTextFromTag(
   containerTag?: string,
 ): Array<{ content: string; name: string }> {
   // Define function to extract documents from any content string
-  const extractDocuments = (
+  const extractNamedDocuments = (
     content: string,
   ): Array<{ content: string; name: string }> => {
     const results: Array<{ content: string; name: string }> = [];
@@ -306,9 +318,8 @@ export function extractMultipleTextFromTag(
     let documentMatch;
     while ((documentMatch = documentRegex.exec(content)) !== null) {
       const name = documentMatch[1] || 'unnamed';
-      // Extract content and remove CDATA sections if present
-      let docContent = documentMatch[2] || '';
-      docContent = docContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+      // Use centralized CDATA removal
+      const docContent = removeCDATA(documentMatch[2] || '');
       results.push({ name, content: docContent });
     }
 
@@ -324,7 +335,7 @@ export function extractMultipleTextFromTag(
     const containerMatch = inputContent.match(containerRegex);
 
     if (containerMatch && containerMatch[1]) {
-      const documents = extractDocuments(containerMatch[1]);
+      const documents = extractNamedDocuments(containerMatch[1]);
       if (documents.length > 0) {
         return documents;
       }
@@ -333,7 +344,7 @@ export function extractMultipleTextFromTag(
   }
 
   // Fallback: extract documents directly from the input content
-  return extractDocuments(inputContent);
+  return extractNamedDocuments(inputContent);
 }
 
 /**
@@ -358,7 +369,7 @@ export function extractContentFromXMLbyTag(
   root: Record<string, unknown>,
   documentTag: string,
 ): string | null {
-  if (!root || typeof root !== 'object') {
+  if (!isObject(root)) {
     logger.error(
       CHANNEL,
       `Invalid root object. Structure: ${getObjectStructure(root)}`,
@@ -368,7 +379,7 @@ export function extractContentFromXMLbyTag(
 
   if (documentTag in root) {
     const content = root[documentTag];
-    if (typeof content === 'string') {
+    if (isString(content)) {
       return content.trim();
     }
     logger.error(
@@ -393,7 +404,7 @@ export function extractContentFromXMLbyTagMultiple(
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
-    if (!root || typeof root !== 'object') {
+    if (!isObject(root)) {
       logger.error(
         CHANNEL,
         `Invalid root object. Structure: ${getObjectStructure(root)}`,
@@ -403,12 +414,8 @@ export function extractContentFromXMLbyTagMultiple(
 
     if (documentTag in root) {
       const container = root[documentTag];
-      if (
-        container &&
-        typeof container === 'object' &&
-        'document' in container
-      ) {
-        const documents = (container as Record<string, unknown>).document;
+      if (isObject(container) && 'document' in container) {
+        const documents = container.document;
         if (Array.isArray(documents)) {
           return documents.map((doc) => ({
             content:
@@ -562,6 +569,7 @@ export function extractDocuments(
 }
 
 export const xmlUtils = {
+  removeCDATA,
   addCdataToTags,
   addCdataToTagsMultiple,
   extractTextFromTag,

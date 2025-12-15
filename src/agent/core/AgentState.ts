@@ -4,21 +4,15 @@ import { z } from 'zod';
 // Local imports - response usage types
 import {
   NormalizedUsageSchema,
-  UsageProviderSchema,
   type NormalizedUsage,
-  type UsageProvider,
 } from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
   RunUsageAccumulatorJSONSchema,
-  type UsageSummary,
-  type NativeUsagePayload,
 } from './RunUsageAccumulator';
 
 // Type imports
 import type {
-  AnthropicAPIResponseUsage,
-  OpenAIAPIResponseUsage,
   ExtendedCompletionUsage,
   AnthropicUsage,
   GenerateContentResponseUsageMetadata,
@@ -29,88 +23,12 @@ export type NativeResponseUsage =
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata;
 
-/**
- * Migrates legacy UsageSummary format to NormalizedUsage.
- * Extracts provider-specific fields (cached tokens, reasoning tokens, etc.)
- * from the legacy format into the normalized structure.
- */
-function migrateLegacyUsageSummary(
-  usageSummary: UsageSummary,
-  provider: UsageProvider,
-  responseTimeMs: number,
-  nativeUsage?: NativeUsagePayload | null,
-): NormalizedUsage {
-  if (!usageSummary) {
-    return {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-      responseTimeMs,
-      provider,
-    };
-  }
-
-  const base: NormalizedUsage = {
-    inputTokens: usageSummary.totalInputTokens,
-    outputTokens: usageSummary.totalOutputTokens,
-    cost: usageSummary.cost,
-    responseTimeMs,
-    provider,
-    percentageCached:
-      usageSummary.percentageCached > 0
-        ? usageSummary.percentageCached
-        : undefined,
-    _native: nativeUsage ?? undefined,
-  };
-
-  // Extract provider-specific fields from legacy format
-  if (isAnthropicUsage(usageSummary)) {
-    if (usageSummary.cache_read_input_tokens) {
-      base.cachedInputTokens = usageSummary.cache_read_input_tokens;
-    }
-    if (usageSummary.cache_creation_input_tokens) {
-      base.cacheCreationTokens = usageSummary.cache_creation_input_tokens;
-    }
-    if (usageSummary.server_tool_use?.web_search_requests) {
-      base.serverToolRequests =
-        usageSummary.server_tool_use.web_search_requests;
-    }
-  } else if (isOpenAIUsage(usageSummary)) {
-    if (usageSummary.cached_tokens > 0) {
-      base.cachedInputTokens = usageSummary.cached_tokens;
-    }
-    if (usageSummary.reasoning_tokens > 0) {
-      base.reasoningTokens = usageSummary.reasoning_tokens;
-    }
-    if (usageSummary.tool_use_tokens && usageSummary.tool_use_tokens > 0) {
-      base.toolUsePromptTokens = usageSummary.tool_use_tokens;
-    }
-  }
-
-  return base;
-}
-
-function isAnthropicUsage(
-  usage: UsageSummary,
-): usage is AnthropicAPIResponseUsage {
-  return usage !== null && 'input_tokens' in usage;
-}
-
-function isOpenAIUsage(usage: UsageSummary): usage is OpenAIAPIResponseUsage {
-  return usage !== null && 'prompt_tokens' in usage;
-}
-
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
   continuationCount: z.int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
-  // New: store normalized usage directly (nullish for backward compat with old saved states)
   normalizedUsage: NormalizedUsageSchema.nullish(),
-  // Legacy fields for backward compatibility (deprecated)
-  usageSummary: z.custom<UsageSummary>().nullable().optional(),
-  nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
-  provider: UsageProviderSchema.nullable().optional(),
 });
 
 /**
@@ -126,7 +44,6 @@ export class ConversationRoundState {
   public continuationCount: number;
   public responseTimeMs: number;
   public outputFile: string;
-  /** Normalized usage data - the single source of truth */
   public normalizedUsage: NormalizedUsage | null;
 
   constructor(roundIndex: number) {
@@ -145,10 +62,6 @@ export class ConversationRoundState {
     this.responseTimeMs += durationMs;
   }
 
-  /**
-   * Sets the normalized usage for this round.
-   * This is the preferred method - use normalizeUsage() from the model handler.
-   */
   setNormalizedUsage(usage: NormalizedUsage): void {
     this.normalizedUsage = usage;
   }
@@ -174,21 +87,7 @@ export class ConversationRoundState {
     state.continuationCount = json.continuationCount;
     state.responseTimeMs = json.responseTimeMs;
     state.outputFile = json.outputFile;
-
-    // Load normalized usage if available
-    if (json.normalizedUsage) {
-      state.normalizedUsage = json.normalizedUsage;
-    }
-    // Legacy: convert old format if present (for backward compatibility)
-    else if (json.usageSummary && json.provider) {
-      state.normalizedUsage = migrateLegacyUsageSummary(
-        json.usageSummary,
-        json.provider,
-        json.responseTimeMs,
-        json.nativeUsage,
-      );
-    }
-
+    state.normalizedUsage = json.normalizedUsage ?? null;
     return state;
   }
 }
@@ -224,9 +123,6 @@ export class AgentRunState {
     this.totalResponseTimeMs += durationMs;
   }
 
-  /**
-   * Records usage from a completed round using normalized usage.
-   */
   recordRound(roundState: ConversationRoundState): void {
     if (roundState.normalizedUsage) {
       this.usageAccumulator.recordNormalizedUsage(
@@ -261,7 +157,3 @@ export class AgentRunState {
     return state;
   }
 }
-
-export type ProviderUsageSummary =
-  | OpenAIAPIResponseUsage
-  | AnthropicAPIResponseUsage;

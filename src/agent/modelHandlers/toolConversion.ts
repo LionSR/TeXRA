@@ -1,4 +1,8 @@
 // Third-party imports
+import { toJSONSchema } from 'zod';
+import { zodFunction } from 'openai/helpers/zod';
+
+// Type imports
 import type { ToolDefinition } from '@model';
 import type {
   Tool as AnthropicTool,
@@ -10,7 +14,10 @@ import type {
   Schema,
   GoogleSearch,
 } from '@google/genai/dist/genai';
-import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionTool,
+  ChatCompletionFunctionTool,
+} from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
   WebSearchTool,
@@ -45,16 +52,41 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   web_search: 'web_search_20250305',
 } as const;
 
-/** Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format. */
+/**
+ * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
+ *
+ * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which:
+ * - Converts Zod schema to JSON Schema using SDK's optimized conversion
+ * - Enables strict mode for better type safety
+ *
+ * Note: zodFunction() may throw for invalid schemas - this is intentional fail-fast
+ * behavior since invalid tool schemas are programming errors caught during development.
+ */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
-  return defs.map((d) => ({
-    type: 'function',
-    function: {
-      name: d.name,
-      description: d.description,
-      parameters: d.parameters,
-    },
-  }));
+  return defs.map((d) => {
+    // Use native SDK Zod conversion when schema is available
+    // zodFunction() returns AutoParseableTool which extends ChatCompletionFunctionTool
+    // with additional parsing metadata - structurally compatible with ChatCompletionTool
+    if (d.zodSchema) {
+      return zodFunction({
+        name: d.name,
+        description: d.description,
+        parameters: d.zodSchema,
+      }) as ChatCompletionTool;
+    }
+
+    // Fallback to manual conversion for legacy definitions
+    // Cast to ChatCompletionFunctionTool since ToolDefinition.parameters
+    // is a union type that includes provider-specific schemas
+    return {
+      type: 'function',
+      function: {
+        name: d.name,
+        description: d.description,
+        parameters: d.parameters,
+      },
+    } as ChatCompletionFunctionTool;
+  });
 }
 
 /**
@@ -63,14 +95,26 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 export interface OpenAIResponseToolOptions {
   /** Whether the model supports native web search. Defaults to false. */
   supportsNativeWebSearch?: boolean;
+  /** Whether the model supports function calling. Defaults to true. */
+  supportsFunctionCalling?: boolean;
 }
 
-/** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
+/**
+ * Convert generic ToolDefinition objects to OpenAI Responses API tool format.
+ *
+ * NOTE: We intentionally don't use zodResponsesFunction() here because it enables
+ * strict mode, which requires all parameters to be required. Tools like Wolfram
+ * have optional fields, so we must use strict: false for the Responses API.
+ *
+ * When a tool has a zodSchema, we use Zod's native toJSONSchema() for conversion
+ * while keeping strict: false for compatibility with optional parameters.
+ */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
   options: OpenAIResponseToolOptions = {},
 ): OpenAIResponseTool[] {
-  const { supportsNativeWebSearch = false } = options;
+  const { supportsNativeWebSearch = false, supportsFunctionCalling = true } =
+    options;
   const tools: OpenAIResponseTool[] = [];
 
   for (const d of defs) {
@@ -82,16 +126,29 @@ export function toOpenAIResponseTools(
       continue;
     }
 
-    // Standard function tools
-    const params = (d.parameters ?? null) as Record<string, unknown> | null;
+    // Deep research models only support native tools (web_search, code_interpreter,
+    // file_search, mcp) and do NOT support function calling. When function calling
+    // is disabled, skip all remaining tools - they cannot be converted to function
+    // format, and native conversion for tools other than web_search is not yet
+    // implemented.
+    if (!supportsFunctionCalling) {
+      continue;
+    }
+
+    // Use native Zod conversion when schema is available, but keep strict: false
+    // to support tools with optional parameters (e.g., Wolfram timeout field)
+    const params = d.zodSchema
+      ? (toJSONSchema(d.zodSchema) as Record<string, unknown> | null)
+      : ((d.parameters ?? null) as Record<string, unknown> | null);
+
     tools.push({
       type: 'function',
       name: d.name,
       description: d.description,
       parameters: params,
       // Setting strict=true requires an explicit `required` array covering all
-      // parameters. The Wolfram tool uses optional fields, so disable strict
-      // validation to avoid schema errors from the OpenAI Responses API.
+      // parameters. Tools with optional fields need strict: false to avoid
+      // OpenAI Responses API schema errors.
       strict: false,
     } as FunctionTool);
   }
@@ -107,7 +164,13 @@ export interface AnthropicToolOptions {
   supportsNativeWebSearch?: boolean;
 }
 
-/** Convert generic ToolDefinition objects to Anthropic Tool format. */
+/**
+ * Convert generic ToolDefinition objects to Anthropic Tool format.
+ *
+ * When a tool has a zodSchema, uses Zod's native toJSONSchema() which:
+ * - Converts Zod schema directly to JSON Schema
+ * - Uses the same conversion pattern as Anthropic's betaZodTool() helper
+ */
 export function toAnthropicTools(
   defs: ToolDefinition[],
   options: AnthropicToolOptions = {},
@@ -129,6 +192,18 @@ export function toAnthropicTools(
       }
     }
 
+    // Use native Zod conversion when schema is available
+    // This mirrors the Anthropic SDK's betaZodTool() implementation
+    if (d.zodSchema) {
+      const jsonSchema = toJSONSchema(d.zodSchema, { reused: 'ref' });
+      return {
+        name: d.name,
+        description: d.description,
+        input_schema: jsonSchema as AnthropicTool['input_schema'],
+      } as ToolUnion;
+    }
+
+    // Fallback to pre-converted parameters for legacy definitions
     const params = d.parameters as AnthropicTool['input_schema'] | undefined;
     return {
       name: d.name,
@@ -146,6 +221,7 @@ export function toAnthropicTools(
  * functionDeclarations - this is a Live API only feature.
  * See: https://ai.google.dev/gemini-api/docs/live-tools
  *
+ * When a tool has a zodSchema, uses Zod's native toJSONSchema() for conversion.
  * All tools (including web_search) are converted to function declarations.
  *
  * @param defs Tool definitions to convert
@@ -157,11 +233,23 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
 
   // Convert all tools to function declarations
   // Native googleSearch is disabled until Live API support is added
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Schema | undefined,
-  }));
+  const declarations: FunctionDeclaration[] = defs.map((d) => {
+    // Use native Zod conversion when schema is available
+    if (d.zodSchema) {
+      return {
+        name: d.name,
+        description: d.description,
+        parameters: toJSONSchema(d.zodSchema) as Schema | undefined,
+      };
+    }
+
+    // Fallback to pre-converted parameters for legacy definitions
+    return {
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Schema | undefined,
+    };
+  });
 
   return [{ functionDeclarations: declarations }];
 }

@@ -40,10 +40,9 @@ import {
 // Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import { PromptBuilder } from '@agent/utils/PromptBuilder';
-import { writePromptToXml } from '@agent/utils/promptUtils';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import { PromptBuilder, writePromptToXml } from '@utils/prompt';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
@@ -336,6 +335,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Generates output file path for specified conversation round.
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
+   *
+   * For scratchpad mode (XML output), uses createRawOutputLocation() which always
+   * routes to run storage when executionId is available. This keeps intermediate
+   * XML artifacts isolated from the user's workspace.
+   *
+   * For direct output mode, uses createLocation() which respects the user's
+   * storageMode preference.
+   *
    * @returns AgentFileLocation - always workspace or runStorage (never external)
    */
   public getOutputFileLocation(currRound: number): AgentFileLocation {
@@ -353,8 +360,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.agentConfig.editedFile || undefined,
     );
 
-    // fileService.createLocation always returns workspace or runStorage for agent outputs
-    return this.fileService.createLocation(fileName) as AgentFileLocation;
+    // Route raw XML to isolated storage, direct outputs respect user preference
+    return (
+      this.useScratchpad
+        ? this.fileService.createRawOutputLocation(fileName)
+        : this.fileService.createLocation(fileName)
+    ) as AgentFileLocation;
   }
 
   /**
@@ -676,17 +687,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           this.fileService.createLocation(f),
         ),
       ];
-      const extraMedia: string[] = [];
+      // Convert all media paths to FileLocation at entry point for consistency
+      const extraMedia: FileLocation[] = [];
 
       if (this.modelHandler.capabilities.supportsVision) {
-        if (
-          this.agentConfig.mediaFile &&
-          !workspaceState.media.files.includes(this.agentConfig.mediaFile)
-        ) {
-          extraMedia.push(this.agentConfig.mediaFile);
+        if (this.agentConfig.mediaFile) {
+          const mediaLocation = this.fileService.createLocation(
+            this.agentConfig.mediaFile,
+          );
+          if (!workspaceState.media.hasFile(mediaLocation.absolutePath)) {
+            extraMedia.push(mediaLocation);
+          }
         }
-        if (this.agentConfig.mediaFiles.length > 0) {
-          extraMedia.push(...this.agentConfig.mediaFiles);
+        for (const mediaPath of this.agentConfig.mediaFiles) {
+          const mediaLocation = this.fileService.createLocation(mediaPath);
+          if (!workspaceState.media.hasFile(mediaLocation.absolutePath)) {
+            extraMedia.push(mediaLocation);
+          }
         }
       }
 

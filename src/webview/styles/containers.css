@@ -29,7 +29,7 @@
 }
 
 /* Only add background when expanded */
-.latexdiffs-section:has(#latexdiffsContent[style*='block']) {
+.latexdiffs-section[data-expanded='true'] {
   background-color: var(--background-color);
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
@@ -98,11 +98,6 @@
   gap: var(--spacing-small);
 }
 
-.output-filename-override {
-  border-top: 1px solid var(--dropdown-border);
-  padding-top: var(--spacing-medium);
-}
-
 .remove-button {
   color: var(--vscode-errorForeground);
   cursor: pointer;
@@ -121,4 +116,85 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Getting started banner - informational style */
+.getting-started-banner {
+  background-color: var(--vscode-inputValidation-infoBackground);
+  color: var(--vscode-inputValidation-infoForeground);
+  border: 1px solid var(--vscode-inputValidation-infoBorder);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+  line-height: 1.5;
+}
+
+.getting-started-banner a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.getting-started-banner a:hover {
+  text-decoration: underline;
+}
+
+/* Login banner - promotional style */
+.login-banner {
+  background: linear-gradient(
+    135deg,
+    var(--vscode-inputValidation-infoBackground) 0%,
+    color-mix(
+        in srgb,
+        var(--vscode-inputValidation-infoBackground) 80%,
+        var(--vscode-button-background)
+      )
+      100%
+  );
+  color: var(--vscode-inputValidation-infoForeground);
+  border: 1px solid var(--vscode-inputValidation-infoBorder);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.login-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+  flex: 1;
+}
+
+.login-banner-icon {
+  font-size: 1.5em;
+  color: var(--vscode-button-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+}
+
+.login-banner-title {
+  font-weight: 600;
+  font-size: 1em;
+}
+
+.login-banner-description {
+  font-size: 0.9em;
+  opacity: 0.9;
+}
+
+.login-banner .actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  flex-shrink: 0;
 }

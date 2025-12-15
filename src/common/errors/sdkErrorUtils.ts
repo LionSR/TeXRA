@@ -1,4 +1,5 @@
 // Third-party imports
+import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import {
   APIConnectionError as AnthropicConnectionError,
   APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
@@ -29,6 +30,9 @@ import {
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
 } from 'openai';
 
+// Local imports - core utilities
+import { extractErrorMessage, isObject, isString } from '@utils/core';
+
 /**
  * Structured representation of a provider HTTP failure.
  */
@@ -55,35 +59,17 @@ export interface ProviderHttpErrorDetails {
   requestId?: string;
 }
 
-const STATUS_TITLES: Record<number, string> = {
-  400: 'Bad Request',
-  401: 'Unauthorized',
-  402: 'Payment Required',
-  403: 'Forbidden',
-  404: 'Not Found',
-  409: 'Conflict',
-  422: 'Unprocessable Entity',
-  429: 'Too Many Requests',
-  500: 'Internal Server Error',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-  504: 'Gateway Timeout',
-};
-
-const STATUS_DESCRIPTIONS: Record<number, string> = {
-  400: 'Invalid parameters',
-  401: 'Invalid API key',
-  402: 'Insufficient credits',
-  403: 'Permission denied',
-  404: 'Resource not found',
-  409: 'Conflict error',
-  422: 'Unprocessable entity',
-  429: 'Rate limit exceeded',
-  500: 'Provider error',
-  502: 'Provider error',
-  503: 'No available providers',
-  504: 'Provider timeout',
-};
+/**
+ * Safely get the reason phrase for a status code.
+ * Returns undefined if the status code is not recognized.
+ */
+function safeGetReasonPhrase(statusCode: number): string | undefined {
+  try {
+    return getReasonPhrase(statusCode);
+  } catch {
+    return undefined;
+  }
+}
 
 type ErrorConstructor<T extends Error = Error> = abstract new (
   ...args: never[]
@@ -143,69 +129,85 @@ const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
 ];
 
 const NATIVE_HTTP_ERRORS: NativeHttpErrorEntry[] = [
-  { ctor: OpenAIBadRequestError, provider: 'openai', fallbackStatusCode: 400 },
+  {
+    ctor: OpenAIBadRequestError,
+    provider: 'openai',
+    fallbackStatusCode: StatusCodes.BAD_REQUEST,
+  },
   {
     ctor: AnthropicBadRequestError,
     provider: 'anthropic',
-    fallbackStatusCode: 400,
+    fallbackStatusCode: StatusCodes.BAD_REQUEST,
   },
   {
     ctor: OpenAIAuthenticationError,
     provider: 'openai',
-    fallbackStatusCode: 401,
+    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
   },
   {
     ctor: AnthropicAuthenticationError,
     provider: 'anthropic',
-    fallbackStatusCode: 401,
+    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
   },
   {
     ctor: OpenAIPermissionDeniedError,
     provider: 'openai',
-    fallbackStatusCode: 403,
+    fallbackStatusCode: StatusCodes.FORBIDDEN,
   },
   {
     ctor: AnthropicPermissionDeniedError,
     provider: 'anthropic',
-    fallbackStatusCode: 403,
+    fallbackStatusCode: StatusCodes.FORBIDDEN,
   },
-  { ctor: OpenAINotFoundError, provider: 'openai', fallbackStatusCode: 404 },
+  {
+    ctor: OpenAINotFoundError,
+    provider: 'openai',
+    fallbackStatusCode: StatusCodes.NOT_FOUND,
+  },
   {
     ctor: AnthropicNotFoundError,
     provider: 'anthropic',
-    fallbackStatusCode: 404,
+    fallbackStatusCode: StatusCodes.NOT_FOUND,
   },
-  { ctor: OpenAIConflictError, provider: 'openai', fallbackStatusCode: 409 },
+  {
+    ctor: OpenAIConflictError,
+    provider: 'openai',
+    fallbackStatusCode: StatusCodes.CONFLICT,
+  },
   {
     ctor: AnthropicConflictError,
     provider: 'anthropic',
-    fallbackStatusCode: 409,
+    fallbackStatusCode: StatusCodes.CONFLICT,
   },
   {
     ctor: OpenAIUnprocessableEntityError,
     provider: 'openai',
-    fallbackStatusCode: 422,
+    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
   },
   {
     ctor: AnthropicUnprocessableEntityError,
     provider: 'anthropic',
-    fallbackStatusCode: 422,
+    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
   },
-  { ctor: OpenAIRateLimitError, provider: 'openai', fallbackStatusCode: 429 },
+  {
+    ctor: OpenAIRateLimitError,
+    provider: 'openai',
+    fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
+  },
   {
     ctor: AnthropicRateLimitError,
     provider: 'anthropic',
-    fallbackStatusCode: 429,
+    fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
   },
   {
     ctor: OpenAIInternalServerError,
     provider: 'openai',
-    fallbackStatusCode: 500,
+    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
   },
   {
     ctor: AnthropicInternalServerError,
     provider: 'anthropic',
-    fallbackStatusCode: 500,
+    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
   },
   { ctor: OpenAIAPIError, provider: 'openai' },
   { ctor: AnthropicAPIError, provider: 'anthropic' },
@@ -221,21 +223,29 @@ function matchNativeMessageError(
   }
 
   return {
-    message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
+    message:
+      entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
     retryable: entry.retryable,
   };
 }
 
 /** Status codes that are retryable (5xx server errors, rate limits, timeouts) */
-const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS_CODES = new Set([
+  StatusCodes.REQUEST_TIMEOUT,
+  StatusCodes.TOO_MANY_REQUESTS,
+  StatusCodes.INTERNAL_SERVER_ERROR,
+  StatusCodes.BAD_GATEWAY,
+  StatusCodes.SERVICE_UNAVAILABLE,
+  StatusCodes.GATEWAY_TIMEOUT,
+]);
 
 function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) {
     return false;
   }
   // All 5xx errors are retryable
-  if (statusCode >= 500) {
+  if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
     return true;
   }
   return RETRYABLE_STATUS_CODES.has(statusCode);
@@ -253,10 +263,10 @@ function matchNativeHttpError(
   const statusText = detectStatusText(err, statusCode);
   const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
-    ? STATUS_DESCRIPTIONS[statusCode]
+    ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Known SDK error types without status codes are unusual (SDK errors typically
@@ -297,7 +307,7 @@ function pickStatus(value: unknown): number | undefined {
 }
 
 function detectStatusCode(err: unknown): number | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -315,8 +325,8 @@ function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  if (!err || typeof err !== 'object') {
-    return statusCode ? STATUS_TITLES[statusCode] : undefined;
+  if (!isObject(err)) {
+    return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
   }
 
   const candidate = err as {
@@ -329,12 +339,12 @@ function detectStatusText(
     candidate.statusText ??
     candidate.response?.statusText ??
     candidate.error?.statusText ??
-    (statusCode ? STATUS_TITLES[statusCode] : undefined)
+    (statusCode ? safeGetReasonPhrase(statusCode) : undefined)
   );
 }
 
 function detectProvider(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -342,7 +352,7 @@ function detectProvider(err: unknown): string | undefined {
     constructor?: { name?: string };
   };
 
-  if (candidate.provider) {
+  if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
@@ -373,7 +383,7 @@ function detectProvider(err: unknown): string | undefined {
  * OpenAI uses 'request_id', Anthropic uses 'request_id' in headers.
  */
 function detectRequestId(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -384,12 +394,12 @@ function detectRequestId(err: unknown): string | undefined {
   };
 
   // OpenAI SDK: request_id property
-  if (typeof candidate.request_id === 'string' && candidate.request_id) {
+  if (isString(candidate.request_id) && candidate.request_id) {
     return candidate.request_id;
   }
 
   // Alternative casing
-  if (typeof candidate.requestId === 'string' && candidate.requestId) {
+  if (isString(candidate.requestId) && candidate.requestId) {
     return candidate.requestId;
   }
 
@@ -399,20 +409,6 @@ function detectRequestId(err: unknown): string | undefined {
     if (headerRequestId) {
       return headerRequestId;
     }
-  }
-
-  return undefined;
-}
-
-function extractMessage(err: unknown): string | undefined {
-  if (err instanceof Error && typeof err.message === 'string') {
-    const trimmed = err.message.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  if (typeof err === 'string') {
-    const trimmed = err.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
   }
 
   return undefined;
@@ -451,10 +447,10 @@ export function formatProviderHttpError(
   const requestId = detectRequestId(err);
 
   const fallbackMessage = statusCode
-    ? STATUS_DESCRIPTIONS[statusCode]
+    ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Unrecognized errors without status codes reached the fallback path.

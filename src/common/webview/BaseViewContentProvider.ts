@@ -20,9 +20,17 @@ export abstract class BaseViewContentProvider {
   protected readonly logger: any;
   protected readonly channel: string;
 
+  /**
+   * @param context - VS Code extension context
+   * @param viewName - Name of this view (used for logging)
+   * @param moduleDescriptors - Optional view-specific module descriptors.
+   *   If provided, getModuleUris() will automatically build URIs from these.
+   *   If not provided, subclasses must override getModuleUris().
+   */
   constructor(
     protected readonly context: vscode.ExtensionContext,
     protected readonly viewName: string,
+    private readonly moduleDescriptors: readonly ModuleDescriptor[] = [],
   ) {
     this.logger = logger;
     this.channel = `${viewName}ContentProvider`;
@@ -35,11 +43,13 @@ export abstract class BaseViewContentProvider {
   protected abstract getViewPath(): string;
 
   /**
-   * Subclasses must provide their specific module URIs
+   * Returns view-specific module URIs. Default implementation uses
+   * moduleDescriptors passed to constructor. Subclasses can override
+   * for custom URI generation.
    */
-  protected abstract getModuleUris(
-    webview: vscode.Webview,
-  ): Record<string, vscode.Uri>;
+  protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
+    return this.buildUriRecord(webview, this.moduleDescriptors);
+  }
 
   /**
    * Optional: Override to provide additional template variables
@@ -91,7 +101,7 @@ export abstract class BaseViewContentProvider {
   /** Convert an array of descriptors into a URI record */
   protected buildUriRecord(
     webview: vscode.Webview,
-    descriptors: ModuleDescriptor[],
+    descriptors: readonly ModuleDescriptor[],
   ): Record<string, vscode.Uri> {
     return descriptors.reduce<Record<string, vscode.Uri>>((acc, d) => {
       acc[d.key] = this.getWebviewUri(webview, d.path);
@@ -179,6 +189,7 @@ export abstract class BaseViewContentProvider {
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
       streamStatusUri: this.getCommonUri(webview, 'constants/streamStatus.js'),
+      todoStatusUri: this.getCommonUri(webview, 'constants/todoStatus.js'),
       vscodeElementsBundleUri: this.getNodeModulesUri(
         webview,
         '@vscode-elements/elements/dist/bundled.js',

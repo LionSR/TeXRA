@@ -22,7 +22,7 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
-import type { WebSearchResult } from './ServerToolTypes';
+import type { ServerToolExtractionResult } from './ServerToolTypes';
 
 // Re-export for backwards compatibility
 export type { ProviderUsage };
@@ -164,6 +164,9 @@ export interface IModelHandler<
   /** Check if output streaming is enabled. */
   isOutputStreamingEnabled(): boolean;
 
+  /** Check if background mode is active for this handler. */
+  isBackgroundModeActive(): boolean;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 
@@ -198,7 +201,7 @@ export interface IModelHandler<
   initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<M[]>;
 
@@ -206,7 +209,7 @@ export interface IModelHandler<
   createRoundMessages(
     messages: M[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<M[]>;
 
   /** Format media content for provider APIs. */
@@ -298,11 +301,14 @@ export interface IModelHandler<
   extractToolUse(responseObject: Resp): T[];
 
   /**
-   * Extract web search results from a provider response.
-   * Returns server-side web search results if the provider supports native search.
-   * Returns empty array if no web search was performed or provider doesn't support it.
+   * Extract all server tool data from a provider response in a single pass.
+   * Returns both normalized results for display and raw content blocks for context.
+   * This is the single source of truth for server tool extraction.
+   *
+   * @param responseObject - The raw API response
+   * @returns Combined extraction result with webSearchResults and contentBlocks
    */
-  extractWebSearchResults(responseObject: Resp): WebSearchResult[];
+  extractServerToolData(responseObject: Resp): ServerToolExtractionResult;
 
   /**
    * Create provider-specific messages capturing the tool call and result.
@@ -363,4 +369,13 @@ export interface IModelHandler<
    * Determine if the stop reason represents an end-turn marker.
    */
   isEndTurnStop(reason: ProviderStopReason): boolean;
+
+  /**
+   * Extract assistant content blocks from a response, excluding tool_use blocks.
+   * Used to preserve original order when building follow-up messages.
+   *
+   * @param responseObject - The raw API response
+   * @returns Array of content blocks suitable for message building, or empty array if not supported
+   */
+  extractAssistantContent(responseObject: Resp): unknown[];
 }

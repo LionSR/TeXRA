@@ -2,8 +2,10 @@
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
+import type { TaskGroupStatus } from '@common/constants/streamStatus';
 // Local imports - logger
-import { getColorForLevel } from '@logger/utils';
+import { getColorForLevel, serializeLogData } from '@logger/utils';
+import type { EndGroupStatus } from '@logger/messageTypes';
 // Type imports
 import type {
   LogEventSink,
@@ -11,8 +13,6 @@ import type {
   LogGroupStartedEvent,
   LogMessageEvent,
 } from '@logger/types';
-// Internal imports
-import { serializeLogData } from '@logger/utils';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
@@ -26,7 +26,7 @@ interface TransportGroup {
   id: string;
   name: string;
   startTime: number;
-  status: 'running' | 'error' | 'stopped';
+  status: TaskGroupStatus;
   parentGroupId?: string;
   endTime?: number;
 }
@@ -91,7 +91,7 @@ export class VSCodeTransport extends Transport {
     return id;
   }
 
-  endGroup(groupId: string, status: 'error' | 'stopped'): void {
+  endGroup(groupId: string, status: EndGroupStatus): void {
     const group = this.groups.get(groupId);
     if (!group) {
       return;
@@ -99,6 +99,7 @@ export class VSCodeTransport extends Transport {
 
     group.endTime = Date.now();
     group.status = status;
+
     this.emitGroupFinished({
       stream: this.streamName,
       groupId,

@@ -67,6 +67,17 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
+.tier-badge.max {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.tier-badge.ultra {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+}
+
+/* Legacy: keep researcher for backwards compat */
 .tier-badge.researcher {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
@@ -152,18 +163,13 @@ h2 {
   color: white;
 }
 
-.visibility-badge.researcher {
+.visibility-badge.custom {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-.visibility-badge.whitelist {
-  background: var(--vscode-inputValidation-warningBackground);
-  color: var(--vscode-inputValidation-warningForeground);
-}
-
-/* Type badges */
-.type-badge {
+/* Category badges */
+.category-badge {
   display: inline-block;
   padding: 2px var(--spacing-small);
   border-radius: var(--border-radius-small);
@@ -171,6 +177,26 @@ h2 {
   font-weight: 500;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
+}
+
+/* Multi-output badges */
+.multi-output-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.multi-output-badge.supported {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.multi-output-badge.not-supported {
+  background: var(--vscode-input-background);
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
 }
 
 /* Select button */

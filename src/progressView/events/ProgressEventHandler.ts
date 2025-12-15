@@ -39,6 +39,7 @@ import {
   type ApprovalEventsModule,
   type ApprovalEventsShared,
 } from './ApprovalEvents';
+import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -53,6 +54,7 @@ export class ProgressEventHandler {
   private readonly logEvents: LogEventsModule;
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
+  private readonly todoEvents: TodoEventsModule;
   private readonly retryEvents: RetryEventsModule;
   private readonly approvalEvents: ApprovalEventsModule;
 
@@ -98,6 +100,10 @@ export class ProgressEventHandler {
         this.initializeStreamForTaskGroup(stream),
       debugLog: (message) => this.logger.debug(message),
     });
+    this.todoEvents = createTodoEvents({
+      withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
+      debugLog: (message) => this.logger.debug(message),
+    });
     this.retryEvents = createRetryEventsModule({
       withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
       showRetryRequest: callbacks.showRetryRequest,
@@ -134,6 +140,9 @@ export class ProgressEventHandler {
     );
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
+    );
+    disposables.push(
+      ...this.todoEvents.register(bus, this.state, this.webviewUpdater),
     );
     disposables.push(...this.retryEvents.register(bus));
     disposables.push(...this.approvalEvents.register(bus));
@@ -270,6 +279,13 @@ export class ProgressEventHandler {
       });
     });
 
+    // Refresh todos for the stream (ephemeral state)
+    // Always send todos if defined (including empty array to clear stale UI)
+    const todos = this.state.getTodos(stream);
+    if (todos !== undefined) {
+      this.webviewUpdater.updateTodos(stream, todos);
+    }
+
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
@@ -290,26 +306,34 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
+    // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      // Status is not 'ready', so it's a valid active status
-      const nextStatus = status;
-      this._streamStatus.set(stream, nextStatus);
+      this._streamStatus.set(stream, status);
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Check if the stream tab exists before deciding update strategy
-      if (this.state.streamTabs.has(stream)) {
-        // Use targeted single-stream update for existing tabs
-        this.webviewUpdater.updateStreamStatus(stream, status);
-      } else {
-        // New stream: need full updateStreams to create the tab
-        this.webviewUpdater.updateAll(this.state, this._streamStatus);
-      }
+      // When sorted by time, status changes may affect tab order (due to new log entries),
+      // so we need a full refresh. Otherwise use efficient targeted update.
+      const needsFullRefresh =
+        !this.state.streamTabs.has(stream) ||
+        this.state.streamSortOrder === 'time';
 
-      if (stream === this.state.activeStream) {
-        this.webviewUpdater.updateStatus(status);
+      if (needsFullRefresh) {
+        // Include current status in refresh map so frontend displays it correctly.
+        // READY is deleted from _streamStatus but should still be shown to user.
+        const statusesForRefresh = new Map(this._streamStatus);
+        statusesForRefresh.set(stream, status);
+        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+      } else {
+        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
+        const logs = this.state.streamTabs.getMessages(stream);
+        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
+        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
+        const lastTimestamp =
+          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
   }

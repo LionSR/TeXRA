@@ -1,6 +1,8 @@
 // Third-party imports
 import { countTokens } from 'gpt-tokenizer';
 import OpenAI from 'openai';
+
+// Local imports - core utilities
 import {
   ChatCompletion,
   ChatCompletionChunk,
@@ -41,6 +43,7 @@ import type { ToolDefinition } from '@model';
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
+import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -389,19 +392,40 @@ export class ModelHandlerOpenAI<
     );
   }
 
+  /**
+   * Returns message normalization options for this handler.
+   * Subclasses can override to specify provider-specific normalization
+   * (e.g., convertContentToString, mergeConsecutiveRoles) without
+   * overriding the entire createResponse method.
+   *
+   * @returns Normalization options, or undefined to skip normalization
+   */
+  protected getMessageNormalizationOptions():
+    | NormalizeOpenAIMessageContentOptions
+    | undefined {
+    return undefined; // Default: no normalization
+  }
+
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<ChatCompletion> {
     const {
       client,
-      messages,
+      messages: rawMessages,
       temperature,
       systemPrompt,
       endTag,
       signal,
       tools,
     } = options;
+
+    // Apply message normalization if subclass specifies options
+    const normOptions = this.getMessageNormalizationOptions();
+    const messages = normOptions
+      ? this.prepareNormalizedMessages(rawMessages, normOptions)
+      : rawMessages;
+
     const useStreaming = this.getStreamingConfig();
     const baseParams = this.buildChatBaseParams(
       messages,
@@ -466,7 +490,7 @@ export class ModelHandlerOpenAI<
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<any[]> {
     const messages: any[] = [];
@@ -557,7 +581,7 @@ export class ModelHandlerOpenAI<
   async createRoundMessages(
     messages: any[],
     userMessage: string,
-    mediaFiles?: string[],
+    mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
 
@@ -1150,7 +1174,7 @@ export class ModelHandlerOpenAI<
     message: Record<string, unknown> | undefined,
   ): string | null {
     const reasoning = message?.reasoning_content;
-    if (typeof reasoning === 'string' && reasoning.trim()) {
+    if (isNonEmptyString(reasoning)) {
       return reasoning;
     }
     return null;

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
@@ -19,6 +20,16 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
+
+/** Schema for remote agent data sent to webview (used for type inference only) */
+const RemoteAgentPayloadSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  visibility: z.array(z.string()),
+  category: z.nativeEnum(AgentCategory),
+  supportsMultipleOutput: z.boolean(),
+});
+type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
 
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -49,33 +60,26 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         authenticated: false,
         user: null,
         tier: 'free',
+        permissions: [],
         remoteAgents: [],
       });
       return;
     }
 
     const user = await SupabaseClient.getUser();
-    const tier = await SupabaseClient.getUserTier();
+    const authContext = await SupabaseClient.getUserAuthContext();
 
-    // Fetch remote agents if user has researcher tier
-    let remoteAgents: Array<{
-      name: string;
-      description: string;
-      visibility: string;
-      agentType?: string;
-    }> = [];
-
-    if (tier === 'researcher') {
-      // Refresh agent cache to ensure remote agents are loaded after authentication
-      await loadAgents();
-      const entries = getAgentsBySource('remote' as AgentSource);
-      remoteAgents = entries.map((entry) => ({
-        name: entry.name,
-        description: entry.description || '',
-        visibility: entry.visibility || 'researcher',
-        agentType: entry.agentType || 'CoT',
-      }));
-    }
+    // Fetch remote agents - RLS filters based on user's permissions
+    // All authenticated users can see agents matching their visibility access
+    await loadAgents();
+    const entries = getAgentsBySource('remote' as AgentSource);
+    const remoteAgents: RemoteAgentPayload[] = entries.map((entry) => ({
+      name: entry.name,
+      description: entry.description || '',
+      visibility: entry.visibility || ['public'],
+      category: entry.category || AgentCategory.Workflow,
+      supportsMultipleOutput: !!entry.multiplePath,
+    }));
 
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -84,7 +88,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier,
+      tier: authContext.tier,
+      permissions: authContext.permissions,
       remoteAgents,
     });
   }

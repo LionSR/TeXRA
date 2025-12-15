@@ -1,6 +1,6 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from './constants.js';
-import { formatTokens } from './formatters.js';
+import { formatTokens } from './formatters/index.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 
@@ -44,20 +44,22 @@ export class UsageSummary {
       footer.hidden = false;
     }
 
-    const parts = [
-      `${formatTokens(inputTokens)}`,
-      `${formatTokens(outputTokens)}`,
-      `$${cost.toFixed(3)}`,
-    ];
+    const formattedInput = formatTokens(inputTokens);
+    const formattedOutput = formatTokens(outputTokens);
+    const formattedCost = `$${cost.toFixed(3)}`;
 
     this._summaryElem.innerHTML = `
       <i class="codicon codicon-meter"></i>
       <span class="run-summary__label">Total usage:</span>
-      <span class="run-summary__value">${parts.join(' · ')}</span>
+      <span class="run-summary__value">
+        <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput} ·
+        <i class="codicon codicon-arrow-down" title="Output tokens"></i>${formattedOutput} ·
+        ${formattedCost}
+      </span>
     `;
     this._summaryElem.setAttribute(
       'aria-label',
-      `Total usage ${parts.join(', ')}`,
+      `Total usage: ${formattedInput} input tokens, ${formattedOutput} output tokens, ${formattedCost}`,
     );
   }
 

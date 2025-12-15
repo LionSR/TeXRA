@@ -28,6 +28,7 @@ import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
+import type { TodoItem } from '@eventBus/schemas';
 
 // Logger imports
 // Type imports
@@ -309,12 +310,18 @@ export class WebviewUpdater {
   /**
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
+   * @param lastTimestamp - Optional timestamp for updating "last activity" display
    */
-  updateStreamStatus(stream: StreamTabId, status: StreamStatus): void {
+  updateStreamStatus(
+    stream: StreamTabId,
+    status: StreamStatus,
+    lastTimestamp?: number,
+  ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
+      lastTimestamp,
     });
   }
 
@@ -336,6 +343,17 @@ export class WebviewUpdater {
     this.sendMessage({
       command: COMMANDS.UPDATE_TASK_GROUP,
       update,
+    });
+  }
+
+  /**
+   * Update the todo list for a stream
+   */
+  updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_TODOS,
+      stream,
+      todos,
     });
   }
 

@@ -1,0 +1,87 @@
+/**
+ * Todo list styles for the ProgressView
+ * Displays task progress for tool-use agents
+ */
+
+.todo-list-container {
+  display: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: transparent;
+  padding: var(--spacing-small) var(--spacing-medium);
+}
+
+.todo-list-container.is-visible {
+  display: block;
+}
+
+.todo-list__header {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: var(--spacing-small);
+}
+
+.todo-list__header .codicon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) 0;
+  font-size: var(--vscode-font-size);
+  line-height: 1.4;
+}
+
+.todo-item__icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.todo-item__content {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* Status-specific styles */
+.todo-item--pending {
+  opacity: 0.7;
+}
+
+.todo-item--pending .todo-item__icon {
+  color: var(--vscode-descriptionForeground);
+}
+
+.todo-item--in-progress {
+  font-weight: 500;
+}
+
+.todo-item--in-progress .todo-item__icon {
+  color: var(--vscode-progressBar-background);
+}
+
+.todo-item--completed {
+  opacity: 0.6;
+}
+
+.todo-item--completed .todo-item__icon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.todo-item--completed .todo-item__content {
+  text-decoration: line-through;
+  text-decoration-color: var(--vscode-descriptionForeground);
+}

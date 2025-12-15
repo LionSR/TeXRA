@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode } from '@agent/node';
 
+// Local imports - constants
+import { END_GROUP_STATUS } from '@logger/messageTypes';
+
 // Internal imports
 import { finalizeLifecycle } from './finalizeLifecycle';
 import { setLifecyclePhase } from './lifecycle';
@@ -96,4 +99,77 @@ export function createAgentFinalizeNode<
       });
     }
   })();
+}
+
+/**
+ * Options for creating a standard finalize node with common defaults.
+ * Uses 'error' | 'stopped' status pattern that most agent flows follow.
+ */
+export interface StandardFinalizeNodeOptions<
+  Shared extends AgentRunShared<any, any, any, any>,
+> {
+  /** Phase name for finalize (typically 'finalize') */
+  finalizePhase: Shared['lifecycle']['phase'];
+  /** Optional work before calling hooks.end() */
+  beforeEnd?(
+    context: FinalizeNodeContext<
+      Shared['lifecycle'],
+      Shared['hooks'],
+      Shared['agent']
+    >,
+  ): Promise<void>;
+  /** Optional callback for secondary errors during finalization */
+  onSecondaryError?(
+    context: FinalizeNodeContext<
+      Shared['lifecycle'],
+      Shared['hooks'],
+      Shared['agent']
+    >,
+    error: unknown,
+  ): void;
+}
+
+/**
+ * Creates a standard finalize node with common patterns pre-configured.
+ *
+ * This factory encapsulates the common finalization pattern used across agent flows:
+ * - Computes status as 'error' if lifecycle has error, otherwise 'stopped'
+ * - Calls optional beforeEnd, then hooks.end(status)
+ * - Calls hooks.cleanup()
+ * - Sets lifecycle status to 'completed' on success
+ *
+ * @example
+ * ```typescript
+ * const finalizeNode = createStandardFinalizeNode<MyShared>({
+ *   finalizePhase: 'finalize',
+ *   beforeEnd: async ({ hooks }) => {
+ *     await hooks.clearPersistedSnapshot();
+ *   },
+ * });
+ * ```
+ */
+export function createStandardFinalizeNode<
+  Shared extends AgentRunShared<any, any, any, any>,
+>(options: StandardFinalizeNodeOptions<Shared>): BaseNode<Shared> {
+  return createAgentFinalizeNode<Shared, 'error' | 'stopped'>({
+    finalizePhase: options.finalizePhase,
+    computeStatus: ({ lifecycle }) =>
+      lifecycle.error || lifecycle.status === 'error'
+        ? END_GROUP_STATUS.ERROR
+        : END_GROUP_STATUS.STOPPED,
+    runFinalize: async (context, status) => {
+      if (options.beforeEnd) {
+        await options.beforeEnd(context);
+      }
+      await context.hooks.end(status);
+    },
+    runCleanup: async ({ hooks }) => {
+      await hooks.cleanup();
+    },
+    onSuccess: ({ lifecycle }) => {
+      lifecycle.status = 'completed';
+      lifecycle.error = undefined;
+    },
+    onSecondaryError: options.onSecondaryError,
+  });
 }

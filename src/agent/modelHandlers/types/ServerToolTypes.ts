@@ -3,7 +3,23 @@
  *
  * Server tools are executed by the provider (Anthropic, OpenAI, Google) rather
  * than locally. This module provides a unified abstraction layer.
+ *
+ * Uses native SDK types where available for better type safety and maintainability.
  */
+
+// SDK type imports - using native types for better type safety
+// Consumers should import SDK types directly from the respective SDKs:
+// - Anthropic: '@anthropic-ai/sdk/resources/messages'
+// - OpenAI: 'openai/resources/responses/responses'
+import type {
+  ServerToolUseBlock,
+  WebSearchToolResultBlock,
+  WebSearchResultBlock,
+} from '@anthropic-ai/sdk/resources/messages';
+import type {
+  ResponseFunctionWebSearch,
+  ResponseReasoningItem,
+} from 'openai/resources/responses/responses';
 
 // ============================================================================
 // Web Search Result Types
@@ -35,7 +51,7 @@ export interface WebSearchResult {
   /** Search result entries */
   results: WebSearchResultEntry[];
   /** Provider that executed the search */
-  provider: 'anthropic' | 'openai' | 'google';
+  provider: 'anthropic' | 'openai';
   /** Unique identifier for this search call */
   callId?: string;
   /** Status of the search */
@@ -43,85 +59,45 @@ export interface WebSearchResult {
 }
 
 // ============================================================================
-// Server Tool Call Types (Discriminated Union)
+// Server Tool Content Block Types
 // ============================================================================
 
 /**
- * Anthropic server tool use block.
- * Represents a tool executed by Anthropic's servers.
+ * Union of all raw content block types that can be returned by server tools.
+ * These blocks need to be preserved in conversation context for follow-up messages.
+ *
+ * - Anthropic: ServerToolUseBlock (the call) and WebSearchToolResultBlock (the result)
+ * - OpenAI: ResponseFunctionWebSearch (combined call/result) and ResponseReasoningItem
+ *   (reasoning items must be included when web_search_call references them)
  */
-export interface AnthropicServerToolCall {
-  provider: 'anthropic';
-  type: 'web_search';
-  callId: string;
-  name: 'web_search';
-  /** Raw SDK block for reference */
-  raw: unknown;
-}
+export type ServerToolContentBlock =
+  | ServerToolUseBlock
+  | WebSearchToolResultBlock
+  | ResponseFunctionWebSearch
+  | ResponseReasoningItem;
 
 /**
- * OpenAI web search call from Responses API.
+ * Combined result from server tool extraction.
+ * Single source of truth for both display (webSearchResults) and context (contentBlocks).
  */
-export interface OpenAIWebSearchCall {
-  provider: 'openai';
-  type: 'web_search_call';
-  callId: string;
-  /** Search query */
-  query?: string;
-  /** Sources/URLs found */
-  sources?: Array<{ type: 'url'; url: string }>;
-  status: 'in_progress' | 'searching' | 'completed' | 'failed';
-  /** Raw SDK object for reference */
-  raw: unknown;
+export interface ServerToolExtractionResult {
+  /** Normalized web search results for display in progress view */
+  webSearchResults: WebSearchResult[];
+  /** Raw content blocks to preserve in conversation context */
+  contentBlocks: ServerToolContentBlock[];
 }
-
-/**
- * Google grounding metadata from search.
- */
-export interface GoogleGroundingResult {
-  provider: 'google';
-  type: 'grounding';
-  /** Grounding chunks with web sources */
-  chunks: Array<{
-    title?: string;
-    uri?: string;
-    domain?: string;
-  }>;
-  /** Queries that were executed */
-  searchQueries?: string[];
-  /** Raw SDK metadata for reference */
-  raw: unknown;
-}
-
-/**
- * Union of all server tool call types.
- */
-export type ServerToolCall =
-  | AnthropicServerToolCall
-  | OpenAIWebSearchCall
-  | GoogleGroundingResult;
 
 // ============================================================================
-// Type Guards
+// Type Guards - Using SDK types for better type safety
 // ============================================================================
 
 /**
- * Check if a server tool call is a web search (any provider).
- */
-export function isWebSearchCall(call: ServerToolCall): boolean {
-  return (
-    call.type === 'web_search' ||
-    call.type === 'web_search_call' ||
-    call.type === 'grounding'
-  );
-}
-
-/**
- * Check if a content block is an Anthropic server tool use.
+ * Type guard for Anthropic server tool use block.
+ * Uses SDK's ServerToolUseBlock type for proper typing.
  */
 export function isAnthropicServerToolUse(
   block: unknown,
-): block is { type: 'server_tool_use'; id: string; name: string } {
+): block is ServerToolUseBlock {
   return (
     typeof block === 'object' &&
     block !== null &&
@@ -130,11 +106,12 @@ export function isAnthropicServerToolUse(
 }
 
 /**
- * Check if a content block is an Anthropic web search result.
+ * Type guard for Anthropic web search result block.
+ * Uses SDK's WebSearchToolResultBlock type for proper typing.
  */
 export function isAnthropicWebSearchResult(
   block: unknown,
-): block is { type: 'web_search_tool_result'; tool_use_id: string } {
+): block is WebSearchToolResultBlock {
   return (
     typeof block === 'object' &&
     block !== null &&
@@ -143,11 +120,12 @@ export function isAnthropicWebSearchResult(
 }
 
 /**
- * Check if an OpenAI response item is a web search call.
+ * Type guard for OpenAI web search call.
+ * Uses SDK's ResponseFunctionWebSearch type for proper typing.
  */
 export function isOpenAIWebSearchCall(
   item: unknown,
-): item is { type: 'web_search_call'; id: string } {
+): item is ResponseFunctionWebSearch {
   return (
     typeof item === 'object' &&
     item !== null &&
@@ -155,55 +133,114 @@ export function isOpenAIWebSearchCall(
   );
 }
 
+/**
+ * Type guard for OpenAI reasoning item.
+ * Uses SDK's ResponseReasoningItem type for proper typing.
+ * Reasoning items must be preserved when web_search_call references them.
+ */
+export function isOpenAIReasoningItem(
+  item: unknown,
+): item is ResponseReasoningItem {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    (item as { type?: string }).type === 'reasoning'
+  );
+}
+
+/**
+ * Type guard for OpenAI server tool content blocks.
+ * Checks if an item is either a web search call or reasoning item.
+ * Used to identify content that needs to be preserved in conversation context.
+ * Reasoning items must be included when web_search_call references them.
+ */
+export function isOpenAIServerToolContent(
+  item: unknown,
+): item is ResponseFunctionWebSearch | ResponseReasoningItem {
+  return isOpenAIWebSearchCall(item) || isOpenAIReasoningItem(item);
+}
+
+/**
+ * Type guard for Anthropic server tool content blocks.
+ * Checks if a block is either a server tool use or web search result.
+ * Used to identify content that needs to be preserved in conversation context.
+ */
+export function isAnthropicServerToolContent(
+  block: unknown,
+): block is ServerToolUseBlock | WebSearchToolResultBlock {
+  return isAnthropicServerToolUse(block) || isAnthropicWebSearchResult(block);
+}
+
 // ============================================================================
-// Result Extraction Helpers
+// Result Extraction Helpers - Using SDK types for type safety
 // ============================================================================
 
 /**
+ * Type guard for WebSearchResultBlock array content.
+ * The SDK's WebSearchToolResultBlockContent is a union of error or results array.
+ */
+function isWebSearchResultArray(
+  content: WebSearchToolResultBlock['content'],
+): content is WebSearchResultBlock[] {
+  return Array.isArray(content);
+}
+
+/**
  * Extract web search results from Anthropic response content.
+ * Uses SDK's WebSearchToolResultBlock and WebSearchResultBlock types.
+ * Correlates server_tool_use blocks (which contain the query) with
+ * web_search_tool_result blocks (which contain the results).
  */
 export function extractAnthropicWebSearchResults(
   content: unknown[],
 ): WebSearchResult[] {
   const results: WebSearchResult[] = [];
 
+  // First pass: build a map of tool_use_id -> query from server_tool_use blocks
+  const queryMap = new Map<string, string>();
+  for (const block of content) {
+    if (isAnthropicServerToolUse(block) && block.name === 'web_search') {
+      const input = block.input as { query?: string } | undefined;
+      if (input?.query) {
+        queryMap.set(block.id, input.query);
+      }
+    }
+  }
+
+  // Second pass: extract results and match with queries
   for (const block of content) {
     if (!isAnthropicWebSearchResult(block)) {
       continue;
     }
 
-    const resultBlock = block as {
-      type: 'web_search_tool_result';
-      tool_use_id: string;
-      content?: Array<{
-        type: 'web_search_result';
-        url?: string;
-        title?: string;
-        encrypted_content?: string;
-        page_age?: string;
-      }>;
-    };
-
-    if (!Array.isArray(resultBlock.content)) {
+    // block is now properly typed as WebSearchToolResultBlock
+    if (!isWebSearchResultArray(block.content)) {
+      // Content is an error, not results
       continue;
     }
 
-    const entries: WebSearchResultEntry[] = resultBlock.content
-      .filter((r) => r.type === 'web_search_result' && r.url)
+    // block.content is now properly typed as WebSearchResultBlock[]
+    const entries: WebSearchResultEntry[] = block.content
+      .filter(
+        (r): r is WebSearchResultBlock =>
+          r.type === 'web_search_result' && !!r.url,
+      )
       .map((r) => ({
-        url: r.url!,
-        title: r.title ?? '',
+        url: r.url,
+        title: r.title,
         snippet: r.encrypted_content,
-        pageAge: r.page_age,
-        domain: extractDomain(r.url!),
+        pageAge: r.page_age ?? undefined,
+        domain: extractDomain(r.url),
       }));
 
     if (entries.length > 0) {
+      // Look up the query from the corresponding server_tool_use block
+      const query = queryMap.get(block.tool_use_id) ?? '';
       results.push({
-        query: '', // Anthropic doesn't expose query in result
+        query,
         results: entries,
         provider: 'anthropic',
-        callId: resultBlock.tool_use_id,
+        callId: block.tool_use_id,
         status: 'completed',
       });
     }
@@ -213,7 +250,79 @@ export function extractAnthropicWebSearchResults(
 }
 
 /**
+ * Extended web search interface with optional action field.
+ * The action field is only populated when using include: ['web_search_call.action.sources'].
+ * Uses SDK's ResponseFunctionWebSearch.Search type for the action structure.
+ */
+interface ResponseFunctionWebSearchWithAction extends ResponseFunctionWebSearch {
+  action?: ResponseFunctionWebSearch.Search;
+}
+
+/**
+ * Build a WebSearchResult from a single OpenAI web search item.
+ * Shared helper used by both streaming emission and final response extraction.
+ *
+ * Handles both cases:
+ * - Default API response: only id, status, type (no action/sources)
+ * - With include sources: action field contains query and sources
+ */
+export function buildOpenAIWebSearchResult(
+  item: ResponseFunctionWebSearch,
+): WebSearchResult {
+  const searchItem = item as ResponseFunctionWebSearchWithAction;
+
+  // Determine status using SDK's status type
+  const status: WebSearchResult['status'] =
+    searchItem.status === 'completed'
+      ? 'completed'
+      : searchItem.status === 'failed'
+        ? 'failed'
+        : 'in_progress';
+
+  const action = searchItem.action;
+
+  // Handle case when action is not present (default API response)
+  if (!action) {
+    return {
+      query: '',
+      results: [],
+      provider: 'openai',
+      callId: searchItem.id,
+      status,
+    };
+  }
+
+  // Handle case when action is present (include sources was used)
+  const entries: WebSearchResultEntry[] = (action.sources ?? []).map((s) => ({
+    url: s.url,
+    title: '', // OpenAI sources don't include titles in basic response
+    domain: extractDomain(s.url),
+  }));
+
+  return {
+    query: action.query ?? '',
+    results: entries,
+    provider: 'openai',
+    callId: searchItem.id,
+    status,
+  };
+}
+
+/**
+ * Check if a web search item has meaningful data (action field with query).
+ * During streaming, web search items may be emitted without the action field,
+ * which results in empty searches being displayed. Use this to filter them out.
+ */
+export function hasOpenAIWebSearchData(
+  item: ResponseFunctionWebSearch,
+): boolean {
+  const searchItem = item as ResponseFunctionWebSearchWithAction;
+  return Boolean(searchItem.action?.query);
+}
+
+/**
  * Extract web search results from OpenAI Responses API output.
+ * Uses SDK's ResponseFunctionWebSearch type for proper typing.
  *
  * Note: The OpenAI Responses API returns web_search_call items with only
  * basic fields (id, status, type) by default. The action field with sources
@@ -230,105 +339,10 @@ export function extractOpenAIWebSearchResults(
       continue;
     }
 
-    const searchItem = item as {
-      type: 'web_search_call';
-      id: string;
-      status?: 'in_progress' | 'searching' | 'completed' | 'failed';
-      // action is only present when include: ['web_search_call.action.sources'] is used
-      action?: {
-        type: 'search';
-        query?: string;
-        sources?: Array<{ type: 'url'; url: string }>;
-      };
-    };
-
-    // Determine status
-    const status: WebSearchResult['status'] =
-      searchItem.status === 'completed'
-        ? 'completed'
-        : searchItem.status === 'failed'
-          ? 'failed'
-          : 'in_progress';
-
-    // Handle case when action is not present (default API response)
-    const action = searchItem.action;
-    if (!action) {
-      // Web search occurred but sources not included in response
-      // Return a result indicating the search happened
-      results.push({
-        query: '',
-        results: [],
-        provider: 'openai',
-        callId: searchItem.id,
-        status,
-      });
-      continue;
-    }
-
-    // Handle case when action is present (include sources was used)
-    if (action.type !== 'search') {
-      continue;
-    }
-
-    const entries: WebSearchResultEntry[] = (action.sources ?? []).map((s) => ({
-      url: s.url,
-      title: '', // OpenAI sources don't include titles in basic response
-      domain: extractDomain(s.url),
-    }));
-
-    results.push({
-      query: action.query ?? '',
-      results: entries,
-      provider: 'openai',
-      callId: searchItem.id,
-      status,
-    });
+    results.push(buildOpenAIWebSearchResult(item));
   }
 
   return results;
-}
-
-/**
- * Extract grounding results from Google GenAI response.
- */
-export function extractGoogleGroundingResults(
-  candidate: unknown,
-): WebSearchResult | null {
-  const cand = candidate as {
-    groundingMetadata?: {
-      groundingChunks?: Array<{
-        web?: { title?: string; uri?: string; domain?: string };
-      }>;
-      webSearchQueries?: string[];
-      retrievalQueries?: string[];
-    };
-  };
-
-  const metadata = cand?.groundingMetadata;
-  if (!metadata?.groundingChunks?.length) {
-    return null;
-  }
-
-  const entries: WebSearchResultEntry[] = metadata.groundingChunks
-    .filter((chunk) => chunk.web?.uri)
-    .map((chunk) => ({
-      url: chunk.web!.uri!,
-      title: chunk.web!.title ?? '',
-      domain: chunk.web!.domain ?? extractDomain(chunk.web!.uri!),
-    }));
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const queries = metadata.webSearchQueries ?? metadata.retrievalQueries ?? [];
-
-  return {
-    query: queries.join('; '),
-    results: entries,
-    provider: 'google',
-    status: 'completed',
-  };
 }
 
 // ============================================================================
@@ -338,7 +352,7 @@ export function extractGoogleGroundingResults(
 /**
  * Extract domain from URL.
  */
-function extractDomain(url: string): string {
+export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {

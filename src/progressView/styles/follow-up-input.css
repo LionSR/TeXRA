@@ -32,6 +32,7 @@
   overflow-y: auto;
 }
 
+/* !important needed to override vscode-toolbar-container's internal flex-direction: row */
 .follow-up-actions,
 vscode-toolbar-container.follow-up-actions {
   display: flex;

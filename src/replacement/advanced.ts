@@ -77,13 +77,10 @@ export function applyLatexQuotesFormatting(text: string): string {
     totalReplacements += replacementCount;
 
     // Restore tikzpicture environments
-    let restoredContent = processedContent;
-    for (let i = 0; i < tikzEnvironments.length; i++) {
-      restoredContent = restoredContent.replace(
-        `__TIKZ_PLACEHOLDER_${i}__`,
-        tikzEnvironments[i],
-      );
-    }
+    const restoredContent = tikzEnvironments.reduce(
+      (content, env, i) => content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
+      processedContent,
+    );
 
     // Replace the current document block with the processed one
     const processedDocumentBlock = `\\begin{document}${restoredContent}\\end{document}`;
@@ -338,21 +335,17 @@ export function replaceMathUnicode(text: string): string {
       const mathContent = text.substring(envStart, envEnd);
 
       // Apply Unicode replacements within the math content
-      let replacedContent = mathContent;
-
-      // Replace Unicode characters with LaTeX commands
-      for (const [unicode, latex] of Object.entries(mathUnicodeMap)) {
-        replacedContent = replacedContent.replace(
-          new RegExp(unicode, 'g'),
-          latex,
-        );
-      }
-
-      // Replace HTML subscript tags with LaTeX subscript syntax
-      replacedContent = replacedContent.replace(/<sub>(.*?)<\/sub>/g, '_{$1}');
-
-      // Replace HTML superscript tags with LaTeX superscript syntax
-      replacedContent = replacedContent.replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+      // Replace Unicode characters with LaTeX commands, then HTML sub/sup tags
+      const replacedContent = Object.entries(mathUnicodeMap)
+        .reduce(
+          (content, [unicode, latex]) =>
+            content.replace(new RegExp(unicode, 'g'), latex),
+          mathContent,
+        )
+        // Replace HTML subscript tags with LaTeX subscript syntax
+        .replace(/<sub>(.*?)<\/sub>/g, '_{$1}')
+        // Replace HTML superscript tags with LaTeX superscript syntax
+        .replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
 
       // Replace the original math content with the processed one
       if (replacedContent !== mathContent) {
@@ -369,19 +362,17 @@ export function replaceMathUnicode(text: string): string {
 
   // Also handle inline math with $ ... $
   const inlineMathPattern = /\$(.*?)\$/g;
-  text = text.replace(inlineMathPattern, (match, p1) => {
-    let content = p1;
-
-    // Replace Unicode characters with LaTeX commands
-    for (const [unicode, latex] of Object.entries(mathUnicodeMap)) {
-      content = content.replace(new RegExp(unicode, 'g'), latex);
-    }
-
-    // Replace HTML subscript tags with LaTeX subscript syntax
-    content = content.replace(/<sub>(.*?)<\/sub>/g, '_{$1}');
-
-    // Replace HTML superscript tags with LaTeX superscript syntax
-    content = content.replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+  text = text.replace(inlineMathPattern, (_match, p1) => {
+    // Replace Unicode characters with LaTeX commands, then HTML sub/sup tags
+    const content = Object.entries(mathUnicodeMap)
+      .reduce(
+        (c, [unicode, latex]) => c.replace(new RegExp(unicode, 'g'), latex),
+        p1 as string,
+      )
+      // Replace HTML subscript tags with LaTeX subscript syntax
+      .replace(/<sub>(.*?)<\/sub>/g, '_{$1}')
+      // Replace HTML superscript tags with LaTeX superscript syntax
+      .replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
 
     return `$${content}$`;
   });

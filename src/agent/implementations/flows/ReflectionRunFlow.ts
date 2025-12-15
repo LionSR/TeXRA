@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -18,11 +20,39 @@ import {
   type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
+import type { EndGroupStatus } from '@logger/messageTypes';
 
-export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
+// Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
+export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
+
+/**
+ * Reflection run phase - single source of truth for reflection agent flow phases.
+ */
+export const REFLECTION_RUN_PHASE = {
+  IDLE: 'idle',
+  INIT: 'init',
+  ROUNDS: 'rounds',
+  FINALIZE: 'finalize',
+} as const;
+
+export const ReflectionRunPhaseSchema = z.enum([
+  REFLECTION_RUN_PHASE.IDLE,
+  REFLECTION_RUN_PHASE.INIT,
+  REFLECTION_RUN_PHASE.ROUNDS,
+  REFLECTION_RUN_PHASE.FINALIZE,
+]);
+
+export type ReflectionRunPhase = z.infer<typeof ReflectionRunPhaseSchema>;
 
 export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
+/**
+ * Runtime state for reflection agent runs.
+ *
+ * Schema alignment: This interface corresponds to {@link ReflectionRunStateSchema}
+ * for serialization. The runtime uses AgentRunState class instances while the
+ * schema uses AgentRunStateSnapshotSchema for JSON compatibility.
+ */
 export interface ReflectionRunState {
   conversation: any[];
   runState: AgentRunState;
@@ -160,7 +190,7 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
   const finalizeNode = createAgentFinalizeNode<
     ReflectionRunShared<C>,
-    'error' | 'stopped'
+    EndGroupStatus
   >({
     finalizePhase: 'finalize',
     computeStatus: ({ lifecycle }) => (lifecycle.error ? 'error' : 'stopped'),

@@ -2,22 +2,101 @@
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
+// Local imports - core utilities
+
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { isNonEmptyString } from '@utils/core';
 
 // Local file imports
-import {
-  ModelHandlerOpenAI,
-  extractReasoningDelta,
-} from './modelHandlerOpenAI';
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
+  ChatCompletionChunk,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
+
+/**
+ * OpenRouter reasoning_details array item types.
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ */
+interface ReasoningDetailItem {
+  type: 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted';
+  id?: string | null;
+  format?: string;
+  index?: number;
+  text?: string; // for reasoning.text
+  summary?: string; // for reasoning.summary
+  data?: string; // for reasoning.encrypted
+  signature?: string | null; // for reasoning.text
+}
+
+/**
+ * Extracts text content from OpenRouter reasoning_details array.
+ * Handles the structured format with type-specific fields.
+ */
+const extractTextFromReasoningDetails = (
+  details: ReasoningDetailItem[] | unknown,
+): string => {
+  if (!Array.isArray(details)) {
+    // Fallback: if it's a string, return it directly
+    if (typeof details === 'string') return details;
+    return '';
+  }
+
+  const textParts: string[] = [];
+  for (const item of details) {
+    if (!item || typeof item !== 'object') continue;
+
+    switch (item.type) {
+      case 'reasoning.text':
+        if (item.text) textParts.push(item.text);
+        break;
+      case 'reasoning.summary':
+        if (item.summary) textParts.push(item.summary);
+        break;
+      case 'reasoning.encrypted':
+        // Encrypted content is not useful for display, skip it
+        break;
+    }
+  }
+
+  return textParts.join('');
+};
+
+/**
+ * Extracts reasoning delta from streaming chunks for OpenRouter.
+ * Handles both:
+ * - reasoning_details: array of objects (OpenRouter normalized format)
+ * - reasoning_content: string (native DeepSeek/other models)
+ */
+const extractOpenRouterReasoningDelta = (
+  chunk: ChatCompletionChunk,
+): string => {
+  const choice = chunk.choices[0];
+  if (!choice) return '';
+
+  const delta = choice.delta as {
+    reasoning_details?: ReasoningDetailItem[] | string;
+    reasoning_content?: string;
+  };
+
+  // Try reasoning_details first (OpenRouter normalized format)
+  if ('reasoning_details' in delta && delta.reasoning_details) {
+    return extractTextFromReasoningDetails(delta.reasoning_details);
+  }
+
+  // Fall back to reasoning_content (native format for some models)
+  if ('reasoning_content' in delta && delta.reasoning_content) {
+    return delta.reasoning_content;
+  }
+
+  return '';
+};
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -43,19 +122,25 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       extra_headers: { 'X-Title': 'TeXRA.ai' },
     };
 
-    // Reasoning parameters might vary depending on the underlying model via OpenRouter
-    // The `reasoning` and `include_reasoning` parameters are specific to some models like O1
+    // Reasoning parameters vary by model via OpenRouter:
+    // - O1-style models: use reasoning.effort + include_reasoning
+    // - DeepSeek V3.2: use reasoning.enabled (no include_reasoning needed,
+    //   reasoning_details is returned automatically when enabled)
     if (this.config.capabilities.supportsReasoning) {
       if (
         this.config.capabilities.supportsReasoningEffort &&
         this.config.capabilities.reasoningEffort
       ) {
+        // O1-style models with effort levels
         kwargs.reasoning = {
           effort: this.validateReasoningEffort(
             this.config.capabilities.reasoningEffort,
           ),
         };
         kwargs.include_reasoning = true;
+      } else {
+        // DeepSeek V3.2 and similar models - just enable reasoning
+        kwargs.reasoning = { enabled: true };
       }
     }
 
@@ -83,7 +168,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         ? this.createOutputStream()
         : undefined;
       for await (const chunk of stream) {
-        const reasoningDelta = extractReasoningDelta(chunk);
+        const reasoningDelta = extractOpenRouterReasoningDelta(chunk);
         const contentDelta = chunk.choices[0]?.delta?.content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
         if (contentDelta) output?.append(contentDelta);
@@ -121,22 +206,32 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   }
 
   /**
-   * OpenRouter uses 'reasoning' field instead of 'reasoning_content'.
-   * Also handles object values by converting to JSON.
+   * OpenRouter returns reasoning in different formats:
+   * - reasoning_details: array of objects (normalized format, see ReasoningDetailItem)
+   * - reasoning: string (simple format)
+   *
+   * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
    */
   protected override extractReasoningFromMessage(
     message: Record<string, unknown> | undefined,
   ): string | null {
+    // Try reasoning_details first (OpenRouter normalized format - array of objects)
+    const reasoningDetails = message?.reasoning_details;
+    if (reasoningDetails) {
+      const extracted = extractTextFromReasoningDetails(reasoningDetails);
+      if (extracted) return extracted;
+    }
+
+    // Fall back to simple reasoning field (string)
     const reasoning = message?.reasoning;
     if (!reasoning) {
       return null;
     }
-    if (typeof reasoning === 'string' && reasoning.trim()) {
+    if (isNonEmptyString(reasoning)) {
       return reasoning;
     }
-    // If reasoning is an object, convert to string
-    const reasoningStr = JSON.stringify(reasoning);
-    return reasoningStr.trim() || null;
+
+    return null;
   }
 }
 

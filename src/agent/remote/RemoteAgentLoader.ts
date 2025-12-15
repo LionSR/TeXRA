@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 import {
   AgentSetting,
@@ -7,7 +8,7 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { isMultipleVariant, getMultipleName } from '@agent/index/agentRegistry';
+import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -20,8 +21,10 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  visibility: 'public' | 'researcher' | 'whitelist';
-  agentType?: string;
+  /** Visibility levels - array of groups that can access this agent */
+  visibility: string[];
+  /** Agent category: 'workflow' or 'toolUse' */
+  agentCategory?: string;
 }
 
 export interface RemoteAgentConfig {
@@ -64,12 +67,22 @@ export class RemoteAgentLoader {
 
     const preferMultiple = options?.preferMultiple ?? false;
 
-    // Build candidate names: if preferMultiple, try _multiple variant first
+    // Build candidate names:
+    // - If preferMultiple: try _multiple first, then base as fallback
+    // - If not preferMultiple: use agentName as-is (already resolved by registry)
     const candidateNames: string[] = [];
+
     if (preferMultiple) {
-      candidateNames.push(getMultipleName(agentName));
+      const multipleName = getMultipleName(agentName);
+      candidateNames.push(multipleName);
+      // Add base as fallback if different
+      const baseName = getBaseName(agentName);
+      if (baseName !== multipleName) {
+        candidateNames.push(baseName);
+      }
+    } else {
+      candidateNames.push(agentName);
     }
-    candidateNames.push(agentName);
 
     logger.info(
       CHANNEL,
@@ -99,9 +112,9 @@ export class RemoteAgentLoader {
         });
 
         if (!response.ok) {
-          if (response.status === 401) {
+          if (response.status === StatusCodes.UNAUTHORIZED) {
             throw new Error('Session expired. Sign in again to continue.');
-          } else if (response.status === 404) {
+          } else if (response.status === StatusCodes.NOT_FOUND) {
             // If not found and we have more candidates to try, continue to next
             if (candidateName !== candidateNames[candidateNames.length - 1]) {
               logger.debug(
@@ -116,7 +129,7 @@ export class RemoteAgentLoader {
             throw new Error(
               `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
             );
-          } else if (response.status === 403) {
+          } else if (response.status === StatusCodes.FORBIDDEN) {
             throw new Error(
               `Access denied to agent "${agentName}". Upgrade your account for access.`,
             );
@@ -127,6 +140,19 @@ export class RemoteAgentLoader {
             } catch (error) {
               logger.warn(CHANNEL, 'Failed to read error response body');
             }
+
+            // Provide more helpful error message for storage-related failures
+            if (
+              response.status === StatusCodes.INTERNAL_SERVER_ERROR &&
+              errorText.includes('Failed to load agent configuration')
+            ) {
+              throw new Error(
+                `Failed to load agent "${agentName}": The agent configuration file could not be retrieved from storage. ` +
+                  `This may indicate the agent's YAML file is missing or the storage path in the database is incorrect. ` +
+                  `Please contact the TeXRA team if this agent should be available.`,
+              );
+            }
+
             throw new Error(
               `Failed to load agent: ${response.statusText} - ${errorText}`,
             );
@@ -151,6 +177,8 @@ export class RemoteAgentLoader {
         const validated = AgentDefinitionSchema.parse(parsed);
 
         // Extract settings and prompts
+        // Note: Remote agents are expected to be self-contained (no inheritance).
+        // If inherits field is present, it's ignored - merge should happen on upload.
         const settings: Partial<AgentSetting> = validated.settings || {};
         const prompts: Partial<AgentPrompt> = validated.prompts || {};
 
@@ -192,7 +220,7 @@ export class RemoteAgentLoader {
             id: '',
             name: agentName,
             description: description || '',
-            visibility: 'researcher',
+            visibility: ['public'],
           },
         };
       } catch (error) {
@@ -248,7 +276,7 @@ export class RemoteAgentLoader {
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility, agent_type')
+        .select('id, name, description, visibility, agent_category')
         .order('name');
 
       if (error) {
@@ -262,7 +290,7 @@ export class RemoteAgentLoader {
         name: row.name,
         description: row.description,
         visibility: row.visibility,
-        agentType: row.agent_type,
+        agentCategory: row.agent_category,
       })) as RemoteAgentMetadata[];
     } catch (error) {
       const errorMessage =
@@ -294,7 +322,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, visibility')
+        .select('id, name, description, visibility, agent_category')
         .eq('name', agentName)
         .single();
 
@@ -306,7 +334,13 @@ export class RemoteAgentLoader {
         return null;
       }
 
-      return data as RemoteAgentMetadata;
+      return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        visibility: data.visibility,
+        agentCategory: data.agent_category,
+      } as RemoteAgentMetadata;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

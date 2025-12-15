@@ -29,11 +29,20 @@ export class BannerManager extends BaseUIManager {
       case ELEMENT_IDS.DEPENDENCY_BANNER:
         this._setupDependencyBanner(element, config);
         break;
+      case ELEMENT_IDS.GETTING_STARTED_BANNER:
+        this._setupGettingStartedBanner(element);
+        break;
+      case ELEMENT_IDS.LOGIN_BANNER:
+        this._setupLoginBanner(element, config);
+        break;
       default:
         break;
     }
 
-    element.style.setProperty('display', 'flex');
+    // Getting started banner uses block layout; others use flex for button alignment
+    const displayStyle =
+      id === ELEMENT_IDS.GETTING_STARTED_BANNER ? 'block' : 'flex';
+    element.style.setProperty('display', displayStyle);
   }
 
   /**
@@ -242,7 +251,7 @@ export class BannerManager extends BaseUIManager {
     nameSpan.textContent = label;
 
     const button = document.createElement('vscode-toolbar-button');
-    button.className = 'secondary dependency-install-button';
+    button.className = 'btn-secondary dependency-install-button';
     button.textContent = 'Install';
     button.setAttribute('icon', 'cloud-download');
     button.dataset.tool = tool;
@@ -250,6 +259,97 @@ export class BannerManager extends BaseUIManager {
     item.appendChild(nameSpan);
     item.appendChild(button);
     container.appendChild(item);
+  }
+
+  /**
+   * Configure getting started banner with helpful links.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   */
+  _setupGettingStartedBanner(element) {
+    const textContainer = element.querySelector('.getting-started-text');
+    if (!textContainer) {
+      console.warn(
+        '[BannerManager] Getting started banner missing text container',
+      );
+      return;
+    }
+
+    // Clear existing content safely
+    textContainer.replaceChildren();
+
+    // Build the message with command links
+    const introText = document.createTextNode(
+      'No files found in workspace. Try ',
+    );
+    textContainer.appendChild(introText);
+
+    // Create links
+    const links = [
+      {
+        command: 'texra.openGettingStarted',
+        text: 'opening the getting started walkthrough',
+      },
+      {
+        command: 'texra.createSampleProject',
+        text: 'creating a sample project',
+      },
+      {
+        command: 'texra.cloneOverleafProject',
+        text: 'cloning an Overleaf project',
+      },
+      {
+        command: 'texra.downloadArXivSource',
+        text: 'downloading an arXiv source',
+      },
+    ];
+
+    links.forEach((link, index) => {
+      const anchor = document.createElement('a');
+      anchor.href = `command:${link.command}`;
+      anchor.textContent = link.text;
+      textContainer.appendChild(anchor);
+
+      if (index < links.length - 1) {
+        const separator =
+          index === links.length - 2
+            ? document.createTextNode(', or ')
+            : document.createTextNode(', ');
+        textContainer.appendChild(separator);
+      }
+    });
+
+    textContainer.appendChild(document.createTextNode('.'));
+  }
+
+  /**
+   * Configure login banner.
+   * @private
+   * @param {HTMLElement} element - The banner element
+   * @param {object} config - Configuration object
+   * @param {string} [config.title] - Optional custom title
+   * @param {string} [config.description] - Optional custom description
+   */
+  _setupLoginBanner(element, config) {
+    const titleElement = element.querySelector('.login-banner-title');
+    const descriptionElement = element.querySelector(
+      '.login-banner-description',
+    );
+
+    if (!(titleElement && descriptionElement)) {
+      console.warn(
+        '[BannerManager] Login banner missing title or description element',
+      );
+      return;
+    }
+
+    if (config?.title) {
+      titleElement.textContent = config.title;
+    }
+
+    if (config?.description) {
+      descriptionElement.textContent = config.description;
+    }
   }
 }
 

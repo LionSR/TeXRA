@@ -56,7 +56,9 @@ describe('toOpenAIResponseTools', () => {
       },
     ];
 
-    const tools = toOpenAIResponseTools(defs, { supportsNativeWebSearch: true });
+    const tools = toOpenAIResponseTools(defs, {
+      supportsNativeWebSearch: true,
+    });
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'web_search');
   });
@@ -69,7 +71,9 @@ describe('toOpenAIResponseTools', () => {
       },
     ];
 
-    const tools = toOpenAIResponseTools(defs, { supportsNativeWebSearch: false });
+    const tools = toOpenAIResponseTools(defs, {
+      supportsNativeWebSearch: false,
+    });
     assert.equal(tools.length, 1);
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
@@ -90,6 +94,69 @@ describe('toOpenAIResponseTools', () => {
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
     assert.equal(tool.name, 'web_search');
+  });
+
+  it('filters out function tools when supportsFunctionCalling is false', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'read_file',
+        description: 'Read a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+        },
+      },
+      {
+        name: 'write_file',
+        description: 'Write a file',
+      },
+    ];
+
+    // Deep research models don't support function calling
+    const tools = toOpenAIResponseTools(defs, {
+      supportsFunctionCalling: false,
+    });
+    // Both read_file and write_file should be filtered out
+    assert.equal(tools.length, 0);
+  });
+
+  it('keeps native web_search when supportsFunctionCalling is false and supportsNativeWebSearch is true', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'web_search',
+        description: 'Search the web',
+      },
+      {
+        name: 'read_file',
+        description: 'Read a file',
+      },
+    ];
+
+    // Deep research models support native web search but not function calling
+    const tools = toOpenAIResponseTools(defs, {
+      supportsFunctionCalling: false,
+      supportsNativeWebSearch: true,
+    });
+    // Only web_search should remain as native tool
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'web_search');
+  });
+
+  it('defaults supportsFunctionCalling to true', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'custom_tool',
+        description: 'A custom function tool',
+      },
+    ];
+
+    // No options passed - function calling should be allowed by default
+    const tools = toOpenAIResponseTools(defs);
+    assert.equal(tools.length, 1);
+    const tool = tools[0] as FunctionTool;
+    assert.equal(tool.type, 'function');
+    assert.equal(tool.name, 'custom_tool');
   });
 });
 

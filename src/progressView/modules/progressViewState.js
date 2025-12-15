@@ -331,6 +331,8 @@ export class ProgressViewState {
     this.runFiles = new RunScopedMap(streamResolver);
     this.runMissingOutputs = new RunScopedMap(streamResolver);
     this.runUsage = new RunScopedMap(streamResolver);
+    // Todo storage by stream ID
+    this.streamTodos = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -726,6 +728,51 @@ export class ProgressViewState {
 
   deleteRunMissingOutputs(streamId, runId) {
     this.runMissingOutputs.delete(streamId, runId);
+  }
+
+  /**
+   * Set todos for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {Array<{content: string, status: string, activeForm: string}>} todos - The todo items
+   */
+  setTodos(streamId, todos) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamTodos.set(targetStream, todos || []);
+  }
+
+  /**
+   * Get todos for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {Array<{content: string, status: string, activeForm: string}>|null}
+   */
+  getTodos(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return null;
+    }
+    return this.streamTodos.get(targetStream) || null;
+  }
+
+  /**
+   * Clear todos for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearTodos(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamTodos.delete(targetStream);
+  }
+
+  /**
+   * Clear all todos across all streams.
+   */
+  clearAllTodos() {
+    this.streamTodos.clear();
   }
 }
 

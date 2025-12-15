@@ -50,23 +50,6 @@ body {
   height: var(--height-button);
 }
 
-/* Input field - uses common.css styles */
-
-/* Section header - extended from common.css */
-.section-header {
-  font-size: var(--font-size-lg);
-  font-weight: bold;
-  margin-top: var(--spacing-small);
-  padding-bottom: var(--spacing-small);
-  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
-  line-height: 1.5;
-}
-
-.section-header .codicon {
-  margin-right: var(--spacing-small);
-  vertical-align: text-bottom;
-}
-
 /* Icon styling - extends common clickable */
 .codicon.clickable:hover {
   color: var(--button-hover-background);
@@ -126,6 +109,14 @@ vscode-option[data-requires-key='true'] {
   opacity: var(--opacity-subtle);
   font-style: italic;
   background-color: var(--vscode-input-background);
+}
+
+/* Red × indicator for missing API keys.
+   Overrides parent opacity/font-style so the ✗ stands out clearly. */
+.api-key-missing {
+  color: var(--vscode-errorForeground);
+  opacity: 1;
+  font-style: normal;
 }
 
 vscode-option[data-multiple='true'] {

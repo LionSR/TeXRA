@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES, DEFAULTS } from '../constants.js';
+import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -31,8 +31,14 @@ export class AgentsTable {
 
   /**
    * Render the profile view with the given data.
+   * @param {Object} options - Render options
+   * @param {boolean} options.authenticated - Whether the user is authenticated
+   * @param {object} options.user - User object with email and id
+   * @param {string} options.tier - Primary group name (for backwards compatibility / display)
+   * @param {string[]} options.permissions - Array of permission strings
+   * @param {Array} options.remoteAgents - Array of remote agent objects
    */
-  render(authenticated, user, tier, remoteAgents) {
+  render({ authenticated, user, tier, permissions, remoteAgents }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);
@@ -71,35 +77,34 @@ export class AgentsTable {
     if (userEmail) userEmail.textContent = user?.email || 'N/A';
     if (userId) userId.textContent = user?.id || '';
 
-    // Update tier badge
+    // Update tier badge (shows primary group for display)
     const tierBadge = safeGetElementById(ELEMENT_IDS.USER_TIER);
     if (tierBadge) {
       tierBadge.textContent = tier;
-      tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier}`;
+      // Normalize tier to lowercase for CSS class consistency
+      tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
     }
 
-    // Update tier message
+    // Update tier message based on whether user has any permissions
     const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
     if (tierMessage) {
-      tierMessage.textContent =
-        tier === 'researcher'
-          ? LABELS.TIER_RESEARCHER_MESSAGE
-          : LABELS.TIER_FREE_MESSAGE;
+      const hasAnyPermissions =
+        Array.isArray(permissions) && permissions.length > 0;
+      tierMessage.textContent = hasAnyPermissions
+        ? LABELS.TIER_PREMIUM_MESSAGE
+        : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show/hide remote agents section based on tier
-    if (tier === 'researcher') {
-      remoteAgentsSection.style.display = 'block';
+    // Show remote agents section for all authenticated users
+    // RLS filters which agents they can see based on permissions
+    remoteAgentsSection.style.display = 'block';
 
-      if (remoteAgents && remoteAgents.length > 0) {
-        this.renderAgentsTable(remoteAgents);
-        noAgentsMessage.style.display = 'none';
-      } else {
-        if (this.container) this.container.innerHTML = '';
-        noAgentsMessage.style.display = 'block';
-      }
+    if (remoteAgents && remoteAgents.length > 0) {
+      this.renderAgentsTable(remoteAgents);
+      noAgentsMessage.style.display = 'none';
     } else {
-      remoteAgentsSection.style.display = 'none';
+      if (this.container) this.container.innerHTML = '';
+      noAgentsMessage.style.display = 'block';
     }
   }
 
@@ -116,7 +121,8 @@ export class AgentsTable {
     thead.innerHTML = `
       <tr>
         <th>Agent</th>
-        <th>Type</th>
+        <th>Category</th>
+        <th>Multi-Output</th>
         <th>Description</th>
         <th>Visibility</th>
         <th>Action</th>
@@ -160,21 +166,47 @@ export class AgentsTable {
     const agentName = row.querySelector('.agent-name');
     if (agentName) agentName.textContent = agent.name;
 
-    // Set agent type badge
-    const typeBadge = row.querySelector('.type-badge');
-    if (typeBadge) {
-      typeBadge.textContent = agent.agentType || DEFAULTS.AGENT_TYPE;
+    // Set agent category badge (workflow or toolUse)
+    const categoryBadge = row.querySelector('.category-badge');
+    if (categoryBadge) {
+      categoryBadge.textContent = agent.category;
+    }
+
+    // Set multi-output badge with codicon and aria-label for accessibility
+    const multiOutputBadge = row.querySelector('.multi-output-badge');
+    if (multiOutputBadge) {
+      const icon = document.createElement('span');
+      icon.className = 'codicon';
+      if (agent.supportsMultipleOutput) {
+        icon.classList.add('codicon-check');
+        multiOutputBadge.classList.add('supported');
+        multiOutputBadge.setAttribute(
+          'aria-label',
+          'Supports multiple outputs',
+        );
+      } else {
+        icon.classList.add('codicon-close');
+        multiOutputBadge.classList.add('not-supported');
+        multiOutputBadge.setAttribute('aria-label', 'Single output only');
+      }
+      multiOutputBadge.appendChild(icon);
     }
 
     // Set description
     const description = row.querySelector('.agent-description');
     if (description) description.textContent = agent.description;
 
-    // Set visibility badge
+    // Set visibility badge (handles both string and array)
     const visibilityBadge = row.querySelector('.visibility-badge');
     if (visibilityBadge) {
-      visibilityBadge.textContent = agent.visibility;
-      visibilityBadge.classList.add(agent.visibility);
+      const visibilityArray = Array.isArray(agent.visibility)
+        ? agent.visibility
+        : [agent.visibility];
+      visibilityBadge.textContent = visibilityArray.join(', ');
+      // Use first visibility value for CSS class, or 'custom' for non-public values
+      const firstVisibility = visibilityArray[0] || 'public';
+      const cssClass = firstVisibility === 'public' ? 'public' : 'custom';
+      visibilityBadge.classList.add(cssClass);
     }
 
     // Set up select button

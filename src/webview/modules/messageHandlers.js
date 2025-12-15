@@ -12,6 +12,7 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  CHECK_BOXES,
   normalizeSessionType,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
@@ -33,6 +34,7 @@ import {
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
+  safeSetElementChecked,
   safeGetElementById,
   setChevronIcon,
   waitForElement,
@@ -99,6 +101,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         ),
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: () =>
         webviewEventBus.dispatchEvent(new CustomEvent('hideDependencyBanner')),
+      [MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER]: () =>
+        bannerManager.showBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
+      [MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.GETTING_STARTED_BANNER),
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) =>
+        bannerManager.showBanner(ELEMENT_IDS.LOGIN_BANNER, m),
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
+        bannerManager.hideBanner(ELEMENT_IDS.LOGIN_BANNER),
       /**
        * Handles SET_MODEL_OPTIONS command to update the model dropdown.
        *
@@ -269,8 +279,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         mainViewState.update({ [stateKey]: targetValue });
 
         // NOW switch session type UI (shows correct dropdown, updates radio buttons)
-        // The value is already set, so applySessionType won't override with default
-        mainViewState.applySessionType(targetSessionType);
+        // Pass skipSave: true since we already updated state via mainViewState.update()
+        // This prevents save() from reading stale DOM values for custom elements
+        mainViewState.applySessionType(targetSessionType, { skipSave: true });
 
         // Decorate the placeholder option if it was just created
         // Re-query options since _setAgentValue may have added a new option
@@ -321,13 +332,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateModelOption(opt) {
-    const { provider, context, cost } = opt.dataset;
+    const { provider, context, cost, requiresKey } = opt.dataset;
     const modelName =
       opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
 
     // Get provider decorator for the icon
     const decorator = getModelProviderDecorator(provider);
-    const displayLabel = `${decorator.unicode} ${modelName}`;
 
     // Build tooltip with provider info
     const hints = [];
@@ -335,8 +345,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (context) hints.push(`Context: ${context}`);
     if (cost) hints.push(`Cost: ${cost}`);
 
-    // Set text content with provider icon
-    opt.textContent = displayLabel;
+    // Set content with provider icon, adding red ✗ via DOM if key is missing
+    opt.textContent = `${decorator.unicode} ${modelName}`;
+    if (requiresKey === 'true') {
+      const span = document.createElement('span');
+      span.className = 'api-key-missing';
+      span.textContent = ' ✗';
+      opt.appendChild(span);
+    }
 
     if (hints.length > 0) {
       opt.title = hints.join(' | ');
@@ -601,6 +617,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    *
    * @param {HTMLElement} selectElement - The select element to restore
    * @param {string[]} candidates - Array of candidate values to try, in priority order
+   * @returns {boolean} True if a candidate was matched, false if fell back to default
    */
   _restoreSelectValue(selectElement, candidates) {
     const filteredCandidates = candidates.filter(Boolean);
@@ -613,7 +630,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (exactMatch) {
       selectElement.value = exactMatch;
-      return;
+      return true;
     }
 
     // Migration: try matching by name suffix for old format values
@@ -627,7 +644,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       );
       if (suffixMatch) {
         selectElement.value = suffixMatch.value;
-        return;
+        return true;
       }
     }
 
@@ -636,13 +653,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (fallbackOption) {
       selectElement.value = fallbackOption.value;
     }
+    return false;
   }
 
   _restoreAgentSelection(selectElement, previousValue) {
     const sessionType = this._getSessionTypeForSelect(selectElement);
     const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
     // Prioritize saved state over previous UI value for agents
-    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+    const restored = this._restoreSelectValue(selectElement, [
+      savedValue,
+      previousValue,
+    ]);
+
+    // If restoration failed, recreate placeholder to preserve the agent selection
+    // even when the agent isn't in the options (e.g., remote agent from another
+    // session, custom agent that was deleted). Check savedValue first, then previousValue.
+    if (!restored) {
+      const valueToRestore = savedValue || previousValue;
+      if (valueToRestore) {
+        this._setAgentValue(selectElement.id, valueToRestore);
+      }
+    }
   }
 
   _restoreModelSelection(selectElement, previousValue) {
@@ -773,52 +804,121 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  /**
+   * Restore the main view state from a TaskState object.
+   *
+   * Flow:
+   * 1. Extract session type from canonical session descriptor
+   * 2. Set all form field values directly in DOM
+   * 3. Set file arrays in DOM
+   * 4. Store state for persistence
+   * 5. Apply session type UI changes (visibility, disabled states)
+   *
+   * Note: We intentionally do NOT call mainViewState.restore() here because
+   * we already set all DOM values directly. Calling restore() would redundantly
+   * re-read state and re-apply to DOM, plus clear and rebuild file lists twice.
+   */
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
-    // TaskState has session at top level - this is the canonical source of truth
-    // agentConfig.session should match, but may be missing in legacy data
+    // TaskState.session is the canonical source of truth for session metadata
     const canonicalSession = state.session || config.session;
 
     const savedState = {};
-    this._restoreFormFields(config, savedState, canonicalSession);
+    const sessionType = this._restoreFormFields(
+      config,
+      savedState,
+      canonicalSession,
+    );
     this._restoreFileArrays(config, savedState, activeFiles);
+
+    // Store state for persistence and future restoration
     mainViewState.set(savedState);
-    mainViewState.restore();
+
+    // Apply session type UI changes (visibility, disabled states) without re-setting values.
+    // skipSave: true because we already have the correct state stored above.
+    mainViewState.applySessionType(sessionType, { skipSave: true });
+
+    // Prevent _postHandle from calling mainViewState.restore()
     this._skipNextRestoreState = true;
   }
 
+  /**
+   * Determine session type from state, with clear priority order.
+   * @returns {'workflow' | 'toolUse'} The normalized session type
+   */
+  _determineSessionType(canonicalSession, state) {
+    // Priority 1: Canonical session descriptor (single source of truth)
+    const category = canonicalSession?.agentCategory;
+    if (
+      category === SESSION_TYPES.TOOL_USE ||
+      category === SESSION_TYPES.WORKFLOW
+    ) {
+      return category;
+    }
+
+    // Priority 2: Explicit sessionType property (for legacy/webview state)
+    if (
+      state.sessionType === SESSION_TYPES.TOOL_USE ||
+      state.sessionType === SESSION_TYPES.WORKFLOW
+    ) {
+      return state.sessionType;
+    }
+
+    // Priority 3: Infer from agentType or isToolUseAgent flag (legacy support)
+    const agentType = canonicalSession?.agentType ?? state.agentType;
+    if (agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent) {
+      return SESSION_TYPES.TOOL_USE;
+    }
+
+    // Default to workflow
+    return SESSION_TYPES.WORKFLOW;
+  }
+
+  /**
+   * Extract agent value for a session type from state.
+   * AgentConfig stores a single 'agent' field, but webview state may have
+   * separate workflowAgent/toolUseAgent fields for UI persistence.
+   */
+  _extractAgentValue(state, forToolUse, isCurrentlyToolUse) {
+    // Check for explicit session-specific agent value first (webview state format)
+    // Use nullish check (!= null) to preserve empty string as an explicit value
+    const explicitValue = forToolUse ? state.toolUseAgent : state.workflowAgent;
+    if (explicitValue != null) {
+      return explicitValue;
+    }
+
+    // Fall back to generic 'agent' field only if it matches the session type
+    // This prevents workflow agent from being assigned to tool-use dropdown and vice versa
+    if (state.agent != null && forToolUse === isCurrentlyToolUse) {
+      return state.agent;
+    }
+
+    return '';
+  }
+
+  /**
+   * Restore form field values from state to DOM.
+   * @returns {string} The normalized session type
+   */
   _restoreFormFields(state, savedState, canonicalSession) {
-    // Use the canonical session from TaskState (passed in), fallback to agentConfig.session
-    const sessionCategory =
-      canonicalSession?.agentCategory ?? state.session?.agentCategory;
+    const sessionType = this._determineSessionType(canonicalSession, state);
+    const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
 
-    let sessionType = state.sessionType;
-    if (sessionCategory === SESSION_TYPES.TOOL_USE) {
-      sessionType = SESSION_TYPES.TOOL_USE;
-    } else if (sessionCategory === SESSION_TYPES.WORKFLOW) {
-      sessionType = SESSION_TYPES.WORKFLOW;
-    }
+    // Extract agent values with clear logic
+    const workflowAgentValue = this._extractAgentValue(
+      state,
+      false,
+      isToolUseSession,
+    );
+    const toolUseAgentValue = this._extractAgentValue(
+      state,
+      true,
+      isToolUseSession,
+    );
 
-    if (!sessionType) {
-      // Final fallback: check agentType from canonical session, then isToolUseAgent flag
-      const agentType = canonicalSession?.agentType ?? state.agentType;
-      const isToolUse =
-        agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent;
-      sessionType = isToolUse ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
-    }
-
-    const normalizedSessionType = normalizeSessionType(sessionType);
-    const isToolUseSession = normalizedSessionType === SESSION_TYPES.TOOL_USE;
-
-    const workflowAgentValue =
-      state.workflowAgent ??
-      (!isToolUseSession ? state.agent : undefined) ??
-      '';
-    const toolUseAgentValue =
-      state.toolUseAgent ?? (isToolUseSession ? state.agent : undefined) ?? '';
-
-    safeSetElementValue(SESSION_TYPE_INPUT, normalizedSessionType);
+    // Set DOM values
+    safeSetElementValue(SESSION_TYPE_INPUT, sessionType);
     this._setAgentValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       workflowAgentValue,
@@ -827,7 +927,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
       toolUseAgentValue,
     );
-    if (state.model) safeSetElementValue('model', state.model);
+
+    if (state.model) {
+      safeSetElementValue('model', state.model);
+    }
 
     const instructionContent = state.instruction || '';
     const instruction =
@@ -838,6 +941,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       instruction.dispatchEvent(new Event('input'));
     }
 
+    // Set single file selections
     if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
     if (state.referenceFile)
       safeSetElementValue(REFERENCE_FILE, state.referenceFile);
@@ -845,13 +949,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
     if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
 
+    // Restore checkbox values
     const toolConfig = state.toolConfig || {};
+    CHECK_BOXES.forEach((id) => {
+      const value = state[id] ?? toolConfig[id] ?? false;
+      safeSetElementChecked(id, value);
+    });
+
+    // Build savedState object for persistence
     Object.assign(savedState, {
-      sessionType: normalizedSessionType,
+      sessionType,
       workflowAgent: workflowAgentValue,
       toolUseAgent: toolUseAgentValue,
       agent:
-        state.agent ??
+        state.agent ||
         (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
@@ -872,6 +983,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       autoCompileInputPdf:
         state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
     });
+
+    return sessionType;
   }
 
   _restoreFileArrays(state, savedState, activeFiles = {}) {
@@ -892,30 +1005,31 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       savedState[visibilityName] = isVisible;
 
       const multipleFilesId = `${fileType}Files`;
+      const containerId = `${fileType}FilesContainer`;
+      const toggleId = `toggle${capitalize(fileType)}Files`;
+
       const multipleFiles = this._getElement(multipleFilesId);
-      if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+      const container = this._getElement(containerId);
+      const toggleElement = this._getElement(toggleId);
 
-        const container = this._getElement(containerId);
-        if (container) {
-          container.style.display = isVisible ? 'block' : 'none';
-        }
+      // Always clear existing files first to handle restoration to empty state
+      if (multipleFiles) {
+        multipleFiles.innerHTML = '';
+      }
 
-        const toggleElement = this._getElement(toggleId);
-        this._setToggleIcon(toggleElement, isVisible);
+      // Set container visibility and toggle icon
+      if (container) {
+        container.style.display = isVisible ? 'block' : 'none';
+      }
+      this._setToggleIcon(toggleElement, isVisible);
 
-        if (multipleFiles) {
-          multipleFiles.innerHTML = '';
-        }
-
-        if (filesArray.length > 0 && multipleFiles) {
-          fileList._batchMode = true;
-          filesArray.forEach((file) => {
-            fileList.add(multipleFilesId, file);
-          });
-          fileList._batchMode = false;
-        }
+      // Add files if any
+      if (filesArray.length > 0 && multipleFiles) {
+        fileList._batchMode = true;
+        filesArray.forEach((file) => {
+          fileList.add(multipleFilesId, file);
+        });
+        fileList._batchMode = false;
       }
     }
   }

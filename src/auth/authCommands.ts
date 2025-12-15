@@ -2,6 +2,12 @@ import * as vscode from 'vscode';
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
+import {
+  OAUTH_PROVIDERS,
+  OAUTH_PROVIDER_LABELS,
+  type OAuthProvider,
+  getAuthCallbackUri,
+} from './config';
 
 /**
  * Command identifiers for auth-related commands.
@@ -29,6 +35,19 @@ export function initializeProfileViewProvider(
   return profileViewProvider;
 }
 
+/** Auth method type including OAuth providers and email */
+type AuthMethod = OAuthProvider | 'email';
+
+/** Email login is disabled due to remote configuration issues */
+const EMAIL_LOGIN_ENABLED = false;
+
+/** All sign-in options shown to users */
+interface SignInOption {
+  label: string;
+  description: string;
+  method: AuthMethod;
+}
+
 /**
  * Command to sign in to TeXRA account.
  */
@@ -51,10 +70,43 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Request authentication (will trigger SupabaseAuthProvider.createSession)
+    // Build sign-in options from enabled auth methods
+    const signInOptions: SignInOption[] = [
+      ...OAUTH_PROVIDERS.map((provider) => ({
+        label: `${OAUTH_PROVIDER_LABELS[provider].icon} ${OAUTH_PROVIDER_LABELS[provider].label}`,
+        description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
+        method: provider as AuthMethod,
+      })),
+      ...(EMAIL_LOGIN_ENABLED
+        ? [
+            {
+              label: '$(mail) Email',
+              description: 'Sign in with a magic link sent to your email',
+              method: 'email' as AuthMethod,
+            },
+          ]
+        : []),
+    ];
+
+    const selected = await vscode.window.showQuickPick(signInOptions, {
+      placeHolder: 'Choose a sign-in method',
+      title: 'TeXRA Sign In',
+    });
+
+    if (!selected) {
+      return; // User cancelled
+    }
+
+    // Handle email authentication separately
+    if (selected.method === 'email') {
+      await signInWithEmail();
+      return;
+    }
+
+    // Request OAuth authentication with selected provider passed via scopes
     const session = await vscode.authentication.getSession(
       'texra-supabase',
-      [],
+      [`provider:${selected.method}`],
       {
         createIfNone: true,
       },
@@ -70,6 +122,57 @@ export async function signIn(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(`Sign in failed: ${message}`);
+  }
+}
+
+/**
+ * Sign in using email magic link.
+ * Sends a one-time login link to the user's email.
+ */
+async function signInWithEmail(): Promise<void> {
+  // Prompt for email
+  const email = await vscode.window.showInputBox({
+    prompt: 'Enter your email address',
+    placeHolder: 'you@example.com',
+    validateInput: (value) => {
+      if (!value) {
+        return 'Email is required';
+      }
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        return 'Please enter a valid email address';
+      }
+      return undefined;
+    },
+  });
+
+  if (!email) {
+    return; // User cancelled
+  }
+
+  try {
+    const supabase = SupabaseClient.getClient();
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: getAuthCallbackUri(vscode.env.uriScheme),
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    void vscode.window.showInformationMessage(
+      `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(
+      `Failed to send magic link: ${message}`,
+    );
   }
 }
 
@@ -144,7 +247,7 @@ export async function viewProfile(): Promise<void> {
 export async function getAuthStatus(): Promise<{
   authenticated: boolean;
   email?: string;
-  tier?: 'free' | 'researcher';
+  tier?: string;
 }> {
   const isAuth = await SupabaseClient.isAuthenticated();
   if (!isAuth) {
@@ -175,7 +278,7 @@ export async function showAccountMenu(): Promise<void> {
         {
           label: '$(sign-in) Sign In',
           description:
-            'Sign in to access remote agents via the researcher access program',
+            'Sign in to access remote agents via the research access program',
           action: 'signIn' as const,
         },
       ];

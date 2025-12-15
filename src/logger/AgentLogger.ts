@@ -15,10 +15,14 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
-import { MESSAGE_TYPES } from './messageTypes';
+import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
-import type { MessageType } from './messageTypes';
+import type {
+  EndGroupStatus,
+  FileListEntry,
+  MessageType,
+} from './messageTypes';
 import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
@@ -30,8 +34,8 @@ export interface LoggerScopeOptions {
    * clutter the UI with nested groups.
    */
   skip?: boolean;
-  successStatus?: 'stopped' | 'error';
-  errorStatus?: 'stopped' | 'error';
+  successStatus?: EndGroupStatus;
+  errorStatus?: EndGroupStatus;
   id?: string;
 }
 
@@ -73,7 +77,7 @@ export interface AgentLogStage {
    * Explicitly finalizes the stage with the provided status. Safe to call
    * multiple times; subsequent calls are ignored.
    */
-  end(status?: 'stopped' | 'error'): void;
+  end(status?: EndGroupStatus): void;
   /**
    * Creates a nested child stage beneath the current stage.
    */
@@ -91,8 +95,8 @@ class AgentLogStageHandle implements AgentLogStage {
     private readonly config: {
       id?: string;
       skip: boolean;
-      successStatus: 'stopped' | 'error';
-      errorStatus: 'stopped' | 'error';
+      successStatus: EndGroupStatus;
+      errorStatus: EndGroupStatus;
       parentGroupId?: string;
     },
   ) {}
@@ -133,7 +137,7 @@ class AgentLogStageHandle implements AgentLogStage {
     }
   }
 
-  end(status: 'stopped' | 'error' = 'stopped'): void {
+  end(status: EndGroupStatus = END_GROUP_STATUS.STOPPED): void {
     if (this.config.skip || !this.config.id || this.ended) {
       return;
     }
@@ -312,13 +316,46 @@ export class AgentLogger {
 
   /**
    * Log a list of files that were processed.
+   * @param files - Array of FileListEntry objects conforming to FileListEntrySchema
    */
-  fileList(files: unknown[], groupId?: string): void {
+  fileList(files: FileListEntry[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
     this.info(summary, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
       data: files,
+    });
+  }
+
+  /**
+   * Log files being loaded for a specific category (input, reference, auxiliary, media).
+   * Creates a FILE_LIST entry with a descriptive category label.
+   * Empty arrays are handled gracefully (no-op).
+   */
+  logFileCategory(
+    category: string,
+    files: Array<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
+    groupId?: string,
+  ): void {
+    if (files.length === 0) {
+      return;
+    }
+
+    // Use explicit === true check: only count files where existence was confirmed
+    const loadedCount = files.filter((f) => f.ok === true).length;
+    const summary = `Loading ${category} (${loadedCount}/${files.length})`;
+
+    const entries: FileListEntry[] = files.map((f) => ({
+      path: f.path,
+      ok: f.ok === true,
+      source: category,
+      sourceDisplay: category,
+    }));
+
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: entries,
     });
   }
 
@@ -570,7 +607,10 @@ export class AgentLogger {
     );
   }
 
-  endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
+  endGroup(
+    groupId: string,
+    status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
+  ): void {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
