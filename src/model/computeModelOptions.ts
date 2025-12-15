@@ -57,10 +57,7 @@ export async function computeModelOptions(): Promise<string> {
       let available = false;
 
       // Check if server-side keys are available for this provider
-      if (
-        hasServerSideKeys &&
-        isProviderSupportedForServerSideKeys(provider.toLowerCase())
-      ) {
+      if (hasServerSideKeys && isProviderSupportedForServerSideKeys(provider)) {
         available = true;
       }
 
