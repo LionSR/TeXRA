@@ -407,6 +407,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     try {
       await SupabaseClient.getClient().auth.signOut();
       await this.context.secrets.delete(SupabaseAuthProvider.SESSION_KEY);
+      // Clear server-side key cache when session is removed (handles automatic invalidation)
+      clearServerSideKeyAccessCache();
       this._onDidChangeSessions.fire({
         added: [],
         removed: [
