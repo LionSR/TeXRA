@@ -134,6 +134,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Auto-focus follow-up input when status is WAITING.
+   * Extracted to avoid duplication in handleUpdateStreams and handleUpdateStreamStatus.
+   * @param {string} status - The stream status to check
+   */
+  _focusFollowUpIfWaiting(status) {
+    if (status === STREAM_STATUS.WAITING) {
+      dom.followUpInput.focus({ scrollIntoView: true });
+    }
+  }
+
+  /**
    * Update run-scoped metadata (instructions, usage, files) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
@@ -304,11 +315,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       // Refresh todos for the active stream
       const todos = state.getTodos(message.activeStream);
       dom.todoList.update(todos || []);
-
-      // Auto-focus follow-up input when active stream is waiting for user input
-      if (streamStatus === STREAM_STATUS.WAITING) {
-        dom.followUpInput.focus({ scrollIntoView: true });
-      }
+      this._focusFollowUpIfWaiting(streamStatus);
     }
 
     this._refreshInstructionForActiveRun();
@@ -606,11 +613,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Also update main status indicator if this is the active stream
     if (stream === state.activeStream) {
       dom.status.update(status || STREAM_STATUS.STOPPED);
-
-      // Auto-focus follow-up input when waiting for user input
-      if (status === STREAM_STATUS.WAITING) {
-        dom.followUpInput.focus({ scrollIntoView: true });
-      }
+      this._focusFollowUpIfWaiting(status);
     }
   }
 
