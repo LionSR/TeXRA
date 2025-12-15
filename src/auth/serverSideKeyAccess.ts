@@ -30,7 +30,12 @@ import { SUPABASE_CUSTOM_DOMAIN } from './config';
 
 /**
  * Supported providers for server-side API keys.
- * These match the providers configured in the relay Edge Function.
+ *
+ * IMPORTANT: This list MUST stay synchronized with:
+ * - PROVIDER_CONFIGS in supabase/functions/relay/index.ts
+ * - Provider documentation in docs/supabase/RELAY_SETUP.md
+ *
+ * If adding/removing providers, update all three locations.
  */
 export const SERVER_SIDE_PROVIDERS = [
   'openai',
@@ -113,8 +118,12 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   }
 
   // Create new cache entry (Promise-based to prevent race conditions)
+  // Reset cache on failure to allow retry on next call
   accessCacheTimestamp = now;
-  accessCachePromise = fetchAccessStatus();
+  accessCachePromise = fetchAccessStatus().catch((err) => {
+    accessCacheTimestamp = 0; // Reset on failure to allow retry
+    throw err;
+  });
 
   return accessCachePromise;
 }

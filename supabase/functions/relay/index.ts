@@ -14,6 +14,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Provider configurations
+//
+// IMPORTANT: This list MUST stay synchronized with:
+// - SERVER_SIDE_PROVIDERS in src/auth/serverSideKeyAccess.ts
+// - Provider documentation in docs/supabase/RELAY_SETUP.md
+//
 // Note: baseUrl should NOT include trailing paths like /v1 since the full path
 // comes from the client request. The relay URL structure is:
 // /relay/{provider}/{...apiPath}
