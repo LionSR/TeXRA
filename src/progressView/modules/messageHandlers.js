@@ -237,7 +237,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (status === undefined) {
         const cachedStatus = state.streamStatuses.get(s.name);
         // Only preserve ERROR status; other statuses should not persist
-        status = cachedStatus === STREAM_STATUS.ERROR ? cachedStatus : undefined;
+        status =
+          cachedStatus === STREAM_STATUS.ERROR ? cachedStatus : undefined;
       }
       if (status) {
         state.streamStatuses.set(s.name, status);

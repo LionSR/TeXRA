@@ -99,7 +99,9 @@ export const AgentSettingBaseSchema = z.strictObject({
 /** Workflow agents: only CoT/Direct types, adds workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
-  agentCategory: z.literal(AgentCategory.Workflow).prefault(AgentCategory.Workflow),
+  agentCategory: z
+    .literal(AgentCategory.Workflow)
+    .prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
@@ -110,7 +112,9 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
 /** Tool-use agents: forces ToolUse type, no workflow fields. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
-  agentCategory: z.literal(AgentCategory.ToolUse).prefault(AgentCategory.ToolUse),
+  agentCategory: z
+    .literal(AgentCategory.ToolUse)
+    .prefault(AgentCategory.ToolUse),
 });
 
 /**
@@ -124,8 +128,14 @@ export const AgentSettingSchema = z.union([
 
 /** Canonical union type - derive subtypes via Extract for type safety. */
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
-export type AgentWorkflowSetting = Extract<AgentSetting, { agentCategory: AgentCategory.Workflow }>;
-export type AgentToolUseSetting = Extract<AgentSetting, { agentCategory: AgentCategory.ToolUse }>;
+export type AgentWorkflowSetting = Extract<
+  AgentSetting,
+  { agentCategory: AgentCategory.Workflow }
+>;
+export type AgentToolUseSetting = Extract<
+  AgentSetting,
+  { agentCategory: AgentCategory.ToolUse }
+>;
 
 /**
  * Return the canonical session descriptor for a fully-materialized agent setting.
