@@ -78,16 +78,23 @@ export function clearServerSideKeyAccessCache(): void {
  * Internal function to fetch access status.
  */
 async function fetchAccessStatus(): Promise<boolean> {
-  const isAuthenticated = await SupabaseClient.isAuthenticated();
-  if (!isAuthenticated) {
+  try {
+    const isAuthenticated = await SupabaseClient.isAuthenticated();
+    if (!isAuthenticated) {
+      lastKnownAccessResult = false;
+      return false;
+    }
+
+    const tier = await SupabaseClient.getUserTier();
+    // Explicitly check for 'Ultra' - undefined/null/errors all result in false
+    const hasAccess = tier === 'Ultra';
+    lastKnownAccessResult = hasAccess;
+    return hasAccess;
+  } catch {
+    // On any error (network, auth, etc.), deny access and allow retry
     lastKnownAccessResult = false;
     return false;
   }
-
-  const tier = await SupabaseClient.getUserTier();
-  const hasAccess = tier === 'Ultra';
-  lastKnownAccessResult = hasAccess;
-  return hasAccess;
 }
 
 /**
@@ -167,6 +174,11 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
 
 /**
  * Check if a provider is supported for server-side keys.
+ *
+ * Note: This accepts both string literals and ModelProvider enum values.
+ * ModelProvider enum values (e.g., ModelProvider.OPENAI = 'openai') are
+ * lowercase strings at runtime, matching SERVER_SIDE_PROVIDERS. The
+ * toLowerCase() call ensures case-insensitive matching for any edge cases.
  */
 export function isProviderSupportedForServerSideKeys(
   provider: string,
