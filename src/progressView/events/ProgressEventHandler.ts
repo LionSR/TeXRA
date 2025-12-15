@@ -306,12 +306,11 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
+    // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      // Status is not 'ready', so it's a valid active status
-      const nextStatus = status;
-      this._streamStatus.set(stream, nextStatus);
+      this._streamStatus.set(stream, status);
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -322,8 +321,11 @@ export class ProgressEventHandler {
         this.state.streamSortOrder === 'time';
 
       if (needsFullRefresh) {
-        // Full refresh - frontend handles main status update via handleUpdateStreams
-        this.webviewUpdater.updateAll(this.state, this._streamStatus);
+        // Include current status in refresh map so frontend displays it correctly.
+        // READY is deleted from _streamStatus but should still be shown to user.
+        const statusesForRefresh = new Map(this._streamStatus);
+        statusesForRefresh.set(stream, status);
+        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
       } else {
         // Targeted update - frontend handles main status update via handleUpdateStreamStatus
         const logs = this.state.streamTabs.getMessages(stream);
