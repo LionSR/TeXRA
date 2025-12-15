@@ -8,7 +8,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
-  AgentType,
+  AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -64,7 +64,7 @@ export async function buildUserVars(
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
     ...getBasicVars(agentConfig, modelHandler),
-    ...(await getFileVars(agentConfig, logger)),
+    ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
     ...getOutputFilesOrder(agentConfig, agentSetting),
@@ -94,6 +94,7 @@ function getBasicVars(
 
 async function getFileVars(
   agentConfig: AgentConfig,
+  agentSetting: AgentSetting,
   logger: AgentLogger,
 ): Promise<UserVars> {
   const userVars: UserVars = {};
@@ -116,13 +117,15 @@ async function getFileVars(
   ].filter(Boolean) as string[];
 
   // Log file categories being loaded (processed sequentially to preserve UI display order)
-  // Using tuple array for explicit ordering guarantee
-  await logFileCategoriesWithExistence(logger, [
-    ['Input Files', allInputFiles],
-    ['Reference Files', allReferenceFiles],
-    ['Auxiliary Files', allAuxiliaryFiles],
-    ['Media Files', allMediaFiles],
-  ]);
+  // Skip for tool-use agents as they don't need this UI feedback
+  if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
+    await logFileCategoriesWithExistence(logger, [
+      ['Input Files', allInputFiles],
+      ['Reference Files', allReferenceFiles],
+      ['Auxiliary Files', allAuxiliaryFiles],
+      ['Media Files', allMediaFiles],
+    ]);
+  }
 
   const singleFileMappings = {
     INPUT: agentConfig.inputFile,
@@ -374,7 +377,7 @@ export function getToolFlags(
   };
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
-  if (agentSetting.agentType !== AgentType.ToolUse) {
+  if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
     const requestArray = Array.isArray(agentPrompt.userRequest)
       ? agentPrompt.userRequest
       : agentPrompt.userRequest
