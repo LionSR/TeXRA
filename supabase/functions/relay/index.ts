@@ -98,15 +98,26 @@ const corsHeaders = {
  * This function checks all possible locations and extracts the JWT.
  */
 function extractJwtFromHeaders(req: Request): string | null {
+  // Debug: Log all received headers
+  const allHeaders: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    // Truncate long values for logging
+    allHeaders[key] =
+      value.length > 50 ? value.substring(0, 50) + '...' : value;
+  });
+  console.log('[DEBUG] Received headers:', JSON.stringify(allHeaders));
+
   // Check custom TeXRA auth header first (SDKs don't interfere with this)
   const texraAuth = req.headers.get('x-texra-auth');
   if (texraAuth) {
+    console.log('[DEBUG] Found x-texra-auth header');
     return texraAuth;
   }
 
   // Check Authorization header (OpenAI style)
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
+    console.log('[DEBUG] Found Authorization header');
     // Handle "Bearer {token}" format
     if (authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);
@@ -118,15 +129,18 @@ function extractJwtFromHeaders(req: Request): string | null {
   // Check x-api-key (Anthropic style)
   const xApiKey = req.headers.get('x-api-key');
   if (xApiKey) {
+    console.log('[DEBUG] Found x-api-key header');
     return xApiKey;
   }
 
   // Check x-goog-api-key (Google style)
   const googApiKey = req.headers.get('x-goog-api-key');
   if (googApiKey) {
+    console.log('[DEBUG] Found x-goog-api-key header');
     return googApiKey;
   }
 
+  console.log('[DEBUG] No auth header found');
   return null;
 }
 
