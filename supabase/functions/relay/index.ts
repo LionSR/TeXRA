@@ -206,8 +206,18 @@ Deno.serve(async (req: Request) => {
     // Different SDKs send the token in different headers (Authorization, x-api-key, etc.)
     const jwtToken = extractJwtFromHeaders(req);
     if (!jwtToken) {
+      // Include received headers in error for debugging
+      const receivedHeaders: Record<string, string> = {};
+      req.headers.forEach((value, key) => {
+        // Truncate long values, hide sensitive data
+        receivedHeaders[key] =
+          value.length > 100 ? value.substring(0, 100) + '...' : value;
+      });
       return new Response(
-        JSON.stringify({ error: 'Missing authorization token' }),
+        JSON.stringify({
+          error: 'Missing authorization token',
+          debug: { receivedHeaders },
+        }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
