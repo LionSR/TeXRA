@@ -327,22 +327,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   async getClient(): Promise<Anthropic> {
     const credential = await this.getApiKey();
-    const baseUrl = this.getBaseUrl();
+    let baseUrl = this.getBaseUrl();
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
     // When using server-side keys via relay, the "credential" is actually the user's
-    // JWT token (not an API key). We use a custom header (x-texra-auth) that the SDK
-    // won't interfere with, since the SDK doesn't reliably forward its own auth headers
-    // to non-Anthropic domains.
+    // JWT token (not an API key). SDKs strip custom headers to non-provider domains,
+    // so we pass the token as a query parameter which cannot be stripped.
     const usingServerSideKeys = shouldUseServerSideKeysSync(
       this.config.provider,
     );
-    if (usingServerSideKeys) {
-      this.logger.debug(`Anthropic: Adding x-texra-auth header for relay auth`);
+    if (usingServerSideKeys && baseUrl) {
+      // Append JWT token as query parameter - SDKs cannot strip query params!
+      const separator = baseUrl.includes('?') ? '&' : '?';
+      baseUrl = `${baseUrl}${separator}texra_token=${encodeURIComponent(credential)}`;
+      this.logger.debug(`Anthropic: Using query param auth for relay`);
       return new Anthropic({
-        apiKey: credential, // SDK requires this, but relay uses x-texra-auth
+        apiKey: credential, // SDK requires this, but relay uses texra_token query param
         baseURL: baseUrl,
-        defaultHeaders: { 'x-texra-auth': credential }, // Custom header for relay
       });
     }
 
