@@ -96,11 +96,9 @@ export const ConversationRoundStateCodec = z.codec(
   ConversationRoundStateSnapshotSchema,
   z.instanceof(ConversationRoundState),
   {
-    decode: (
-      json: ConversationRoundStateSnapshot,
-    ): ConversationRoundState => {
-      // Intentional re-parse: validates untrusted input and applies schema defaults
-      // for legacy snapshots that may be missing fields like continuationCount
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
+    decode: (json): ConversationRoundState => {
       const parsed = ConversationRoundStateSnapshotSchema.parse(json);
       const state = new ConversationRoundState(parsed.roundIndex);
       state.continuationCount = parsed.continuationCount;
@@ -109,7 +107,7 @@ export const ConversationRoundStateCodec = z.codec(
       state.normalizedUsage = parsed.normalizedUsage ?? null;
       return state;
     },
-    encode: (state: ConversationRoundState): ConversationRoundStateSnapshot => ({
+    encode: (state): ConversationRoundStateSnapshot => ({
       roundIndex: state.roundIndex,
       continuationCount: state.continuationCount,
       responseTimeMs: state.responseTimeMs,
@@ -178,11 +176,10 @@ export const AgentRunStateCodec = z.codec(
   AgentRunStateSnapshotSchema,
   z.instanceof(AgentRunState),
   {
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
     decode: (json): AgentRunState => {
-      // Intentional re-parse: validates untrusted input and applies schema defaults
-      // for legacy snapshots that may be missing fields like totalRounds
       const parsed = AgentRunStateSnapshotSchema.parse(json);
-      // Compose with nested codec
       const usageAccumulator = RunUsageAccumulatorCodec.decode(
         parsed.usageAccumulator,
       );
