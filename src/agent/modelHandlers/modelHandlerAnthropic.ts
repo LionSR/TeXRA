@@ -323,12 +323,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   async getClient(): Promise<Anthropic> {
-    const apiKey = await this.getApiKey();
+    const credential = await this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    // const baseUrl = 'https://api.anthropic.com/v1/';
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
-    // there is a time out parameter that be be set; default is 10 minutes
-    return new Anthropic({ apiKey, baseURL: baseUrl });
+
+    // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header
+    return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
