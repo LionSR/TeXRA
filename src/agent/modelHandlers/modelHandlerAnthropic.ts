@@ -65,7 +65,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Auth imports
-import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+// import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess'; // TEST: temporarily disabled
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
@@ -327,28 +327,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   async getClient(): Promise<Anthropic> {
     const credential = await this.getApiKey();
-    let baseUrl = this.getBaseUrl();
+    const baseUrl = this.getBaseUrl();
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
-    // When using server-side keys via relay, the "credential" is actually the user's
-    // JWT token (not an API key). SDKs construct URLs by appending paths to baseURL,
-    // which breaks if we add query params. Instead, we embed the token in the URL path
-    // using /-/ as separator: /relay/{provider}/-/{token}
-    // JWTs use URL-safe base64 (no slashes) so this works safely.
-    const usingServerSideKeys = shouldUseServerSideKeysSync(
-      this.config.provider,
-    );
-    if (usingServerSideKeys && baseUrl) {
-      // Embed JWT token in URL path: /relay/anthropic/-/{token}
-      baseUrl = `${baseUrl}/-/${credential}`;
-      this.logger.debug(`Anthropic: Using path-embedded token for relay auth`);
-      return new Anthropic({
-        apiKey: credential, // SDK requires this, but relay extracts token from path
-        baseURL: baseUrl,
-      });
-    }
-
-    // Standard flow: credential is an actual API key
+    // TEST: Try header-based auth instead of path-embedded tokens
+    // The SDK should send x-api-key: {credential} to the relay
+    // The relay extracts JWT from x-api-key header
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
