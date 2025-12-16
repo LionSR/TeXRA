@@ -39,14 +39,24 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 // comes from the client request. The relay URL structure is:
 // /relay/{provider}/{...apiPath}
 // Example: /relay/openai/v1/chat/completions -> https://api.openai.com/v1/chat/completions
-const PROVIDER_CONFIGS: Record<
-  string,
-  {
-    baseUrl: string;
-    authType: 'bearer' | 'x-api-key' | 'x-goog-api-key';
-    envKey: string;
-  }
-> = {
+
+/** Supported provider keys for compile-time safety when adding providers. */
+type ProviderKey =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'xai'
+  | 'deepseek'
+  | 'moonshot'
+  | 'dashscope';
+
+interface ProviderConfig {
+  baseUrl: string;
+  authType: 'bearer' | 'x-api-key' | 'x-goog-api-key';
+  envKey: string;
+}
+
+const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
   openai: {
     baseUrl: 'https://api.openai.com',
     authType: 'bearer',
@@ -86,6 +96,16 @@ const PROVIDER_CONFIGS: Record<
     envKey: 'DASHSCOPE_API_KEY',
   },
 };
+
+/** Type guard to check if a string is a valid provider key. */
+function isProviderKey(key: string): key is ProviderKey {
+  return key in PROVIDER_CONFIGS;
+}
+
+/** Get provider config with type safety. Returns undefined for unknown providers. */
+function getProviderConfig(provider: string): ProviderConfig | undefined {
+  return isProviderKey(provider) ? PROVIDER_CONFIGS[provider] : undefined;
+}
 
 // CORS headers
 // Note: VS Code extensions make requests from the extension host (Node.js process),
@@ -283,7 +303,7 @@ Deno.serve(async (req: Request) => {
     const { provider, apiPath, pathToken } = parsed;
 
     // 2. Validate provider
-    const providerConfig = PROVIDER_CONFIGS[provider];
+    const providerConfig = getProviderConfig(provider);
     if (!providerConfig) {
       return new Response(
         JSON.stringify({
