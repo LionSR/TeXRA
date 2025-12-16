@@ -21,7 +21,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
-import { FileInteractionStateCodec } from './AgentWorkspaceState';
+import { FileInteractionStateCodec, type FileInteractionStateSnapshot } from './AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -118,7 +118,7 @@ export async function runToolUseCycle<C = unknown>(
  */
 function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
-  const interactions = FileInteractionStateCodec.encode(store.workspace.interactions);
+  const interactions = FileInteractionStateCodec.encode(store.workspace.interactions) as FileInteractionStateSnapshot;
 
   if (interactions.edits.length === 0) {
     return;

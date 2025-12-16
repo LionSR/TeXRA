@@ -56,7 +56,11 @@ export const RunUsageAccumulatorJSONSchema = z.object({
   totals: RunUsageTotalsSchema.partial().default({}),
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).default([]),
 });
-export type RunUsageAccumulatorJSON = z.infer<
+/**
+ * Output type for RunUsageAccumulator serialization.
+ * Uses z.output<> to get the type after parsing (all fields required).
+ */
+export type RunUsageAccumulatorJSON = z.output<
   typeof RunUsageAccumulatorJSONSchema
 >;
 
@@ -133,11 +137,14 @@ export const RunUsageAccumulatorCodec = z.codec(
   z.instanceof(RunUsageAccumulator),
   {
     decode: (json: RunUsageAccumulatorJSON): RunUsageAccumulator => {
+      // Intentional re-parse: validates untrusted input and applies schema defaults
+      // for legacy snapshots that may be missing fields (e.g., normalizedSnapshots)
+      const parsed = RunUsageAccumulatorJSONSchema.parse(json);
       const acc = new RunUsageAccumulator();
       // Schema handles defaults via .default() - parse partial totals to full totals
-      const totals = RunUsageTotalsSchema.parse(json.totals);
+      const totals = RunUsageTotalsSchema.parse(parsed.totals);
       acc._setTotals(totals);
-      acc._pushSnapshots(json.normalizedSnapshots);
+      acc._pushSnapshots(parsed.normalizedSnapshots);
       return acc;
     },
     encode: (acc: RunUsageAccumulator): RunUsageAccumulatorJSON => ({
