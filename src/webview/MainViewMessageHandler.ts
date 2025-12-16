@@ -6,13 +6,9 @@ import { computeAgentOptions } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - webview
-import {
-  BaseViewMessageHandler,
-  MessageHandler,
-  MAIN_VIEW_COMMANDS,
-  createRecordingHandlers,
-  createBannerForwardingHandlers,
-} from '@common/webview';
+import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
+// @ts-ignore - Import JavaScript module
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -27,12 +23,10 @@ import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
-// Type imports
-import type { RecordingManager } from '@common/managers';
-
 // Local file imports
 import {
   SettingsManager,
+  RecordingManager,
   FileManager,
   ExecutionManager,
   DiffManager,
@@ -47,29 +41,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
 
-  /** Recording handlers created via shared utility */
-  private readonly recordingHandlers: Record<
-    string,
-    MessageHandler<vscode.WebviewView>
-  >;
-
   constructor(private readonly context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
     this.settingsManager = new SettingsManager();
-
-    // Use shared recording handler factory
-    const { manager, handlers } = createRecordingHandlers(context, {
-      startCommand: MAIN_VIEW_COMMANDS.START_RECORDING,
-      stopCommand: MAIN_VIEW_COMMANDS.STOP_RECORDING,
+    this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
       transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing instruction',
     });
-    this.recordingManager = manager;
-    this.recordingHandlers = handlers;
-
     this.fileManager = new FileManager(context);
     this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
@@ -242,21 +223,36 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ),
         );
       },
-      // Banner handlers via shared utility
-      ...createBannerForwardingHandlers(() => this.getActiveView(), [
-        {
-          show: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          hide: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
-        },
-        {
-          show: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-          hide: MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER,
-        },
-        {
-          show: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-          hide: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
-        },
-      ]),
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m) => {
+        /* Banner handled client-side */
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
+      },
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await setConfig('ui.showDependencyReminders', m.value);
       },
@@ -324,8 +320,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         });
       },
 
-      // Recording commands via shared utility
-      ...this.recordingHandlers,
+      // Recording commands
+      [MAIN_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
+        this.recordingManager.start(w),
+      [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
+        this.recordingManager.stop(w),
 
       // File refresh and update operations
       [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async () =>
