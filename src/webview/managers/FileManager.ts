@@ -93,9 +93,7 @@ export class FileManager {
     }
   }
 
-  async handleInputFileSelected(
-    message: FileSelectedMessage,
-  ): Promise<void> {
+  async handleInputFileSelected(message: FileSelectedMessage): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;

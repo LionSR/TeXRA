@@ -359,4 +359,3 @@ export function extractDomain(url: string): string {
     return '';
   }
 }
-
