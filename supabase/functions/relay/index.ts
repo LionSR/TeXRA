@@ -160,14 +160,23 @@ function extractJwtFromRequest(req: Request, url: URL): string | null {
  * 2. /relay/{provider}/-/{token}/{...apiPath} - token embedded in path (for SDKs that strip headers)
  *
  * The /-/ separator indicates a path-embedded token follows.
+ * Note: Supabase Edge Functions receive paths like /functions/v1/relay/...
  */
 function parseRequestPath(pathname: string): {
   provider: string;
   apiPath: string;
   pathToken?: string;
 } | null {
-  // Remove /relay/ prefix and split
-  const withoutPrefix = pathname.replace(/^\/relay\/?/, '');
+  // Find /relay/ in the path (handles /functions/v1/relay/... prefix from Supabase)
+  const relayIndex = pathname.indexOf('/relay/');
+  if (relayIndex === -1) {
+    console.log('[DEBUG] No /relay/ found in pathname:', pathname);
+    return null;
+  }
+
+  // Extract everything after /relay/
+  const withoutPrefix = pathname.substring(relayIndex + 7); // 7 = '/relay/'.length
+  console.log('[DEBUG] Path after /relay/:', withoutPrefix);
   const parts = withoutPrefix.split('/');
 
   if (parts.length < 1 || !parts[0]) {
@@ -180,7 +189,12 @@ function parseRequestPath(pathname: string): {
   if (parts.length >= 3 && parts[1] === '-') {
     const pathToken = parts[2];
     const apiPath = '/' + parts.slice(3).join('/');
-    console.log('[DEBUG] Found path-embedded token');
+    console.log(
+      '[DEBUG] Found path-embedded token, provider:',
+      provider,
+      'apiPath:',
+      apiPath,
+    );
     return { provider, apiPath, pathToken };
   }
 
