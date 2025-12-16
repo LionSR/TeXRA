@@ -334,7 +334,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // JWT token (not an API key). We use a custom header (x-texra-auth) that the SDK
     // won't interfere with, since the SDK doesn't reliably forward its own auth headers
     // to non-Anthropic domains.
-    const usingServerSideKeys = shouldUseServerSideKeysSync(this.config.provider);
+    const usingServerSideKeys = shouldUseServerSideKeysSync(
+      this.config.provider,
+    );
     if (usingServerSideKeys) {
       this.logger.debug(`Anthropic: Adding x-texra-auth header for relay auth`);
       return new Anthropic({
