@@ -247,7 +247,10 @@ Deno.serve(async (req: Request) => {
   // Handle /providers endpoint - returns list of providers with configured API keys
   // This is a public endpoint (no auth required) so clients know which providers
   // are available before attempting to use them.
-  if (url.pathname.endsWith('/relay/providers') || url.pathname === '/providers') {
+  if (
+    url.pathname.endsWith('/relay/providers') ||
+    url.pathname === '/providers'
+  ) {
     const enabledProviders = getEnabledProviders();
     return new Response(
       JSON.stringify({
