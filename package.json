@@ -1637,7 +1637,7 @@
     "@google/genai": "^1.33.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
-    "@supabase/supabase-js": "^2.87.1",
+    "@supabase/supabase-js": "^2.87.3",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.44",
     "@vscode/markdown-it-katex": "^1.1.2",
