@@ -70,7 +70,11 @@ export const FileInteractionStateSnapshotSchema = z.object({
     )
     .default([]),
 });
-export type FileInteractionStateSnapshot = z.infer<
+/**
+ * Output type for FileInteractionState serialization.
+ * Uses z.output<> to get the type after parsing (all fields required).
+ */
+export type FileInteractionStateSnapshot = z.output<
   typeof FileInteractionStateSnapshotSchema
 >;
 
@@ -296,7 +300,11 @@ import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 export const TodoStateSnapshotSchema = z.object({
   todos: z.array(TodoItemSchema).default([]),
 });
-export type TodoStateSnapshot = z.infer<typeof TodoStateSnapshotSchema>;
+/**
+ * Output type for TodoState serialization.
+ * Uses z.output<> to get the type after parsing (all fields required).
+ */
+export type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
 
 /**
  * State for managing todo items during tool-use sessions.
@@ -420,9 +428,27 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
   todos: TodoStateSnapshotSchema.default({ todos: [] }),
 });
 
-export type AgentWorkspaceSnapshot = z.infer<
+/**
+ * Output type for AgentWorkspaceState serialization.
+ * Uses z.output<> to get the type after parsing (all fields required).
+ */
+export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
 >;
+
+/** Symbol key for internal factory - only used by codec */
+const INTERNAL_FACTORY = Symbol('AgentWorkspaceState.internalFactory');
+
+/** Parameters for internal factory construction */
+interface AgentWorkspaceStateParams {
+  assembly: ResponseAssemblyState;
+  media: MediaAttachmentState;
+  reasoning: ReasoningCacheState;
+  document: DocumentStatsState;
+  interactions: FileInteractionState;
+  serverToolContent: ServerToolContentState;
+  todos: TodoState;
+}
 
 export class AgentWorkspaceState {
   public readonly assembly: ResponseAssemblyState;
@@ -434,35 +460,35 @@ export class AgentWorkspaceState {
   public readonly todos: TodoState;
 
   /** Use AgentWorkspaceState.create() for new instances */
-  private constructor(
-    assembly: ResponseAssemblyState,
-    media: MediaAttachmentState,
-    reasoning: ReasoningCacheState,
-    document: DocumentStatsState,
-    interactions: FileInteractionState,
-    serverToolContent: ServerToolContentState,
-    todos: TodoState,
-  ) {
-    this.assembly = assembly;
-    this.media = media;
-    this.reasoning = reasoning;
-    this.document = document;
-    this.interactions = interactions;
-    this.serverToolContent = serverToolContent;
-    this.todos = todos;
+  private constructor(params: AgentWorkspaceStateParams) {
+    this.assembly = params.assembly;
+    this.media = params.media;
+    this.reasoning = params.reasoning;
+    this.document = params.document;
+    this.interactions = params.interactions;
+    this.serverToolContent = params.serverToolContent;
+    this.todos = params.todos;
   }
 
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
-    return new AgentWorkspaceState(
-      new ResponseAssemblyState(),
-      new MediaAttachmentState(),
-      new ReasoningCacheState(),
-      new DocumentStatsState(),
-      new FileInteractionState(),
-      new ServerToolContentState(),
-      new TodoState(),
-    );
+    return new AgentWorkspaceState({
+      assembly: new ResponseAssemblyState(),
+      media: new MediaAttachmentState(),
+      reasoning: new ReasoningCacheState(),
+      document: new DocumentStatsState(),
+      interactions: new FileInteractionState(),
+      serverToolContent: new ServerToolContentState(),
+      todos: new TodoState(),
+    });
+  }
+
+  /**
+   * Internal factory for codec use only.
+   * @internal Do not use directly - use AgentWorkspaceStateCodec.decode() instead.
+   */
+  static [INTERNAL_FACTORY](params: AgentWorkspaceStateParams): AgentWorkspaceState {
+    return new AgentWorkspaceState(params);
   }
 
   resetReasoning(): void {
@@ -478,13 +504,16 @@ export class AgentWorkspaceState {
  * Codec for bi-directional serialization of AgentWorkspaceState.
  * Use .encode() to serialize and .decode() to deserialize.
  * Handles legacy format migration (e.g., media files string → FileLocation).
+ *
+ * Note: Uses z.custom() instead of z.instanceof() because the class has a private constructor.
  */
 export const AgentWorkspaceStateCodec = z.codec(
   AgentWorkspaceStateSnapshotSchema,
-  z.instanceof(AgentWorkspaceState),
+  z.custom<AgentWorkspaceState>((val) => val instanceof AgentWorkspaceState),
   {
-    decode: (json: AgentWorkspaceSnapshot): AgentWorkspaceState => {
-      // Schema handles defaults and legacy format conversion via MediaFileEntryCodec
+    decode: (json): AgentWorkspaceState => {
+      // Intentional re-parse: validates untrusted input and applies schema defaults
+      // for legacy snapshots that may be missing fields or have wrong types
       const parsed = AgentWorkspaceStateSnapshotSchema.parse(json);
 
       // Build component states
@@ -507,18 +536,18 @@ export const AgentWorkspaceStateCodec = z.codec(
       const interactions = FileInteractionStateCodec.decode(parsed.interactions);
       const todos = TodoStateCodec.decode(parsed.todos);
 
-      // Use private constructor via factory pattern workaround
-      return (AgentWorkspaceState as any).create_internal(
+      // Use Symbol-keyed factory for type-safe internal construction
+      return AgentWorkspaceState[INTERNAL_FACTORY]({
         assembly,
         media,
         reasoning,
         document,
         interactions,
-        new ServerToolContentState(),
+        serverToolContent: new ServerToolContentState(),
         todos,
-      );
+      });
     },
-    encode: (state: AgentWorkspaceState): AgentWorkspaceSnapshot => ({
+    encode: (state): AgentWorkspaceSnapshot => ({
       assembly: {
         lastResponse: state.assembly.lastResponse,
         accumulatedOutput: state.assembly.accumulatedOutput,
@@ -533,29 +562,8 @@ export const AgentWorkspaceStateCodec = z.codec(
       document: {
         texcountStats: state.document.texcountStats,
       },
-      interactions: FileInteractionStateCodec.encode(state.interactions),
-      todos: TodoStateCodec.encode(state.todos),
+      interactions: FileInteractionStateCodec.encode(state.interactions) as AgentWorkspaceSnapshot['interactions'],
+      todos: TodoStateCodec.encode(state.todos) as AgentWorkspaceSnapshot['todos'],
     }),
   },
 );
-
-// Internal factory for codec use - avoids exposing full constructor publicly
-(AgentWorkspaceState as any).create_internal = function (
-  assembly: ResponseAssemblyState,
-  media: MediaAttachmentState,
-  reasoning: ReasoningCacheState,
-  document: DocumentStatsState,
-  interactions: FileInteractionState,
-  serverToolContent: ServerToolContentState,
-  todos: TodoState,
-): AgentWorkspaceState {
-  return new (AgentWorkspaceState as any)(
-    assembly,
-    media,
-    reasoning,
-    document,
-    interactions,
-    serverToolContent,
-    todos,
-  );
-};
