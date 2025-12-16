@@ -285,9 +285,21 @@ Deno.serve(async (req: Request) => {
 
     // 6. Get server-side API key
     const apiKey = Deno.env.get(providerConfig.envKey);
+    console.log(
+      `[DEBUG] API key for ${provider} (envKey: ${providerConfig.envKey}): ${apiKey ? `found (${apiKey.length} chars, starts with ${apiKey.substring(0, 8)}...)` : 'NOT FOUND'}`,
+    );
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: `API key not configured for ${provider}` }),
+        JSON.stringify({
+          error: `API key not configured for ${provider}`,
+          debug: {
+            envKey: providerConfig.envKey,
+            availableEnvKeys: Object.keys(Deno.env.toObject()).filter(
+              (k) =>
+                k.includes('API') || k.includes('KEY') || k.includes('SECRET'),
+            ),
+          },
+        }),
         {
           status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -334,11 +346,56 @@ Deno.serve(async (req: Request) => {
     }
 
     // 9. Forward request to provider
+    // Debug: Log what we're sending upstream
+    const upstreamHeadersObj: Record<string, string> = {};
+    upstreamHeaders.forEach((value, key) => {
+      // Truncate long values, partially hide API keys
+      if (
+        key.toLowerCase().includes('key') ||
+        key.toLowerCase() === 'authorization'
+      ) {
+        upstreamHeadersObj[key] =
+          value.length > 20 ? `${value.substring(0, 15)}...` : value;
+      } else {
+        upstreamHeadersObj[key] = value;
+      }
+    });
+    console.log(`[DEBUG] Upstream request to ${targetUrl}`);
+    console.log(
+      `[DEBUG] Upstream headers: ${JSON.stringify(upstreamHeadersObj)}`,
+    );
+
     const upstreamResponse = await fetch(targetUrl, {
       method: req.method,
       headers: upstreamHeaders,
       body: req.method !== 'GET' ? req.body : undefined,
     });
+
+    // Debug: Log upstream response status
+    console.log(`[DEBUG] Upstream response status: ${upstreamResponse.status}`);
+
+    // Debug: If error response, log the body
+    if (upstreamResponse.status >= 400) {
+      const errorBody = await upstreamResponse.text();
+      console.log(`[DEBUG] Upstream error body: ${errorBody}`);
+      // Return the error with debug info
+      return new Response(
+        JSON.stringify({
+          error: 'Upstream API error',
+          upstreamStatus: upstreamResponse.status,
+          upstreamError: errorBody,
+          debug: {
+            targetUrl,
+            provider,
+            headersSet: Object.keys(upstreamHeadersObj),
+          },
+        }),
+        {
+          status: upstreamResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    }
 
     // 10. Return response with CORS headers
     const responseHeaders = new Headers(corsHeaders);
