@@ -85,15 +85,9 @@ Examples:
 
 ## Client-Side Settings
 
-Users must enable the experimental setting in VS Code:
+Ultra tier users can toggle between "Included Access" and "Use My Own Keys" in the Profile view. By default, Ultra users have included access enabled.
 
-```json
-{
-  "texra.experimental.useServerSideKeys": true
-}
-```
-
-When enabled:
+When using included access:
 
 1. Models from supported providers will show as available (no API key warning)
 2. Requests will be routed through the relay
