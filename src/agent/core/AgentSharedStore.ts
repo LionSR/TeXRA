@@ -139,8 +139,9 @@ export const AgentSharedStoreCodec = z.codec(
   AgentSharedStoreSnapshotSchema,
   z.instanceof(AgentSharedStore),
   {
+    // Validation and defaults are applied by nested codecs (each parses its own schema).
+    // No top-level parse needed here since we delegate to specialized codecs.
     decode: (snapshot): AgentSharedStore => {
-      // Use nested codecs for each state slice
       const round = ConversationRoundStateCodec.decode(snapshot.round);
       const run = AgentRunStateCodec.decode(snapshot.run);
       const workspace = AgentWorkspaceStateCodec.decode(snapshot.workspace);
