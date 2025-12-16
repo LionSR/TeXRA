@@ -169,12 +169,12 @@ export const FileInteractionStateCodec = z.codec(
   FileInteractionStateSnapshotSchema,
   z.instanceof(FileInteractionState),
   {
-    decode: (json: FileInteractionStateSnapshot): FileInteractionState => {
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
+    decode: (json): FileInteractionState => {
       const parsed = FileInteractionStateSnapshotSchema.parse(json);
       const state = new FileInteractionState();
-      // Restore read files
       parsed.readFiles.forEach((path: string) => state.recordRead(path));
-      // Restore edits directly (absolute values, not deltas)
       for (const entry of parsed.edits) {
         state._getEdits().set(entry.path, {
           added: entry.added,
@@ -183,7 +183,7 @@ export const FileInteractionStateCodec = z.codec(
       }
       return state;
     },
-    encode: (state: FileInteractionState): FileInteractionStateSnapshot => ({
+    encode: (state): FileInteractionStateSnapshot => ({
       readFiles: Array.from(state._getReadFiles()),
       edits: Array.from(state._getEdits().entries()).map(
         ([path, diff]: [string, { added: number; removed: number }]) => ({
@@ -364,13 +364,15 @@ export const TodoStateCodec = z.codec(
   TodoStateSnapshotSchema,
   z.instanceof(TodoState),
   {
-    decode: (json: TodoStateSnapshot): TodoState => {
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
+    decode: (json): TodoState => {
       const parsed = TodoStateSnapshotSchema.parse(json);
       const state = new TodoState();
       state._setTodos([...parsed.todos]);
       return state;
     },
-    encode: (state: TodoState): TodoStateSnapshot => ({
+    encode: (state): TodoStateSnapshot => ({
       todos: [...state.todos],
     }),
   },
@@ -511,9 +513,9 @@ export const AgentWorkspaceStateCodec = z.codec(
   AgentWorkspaceStateSnapshotSchema,
   z.custom<AgentWorkspaceState>((val) => val instanceof AgentWorkspaceState),
   {
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
     decode: (json): AgentWorkspaceState => {
-      // Intentional re-parse: validates untrusted input and applies schema defaults
-      // for legacy snapshots that may be missing fields or have wrong types
       const parsed = AgentWorkspaceStateSnapshotSchema.parse(json);
 
       // Build component states

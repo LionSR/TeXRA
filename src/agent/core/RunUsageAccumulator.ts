@@ -136,12 +136,11 @@ export const RunUsageAccumulatorCodec = z.codec(
   RunUsageAccumulatorJSONSchema,
   z.instanceof(RunUsageAccumulator),
   {
-    decode: (json: RunUsageAccumulatorJSON): RunUsageAccumulator => {
-      // Intentional re-parse: validates untrusted input and applies schema defaults
-      // for legacy snapshots that may be missing fields (e.g., normalizedSnapshots)
+    // Note: z.codec() does NOT auto-validate input before calling decode.
+    // We parse to apply schema defaults for legacy snapshots missing fields.
+    decode: (json): RunUsageAccumulator => {
       const parsed = RunUsageAccumulatorJSONSchema.parse(json);
       const acc = new RunUsageAccumulator();
-      // Schema handles defaults via .default() - parse partial totals to full totals
       const totals = RunUsageTotalsSchema.parse(parsed.totals);
       acc._setTotals(totals);
       acc._pushSnapshots(parsed.normalizedSnapshots);
