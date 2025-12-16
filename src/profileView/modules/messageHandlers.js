@@ -24,6 +24,8 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       tier: message.tier,
       permissions: message.permissions || [],
       remoteAgents: message.remoteAgents,
+      apiAccessMode: message.apiAccessMode,
+      enabledProviders: message.enabledProviders || [],
     });
 
     // Update UI
@@ -33,6 +35,8 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       tier: message.tier,
       permissions: message.permissions || [],
       remoteAgents: message.remoteAgents,
+      apiAccessMode: message.apiAccessMode,
+      enabledProviders: message.enabledProviders || [],
     });
   }
 }

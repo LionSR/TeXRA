@@ -9,7 +9,6 @@ import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 // @ts-ignore - Import JavaScript module
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
@@ -443,24 +442,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(_message, webviewView);
     try {
+      // computeModelOptions checks canUseServerSideKeys() and sets data-requires-key
+      // accordingly. The webview's _applyModelOptions then calls updateModelApiKeyBanner()
+      // which shows/hides the banner based on the selected model's data-requires-key.
+      // No separate banner message needed here - webview handles it.
       const modelOptions = await computeModelOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
         options: modelOptions,
       });
-
-      const showReminders = getConfig<boolean>(
-        'texra.ui.showApiKeyReminders',
-        true,
-      );
-      if (showReminders) {
-        const hasAnyApiKey = await SecretManager.anyApiKeyExists();
-        if (!hasAnyApiKey) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          });
-        }
-      }
 
       const agentOptions = await computeAgentOptions();
       webviewView.webview.postMessage({

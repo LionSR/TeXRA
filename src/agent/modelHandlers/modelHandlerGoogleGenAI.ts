@@ -304,14 +304,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
-      const apiKey = await this.getApiKey();
+      const credential = await this.getApiKey();
       const baseUrl = this.getBaseUrl();
-      // this would get the base url for the google via openai provider
-      // const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/';
-      // const baseUrl = 'https://generativelanguage.googleapis.com';
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
+
+      // For relay auth: credential is the user's JWT, SDK sends it via x-goog-api-key header
       this.googleClient = new GoogleGenAI({
-        apiKey: apiKey,
+        apiKey: credential,
         httpOptions: {
           baseUrl: baseUrl ?? undefined,
         },
@@ -767,9 +766,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const candidate = responseObject.candidates[0];
+    const parts = candidate?.content?.parts ?? [];
 
-    // SDK's .text getter automatically excludes thought parts and concatenates text
-    const rawResponseText = (responseObject.text ?? '').trim();
+    // Compute text directly from parts instead of using SDK's .text getter.
+    // The getter may use cached values that don't reflect mutations we made
+    // to the candidates array during streaming (lines 536-550, 577-584).
+    // Filter out thought parts and concatenate text from remaining parts.
+    const rawResponseText = parts
+      .filter((part): part is Part & { text: string } => isTextPart(part))
+      .filter((part) => !part.thought)
+      .map((part) => part.text)
+      .join('')
+      .trim();
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = replacementEngine.applyAll(rawResponseText);

@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports
+import { canUseServerSideKeys } from '@auth/serverSideKeyAccess';
+
 export type ApiProvider = (typeof SecretManager.API_PROVIDERS)[number];
 
 export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
@@ -67,11 +70,19 @@ export class SecretManager {
   }
 
   public static async anyApiKeyExists(): Promise<boolean> {
+    // Check local API keys first
     for (const provider of this.API_PROVIDERS) {
       if (await this.apiKeyExists(provider)) {
         return true;
       }
     }
+
+    // Check if server-side keys are available (Ultra tier + enabled providers)
+    // This returns true if user has Ultra tier and at least one provider is enabled
+    if (await canUseServerSideKeys()) {
+      return true;
+    }
+
     return false;
   }
 
