@@ -422,24 +422,15 @@ Deno.serve(async (req: Request) => {
       body: req.method !== 'GET' ? req.body : undefined,
     });
 
-    // If error response, wrap with relay metadata for debugging
+    // Log upstream errors server-side, but pass through original response to SDKs
+    // This preserves the provider's error format (error.message, error.type, etc.)
+    // so SDKs can parse and display meaningful error messages to users.
     if (upstreamResponse.status >= 400) {
-      const errorBody = await upstreamResponse.text();
       console.error(
         `[RELAY] Upstream error: ${provider} ${upstreamResponse.status}`,
       );
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Upstream API error',
-          upstreamStatus: upstreamResponse.status,
-          upstreamError: errorBody,
-        }),
-        {
-          status: upstreamResponse.status,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
+      // Pass through the original error response - don't wrap it
+      // SDKs expect specific error formats (e.g., { error: { message: "...", type: "..." } })
     }
 
     // 10. Return response with CORS headers
