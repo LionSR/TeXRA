@@ -4,12 +4,15 @@ import { z } from 'zod';
 // Local imports - state slices
 import {
   AgentRunState,
+  AgentRunStateCodec,
   ConversationRoundState,
+  ConversationRoundStateCodec,
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
 } from './AgentState';
 import {
   AgentWorkspaceState,
+  AgentWorkspaceStateCodec,
   AgentWorkspaceStateSnapshotSchema,
 } from './AgentWorkspaceState';
 import {
@@ -110,42 +113,49 @@ export class AgentSharedStore {
       });
     }
   }
-
-  toJSON(): AgentSharedStoreSnapshot {
-    return {
-      round: this.roundState.toJSON(),
-      run: this.runState.toJSON(),
-      workspace: this.workspaceState.toJSON(),
-      user: {
-        input: { ...this.userChannels.input },
-        transient: { ...this.userChannels.transient },
-        output: { ...this.userChannels.output },
-      },
-    };
-  }
-
-  static fromJSON(
-    snapshot: AgentSharedStoreSnapshot,
-    options?: { onRoundFinalized?: AgentRoundFinalizedCallback },
-  ): AgentSharedStore {
-    const round = ConversationRoundState.fromJSON(snapshot.round);
-    const run = AgentRunState.fromJSON(snapshot.run);
-    const workspace = AgentWorkspaceState.fromJSON(snapshot.workspace);
-    const storeUserChannels: UserVariableChannels = {
-      input: Object.freeze({ ...snapshot.user.input }),
-      transient: { ...snapshot.user.transient },
-      output: { ...snapshot.user.output },
-    };
-
-    return new AgentSharedStore({
-      round,
-      run,
-      workspace,
-      user: storeUserChannels,
-      onRoundFinalized: options?.onRoundFinalized,
-    });
-  }
 }
+
+/**
+ * Codec for bi-directional serialization of AgentSharedStore.
+ * Use .encode() to serialize and .decode() to deserialize.
+ *
+ * Note: The onRoundFinalized callback is not serialized as it's runtime-only.
+ * Use AgentSharedStoreCodec.decode() then set the callback separately if needed.
+ */
+export const AgentSharedStoreCodec = z.codec(
+  AgentSharedStoreSnapshotSchema,
+  z.instanceof(AgentSharedStore),
+  {
+    decode: (snapshot: AgentSharedStoreSnapshot): AgentSharedStore => {
+      // Use nested codecs for each state slice
+      const round = ConversationRoundStateCodec.decode(snapshot.round);
+      const run = AgentRunStateCodec.decode(snapshot.run);
+      const workspace = AgentWorkspaceStateCodec.decode(snapshot.workspace);
+      const storeUserChannels: UserVariableChannels = {
+        input: Object.freeze({ ...snapshot.user.input }),
+        transient: { ...snapshot.user.transient },
+        output: { ...snapshot.user.output },
+      };
+
+      return new AgentSharedStore({
+        round,
+        run,
+        workspace,
+        user: storeUserChannels,
+      });
+    },
+    encode: (store: AgentSharedStore): AgentSharedStoreSnapshot => ({
+      round: ConversationRoundStateCodec.encode(store.round),
+      run: AgentRunStateCodec.encode(store.run),
+      workspace: AgentWorkspaceStateCodec.encode(store.workspace),
+      user: {
+        input: { ...store.user.input },
+        transient: { ...store.user.transient },
+        output: { ...store.user.output },
+      },
+    }),
+  },
+);
 
 interface SharedStoreFactoryParams {
   roundIndex: number;
@@ -170,10 +180,21 @@ export function createSharedStore(
     if (!snapshot) {
       throw new Error('Shared store snapshot is required.');
     }
+    // Validate and decode using codec (handles nested state restoration)
     AgentSharedStoreSnapshotSchema.parse(snapshot);
-    return AgentSharedStore.fromJSON(snapshot, {
-      onRoundFinalized: args.onRoundFinalized,
-    });
+    const store = AgentSharedStoreCodec.decode(snapshot);
+
+    // Re-create with callback if provided (callbacks are not serialized)
+    if (args.onRoundFinalized) {
+      return new AgentSharedStore({
+        round: store.round,
+        run: store.run,
+        workspace: store.workspace,
+        user: store.user,
+        onRoundFinalized: args.onRoundFinalized,
+      });
+    }
+    return store;
   }
 
   const initialRound =

@@ -142,7 +142,7 @@ describe('BashTool', () => {
       openRouterOnly: false,
     };
     const handler = new BashMockHandler(config);
-    const workspaceState = new AgentWorkspaceState();
+    const workspaceState = AgentWorkspaceState.create();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: {
