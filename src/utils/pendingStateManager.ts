@@ -25,9 +25,3 @@ export function consumePendingState(): TaskState | undefined {
   return state;
 }
 
-/**
- * Check if there is pending state.
- */
-export function hasPendingState(): boolean {
-  return pendingState !== undefined;
-}
