@@ -135,7 +135,8 @@ export function isServerSideKeysSettingEnabled(): boolean {
 /**
  * Set the "use included model access" preference.
  * This persists the setting to globalState and updates the in-memory value.
- * Also fires the onDidChangeModelAccess event so listeners can refresh.
+ * Also clears the access cache and fires the onDidChangeModelAccess event
+ * so listeners can refresh with fresh data.
  *
  * @param value - True to use included access, false to use personal keys
  */
@@ -146,6 +147,8 @@ export async function setUseIncludedModelAccess(value: boolean): Promise<void> {
     await globalState.update(USE_INCLUDED_ACCESS_KEY, value);
   }
   if (changed) {
+    // Clear cache BEFORE firing event so listeners get fresh data
+    clearServerSideKeyAccessCache();
     _onDidChangeModelAccess.fire(value);
   }
 }
@@ -364,21 +367,6 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
  */
 export function isProviderEnabledForServerSideKeys(provider: string): boolean {
   return enabledProvidersCache.includes(provider.toLowerCase());
-}
-
-/**
- * Check if a provider could potentially support server-side keys.
- * This checks against the static list of all possible providers,
- * NOT whether it's currently enabled on the server.
- *
- * Use isProviderEnabledForServerSideKeys() to check actual availability.
- */
-export function isProviderSupportedForServerSideKeys(
-  provider: string,
-): provider is ServerSideProvider {
-  return SERVER_SIDE_PROVIDERS.includes(
-    provider.toLowerCase() as ServerSideProvider,
-  );
 }
 
 /**
