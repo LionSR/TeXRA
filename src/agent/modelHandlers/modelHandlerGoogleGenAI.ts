@@ -766,9 +766,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const candidate = responseObject.candidates[0];
+    const parts = candidate?.content?.parts ?? [];
 
-    // SDK's .text getter automatically excludes thought parts and concatenates text
-    const rawResponseText = (responseObject.text ?? '').trim();
+    // Compute text directly from parts instead of using SDK's .text getter.
+    // The getter may use cached values that don't reflect mutations we made
+    // to the candidates array during streaming (lines 536-550, 577-584).
+    // Filter out thought parts and concatenate text from remaining parts.
+    const rawResponseText = parts
+      .filter((part): part is Part & { text: string } => isTextPart(part))
+      .filter((part) => !part.thought)
+      .map((part) => part.text)
+      .join('')
+      .trim();
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = replacementEngine.applyAll(rawResponseText);
