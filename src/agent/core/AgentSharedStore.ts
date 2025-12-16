@@ -193,8 +193,7 @@ export function createSharedStore(
     if (!snapshot) {
       throw new Error('Shared store snapshot is required.');
     }
-    // Validate and decode using codec (handles nested state restoration)
-    AgentSharedStoreSnapshotSchema.parse(snapshot);
+    // Codec decode handles validation via nested schema parses
     const store = AgentSharedStoreCodec.decode(snapshot);
 
     // Attach callback post-creation if provided (callbacks are not serialized)
