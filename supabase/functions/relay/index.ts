@@ -4,14 +4,25 @@
  * This function acts as a transparent proxy for AI API requests, allowing Ultra
  * tier users to access AI models without providing their own API keys.
  *
+ * Authentication: JWT tokens are extracted from SDK auth headers:
+ * - OpenAI: Authorization: Bearer {jwt}
+ * - Anthropic: x-api-key: {jwt}
+ * - Google: x-goog-api-key: {jwt}
+ *
+ * The relay validates the JWT, checks user tier, then replaces it with the
+ * real API key before forwarding to the upstream provider.
+ *
  * URL Structure: /relay/{provider}/{...path}
  * Example: /relay/openai/v1/chat/completions
  *
  * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
+ *
+ * IMPORTANT: Deploy with --no-verify-jwt flag since we validate JWTs manually
+ * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.0.0';
+const RELAY_VERSION = '1.1.0';
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -91,18 +102,18 @@ const corsHeaders = {
 /**
  * Extract JWT token from request.
  *
- * SDKs (especially Google and Anthropic) strip custom headers when sending to
- * non-provider domains. Query parameters cannot be stripped, so we check there first.
+ * SDKs send their credentials in provider-specific headers. When the user's JWT
+ * is passed as the "apiKey" to the SDK, it arrives here in these headers.
  *
  * Priority order:
- * 1. Query parameter: ?texra_token={token} (SDKs cannot strip this!)
- * 2. Custom header: x-texra-auth: {token}
- * 3. Authorization: Bearer {token} (OpenAI style)
- * 4. x-api-key: {token} (Anthropic style)
- * 5. x-goog-api-key: {token} (Google style)
+ * 1. Query parameter: ?texra_token={token} (fallback for edge cases)
+ * 2. Custom header: x-texra-auth: {token} (explicit TeXRA auth)
+ * 3. Authorization: Bearer {token} (OpenAI SDK)
+ * 4. x-api-key: {token} (Anthropic SDK)
+ * 5. x-goog-api-key: {token} (Google SDK)
  */
 function extractJwtFromRequest(req: Request, url: URL): string | null {
-  // 1. Check query parameter first (SDKs CANNOT strip this!)
+  // 1. Check query parameter (fallback for edge cases)
   const queryToken = url.searchParams.get('texra_token');
   if (queryToken) {
     return queryToken;
@@ -224,18 +235,10 @@ Deno.serve(async (req: Request) => {
     // Path token is most reliable since SDKs cannot modify the URL path structure
     const jwtToken = pathToken || extractJwtFromRequest(req, url);
     if (!jwtToken) {
-      // Include received headers in error for debugging
-      const receivedHeaders: Record<string, string> = {};
-      req.headers.forEach((value, key) => {
-        // Truncate long values, hide sensitive data
-        receivedHeaders[key] =
-          value.length > 100 ? value.substring(0, 100) + '...' : value;
-      });
       return new Response(
         JSON.stringify({
           _relay: RELAY_VERSION,
           error: 'Missing authorization token',
-          debug: { receivedHeaders, pathToken: !!pathToken },
         }),
         {
           status: 401,
@@ -273,8 +276,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           _relay: RELAY_VERSION,
-          error: 'Invalid token',
-          debug: { userError: userError?.message },
+          error: 'Invalid or expired token',
         }),
         {
           status: 401,
@@ -312,16 +314,11 @@ Deno.serve(async (req: Request) => {
     // 6. Get server-side API key
     const apiKey = Deno.env.get(providerConfig.envKey);
     if (!apiKey) {
+      console.error(`[RELAY] API key not configured: ${providerConfig.envKey}`);
       return new Response(
         JSON.stringify({
+          _relay: RELAY_VERSION,
           error: `API key not configured for ${provider}`,
-          debug: {
-            envKey: providerConfig.envKey,
-            availableEnvKeys: Object.keys(Deno.env.toObject()).filter(
-              (k) =>
-                k.includes('API') || k.includes('KEY') || k.includes('SECRET'),
-            ),
-          },
         }),
         {
           status: 503,
