@@ -315,7 +315,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       // JWT token (not an API key). We use a custom header (x-texra-auth) that the SDK
       // won't interfere with, since the SDK doesn't reliably forward its own auth headers
       // to non-Google domains.
-      const usingServerSideKeys = shouldUseServerSideKeysSync(this.config.provider);
+      const usingServerSideKeys = shouldUseServerSideKeysSync(
+        this.config.provider,
+      );
       if (usingServerSideKeys) {
         this.logger.debug(`Google: Adding x-texra-auth header for relay auth`);
         this.googleClient = new GoogleGenAI({
