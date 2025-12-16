@@ -8,6 +8,7 @@ import {
 } from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
+  RunUsageAccumulatorCodec,
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
 
@@ -23,12 +24,28 @@ export type NativeResponseUsage =
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata;
 
+/** Default values for ConversationRoundState */
+const ROUND_STATE_DEFAULTS = {
+  continuationCount: 0,
+  responseTimeMs: 0,
+  outputFile: '',
+  normalizedUsage: null,
+} as const;
+
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
-  continuationCount: z.int().nonnegative(),
-  responseTimeMs: z.number().nonnegative(),
-  outputFile: z.string(),
-  normalizedUsage: NormalizedUsageSchema.nullish(),
+  continuationCount: z
+    .int()
+    .nonnegative()
+    .default(ROUND_STATE_DEFAULTS.continuationCount),
+  responseTimeMs: z
+    .number()
+    .nonnegative()
+    .default(ROUND_STATE_DEFAULTS.responseTimeMs),
+  outputFile: z.string().default(ROUND_STATE_DEFAULTS.outputFile),
+  normalizedUsage: NormalizedUsageSchema.nullish().default(
+    ROUND_STATE_DEFAULTS.normalizedUsage,
+  ),
 });
 
 /**
@@ -48,10 +65,10 @@ export class ConversationRoundState {
 
   constructor(roundIndex: number) {
     this.roundIndex = roundIndex;
-    this.continuationCount = 0;
-    this.responseTimeMs = 0;
-    this.outputFile = '';
-    this.normalizedUsage = null;
+    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
+    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
+    this.outputFile = ROUND_STATE_DEFAULTS.outputFile;
+    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
   incrementContinuation(): void {
@@ -69,32 +86,50 @@ export class ConversationRoundState {
   clearUsage(): void {
     this.normalizedUsage = null;
   }
-
-  toJSON(): ConversationRoundStateSnapshot {
-    return {
-      roundIndex: this.roundIndex,
-      continuationCount: this.continuationCount,
-      responseTimeMs: this.responseTimeMs,
-      outputFile: this.outputFile,
-      normalizedUsage: this.normalizedUsage,
-    };
-  }
-
-  static fromJSON(
-    json: ConversationRoundStateSnapshot,
-  ): ConversationRoundState {
-    const state = new ConversationRoundState(json.roundIndex);
-    state.continuationCount = json.continuationCount;
-    state.responseTimeMs = json.responseTimeMs;
-    state.outputFile = json.outputFile;
-    state.normalizedUsage = json.normalizedUsage ?? null;
-    return state;
-  }
 }
 
+/**
+ * Codec for bi-directional serialization of ConversationRoundState.
+ * Use .encode() to serialize and .decode() to deserialize.
+ */
+export const ConversationRoundStateCodec = z.codec(
+  ConversationRoundStateSnapshotSchema,
+  z.instanceof(ConversationRoundState),
+  {
+    decode: (
+      json: ConversationRoundStateSnapshot,
+    ): ConversationRoundState => {
+      // Schema handles defaults via .default()
+      const parsed = ConversationRoundStateSnapshotSchema.parse(json);
+      const state = new ConversationRoundState(parsed.roundIndex);
+      state.continuationCount = parsed.continuationCount;
+      state.responseTimeMs = parsed.responseTimeMs;
+      state.outputFile = parsed.outputFile;
+      state.normalizedUsage = parsed.normalizedUsage ?? null;
+      return state;
+    },
+    encode: (state: ConversationRoundState): ConversationRoundStateSnapshot => ({
+      roundIndex: state.roundIndex,
+      continuationCount: state.continuationCount,
+      responseTimeMs: state.responseTimeMs,
+      outputFile: state.outputFile,
+      normalizedUsage: state.normalizedUsage,
+    }),
+  },
+);
+
+/** Default values for AgentRunState */
+const RUN_STATE_DEFAULTS = {
+  totalRounds: 0,
+  totalResponseTimeMs: 0,
+} as const;
+
 export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative(),
-  totalResponseTimeMs: z.number().nonnegative(),
+  totalRounds: z.int().nonnegative().default(RUN_STATE_DEFAULTS.totalRounds),
+  totalResponseTimeMs: z
+    .number()
+    .nonnegative()
+    .default(RUN_STATE_DEFAULTS.totalResponseTimeMs),
   usageAccumulator: RunUsageAccumulatorJSONSchema,
 });
 
@@ -110,8 +145,8 @@ export class AgentRunState {
   public readonly usageAccumulator: RunUsageAccumulator;
 
   constructor(accumulator?: RunUsageAccumulator) {
-    this.totalRounds = 0;
-    this.totalResponseTimeMs = 0;
+    this.totalRounds = RUN_STATE_DEFAULTS.totalRounds;
+    this.totalResponseTimeMs = RUN_STATE_DEFAULTS.totalResponseTimeMs;
     this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
   }
 
@@ -132,28 +167,30 @@ export class AgentRunState {
     }
     this.addResponseTime(roundState.responseTimeMs);
   }
-
-  toJSON(): AgentRunStateSnapshot {
-    return {
-      totalRounds: this.totalRounds,
-      totalResponseTimeMs: this.totalResponseTimeMs,
-      usageAccumulator: this.usageAccumulator.toJSON(),
-    };
-  }
-
-  static fromJSON(
-    json: AgentRunStateSnapshot | null | undefined,
-  ): AgentRunState {
-    if (!json) {
-      return new AgentRunState();
-    }
-
-    const usageAccumulator = RunUsageAccumulator.fromJSON(
-      json.usageAccumulator,
-    );
-    const state = new AgentRunState(usageAccumulator);
-    state.totalRounds = json.totalRounds;
-    state.totalResponseTimeMs = json.totalResponseTimeMs;
-    return state;
-  }
 }
+
+/**
+ * Codec for bi-directional serialization of AgentRunState.
+ * Use .encode() to serialize and .decode() to deserialize.
+ */
+export const AgentRunStateCodec = z.codec(
+  AgentRunStateSnapshotSchema,
+  z.instanceof(AgentRunState),
+  {
+    decode: (json: AgentRunStateSnapshot): AgentRunState => {
+      // Compose with nested codec
+      const usageAccumulator = RunUsageAccumulatorCodec.decode(
+        json.usageAccumulator,
+      );
+      const state = new AgentRunState(usageAccumulator);
+      state.totalRounds = json.totalRounds;
+      state.totalResponseTimeMs = json.totalResponseTimeMs;
+      return state;
+    },
+    encode: (state: AgentRunState): AgentRunStateSnapshot => ({
+      totalRounds: state.totalRounds,
+      totalResponseTimeMs: state.totalResponseTimeMs,
+      usageAccumulator: RunUsageAccumulatorCodec.encode(state.usageAccumulator),
+    }),
+  },
+);

@@ -17,6 +17,7 @@ import {
 } from '@utils/config';
 
 // Local file imports
+import { AgentSharedStoreCodec } from '@agent/core/AgentSharedStore';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
@@ -100,7 +101,7 @@ export const ToolUseSnapshotStore = {
       streamId: payload.streamId,
       agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
-      store: payload.store.toJSON(),
+      store: AgentSharedStoreCodec.encode(payload.store),
       lastUpdated: Date.now(),
     } as const;
 
