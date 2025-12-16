@@ -34,7 +34,6 @@ export const OPENAI_COMPLETION_FINISH_REASONS = Object.values(
 export type OpenAICompletionFinishReason =
   (typeof OPENAI_COMPLETION_FINISH_REASONS)[number];
 
-
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
   END_TURN: 'endTurn',

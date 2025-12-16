@@ -24,4 +24,3 @@ export function consumePendingState(): TaskState | undefined {
   pendingState = undefined;
   return state;
 }
-
