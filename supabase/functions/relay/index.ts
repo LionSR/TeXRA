@@ -86,18 +86,19 @@ const corsHeaders = {
 };
 
 /**
- * Extract JWT token from request headers.
+ * Extract JWT token from request.
  *
- * Different SDK clients send the "API key" (which is actually the JWT when using
- * server-side keys) in different headers:
- * - Custom TeXRA header: x-texra-auth: {token} (preferred, SDKs won't interfere)
- * - OpenAI SDK: Authorization: Bearer {token}
- * - Anthropic SDK: x-api-key: {token}
- * - Google SDK: x-goog-api-key: {token}
+ * SDKs (especially Google and Anthropic) strip custom headers when sending to
+ * non-provider domains. Query parameters cannot be stripped, so we check there first.
  *
- * This function checks all possible locations and extracts the JWT.
+ * Priority order:
+ * 1. Query parameter: ?texra_token={token} (SDKs cannot strip this!)
+ * 2. Custom header: x-texra-auth: {token}
+ * 3. Authorization: Bearer {token} (OpenAI style)
+ * 4. x-api-key: {token} (Anthropic style)
+ * 5. x-goog-api-key: {token} (Google style)
  */
-function extractJwtFromHeaders(req: Request): string | null {
+function extractJwtFromRequest(req: Request, url: URL): string | null {
   // Debug: Log all received headers
   const allHeaders: Record<string, string> = {};
   req.headers.forEach((value, key) => {
@@ -107,14 +108,21 @@ function extractJwtFromHeaders(req: Request): string | null {
   });
   console.log('[DEBUG] Received headers:', JSON.stringify(allHeaders));
 
-  // Check custom TeXRA auth header first (SDKs don't interfere with this)
+  // 1. Check query parameter first (SDKs CANNOT strip this!)
+  const queryToken = url.searchParams.get('texra_token');
+  if (queryToken) {
+    console.log('[DEBUG] Found texra_token query parameter');
+    return queryToken;
+  }
+
+  // 2. Check custom TeXRA auth header (SDKs shouldn't interfere with this)
   const texraAuth = req.headers.get('x-texra-auth');
   if (texraAuth) {
     console.log('[DEBUG] Found x-texra-auth header');
     return texraAuth;
   }
 
-  // Check Authorization header (OpenAI style)
+  // 3. Check Authorization header (OpenAI style)
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     console.log('[DEBUG] Found Authorization header');
@@ -126,21 +134,21 @@ function extractJwtFromHeaders(req: Request): string | null {
     return authHeader;
   }
 
-  // Check x-api-key (Anthropic style)
+  // 4. Check x-api-key (Anthropic style)
   const xApiKey = req.headers.get('x-api-key');
   if (xApiKey) {
     console.log('[DEBUG] Found x-api-key header');
     return xApiKey;
   }
 
-  // Check x-goog-api-key (Google style)
+  // 5. Check x-goog-api-key (Google style)
   const googApiKey = req.headers.get('x-goog-api-key');
   if (googApiKey) {
     console.log('[DEBUG] Found x-goog-api-key header');
     return googApiKey;
   }
 
-  console.log('[DEBUG] No auth header found');
+  console.log('[DEBUG] No auth token found in query params or headers');
   return null;
 }
 
@@ -204,7 +212,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. Extract JWT from request headers
     // Different SDKs send the token in different headers (Authorization, x-api-key, etc.)
-    const jwtToken = extractJwtFromHeaders(req);
+    const jwtToken = extractJwtFromRequest(req, url);
     if (!jwtToken) {
       // Include received headers in error for debugging
       const receivedHeaders: Record<string, string> = {};
