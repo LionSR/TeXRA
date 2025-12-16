@@ -116,6 +116,9 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export function initializeServerSideKeyAccess(
   context: vscode.ExtensionContext,
 ): void {
+  // Register EventEmitter for disposal when extension deactivates
+  context.subscriptions.push(_onDidChangeModelAccess);
+
   globalState = context.globalState;
   // Load persisted value, defaulting to true (use included access)
   useIncludedModelAccess = globalState.get<boolean>(
