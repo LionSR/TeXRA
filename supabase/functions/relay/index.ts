@@ -153,12 +153,19 @@ function extractJwtFromRequest(req: Request, url: URL): string | null {
 }
 
 /**
- * Parse the URL path to extract provider and API path.
- * Expected format: /relay/{provider}/{...apiPath}
+ * Parse the URL path to extract provider, optional path-embedded token, and API path.
+ *
+ * Supported formats:
+ * 1. /relay/{provider}/{...apiPath} - token from query param or headers
+ * 2. /relay/{provider}/-/{token}/{...apiPath} - token embedded in path (for SDKs that strip headers)
+ *
+ * The /-/ separator indicates a path-embedded token follows.
  */
-function parseRequestPath(
-  pathname: string,
-): { provider: string; apiPath: string } | null {
+function parseRequestPath(pathname: string): {
+  provider: string;
+  apiPath: string;
+  pathToken?: string;
+} | null {
   // Remove /relay/ prefix and split
   const withoutPrefix = pathname.replace(/^\/relay\/?/, '');
   const parts = withoutPrefix.split('/');
@@ -168,8 +175,17 @@ function parseRequestPath(
   }
 
   const provider = parts[0].toLowerCase();
-  const apiPath = '/' + parts.slice(1).join('/');
 
+  // Check if token is embedded in path: /relay/{provider}/-/{token}/{...apiPath}
+  if (parts.length >= 3 && parts[1] === '-') {
+    const pathToken = parts[2];
+    const apiPath = '/' + parts.slice(3).join('/');
+    console.log('[DEBUG] Found path-embedded token');
+    return { provider, apiPath, pathToken };
+  }
+
+  // Standard format: /relay/{provider}/{...apiPath}
+  const apiPath = '/' + parts.slice(1).join('/');
   return { provider, apiPath };
 }
 
@@ -196,7 +212,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { provider, apiPath } = parsed;
+    const { provider, apiPath, pathToken } = parsed;
 
     // 2. Validate provider
     const providerConfig = PROVIDER_CONFIGS[provider];
@@ -210,9 +226,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 3. Extract JWT from request headers
-    // Different SDKs send the token in different headers (Authorization, x-api-key, etc.)
-    const jwtToken = extractJwtFromRequest(req, url);
+    // 3. Extract JWT token - path-embedded token has highest priority
+    // Path token is most reliable since SDKs cannot modify the URL path structure
+    const jwtToken = pathToken || extractJwtFromRequest(req, url);
+    if (pathToken) {
+      console.log('[DEBUG] Using path-embedded token for auth');
+    }
     if (!jwtToken) {
       // Include received headers in error for debugging
       const receivedHeaders: Record<string, string> = {};
