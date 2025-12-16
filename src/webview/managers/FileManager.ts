@@ -17,8 +17,7 @@ import { WorkspaceFS } from '@utils/files';
 // Local imports - types
 import type {
   FileSelectionMessage,
-  InputFileSelectedMessage,
-  GenericFileSelectedMessage,
+  FileSelectedMessage,
   RequestInputFileMessage,
   RequestFileMessage,
   RequestEditedFileMessage,
@@ -95,7 +94,7 @@ export class FileManager {
   }
 
   async handleInputFileSelected(
-    message: InputFileSelectedMessage,
+    message: FileSelectedMessage,
   ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
@@ -110,7 +109,7 @@ export class FileManager {
     this.postFileUpdate('Edited', filteredEditedFiles);
   }
 
-  handleGenericFileSelected(message: GenericFileSelectedMessage): void {
+  handleGenericFileSelected(message: FileSelectedMessage): void {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
