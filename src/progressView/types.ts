@@ -1,8 +1,7 @@
 // Local imports - agent types
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import type { StreamStatus } from '@common/constants/streamStatus';
 
 export interface StreamUITraits {
   /** Canonical session grouping for the stream. */
@@ -40,16 +39,4 @@ export interface InstructionMetadata {
 export interface InstructionUpdate {
   text: string;
   metadata?: InstructionMetadata;
-}
-
-/**
- * Message payload for UPDATE_STREAM_STATUS command.
- * Used for efficient single-stream status updates without full list refresh.
- */
-export interface UpdateStreamStatusMessage {
-  command: 'updateStreamStatus';
-  stream: StreamTabId;
-  status: StreamStatus;
-  /** Optional timestamp for updating "last activity" display */
-  lastTimestamp?: number;
 }

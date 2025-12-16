@@ -20,8 +20,6 @@ export const LogLevelSchema = z.enum([
   LOG_LEVELS.DEBUG,
 ]);
 
-export type LogLevel = z.infer<typeof LogLevelSchema>;
-
 /**
  * End group status - terminal states used when finalizing log groups.
  * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
