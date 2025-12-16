@@ -434,19 +434,25 @@ Deno.serve(async (req: Request) => {
     }
 
     // 10. Return response with CORS headers
+    // Forward all response headers except hop-by-hop headers
     const responseHeaders = new Headers(corsHeaders);
 
-    // Copy relevant response headers
-    const responseContentType = upstreamResponse.headers.get('Content-Type');
-    if (responseContentType) {
-      responseHeaders.set('Content-Type', responseContentType);
-    }
+    // Headers to skip in response (hop-by-hop or should not be forwarded)
+    const SKIP_RESPONSE_HEADERS = new Set([
+      'connection',
+      'keep-alive',
+      'transfer-encoding', // Let fetch handle this
+      'te',
+      'trailer',
+      'upgrade',
+    ]);
 
-    // For streaming responses
-    const transferEncoding = upstreamResponse.headers.get('Transfer-Encoding');
-    if (transferEncoding) {
-      responseHeaders.set('Transfer-Encoding', transferEncoding);
-    }
+    // Copy all upstream response headers except the ones we skip
+    upstreamResponse.headers.forEach((value, key) => {
+      if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
+        responseHeaders.set(key, value);
+      }
+    });
 
     // Disable buffering for streaming
     responseHeaders.set('X-Accel-Buffering', 'no');
