@@ -9,6 +9,7 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
+import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -36,6 +37,7 @@ export class MainViewProvider
     this.setupFileWatcher();
     this.setupAgentWatcher();
     this.setupConfigurationWatcher();
+    this.setupAuthListener();
     this.registerCommandHandlers();
   }
 
@@ -69,6 +71,25 @@ export class MainViewProvider
       this.context,
       ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
       () => this.refreshOptionsAndView(),
+    );
+  }
+
+  private setupAuthListener() {
+    // Listen for authentication state changes to refresh model availability
+    // When user logs in/out, server-side key availability may change
+    this.context.subscriptions.push(
+      vscode.authentication.onDidChangeSessions((e) => {
+        if (e.provider.id === 'texra-supabase') {
+          void this.refreshOptionsAndView();
+        }
+      }),
+    );
+
+    // Listen for model access setting changes (included vs personal keys)
+    this.context.subscriptions.push(
+      onDidChangeModelAccess(() => {
+        void this.refreshOptionsAndView();
+      }),
     );
   }
 

@@ -217,3 +217,71 @@ h2 {
   color: var(--vscode-descriptionForeground);
   font-style: italic;
 }
+
+/* API Access section (Ultra tier only) */
+.api-access-section {
+  margin-top: var(--spacing-xlarge);
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.api-access-description {
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: var(--spacing-medium);
+}
+
+.api-access-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+.api-access-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-medium);
+  padding: var(--spacing-medium);
+  background: var(--vscode-input-background);
+  border: var(--border-thin) solid var(--vscode-panel-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.api-access-option:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+.api-access-option:has(input:checked) {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
+}
+
+.api-access-option input[type='radio'] {
+  margin-top: 3px;
+  accent-color: var(--vscode-focusBorder);
+}
+
+.option-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+}
+
+.option-title {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.option-description {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-descriptionForeground);
+}
+
+.enabled-providers-info {
+  margin-top: var(--spacing-medium);
+  padding: var(--spacing-small) var(--spacing-medium);
+  background: var(--vscode-textBlockQuote-background);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  color: var(--vscode-descriptionForeground);
+}
