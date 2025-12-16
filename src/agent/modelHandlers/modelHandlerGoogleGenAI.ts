@@ -308,23 +308,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
       const credential = await this.getApiKey();
-      const baseUrl = this.getBaseUrl();
+      let baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
       // When using server-side keys via relay, the "credential" is actually the user's
-      // JWT token (not an API key). We use a custom header (x-texra-auth) that the SDK
-      // won't interfere with, since the SDK doesn't reliably forward its own auth headers
-      // to non-Google domains.
+      // JWT token (not an API key). SDKs strip custom headers to non-provider domains,
+      // so we pass the token as a query parameter which cannot be stripped.
       const usingServerSideKeys = shouldUseServerSideKeysSync(
         this.config.provider,
       );
-      if (usingServerSideKeys) {
-        this.logger.debug(`Google: Adding x-texra-auth header for relay auth`);
+      if (usingServerSideKeys && baseUrl) {
+        // Append JWT token as query parameter - SDKs cannot strip query params!
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        baseUrl = `${baseUrl}${separator}texra_token=${encodeURIComponent(credential)}`;
+        this.logger.debug(`Google: Using query param auth for relay`);
         this.googleClient = new GoogleGenAI({
-          apiKey: credential, // SDK requires this, but relay uses x-texra-auth
+          apiKey: credential, // SDK requires this, but relay uses texra_token query param
           httpOptions: {
-            baseUrl: baseUrl ?? undefined,
-            headers: { 'x-texra-auth': credential }, // Custom header for relay
+            baseUrl: baseUrl,
           },
         });
       } else {
