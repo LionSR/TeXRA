@@ -52,7 +52,6 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected usageMonitor: UsageMonitor;
   protected runStage?: AgentLogStage;
   private lastRunStageId?: string;
-  protected userVars: Record<string, any> = {};
   protected userVarChannels: UserVariableChannels = {
     input: Object.freeze({}),
     transient: {},
@@ -110,12 +109,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   protected resetTransientUserVars(overrides?: Record<string, any>): void {
-    const nextTransient = {
+    this.userVarChannels.transient = {
       ...this.userVarChannels.input,
       ...(overrides ?? {}),
     };
-    this.userVarChannels.transient = nextTransient;
-    this.userVars = this.userVarChannels.transient;
   }
 
   /** Retrieve the initialized client instance. */
