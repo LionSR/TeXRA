@@ -12,7 +12,10 @@
  * The relay validates the JWT, checks user tier, then replaces it with the
  * real API key before forwarding to the upstream provider.
  *
- * URL Structure: /relay/{provider}/{...path}
+ * Endpoints:
+ * - GET /relay/providers - Returns list of providers with configured API keys (public)
+ * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra tier)
+ *
  * Example: /relay/openai/v1/chat/completions
  *
  * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
@@ -22,7 +25,7 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.2.0';
+const RELAY_VERSION = '1.3.0';
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -176,6 +179,19 @@ function extractJwtFromRequest(req: Request): string | null {
 const RELAY_PATH_PREFIX = '/relay/';
 
 /**
+ * Get list of providers that have API keys configured.
+ * Used by the /providers endpoint to inform clients which providers are available.
+ */
+function getEnabledProviders(): string[] {
+  return Object.entries(PROVIDER_CONFIGS)
+    .filter(([_, config]) => {
+      const apiKey = Deno.env.get(config.envKey);
+      return apiKey && apiKey.length > 0;
+    })
+    .map(([provider]) => provider);
+}
+
+/**
  * Parse the URL path to extract provider, optional path-embedded token, and API path.
  *
  * Supported formats:
@@ -226,6 +242,23 @@ Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Handle /providers endpoint - returns list of providers with configured API keys
+  // This is a public endpoint (no auth required) so clients know which providers
+  // are available before attempting to use them.
+  if (url.pathname.endsWith('/relay/providers') || url.pathname === '/providers') {
+    const enabledProviders = getEnabledProviders();
+    return new Response(
+      JSON.stringify({
+        _relay: RELAY_VERSION,
+        providers: enabledProviders,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    );
   }
 
   try {
