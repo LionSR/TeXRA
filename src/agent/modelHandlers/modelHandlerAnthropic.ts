@@ -331,40 +331,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
     // When using server-side keys via relay, the "credential" is actually the user's
-    // JWT token (not an API key). The Anthropic SDK's fetch option doesn't reliably
-    // send headers to non-Anthropic domains, so we intercept global fetch.
+    // JWT token (not an API key). We use a custom header (x-texra-auth) that the SDK
+    // won't interfere with, since the SDK doesn't reliably forward its own auth headers
+    // to non-Anthropic domains.
     const usingServerSideKeys = shouldUseServerSideKeysSync(this.config.provider);
-    if (usingServerSideKeys && baseUrl) {
-      this.logger.debug(
-        `Anthropic: Setting up fetch interceptor for relay auth`,
-      );
-      const jwtToken = credential;
-      const relayDomain = new URL(baseUrl).hostname;
-
-      // Wrap global fetch to inject auth header for relay requests
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (
-        input: RequestInfo | URL,
-        init?: RequestInit,
-      ): Promise<Response> => {
-        const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-
-        // Only inject header for requests to our relay
-        if (url.includes(relayDomain)) {
-          const headers = new Headers(init?.headers);
-          headers.set('x-api-key', jwtToken);
-          return originalFetch(input, { ...init, headers });
-        }
-        return originalFetch(input, init);
-      };
+    if (usingServerSideKeys) {
+      this.logger.debug(`Anthropic: Adding x-texra-auth header for relay auth`);
+      return new Anthropic({
+        apiKey: credential, // SDK requires this, but relay uses x-texra-auth
+        baseURL: baseUrl,
+        defaultHeaders: { 'x-texra-auth': credential }, // Custom header for relay
+      });
     }
 
-    // Standard flow: credential is an actual API key (or JWT for relay)
+    // Standard flow: credential is an actual API key
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
