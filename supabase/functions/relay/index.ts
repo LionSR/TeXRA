@@ -22,7 +22,7 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.1.0';
+const RELAY_VERSION = '1.2.0';
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -100,32 +100,28 @@ const corsHeaders = {
 };
 
 /**
- * Extract JWT token from request.
+ * Extract JWT token from request headers.
  *
  * SDKs send their credentials in provider-specific headers. When the user's JWT
  * is passed as the "apiKey" to the SDK, it arrives here in these headers.
  *
  * Priority order:
- * 1. Query parameter: ?texra_token={token} (fallback for edge cases)
- * 2. Custom header: x-texra-auth: {token} (explicit TeXRA auth)
- * 3. Authorization: Bearer {token} (OpenAI SDK)
- * 4. x-api-key: {token} (Anthropic SDK)
- * 5. x-goog-api-key: {token} (Google SDK)
+ * 1. Custom header: x-texra-auth: {token} (explicit TeXRA auth)
+ * 2. Authorization: Bearer {token} (OpenAI SDK)
+ * 3. x-api-key: {token} (Anthropic SDK)
+ * 4. x-goog-api-key: {token} (Google SDK)
+ *
+ * Note: Query parameters were intentionally removed for security (they appear
+ * in server logs, browser history, and referrer headers).
  */
-function extractJwtFromRequest(req: Request, url: URL): string | null {
-  // 1. Check query parameter (fallback for edge cases)
-  const queryToken = url.searchParams.get('texra_token');
-  if (queryToken) {
-    return queryToken;
-  }
-
-  // 2. Check custom TeXRA auth header (SDKs shouldn't interfere with this)
+function extractJwtFromRequest(req: Request): string | null {
+  // 1. Check custom TeXRA auth header (explicit auth for edge cases)
   const texraAuth = req.headers.get('x-texra-auth');
   if (texraAuth) {
     return texraAuth;
   }
 
-  // 3. Check Authorization header (OpenAI style)
+  // 2. Check Authorization header (OpenAI style)
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     // Handle "Bearer {token}" format
@@ -136,13 +132,13 @@ function extractJwtFromRequest(req: Request, url: URL): string | null {
     return authHeader;
   }
 
-  // 4. Check x-api-key (Anthropic style)
+  // 3. Check x-api-key (Anthropic style)
   const xApiKey = req.headers.get('x-api-key');
   if (xApiKey) {
     return xApiKey;
   }
 
-  // 5. Check x-goog-api-key (Google style)
+  // 4. Check x-goog-api-key (Google style)
   const googApiKey = req.headers.get('x-goog-api-key');
   if (googApiKey) {
     return googApiKey;
@@ -208,6 +204,7 @@ Deno.serve(async (req: Request) => {
     if (!parsed) {
       return new Response(
         JSON.stringify({
+          _relay: RELAY_VERSION,
           error: 'Invalid path. Expected: /relay/{provider}/{apiPath}',
         }),
         {
@@ -223,7 +220,10 @@ Deno.serve(async (req: Request) => {
     const providerConfig = PROVIDER_CONFIGS[provider];
     if (!providerConfig) {
       return new Response(
-        JSON.stringify({ error: `Unsupported provider: ${provider}` }),
+        JSON.stringify({
+          _relay: RELAY_VERSION,
+          error: `Unsupported provider: ${provider}`,
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -233,7 +233,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. Extract JWT token - path-embedded token has highest priority
     // Path token is most reliable since SDKs cannot modify the URL path structure
-    const jwtToken = pathToken || extractJwtFromRequest(req, url);
+    const jwtToken = pathToken || extractJwtFromRequest(req);
     if (!jwtToken) {
       return new Response(
         JSON.stringify({
@@ -254,7 +254,10 @@ Deno.serve(async (req: Request) => {
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('Missing required Supabase environment variables');
       return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
+        JSON.stringify({
+          _relay: RELAY_VERSION,
+          error: 'Server configuration error',
+        }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -293,15 +296,22 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: 'Profile not found' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          _relay: RELAY_VERSION,
+          error: 'Profile not found',
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     if (profile.tier !== 'Ultra') {
       return new Response(
         JSON.stringify({
+          _relay: RELAY_VERSION,
           error: 'Ultra tier required for server-side API keys',
         }),
         {
@@ -417,9 +427,15 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     // Log full error server-side for debugging, but don't expose details to clients
     console.error('Relay error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        _relay: RELAY_VERSION,
+        error: 'Internal server error',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    );
   }
 });
