@@ -4,7 +4,7 @@ import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
 import {
   canUseServerSideKeys,
-  isProviderSupportedForServerSideKeys,
+  isProviderEnabledForServerSideKeys,
 } from '@auth/serverSideKeyAccess';
 
 /**
@@ -57,7 +57,8 @@ export async function computeModelOptions(): Promise<string> {
       let available = false;
 
       // Check if server-side keys are available for this provider
-      if (hasServerSideKeys && isProviderSupportedForServerSideKeys(provider)) {
+      // isProviderEnabledForServerSideKeys checks the server's list of enabled providers
+      if (hasServerSideKeys && isProviderEnabledForServerSideKeys(provider)) {
         available = true;
       }
 
