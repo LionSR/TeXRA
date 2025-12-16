@@ -36,6 +36,7 @@ export class MainViewProvider
     this.setupFileWatcher();
     this.setupAgentWatcher();
     this.setupConfigurationWatcher();
+    this.setupAuthListener();
     this.registerCommandHandlers();
   }
 
@@ -67,8 +68,26 @@ export class MainViewProvider
     // Watch for configuration changes that affect agent/model options
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
+      [
+        'texra.agents',
+        'texra.toolUseAgents',
+        'texra.models',
+        'texra.files',
+        'texra.experimental.useServerSideKeys',
+      ],
       () => this.refreshOptionsAndView(),
+    );
+  }
+
+  private setupAuthListener() {
+    // Listen for authentication state changes to refresh model availability
+    // When user logs in/out, server-side key availability may change
+    this.context.subscriptions.push(
+      vscode.authentication.onDidChangeSessions((e) => {
+        if (e.provider.id === 'texra-supabase') {
+          void this.refreshOptionsAndView();
+        }
+      }),
     );
   }
 
