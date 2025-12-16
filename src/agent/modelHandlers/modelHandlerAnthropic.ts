@@ -331,25 +331,40 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
     // When using server-side keys via relay, the "credential" is actually the user's
-    // JWT token (not an API key). We inject it into the x-api-key header so the relay
-    // can authenticate the user. The relay then uses its own server-side API key.
-    if (shouldUseServerSideKeysSync(this.config.provider)) {
-      const jwtToken = credential; // Clarify: this is JWT, not an API key
+    // JWT token (not an API key). The Anthropic SDK's fetch option doesn't reliably
+    // send headers to non-Anthropic domains, so we intercept global fetch.
+    const usingServerSideKeys = shouldUseServerSideKeysSync(this.config.provider);
+    if (usingServerSideKeys && baseUrl) {
       this.logger.debug(
-        `Anthropic: Injecting JWT into x-api-key header for relay auth`,
+        `Anthropic: Setting up fetch interceptor for relay auth`,
       );
-      return new Anthropic({
-        apiKey: jwtToken, // SDK requires this param
-        baseURL: baseUrl,
-        fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
+      const jwtToken = credential;
+      const relayDomain = new URL(baseUrl).hostname;
+
+      // Wrap global fetch to inject auth header for relay requests
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+
+        // Only inject header for requests to our relay
+        if (url.includes(relayDomain)) {
           const headers = new Headers(init?.headers);
-          headers.set('x-api-key', jwtToken); // Relay extracts JWT from this header
-          return fetch(url, { ...init, headers });
-        },
-      });
+          headers.set('x-api-key', jwtToken);
+          return originalFetch(input, { ...init, headers });
+        }
+        return originalFetch(input, init);
+      };
     }
 
-    // Standard flow: credential is an actual API key
+    // Standard flow: credential is an actual API key (or JWT for relay)
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
