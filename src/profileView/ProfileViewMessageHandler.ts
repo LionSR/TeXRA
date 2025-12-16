@@ -17,6 +17,7 @@ import {
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
+import { ULTRA_TIER } from '@/auth/config';
 import {
   getEnabledProviders,
   setUseIncludedModelAccess,
@@ -94,7 +95,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }));
 
     // Get model access settings for Ultra tier users
-    const isUltra = authContext.tier === 'Ultra';
+    const isUltra = authContext.tier === ULTRA_TIER;
     const useIncludedAccess = getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
