@@ -1,16 +1,11 @@
-// Standard library imports
 import * as path from 'path';
 
-// Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import {
   AgentSetting,
-  AgentType,
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -19,25 +14,14 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
-  replaceInputCommands,
   createFileMapping,
   TaskRunFileService,
   flexibleFS,
-  WorkspaceFS,
   pathToLocation,
   getComparablePath,
 } from '@utils/files';
-// Type imports
-
-// Internal imports
-import {
-  extractMultipleTextFromTag,
-  extractTextFromTag,
-} from '@utils/text/xmlUtils';
 import { bus } from '@eventBus/ProgressEventBus';
-import { runLatexFormatter } from '@latex/texFormatter';
 
-// Local file imports
 import { XmlOutputManager } from './XmlOutputManager';
 import {
   type FileLocation,
@@ -48,15 +32,9 @@ import {
 } from './types';
 import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
-
-// Type imports
+import { OutputFileProcessor } from './OutputFileProcessor';
 import type { IOutputHandler } from './IOutputHandler';
 
-// Local imports - types
-
-/**
- * Complete round data containing outputs and metadata.
- */
 interface RoundData {
   outputs: OutputFileInfo[];
   rawOutput: FileLocation | null;
@@ -68,10 +46,8 @@ export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
   public logId: number;
-  // Single source of truth for all round data
   private rounds: Map<number, RoundData>;
 
-  // Backward-compatible getter for external consumers (LatexDiffManager)
   public get outputFiles(): { [key: number]: OutputFileInfo[] } {
     const result: { [key: number]: OutputFileInfo[] } = {};
     this.rounds.forEach((data, round) => {
@@ -79,6 +55,7 @@ export class OutputHandler implements IOutputHandler {
     });
     return result;
   }
+
   public baseFiles: FileLocation[];
   protected logger: AgentLogger;
   protected channel: string;
@@ -88,13 +65,9 @@ export class OutputHandler implements IOutputHandler {
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private readonly executionId: string;
-  /**
-   * The storage key for this handler.
-   * Set via setActiveRun() when a workflow agent creates its primary task group.
-   * This is THE key for storage operations.
-   */
   private _storageKey: StorageKey | null;
   private runPreparation: Promise<void> | null;
+  private readonly fileProcessor: OutputFileProcessor;
 
   constructor(
     agentSetting: AgentSetting,
@@ -123,7 +96,7 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
-      () => this.outputFiles, // Pass function reference instead of snapshot
+      () => this.outputFiles,
       this.baseFiles,
       this.logger,
       this.channel,
@@ -134,9 +107,15 @@ export class OutputHandler implements IOutputHandler {
     this._storageKey = null;
     this.runPreparation = null;
 
-    // Don't ask logger for initial group - let the agent set it explicitly
-    // via setActiveRun() when it creates its primary task group.
-    // This eliminates the round-trip to logger for ID resolution.
+    this.fileProcessor = new OutputFileProcessor({
+      agentSetting: this.agentSetting,
+      baseFiles: this.baseFiles,
+      channel: this.channel,
+      logger: this.logger,
+      xmlManager: this.xmlManager,
+      setRoundOutputs: (round, outputs) => this.setRoundOutputs(round, outputs),
+      ensureRoundData: (round) => this.ensureRoundData(round),
+    });
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -146,10 +125,7 @@ export class OutputHandler implements IOutputHandler {
   private collectRunSupportFiles(): FileLocation[] {
     const extras = new Map<string, FileLocation>();
     const add = (value?: string | FileLocation | null) => {
-      if (!value) {
-        return;
-      }
-
+      if (!value) return;
       const location =
         typeof value === 'string' ? pathToLocation(value) : value;
       extras.set(getComparablePath(location), location);
@@ -168,21 +144,10 @@ export class OutputHandler implements IOutputHandler {
     return Array.from(extras.values());
   }
 
-  /**
-   * Set the active storage key for this handler.
-   *
-   * Called by workflow agents when they create their primary task group.
-   * The storageKey becomes THE key for all storage operations.
-   *
-   * @param storageKey - THE key for storage operations (already branded via normalizeRunId)
-   */
   public setActiveRun(storageKey: StorageKey): void {
-    // Use the stored executionId directly - no round-trip to fileService
     this.fileService.updateRunContext(this.executionId);
 
-    if (storageKey === this._storageKey) {
-      return;
-    }
+    if (storageKey === this._storageKey) return;
 
     this._storageKey = storageKey;
     this.openedOutputs.clear();
@@ -195,34 +160,22 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
-  /**
-   * Get the current storage key.
-   * Returns the storageKey if set, otherwise falls back to DEFAULT_RUN_ID.
-   */
   private getStorageKey(): StorageKey {
     return this._storageKey ?? normalizeRunId(null);
   }
 
-  /**
-   * Create a storage-scoped payload for event bus emissions.
-   * Returns an object with storageKey (the single source of truth).
-   */
   private createStoragePayload(): {
     storageKey: StorageKey;
     executionId: string | undefined;
   } {
-    const storageKey = this.getStorageKey();
     return {
-      storageKey,
-      // Use stored executionId - no round-trip to fileService
+      storageKey: this.getStorageKey(),
       executionId: this.executionId,
     };
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
-    if (!this.runPreparation) {
-      return;
-    }
+    if (!this.runPreparation) return;
 
     try {
       await this.runPreparation;
@@ -248,14 +201,6 @@ export class OutputHandler implements IOutputHandler {
     return stage.run(() => fn(stage));
   }
 
-  /**
-   * Ensure that storage exists for a round and return its output list.
-   * @param round The round index to initialize.
-   * @returns The mutable list of outputs for the round.
-   */
-  /**
-   * Get or create round data.
-   */
   private ensureRoundData(round: number): RoundData {
     let data = this.rounds.get(round);
     if (!data) {
@@ -282,101 +227,26 @@ export class OutputHandler implements IOutputHandler {
     return (this.rounds.get(round)?.outputs.length ?? 0) > 0;
   }
 
-  /**
-   * Indents a LaTeX file for better readability
-   */
-  public async indentLatexFile(fileLocation: FileLocation): Promise<void> {
-    if (!fileLocation.absolutePath.includes('.tex')) {
-      return;
-    }
-    this.logger.debug(`Formatting ${fileLocation.absolutePath}`);
-    await runLatexFormatter(fileLocation.absolutePath);
+  private setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
+    const data = this.ensureRoundData(round);
+    data.outputs = outputs;
   }
 
-  /**
-   * Indents multiple LaTeX files for better readability
-   */
-  public async indentLatexFiles(fileLocations: FileLocation[]): Promise<void> {
-    for (const location of fileLocations) {
-      await this.indentLatexFile(location);
-    }
-  }
-
-  private async cleanupLatexBackups(
-    fileLocation: FileLocation | null,
-  ): Promise<void> {
-    if (!fileLocation) {
-      return;
-    }
-
-    const workspaceRoot = WorkspaceFS.getPath();
-    if (!workspaceRoot) {
-      return;
-    }
-
-    const originalLocation = fileLocation;
-    if (originalLocation.kind !== 'workspace') {
-      return;
-    }
-    const workspaceAbsolute = originalLocation.absolutePath;
-
-    if (!workspaceAbsolute) {
-      return;
-    }
-
-    const { dir, base, name } = path.parse(workspaceAbsolute);
-    const backupCandidates = new Set<string>([
-      path.join(dir, `${base}.bak`),
-      path.join(dir, `${base}.bak0`),
-      path.join(dir, `${base}.bak1`),
-      path.join(dir, `${name}.bak`),
-      path.join(dir, `${name}.bak0`),
-      path.join(dir, `${name}.bak1`),
-      path.join(dir, 'indent.log'),
-    ]);
-
-    for (const candidateAbsolute of backupCandidates) {
-      const relative = path.relative(workspaceRoot, candidateAbsolute);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        continue;
-      }
-
-      try {
-        if (await WorkspaceFS.exists(relative)) {
-          await WorkspaceFS.delete(relative);
-          this.logger.debug(`Removed latexindent backup ${relative}`);
-        }
-      } catch (error) {
-        this.logger.debug(
-          `Failed to remove latexindent backup ${relative}: ${toErrorMessage(error)}`,
-        );
-      }
-    }
-  }
-
-  /**
-   * Gather mapping and diff statistics for output files of a round.
-   * Computes diff stats in parallel for better performance.
-   */
   public async gatherOutputFileInfo(
     currRound: number,
   ): Promise<OutputFileInfo[]> {
     const roundOutputs = this.ensureRound(currRound);
     const mapping = this.getRoundMapping(currRound);
 
-    // Parallelize diff computation for better performance
     const infos = await Promise.all(
       roundOutputs.map(async (output) => {
         const location = output.location;
         const locationPath = getComparablePath(location);
 
-        // Look up relationships using string keys (robust to FileLocation reconstruction)
         const baseLocation = mapping.baseToOutput.get(locationPath) ?? null;
-        const prevLocation = mapping.prevToOutput.get(locationPath) ?? null;
         const originalLocation =
           mapping.originByOutput.get(locationPath) ?? null;
 
-        // Determine effective diff base: prefer explicit base, fallback to original if different from current
         const isSameFile =
           originalLocation &&
           getComparablePath(originalLocation) === locationPath;
@@ -393,10 +263,9 @@ export class OutputHandler implements IOutputHandler {
           source: output.source,
           location,
           lineage: {
-            // Track original file, what to compare against, and where diff is
             original: originalLocation,
             diffBase: diffBaseLocation,
-            diffFile: null, // Set later when latexdiff is generated
+            diffFile: null,
           },
           diff: stats,
         };
@@ -406,24 +275,17 @@ export class OutputHandler implements IOutputHandler {
     return infos;
   }
 
-  /**
-   * Compute mapping metadata for a round on-demand.
-   * Uses string keys (comparable paths) with FileLocation values for robust lookups.
-   * All maps are indexed by OUTPUT path for efficient lineage tracking.
-   */
   public getRoundMapping(currRound: number): RoundFileMapping {
     const currentData = this.rounds.get(currRound);
     const currentOutputs = currentData?.outputs ?? [];
     const currentLocations = currentOutputs.map((entry) => entry.location);
 
-    // Create forward mapping: base → output
     const forwardBaseToOutput = createFileMapping(
       this.baseFiles,
       currentLocations,
       'contains',
     );
 
-    // Reverse to: output path → base FileLocation (for efficient lookup in gatherOutputFileInfo)
     const baseToOutput = new Map<string, FileLocation>();
     for (const [basePath, outputLoc] of forwardBaseToOutput) {
       const baseLoc = this.baseFiles.find(
@@ -438,13 +300,11 @@ export class OutputHandler implements IOutputHandler {
     const prevOutputs = prevData?.outputs ?? [];
     const prevLocations = prevOutputs.map((entry) => entry.location);
 
-    // Create forward mapping: prev → current output
     const forwardPrevToOutput =
       currRound > 0
         ? createFileMapping(prevLocations, currentLocations, 'basename', true)
         : new Map<string, FileLocation>();
 
-    // Reverse to: output path → prev FileLocation (for efficient lookup)
     const prevToOutput = new Map<string, FileLocation>();
     if (currRound > 0) {
       for (const [prevPath, outputLoc] of forwardPrevToOutput) {
@@ -457,11 +317,8 @@ export class OutputHandler implements IOutputHandler {
       }
     }
 
-    // Map each output to its original base file by matching source name
     const originByOutput = new Map<string, FileLocation | undefined>();
     for (const entry of currentOutputs) {
-      // Find the base file that matches this output's source name
-      // Use exact basename matching (with or without extension for LaTeX compatibility)
       const matchingBase = this.baseFiles.find((baseLoc) => {
         const baseName = path.basename(
           baseLoc.kind !== 'external'
@@ -483,25 +340,13 @@ export class OutputHandler implements IOutputHandler {
       originByOutput.set(outputPath, matchingBase);
     }
 
-    return {
-      baseToOutput,
-      prevToOutput,
-      originByOutput,
-    };
+    return { baseToOutput, prevToOutput, originByOutput };
   }
 
-  /**
-   * Hydrate output artifacts from a saved state.
-   *
-   * @param storageKey - THE key for storage (from context.storageKey or saved state)
-   *                     Pass null only for legacy data without storage key.
-   * @param rounds - Map of round number to output files
-   */
   public hydrateFromArtifacts(
     storageKey: StorageKey | null,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    // storageKey is the single source of truth - no logger round-trips
     const currentKey = this.getStorageKey();
     const targetKey = storageKey ?? currentKey;
 
@@ -530,16 +375,6 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  /**
-   * Set output files for a round.
-   * @param round The round number
-   * @param outputs The output file infos
-   */
-  private setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
-    const data = this.ensureRoundData(round);
-    data.outputs = outputs;
-  }
-
   public async validateExpectedOutputs(
     outputLocation: FileLocation,
     currRound: number,
@@ -564,7 +399,6 @@ export class OutputHandler implements IOutputHandler {
           return;
         }
 
-        // Use run-storage aware location resolution
         const checks = expected.map(async (file) => ({
           file,
           exists: await flexibleFS.exists(
@@ -611,11 +445,6 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
-  /**
-   * Finalize processing for a conversation round.
-   * Gathers file info, validates expected outputs and
-   * emits an event with the collected files.
-   */
   public async finalizeRound(
     outputFile: FileLocation,
     currRound: number,
@@ -659,9 +488,7 @@ export class OutputHandler implements IOutputHandler {
 
         for (const info of fileInfos) {
           const filePath = info.location.absolutePath;
-          if (this.openedOutputs.has(filePath)) {
-            continue;
-          }
+          if (this.openedOutputs.has(filePath)) continue;
 
           try {
             await openBuildDisplayIfTex(info.location, { preserveFocus: true });
@@ -676,9 +503,6 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
-  /**
-   * Processes output files from XML or direct input.
-   */
   public async processOutputFiles(
     outputLocation: FileLocation,
     currRound: number,
@@ -694,154 +518,28 @@ export class OutputHandler implements IOutputHandler {
         const data = this.ensureRoundData(currRound);
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
-        const rawPath = rawLocation.absolutePath;
-        const storagePayload = this.createStoragePayload();
-
-        const handleMultipleOutputs = async () => {
-          this.logger.debug(
-            `Processing multiple outputs for ${outputLocation.absolutePath}; outputFiles: ${this.agentConfig.outputFiles}`,
-          );
-
-          try {
-            const processedPairs =
-              await this.xmlManager.processMultipleXmlOutputs(outputLocation);
-
-            if (processedPairs && processedPairs.length > 0) {
-              await this.indentLatexFiles(
-                processedPairs.map((p) => p.location),
-              );
-              this.logger.debug(
-                `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
-              );
-
-              if (this.baseFiles && this.baseFiles.length > 0) {
-                await replaceInputCommands(
-                  this.baseFiles,
-                  processedPairs.map((p) => p.location),
-                  this.logger,
-                );
-              }
-              this.setRoundOutputs(currRound, processedPairs);
-              await this.captureXmlSummary(
-                currRound,
-                rawLocation,
-                processedPairs,
-                scope,
-              );
-              return;
-            }
-
-            this.logger.debug(
-              `No processed files were generated from ${outputLocation.absolutePath}`,
-            );
-            this.setRoundOutputs(currRound, []);
-            await this.cleanupLatexBackups(rawLocation);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          } catch (err) {
-            this.logger.debug(
-              `Error processing output files: ${toErrorMessage(err)}`,
-              { messageType: MESSAGE_TYPES.INTERNAL },
-            );
-            this.setRoundOutputs(currRound, []);
-            await this.cleanupLatexBackups(rawLocation);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          }
-        };
-
-        const handleSingleOutput = async () => {
-          this.logger.debug(
-            `Processing single output for ${outputLocation.absolutePath}`,
-          );
-
-          try {
-            const processedLocation = rawLocation ?? outputLocation;
-            let processed: OutputFileInfo = {
-              source: path.basename(outputLocation.absolutePath),
-              location: processedLocation,
-              lineage: null,
-              diff: null,
-            };
-            const hasScratchpadPrefill =
-              this.agentSetting.prefills?.some((prefill) =>
-                /<scratchpad\s*>/i.test(prefill),
-              ) ?? false;
-            const hasDocumentTag = Boolean(this.agentSetting.documentTag);
-            const shouldProcessXml =
-              this.agentSetting.agentType === AgentType.CoT ||
-              (this.agentSetting.agentType === AgentType.Direct &&
-                (hasDocumentTag || hasScratchpadPrefill));
-
-            if (shouldProcessXml) {
-              processed =
-                await this.xmlManager.processSingleXmlOutput(outputLocation);
-            }
-
-            const hasProcessedPath = Boolean(
-              processed && processed.location.absolutePath,
-            );
-
-            if (hasProcessedPath && processed.location) {
-              await this.indentLatexFile(processed.location);
-              this.logger.debug(
-                `Indented single output file: ${processed.location.absolutePath}`,
-              );
-            }
-
-            const processedFiles = hasProcessedPath ? [processed] : [];
-
-            if (hasProcessedPath) {
-              if (this.baseFiles && this.baseFiles.length > 0) {
-                await replaceInputCommands(
-                  this.baseFiles,
-                  processedFiles.map((entry) => entry.location),
-                  this.logger,
-                );
-              }
-
-              this.setRoundOutputs(currRound, processedFiles);
-            } else {
-              this.logger.debug(
-                `No processed file was generated from ${outputLocation.absolutePath}`,
-              );
-              this.setRoundOutputs(currRound, []);
-            }
-
-            await this.captureXmlSummary(
-              currRound,
-              rawLocation,
-              processedFiles,
-              scope,
-            );
-          } catch (err) {
-            this.logger.debug(
-              `Error processing output file: ${toErrorMessage(err)}`,
-              { messageType: MESSAGE_TYPES.INTERNAL },
-            );
-            const missingOutputsData = {
-              missing: [],
-              xmlFile: outputLocation.absolutePath,
-              documentTag: this.agentSetting.documentTag,
-            };
-            this.logger.missingOutputs(missingOutputsData);
-            bus.emit('updateMissingOutputs', {
-              stream: this.channel,
-              ...storagePayload,
-              filesByRound: { [currRound]: [] },
-            });
-            this.setRoundOutputs(currRound, []);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          }
-        };
 
         if (
           Array.isArray(this.agentConfig.outputFiles) &&
           this.agentConfig.outputFiles.length > 0
         ) {
-          await handleMultipleOutputs();
+          await this.fileProcessor.processMultipleOutputs(
+            outputLocation,
+            currRound,
+            rawLocation,
+            scope,
+          );
           return;
         }
 
-        await handleSingleOutput();
+        const storagePayload = this.createStoragePayload();
+        await this.fileProcessor.processSingleOutput(
+          outputLocation,
+          currRound,
+          rawLocation,
+          storagePayload,
+          scope,
+        );
       },
     );
   }
@@ -874,103 +572,5 @@ export class OutputHandler implements IOutputHandler {
         sourceLocation: null,
       }
     );
-  }
-
-  private async captureXmlSummary(
-    round: number,
-    rawOutput: FileLocation | null,
-    processed: OutputFileInfo[],
-    stage?: AgentLogStage,
-  ): Promise<void> {
-    const run = async () => {
-      const singleFile =
-        processed.length === 1 ? processed[0].location.absolutePath : null;
-      const data = this.ensureRoundData(round);
-      const sourceLocation = rawOutput ?? data.rawOutput ?? null;
-
-      if (!rawOutput?.absolutePath) {
-        data.xmlSummary = {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-        return;
-      }
-
-      try {
-        const rawContent = await flexibleFS.read(rawOutput);
-        const tagContents: Record<string, string | string[]> = {};
-        const documents: string[] = [];
-
-        const documentTag = this.agentSetting.documentTag;
-        const documentEntries = extractMultipleTextFromTag(
-          rawContent,
-          documentTag,
-        );
-        if (documentEntries.length > 0) {
-          const trimmedDocuments = documentEntries.map((entry) =>
-            entry.content.trim(),
-          );
-          if (trimmedDocuments.length === 1) {
-            tagContents[documentTag] = trimmedDocuments[0];
-          } else {
-            tagContents[documentTag] = trimmedDocuments;
-          }
-
-          for (const entry of documentEntries) {
-            const nameAttr = entry.name ? ` name="${entry.name}"` : '';
-            const trimmed = entry.content.trim();
-            documents.push(
-              `<${documentTag}${nameAttr}>${trimmed}</${documentTag}>`,
-            );
-          }
-        } else {
-          const singleDocument = extractTextFromTag(
-            rawContent,
-            documentTag,
-          ).trim();
-          if (singleDocument) {
-            tagContents[documentTag] = singleDocument;
-            documents.push(
-              `<${documentTag}>${singleDocument}</${documentTag}>`,
-            );
-          }
-        }
-
-        const scratchpadContent = extractTextFromTag(
-          rawContent,
-          'scratchpad',
-        ).trim();
-        if (scratchpadContent) {
-          tagContents.scratchpad = scratchpadContent;
-        }
-
-        data.xmlSummary = {
-          tagContents,
-          documents,
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-      } catch (error) {
-        this.logger.debug(
-          `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
-        );
-        data.xmlSummary = {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-      }
-    };
-
-    if (stage) {
-      await stage.within(run);
-      return;
-    }
-
-    await run();
   }
 }

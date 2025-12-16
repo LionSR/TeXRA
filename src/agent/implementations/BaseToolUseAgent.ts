@@ -243,7 +243,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
         this.agentPrompt,
-        this.userVars,
+        this.userVarChannels.transient,
         this.logger,
       );
 
