@@ -11,7 +11,7 @@
   font-size: var(--font-size-sm);
   border-left: var(--border-thin) solid var(--vscode-panel-border);
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   background-color: var(--background-color);
 }
 
@@ -103,10 +103,13 @@
 
 .tab-delete {
   flex-shrink: 0;
-  display: flex;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
   align-items: center;
   justify-content: center;
   width: var(--height-control);
+  min-width: var(--height-control);
   height: var(--height-control);
   margin: 0;
   margin-right: var(--spacing-small);
