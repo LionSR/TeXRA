@@ -59,6 +59,9 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
+// Auth imports
+import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+
 // Google finish reasons are re-exported from the SDK
 
 // Local constant
@@ -306,15 +309,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (!this.googleClient) {
       const apiKey = await this.getApiKey();
       const baseUrl = this.getBaseUrl();
-      // this would get the base url for the google via openai provider
-      // const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/';
-      // const baseUrl = 'https://generativelanguage.googleapis.com';
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
+
+      // When using server-side keys via relay, inject the x-goog-api-key header explicitly.
+      // The Google SDK may not send credentials to non-Google hosts by default.
+      const httpOptions: { baseUrl?: string; headers?: Record<string, string> } =
+        {
+          baseUrl: baseUrl ?? undefined,
+        };
+
+      if (shouldUseServerSideKeysSync(this.config.provider)) {
+        httpOptions.headers = {
+          'x-goog-api-key': apiKey,
+        };
+      }
+
       this.googleClient = new GoogleGenAI({
         apiKey: apiKey,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-        },
+        httpOptions,
       });
     }
     return this.googleClient;
