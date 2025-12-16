@@ -29,6 +29,7 @@ venv/**
 docs/**
 prototypes/**
 test/**
+test-loader.mjs
 AGENTS.md
 CLAUDE.md
 
