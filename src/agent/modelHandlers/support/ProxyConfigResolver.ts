@@ -79,12 +79,15 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // When server-side keys are enabled, we use the Supabase Edge Function relay
   // which handles everything directly - no intermediate proxy is used.
   //
+  // Skip openRouterOnly models - these should always route through OpenRouter
+  // since their model IDs don't exist on provider APIs.
+  //
   // shouldUseServerSideKeysSync checks:
   // 1. Setting is enabled
   // 2. Provider is supported
   // 3. A prior async check (canUseServerSideKeys) confirmed Ultra tier access
   // This ensures URL routing and API key retrieval stay synchronized.
-  if (shouldUseServerSideKeysSync(config.provider)) {
+  if (!config.openRouterOnly && shouldUseServerSideKeysSync(config.provider)) {
     const relayUrl = getRelayBaseUrl(config.provider);
     config.logger?.debug(
       `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
