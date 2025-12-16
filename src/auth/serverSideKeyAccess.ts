@@ -135,8 +135,8 @@ export function isServerSideKeysSettingEnabled(): boolean {
 /**
  * Set the "use included model access" preference.
  * This persists the setting to globalState and updates the in-memory value.
- * Also clears the access cache and fires the onDidChangeModelAccess event
- * so listeners can refresh with fresh data.
+ * Also clears the access cache, pre-fetches enabled providers (if enabling),
+ * and fires the onDidChangeModelAccess event so listeners can refresh.
  *
  * @param value - True to use included access, false to use personal keys
  */
@@ -147,8 +147,15 @@ export async function setUseIncludedModelAccess(value: boolean): Promise<void> {
     await globalState.update(USE_INCLUDED_ACCESS_KEY, value);
   }
   if (changed) {
-    // Clear cache BEFORE firing event so listeners get fresh data
+    // Clear cache BEFORE fetching fresh data
     clearServerSideKeyAccessCache();
+
+    // If enabling, pre-fetch providers so cache is warm when listeners refresh
+    // This ensures model options are computed with the latest provider list
+    if (value) {
+      await getEnabledProviders();
+    }
+
     _onDidChangeModelAccess.fire(value);
   }
 }
