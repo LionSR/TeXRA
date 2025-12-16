@@ -18,9 +18,13 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
-import { RecordingManager } from '@common/managers';
-import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
+import type { RecordingManager } from '@common/managers';
+import {
+  BaseViewMessageHandler,
+  MessageHandler,
+  PROGRESS_VIEW_COMMANDS,
+  createRecordingHandlers,
+} from '@common/webview';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
   isWorkflowTaskState,
@@ -76,19 +80,31 @@ const ApprovalAction = z.object({
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
 
+  /** Recording handlers created via shared utility */
+  private readonly recordingHandlers: Record<
+    string,
+    MessageHandler<vscode.WebviewView>
+  >;
+
   constructor(
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
   ) {
     // Enable activeView tracking - getActiveView() is inherited from base class
     super('ProgressView', { trackActiveView: true });
-    this.recordingManager = new RecordingManager(context, {
+
+    // Use shared recording handler factory
+    const { manager, handlers } = createRecordingHandlers(context, {
+      startCommand: PROGRESS_VIEW_COMMANDS.START_RECORDING,
+      stopCommand: PROGRESS_VIEW_COMMANDS.STOP_RECORDING,
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
       transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing follow-up message',
     });
+    this.recordingManager = manager;
+    this.recordingHandlers = handlers;
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
@@ -138,10 +154,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleOpenTaskStorage.bind(this),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]:
         this.handlePolishFollowUp.bind(this),
-      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
-        this.recordingManager.start(w),
-      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
-        this.recordingManager.stop(w),
+      // Recording commands via shared utility
+      ...this.recordingHandlers,
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
         this.handleShowInformationMessage.bind(this),
       [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]:

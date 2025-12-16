@@ -18,3 +18,16 @@ export {
   WEBVIEW_COMMANDS,
 } from './commands';
 export { getSharedLocalResourceRoots } from './resourceRoots';
+
+// Shared utilities for message handlers
+export {
+  createRecordingHandlers,
+  type RecordingHandlerConfig,
+  type RecordingHandlerResult,
+} from './RecordingHandlerMixin';
+export {
+  createBannerForwardingHandlers,
+  createForwardingHandler,
+  type BannerCommandPair,
+} from './BannerForwardingHandlers';
+export { WebviewMessageBroadcaster } from './WebviewMessageBroadcaster';
