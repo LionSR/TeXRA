@@ -9,6 +9,7 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
+import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -68,13 +69,7 @@ export class MainViewProvider
     // Watch for configuration changes that affect agent/model options
     watchConfig(
       this.context,
-      [
-        'texra.agents',
-        'texra.toolUseAgents',
-        'texra.models',
-        'texra.files',
-        'texra.experimental.useServerSideKeys',
-      ],
+      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
       () => this.refreshOptionsAndView(),
     );
   }
@@ -87,6 +82,13 @@ export class MainViewProvider
         if (e.provider.id === 'texra-supabase') {
           void this.refreshOptionsAndView();
         }
+      }),
+    );
+
+    // Listen for model access setting changes (included vs personal keys)
+    this.context.subscriptions.push(
+      onDidChangeModelAccess(() => {
+        void this.refreshOptionsAndView();
       }),
     );
   }

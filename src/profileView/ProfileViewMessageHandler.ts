@@ -13,7 +13,6 @@ import {
   type MessageHandler,
   PROFILE_VIEW_COMMANDS,
 } from '@common/webview';
-import { getConfig, setConfig } from '@utils/config';
 
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -21,6 +20,8 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 import {
   getEnabledProviders,
   clearServerSideKeyAccessCache,
+  setUseIncludedModelAccess,
+  getUseIncludedModelAccess,
 } from '@/auth/serverSideKeyAccess';
 
 // --- Message Schemas ---
@@ -93,13 +94,10 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
-    // Get API access settings for Ultra tier users
+    // Get model access settings for Ultra tier users
     const isUltra = authContext.tier === 'Ultra';
-    const useServerSideKeys = getConfig<boolean>(
-      'texra.experimental.useServerSideKeys',
-      false,
-    );
-    const apiAccessMode = useServerSideKeys ? 'included' : 'personal';
+    const useIncludedAccess = getUseIncludedModelAccess();
+    const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
     // Fetch enabled providers from relay server (only for Ultra tier)
     let enabledProviders: string[] = [];
@@ -171,11 +169,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       'setApiAccessMode',
       async ({ mode }) => {
         // Update the setting
-        const useServerSideKeys = mode === 'included';
-        await setConfig(
-          'texra.experimental.useServerSideKeys',
-          useServerSideKeys,
-        );
+        const useIncludedAccess = mode === 'included';
+        await setUseIncludedModelAccess(useIncludedAccess);
 
         // Clear the cache so it picks up the new setting
         clearServerSideKeyAccessCache();
@@ -187,7 +182,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         const modeLabel =
           mode === 'included' ? 'Included Access' : 'My Own Keys';
         void vscode.window.showInformationMessage(
-          `API access mode changed to: ${modeLabel}`,
+          `Model access changed to: ${modeLabel}`,
         );
       },
     );
