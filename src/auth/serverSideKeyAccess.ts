@@ -153,6 +153,17 @@ export async function canUseServerSideKeys(): Promise<boolean> {
  * normal API key behavior rather than sending requests to the relay
  * that would fail authentication.
  *
+ * RACE CONDITION NOTE:
+ * Both resolveBaseUrl() and getApiKey() call this function independently.
+ * Theoretically, if lastKnownAccessResult changes between the two calls
+ * (e.g., cache expires and another async operation triggers refresh),
+ * the routing could be inconsistent. In practice this is extremely unlikely:
+ * - Cache TTL is 5 minutes, requests typically take <30 seconds
+ * - canUseServerSideKeys() is only called when rendering model dropdown
+ * - The failure mode is API error (not security issue)
+ * If this becomes a problem, consider computing the decision once per
+ * request and passing it through both code paths.
+ *
  * This synchronous function is needed because getBaseUrl() is synchronous.
  */
 export function shouldUseServerSideKeysSync(provider: string): boolean {
