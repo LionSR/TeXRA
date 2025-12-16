@@ -326,25 +326,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   async getClient(): Promise<Anthropic> {
-    const apiKey = await this.getApiKey();
+    const credential = await this.getApiKey();
     const baseUrl = this.getBaseUrl();
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
-    // When using server-side keys via relay, inject the x-api-key header explicitly.
-    // The Anthropic SDK may not send credentials to non-Anthropic hosts by default.
+    // When using server-side keys via relay, the "credential" is actually the user's
+    // JWT token (not an API key). We inject it into the x-api-key header so the relay
+    // can authenticate the user. The relay then uses its own server-side API key.
     if (shouldUseServerSideKeysSync(this.config.provider)) {
+      const jwtToken = credential; // Clarify: this is JWT, not an API key
       return new Anthropic({
-        apiKey,
+        apiKey: jwtToken, // SDK requires this param, but relay ignores the value
         baseURL: baseUrl,
         fetch: async (url, init) => {
           const headers = new Headers(init?.headers);
-          headers.set('x-api-key', apiKey);
+          headers.set('x-api-key', jwtToken); // Relay extracts JWT from this header
           return fetch(url, { ...init, headers });
         },
       });
     }
 
-    return new Anthropic({ apiKey, baseURL: baseUrl });
+    // Standard flow: credential is an actual API key
+    return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
