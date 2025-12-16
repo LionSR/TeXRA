@@ -27,6 +27,9 @@
 // Relay version for debugging deployments
 const RELAY_VERSION = '1.3.1';
 
+/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
+const ULTRA_TIER = 'Ultra';
+
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Provider configurations
@@ -389,7 +392,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (profile.tier !== 'Ultra') {
+    if (profile.tier !== ULTRA_TIER) {
       return new Response(
         JSON.stringify({
           _relay: RELAY_VERSION,

@@ -39,7 +39,7 @@
 
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
-import { SUPABASE_CUSTOM_DOMAIN } from './config';
+import { SUPABASE_CUSTOM_DOMAIN, ULTRA_TIER } from './config';
 
 /**
  * Global state key for the "use included model access" preference.
@@ -208,8 +208,8 @@ async function fetchAccessStatus(): Promise<boolean> {
     }
 
     const tier = await SupabaseClient.getUserTier();
-    // Explicitly check for 'Ultra' - undefined/null/errors all result in false
-    const hasAccess = tier === 'Ultra';
+    // Explicitly check for Ultra tier - undefined/null/errors all result in false
+    const hasAccess = tier === ULTRA_TIER;
     accessCache.lastKnownResult = hasAccess;
     return hasAccess;
   } catch {
@@ -259,10 +259,7 @@ export async function getEnabledProviders(): Promise<string[]> {
   const now = Date.now();
 
   // Check if cache is still valid
-  if (
-    providersCache.promise &&
-    now - providersCache.timestamp < CACHE_TTL_MS
-  ) {
+  if (providersCache.promise && now - providersCache.timestamp < CACHE_TTL_MS) {
     return providersCache.promise;
   }
 
