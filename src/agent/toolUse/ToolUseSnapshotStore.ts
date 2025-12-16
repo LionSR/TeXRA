@@ -5,7 +5,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
-// Local imports - logging
+// Local imports - agent
+import { AgentSharedStoreCodec } from '@agent/core/AgentSharedStore';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -15,9 +16,6 @@ import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
 } from '@utils/config';
-
-// Local file imports
-import { AgentSharedStoreCodec } from '@agent/core/AgentSharedStore';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,

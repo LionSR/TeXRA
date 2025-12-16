@@ -50,9 +50,9 @@ export const ConversationRoundStateSnapshotSchema = z.object({
 
 /**
  * Single source of truth for ConversationRoundState serialization format.
- * Derived from the Zod schema - do not duplicate this definition.
+ * Uses z.output<> to get the type after parsing (all fields required).
  */
-export type ConversationRoundStateSnapshot = z.infer<
+export type ConversationRoundStateSnapshot = z.output<
   typeof ConversationRoundStateSnapshotSchema
 >;
 
@@ -135,9 +135,9 @@ export const AgentRunStateSnapshotSchema = z.object({
 
 /**
  * Single source of truth for AgentRunState serialization format.
- * Derived from the Zod schema - do not duplicate this definition.
+ * Uses z.output<> to get the type after parsing (all fields required).
  */
-export type AgentRunStateSnapshot = z.infer<typeof AgentRunStateSnapshotSchema>;
+export type AgentRunStateSnapshot = z.output<typeof AgentRunStateSnapshotSchema>;
 
 export class AgentRunState {
   public totalRounds: number;
@@ -177,7 +177,7 @@ export const AgentRunStateCodec = z.codec(
   AgentRunStateSnapshotSchema,
   z.instanceof(AgentRunState),
   {
-    decode: (json: AgentRunStateSnapshot): AgentRunState => {
+    decode: (json): AgentRunState => {
       // Compose with nested codec
       const usageAccumulator = RunUsageAccumulatorCodec.decode(
         json.usageAccumulator,
@@ -187,10 +187,10 @@ export const AgentRunStateCodec = z.codec(
       state.totalResponseTimeMs = json.totalResponseTimeMs;
       return state;
     },
-    encode: (state: AgentRunState): AgentRunStateSnapshot => ({
+    encode: (state): AgentRunStateSnapshot => ({
       totalRounds: state.totalRounds,
       totalResponseTimeMs: state.totalResponseTimeMs,
-      usageAccumulator: RunUsageAccumulatorCodec.encode(state.usageAccumulator),
+      usageAccumulator: RunUsageAccumulatorCodec.encode(state.usageAccumulator) as AgentRunStateSnapshot['usageAccumulator'],
     }),
   },
 );
