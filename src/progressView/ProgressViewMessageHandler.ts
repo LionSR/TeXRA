@@ -499,82 +499,90 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleOpenTaskStorage(message: unknown): Promise<void> {
-    const parsed = OpenTaskStorageMessageSchema.safeParse(message);
-    const stream = (parsed.success ? parsed.data.stream : undefined) as
-      | StreamTabId
-      | undefined;
-    if (!stream) {
-      await vscode.window.showInformationMessage(
-        'No workspace storage folder is available for this run yet.',
-      );
-      return;
-    }
+    await this.withValidatedMessage(
+      OpenTaskStorageMessageSchema,
+      message,
+      'openTaskStorage',
+      async ({ stream: streamOrUndefined }) => {
+        const stream = streamOrUndefined as StreamTabId | undefined;
+        if (!stream) {
+          await vscode.window.showInformationMessage(
+            'No workspace storage folder is available for this run yet.',
+          );
+          return;
+        }
 
-    const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
-      persist: false,
-    });
-    // Only fetch output files if we have a resolved run ID
-    const storageKey = resolvedRunId ? normalizeRunId(resolvedRunId) : null;
-    const runOutputs = storageKey
-      ? this.provider.state.getRunOutputFiles(stream, { storageKey })
-      : undefined;
+        const resolvedRunId = this.provider.state.resolveRunId(
+          stream,
+          undefined,
+          {
+            persist: false,
+          },
+        );
+        // Only fetch output files if we have a resolved run ID
+        const storageKey = resolvedRunId ? normalizeRunId(resolvedRunId) : null;
+        const runOutputs = storageKey
+          ? this.provider.state.getRunOutputFiles(stream, { storageKey })
+          : undefined;
 
-    // executionId is the physical directory name: taskRuns/<executionId>/
-    // For workflow agents, storageKey (task group ID) differs from executionId,
-    // but files are always written to the executionId directory.
-    const executionId = this.provider.state.getExecutionId(stream);
+        // executionId is the physical directory name: taskRuns/<executionId>/
+        // For workflow agents, storageKey (task group ID) differs from executionId,
+        // but files are always written to the executionId directory.
+        const executionId = this.provider.state.getExecutionId(stream);
 
-    try {
-      let directoryToReveal: string | undefined;
+        try {
+          let directoryToReveal: string | undefined;
 
-      if (executionId) {
-        await ensureRunDir(executionId);
-        directoryToReveal = getRunDir(executionId);
-      } else if (runOutputs) {
-        // Defensive fallback: executionId and outputFiles are persisted independently,
-        // so edge cases (data migration, partial state) could leave files without executionId.
-        // Extract directory from actual file paths.
-        for (const infos of runOutputs.values()) {
-          for (const info of infos) {
-            if (
-              info.location.kind === 'runStorage' ||
-              info.location.kind === 'workspace'
-            ) {
-              directoryToReveal = path.dirname(info.location.absolutePath);
-              break;
+          if (executionId) {
+            await ensureRunDir(executionId);
+            directoryToReveal = getRunDir(executionId);
+          } else if (runOutputs) {
+            // Defensive fallback: executionId and outputFiles are persisted independently,
+            // so edge cases (data migration, partial state) could leave files without executionId.
+            // Extract directory from actual file paths.
+            for (const infos of runOutputs.values()) {
+              for (const info of infos) {
+                if (
+                  info.location.kind === 'runStorage' ||
+                  info.location.kind === 'workspace'
+                ) {
+                  directoryToReveal = path.dirname(info.location.absolutePath);
+                  break;
+                }
+              }
+              if (directoryToReveal) break;
             }
           }
-          if (directoryToReveal) break;
+
+          if (!directoryToReveal) {
+            await vscode.window.showInformationMessage(
+              'No workspace storage folder is available for this run yet.',
+            );
+            return;
+          }
+
+          await safeExecuteCommand('revealFileInOS', [
+            vscode.Uri.file(directoryToReveal),
+          ]);
+        } catch (error) {
+          const errorMessage = toErrorMessage(error);
+          this.logger.error(
+            this.channel,
+            `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
+            {
+              data: {
+                error: error instanceof Error ? error : undefined,
+                stream,
+                executionId,
+              },
+            },
+          );
+          await vscode.window.showErrorMessage(
+            'Unable to open the workspace storage folder for this run.',
+          );
         }
-      }
-
-      if (!directoryToReveal) {
-        await vscode.window.showInformationMessage(
-          'No workspace storage folder is available for this run yet.',
-        );
-        return;
-      }
-
-      await safeExecuteCommand('revealFileInOS', [
-        vscode.Uri.file(directoryToReveal),
-      ]);
-    } catch (error) {
-      const errorMessage = toErrorMessage(error);
-      this.logger.error(
-        this.channel,
-        `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
-        {
-          data: {
-            error: error instanceof Error ? error : undefined,
-            stream,
-            executionId,
-          },
-        },
-      );
-      await vscode.window.showErrorMessage(
-        'Unable to open the workspace storage folder for this run.',
-      );
-    }
+      },
+    );
   }
 
   private async handleOpenFile(message: FileCommandMessage): Promise<void> {

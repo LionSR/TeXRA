@@ -107,7 +107,7 @@ export type FilterStreamsMessage = z.infer<typeof FilterStreamsMessageSchema>;
 /** Message for send follow-up command */
 export const SendFollowUpMessageSchema = z.object({
   stream: StreamIdSchema,
-  text: z.string(),
+  text: TrimmedString,
 });
 export type SendFollowUpMessage = z.infer<typeof SendFollowUpMessageSchema>;
 
