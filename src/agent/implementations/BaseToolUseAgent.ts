@@ -259,7 +259,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const store = createSharedStore({
       roundIndex: state.runState.totalRounds,
       runState: state.runState,
-      workspaceState: new AgentWorkspaceState(),
+      workspaceState: AgentWorkspaceState.create(),
       userChannels: this.getUserVarChannels(),
       onRoundFinalized: this.getUsageRecorder('tool-use'),
     });
