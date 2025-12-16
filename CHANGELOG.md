@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0] - 2025-12-16
+
+### Bug Fixes
+
+- Fixed OpenAI streaming to collect all reasoning items with web search.
+- Fixed Google model response text computation.
+- Fixed LaTeX replacement rules causing formatting issues.
+- Fixed latexdiff output causing compilation errors.
+- Fixed model dropdown resetting media selection when changed.
+- Fixed stream list not auto-refreshing when status changes.
+- API key banner now hides when the model no longer requires a key.
+
+### Improvements
+
+- Updated core dependencies: MCP SDK, Supabase, OpenAI, Zod, webpack.
+
 ## [0.34.10] - 2025-12-13
 
 ### Features
