@@ -1,6 +1,9 @@
 import * as path from 'path';
 
-import { AgentType, type AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import {
+  AgentType,
+  type AgentWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -18,11 +21,7 @@ import {
   cleanupLatexBackups,
 } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-import type {
-  FileLocation,
-  OutputFileInfo,
-  OutputXmlSummary,
-} from './types';
+import type { FileLocation, OutputFileInfo, OutputXmlSummary } from './types';
 
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
@@ -76,7 +75,12 @@ export class OutputFileProcessor {
           );
         }
         this.ctx.setRoundOutputs(currRound, processedPairs);
-        await this.captureXmlSummary(currRound, rawLocation, processedPairs, scope);
+        await this.captureXmlSummary(
+          currRound,
+          rawLocation,
+          processedPairs,
+          scope,
+        );
         return;
       }
 
@@ -159,7 +163,12 @@ export class OutputFileProcessor {
         this.ctx.setRoundOutputs(currRound, []);
       }
 
-      await this.captureXmlSummary(currRound, rawLocation, processedFiles, scope);
+      await this.captureXmlSummary(
+        currRound,
+        rawLocation,
+        processedFiles,
+        scope,
+      );
     } catch (err) {
       logger.debug(`Error processing output file: ${toErrorMessage(err)}`, {
         messageType: MESSAGE_TYPES.INTERNAL,
