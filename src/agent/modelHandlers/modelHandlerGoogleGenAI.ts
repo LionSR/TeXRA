@@ -307,25 +307,27 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
-      const apiKey = await this.getApiKey();
+      const credential = await this.getApiKey();
       const baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
-      // When using server-side keys via relay, inject the x-goog-api-key header explicitly.
-      // The Google SDK may not send credentials to non-Google hosts by default.
       const httpOptions: { baseUrl?: string; headers?: Record<string, string> } =
         {
           baseUrl: baseUrl ?? undefined,
         };
 
+      // When using server-side keys via relay, the "credential" is actually the user's
+      // JWT token (not an API key). We inject it into the x-goog-api-key header so the
+      // relay can authenticate the user. The relay then uses its own server-side API key.
       if (shouldUseServerSideKeysSync(this.config.provider)) {
+        const jwtToken = credential; // Clarify: this is JWT, not an API key
         httpOptions.headers = {
-          'x-goog-api-key': apiKey,
+          'x-goog-api-key': jwtToken, // Relay extracts JWT from this header
         };
       }
 
       this.googleClient = new GoogleGenAI({
-        apiKey: apiKey,
+        apiKey: credential, // SDK requires this param; for relay mode it's JWT
         httpOptions,
       });
     }
