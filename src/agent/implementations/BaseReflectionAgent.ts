@@ -265,7 +265,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.promptBuilder = new PromptBuilder(
         this.agentPrompt,
         this.agentSetting,
-        this.userVars,
+        this.userVarChannels.transient,
         this.logger,
       );
     }
