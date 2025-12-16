@@ -59,9 +59,6 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
-// Auth imports
-// import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess'; // TEST: temporarily disabled
-
 // Google finish reasons are re-exported from the SDK
 
 // Local constant
@@ -311,9 +308,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
-      // TEST: Try header-based auth instead of path-embedded tokens
-      // The SDK should send x-goog-api-key: {credential} to the relay
-      // The relay extracts JWT from x-goog-api-key header
+      // For relay auth: credential is the user's JWT, SDK sends it via x-goog-api-key header
       this.googleClient = new GoogleGenAI({
         apiKey: credential,
         httpOptions: {
