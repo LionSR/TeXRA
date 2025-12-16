@@ -22,6 +22,7 @@ import {
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
+import { canUseServerSideKeys } from '@auth/serverSideKeyAccess';
 
 // Local file imports
 import {
@@ -455,9 +456,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       );
       if (showReminders) {
         const hasAnyApiKey = await SecretManager.anyApiKeyExists();
-        if (!hasAnyApiKey) {
+        // canUseServerSideKeys is already called by computeModelOptions, so cache is warm
+        const hasServerSideKeys = await canUseServerSideKeys();
+        if (!hasAnyApiKey && !hasServerSideKeys) {
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
+          });
+        } else {
+          // Hide banner if user now has access (local keys or server-side keys)
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
           });
         }
       }

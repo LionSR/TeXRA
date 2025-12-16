@@ -1,10 +1,7 @@
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
-import {
-  shouldUseServerSideKeysSync,
-  getRelayBaseUrl,
-} from '@auth/serverSideKeyAccess';
+import { getRelayBaseUrl } from '@auth/serverSideKeyAccess';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
@@ -33,6 +30,7 @@ export interface ProxyConfig {
   openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
   requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
+  useServerSideKeys?: boolean; // Pre-computed by caller to avoid duplicated checks
   logger?: { debug: (message: string) => void };
 }
 
@@ -79,15 +77,9 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // When server-side keys are enabled, we use the Supabase Edge Function relay
   // which handles everything directly - no intermediate proxy is used.
   //
-  // Skip openRouterOnly models - these should always route through OpenRouter
-  // since their model IDs don't exist on provider APIs.
-  //
-  // shouldUseServerSideKeysSync checks:
-  // 1. Setting is enabled
-  // 2. Provider is supported
-  // 3. A prior async check (canUseServerSideKeys) confirmed Ultra tier access
-  // This ensures URL routing and API key retrieval stay synchronized.
-  if (!config.openRouterOnly && shouldUseServerSideKeysSync(config.provider)) {
+  // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this decision
+  // to ensure consistency between URL routing and API key retrieval.
+  if (config.useServerSideKeys) {
     const relayUrl = getRelayBaseUrl(config.provider);
     config.logger?.debug(
       `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
