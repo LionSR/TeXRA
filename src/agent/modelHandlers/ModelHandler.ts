@@ -29,6 +29,8 @@ import {
   resolveBaseUrl,
   shouldUseOpenRouter,
 } from './support/ProxyConfigResolver';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -216,10 +218,47 @@ export abstract class ModelHandler<
   }
 
   /**
+   * Check if server-side keys should be used for this model.
+   *
+   * Centralizes the decision to avoid duplication between getApiKey() and getBaseUrl().
+   * Both methods call this to ensure consistent routing decisions.
+   *
+   * Returns true only if:
+   * 1. Model is not openRouterOnly (those always use OpenRouter)
+   * 2. shouldUseServerSideKeysSync confirms access (setting enabled, provider supported, Ultra tier)
+   */
+  protected shouldUseServerSideKeys(): boolean {
+    // Skip openRouterOnly models - these should always route through OpenRouter
+    // since their model IDs don't exist on provider APIs.
+    if (this.config.openRouterOnly) {
+      return false;
+    }
+    return shouldUseServerSideKeysSync(this.config.provider);
+  }
+
+  /**
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
+   * When server-side keys are enabled (experimental), returns the user's JWT token instead,
+   * which the relay Edge Function will use for authentication.
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
+    // Use centralized check to ensure consistency with getBaseUrl()
+    if (this.shouldUseServerSideKeys()) {
+      const accessToken = await SupabaseClient.getAccessToken();
+      if (accessToken) {
+        this.logger.debug(
+          `Using server-side API keys via relay for ${this.config.provider}`,
+        );
+        return accessToken;
+      }
+      // This should not happen if shouldUseServerSideKeys returned true,
+      // but fall through to normal API key retrieval just in case
+      this.logger.warn(
+        'Server-side keys check passed but no access token available, falling back to local keys',
+      );
+    }
+
     if (shouldUseOpenRouter(this.config)) {
       try {
         return await SecretManager.getApiKey('openRouter');
@@ -245,11 +284,14 @@ export abstract class ModelHandler<
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
+    // Use centralized check to ensure consistency with getApiKey()
+    // Pass the decision to resolveBaseUrl to avoid duplicate checks
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
       customBaseUrl: this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
+      useServerSideKeys: this.shouldUseServerSideKeys(),
       logger: this.logger,
     });
   }

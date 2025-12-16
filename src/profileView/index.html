@@ -67,6 +67,49 @@
       </div>
 
       <div
+        id="apiAccessSection"
+        class="api-access-section"
+        style="display: none"
+      >
+        <h2>Model Access</h2>
+        <p class="api-access-description">
+          As an Ultra member, you can use TeXRA's included model access or
+          provide your own API keys.
+        </p>
+        <div class="api-access-options">
+          <label class="api-access-option">
+            <input
+              type="radio"
+              name="apiAccessMode"
+              value="included"
+              id="apiAccessIncluded"
+            />
+            <span class="option-content">
+              <span class="option-title">Use Included Access</span>
+              <span class="option-description"
+                >Works automatically. No setup needed.</span
+              >
+            </span>
+          </label>
+          <label class="api-access-option">
+            <input
+              type="radio"
+              name="apiAccessMode"
+              value="personal"
+              id="apiAccessPersonal"
+            />
+            <span class="option-content">
+              <span class="option-title">Use My Own Keys</span>
+              <span class="option-description"
+                >Provide your own API keys from OpenAI, Anthropic, etc.</span
+              >
+            </span>
+          </label>
+        </div>
+        <p id="enabledProvidersInfo" class="enabled-providers-info"></p>
+      </div>
+
+      <div
         id="notAuthenticated"
         class="not-authenticated"
         style="display: none"

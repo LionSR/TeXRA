@@ -84,6 +84,9 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
 export type UserTier = z.infer<typeof UserTierSchema>;
 
+/** Ultra tier constant for server-side API key access checks. */
+export const ULTRA_TIER: UserTier = 'Ultra';
+
 /**
  * User's authorization context.
  * Permissions are visibility values stored in profiles.permissions column.

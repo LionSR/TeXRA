@@ -208,6 +208,7 @@ export async function signOut(): Promise<void> {
     // Use authentication provider to properly sign out
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
+      // removeSession() handles cache clearing internally
       await authProvider.removeSession(session.id);
       void vscode.window.showInformationMessage('Signed out successfully');
     } else {
