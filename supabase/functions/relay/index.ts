@@ -10,6 +10,9 @@
  * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
  */
 
+// Boot log - this should appear in Logs tab if function starts successfully
+console.log('[RELAY] Function booting - version 18');
+
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Provider configurations
@@ -204,6 +207,9 @@ function parseRequestPath(pathname: string): {
 }
 
 Deno.serve(async (req: Request) => {
+  // Log every request immediately
+  console.log('[RELAY] Request received:', req.method, req.url);
+
   const url = new URL(req.url);
 
   // Handle CORS preflight
@@ -212,6 +218,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    console.log('[RELAY] Processing request, pathname:', url.pathname);
+
     // 1. Parse the request path
     const parsed = parseRequestPath(url.pathname);
     if (!parsed) {
