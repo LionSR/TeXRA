@@ -37,9 +37,41 @@
  * warnings for providers that are available via relay.
  */
 
-import { getConfig } from '@utils/config';
+import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from './config';
+
+/**
+ * Global state key for the "use included model access" preference.
+ * This is an internal setting (not exposed in VS Code settings) that
+ * Ultra tier users control via the profile view.
+ */
+const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
+
+/**
+ * In-memory state for the setting. Defaults to true (use included access).
+ * This is loaded from globalState on initialization and can be updated
+ * via setUseIncludedModelAccess().
+ */
+let useIncludedModelAccess: boolean = true;
+
+/**
+ * Reference to the extension context's globalState for persistence.
+ * Set via initializeServerSideKeyAccess().
+ */
+let globalState: vscode.Memento | null = null;
+
+/**
+ * Event emitter for model access setting changes.
+ * Fire this when the setting changes so listeners can refresh.
+ */
+const _onDidChangeModelAccess = new vscode.EventEmitter<boolean>();
+
+/**
+ * Event that fires when the "use included model access" setting changes.
+ * Subscribe to this to refresh model options when the setting is toggled.
+ */
+export const onDidChangeModelAccess = _onDidChangeModelAccess.event;
 
 /**
  * All providers that could potentially support server-side API keys.
@@ -76,10 +108,53 @@ let lastKnownAccessResult: boolean = false;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Check if the experimental setting for server-side keys is enabled.
+ * Initialize the server-side key access module with the extension context.
+ * Call this once during extension activation to enable state persistence.
+ *
+ * @param context - The VS Code extension context
+ */
+export function initializeServerSideKeyAccess(
+  context: vscode.ExtensionContext,
+): void {
+  globalState = context.globalState;
+  // Load persisted value, defaulting to true (use included access)
+  useIncludedModelAccess = globalState.get<boolean>(
+    USE_INCLUDED_ACCESS_KEY,
+    true,
+  );
+}
+
+/**
+ * Check if the "use included model access" setting is enabled.
+ * This is the internal check for whether server-side keys should be used.
  */
 export function isServerSideKeysSettingEnabled(): boolean {
-  return getConfig<boolean>('texra.experimental.useServerSideKeys', true);
+  return useIncludedModelAccess;
+}
+
+/**
+ * Set the "use included model access" preference.
+ * This persists the setting to globalState and updates the in-memory value.
+ * Also fires the onDidChangeModelAccess event so listeners can refresh.
+ *
+ * @param value - True to use included access, false to use personal keys
+ */
+export async function setUseIncludedModelAccess(value: boolean): Promise<void> {
+  const changed = useIncludedModelAccess !== value;
+  useIncludedModelAccess = value;
+  if (globalState) {
+    await globalState.update(USE_INCLUDED_ACCESS_KEY, value);
+  }
+  if (changed) {
+    _onDidChangeModelAccess.fire(value);
+  }
+}
+
+/**
+ * Get the current "use included model access" preference.
+ */
+export function getUseIncludedModelAccess(): boolean {
+  return useIncludedModelAccess;
 }
 
 /**
