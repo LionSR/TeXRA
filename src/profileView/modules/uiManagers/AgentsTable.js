@@ -5,6 +5,9 @@ import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
+/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
+const ULTRA_TIER = 'Ultra';
+
 /**
  * Manages the agents table rendering and interactions.
  */
@@ -109,7 +112,7 @@ export class AgentsTable {
 
     // Show API access section only for Ultra tier
     if (apiAccessSection) {
-      const isUltra = tier === 'Ultra';
+      const isUltra = tier === ULTRA_TIER;
       apiAccessSection.style.display = isUltra ? 'block' : 'none';
 
       if (isUltra) {
