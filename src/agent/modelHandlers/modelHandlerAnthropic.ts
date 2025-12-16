@@ -64,6 +64,9 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
+// Auth imports
+import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -325,9 +328,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    // const baseUrl = 'https://api.anthropic.com/v1/';
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
-    // there is a time out parameter that be be set; default is 10 minutes
+
+    // When using server-side keys via relay, inject the x-api-key header explicitly.
+    // The Anthropic SDK may not send credentials to non-Anthropic hosts by default.
+    if (shouldUseServerSideKeysSync(this.config.provider)) {
+      return new Anthropic({
+        apiKey,
+        baseURL: baseUrl,
+        fetch: async (url, init) => {
+          const headers = new Headers(init?.headers);
+          headers.set('x-api-key', apiKey);
+          return fetch(url, { ...init, headers });
+        },
+      });
+    }
+
     return new Anthropic({ apiKey, baseURL: baseUrl });
   }
 
