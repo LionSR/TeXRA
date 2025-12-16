@@ -360,27 +360,3 @@ export function extractDomain(url: string): string {
   }
 }
 
-/**
- * Format web search results for display/logging.
- */
-export function formatWebSearchResults(result: WebSearchResult): string {
-  const lines: string[] = [];
-
-  if (result.query) {
-    lines.push(`Search: "${result.query}"`);
-  }
-
-  lines.push(`Provider: ${result.provider}`);
-  lines.push(`Results: ${result.results.length}`);
-  lines.push('');
-
-  for (const entry of result.results) {
-    lines.push(`• ${entry.title || entry.domain || 'Untitled'}`);
-    lines.push(`  ${entry.url}`);
-    if (entry.snippet) {
-      lines.push(`  ${entry.snippet.slice(0, 100)}...`);
-    }
-  }
-
-  return lines.join('\n');
-}
