@@ -18,7 +18,7 @@
  *
  * 1. `canUseServerSideKeys()` performs the async authentication and tier check
  * 2. It also fetches the list of enabled providers from the server
- * 3. Results are cached in `lastKnownAccessResult` and `enabledProvidersCache`
+ * 3. Results are cached in `accessCache` and `providersCache`
  * 4. `shouldUseServerSideKeysSync()` uses these cached values for sync decisions
  *
  * Call Sequence:
@@ -92,21 +92,34 @@ export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
 /** Cache TTL for all server-side key access checks (5 minutes). */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * Cache for enabled providers fetched from the relay server.
- * This is populated by fetchEnabledProviders() and used for sync checks.
- */
-let enabledProvidersCache: string[] = [];
-let enabledProvidersCacheTimestamp: number = 0;
-let enabledProvidersCachePromise: Promise<string[]> | null = null;
+/** Cache state for enabled providers fetched from the relay server. */
+interface ProvidersCache {
+  promise: Promise<string[]> | null;
+  timestamp: number;
+  /** Sync-accessible list of providers (populated when promise resolves). */
+  providers: string[];
+}
 
-/**
- * Cache for server-side key access check.
- * Uses Promise-based caching to avoid race conditions.
- */
-let accessCachePromise: Promise<boolean> | null = null;
-let accessCacheTimestamp: number = 0;
-let lastKnownAccessResult: boolean = false;
+/** Cache state for server-side key access check. */
+interface AccessCache {
+  promise: Promise<boolean> | null;
+  timestamp: number;
+  /** Sync-accessible result (populated when promise resolves). */
+  lastKnownResult: boolean;
+}
+
+/** Encapsulated cache state for maintainability. */
+const providersCache: ProvidersCache = {
+  promise: null,
+  timestamp: 0,
+  providers: [],
+};
+
+const accessCache: AccessCache = {
+  promise: null,
+  timestamp: 0,
+  lastKnownResult: false,
+};
 
 /**
  * Initialize the server-side key access module with the extension context.
@@ -175,12 +188,12 @@ export function getUseIncludedModelAccess(): boolean {
  * Clear the access cache. Call this when user signs in/out.
  */
 export function clearServerSideKeyAccessCache(): void {
-  accessCachePromise = null;
-  accessCacheTimestamp = 0;
-  lastKnownAccessResult = false;
-  enabledProvidersCache = [];
-  enabledProvidersCacheTimestamp = 0;
-  enabledProvidersCachePromise = null;
+  accessCache.promise = null;
+  accessCache.timestamp = 0;
+  accessCache.lastKnownResult = false;
+  providersCache.providers = [];
+  providersCache.timestamp = 0;
+  providersCache.promise = null;
 }
 
 /**
@@ -190,18 +203,18 @@ async function fetchAccessStatus(): Promise<boolean> {
   try {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     if (!isAuthenticated) {
-      lastKnownAccessResult = false;
+      accessCache.lastKnownResult = false;
       return false;
     }
 
     const tier = await SupabaseClient.getUserTier();
     // Explicitly check for 'Ultra' - undefined/null/errors all result in false
     const hasAccess = tier === 'Ultra';
-    lastKnownAccessResult = hasAccess;
+    accessCache.lastKnownResult = hasAccess;
     return hasAccess;
   } catch {
     // On any error (network, auth, etc.), deny access and allow retry
-    lastKnownAccessResult = false;
+    accessCache.lastKnownResult = false;
     return false;
   }
 }
@@ -227,7 +240,7 @@ async function fetchEnabledProvidersFromServer(): Promise<string[]> {
 
     const data = await response.json();
     if (Array.isArray(data.providers)) {
-      enabledProvidersCache = data.providers;
+      providersCache.providers = data.providers;
       return data.providers;
     }
 
@@ -247,17 +260,17 @@ export async function getEnabledProviders(): Promise<string[]> {
 
   // Check if cache is still valid
   if (
-    enabledProvidersCachePromise &&
-    now - enabledProvidersCacheTimestamp < CACHE_TTL_MS
+    providersCache.promise &&
+    now - providersCache.timestamp < CACHE_TTL_MS
   ) {
-    return enabledProvidersCachePromise;
+    return providersCache.promise;
   }
 
   // Create new cache entry
-  enabledProvidersCacheTimestamp = now;
-  enabledProvidersCachePromise = fetchEnabledProvidersFromServer();
+  providersCache.timestamp = now;
+  providersCache.promise = fetchEnabledProvidersFromServer();
 
-  return enabledProvidersCachePromise;
+  return providersCache.promise;
 }
 
 /**
@@ -265,7 +278,7 @@ export async function getEnabledProviders(): Promise<string[]> {
  * Returns empty array if providers haven't been fetched yet.
  */
 export function getEnabledProvidersSync(): string[] {
-  return enabledProvidersCache;
+  return providersCache.providers;
 }
 
 /**
@@ -295,16 +308,16 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   const now = Date.now();
 
   // Check if cache is still valid
-  if (accessCachePromise && now - accessCacheTimestamp < CACHE_TTL_MS) {
-    return accessCachePromise;
+  if (accessCache.promise && now - accessCache.timestamp < CACHE_TTL_MS) {
+    return accessCache.promise;
   }
 
   // Create new cache entry (Promise-based to prevent race conditions)
   // Note: fetchAccessStatus() handles errors internally and returns false,
   // so transient failures are cached for the TTL. This is intentional to
   // avoid hammering the auth service on repeated failures.
-  accessCacheTimestamp = now;
-  accessCachePromise = (async () => {
+  accessCache.timestamp = now;
+  accessCache.promise = (async () => {
     // Fetch both access status and enabled providers in parallel
     const [hasAccess, providers] = await Promise.all([
       fetchAccessStatus(),
@@ -315,7 +328,7 @@ export async function canUseServerSideKeys(): Promise<boolean> {
     return hasAccess && providers.length > 0;
   })();
 
-  return accessCachePromise;
+  return accessCache.promise;
 }
 
 /**
@@ -358,13 +371,13 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
 
   // Provider must be enabled on the server (has API key configured)
   const normalizedProvider = provider.toLowerCase();
-  if (!enabledProvidersCache.includes(normalizedProvider)) {
+  if (!providersCache.providers.includes(normalizedProvider)) {
     return false;
   }
 
   // Must have confirmed access from a prior async check
   // This ensures routing and API key decisions are synchronized
-  return lastKnownAccessResult === true;
+  return accessCache.lastKnownResult === true;
 }
 
 /**
@@ -377,7 +390,7 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
  * The toLowerCase() call ensures case-insensitive matching.
  */
 export function isProviderEnabledForServerSideKeys(provider: string): boolean {
-  return enabledProvidersCache.includes(provider.toLowerCase());
+  return providersCache.providers.includes(provider.toLowerCase());
 }
 
 /**
