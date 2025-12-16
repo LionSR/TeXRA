@@ -451,12 +451,40 @@ Deno.serve(async (req: Request) => {
       upstreamHeaders.set('x-goog-api-key', apiKey);
     }
 
-    // 9. Forward request to provider
-    const upstreamResponse = await fetch(targetUrl, {
-      method: req.method,
-      headers: upstreamHeaders,
-      body: req.method !== 'GET' ? req.body : undefined,
-    });
+    // 9. Forward request to provider with timeout
+    // Use 2 minute timeout to accommodate streaming responses
+    const UPSTREAM_TIMEOUT_MS = 120000;
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(
+      () => abortController.abort(),
+      UPSTREAM_TIMEOUT_MS,
+    );
+
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetch(targetUrl, {
+        method: req.method,
+        headers: upstreamHeaders,
+        body: req.method !== 'GET' ? req.body : undefined,
+        signal: abortController.signal,
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({
+            _relay: RELAY_VERSION,
+            error: 'Upstream request timed out',
+          }),
+          {
+            status: 504,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      throw error;
+    }
+    clearTimeout(timeoutId);
 
     // Log upstream errors server-side, but pass through original response to SDKs
     // This preserves the provider's error format (error.message, error.type, etc.)

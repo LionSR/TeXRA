@@ -19,7 +19,6 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import {
   getEnabledProviders,
-  clearServerSideKeyAccessCache,
   setUseIncludedModelAccess,
   getUseIncludedModelAccess,
 } from '@/auth/serverSideKeyAccess';
@@ -168,12 +167,9 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       message,
       'setApiAccessMode',
       async ({ mode }) => {
-        // Update the setting
+        // Update the setting (also clears cache and fires change event)
         const useIncludedAccess = mode === 'included';
         await setUseIncludedModelAccess(useIncludedAccess);
-
-        // Clear the cache so it picks up the new setting
-        clearServerSideKeyAccessCache();
 
         // Refresh profile data to reflect the change
         await this.sendProfileData(view.webview);
