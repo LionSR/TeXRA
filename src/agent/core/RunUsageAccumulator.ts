@@ -7,17 +7,38 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 
-/** Schema for run usage totals */
+/** Default values for run usage totals */
+const DEFAULT_TOTALS = {
+  firstInputTokens: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCost: 0,
+  totalCacheReadInputTokens: 0,
+  totalCacheCreationInputTokens: 0,
+  totalReasoningTokens: 0,
+  totalToolUsePromptTokens: 0,
+  totalServerToolRequests: 0,
+} as const;
+
+/** Schema for run usage totals with defaults */
 export const RunUsageTotalsSchema = z.object({
-  firstInputTokens: z.number(),
-  totalInputTokens: z.number(),
-  totalOutputTokens: z.number(),
-  totalCost: z.number(),
-  totalCacheReadInputTokens: z.number(),
-  totalCacheCreationInputTokens: z.number(),
-  totalReasoningTokens: z.number(),
-  totalToolUsePromptTokens: z.number(),
-  totalServerToolRequests: z.number(),
+  firstInputTokens: z.number().default(DEFAULT_TOTALS.firstInputTokens),
+  totalInputTokens: z.number().default(DEFAULT_TOTALS.totalInputTokens),
+  totalOutputTokens: z.number().default(DEFAULT_TOTALS.totalOutputTokens),
+  totalCost: z.number().default(DEFAULT_TOTALS.totalCost),
+  totalCacheReadInputTokens: z
+    .number()
+    .default(DEFAULT_TOTALS.totalCacheReadInputTokens),
+  totalCacheCreationInputTokens: z
+    .number()
+    .default(DEFAULT_TOTALS.totalCacheCreationInputTokens),
+  totalReasoningTokens: z.number().default(DEFAULT_TOTALS.totalReasoningTokens),
+  totalToolUsePromptTokens: z
+    .number()
+    .default(DEFAULT_TOTALS.totalToolUsePromptTokens),
+  totalServerToolRequests: z
+    .number()
+    .default(DEFAULT_TOTALS.totalServerToolRequests),
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
@@ -30,26 +51,14 @@ export type NormalizedUsageSnapshot = z.infer<
   typeof NormalizedUsageSnapshotSchema
 >;
 
-/** Schema for RunUsageAccumulator JSON serialization */
+/** Schema for RunUsageAccumulator JSON serialization (input accepts partial totals) */
 export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.partial(),
-  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).optional(),
+  totals: RunUsageTotalsSchema.partial().default({}),
+  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).default([]),
 });
 export type RunUsageAccumulatorJSON = z.infer<
   typeof RunUsageAccumulatorJSONSchema
 >;
-
-const DEFAULT_TOTALS: RunUsageTotals = {
-  firstInputTokens: 0,
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalCost: 0,
-  totalCacheReadInputTokens: 0,
-  totalCacheCreationInputTokens: 0,
-  totalReasoningTokens: 0,
-  totalToolUsePromptTokens: 0,
-  totalServerToolRequests: 0,
-};
 
 export class RunUsageAccumulator {
   private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
@@ -104,39 +113,36 @@ export class RunUsageAccumulator {
     return this.normalizedSnapshots;
   }
 
-  toJSON(): RunUsageAccumulatorJSON {
-    return {
-      totals: this.totals,
-      normalizedSnapshots:
-        this.normalizedSnapshots.length > 0
-          ? this.normalizedSnapshots
-          : undefined,
-    };
+  /** @internal Used by codec - prefer RunUsageAccumulatorCodec.encode() */
+  _setTotals(totals: RunUsageTotals): void {
+    this.totals = totals;
   }
 
-  static fromJSON(
-    json: RunUsageAccumulatorJSON | null | undefined,
-  ): RunUsageAccumulator {
-    const acc = new RunUsageAccumulator();
-    if (!json) return acc;
-
-    const t = json.totals;
-    acc.totals = {
-      firstInputTokens: t.firstInputTokens ?? 0,
-      totalInputTokens: t.totalInputTokens ?? 0,
-      totalOutputTokens: t.totalOutputTokens ?? 0,
-      totalCost: t.totalCost ?? 0,
-      totalCacheReadInputTokens: t.totalCacheReadInputTokens ?? 0,
-      totalCacheCreationInputTokens: t.totalCacheCreationInputTokens ?? 0,
-      totalReasoningTokens: t.totalReasoningTokens ?? 0,
-      totalToolUsePromptTokens: t.totalToolUsePromptTokens ?? 0,
-      totalServerToolRequests: t.totalServerToolRequests ?? 0,
-    };
-
-    if (json.normalizedSnapshots) {
-      acc.normalizedSnapshots.push(...json.normalizedSnapshots);
-    }
-
-    return acc;
+  /** @internal Used by codec - prefer RunUsageAccumulatorCodec.decode() */
+  _pushSnapshots(snapshots: NormalizedUsageSnapshot[]): void {
+    this.normalizedSnapshots.push(...snapshots);
   }
 }
+
+/**
+ * Codec for bi-directional serialization of RunUsageAccumulator.
+ * Use .encode() to serialize and .decode() to deserialize.
+ */
+export const RunUsageAccumulatorCodec = z.codec(
+  RunUsageAccumulatorJSONSchema,
+  z.instanceof(RunUsageAccumulator),
+  {
+    decode: (json: RunUsageAccumulatorJSON): RunUsageAccumulator => {
+      const acc = new RunUsageAccumulator();
+      // Schema handles defaults via .default() - parse partial totals to full totals
+      const totals = RunUsageTotalsSchema.parse(json.totals);
+      acc._setTotals(totals);
+      acc._pushSnapshots(json.normalizedSnapshots);
+      return acc;
+    },
+    encode: (acc: RunUsageAccumulator): RunUsageAccumulatorJSON => ({
+      totals: acc.getTotals(),
+      normalizedSnapshots: [...acc.getNormalizedSnapshots()],
+    }),
+  },
+);

@@ -323,7 +323,7 @@ describe('ResponseCycle background reasoning logs', () => {
     const messages: ProviderMessage[] = [];
     const stateRound = new ConversationRoundState(1);
     const stateGlobal = new AgentRunState();
-    const workspaceState = new AgentWorkspaceState();
+    const workspaceState = AgentWorkspaceState.create();
     const userVarChannels = {
       input: Object.freeze({}),
       transient: {} as Record<string, any>,
