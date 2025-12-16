@@ -5,14 +5,21 @@
  * providing their own API keys. The keys are stored as Supabase Edge
  * Function secrets and accessed via the relay function.
  *
+ * PER-PROVIDER ENABLEMENT:
+ * -----------------------
+ * The relay server controls which providers are enabled. The client fetches
+ * the list of enabled providers from `/relay/providers` and caches it.
+ * This allows the server to enable/disable providers without client updates.
+ *
  * INITIALIZATION REQUIREMENTS:
  * ----------------------------
  * The `canUseServerSideKeys()` async function MUST be called at least once
  * before `shouldUseServerSideKeysSync()` will return true. This is because:
  *
  * 1. `canUseServerSideKeys()` performs the async authentication and tier check
- * 2. It caches the result in `lastKnownAccessResult`
- * 3. `shouldUseServerSideKeysSync()` uses this cached value for sync decisions
+ * 2. It also fetches the list of enabled providers from the server
+ * 3. Results are cached in `lastKnownAccessResult` and `enabledProvidersCache`
+ * 4. `shouldUseServerSideKeysSync()` uses these cached values for sync decisions
  *
  * Call Sequence:
  * - `canUseServerSideKeys()` is called in `computeModelOptions()` when rendering
@@ -22,6 +29,12 @@
  *
  * If `canUseServerSideKeys()` hasn't been called, `shouldUseServerSideKeysSync()`
  * will return false, causing fallback to normal API key behavior.
+ *
+ * API KEY DETECTION:
+ * -----------------
+ * Use `getEnabledProvidersSync()` to get the list of providers that have
+ * server-side keys available. This can be used to skip "missing API key"
+ * warnings for providers that are available via relay.
  */
 
 import { getConfig } from '@utils/config';
@@ -29,13 +42,8 @@ import { SupabaseClient } from './SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from './config';
 
 /**
- * Supported providers for server-side API keys.
- *
- * IMPORTANT: This list MUST stay synchronized with:
- * - PROVIDER_CONFIGS in supabase/functions/relay/index.ts
- * - Provider documentation in docs/supabase/RELAY_SETUP.md
- *
- * If adding/removing providers, update all three locations.
+ * All providers that could potentially support server-side API keys.
+ * The actual enabled providers are fetched from the relay server at runtime.
  */
 export const SERVER_SIDE_PROVIDERS = [
   'openai',
@@ -48,6 +56,15 @@ export const SERVER_SIDE_PROVIDERS = [
 ] as const;
 
 export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
+
+/**
+ * Cache for enabled providers fetched from the relay server.
+ * This is populated by fetchEnabledProviders() and used for sync checks.
+ */
+let enabledProvidersCache: string[] = [];
+let enabledProvidersCacheTimestamp: number = 0;
+let enabledProvidersCachePromise: Promise<string[]> | null = null;
+const PROVIDERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Cache for server-side key access check.
@@ -72,6 +89,9 @@ export function clearServerSideKeyAccessCache(): void {
   accessCachePromise = null;
   accessCacheTimestamp = 0;
   lastKnownAccessResult = false;
+  enabledProvidersCache = [];
+  enabledProvidersCacheTimestamp = 0;
+  enabledProvidersCachePromise = null;
 }
 
 /**
@@ -98,15 +118,81 @@ async function fetchAccessStatus(): Promise<boolean> {
 }
 
 /**
+ * Fetch list of enabled providers from the relay server.
+ * This is a public endpoint that returns providers with configured API keys.
+ */
+async function fetchEnabledProvidersFromServer(): Promise<string[]> {
+  try {
+    const url = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay/providers`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[ServerSideKeys] Failed to fetch providers: ${response.status}`,
+      );
+      return [];
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data.providers)) {
+      enabledProvidersCache = data.providers;
+      return data.providers;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('[ServerSideKeys] Error fetching providers:', error);
+    return [];
+  }
+}
+
+/**
+ * Get the list of enabled providers from the relay server.
+ * Results are cached for 5 minutes.
+ */
+export async function getEnabledProviders(): Promise<string[]> {
+  const now = Date.now();
+
+  // Check if cache is still valid
+  if (
+    enabledProvidersCachePromise &&
+    now - enabledProvidersCacheTimestamp < PROVIDERS_CACHE_TTL_MS
+  ) {
+    return enabledProvidersCachePromise;
+  }
+
+  // Create new cache entry
+  enabledProvidersCacheTimestamp = now;
+  enabledProvidersCachePromise = fetchEnabledProvidersFromServer();
+
+  return enabledProvidersCachePromise;
+}
+
+/**
+ * Get the cached list of enabled providers (synchronous).
+ * Returns empty array if providers haven't been fetched yet.
+ */
+export function getEnabledProvidersSync(): string[] {
+  return enabledProvidersCache;
+}
+
+/**
  * Check if the current user can use server-side API keys.
  *
  * Requirements:
  * 1. The experimental setting must be enabled
  * 2. User must be authenticated
  * 3. User must have Ultra tier
+ * 4. At least one provider must be enabled on the server
  *
  * Results are cached for 5 minutes to avoid repeated database calls.
  * Uses Promise-based caching to prevent race conditions.
+ *
+ * This function also fetches the list of enabled providers from the server,
+ * priming the cache for shouldUseServerSideKeysSync().
  */
 export async function canUseServerSideKeys(): Promise<boolean> {
   // Check setting first (fast, no network)
@@ -129,7 +215,16 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   // so transient failures are cached for the TTL. This is intentional to
   // avoid hammering the auth service on repeated failures.
   accessCacheTimestamp = now;
-  accessCachePromise = fetchAccessStatus();
+  accessCachePromise = (async () => {
+    // Fetch both access status and enabled providers in parallel
+    const [hasAccess, providers] = await Promise.all([
+      fetchAccessStatus(),
+      getEnabledProviders(),
+    ]);
+
+    // Must have access AND at least one enabled provider
+    return hasAccess && providers.length > 0;
+  })();
 
   return accessCachePromise;
 }
@@ -139,7 +234,7 @@ export async function canUseServerSideKeys(): Promise<boolean> {
  *
  * IMPORTANT: This only returns true if:
  * 1. The setting is enabled
- * 2. The provider is supported
+ * 2. The provider is enabled on the server (has API key configured)
  * 3. A previous async check (canUseServerSideKeys) confirmed access
  *
  * PREREQUISITE: canUseServerSideKeys() must have been called and completed
@@ -172,8 +267,9 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
     return false;
   }
 
-  // Provider must be supported
-  if (!isProviderSupportedForServerSideKeys(provider)) {
+  // Provider must be enabled on the server (has API key configured)
+  const normalizedProvider = provider.toLowerCase();
+  if (!enabledProvidersCache.includes(normalizedProvider)) {
     return false;
   }
 
@@ -183,12 +279,24 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
 }
 
 /**
- * Check if a provider is supported for server-side keys.
+ * Check if a provider is enabled for server-side keys on the server.
+ *
+ * This checks against the cached list of enabled providers fetched from
+ * the relay server. Returns false if providers haven't been fetched yet.
  *
  * Note: This accepts both string literals and ModelProvider enum values.
- * ModelProvider enum values (e.g., ModelProvider.OPENAI = 'openai') are
- * lowercase strings at runtime, matching SERVER_SIDE_PROVIDERS. The
- * toLowerCase() call ensures case-insensitive matching for any edge cases.
+ * The toLowerCase() call ensures case-insensitive matching.
+ */
+export function isProviderEnabledForServerSideKeys(provider: string): boolean {
+  return enabledProvidersCache.includes(provider.toLowerCase());
+}
+
+/**
+ * Check if a provider could potentially support server-side keys.
+ * This checks against the static list of all possible providers,
+ * NOT whether it's currently enabled on the server.
+ *
+ * Use isProviderEnabledForServerSideKeys() to check actual availability.
  */
 export function isProviderSupportedForServerSideKeys(
   provider: string,
