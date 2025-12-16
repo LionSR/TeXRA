@@ -13,13 +13,21 @@ import {
   type MessageHandler,
   PROFILE_VIEW_COMMANDS,
 } from '@common/webview';
+import { getConfig, setConfig } from '@utils/config';
 
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
+import {
+  getEnabledProviders,
+  clearServerSideKeyAccessCache,
+} from '@/auth/serverSideKeyAccess';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
+const SetApiAccessModeMessage = z.object({
+  mode: z.enum(['included', 'personal']),
+});
 
 /** Schema for remote agent data sent to webview (used for type inference only) */
 const RemoteAgentPayloadSchema = z.object({
@@ -48,6 +56,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       [PROFILE_VIEW_COMMANDS.SELECT_AGENT]: this.handleSelectAgent.bind(this),
       [PROFILE_VIEW_COMMANDS.SIGN_IN]: this.handleSignIn.bind(this),
       [PROFILE_VIEW_COMMANDS.SIGN_OUT]: this.handleSignOut.bind(this),
+      [PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE]:
+        this.handleSetApiAccessMode.bind(this),
     };
   }
 
@@ -62,6 +72,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         tier: 'free',
         permissions: [],
         remoteAgents: [],
+        apiAccessMode: 'personal',
+        enabledProviders: [],
       });
       return;
     }
@@ -81,6 +93,20 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
+    // Get API access settings for Ultra tier users
+    const isUltra = authContext.tier === 'Ultra';
+    const useServerSideKeys = getConfig<boolean>(
+      'texra.experimental.useServerSideKeys',
+      false,
+    );
+    const apiAccessMode = useServerSideKeys ? 'included' : 'personal';
+
+    // Fetch enabled providers from relay server (only for Ultra tier)
+    let enabledProviders: string[] = [];
+    if (isUltra) {
+      enabledProviders = await getEnabledProviders();
+    }
+
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
       authenticated: true,
@@ -91,6 +117,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       tier: authContext.tier,
       permissions: authContext.permissions,
       remoteAgents,
+      apiAccessMode,
+      enabledProviders,
     });
   }
 
@@ -131,5 +159,37 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
+  }
+
+  private async handleSetApiAccessMode(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      SetApiAccessModeMessage,
+      message,
+      'setApiAccessMode',
+      async ({ mode }) => {
+        // Update the setting
+        const useServerSideKeys = mode === 'included';
+        await setConfig(
+          'texra.experimental.useServerSideKeys',
+          useServerSideKeys,
+        );
+
+        // Clear the cache so it picks up the new setting
+        clearServerSideKeyAccessCache();
+
+        // Refresh profile data to reflect the change
+        await this.sendProfileData(view.webview);
+
+        // Show confirmation message
+        const modeLabel =
+          mode === 'included' ? 'Included Access' : 'My Own Keys';
+        void vscode.window.showInformationMessage(
+          `API access mode changed to: ${modeLabel}`,
+        );
+      },
+    );
   }
 }
