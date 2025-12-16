@@ -45,8 +45,6 @@ export const EditedFileRecordSchema = z.object({
   sourceDisplay: z.string(),
 });
 
-export type EditedFileRecord = z.infer<typeof EditedFileRecordSchema>;
-
 /**
  * Schema for strongly-typed tool result payloads sent to model handlers.
  * This is what gets passed to handlers - no binary data, properly typed fields.
