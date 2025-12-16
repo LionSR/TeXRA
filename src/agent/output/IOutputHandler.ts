@@ -30,12 +30,6 @@ export interface IOutputHandler {
   /** Determine whether a round has generated outputs. */
   hasRoundOutputs(round: number): boolean;
 
-  /** Indent a single LaTeX file for readability. */
-  indentLatexFile(fileLocation: FileLocation): Promise<void>;
-
-  /** Indent multiple LaTeX files for readability. */
-  indentLatexFiles(fileLocations: FileLocation[]): Promise<void>;
-
   /** Process output files from XML or direct input. */
   processOutputFiles(
     outputLocation: FileLocation,
