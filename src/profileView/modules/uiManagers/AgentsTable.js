@@ -37,8 +37,18 @@ export class AgentsTable {
    * @param {string} options.tier - Primary group name (for backwards compatibility / display)
    * @param {string[]} options.permissions - Array of permission strings
    * @param {Array} options.remoteAgents - Array of remote agent objects
+   * @param {string} options.apiAccessMode - 'included' or 'personal'
+   * @param {string[]} options.enabledProviders - Array of enabled provider names
    */
-  render({ authenticated, user, tier, permissions, remoteAgents }) {
+  render({
+    authenticated,
+    user,
+    tier,
+    permissions,
+    remoteAgents,
+    apiAccessMode,
+    enabledProviders,
+  }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);
@@ -46,6 +56,7 @@ export class AgentsTable {
       ELEMENT_IDS.REMOTE_AGENTS_SECTION,
     );
     const noAgentsMessage = safeGetElementById(ELEMENT_IDS.NO_AGENTS_MESSAGE);
+    const apiAccessSection = safeGetElementById(ELEMENT_IDS.API_ACCESS_SECTION);
 
     if (
       !profileInfo ||
@@ -63,6 +74,7 @@ export class AgentsTable {
       tierInfo.style.display = 'none';
       notAuthenticated.style.display = 'block';
       remoteAgentsSection.style.display = 'none';
+      if (apiAccessSection) apiAccessSection.style.display = 'none';
       return;
     }
 
@@ -95,6 +107,16 @@ export class AgentsTable {
         : LABELS.TIER_FREE_MESSAGE;
     }
 
+    // Show API access section only for Ultra tier
+    if (apiAccessSection) {
+      const isUltra = tier === 'Ultra';
+      apiAccessSection.style.display = isUltra ? 'block' : 'none';
+
+      if (isUltra) {
+        this.renderApiAccessSection(apiAccessMode, enabledProviders);
+      }
+    }
+
     // Show remote agents section for all authenticated users
     // RLS filters which agents they can see based on permissions
     remoteAgentsSection.style.display = 'block';
@@ -106,6 +128,76 @@ export class AgentsTable {
       if (this.container) this.container.innerHTML = '';
       noAgentsMessage.style.display = 'block';
     }
+  }
+
+  /**
+   * Render the API access section for Ultra tier users.
+   * @param {string} apiAccessMode - 'included' or 'personal'
+   * @param {string[]} enabledProviders - Array of enabled provider names
+   */
+  renderApiAccessSection(apiAccessMode, enabledProviders) {
+    const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
+    const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
+    const providersInfo = safeGetElementById(
+      ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
+    );
+
+    // Set the current mode
+    if (includedRadio) {
+      includedRadio.checked = apiAccessMode === 'included';
+    }
+    if (personalRadio) {
+      personalRadio.checked = apiAccessMode === 'personal';
+    }
+
+    // Show enabled providers info when using included access
+    if (providersInfo) {
+      if (
+        apiAccessMode === 'included' &&
+        enabledProviders &&
+        enabledProviders.length > 0
+      ) {
+        const providerNames = enabledProviders
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+          .join(', ');
+        providersInfo.textContent = `Available: ${providerNames}`;
+        providersInfo.style.display = 'block';
+      } else {
+        providersInfo.style.display = 'none';
+      }
+    }
+
+    // Add event listeners (only once)
+    if (!this._apiAccessListenersAdded) {
+      this._apiAccessListenersAdded = true;
+
+      if (includedRadio) {
+        includedRadio.addEventListener('change', () => {
+          if (includedRadio.checked) {
+            this.setApiAccessMode('included');
+          }
+        });
+      }
+
+      if (personalRadio) {
+        personalRadio.addEventListener('change', () => {
+          if (personalRadio.checked) {
+            this.setApiAccessMode('personal');
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Send message to change API access mode.
+   * @param {string} mode - 'included' or 'personal'
+   */
+  setApiAccessMode(mode) {
+    vscode.postMessage({
+      command: PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      mode,
+    });
   }
 
   /**
