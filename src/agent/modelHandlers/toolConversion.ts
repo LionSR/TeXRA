@@ -37,13 +37,6 @@ import type {
  */
 export const NATIVE_TOOL_NAMES = new Set(['web_search']);
 
-/**
- * Check if a tool is a native/server-side tool.
- */
-export function isNativeTool(name: string): boolean {
-  return NATIVE_TOOL_NAMES.has(name);
-}
-
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
   bash: 'bash_20250124',
