@@ -10,8 +10,8 @@
  * Supported providers: openai, anthropic, google, xai, deepseek, moonshot, dashscope
  */
 
-// Boot log - this should appear in Logs tab if function starts successfully
-console.log('[RELAY] Function booting - version 18');
+// Relay version for debugging deployments
+const RELAY_VERSION = '1.0.0';
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -102,33 +102,21 @@ const corsHeaders = {
  * 5. x-goog-api-key: {token} (Google style)
  */
 function extractJwtFromRequest(req: Request, url: URL): string | null {
-  // Debug: Log all received headers
-  const allHeaders: Record<string, string> = {};
-  req.headers.forEach((value, key) => {
-    // Truncate long values for logging
-    allHeaders[key] =
-      value.length > 50 ? value.substring(0, 50) + '...' : value;
-  });
-  console.log('[DEBUG] Received headers:', JSON.stringify(allHeaders));
-
   // 1. Check query parameter first (SDKs CANNOT strip this!)
   const queryToken = url.searchParams.get('texra_token');
   if (queryToken) {
-    console.log('[DEBUG] Found texra_token query parameter');
     return queryToken;
   }
 
   // 2. Check custom TeXRA auth header (SDKs shouldn't interfere with this)
   const texraAuth = req.headers.get('x-texra-auth');
   if (texraAuth) {
-    console.log('[DEBUG] Found x-texra-auth header');
     return texraAuth;
   }
 
   // 3. Check Authorization header (OpenAI style)
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
-    console.log('[DEBUG] Found Authorization header');
     // Handle "Bearer {token}" format
     if (authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);
@@ -140,18 +128,15 @@ function extractJwtFromRequest(req: Request, url: URL): string | null {
   // 4. Check x-api-key (Anthropic style)
   const xApiKey = req.headers.get('x-api-key');
   if (xApiKey) {
-    console.log('[DEBUG] Found x-api-key header');
     return xApiKey;
   }
 
   // 5. Check x-goog-api-key (Google style)
   const googApiKey = req.headers.get('x-goog-api-key');
   if (googApiKey) {
-    console.log('[DEBUG] Found x-goog-api-key header');
     return googApiKey;
   }
 
-  console.log('[DEBUG] No auth token found in query params or headers');
   return null;
 }
 
@@ -173,13 +158,11 @@ function parseRequestPath(pathname: string): {
   // Find /relay/ in the path (handles /functions/v1/relay/... prefix from Supabase)
   const relayIndex = pathname.indexOf('/relay/');
   if (relayIndex === -1) {
-    console.log('[DEBUG] No /relay/ found in pathname:', pathname);
     return null;
   }
 
   // Extract everything after /relay/
   const withoutPrefix = pathname.substring(relayIndex + 7); // 7 = '/relay/'.length
-  console.log('[DEBUG] Path after /relay/:', withoutPrefix);
   const parts = withoutPrefix.split('/');
 
   if (parts.length < 1 || !parts[0]) {
@@ -192,12 +175,6 @@ function parseRequestPath(pathname: string): {
   if (parts.length >= 3 && parts[1] === '-') {
     const pathToken = parts[2];
     const apiPath = '/' + parts.slice(3).join('/');
-    console.log(
-      '[DEBUG] Found path-embedded token, provider:',
-      provider,
-      'apiPath:',
-      apiPath,
-    );
     return { provider, apiPath, pathToken };
   }
 
@@ -207,9 +184,6 @@ function parseRequestPath(pathname: string): {
 }
 
 Deno.serve(async (req: Request) => {
-  // Log every request immediately
-  console.log('[RELAY] Request received:', req.method, req.url);
-
   const url = new URL(req.url);
 
   // Handle CORS preflight
@@ -218,8 +192,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    console.log('[RELAY] Processing request, pathname:', url.pathname);
-
     // 1. Parse the request path
     const parsed = parseRequestPath(url.pathname);
     if (!parsed) {
@@ -251,9 +223,6 @@ Deno.serve(async (req: Request) => {
     // 3. Extract JWT token - path-embedded token has highest priority
     // Path token is most reliable since SDKs cannot modify the URL path structure
     const jwtToken = pathToken || extractJwtFromRequest(req, url);
-    if (pathToken) {
-      console.log('[DEBUG] Using path-embedded token for auth');
-    }
     if (!jwtToken) {
       // Include received headers in error for debugging
       const receivedHeaders: Record<string, string> = {};
@@ -264,7 +233,7 @@ Deno.serve(async (req: Request) => {
       });
       return new Response(
         JSON.stringify({
-          _relay: 'texra-v1',
+          _relay: RELAY_VERSION,
           error: 'Missing authorization token',
           debug: { receivedHeaders, pathToken: !!pathToken },
         }),
@@ -303,7 +272,7 @@ Deno.serve(async (req: Request) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({
-          _relay: 'texra-v1',
+          _relay: RELAY_VERSION,
           error: 'Invalid token',
           debug: { userError: userError?.message },
         }),
@@ -342,9 +311,6 @@ Deno.serve(async (req: Request) => {
 
     // 6. Get server-side API key
     const apiKey = Deno.env.get(providerConfig.envKey);
-    console.log(
-      `[DEBUG] API key for ${provider} (envKey: ${providerConfig.envKey}): ${apiKey ? `found (${apiKey.length} chars, starts with ${apiKey.substring(0, 8)}...)` : 'NOT FOUND'}`,
-    );
     if (!apiKey) {
       return new Response(
         JSON.stringify({
@@ -403,52 +369,24 @@ Deno.serve(async (req: Request) => {
     }
 
     // 9. Forward request to provider
-    // Debug: Log what we're sending upstream
-    const upstreamHeadersObj: Record<string, string> = {};
-    upstreamHeaders.forEach((value, key) => {
-      // Truncate long values, partially hide API keys
-      if (
-        key.toLowerCase().includes('key') ||
-        key.toLowerCase() === 'authorization'
-      ) {
-        upstreamHeadersObj[key] =
-          value.length > 20 ? `${value.substring(0, 15)}...` : value;
-      } else {
-        upstreamHeadersObj[key] = value;
-      }
-    });
-    console.log(`[DEBUG] Upstream request to ${targetUrl}`);
-    console.log(
-      `[DEBUG] Upstream headers: ${JSON.stringify(upstreamHeadersObj)}`,
-    );
-
     const upstreamResponse = await fetch(targetUrl, {
       method: req.method,
       headers: upstreamHeaders,
       body: req.method !== 'GET' ? req.body : undefined,
     });
 
-    // Debug: Log upstream response status
-    console.log(`[DEBUG] Upstream response status: ${upstreamResponse.status}`);
-
-    // Debug: If error response, log the body
+    // If error response, wrap with relay metadata for debugging
     if (upstreamResponse.status >= 400) {
       const errorBody = await upstreamResponse.text();
-      console.log(`[DEBUG] Upstream error body: ${errorBody}`);
-      // Return the error with debug info - use distinctive marker
+      console.error(
+        `[RELAY] Upstream error: ${provider} ${upstreamResponse.status}`,
+      );
       return new Response(
         JSON.stringify({
-          _relay: 'texra-v1', // Marker to prove relay code ran
+          _relay: RELAY_VERSION,
           error: 'Upstream API error',
           upstreamStatus: upstreamResponse.status,
           upstreamError: errorBody,
-          debug: {
-            targetUrl,
-            provider,
-            apiKeyFound: !!apiKey,
-            apiKeyLength: apiKey?.length,
-            headersSet: Object.keys(upstreamHeadersObj),
-          },
         }),
         {
           status: upstreamResponse.status,
