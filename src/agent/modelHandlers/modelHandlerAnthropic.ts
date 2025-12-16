@@ -335,10 +335,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // can authenticate the user. The relay then uses its own server-side API key.
     if (shouldUseServerSideKeysSync(this.config.provider)) {
       const jwtToken = credential; // Clarify: this is JWT, not an API key
+      this.logger.debug(
+        `Anthropic: Injecting JWT into x-api-key header for relay auth`,
+      );
       return new Anthropic({
-        apiKey: jwtToken, // SDK requires this param, but relay ignores the value
+        apiKey: jwtToken, // SDK requires this param
         baseURL: baseUrl,
-        fetch: async (url, init) => {
+        fetch: async (url: RequestInfo | URL, init?: RequestInit) => {
           const headers = new Headers(init?.headers);
           headers.set('x-api-key', jwtToken); // Relay extracts JWT from this header
           return fetch(url, { ...init, headers });
