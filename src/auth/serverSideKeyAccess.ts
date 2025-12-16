@@ -89,6 +89,9 @@ export const SERVER_SIDE_PROVIDERS = [
 
 export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
 
+/** Cache TTL for all server-side key access checks (5 minutes). */
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Cache for enabled providers fetched from the relay server.
  * This is populated by fetchEnabledProviders() and used for sync checks.
@@ -96,7 +99,6 @@ export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
 let enabledProvidersCache: string[] = [];
 let enabledProvidersCacheTimestamp: number = 0;
 let enabledProvidersCachePromise: Promise<string[]> | null = null;
-const PROVIDERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Cache for server-side key access check.
@@ -105,7 +107,6 @@ const PROVIDERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let accessCachePromise: Promise<boolean> | null = null;
 let accessCacheTimestamp: number = 0;
 let lastKnownAccessResult: boolean = false;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Initialize the server-side key access module with the extension context.
@@ -247,7 +248,7 @@ export async function getEnabledProviders(): Promise<string[]> {
   // Check if cache is still valid
   if (
     enabledProvidersCachePromise &&
-    now - enabledProvidersCacheTimestamp < PROVIDERS_CACHE_TTL_MS
+    now - enabledProvidersCacheTimestamp < CACHE_TTL_MS
   ) {
     return enabledProvidersCachePromise;
   }
