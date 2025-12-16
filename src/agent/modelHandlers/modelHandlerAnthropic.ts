@@ -64,9 +64,6 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
-// Auth imports
-// import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess'; // TEST: temporarily disabled
-
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -330,9 +327,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const baseUrl = this.getBaseUrl();
     this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
 
-    // TEST: Try header-based auth instead of path-embedded tokens
-    // The SDK should send x-api-key: {credential} to the relay
-    // The relay extracts JWT from x-api-key header
+    // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header
     return new Anthropic({ apiKey: credential, baseURL: baseUrl });
   }
 
