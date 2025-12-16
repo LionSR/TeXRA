@@ -81,7 +81,7 @@ const PROVIDER_CONFIGS: Record<
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-api-key, x-goog-api-key, x-client-info, apikey, content-type, anthropic-version, anthropic-beta, x-stainless-lang, x-stainless-package-version, x-stainless-os, x-stainless-arch, x-stainless-runtime, x-stainless-runtime-version',
+    'authorization, x-api-key, x-goog-api-key, x-texra-auth, x-client-info, apikey, content-type, anthropic-version, anthropic-beta, x-stainless-lang, x-stainless-package-version, x-stainless-os, x-stainless-arch, x-stainless-runtime, x-stainless-runtime-version',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
@@ -90,6 +90,7 @@ const corsHeaders = {
  *
  * Different SDK clients send the "API key" (which is actually the JWT when using
  * server-side keys) in different headers:
+ * - Custom TeXRA header: x-texra-auth: {token} (preferred, SDKs won't interfere)
  * - OpenAI SDK: Authorization: Bearer {token}
  * - Anthropic SDK: x-api-key: {token}
  * - Google SDK: x-goog-api-key: {token}
@@ -97,7 +98,13 @@ const corsHeaders = {
  * This function checks all possible locations and extracts the JWT.
  */
 function extractJwtFromHeaders(req: Request): string | null {
-  // Check Authorization header first (OpenAI style)
+  // Check custom TeXRA auth header first (SDKs don't interfere with this)
+  const texraAuth = req.headers.get('x-texra-auth');
+  if (texraAuth) {
+    return texraAuth;
+  }
+
+  // Check Authorization header (OpenAI style)
   const authHeader = req.headers.get('Authorization');
   if (authHeader) {
     // Handle "Bearer {token}" format
