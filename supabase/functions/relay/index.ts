@@ -25,7 +25,7 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.3.0';
+const RELAY_VERSION = '1.3.1';
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -334,10 +334,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // 4. Validate user and check tier
+    //
+    // SECURITY MODEL:
+    // - Use SUPABASE_ANON_KEY (not service role) so RLS policies apply
+    // - Pass user's JWT in Authorization header for authentication
+    // - auth.getUser() validates the JWT and returns the authenticated user
+    // - Profile query is protected by RLS: users can only read their own profile
+    //
+    // This provides defense-in-depth: even if there's a bug in our filtering,
+    // RLS prevents users from accessing other users' data.
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !supabaseAnonKey) {
       console.error('Missing required Supabase environment variables');
       return new Response(
         JSON.stringify({
@@ -351,8 +360,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Create client with the extracted JWT in Authorization header format
-    const userClient = createClient(supabaseUrl, serviceRoleKey, {
+    // Create client with the user's JWT for authentication
+    // RLS policies will apply based on the authenticated user
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: `Bearer ${jwtToken}` } },
     });
 
