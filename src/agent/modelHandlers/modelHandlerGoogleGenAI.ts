@@ -312,18 +312,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
       // When using server-side keys via relay, the "credential" is actually the user's
-      // JWT token (not an API key). SDKs strip custom headers to non-provider domains,
-      // so we pass the token as a query parameter which cannot be stripped.
+      // JWT token (not an API key). SDKs construct URLs by appending paths to baseUrl,
+      // which breaks if we add query params to baseUrl. Instead, we embed the token
+      // in the URL path using /-/ as separator: /relay/{provider}/-/{token}
+      // JWTs use URL-safe base64 (no slashes) so this works safely.
       const usingServerSideKeys = shouldUseServerSideKeysSync(
         this.config.provider,
       );
       if (usingServerSideKeys && baseUrl) {
-        // Append JWT token as query parameter - SDKs cannot strip query params!
-        const separator = baseUrl.includes('?') ? '&' : '?';
-        baseUrl = `${baseUrl}${separator}texra_token=${encodeURIComponent(credential)}`;
-        this.logger.debug(`Google: Using query param auth for relay`);
+        // Embed JWT token in URL path: /relay/google/-/{token}
+        baseUrl = `${baseUrl}/-/${credential}`;
+        this.logger.debug(`Google: Using path-embedded token for relay auth`);
         this.googleClient = new GoogleGenAI({
-          apiKey: credential, // SDK requires this, but relay uses texra_token query param
+          apiKey: credential, // SDK requires this, but relay extracts token from path
           httpOptions: {
             baseUrl: baseUrl,
           },
