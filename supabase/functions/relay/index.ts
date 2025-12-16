@@ -25,7 +25,7 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.3.1';
+const RELAY_VERSION = '1.3.2';
 
 /** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
 const ULTRA_TIER = 'Ultra';
@@ -470,8 +470,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // 9. Forward request to provider with timeout
-    // Use 2 minute timeout to accommodate streaming responses
-    const UPSTREAM_TIMEOUT_MS = 120000;
+    // Use 5 minute timeout to accommodate thinking models (e.g., Gemini 3)
+    // which can take significant time for complex reasoning tasks
+    const UPSTREAM_TIMEOUT_MS = 300000;
     const abortController = new AbortController();
     const timeoutId = setTimeout(
       () => abortController.abort(),
