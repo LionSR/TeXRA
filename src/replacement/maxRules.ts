@@ -91,7 +91,6 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // prettier-ignore
     const mathOperators = [
       'argmin','argmax','tr','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
-      'sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
     ];
 
     // Direct mapping: \mathrm{op} -> \op and \text{op} -> \op
