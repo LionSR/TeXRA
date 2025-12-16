@@ -99,7 +99,8 @@ export const ConversationRoundStateCodec = z.codec(
     decode: (
       json: ConversationRoundStateSnapshot,
     ): ConversationRoundState => {
-      // Schema handles defaults via .default()
+      // Intentional re-parse: validates untrusted input and applies schema defaults
+      // for legacy snapshots that may be missing fields like continuationCount
       const parsed = ConversationRoundStateSnapshotSchema.parse(json);
       const state = new ConversationRoundState(parsed.roundIndex);
       state.continuationCount = parsed.continuationCount;
@@ -178,13 +179,16 @@ export const AgentRunStateCodec = z.codec(
   z.instanceof(AgentRunState),
   {
     decode: (json): AgentRunState => {
+      // Intentional re-parse: validates untrusted input and applies schema defaults
+      // for legacy snapshots that may be missing fields like totalRounds
+      const parsed = AgentRunStateSnapshotSchema.parse(json);
       // Compose with nested codec
       const usageAccumulator = RunUsageAccumulatorCodec.decode(
-        json.usageAccumulator,
+        parsed.usageAccumulator,
       );
       const state = new AgentRunState(usageAccumulator);
-      state.totalRounds = json.totalRounds;
-      state.totalResponseTimeMs = json.totalResponseTimeMs;
+      state.totalRounds = parsed.totalRounds;
+      state.totalResponseTimeMs = parsed.totalResponseTimeMs;
       return state;
     },
     encode: (state): AgentRunStateSnapshot => ({
