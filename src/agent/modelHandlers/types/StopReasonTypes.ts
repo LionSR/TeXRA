@@ -34,25 +34,6 @@ export const OPENAI_COMPLETION_FINISH_REASONS = Object.values(
 export type OpenAICompletionFinishReason =
   (typeof OPENAI_COMPLETION_FINISH_REASONS)[number];
 
-/**
- * Status values used by the OpenAI Responses API.
- * Re-exported from the SDK for convenience; the SDK's ResponseStatus type
- * is the single source of truth.
- */
-export { type ResponseStatus as OpenAIResponseStatus } from 'openai/resources/responses/responses';
-
-/** Constants matching SDK's ResponseStatus for runtime checks. */
-export const OPENAI_RESPONSE_STATUS = {
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  IN_PROGRESS: 'in_progress',
-  CANCELLED: 'cancelled',
-  QUEUED: 'queued',
-  INCOMPLETE: 'incomplete',
-} as const satisfies Record<
-  string,
-  import('openai/resources/responses/responses').ResponseStatus
->;
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
@@ -75,7 +56,6 @@ export const ANTHROPIC_STOP = {
   PAUSE_TURN: 'pause_turn',
   REFUSAL: 'refusal',
 } as const satisfies Record<string, AnthropicSDKStopReason>;
-export const ANTHROPIC_STOP_REASONS = Object.values(ANTHROPIC_STOP);
 /** Anthropic stop reason type - derived from SDK's StopReason */
 export type AnthropicStopReason = AnthropicSDKStopReason;
 
