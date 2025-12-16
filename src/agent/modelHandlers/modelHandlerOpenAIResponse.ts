@@ -1264,7 +1264,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
-  /** Process reasoning summaries from the Responses API. */
+  /**
+   * Process reasoning summaries from the Responses API.
+   *
+   * Collects ALL reasoning items from the response output, not just the first.
+   * This is important when native search is enabled because the model may produce
+   * multiple reasoning items (e.g., one before web_search_call, one before function_call).
+   */
   processThinkingBlock(
     responseObject: Response,
     workspaceState?: AgentWorkspaceState,
@@ -1273,18 +1279,32 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!Array.isArray(outputArr)) {
       return null;
     }
-    const reasoningObj = outputArr.find(
-      (item) => item?.type === 'reasoning',
-    ) as ResponseReasoningItem | undefined;
-    const summaryParts = reasoningObj?.summary ?? [];
-    if (summaryParts.length === 0) {
+
+    // Collect ALL reasoning items, not just the first
+    // This handles cases where native search produces multiple reasoning blocks
+    const reasoningItems = outputArr.filter(
+      (item): item is ResponseReasoningItem => item?.type === 'reasoning',
+    );
+
+    if (reasoningItems.length === 0) {
       return null;
     }
 
-    const thoughtContent = summaryParts.map((part) => part.text).join('\n\n'); // to make the thinking markdown rendering more readable
+    // Flatten all summary parts from all reasoning items
+    const allSummaryParts = reasoningItems.flatMap(
+      (item) => item.summary ?? [],
+    );
+
+    if (allSummaryParts.length === 0) {
+      return null;
+    }
+
+    const thoughtContent = allSummaryParts
+      .map((part) => part.text)
+      .join('\n\n'); // to make the thinking markdown rendering more readable
 
     if (workspaceState) {
-      workspaceState.reasoning.thinkingBlocks = summaryParts.map((part) => ({
+      workspaceState.reasoning.thinkingBlocks = allSummaryParts.map((part) => ({
         type: 'thinking',
         thinking: part.text,
       }));
@@ -1293,7 +1313,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (thoughtContent) {
       this.logger.debug(
-        `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,
+        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.substring(0, K_SLICE)}...`,
       );
     }
 
