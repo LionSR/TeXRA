@@ -25,7 +25,7 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.3.2';
+const RELAY_VERSION = '1.3.3';
 
 /** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
 const ULTRA_TIER = 'Ultra';
@@ -470,9 +470,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // 9. Forward request to provider with timeout
-    // Use 5 minute timeout to accommodate thinking models (e.g., Gemini 3)
-    // which can take significant time for complex reasoning tasks
-    const UPSTREAM_TIMEOUT_MS = 300000;
+    // Use 390s timeout to maximize compatibility with Supabase paid plans (400s wall clock limit)
+    // Note: Free plans have 150s limit - thinking models may timeout on free tier
+    const UPSTREAM_TIMEOUT_MS = 390000;
     const abortController = new AbortController();
     const timeoutId = setTimeout(
       () => abortController.abort(),
