@@ -60,7 +60,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Auth imports
-import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+// import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess'; // TEST: temporarily disabled
 
 // Google finish reasons are re-exported from the SDK
 
@@ -308,35 +308,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
       const credential = await this.getApiKey();
-      let baseUrl = this.getBaseUrl();
+      const baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
-      // When using server-side keys via relay, the "credential" is actually the user's
-      // JWT token (not an API key). SDKs construct URLs by appending paths to baseUrl,
-      // which breaks if we add query params to baseUrl. Instead, we embed the token
-      // in the URL path using /-/ as separator: /relay/{provider}/-/{token}
-      // JWTs use URL-safe base64 (no slashes) so this works safely.
-      const usingServerSideKeys = shouldUseServerSideKeysSync(
-        this.config.provider,
-      );
-      if (usingServerSideKeys && baseUrl) {
-        // Embed JWT token in URL path: /relay/google/-/{token}
-        baseUrl = `${baseUrl}/-/${credential}`;
-        this.logger.debug(`Google: Using path-embedded token for relay auth`);
-        this.googleClient = new GoogleGenAI({
-          apiKey: credential, // SDK requires this, but relay extracts token from path
-          httpOptions: {
-            baseUrl: baseUrl,
-          },
-        });
-      } else {
-        this.googleClient = new GoogleGenAI({
-          apiKey: credential,
-          httpOptions: {
-            baseUrl: baseUrl ?? undefined,
-          },
-        });
-      }
+      // TEST: Try header-based auth instead of path-embedded tokens
+      // The SDK should send x-goog-api-key: {credential} to the relay
+      // The relay extracts JWT from x-goog-api-key header
+      this.googleClient = new GoogleGenAI({
+        apiKey: credential,
+        httpOptions: {
+          baseUrl: baseUrl ?? undefined,
+        },
+      });
     }
     return this.googleClient;
   }
