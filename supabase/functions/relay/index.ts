@@ -91,11 +91,36 @@ const PROVIDER_CONFIGS: Record<
 // 1. Development/testing scenarios
 // 2. Webview contexts (which have origins like vscode-webview://*)
 // Security is enforced via JWT validation, not CORS origin checking.
-// TODO: Consider restricting to specific origins in production if needed.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-api-key, x-goog-api-key, x-texra-auth, x-client-info, apikey, content-type, anthropic-version, anthropic-beta, x-stainless-lang, x-stainless-package-version, x-stainless-os, x-stainless-arch, x-stainless-runtime, x-stainless-runtime-version',
+  // Allow common SDK headers from all providers
+  'Access-Control-Allow-Headers': [
+    // Standard headers
+    'authorization',
+    'content-type',
+    'accept',
+    // TeXRA auth headers
+    'x-texra-auth',
+    'x-client-info',
+    'apikey',
+    // Anthropic SDK headers
+    'x-api-key',
+    'anthropic-version',
+    'anthropic-beta',
+    'x-stainless-lang',
+    'x-stainless-package-version',
+    'x-stainless-os',
+    'x-stainless-arch',
+    'x-stainless-runtime',
+    'x-stainless-runtime-version',
+    // Google SDK headers
+    'x-goog-api-key',
+    'x-goog-api-client',
+    // OpenAI SDK headers
+    'openai-beta',
+    'openai-organization',
+    'openai-project',
+  ].join(', '),
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
@@ -147,6 +172,9 @@ function extractJwtFromRequest(req: Request): string | null {
   return null;
 }
 
+// Path prefix constant for URL parsing
+const RELAY_PATH_PREFIX = '/relay/';
+
 /**
  * Parse the URL path to extract provider, optional path-embedded token, and API path.
  *
@@ -163,13 +191,15 @@ function parseRequestPath(pathname: string): {
   pathToken?: string;
 } | null {
   // Find /relay/ in the path (handles /functions/v1/relay/... prefix from Supabase)
-  const relayIndex = pathname.indexOf('/relay/');
+  const relayIndex = pathname.indexOf(RELAY_PATH_PREFIX);
   if (relayIndex === -1) {
     return null;
   }
 
   // Extract everything after /relay/
-  const withoutPrefix = pathname.substring(relayIndex + 7); // 7 = '/relay/'.length
+  const withoutPrefix = pathname.substring(
+    relayIndex + RELAY_PATH_PREFIX.length,
+  );
   const parts = withoutPrefix.split('/');
 
   if (parts.length < 1 || !parts[0]) {
@@ -341,38 +371,48 @@ Deno.serve(async (req: Request) => {
     const targetUrl = `${providerConfig.baseUrl}${apiPath}${url.search}`;
 
     // 8. Prepare headers for upstream request
+    // Forward all client headers except those we need to modify or skip
     const upstreamHeaders = new Headers();
 
-    // Copy content-type
-    const contentType = req.headers.get('Content-Type');
-    if (contentType) {
-      upstreamHeaders.set('Content-Type', contentType);
-    }
+    // Headers to skip (hop-by-hop, security-sensitive, or relay-specific)
+    const SKIP_HEADERS = new Set([
+      'host',
+      'connection',
+      'keep-alive',
+      'transfer-encoding',
+      'te',
+      'trailer',
+      'upgrade',
+      'proxy-authorization',
+      'proxy-connection',
+      // Auth headers we'll replace with real API key
+      'authorization',
+      'x-api-key',
+      'x-goog-api-key',
+      // TeXRA-specific headers that shouldn't go upstream
+      'x-texra-auth',
+      'x-client-info',
+      'apikey', // Supabase's anon key header
+    ]);
 
-    // Set auth header based on provider
+    // Copy all client headers except the ones we skip
+    req.headers.forEach((value, key) => {
+      if (!SKIP_HEADERS.has(key.toLowerCase())) {
+        upstreamHeaders.set(key, value);
+      }
+    });
+
+    // Set auth header based on provider (replaces any client auth)
     if (providerConfig.authType === 'bearer') {
       upstreamHeaders.set('Authorization', `Bearer ${apiKey}`);
     } else if (providerConfig.authType === 'x-api-key') {
       upstreamHeaders.set('x-api-key', apiKey);
-      // Copy anthropic-specific headers
-      const anthropicVersion = req.headers.get('anthropic-version');
-      if (anthropicVersion) {
-        upstreamHeaders.set('anthropic-version', anthropicVersion);
-      } else {
+      // Ensure anthropic-version is set (required by Anthropic API)
+      if (!upstreamHeaders.has('anthropic-version')) {
         upstreamHeaders.set('anthropic-version', '2023-06-01');
-      }
-      const anthropicBeta = req.headers.get('anthropic-beta');
-      if (anthropicBeta) {
-        upstreamHeaders.set('anthropic-beta', anthropicBeta);
       }
     } else if (providerConfig.authType === 'x-goog-api-key') {
       upstreamHeaders.set('x-goog-api-key', apiKey);
-    }
-
-    // Copy Accept header
-    const acceptHeader = req.headers.get('Accept');
-    if (acceptHeader) {
-      upstreamHeaders.set('Accept', acceptHeader);
     }
 
     // 9. Forward request to provider
