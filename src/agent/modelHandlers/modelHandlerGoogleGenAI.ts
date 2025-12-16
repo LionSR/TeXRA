@@ -312,25 +312,57 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
       // When using server-side keys via relay, the "credential" is actually the user's
-      // JWT token (not an API key). We inject it into the x-goog-api-key header so the
-      // relay can authenticate the user. The relay then uses its own server-side API key.
+      // JWT token (not an API key). The Google SDK doesn't send auth headers to non-Google
+      // domains, so we need to intercept fetch and inject the header ourselves.
       const usingServerSideKeys = shouldUseServerSideKeysSync(this.config.provider);
-      if (usingServerSideKeys) {
+      if (usingServerSideKeys && baseUrl) {
         this.logger.debug(
-          `Google: Injecting JWT into x-goog-api-key header for relay auth`,
+          `Google: Setting up fetch interceptor for relay auth`,
         );
-      }
+        const jwtToken = credential;
+        const relayDomain = new URL(baseUrl).hostname;
 
-      this.googleClient = new GoogleGenAI({
-        apiKey: credential,
-        httpOptions: {
-          baseUrl: baseUrl ?? undefined,
-          // Add custom header for relay authentication
-          ...(usingServerSideKeys && {
-            headers: { 'x-goog-api-key': credential },
-          }),
-        },
-      });
+        // Wrap global fetch to inject auth header for relay requests
+        const originalFetch = globalThis.fetch;
+        const wrappedFetch = async (
+          input: RequestInfo | URL,
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const url =
+            typeof input === 'string'
+              ? input
+              : input instanceof URL
+                ? input.href
+                : input.url;
+
+          // Only inject header for requests to our relay
+          if (url.includes(relayDomain)) {
+            const headers = new Headers(init?.headers);
+            headers.set('x-goog-api-key', jwtToken);
+            return originalFetch(input, { ...init, headers });
+          }
+          return originalFetch(input, init);
+        };
+
+        // Temporarily replace global fetch while creating client
+        globalThis.fetch = wrappedFetch;
+        try {
+          this.googleClient = new GoogleGenAI({
+            apiKey: credential,
+            httpOptions: { baseUrl },
+          });
+        } finally {
+          // Note: We keep the wrapped fetch because the SDK makes requests later,
+          // not during construction. The wrapper only affects relay requests.
+        }
+      } else {
+        this.googleClient = new GoogleGenAI({
+          apiKey: credential,
+          httpOptions: {
+            baseUrl: baseUrl ?? undefined,
+          },
+        });
+      }
     }
     return this.googleClient;
   }
