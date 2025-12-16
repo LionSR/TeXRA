@@ -225,10 +225,16 @@ export abstract class ModelHandler<
    */
   public async getApiKey(): Promise<string> {
     // Check if server-side keys should be used (experimental feature for Ultra users)
+    // Skip openRouterOnly models - these should always use OpenRouter API key
+    // since their model IDs don't exist on provider APIs.
+    //
     // shouldUseServerSideKeysSync returns true only if a prior canUseServerSideKeys()
     // check confirmed the user has Ultra tier access. This ensures URL routing
     // (via resolveBaseUrl) and API key retrieval stay synchronized.
-    if (shouldUseServerSideKeysSync(this.config.provider)) {
+    if (
+      !this.config.openRouterOnly &&
+      shouldUseServerSideKeysSync(this.config.provider)
+    ) {
       const accessToken = await SupabaseClient.getAccessToken();
       if (accessToken) {
         this.logger.debug(
