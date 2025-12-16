@@ -198,3 +198,95 @@ export const UpdateFilesMessageSchema = BaseMessageSchema.extend(
 );
 
 export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
+
+// --- Execution Manager Message Schemas ---
+
+/** Tool configuration options */
+const ToolConfigSchema = z.object({
+  autoExtractFigure: z.boolean().optional(),
+  autoExtractTikzFigure: z.boolean().optional(),
+  attachTeXCount: z.boolean().optional(),
+  attachDiagnostics: z.boolean().optional(),
+  autoCompileInputPdf: z.boolean().optional(),
+});
+
+/**
+ * Execute agent message from webview.
+ * Contains all fields needed to run a workflow or tool-use agent.
+ */
+export const ExecuteMessageSchema = z.object({
+  // Agent identification
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  instruction: z.string().optional(),
+  isToolUseAgent: z.boolean().optional(),
+
+  // File inputs
+  inputFile: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  referenceFile: z.string().nullable().optional(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFile: z.string().nullable().optional(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  mediaFile: z.string().nullable().optional(),
+  mediaFiles: z.array(z.string()).optional(),
+
+  // Output configuration
+  outputFiles: z.array(z.string()).optional(),
+  outputFilesActive: z.boolean().optional(),
+
+  // Tool config
+  ...ToolConfigSchema.shape,
+});
+
+export type ExecuteMessage = z.infer<typeof ExecuteMessageSchema>;
+
+/**
+ * File operation message for merge/compare/accept operations
+ */
+export const FileOperationMessageSchema = z.object({
+  command: z.string(),
+  inputFile: z.string().optional(),
+  baseFile: z.string().optional(),
+  editedFile: z.string().optional(),
+});
+
+export type FileOperationMessage = z.infer<typeof FileOperationMessageSchema>;
+
+/**
+ * Housekeeping command message (clean, indent, etc.)
+ */
+export const HousekeepingMessageSchema = z.object({
+  command: z.string(),
+});
+
+export type HousekeepingMessage = z.infer<typeof HousekeepingMessageSchema>;
+
+/**
+ * Single file operation message (pack/clean single file)
+ */
+export const SingleOperationMessageSchema = z.object({
+  command: z.string(),
+  inputFile: z.string().optional(),
+  agent: z.string().optional(),
+  model: z.string().optional(),
+});
+
+export type SingleOperationMessage = z.infer<
+  typeof SingleOperationMessageSchema
+>;
+
+/**
+ * Multiple file operation message (pack/clean multiple files)
+ */
+export const MultipleOperationMessageSchema = z.object({
+  command: z.string(),
+  inputFile: z.string().optional(),
+  agent: z.string().optional(),
+  model: z.string().optional(),
+  outputFiles: z.array(z.string()).optional(),
+});
+
+export type MultipleOperationMessage = z.infer<
+  typeof MultipleOperationMessageSchema
+>;

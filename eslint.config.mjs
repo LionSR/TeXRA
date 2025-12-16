@@ -115,7 +115,11 @@ export default tseslint.config(
 
       // --- Adjustments for ESLint v9 ---
 
-      // Temporarily disable strict any checks - REVISIT LATER
+      // @typescript-eslint/no-explicit-any enforcement roadmap:
+      // 1. Message handlers now use 'unknown' with Zod schema validation
+      // 2. Consider setting to 'warn' once major handler migrations complete
+      // 3. Target full 'error' enforcement after all `any` types are removed
+      // See: src/common/webview/BaseViewMessageHandler.ts for validation pattern
       '@typescript-eslint/no-explicit-any': 'off',
 
       // Disable rules causing many errors after upgrade - REVISIT LATER

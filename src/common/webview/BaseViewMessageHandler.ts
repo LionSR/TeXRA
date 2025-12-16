@@ -9,9 +9,14 @@ import * as logger from '@logger/logUtils';
 import { COMMON_COMMANDS } from './commands';
 import type { z } from 'zod';
 
+/**
+ * Message handler function type.
+ * Uses `unknown` instead of `any` to encourage proper validation.
+ * Use withValidatedMessage() for type-safe message handling.
+ */
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
-> = (message: any, webviewView: T) => Promise<void> | void;
+> = (message: unknown, webviewView: T) => Promise<void> | void;
 
 /**
  * Configuration options for BaseViewMessageHandler.
@@ -91,13 +96,15 @@ export abstract class BaseViewMessageHandler<
    * Standard message handling with consistent error handling and logging.
    * When trackActiveView is enabled, automatically updates the active view reference.
    */
-  public async handleMessage(message: any, webviewView: T): Promise<void> {
+  public async handleMessage(message: unknown, webviewView: T): Promise<void> {
     // Track active view when option is enabled
     if (this._options.trackActiveView) {
       this._activeView = webviewView;
     }
 
-    if (!message?.command) {
+    // Type guard for message structure
+    const msg = message as { command?: string } | null | undefined;
+    if (!msg?.command) {
       this.logger.warn(
         this.channel,
         `Received message without command. Message: ${JSON.stringify(message)}`,
@@ -105,11 +112,11 @@ export abstract class BaseViewMessageHandler<
       return;
     }
 
-    this.logger.debug(this.channel, `Received message: ${message.command}`);
+    this.logger.debug(this.channel, `Received message: ${msg.command}`);
 
-    const handler = this.handlers[message.command];
+    const handler = this.handlers[msg.command];
     if (!handler) {
-      this.logger.warn(this.channel, `Unknown command: ${message.command}`);
+      this.logger.warn(this.channel, `Unknown command: ${msg.command}`);
       return;
     }
 
@@ -118,13 +125,13 @@ export abstract class BaseViewMessageHandler<
     } catch (error) {
       this.logger.error(
         this.channel,
-        `Error handling command ${message.command}: ${toErrorMessage(error)}`,
+        `Error handling command ${msg.command}: ${toErrorMessage(error)}`,
       );
 
       // Optionally notify the webview of the error
       webviewView.webview.postMessage({
         command: 'error',
-        message: `Failed to handle command: ${message.command}`,
+        message: `Failed to handle command: ${msg.command}`,
       });
     }
   }
@@ -132,8 +139,12 @@ export abstract class BaseViewMessageHandler<
   /**
    * Helper method for common theme handling
    */
-  protected async handleTheme(message: any, webviewView: T): Promise<void> {
-    if (!message?.theme) {
+  protected async handleTheme(
+    message: unknown,
+    webviewView: T,
+  ): Promise<void> {
+    const msg = message as { theme?: string } | null | undefined;
+    if (!msg?.theme) {
       this.logger.warn(this.channel, 'Invalid theme message', {
         data: message,
       });
@@ -142,17 +153,21 @@ export abstract class BaseViewMessageHandler<
 
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.THEME_SET,
-      theme: message.theme,
+      theme: msg.theme,
     });
   }
 
   /**
    * Helper method for common debug mode handling
    */
-  protected async handleDebugMode(message: any, webviewView: T): Promise<void> {
+  protected async handleDebugMode(
+    message: unknown,
+    webviewView: T,
+  ): Promise<void> {
+    const msg = message as { debugMode?: boolean } | null | undefined;
     webviewView.webview.postMessage({
       command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode: message.debugMode,
+      debugMode: msg?.debugMode,
     });
   }
 
@@ -162,8 +177,8 @@ export abstract class BaseViewMessageHandler<
    * when the webview signals it is ready.
    */
   protected async handleWebviewReady(
-    message: any,
-    webviewView: T,
+    _message: unknown,
+    _webviewView: T,
   ): Promise<void> {
     this.logger.debug(this.channel, 'Webview ready signal received');
     // Subclasses can override for custom ready handling
