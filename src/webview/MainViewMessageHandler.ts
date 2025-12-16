@@ -33,28 +33,11 @@ import {
   InstructionManager,
 } from './managers';
 
-// Type imports for message type assertions
-import type {
-  FileSelectionMessage,
-  FileSelectedMessage,
-  RequestInputFileMessage,
-  RequestFileMessage,
-  RequestEditedFileMessage,
-  RequestBaseFileMessage,
-  RequestDefaultOutputFilesMessage,
-  SetMultipleFilesMessage,
-  SelectMultipleFilesMessage,
-  GetCurrentFileMessage,
-  UpdateFilesMessage,
-  PolishInstructionMessage,
-  ClipboardImageMessage,
-} from './types/messages';
-
 /**
- * Type guard helper for message properties.
- * Used for inline handlers that need to access optional message fields.
+ * Type helper for accessing message properties inline.
+ * Use sparingly - prefer manager-level validation for complex messages.
  */
-type MessageWith<T> = { command: string } & T;
+type AnyMessage = Record<string, unknown>;
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;
@@ -96,8 +79,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     string,
     MessageHandler<vscode.WebviewView>
   > {
-    // Type assertion helper for cleaner handler definitions
-    const asMsg = <T>(m: unknown): T => m as T;
+    // Helper to access message properties for simple inline handlers
+    const msg = (m: unknown) => m as AnyMessage;
 
     return {
       // Common handlers
@@ -108,10 +91,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // Core functionality
       [MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
         this.handleInfoMessage.bind(this),
-      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) => {
-        const msg = asMsg<MessageWith<{ key: string; text: string }>>(m);
-        return showInstructionWithSuppress(msg.key, msg.text);
-      },
+      [MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION]: async (m) =>
+        showInstructionWithSuppress(
+          msg(m).key as string,
+          msg(m).text as string,
+        ),
       [MAIN_VIEW_COMMANDS.GET_THEME]: this.handleThemeRequest.bind(this),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]:
         this.handleDebugModeRequest.bind(this),
@@ -121,94 +105,65 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
         this.handleShowAgentHistory.bind(this),
 
-      // Delegate to managers for specific functionality
-      // File selection commands
+      // File selection commands - managers validate internally
       [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m) =>
-        this.fileManager.handleFileSelection(asMsg<FileSelectionMessage>(m)),
+        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: async (m) =>
-        this.fileManager.handleFileSelection(asMsg<FileSelectionMessage>(m)),
+        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: async (m) =>
-        this.fileManager.handleFileSelection(asMsg<FileSelectionMessage>(m)),
+        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: async (m) =>
-        this.fileManager.handleFileSelection(asMsg<FileSelectionMessage>(m)),
+        this.fileManager.handleFileSelection(m),
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: async () =>
         this.fileManager.handleEditedFileSelection(),
 
-      // File selected commands
+      // File selected commands - managers validate internally
       [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: async (m) =>
-        this.fileManager.handleInputFileSelected(asMsg<FileSelectedMessage>(m)),
+        this.fileManager.handleInputFileSelected(m),
       [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: async (m) =>
-        this.fileManager.handleGenericFileSelected(
-          asMsg<FileSelectedMessage>(m),
-        ),
+        this.fileManager.handleGenericFileSelected(m),
       [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: async (m) =>
-        this.fileManager.handleGenericFileSelected(
-          asMsg<FileSelectedMessage>(m),
-        ),
+        this.fileManager.handleGenericFileSelected(m),
       [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: async (m) =>
-        this.fileManager.handleGenericFileSelected(
-          asMsg<FileSelectedMessage>(m),
-        ),
+        this.fileManager.handleGenericFileSelected(m),
       [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: async (m) =>
-        this.fileManager.handleGenericFileSelected(
-          asMsg<FileSelectedMessage>(m),
-        ),
+        this.fileManager.handleGenericFileSelected(m),
 
-      // Request file commands
+      // Request file commands - managers validate internally
       [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m) =>
-        this.fileManager.handleRequestInputFile(
-          asMsg<RequestInputFileMessage>(m),
-        ),
+        this.fileManager.handleRequestInputFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m) =>
-        this.fileManager.handleRequestFile(asMsg<RequestFileMessage>(m)),
+        this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m) =>
-        this.fileManager.handleRequestFile(asMsg<RequestFileMessage>(m)),
+        this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: async (m) =>
-        this.fileManager.handleRequestFile(asMsg<RequestFileMessage>(m)),
+        this.fileManager.handleRequestFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m) =>
-        this.fileManager.handleRequestEditedFile(
-          asMsg<RequestEditedFileMessage>(m),
-        ),
+        this.fileManager.handleRequestEditedFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m) =>
-        this.fileManager.handleRequestBaseFile(
-          asMsg<RequestBaseFileMessage>(m),
-        ),
+        this.fileManager.handleRequestBaseFile(m),
       [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m) =>
-        this.fileManager.handleRequestDefaultOutputFiles(
-          asMsg<RequestDefaultOutputFilesMessage>(m),
-        ),
+        this.fileManager.handleRequestDefaultOutputFiles(m),
 
-      // Multiple file operations
+      // Multiple file operations - managers validate internally
       [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: async (m) =>
-        this.fileManager.handleSetMultipleFiles(
-          asMsg<SetMultipleFilesMessage>(m),
-        ),
+        this.fileManager.handleSetMultipleFiles(m),
       [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: async (m) =>
-        this.fileManager.handleSetMultipleFiles(
-          asMsg<SetMultipleFilesMessage>(m),
-        ),
+        this.fileManager.handleSetMultipleFiles(m),
       [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: async (m) =>
-        this.fileManager.handleSetMultipleFiles(
-          asMsg<SetMultipleFilesMessage>(m),
-        ),
+        this.fileManager.handleSetMultipleFiles(m),
       [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: async (m) =>
-        this.fileManager.handleSetMultipleFiles(
-          asMsg<SetMultipleFilesMessage>(m),
-        ),
+        this.fileManager.handleSetMultipleFiles(m),
       [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: async (m) =>
-        this.fileManager.handleSelectMultipleFiles(
-          asMsg<SelectMultipleFilesMessage>(m),
-        ),
+        this.fileManager.handleSelectMultipleFiles(m),
 
-      // Other file operations
+      // Other file operations - managers validate internally
       [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: async (m) =>
-        this.fileManager.handleGetCurrentFile(asMsg<GetCurrentFileMessage>(m)),
-      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m) => {
-        const msg = asMsg<MessageWith<{ fileType: string }>>(m);
-        return this.fileManager.handleAddOpenedFiles(msg.fileType);
-      },
+        this.fileManager.handleGetCurrentFile(m),
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m) =>
+        this.fileManager.handleAddOpenedFiles(msg(m).fileType as string),
 
-      // Execution commands
+      // Execution commands - managers validate internally
       [MAIN_VIEW_COMMANDS.MERGE]: async (m) =>
         this.executionManager.handleMerge(m),
       [MAIN_VIEW_COMMANDS.COMPARE]: async (m) =>
@@ -218,9 +173,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
         this.settingsManager.openSettings(),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
-        const msg = asMsg<MessageWith<{ sessionType?: string }>>(m);
         const query =
-          msg.sessionType === 'toolUse'
+          msg(m).sessionType === 'toolUse'
             ? SETTINGS_QUERY.TOOL_USE_AGENTS
             : SETTINGS_QUERY.WORKFLOW_AGENTS;
         return this.settingsManager.openSettings(query);
@@ -228,8 +182,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
         this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
-        const msg = asMsg<MessageWith<{ customDirSet?: boolean }>>(m);
-        if (msg.customDirSet) {
+        if (msg(m).customDirSet) {
           const dir = await agentDirectories.custom();
           if (dir) {
             await vscode.commands.executeCommand(
@@ -250,31 +203,25 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: async () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
-      // Instruction commands
+      // Instruction commands - managers validate internally
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m) =>
-        this.instructionManager.handlePolishInstructionText(
-          asMsg<PolishInstructionMessage>(m),
-        ),
+        this.instructionManager.handlePolishInstructionText(m),
       [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: async () =>
         this.instructionManager.handleTranscribeInstruction(),
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m) =>
-        this.instructionManager.handleClipboardImage(
-          asMsg<ClipboardImageMessage>(m),
-        ),
+        this.instructionManager.handleClipboardImage(m),
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
-        // Reuse existing setApiKey command with provider parameter
-        const msg = asMsg<MessageWith<{ provider?: string }>>(m);
-        if (msg.provider) {
-          await safeExecuteCommand('texra.setApiKey', [msg.provider]);
+        const provider = msg(m).provider as string | undefined;
+        if (provider) {
+          await safeExecuteCommand('texra.setApiKey', [provider]);
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
-        // Open provider-specific API key page
-        const msg = asMsg<MessageWith<{ provider?: string }>>(m);
-        if (msg.provider) {
-          const url = PROVIDER_URLS[msg.provider as keyof typeof PROVIDER_URLS];
+        const provider = msg(m).provider as string | undefined;
+        if (provider) {
+          const url = PROVIDER_URLS[provider as keyof typeof PROVIDER_URLS];
           if (url) {
             await vscode.env.openExternal(vscode.Uri.parse(url));
           }
@@ -318,12 +265,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         view?.webview.postMessage(m);
       },
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
-        const msg = asMsg<MessageWith<{ value: boolean }>>(m);
-        await setConfig('ui.showDependencyReminders', msg.value);
+        const data = msg(m);
+        await setConfig('ui.showDependencyReminders', data.value as boolean);
       },
       [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: async (m) => {
-        const msg = asMsg<MessageWith<{ tool: string }>>(m);
-        const cmd = getToolDocsCommand(msg.tool);
+        const data = msg(m);
+        const cmd = getToolDocsCommand(data.tool as string);
         if (cmd) {
           const [command, ...args] = cmd.split(',');
           await safeExecuteCommand(command, args);
@@ -392,19 +339,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
         this.recordingManager.stop(w),
 
-      // File refresh and update operations
+      // File refresh and update operations - manager validates internally
       [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async () =>
         this.fileManager.handleRefreshAllFiles(),
       [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: async (m) =>
-        this.fileManager.handleUpdateFiles(asMsg<UpdateFilesMessage>(m)),
+        this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: async (m) =>
-        this.fileManager.handleUpdateFiles(asMsg<UpdateFilesMessage>(m)),
+        this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: async (m) =>
-        this.fileManager.handleUpdateFiles(asMsg<UpdateFilesMessage>(m)),
+        this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: async (m) =>
-        this.fileManager.handleUpdateFiles(asMsg<UpdateFilesMessage>(m)),
+        this.fileManager.handleUpdateFiles(m),
       [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: async (m) =>
-        this.fileManager.handleUpdateFiles(asMsg<UpdateFilesMessage>(m)),
+        this.fileManager.handleUpdateFiles(m),
 
       // Git/diff operations
       [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m) => {

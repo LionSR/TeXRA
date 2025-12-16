@@ -12,17 +12,16 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
-import { sleep } from '@utils/helpers';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
 import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 
-// Local imports - types
-import type {
-  PolishInstructionMessage,
-  ClipboardImageMessage,
+// Local imports - schemas (single source of truth)
+import {
+  PolishInstructionMessageSchema,
+  ClipboardImageMessageSchema,
 } from '../types/messages';
 
 const CHANNEL = 'InstructionManager';
@@ -98,64 +97,72 @@ export class InstructionManager {
     }
   }
 
-  async handlePolishInstructionText(
-    message: PolishInstructionMessage,
-  ): Promise<void> {
+  async handlePolishInstructionText(message: unknown): Promise<void> {
+    const parsed = PolishInstructionMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid polish instruction message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
+
+    const msg = parsed.data;
     try {
-      const fileContext: FileContext = { agent: message.agent };
+      const fileContext: FileContext = { agent: msg.agent };
 
       // Add single files
-      this.addSingleFileIfValid(fileContext, 'inputFile', message.inputFile);
+      this.addSingleFileIfValid(fileContext, 'inputFile', msg.inputFile);
       this.addSingleFileIfValid(
         fileContext,
         'referenceFile',
-        message.referenceFile,
+        msg.referenceFile,
       );
       this.addSingleFileIfValid(
         fileContext,
         'auxiliaryFile',
-        message.auxiliaryFile,
+        msg.auxiliaryFile,
       );
-      this.addSingleFileIfValid(fileContext, 'mediaFile', message.mediaFile);
+      this.addSingleFileIfValid(fileContext, 'mediaFile', msg.mediaFile);
 
       // Add multiple files
       this.addMultipleFilesIfValid(
         fileContext,
         'inputFiles',
-        !!message.inputFilesActive,
-        message.inputFiles,
+        !!msg.inputFilesActive,
+        msg.inputFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'referenceFiles',
-        !!message.referenceFilesActive,
-        message.referenceFiles,
+        !!msg.referenceFilesActive,
+        msg.referenceFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'auxiliaryFiles',
-        !!message.auxiliaryFilesActive,
-        message.auxiliaryFiles,
+        !!msg.auxiliaryFilesActive,
+        msg.auxiliaryFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'mediaFiles',
-        !!message.mediaFilesActive,
-        message.mediaFiles,
+        !!msg.mediaFilesActive,
+        msg.mediaFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'outputFiles',
-        !!message.outputFilesActive,
-        message.outputFiles,
+        !!msg.outputFilesActive,
+        msg.outputFiles,
       );
 
       try {
-        const result = await polishTextWithAI(message.text, fileContext);
+        const result = await polishTextWithAI(msg.text, fileContext);
         if (result.success) {
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
@@ -195,13 +202,22 @@ export class InstructionManager {
     );
   }
 
-  async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
+  async handleClipboardImage(message: unknown): Promise<void> {
+    const parsed = ClipboardImageMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid clipboard image message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
+
     try {
-      const { base64, mediaType, fileName } = message;
+      const { base64, mediaType, fileName } = parsed.data;
       if (!base64 || !mediaType || !fileName) {
         return;
       }

@@ -14,20 +14,19 @@ import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
-// Local imports - types
-import type {
-  FileSelectionMessage,
-  InputFileSelectedMessage,
-  GenericFileSelectedMessage,
-  RequestInputFileMessage,
-  RequestFileMessage,
-  RequestEditedFileMessage,
-  RequestBaseFileMessage,
-  RequestDefaultOutputFilesMessage,
-  SetMultipleFilesMessage,
-  SelectMultipleFilesMessage,
-  GetCurrentFileMessage,
-  UpdateFilesMessage,
+// Local imports - schemas (single source of truth)
+import {
+  FileSelectionMessageSchema,
+  FileSelectedMessageSchema,
+  RequestInputFileMessageSchema,
+  RequestFileMessageSchema,
+  RequestEditedFileMessageSchema,
+  RequestBaseFileMessageSchema,
+  RequestDefaultOutputFilesMessageSchema,
+  SetMultipleFilesMessageSchema,
+  SelectMultipleFilesMessageSchema,
+  GetCurrentFileMessageSchema,
+  UpdateFilesMessageSchema,
 } from '../types/messages';
 
 const CHANNEL = 'FileManager';
@@ -58,16 +57,25 @@ export class FileManager {
     return this.webview;
   }
 
-  async handleFileSelection(message: FileSelectionMessage): Promise<void> {
+  async handleFileSelection(message: unknown): Promise<void> {
+    const parsed = FileSelectionMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid file selection message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const singleFileType = message.command.replace('select', '');
+
+    const singleFileType = parsed.data.command.replace('select', '');
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
     const file = await vscode.commands.executeCommand<string>(
-      `texra.${message.command}`,
+      `texra.${parsed.data.command}`,
     );
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
@@ -94,45 +102,78 @@ export class FileManager {
     }
   }
 
-  async handleInputFileSelected(
-    message: InputFileSelectedMessage,
-  ): Promise<void> {
+  async handleInputFileSelected(message: unknown): Promise<void> {
+    const parsed = FileSelectedMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid input file selected message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
+
     const baseFileNameForInput = path.basename(
-      message.filePath,
-      path.extname(message.filePath),
+      parsed.data.filePath,
+      path.extname(parsed.data.filePath),
     );
     const filteredEditedFiles =
       await fileLister.listEditedFiles(baseFileNameForInput);
     this.postFileUpdate('Edited', filteredEditedFiles);
   }
 
-  handleGenericFileSelected(message: GenericFileSelectedMessage): void {
-    logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
+  handleGenericFileSelected(message: unknown): void {
+    const parsed = FileSelectedMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid generic file selected message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
+    logger.debug(
+      CHANNEL,
+      `${parsed.data.command}: ${parsed.data.filePath}`,
+    );
   }
 
-  async handleRequestInputFile(
-    message: RequestInputFileMessage,
-  ): Promise<void> {
+  async handleRequestInputFile(message: unknown): Promise<void> {
+    const parsed = RequestInputFileMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid request input file message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     if (!this.getWebview()) {
       return;
     }
+
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
       )) ?? [];
     await this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: !!parsed.data.notifyWhenEmpty,
     });
 
     this.updateGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
-  async handleRequestFile(message: RequestFileMessage): Promise<void> {
-    const fileType = message.command.replace('request', '').replace('File', '');
+  async handleRequestFile(message: unknown): Promise<void> {
+    const parsed = RequestFileMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid request file message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
+    const fileType = parsed.data.command.replace('request', '').replace('File', '');
     const files = await (async () => {
       switch (fileType) {
         case 'Reference':
@@ -146,31 +187,45 @@ export class FileManager {
       }
     })();
     await this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: !!parsed.data.notifyWhenEmpty,
     });
   }
 
-  async handleRequestEditedFile(
-    message: RequestEditedFileMessage,
-  ): Promise<void> {
+  async handleRequestEditedFile(message: unknown): Promise<void> {
+    const parsed = RequestEditedFileMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid request edited file message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     let allEditedFiles: string[] = [];
-    if (message.baseFile) {
+    if (parsed.data.baseFile) {
       const baseFileNameForEdited = path.basename(
-        message.baseFile,
-        path.extname(message.baseFile),
+        parsed.data.baseFile,
+        path.extname(parsed.data.baseFile),
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
     await this.postFileUpdate('Edited', allEditedFiles, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
+      notifyWhenEmpty: !!parsed.data.notifyWhenEmpty,
     });
   }
 
-  async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
+  async handleRequestBaseFile(message: unknown): Promise<void> {
+    const parsed = RequestBaseFileMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid request base file message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const files = await fileLister.list('input');
     await this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: !!message.notifyWhenEmpty,
-      additionalPayload: message.preserveBaseFile
+      notifyWhenEmpty: !!parsed.data.notifyWhenEmpty,
+      additionalPayload: parsed.data.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
     });
@@ -178,14 +233,21 @@ export class FileManager {
     this.updateGettingStartedBanner(files.length === 0);
   }
 
-  async handleRequestDefaultOutputFiles(
-    message: RequestDefaultOutputFilesMessage,
-  ): Promise<void> {
+  async handleRequestDefaultOutputFiles(message: unknown): Promise<void> {
+    const parsed = RequestDefaultOutputFilesMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid request default output files message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const agentIdentifier = message.agent;
+
+    const agentIdentifier = parsed.data.agent;
     if (!agentIdentifier) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
@@ -213,34 +275,50 @@ export class FileManager {
     }
   }
 
-  handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
+  handleSetMultipleFiles(message: unknown): void {
+    const parsed = SetMultipleFilesMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid set multiple files message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    if (message.files && message.files.length > 0) {
+
+    if (parsed.data.files && parsed.data.files.length > 0) {
       webviewView.webview.postMessage({
-        command: message.command,
-        files: message.files,
+        command: parsed.data.command,
+        files: parsed.data.files,
       });
     }
   }
 
-  async handleSelectMultipleFiles(
-    message: SelectMultipleFilesMessage,
-  ): Promise<void> {
+  async handleSelectMultipleFiles(message: unknown): Promise<void> {
+    const parsed = SelectMultipleFilesMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid select multiple files message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const fileType = message.fileType;
+
+    const fileType = parsed.data.fileType;
     let selectedFiles: string[] | null = null;
 
     try {
       if (fileType === 'OutputFiles') {
-        selectedFiles = await this.selectOutputFiles(message.currentFile);
+        selectedFiles = await this.selectOutputFiles(parsed.data.currentFile);
       } else {
-        const currentFileForMultiple = message.currentFile;
+        const currentFileForMultiple = parsed.data.currentFile;
         const baseType = fileType.replace('Files', '');
         selectedFiles = await vscode.commands.executeCommand<string[]>(
           `texra.select${baseType}Files`,
@@ -289,19 +367,28 @@ export class FileManager {
     this.updateGettingStartedBanner(refreshedFiles.input.length === 0);
   }
 
-  async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
+  async handleGetCurrentFile(message: unknown): Promise<void> {
+    const parsed = GetCurrentFileMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid get current file message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const fileType = message.fileType ?? 'input';
+
+    const fileType = parsed.data.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
       'texra.getCurrentFile',
     );
     if (currentOpenFile) {
       let commitCheckFile: string | null = null;
       if (fileType === 'edited') {
-        const baseFile = message.baseFile;
+        const baseFile = parsed.data.baseFile;
         if (baseFile) {
           const baseFileName = path.basename(baseFile, path.extname(baseFile));
           const currentFileName = path.basename(
@@ -420,14 +507,23 @@ export class FileManager {
     });
   }
 
-  async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
+  async handleUpdateFiles(message: unknown): Promise<void> {
+    const parsed = UpdateFilesMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logger.debug(CHANNEL, 'Invalid update files message', {
+        data: parsed.error,
+      });
+      return;
+    }
+
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const command = message.command;
+
+    const command = parsed.data.command;
     const fileType = command.replace('update', '');
-    const files = message.files ?? [];
+    const files = parsed.data.files ?? [];
 
     logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
     webviewView.webview.postMessage({ command: `set${fileType}`, files });
