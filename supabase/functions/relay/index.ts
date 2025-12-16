@@ -256,8 +256,9 @@ Deno.serve(async (req: Request) => {
       });
       return new Response(
         JSON.stringify({
+          _relay: 'texra-v1',
           error: 'Missing authorization token',
-          debug: { receivedHeaders },
+          debug: { receivedHeaders, pathToken: !!pathToken },
         }),
         {
           status: 401,
@@ -292,10 +293,17 @@ Deno.serve(async (req: Request) => {
     } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          _relay: 'texra-v1',
+          error: 'Invalid token',
+          debug: { userError: userError?.message },
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // 5. Check user tier is Ultra
@@ -419,15 +427,18 @@ Deno.serve(async (req: Request) => {
     if (upstreamResponse.status >= 400) {
       const errorBody = await upstreamResponse.text();
       console.log(`[DEBUG] Upstream error body: ${errorBody}`);
-      // Return the error with debug info
+      // Return the error with debug info - use distinctive marker
       return new Response(
         JSON.stringify({
+          _relay: 'texra-v1', // Marker to prove relay code ran
           error: 'Upstream API error',
           upstreamStatus: upstreamResponse.status,
           upstreamError: errorBody,
           debug: {
             targetUrl,
             provider,
+            apiKeyFound: !!apiKey,
+            apiKeyLength: apiKey?.length,
             headersSet: Object.keys(upstreamHeadersObj),
           },
         }),
