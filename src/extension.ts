@@ -19,6 +19,7 @@ import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { initializeServerSideKeyAccess } from '@/auth/serverSideKeyAccess';
 import * as logger from '@logger/logUtils';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
@@ -103,6 +104,7 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
+  initializeServerSideKeyAccess(context);
 
   // Copy default agents BEFORE initializing the agent index
   // This ensures built-in agents are available when the index scans directories

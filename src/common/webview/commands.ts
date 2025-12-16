@@ -244,6 +244,8 @@ export const PROFILE_VIEW_COMMANDS = {
   SELECT_AGENT: 'selectAgent',
   SIGN_IN: 'signIn',
   SIGN_OUT: 'signOut',
+  // API access mode toggle (Ultra tier)
+  SET_API_ACCESS_MODE: 'setApiAccessMode',
 };
 
 // Export all commands in a single object for convenience
