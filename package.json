@@ -645,7 +645,7 @@
           },
           "texra.experimental.useServerSideKeys": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "[Experimental] Use server-side API keys instead of local keys. Requires Ultra tier and authentication. When enabled, models are available without configuring personal API keys.",
             "scope": "resource"
           }
