@@ -676,6 +676,141 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
+  private async handleMultipleOutputs(
+    outputLocation: FileLocation,
+    currRound: number,
+    rawLocation: FileLocation,
+    scope: AgentLogStage,
+  ): Promise<void> {
+    this.logger.debug(
+      `Processing multiple outputs for ${outputLocation.absolutePath}; outputFiles: ${this.agentConfig.outputFiles}`,
+    );
+
+    try {
+      const processedPairs =
+        await this.xmlManager.processMultipleXmlOutputs(outputLocation);
+
+      if (processedPairs && processedPairs.length > 0) {
+        await this.indentLatexFiles(processedPairs.map((p) => p.location));
+        this.logger.debug(
+          `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
+        );
+
+        if (this.baseFiles && this.baseFiles.length > 0) {
+          await replaceInputCommands(
+            this.baseFiles,
+            processedPairs.map((p) => p.location),
+            this.logger,
+          );
+        }
+        this.setRoundOutputs(currRound, processedPairs);
+        await this.captureXmlSummary(currRound, rawLocation, processedPairs, scope);
+        return;
+      }
+
+      this.logger.debug(
+        `No processed files were generated from ${outputLocation.absolutePath}`,
+      );
+      this.setRoundOutputs(currRound, []);
+      await this.cleanupLatexBackups(rawLocation);
+      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+    } catch (err) {
+      this.logger.debug(
+        `Error processing output files: ${toErrorMessage(err)}`,
+        { messageType: MESSAGE_TYPES.INTERNAL },
+      );
+      this.setRoundOutputs(currRound, []);
+      await this.cleanupLatexBackups(rawLocation);
+      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+    }
+  }
+
+  private async handleSingleOutput(
+    outputLocation: FileLocation,
+    currRound: number,
+    rawLocation: FileLocation,
+    storagePayload: { storageKey: StorageKey; executionId: string | undefined },
+    scope: AgentLogStage,
+  ): Promise<void> {
+    this.logger.debug(
+      `Processing single output for ${outputLocation.absolutePath}`,
+    );
+
+    try {
+      const processedLocation = rawLocation ?? outputLocation;
+      let processed: OutputFileInfo = {
+        source: path.basename(outputLocation.absolutePath),
+        location: processedLocation,
+        lineage: null,
+        diff: null,
+      };
+      const hasScratchpadPrefill =
+        this.agentSetting.prefills?.some((prefill) =>
+          /<scratchpad\s*>/i.test(prefill),
+        ) ?? false;
+      const hasDocumentTag = Boolean(this.agentSetting.documentTag);
+      const shouldProcessXml =
+        this.agentSetting.agentType === AgentType.CoT ||
+        (this.agentSetting.agentType === AgentType.Direct &&
+          (hasDocumentTag || hasScratchpadPrefill));
+
+      if (shouldProcessXml) {
+        processed =
+          await this.xmlManager.processSingleXmlOutput(outputLocation);
+      }
+
+      const hasProcessedPath = Boolean(
+        processed && processed.location.absolutePath,
+      );
+
+      if (hasProcessedPath && processed.location) {
+        await this.indentLatexFile(processed.location);
+        this.logger.debug(
+          `Indented single output file: ${processed.location.absolutePath}`,
+        );
+      }
+
+      const processedFiles = hasProcessedPath ? [processed] : [];
+
+      if (hasProcessedPath) {
+        if (this.baseFiles && this.baseFiles.length > 0) {
+          await replaceInputCommands(
+            this.baseFiles,
+            processedFiles.map((entry) => entry.location),
+            this.logger,
+          );
+        }
+
+        this.setRoundOutputs(currRound, processedFiles);
+      } else {
+        this.logger.debug(
+          `No processed file was generated from ${outputLocation.absolutePath}`,
+        );
+        this.setRoundOutputs(currRound, []);
+      }
+
+      await this.captureXmlSummary(currRound, rawLocation, processedFiles, scope);
+    } catch (err) {
+      this.logger.debug(
+        `Error processing output file: ${toErrorMessage(err)}`,
+        { messageType: MESSAGE_TYPES.INTERNAL },
+      );
+      const missingOutputsData = {
+        missing: [],
+        xmlFile: outputLocation.absolutePath,
+        documentTag: this.agentSetting.documentTag,
+      };
+      this.logger.missingOutputs(missingOutputsData);
+      bus.emit('updateMissingOutputs', {
+        stream: this.channel,
+        ...storagePayload,
+        filesByRound: { [currRound]: [] },
+      });
+      this.setRoundOutputs(currRound, []);
+      await this.captureXmlSummary(currRound, rawLocation, [], scope);
+    }
+  }
+
   /**
    * Processes output files from XML or direct input.
    */
@@ -694,154 +829,17 @@ export class OutputHandler implements IOutputHandler {
         const data = this.ensureRoundData(currRound);
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
-        const rawPath = rawLocation.absolutePath;
-        const storagePayload = this.createStoragePayload();
-
-        const handleMultipleOutputs = async () => {
-          this.logger.debug(
-            `Processing multiple outputs for ${outputLocation.absolutePath}; outputFiles: ${this.agentConfig.outputFiles}`,
-          );
-
-          try {
-            const processedPairs =
-              await this.xmlManager.processMultipleXmlOutputs(outputLocation);
-
-            if (processedPairs && processedPairs.length > 0) {
-              await this.indentLatexFiles(
-                processedPairs.map((p) => p.location),
-              );
-              this.logger.debug(
-                `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
-              );
-
-              if (this.baseFiles && this.baseFiles.length > 0) {
-                await replaceInputCommands(
-                  this.baseFiles,
-                  processedPairs.map((p) => p.location),
-                  this.logger,
-                );
-              }
-              this.setRoundOutputs(currRound, processedPairs);
-              await this.captureXmlSummary(
-                currRound,
-                rawLocation,
-                processedPairs,
-                scope,
-              );
-              return;
-            }
-
-            this.logger.debug(
-              `No processed files were generated from ${outputLocation.absolutePath}`,
-            );
-            this.setRoundOutputs(currRound, []);
-            await this.cleanupLatexBackups(rawLocation);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          } catch (err) {
-            this.logger.debug(
-              `Error processing output files: ${toErrorMessage(err)}`,
-              { messageType: MESSAGE_TYPES.INTERNAL },
-            );
-            this.setRoundOutputs(currRound, []);
-            await this.cleanupLatexBackups(rawLocation);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          }
-        };
-
-        const handleSingleOutput = async () => {
-          this.logger.debug(
-            `Processing single output for ${outputLocation.absolutePath}`,
-          );
-
-          try {
-            const processedLocation = rawLocation ?? outputLocation;
-            let processed: OutputFileInfo = {
-              source: path.basename(outputLocation.absolutePath),
-              location: processedLocation,
-              lineage: null,
-              diff: null,
-            };
-            const hasScratchpadPrefill =
-              this.agentSetting.prefills?.some((prefill) =>
-                /<scratchpad\s*>/i.test(prefill),
-              ) ?? false;
-            const hasDocumentTag = Boolean(this.agentSetting.documentTag);
-            const shouldProcessXml =
-              this.agentSetting.agentType === AgentType.CoT ||
-              (this.agentSetting.agentType === AgentType.Direct &&
-                (hasDocumentTag || hasScratchpadPrefill));
-
-            if (shouldProcessXml) {
-              processed =
-                await this.xmlManager.processSingleXmlOutput(outputLocation);
-            }
-
-            const hasProcessedPath = Boolean(
-              processed && processed.location.absolutePath,
-            );
-
-            if (hasProcessedPath && processed.location) {
-              await this.indentLatexFile(processed.location);
-              this.logger.debug(
-                `Indented single output file: ${processed.location.absolutePath}`,
-              );
-            }
-
-            const processedFiles = hasProcessedPath ? [processed] : [];
-
-            if (hasProcessedPath) {
-              if (this.baseFiles && this.baseFiles.length > 0) {
-                await replaceInputCommands(
-                  this.baseFiles,
-                  processedFiles.map((entry) => entry.location),
-                  this.logger,
-                );
-              }
-
-              this.setRoundOutputs(currRound, processedFiles);
-            } else {
-              this.logger.debug(
-                `No processed file was generated from ${outputLocation.absolutePath}`,
-              );
-              this.setRoundOutputs(currRound, []);
-            }
-
-            await this.captureXmlSummary(
-              currRound,
-              rawLocation,
-              processedFiles,
-              scope,
-            );
-          } catch (err) {
-            this.logger.debug(
-              `Error processing output file: ${toErrorMessage(err)}`,
-              { messageType: MESSAGE_TYPES.INTERNAL },
-            );
-            const missingOutputsData = {
-              missing: [],
-              xmlFile: outputLocation.absolutePath,
-              documentTag: this.agentSetting.documentTag,
-            };
-            this.logger.missingOutputs(missingOutputsData);
-            bus.emit('updateMissingOutputs', {
-              stream: this.channel,
-              ...storagePayload,
-              filesByRound: { [currRound]: [] },
-            });
-            this.setRoundOutputs(currRound, []);
-            await this.captureXmlSummary(currRound, rawLocation, [], scope);
-          }
-        };
 
         if (
           Array.isArray(this.agentConfig.outputFiles) &&
           this.agentConfig.outputFiles.length > 0
         ) {
-          await handleMultipleOutputs();
+          await this.handleMultipleOutputs(outputLocation, currRound, rawLocation, scope);
           return;
         }
 
-        await handleSingleOutput();
+        const storagePayload = this.createStoragePayload();
+        await this.handleSingleOutput(outputLocation, currRound, rawLocation, storagePayload, scope);
       },
     );
   }
