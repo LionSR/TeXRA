@@ -52,10 +52,8 @@ export function updateModelApiKeyBanner(
     return;
   }
 
-  if (persistForced) {
-    return;
-  }
-
+  // Model doesn't require key - hide banner and reset forced state
+  // This ensures banner updates correctly when server-side keys become available
   bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER);
   apiKeyBannerState = { forced: false, visible: false };
 }
