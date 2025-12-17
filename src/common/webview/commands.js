@@ -118,6 +118,7 @@ export const MAIN_VIEW_COMMANDS = {
   SET_SELECTED_COMMIT: 'setSelectedCommit',
   SET_MODEL_OPTIONS: 'setModelOptions',
   SET_AGENT_OPTIONS: 'setAgentOptions',
+  SET_SELECTED_AGENT: 'setSelectedAgent',
 
   // File refresh and update operations
   REFRESH_ALL_FILES: 'refreshAllFiles',
@@ -224,6 +225,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
   OPEN_LABEL: 'openLabel',
+
+  // Profile
+  OPEN_PROFILE: 'openProfile',
 };
 
 // History view specific commands
