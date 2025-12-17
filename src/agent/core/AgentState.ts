@@ -8,7 +8,6 @@ import {
 } from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
-  RunUsageAccumulatorCodec,
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
 
@@ -71,6 +70,28 @@ export class ConversationRoundState {
     this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): ConversationRoundState {
+    const parsed = ConversationRoundStateSnapshotSchema.parse(snapshot);
+    const state = new ConversationRoundState(parsed.roundIndex);
+    state.continuationCount = parsed.continuationCount;
+    state.responseTimeMs = parsed.responseTimeMs;
+    state.outputFile = parsed.outputFile;
+    state.normalizedUsage = parsed.normalizedUsage ?? null;
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): ConversationRoundStateSnapshot {
+    return {
+      roundIndex: this.roundIndex,
+      continuationCount: this.continuationCount,
+      responseTimeMs: this.responseTimeMs,
+      outputFile: this.outputFile,
+      normalizedUsage: this.normalizedUsage,
+    };
+  }
+
   incrementContinuation(): void {
     this.continuationCount += 1;
   }
@@ -87,35 +108,6 @@ export class ConversationRoundState {
     this.normalizedUsage = null;
   }
 }
-
-/**
- * Codec for bi-directional serialization of ConversationRoundState.
- * Use .encode() to serialize and .decode() to deserialize.
- */
-export const ConversationRoundStateCodec = z.codec(
-  ConversationRoundStateSnapshotSchema,
-  z.instanceof(ConversationRoundState),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): ConversationRoundState => {
-      const parsed = ConversationRoundStateSnapshotSchema.parse(json);
-      const state = new ConversationRoundState(parsed.roundIndex);
-      state.continuationCount = parsed.continuationCount;
-      state.responseTimeMs = parsed.responseTimeMs;
-      state.outputFile = parsed.outputFile;
-      state.normalizedUsage = parsed.normalizedUsage ?? null;
-      return state;
-    },
-    encode: (state): ConversationRoundStateSnapshot => ({
-      roundIndex: state.roundIndex,
-      continuationCount: state.continuationCount,
-      responseTimeMs: state.responseTimeMs,
-      outputFile: state.outputFile,
-      normalizedUsage: state.normalizedUsage,
-    }),
-  },
-);
 
 /** Default values for AgentRunState */
 const RUN_STATE_DEFAULTS = {
@@ -149,6 +141,25 @@ export class AgentRunState {
     this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
   }
 
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): AgentRunState {
+    const parsed = AgentRunStateSnapshotSchema.parse(snapshot);
+    const usageAccumulator = RunUsageAccumulator.fromSnapshot(parsed.usageAccumulator);
+    const state = new AgentRunState(usageAccumulator);
+    state.totalRounds = parsed.totalRounds;
+    state.totalResponseTimeMs = parsed.totalResponseTimeMs;
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): AgentRunStateSnapshot {
+    return {
+      totalRounds: this.totalRounds,
+      totalResponseTimeMs: this.totalResponseTimeMs,
+      usageAccumulator: this.usageAccumulator.toSnapshot(),
+    };
+  }
+
   incrementRounds(): void {
     this.totalRounds += 1;
   }
@@ -167,31 +178,3 @@ export class AgentRunState {
     this.addResponseTime(roundState.responseTimeMs);
   }
 }
-
-/**
- * Codec for bi-directional serialization of AgentRunState.
- * Use .encode() to serialize and .decode() to deserialize.
- */
-export const AgentRunStateCodec = z.codec(
-  AgentRunStateSnapshotSchema,
-  z.instanceof(AgentRunState),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): AgentRunState => {
-      const parsed = AgentRunStateSnapshotSchema.parse(json);
-      const usageAccumulator = RunUsageAccumulatorCodec.decode(
-        parsed.usageAccumulator,
-      );
-      const state = new AgentRunState(usageAccumulator);
-      state.totalRounds = parsed.totalRounds;
-      state.totalResponseTimeMs = parsed.totalResponseTimeMs;
-      return state;
-    },
-    encode: (state): AgentRunStateSnapshot => ({
-      totalRounds: state.totalRounds,
-      totalResponseTimeMs: state.totalResponseTimeMs,
-      usageAccumulator: RunUsageAccumulatorCodec.encode(state.usageAccumulator) as AgentRunStateSnapshot['usageAccumulator'],
-    }),
-  },
-);

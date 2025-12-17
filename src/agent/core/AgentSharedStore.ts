@@ -4,15 +4,12 @@ import { z } from 'zod';
 // Local imports - state slices
 import {
   AgentRunState,
-  AgentRunStateCodec,
   ConversationRoundState,
-  ConversationRoundStateCodec,
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
 } from './AgentState';
 import {
   AgentWorkspaceState,
-  AgentWorkspaceStateCodec,
   AgentWorkspaceStateSnapshotSchema,
 } from './AgentWorkspaceState';
 import {
@@ -82,6 +79,35 @@ export class AgentSharedStore {
     this._onRoundFinalized = config.onRoundFinalized;
   }
 
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): AgentSharedStore {
+    const parsed = AgentSharedStoreSnapshotSchema.parse(snapshot);
+    return new AgentSharedStore({
+      round: ConversationRoundState.fromSnapshot(parsed.round),
+      run: AgentRunState.fromSnapshot(parsed.run),
+      workspace: AgentWorkspaceState.fromSnapshot(parsed.workspace),
+      user: {
+        input: Object.freeze({ ...parsed.user.input }),
+        transient: { ...parsed.user.transient },
+        output: { ...parsed.user.output },
+      },
+    });
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): AgentSharedStoreSnapshot {
+    return {
+      round: this.roundState.toSnapshot(),
+      run: this.runState.toSnapshot(),
+      workspace: this.workspaceState.toSnapshot(),
+      user: {
+        input: { ...this.userChannels.input },
+        transient: { ...this.userChannels.transient },
+        output: { ...this.userChannels.output },
+      },
+    };
+  }
+
   get round(): ConversationRoundState {
     return this.roundState;
   }
@@ -128,49 +154,6 @@ export class AgentSharedStore {
   }
 }
 
-/**
- * Codec for bi-directional serialization of AgentSharedStore.
- * Use .encode() to serialize and .decode() to deserialize.
- *
- * Note: The onRoundFinalized callback is not serialized as it's runtime-only.
- * Use AgentSharedStoreCodec.decode() then set the callback separately if needed.
- */
-export const AgentSharedStoreCodec = z.codec(
-  AgentSharedStoreSnapshotSchema,
-  z.instanceof(AgentSharedStore),
-  {
-    // Validation and defaults are applied by nested codecs (each parses its own schema).
-    // No top-level parse needed here since we delegate to specialized codecs.
-    decode: (snapshot): AgentSharedStore => {
-      const round = ConversationRoundStateCodec.decode(snapshot.round);
-      const run = AgentRunStateCodec.decode(snapshot.run);
-      const workspace = AgentWorkspaceStateCodec.decode(snapshot.workspace);
-      const storeUserChannels: UserVariableChannels = {
-        input: Object.freeze({ ...snapshot.user.input }),
-        transient: { ...snapshot.user.transient },
-        output: { ...snapshot.user.output },
-      };
-
-      return new AgentSharedStore({
-        round,
-        run,
-        workspace,
-        user: storeUserChannels,
-      });
-    },
-    encode: (store): AgentSharedStoreSnapshot => ({
-      round: ConversationRoundStateCodec.encode(store.round) as AgentSharedStoreSnapshot['round'],
-      run: AgentRunStateCodec.encode(store.run) as AgentSharedStoreSnapshot['run'],
-      workspace: AgentWorkspaceStateCodec.encode(store.workspace) as AgentSharedStoreSnapshot['workspace'],
-      user: {
-        input: { ...store.user.input },
-        transient: { ...store.user.transient },
-        output: { ...store.user.output },
-      },
-    }),
-  },
-);
-
 interface SharedStoreFactoryParams {
   roundIndex: number;
   runState: AgentRunState;
@@ -194,8 +177,7 @@ export function createSharedStore(
     if (!snapshot) {
       throw new Error('Shared store snapshot is required.');
     }
-    // Codec decode handles validation via nested schema parses
-    const store = AgentSharedStoreCodec.decode(snapshot);
+    const store = AgentSharedStore.fromSnapshot(snapshot);
 
     // Attach callback post-creation if provided (callbacks are not serialized)
     if (args.onRoundFinalized) {

@@ -8,21 +8,27 @@ import {
   type FileLocation,
 } from '@utils/files';
 
+/** Schema for ThinkingBlock */
+export const ThinkingBlockSchema = z.object({
+  type: z.string(),
+  thinking: z.string().optional(),
+  signature: z.string().optional(),
+  data: z.string().optional(),
+});
+
 /**
  * Thinking block from reasoning models.
  * This represents the internal reasoning/thinking output from models like Claude Sonnet 4.
  * Supports both regular thinking blocks and redacted thinking blocks from Anthropic.
  */
-export interface ThinkingBlock {
-  /** Block type: 'thinking' for regular, 'redacted_thinking' for redacted */
-  type: string;
-  /** Thinking content (for regular thinking blocks) */
-  thinking?: string;
-  /** Signature for verification (for regular thinking blocks from Anthropic) */
-  signature?: string;
-  /** Encrypted data (for redacted thinking blocks from Anthropic) */
-  data?: string;
-}
+export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
+
+/** Schema for ResponseAssemblyState serialization */
+export const ResponseAssemblyStateSnapshotSchema = z.object({
+  lastResponse: z.string().default(''),
+  accumulatedOutput: z.string().default(''),
+});
+export type ResponseAssemblyStateSnapshot = z.output<typeof ResponseAssemblyStateSnapshotSchema>;
 
 /**
  * Workspace assembly state keeps track of the model's textual output so the
@@ -31,6 +37,23 @@ export interface ThinkingBlock {
 export class ResponseAssemblyState {
   private _lastResponse = '';
   private _accumulatedOutput = '';
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): ResponseAssemblyState {
+    const parsed = ResponseAssemblyStateSnapshotSchema.parse(snapshot);
+    const state = new ResponseAssemblyState();
+    state._lastResponse = parsed.lastResponse;
+    state._accumulatedOutput = parsed.accumulatedOutput;
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): ResponseAssemblyStateSnapshot {
+    return {
+      lastResponse: this._lastResponse,
+      accumulatedOutput: this._accumulatedOutput,
+    };
+  }
 
   get lastResponse(): string {
     return this._lastResponse;
@@ -84,6 +107,29 @@ export class FileInteractionState {
     string,
     { added: number; removed: number }
   >();
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): FileInteractionState {
+    const parsed = FileInteractionStateSnapshotSchema.parse(snapshot);
+    const state = new FileInteractionState();
+    parsed.readFiles.forEach((path) => state.readFiles.add(path));
+    for (const entry of parsed.edits) {
+      state.edits.set(entry.path, { added: entry.added, removed: entry.removed });
+    }
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): FileInteractionStateSnapshot {
+    return {
+      readFiles: Array.from(this.readFiles),
+      edits: Array.from(this.edits.entries()).map(([path, diff]) => ({
+        path,
+        added: diff.added,
+        removed: diff.removed,
+      })),
+    };
+  }
 
   recordRead(path: string | undefined | null): void {
     if (!path) return;
@@ -149,57 +195,40 @@ export class FileInteractionState {
     const lineChanges = added || removed ? { added, removed } : undefined;
     return { edits: editsForCall, lineChanges };
   }
-
-  /** @internal Used by codec - prefer FileInteractionStateCodec */
-  _getReadFiles(): Set<string> {
-    return this.readFiles;
-  }
-
-  /** @internal Used by codec - prefer FileInteractionStateCodec */
-  _getEdits(): Map<string, { added: number; removed: number }> {
-    return this.edits;
-  }
 }
 
 /**
- * Codec for bi-directional serialization of FileInteractionState.
- * Use .encode() to serialize and .decode() to deserialize.
+ * Schema for legacy media file entries.
+ * Legacy snapshots stored plain strings; new snapshots store FileLocation objects.
+ * Transform normalizes legacy strings to FileLocation on parse.
  */
-export const FileInteractionStateCodec = z.codec(
-  FileInteractionStateSnapshotSchema,
-  z.instanceof(FileInteractionState),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): FileInteractionState => {
-      const parsed = FileInteractionStateSnapshotSchema.parse(json);
-      const state = new FileInteractionState();
-      parsed.readFiles.forEach((path: string) => state.recordRead(path));
-      for (const entry of parsed.edits) {
-        state._getEdits().set(entry.path, {
-          added: entry.added,
-          removed: entry.removed,
-        });
-      }
-      return state;
-    },
-    encode: (state): FileInteractionStateSnapshot => ({
-      readFiles: Array.from(state._getReadFiles()),
-      edits: Array.from(state._getEdits().entries()).map(
-        ([path, diff]: [string, { added: number; removed: number }]) => ({
-          path,
-          added: diff.added,
-          removed: diff.removed,
-        }),
-      ),
-    }),
-  },
+const MediaFileEntrySchema = z.union([z.string(), FileLocationSchema]).transform(
+  (entry): FileLocation => (typeof entry === 'string' ? pathToLocation(entry) : entry),
 );
+
+/** Schema for MediaAttachmentState serialization */
+export const MediaAttachmentStateSnapshotSchema = z.object({
+  files: z.array(MediaFileEntrySchema).default([]),
+});
+export type MediaAttachmentStateSnapshot = z.output<typeof MediaAttachmentStateSnapshotSchema>;
 
 export class MediaAttachmentState {
   public readonly files: FileLocation[] = [];
   /** Set of absolute paths for O(1) deduplication lookups */
   private readonly pathSet = new Set<string>();
+
+  /** Deserialize from a snapshot. Validates, applies defaults, and normalizes legacy formats. */
+  static fromSnapshot(snapshot: unknown): MediaAttachmentState {
+    const parsed = MediaAttachmentStateSnapshotSchema.parse(snapshot);
+    const state = new MediaAttachmentState();
+    state.addMediaFiles(parsed.files);
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): MediaAttachmentStateSnapshot {
+    return { files: [...this.files] };
+  }
 
   /**
    * Add a single media file to the attachment state.
@@ -231,9 +260,33 @@ export class MediaAttachmentState {
   }
 }
 
+/** Schema for ReasoningCacheState serialization */
+export const ReasoningCacheStateSnapshotSchema = z.object({
+  thinkingBlocks: z.array(ThinkingBlockSchema).default([]),
+  thinkingAdded: z.boolean().default(false),
+});
+export type ReasoningCacheStateSnapshot = z.output<typeof ReasoningCacheStateSnapshotSchema>;
+
 export class ReasoningCacheState {
   public thinkingBlocks: ThinkingBlock[] = [];
   public thinkingAdded = false;
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): ReasoningCacheState {
+    const parsed = ReasoningCacheStateSnapshotSchema.parse(snapshot);
+    const state = new ReasoningCacheState();
+    state.thinkingBlocks = [...parsed.thinkingBlocks];
+    state.thinkingAdded = parsed.thinkingAdded;
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): ReasoningCacheStateSnapshot {
+    return {
+      thinkingBlocks: [...this.thinkingBlocks],
+      thinkingAdded: this.thinkingAdded,
+    };
+  }
 
   get primaryBlock(): ThinkingBlock | null {
     return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
@@ -285,8 +338,27 @@ export class ServerToolContentState {
   }
 }
 
+/** Schema for DocumentStatsState serialization */
+export const DocumentStatsStateSnapshotSchema = z.object({
+  texcountStats: z.string().nullable().default(null),
+});
+export type DocumentStatsStateSnapshot = z.output<typeof DocumentStatsStateSnapshotSchema>;
+
 export class DocumentStatsState {
   public texcountStats: string | null = null;
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): DocumentStatsState {
+    const parsed = DocumentStatsStateSnapshotSchema.parse(snapshot);
+    const state = new DocumentStatsState();
+    state.texcountStats = parsed.texcountStats;
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): DocumentStatsStateSnapshot {
+    return { texcountStats: this.texcountStats };
+  }
 
   updateTeXCountStats(stats: string | null): void {
     this.texcountStats = stats;
@@ -313,6 +385,19 @@ export type TodoStateSnapshot = z.output<typeof TodoStateSnapshotSchema>;
 export class TodoState {
   private _todos: TodoItem[] = [];
   private _onUpdate?: (todos: TodoItem[]) => void;
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): TodoState {
+    const parsed = TodoStateSnapshotSchema.parse(snapshot);
+    const state = new TodoState();
+    state._todos = [...parsed.todos];
+    return state;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): TodoStateSnapshot {
+    return { todos: [...this._todos] };
+  }
 
   get todos(): TodoItem[] {
     return this._todos;
@@ -349,84 +434,19 @@ export class TodoState {
   reset(): void {
     this._todos = [];
   }
-
-  /** @internal Used by codec */
-  _setTodos(todos: TodoItem[]): void {
-    this._todos = todos;
-  }
 }
 
 /**
- * Codec for bi-directional serialization of TodoState.
- * Use .encode() to serialize and .decode() to deserialize.
- */
-export const TodoStateCodec = z.codec(
-  TodoStateSnapshotSchema,
-  z.instanceof(TodoState),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): TodoState => {
-      const parsed = TodoStateSnapshotSchema.parse(json);
-      const state = new TodoState();
-      state._setTodos([...parsed.todos]);
-      return state;
-    },
-    encode: (state): TodoStateSnapshot => ({
-      todos: [...state.todos],
-    }),
-  },
-);
-
-export const ThinkingBlockSchema = z.object({
-  type: z.string(),
-  thinking: z.string().optional(),
-  signature: z.string().optional(),
-  data: z.string().optional(),
-});
-
-/**
- * Codec for media files that handles both legacy (string[]) and new (FileLocation[]) formats.
- * Legacy snapshots stored plain strings; new snapshots store FileLocation objects.
- * Uses transform to normalize legacy strings to FileLocation on decode.
- */
-const MediaFileEntryCodec = z.codec(
-  z.union([z.string(), FileLocationSchema]),
-  FileLocationSchema,
-  {
-    decode: (entry: string | FileLocation): FileLocation =>
-      typeof entry === 'string' ? pathToLocation(entry) : entry,
-    encode: (location: FileLocation): FileLocation => location,
-  },
-);
-
-/**
- * We use z.object() instead of z.strictObject() to remain backward compatible
+ * Composite schema for AgentWorkspaceState serialization.
+ * Uses z.object() (not strictObject) to remain backward compatible
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
 export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: z
-    .object({
-      lastResponse: z.string().default(''),
-      accumulatedOutput: z.string().default(''),
-    })
-    .default({ lastResponse: '', accumulatedOutput: '' }),
-  media: z
-    .object({ files: z.array(MediaFileEntryCodec).default([]) })
-    .default({ files: [] }),
-  reasoning: z
-    .object({
-      thinkingBlocks: z.array(ThinkingBlockSchema).default([]),
-      thinkingAdded: z.boolean().default(false),
-    })
-    .default({ thinkingBlocks: [], thinkingAdded: false }),
-  document: z
-    .object({ texcountStats: z.string().nullable().default(null) })
-    .default({ texcountStats: null }),
-  interactions: FileInteractionStateSnapshotSchema.default({
-    readFiles: [],
-    edits: [],
-  }),
+  assembly: ResponseAssemblyStateSnapshotSchema.default({ lastResponse: '', accumulatedOutput: '' }),
+  media: MediaAttachmentStateSnapshotSchema.default({ files: [] }),
+  reasoning: ReasoningCacheStateSnapshotSchema.default({ thinkingBlocks: [], thinkingAdded: false }),
+  document: DocumentStatsStateSnapshotSchema.default({ texcountStats: null }),
+  interactions: FileInteractionStateSnapshotSchema.default({ readFiles: [], edits: [] }),
   todos: TodoStateSnapshotSchema.default({ todos: [] }),
 });
 
@@ -438,20 +458,6 @@ export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
 >;
 
-/** Symbol key for internal factory - only used by codec */
-const INTERNAL_FACTORY = Symbol('AgentWorkspaceState.internalFactory');
-
-/** Parameters for internal factory construction */
-interface AgentWorkspaceStateParams {
-  assembly: ResponseAssemblyState;
-  media: MediaAttachmentState;
-  reasoning: ReasoningCacheState;
-  document: DocumentStatsState;
-  interactions: FileInteractionState;
-  serverToolContent: ServerToolContentState;
-  todos: TodoState;
-}
-
 export class AgentWorkspaceState {
   public readonly assembly: ResponseAssemblyState;
   public readonly media: MediaAttachmentState;
@@ -461,36 +467,61 @@ export class AgentWorkspaceState {
   public readonly serverToolContent: ServerToolContentState;
   public readonly todos: TodoState;
 
-  /** Use AgentWorkspaceState.create() for new instances */
-  private constructor(params: AgentWorkspaceStateParams) {
-    this.assembly = params.assembly;
-    this.media = params.media;
-    this.reasoning = params.reasoning;
-    this.document = params.document;
-    this.interactions = params.interactions;
-    this.serverToolContent = params.serverToolContent;
-    this.todos = params.todos;
+  private constructor(
+    assembly: ResponseAssemblyState,
+    media: MediaAttachmentState,
+    reasoning: ReasoningCacheState,
+    document: DocumentStatsState,
+    interactions: FileInteractionState,
+    serverToolContent: ServerToolContentState,
+    todos: TodoState,
+  ) {
+    this.assembly = assembly;
+    this.media = media;
+    this.reasoning = reasoning;
+    this.document = document;
+    this.interactions = interactions;
+    this.serverToolContent = serverToolContent;
+    this.todos = todos;
   }
 
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
-    return new AgentWorkspaceState({
-      assembly: new ResponseAssemblyState(),
-      media: new MediaAttachmentState(),
-      reasoning: new ReasoningCacheState(),
-      document: new DocumentStatsState(),
-      interactions: new FileInteractionState(),
-      serverToolContent: new ServerToolContentState(),
-      todos: new TodoState(),
-    });
+    return new AgentWorkspaceState(
+      new ResponseAssemblyState(),
+      new MediaAttachmentState(),
+      new ReasoningCacheState(),
+      new DocumentStatsState(),
+      new FileInteractionState(),
+      new ServerToolContentState(),
+      new TodoState(),
+    );
   }
 
-  /**
-   * Internal factory for codec use only.
-   * @internal Do not use directly - use AgentWorkspaceStateCodec.decode() instead.
-   */
-  static [INTERNAL_FACTORY](params: AgentWorkspaceStateParams): AgentWorkspaceState {
-    return new AgentWorkspaceState(params);
+  /** Deserialize from a snapshot. Validates, applies defaults, and handles legacy formats. */
+  static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
+    const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
+    return new AgentWorkspaceState(
+      ResponseAssemblyState.fromSnapshot(parsed.assembly),
+      MediaAttachmentState.fromSnapshot(parsed.media),
+      ReasoningCacheState.fromSnapshot(parsed.reasoning),
+      DocumentStatsState.fromSnapshot(parsed.document),
+      FileInteractionState.fromSnapshot(parsed.interactions),
+      new ServerToolContentState(), // Ephemeral - not serialized
+      TodoState.fromSnapshot(parsed.todos),
+    );
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): AgentWorkspaceSnapshot {
+    return {
+      assembly: this.assembly.toSnapshot(),
+      media: this.media.toSnapshot(),
+      reasoning: this.reasoning.toSnapshot(),
+      document: this.document.toSnapshot(),
+      interactions: this.interactions.toSnapshot(),
+      todos: this.todos.toSnapshot(),
+    };
   }
 
   resetReasoning(): void {
@@ -502,70 +533,3 @@ export class AgentWorkspaceState {
   }
 }
 
-/**
- * Codec for bi-directional serialization of AgentWorkspaceState.
- * Use .encode() to serialize and .decode() to deserialize.
- * Handles legacy format migration (e.g., media files string → FileLocation).
- *
- * Note: Uses z.custom() instead of z.instanceof() because the class has a private constructor.
- */
-export const AgentWorkspaceStateCodec = z.codec(
-  AgentWorkspaceStateSnapshotSchema,
-  z.custom<AgentWorkspaceState>((val) => val instanceof AgentWorkspaceState),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): AgentWorkspaceState => {
-      const parsed = AgentWorkspaceStateSnapshotSchema.parse(json);
-
-      // Build component states
-      const assembly = new ResponseAssemblyState();
-      assembly.lastResponse = parsed.assembly.lastResponse;
-      assembly.accumulatedOutput = parsed.assembly.accumulatedOutput;
-
-      const media = new MediaAttachmentState();
-      // Files are already normalized to FileLocation by MediaFileEntryCodec
-      media.addMediaFiles(parsed.media.files);
-
-      const reasoning = new ReasoningCacheState();
-      reasoning.thinkingBlocks.push(...parsed.reasoning.thinkingBlocks);
-      reasoning.thinkingAdded = parsed.reasoning.thinkingAdded;
-
-      const document = new DocumentStatsState();
-      document.texcountStats = parsed.document.texcountStats;
-
-      // Use nested codecs for complex state
-      const interactions = FileInteractionStateCodec.decode(parsed.interactions);
-      const todos = TodoStateCodec.decode(parsed.todos);
-
-      // Use Symbol-keyed factory for type-safe internal construction
-      return AgentWorkspaceState[INTERNAL_FACTORY]({
-        assembly,
-        media,
-        reasoning,
-        document,
-        interactions,
-        serverToolContent: new ServerToolContentState(),
-        todos,
-      });
-    },
-    encode: (state): AgentWorkspaceSnapshot => ({
-      assembly: {
-        lastResponse: state.assembly.lastResponse,
-        accumulatedOutput: state.assembly.accumulatedOutput,
-      },
-      media: {
-        files: [...state.media.files],
-      },
-      reasoning: {
-        thinkingBlocks: [...state.reasoning.thinkingBlocks],
-        thinkingAdded: state.reasoning.thinkingAdded,
-      },
-      document: {
-        texcountStats: state.document.texcountStats,
-      },
-      interactions: FileInteractionStateCodec.encode(state.interactions) as AgentWorkspaceSnapshot['interactions'],
-      todos: TodoStateCodec.encode(state.todos) as AgentWorkspaceSnapshot['todos'],
-    }),
-  },
-);
