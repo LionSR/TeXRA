@@ -72,7 +72,9 @@ export class RunUsageAccumulator {
   static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
     const parsed = RunUsageAccumulatorJSONSchema.parse(snapshot);
     const acc = new RunUsageAccumulator();
-    // parsed.totals already has defaults from parent schema, just needs field defaults
+    // .partial().default({}) returns {} for missing totals, NOT the field defaults.
+    // Field-level defaults only apply when the field key is missing from a non-partial object.
+    // We need to spread DEFAULT_TOTALS to fill in any missing fields.
     acc.totals = { ...DEFAULT_TOTALS, ...parsed.totals };
     acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
     return acc;
