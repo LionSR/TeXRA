@@ -10,7 +10,6 @@ import {
 } from '@agent/core/AgentDataclass';
 import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 
@@ -182,25 +181,14 @@ export class RemoteAgentLoader {
         const settings: Partial<AgentSetting> = validated.settings || {};
         const prompts: Partial<AgentPrompt> = validated.prompts || {};
 
-        // Resolve tool names to definitions
-        // tools can be strings (tool names) or partial ToolDefinitions from YAML
+        // Resolve tool names to definitions using shared utility
         if (Array.isArray(settings.tools)) {
-          const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-          const rawTools = settings.tools as (string | { name: string })[];
-          settings.tools = rawTools.map((item) => {
-            if (typeof item === 'string') {
-              const tool = DEFAULT_TOOL_REGISTRY[item];
-              if (!tool) {
-                logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
-                return { name: item } as ToolDefinition;
-              }
-              return tool.definition;
-            }
-            if (!DEFAULT_TOOL_REGISTRY[item.name]) {
-              logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
-            }
-            return item as ToolDefinition;
-          });
+          const { resolveToolDefinitions } = await import('@tools/registry');
+          settings.tools = resolveToolDefinitions(
+            settings.tools as (string | { name: string })[],
+            (name) =>
+              logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+          );
         }
 
         const validatedSettings = parseAgentSetting(settings);
