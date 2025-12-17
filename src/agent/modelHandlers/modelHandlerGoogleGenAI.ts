@@ -162,9 +162,38 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
+  private isGemini3Model(): boolean {
+    return this.config.fullName.includes('gemini-3-');
+  }
+
+  /**
+   * Apply media resolution settings for Gemini 3 models.
+   * Per Google's recommendations:
+   * - Images: media_resolution_high (1120 tokens) for maximum quality
+   * - PDFs: media_resolution_medium (560 tokens) - quality saturates at medium
+   * - Video: media_resolution_low or medium (70 tokens per frame) for most tasks
+   */
+  private applyMediaResolution(part: Part, mimeType: string): Part {
+    if (!this.isGemini3Model()) {
+      return part;
+    }
+
+    const isImage = mimeType.startsWith('image/');
+    const isPdf = mimeType === 'application/pdf';
+
+    if (isImage) {
+      (part as any).mediaResolution = { level: 'media_resolution_high' };
+    } else if (isPdf) {
+      (part as any).mediaResolution = { level: 'media_resolution_medium' };
+    }
+    // Videos use low/medium by default which is optimal
+
+    return part;
+  }
+
   private getThinkingLevel(): ThinkingLevel | undefined {
     const requestedLevel = this.capabilities.reasoningEffort;
-    const isGemini3 = this.config.fullName.includes('gemini-3-pro');
+    const isGemini3 = this.isGemini3Model();
 
     if (requestedLevel === ReasoningEffort.NONE) {
       if (isGemini3) {
@@ -222,7 +251,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           this.logger.debug(
             `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
           );
-          uploadedParts.push(createPartFromBase64(inlinePayload, mimeType));
+          const part = this.applyMediaResolution(
+            createPartFromBase64(inlinePayload, mimeType),
+            mimeType,
+          );
+          uploadedParts.push(part);
           uploadSummaries.push({ path: fileName, ok: true });
           continue;
         }
@@ -277,7 +310,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           entry,
           uploadResult,
         );
-        uploadedParts.push(createPartFromUri(fileUri, resolvedMimeType));
+        const part = this.applyMediaResolution(
+          createPartFromUri(fileUri, resolvedMimeType),
+          resolvedMimeType,
+        );
+        uploadedParts.push(part);
         uploadSummaries.push({ path: fileName, ok: true });
       } catch (error) {
         uploadSummaries.push({ path: fileName, ok: false });
