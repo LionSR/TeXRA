@@ -11,6 +11,7 @@ import {
   GenerateContentResponse,
   FinishReason,
   ThinkingLevel,
+  PartMediaResolutionLevel,
   type FunctionCall,
   type FunctionResponsePart,
   File,
@@ -162,23 +163,54 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
+  private isGemini3Model(): boolean {
+    return this.config.fullName.includes('gemini-3-');
+  }
+
+  /**
+   * Get media resolution level for Gemini 3 models.
+   * Per Google's recommendations:
+   * - Images: MEDIA_RESOLUTION_HIGH (1120 tokens) for maximum quality
+   * - PDFs: MEDIA_RESOLUTION_HIGH for better OCR of dense/small text
+   * - Video: uses default (low/medium, 70 tokens per frame) for most tasks
+   */
+  private getMediaResolution(
+    mimeType: string,
+  ): PartMediaResolutionLevel | undefined {
+    if (!this.isGemini3Model()) {
+      return undefined;
+    }
+
+    const isImage = mimeType.startsWith('image/');
+    const isPdf = mimeType === 'application/pdf';
+
+    if (isImage || isPdf) {
+      return PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
+    }
+    // Videos use default which is optimal
+    return undefined;
+  }
+
   private getThinkingLevel(): ThinkingLevel | undefined {
     const requestedLevel = this.capabilities.reasoningEffort;
-    const isGemini3 = this.config.fullName.includes('gemini-3-pro');
+    const isGemini3 = this.isGemini3Model();
 
     if (requestedLevel === ReasoningEffort.NONE) {
       if (isGemini3) {
+        // Gemini 3 Pro only supports LOW/HIGH; Flash supports MINIMAL but still requires
+        // thought signatures. Use LOW for minimal latency when thinking is "disabled".
         this.logger.warn(
-          "Gemini 3 Pro can't disable thinking. Using thinking_level 'HIGH'.",
+          "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
         );
-        return ThinkingLevel.HIGH;
+        return ThinkingLevel.LOW;
       }
       return undefined;
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
+      // SDK only exports LOW/HIGH; Gemini 3 Flash supports MEDIUM via API but SDK lacks enum
       this.logger.warn(
-        "Google models don't support thinking_level 'MEDIUM'. Falling back to 'HIGH'.",
+        "SDK ThinkingLevel enum doesn't include 'MEDIUM'. Falling back to 'HIGH'.",
       );
       return ThinkingLevel.HIGH;
     }
@@ -222,7 +254,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           this.logger.debug(
             `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
           );
-          uploadedParts.push(createPartFromBase64(inlinePayload, mimeType));
+          const part = createPartFromBase64(
+            inlinePayload,
+            mimeType,
+            this.getMediaResolution(mimeType),
+          );
+          uploadedParts.push(part);
           uploadSummaries.push({ path: fileName, ok: true });
           continue;
         }
@@ -277,7 +314,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           entry,
           uploadResult,
         );
-        uploadedParts.push(createPartFromUri(fileUri, resolvedMimeType));
+        const part = createPartFromUri(
+          fileUri,
+          resolvedMimeType,
+          this.getMediaResolution(resolvedMimeType),
+        );
+        uploadedParts.push(part);
         uploadSummaries.push({ path: fileName, ok: true });
       } catch (error) {
         uploadSummaries.push({ path: fileName, ok: false });
@@ -577,10 +619,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const candidateContent = baseResponse.candidates?.[0]?.content;
         if (candidateContent?.parts) {
           const filteredParts = candidateContent.parts.filter(
-            (part) => !(part as any).thought,
+            (part) => !part.thought,
           );
           // Update the parts array; the SDK will compute the text property from it
-          (candidateContent as any).parts = filteredParts;
+          candidateContent.parts = filteredParts;
         }
 
         return baseResponse;
@@ -613,8 +655,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
       }
       if (error instanceof Error && error.message?.includes('SAFETY')) {
+        // SDK errors may include response metadata at runtime
+        const errorWithResponse = error as Error & {
+          response?: { promptFeedback?: unknown };
+        };
         this.logger.warn(
-          `Content blocked by safety filter: ${JSON.stringify((error as any).response?.promptFeedback)}`,
+          `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
         );
       }
       throw error;
