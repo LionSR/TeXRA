@@ -26,6 +26,9 @@ type PickerResult<Many extends boolean> = Many extends true
 
 function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
   return async (currentFile?: string): Promise<PickerResult<Many>> => {
+    // TypeScript cannot narrow conditional types at runtime, so we need this cast
+    const nullResult = null as PickerResult<Many>;
+
     try {
       const baseOpts = {
         currentFile,
@@ -38,8 +41,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
         : await selectFile(baseOpts);
 
       if (!result) {
-        // TypeScript cannot narrow conditional types at runtime
-        return null as PickerResult<Many>;
+        return nullResult;
       }
 
       const message = Array.isArray(result)
@@ -50,7 +52,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
       return result as PickerResult<Many>;
     } catch (err) {
       await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
-      return null as PickerResult<Many>;
+      return nullResult;
     }
   };
 }

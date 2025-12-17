@@ -93,6 +93,19 @@ export function resetDefaultToolRegistry(): void {
 export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
 
 /**
+ * Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores.
+ */
+const VALID_TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Validates a tool name contains only allowed characters.
+ * @returns true if valid, false otherwise
+ */
+function isValidToolName(name: string): boolean {
+  return VALID_TOOL_NAME_PATTERN.test(name);
+}
+
+/**
  * Raw tool configuration from YAML - can be a string name or partial definition.
  * Object form must have a name and can include optional description/parameters.
  */
@@ -114,6 +127,11 @@ export function resolveToolDefinitions(
 ): ToolDefinition[] {
   return tools.map((item): ToolDefinition => {
     if (typeof item === 'string') {
+      // Validate tool name format
+      if (!isValidToolName(item)) {
+        warnOnMissing?.(`Invalid tool name format: "${item}"`);
+        return { name: 'invalid_tool' };
+      }
       const tool = DEFAULT_TOOL_REGISTRY[item];
       if (!tool) {
         warnOnMissing?.(item);
@@ -121,10 +139,17 @@ export function resolveToolDefinitions(
       }
       return tool.definition;
     }
+    // Validate tool name format for object form
+    if (!isValidToolName(item.name)) {
+      warnOnMissing?.(`Invalid tool name format: "${item.name}"`);
+      return { name: 'invalid_tool' };
+    }
     if (!DEFAULT_TOOL_REGISTRY[item.name]) {
       warnOnMissing?.(item.name);
     }
     // Validate against schema - if invalid, return minimal definition
+    // Note: Cast is safe because ToolDefinitionSchema validates structure;
+    // ToolDefinition type adds provider-specific param types that are additive.
     const parsed = ToolDefinitionSchema.safeParse(item);
     if (parsed.success) {
       return parsed.data as ToolDefinition;
