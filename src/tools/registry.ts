@@ -3,7 +3,10 @@ import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
-import type { ToolDefinition } from '@model/ToolDefinition';
+import {
+  ToolDefinitionSchema,
+  type ToolDefinition,
+} from '@model/ToolDefinition';
 
 // Local imports - tools
 import { BashTool } from './bash';
@@ -91,8 +94,11 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
 
 /**
  * Raw tool configuration from YAML - can be a string name or partial definition.
+ * Object form must have a name and can include optional description/parameters.
  */
-export type RawToolConfig = string | { name: string; [key: string]: unknown };
+export type RawToolConfig =
+  | string
+  | (Partial<ToolDefinition> & { name: string });
 
 /**
  * Resolve raw tool configurations to ToolDefinition objects.
@@ -118,6 +124,12 @@ export function resolveToolDefinitions(
     if (!DEFAULT_TOOL_REGISTRY[item.name]) {
       warnOnMissing?.(item.name);
     }
-    return item as ToolDefinition;
+    // Validate against schema - if invalid, return minimal definition
+    const parsed = ToolDefinitionSchema.safeParse(item);
+    if (parsed.success) {
+      return parsed.data as ToolDefinition;
+    }
+    // Fallback: return just the name if validation fails
+    return { name: item.name };
   });
 }
