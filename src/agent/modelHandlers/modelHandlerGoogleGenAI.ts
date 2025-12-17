@@ -197,17 +197,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (requestedLevel === ReasoningEffort.NONE) {
       if (isGemini3) {
+        // Gemini 3 Pro only supports LOW/HIGH; Flash supports MINIMAL but still requires
+        // thought signatures. Use LOW for minimal latency when thinking is "disabled".
         this.logger.warn(
-          "Gemini 3 Pro can't disable thinking. Using thinking_level 'HIGH'.",
+          "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
         );
-        return ThinkingLevel.HIGH;
+        return ThinkingLevel.LOW;
       }
       return undefined;
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
+      // SDK only exports LOW/HIGH; Gemini 3 Flash supports MEDIUM via API but SDK lacks enum
       this.logger.warn(
-        "Google models don't support thinking_level 'MEDIUM'. Falling back to 'HIGH'.",
+        "SDK ThinkingLevel enum doesn't include 'MEDIUM'. Falling back to 'HIGH'.",
       );
       return ThinkingLevel.HIGH;
     }
