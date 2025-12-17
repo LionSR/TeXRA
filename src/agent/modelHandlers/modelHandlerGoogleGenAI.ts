@@ -652,8 +652,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
       }
       if (error instanceof Error && error.message?.includes('SAFETY')) {
+        // SDK errors may include response metadata at runtime
+        const errorWithResponse = error as Error & {
+          response?: { promptFeedback?: unknown };
+        };
         this.logger.warn(
-          `Content blocked by safety filter: ${JSON.stringify((error as any).response?.promptFeedback)}`,
+          `Content blocked by safety filter: ${JSON.stringify(errorWithResponse.response?.promptFeedback)}`,
         );
       }
       throw error;
