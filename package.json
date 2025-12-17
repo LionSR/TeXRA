@@ -818,6 +818,8 @@
             "default": "gemini25f",
             "enum": [
               "sonnet4T",
+              "gemini3p",
+              "gemini3f",
               "gemini25p",
               "gemini25f",
               "gpt52",
@@ -835,6 +837,8 @@
             ],
             "enumDescriptions": [
               "Claude Sonnet 4T",
+              "Gemini 3 Pro",
+              "Gemini 3 Flash",
               "Gemini 2.5 Pro",
               "Gemini 2.5 Flash",
               "OpenAI GPT-5.2",
