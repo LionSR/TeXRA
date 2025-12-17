@@ -24,9 +24,6 @@ import {
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
-// Type imports
-import type { ToolDefinition } from '@model';
-
 // Internal imports
 import { AbsoluteFS } from '@utils/files';
 
@@ -165,25 +162,13 @@ export async function loadAgentSettingAndPrompts(
 
     ensureAgentTypeForSource(settings, entry.source);
 
-    // Resolve tool names to definitions
-    // tools can be strings (tool names) or partial ToolDefinitions from YAML
+    // Resolve tool names to definitions using shared utility
     if (Array.isArray(settings.tools)) {
-      const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-      const rawTools = settings.tools as (string | { name: string })[];
-      settings.tools = rawTools.map((item) => {
-        if (typeof item === 'string') {
-          const tool = DEFAULT_TOOL_REGISTRY[item];
-          if (!tool) {
-            logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
-            return { name: item } as ToolDefinition;
-          }
-          return tool.definition;
-        }
-        if (!DEFAULT_TOOL_REGISTRY[item.name]) {
-          logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
-        }
-        return item as ToolDefinition;
-      });
+      const { resolveToolDefinitions } = await import('@tools/registry');
+      settings.tools = resolveToolDefinitions(
+        settings.tools as (string | { name: string })[],
+        (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+      );
     }
 
     // Apply defaults and validate the final settings and prompts

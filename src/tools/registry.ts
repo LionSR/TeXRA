@@ -2,6 +2,9 @@
 import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
+// Local imports - model types
+import type { ToolDefinition } from '@model/ToolDefinition';
+
 // Local imports - tools
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
@@ -85,3 +88,36 @@ export function resetDefaultToolRegistry(): void {
  * @deprecated Prefer getDefaultToolRegistry() for IToolRegistry interface.
  */
 export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
+
+/**
+ * Raw tool configuration from YAML - can be a string name or partial definition.
+ */
+export type RawToolConfig = string | { name: string; [key: string]: unknown };
+
+/**
+ * Resolve raw tool configurations to ToolDefinition objects.
+ * Handles both string names (resolved from registry) and partial definitions.
+ *
+ * @param tools - Array of raw tool configs (strings or objects with name)
+ * @param warnOnMissing - Optional callback for logging warnings about missing tools
+ * @returns Array of resolved ToolDefinition objects
+ */
+export function resolveToolDefinitions(
+  tools: RawToolConfig[],
+  warnOnMissing?: (toolName: string) => void,
+): ToolDefinition[] {
+  return tools.map((item): ToolDefinition => {
+    if (typeof item === 'string') {
+      const tool = DEFAULT_TOOL_REGISTRY[item];
+      if (!tool) {
+        warnOnMissing?.(item);
+        return { name: item };
+      }
+      return tool.definition;
+    }
+    if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+      warnOnMissing?.(item.name);
+    }
+    return item as ToolDefinition;
+  });
+}
