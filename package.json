@@ -105,6 +105,7 @@
                 "gpt41",
                 "gpt4o",
                 "gemini3p",
+                "gemini3f",
                 "gemini25p",
                 "gemini25f",
                 "deepseek",
