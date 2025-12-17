@@ -68,6 +68,24 @@ export class RunUsageAccumulator {
   private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
 
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
+    const parsed = RunUsageAccumulatorJSONSchema.parse(snapshot);
+    const acc = new RunUsageAccumulator();
+    // parsed.totals already has defaults from parent schema, just needs field defaults
+    acc.totals = { ...DEFAULT_TOTALS, ...parsed.totals };
+    acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
+    return acc;
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): RunUsageAccumulatorJSON {
+    return {
+      totals: this.totals,
+      normalizedSnapshots: [...this.normalizedSnapshots],
+    };
+  }
+
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
     if (this.totals.firstInputTokens === 0) {
       this.totals.firstInputTokens =
@@ -116,39 +134,4 @@ export class RunUsageAccumulator {
   getNormalizedSnapshots(): readonly NormalizedUsageSnapshot[] {
     return this.normalizedSnapshots;
   }
-
-  /** @internal Used by codec - prefer RunUsageAccumulatorCodec.encode() */
-  _setTotals(totals: RunUsageTotals): void {
-    this.totals = totals;
-  }
-
-  /** @internal Used by codec - prefer RunUsageAccumulatorCodec.decode() */
-  _pushSnapshots(snapshots: NormalizedUsageSnapshot[]): void {
-    this.normalizedSnapshots.push(...snapshots);
-  }
 }
-
-/**
- * Codec for bi-directional serialization of RunUsageAccumulator.
- * Use .encode() to serialize and .decode() to deserialize.
- */
-export const RunUsageAccumulatorCodec = z.codec(
-  RunUsageAccumulatorJSONSchema,
-  z.instanceof(RunUsageAccumulator),
-  {
-    // Note: z.codec() does NOT auto-validate input before calling decode.
-    // We parse to apply schema defaults for legacy snapshots missing fields.
-    decode: (json): RunUsageAccumulator => {
-      const parsed = RunUsageAccumulatorJSONSchema.parse(json);
-      const acc = new RunUsageAccumulator();
-      const totals = RunUsageTotalsSchema.parse(parsed.totals);
-      acc._setTotals(totals);
-      acc._pushSnapshots(parsed.normalizedSnapshots);
-      return acc;
-    },
-    encode: (acc: RunUsageAccumulator): RunUsageAccumulatorJSON => ({
-      totals: acc.getTotals(),
-      normalizedSnapshots: [...acc.getNormalizedSnapshots()],
-    }),
-  },
-);

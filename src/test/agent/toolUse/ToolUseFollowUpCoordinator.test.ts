@@ -7,7 +7,6 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import {
   createSharedStore,
-  AgentSharedStoreCodec,
   type AgentSharedStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
 import {
@@ -45,7 +44,7 @@ describe('ToolUseFollowUpCoordinator', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    store: AgentSharedStoreCodec.encode(store) as AgentSharedStoreSnapshot,
+    store: store.toSnapshot(),
     lastUpdated: Date.now(),
   };
 
