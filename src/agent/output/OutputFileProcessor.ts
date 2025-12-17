@@ -6,7 +6,6 @@ import {
 } from '@agent/core/AgentDataclass';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { replaceInputCommands, flexibleFS } from '@utils/files';
@@ -14,6 +13,7 @@ import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 import {
   indentLatexFile,

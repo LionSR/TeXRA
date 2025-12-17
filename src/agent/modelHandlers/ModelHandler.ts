@@ -2,6 +2,8 @@
 import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
@@ -29,8 +31,6 @@ import {
   resolveBaseUrl,
   shouldUseOpenRouter,
 } from './support/ProxyConfigResolver';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
