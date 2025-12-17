@@ -42,7 +42,7 @@ export const ConversationRoundStateSnapshotSchema = z.object({
     .nonnegative()
     .default(ROUND_STATE_DEFAULTS.responseTimeMs),
   outputFile: z.string().default(ROUND_STATE_DEFAULTS.outputFile),
-  normalizedUsage: NormalizedUsageSchema.nullish().default(
+  normalizedUsage: NormalizedUsageSchema.nullable().default(
     ROUND_STATE_DEFAULTS.normalizedUsage,
   ),
 });
@@ -77,7 +77,7 @@ export class ConversationRoundState {
     state.continuationCount = parsed.continuationCount;
     state.responseTimeMs = parsed.responseTimeMs;
     state.outputFile = parsed.outputFile;
-    state.normalizedUsage = parsed.normalizedUsage ?? null;
+    state.normalizedUsage = parsed.normalizedUsage;
     return state;
   }
 
@@ -121,7 +121,10 @@ export const AgentRunStateSnapshotSchema = z.object({
     .number()
     .nonnegative()
     .default(RUN_STATE_DEFAULTS.totalResponseTimeMs),
-  usageAccumulator: RunUsageAccumulatorJSONSchema,
+  usageAccumulator: RunUsageAccumulatorJSONSchema.default({
+    totals: {},
+    normalizedSnapshots: [],
+  }),
 });
 
 /**
