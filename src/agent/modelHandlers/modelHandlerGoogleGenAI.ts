@@ -11,6 +11,7 @@ import {
   GenerateContentResponse,
   FinishReason,
   ThinkingLevel,
+  PartMediaResolutionLevel,
   type FunctionCall,
   type FunctionResponsePart,
   File,
@@ -167,28 +168,27 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
-   * Apply media resolution settings for Gemini 3 models.
+   * Get media resolution level for Gemini 3 models.
    * Per Google's recommendations:
-   * - Images: media_resolution_high (1120 tokens) for maximum quality
-   * - PDFs: media_resolution_medium (560 tokens) - quality saturates at medium
-   * - Video: media_resolution_low or medium (70 tokens per frame) for most tasks
+   * - Images: MEDIA_RESOLUTION_HIGH (1120 tokens) for maximum quality
+   * - PDFs: MEDIA_RESOLUTION_HIGH for better OCR of dense/small text
+   * - Video: uses default (low/medium, 70 tokens per frame) for most tasks
    */
-  private applyMediaResolution(part: Part, mimeType: string): Part {
+  private getMediaResolution(
+    mimeType: string,
+  ): PartMediaResolutionLevel | undefined {
     if (!this.isGemini3Model()) {
-      return part;
+      return undefined;
     }
 
     const isImage = mimeType.startsWith('image/');
     const isPdf = mimeType === 'application/pdf';
 
-    if (isImage) {
-      (part as any).mediaResolution = { level: 'media_resolution_high' };
-    } else if (isPdf) {
-      (part as any).mediaResolution = { level: 'media_resolution_medium' };
+    if (isImage || isPdf) {
+      return PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
     }
-    // Videos use low/medium by default which is optimal
-
-    return part;
+    // Videos use default which is optimal
+    return undefined;
   }
 
   private getThinkingLevel(): ThinkingLevel | undefined {
@@ -251,9 +251,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           this.logger.debug(
             `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
           );
-          const part = this.applyMediaResolution(
-            createPartFromBase64(inlinePayload, mimeType),
+          const part = createPartFromBase64(
+            inlinePayload,
             mimeType,
+            this.getMediaResolution(mimeType),
           );
           uploadedParts.push(part);
           uploadSummaries.push({ path: fileName, ok: true });
@@ -310,9 +311,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           entry,
           uploadResult,
         );
-        const part = this.applyMediaResolution(
-          createPartFromUri(fileUri, resolvedMimeType),
+        const part = createPartFromUri(
+          fileUri,
           resolvedMimeType,
+          this.getMediaResolution(resolvedMimeType),
         );
         uploadedParts.push(part);
         uploadSummaries.push({ path: fileName, ok: true });
@@ -614,10 +616,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const candidateContent = baseResponse.candidates?.[0]?.content;
         if (candidateContent?.parts) {
           const filteredParts = candidateContent.parts.filter(
-            (part) => !(part as any).thought,
+            (part) => !part.thought,
           );
           // Update the parts array; the SDK will compute the text property from it
-          (candidateContent as any).parts = filteredParts;
+          candidateContent.parts = filteredParts;
         }
 
         return baseResponse;
