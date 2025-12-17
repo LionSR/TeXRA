@@ -183,9 +183,11 @@ export class RemoteAgentLoader {
         const prompts: Partial<AgentPrompt> = validated.prompts || {};
 
         // Resolve tool names to definitions
+        // tools can be strings (tool names) or partial ToolDefinitions from YAML
         if (Array.isArray(settings.tools)) {
           const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-          settings.tools = (settings.tools as any[]).map((item) => {
+          const rawTools = settings.tools as (string | { name: string })[];
+          settings.tools = rawTools.map((item) => {
             if (typeof item === 'string') {
               const tool = DEFAULT_TOOL_REGISTRY[item];
               if (!tool) {
