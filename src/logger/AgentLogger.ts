@@ -362,10 +362,7 @@ export class AgentLogger {
   /**
    * Log missing output information.
    */
-  missingOutputs(
-    info: { missing?: unknown[] } | unknown,
-    groupId?: string,
-  ): void {
+  missingOutputs(info: unknown, groupId?: string): void {
     const missing =
       typeof info === 'object' && info !== null && 'missing' in info
         ? (info as { missing?: unknown[] }).missing
