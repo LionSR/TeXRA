@@ -2,7 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - Anthropic Tool
-import { TextEditorTool, ToolCallInput, type EditorCommand } from '@agent/toolUse';
+import {
+  TextEditorTool,
+  ToolCallInput,
+  type EditorCommand,
+} from '@agent/toolUse';
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -59,7 +63,10 @@ async function handleTestTextEditor(): Promise<void> {
 
     // Prepare input based on selected command
     // Type assertion is safe because showQuickPick options match EditorCommand values
-    const input: ToolCallInput = { command: command as EditorCommand, path: filePath };
+    const input: ToolCallInput = {
+      command: command as EditorCommand,
+      path: filePath,
+    };
 
     switch (command) {
       case 'view':
