@@ -1,7 +1,7 @@
+import { getRelayBaseUrl } from '@auth/serverSideKeyAccess';
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
-import { getRelayBaseUrl } from '@auth/serverSideKeyAccess';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 

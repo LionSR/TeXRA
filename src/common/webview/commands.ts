@@ -167,9 +167,15 @@ export const PROGRESS_VIEW_COMMANDS = {
   APPEND_LOG: 'appendLog',
   UPDATE_LOG: 'updateLog',
 
+  // Instruction panel
+  UPDATE_INSTRUCTION: 'updateInstruction',
+
   // Task Groups
   ADD_TASK_GROUP: 'addTaskGroup',
   UPDATE_TASK_GROUP: 'updateTaskGroup',
+
+  // Todo List
+  UPDATE_TODOS: 'updateTodos',
 
   // Status and files
   UPDATE_STATUS: 'updateStatus',
