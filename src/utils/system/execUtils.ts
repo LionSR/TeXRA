@@ -2,6 +2,20 @@
 import { execa, type Options, ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
+/**
+ * Encoding options compatible with execa v9.
+ * execa uses a stricter encoding type than Node's BufferEncoding.
+ */
+type ExecaEncodingOption =
+  | 'utf8'
+  | 'utf16le'
+  | 'buffer'
+  | 'hex'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'ascii';
+
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
@@ -66,15 +80,16 @@ export async function executeCommand(
       : { ...process.env };
     env.PATH = extendEnvPath(env.PATH);
 
-    const encodingOption: BufferEncoding =
+    // Normalize 'utf-8' to 'utf8' for execa compatibility
+    const encodingOption: ExecaEncodingOption =
       options.encoding && options.encoding.toLowerCase() === 'utf-8'
         ? 'utf8'
-        : (options.encoding ?? 'utf8');
+        : ((options.encoding ?? 'utf8') as ExecaEncodingOption);
 
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: encodingOption as any, // execa v9 type compatibility
+      encoding: encodingOption,
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
