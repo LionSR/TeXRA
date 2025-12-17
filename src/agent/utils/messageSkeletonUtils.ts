@@ -92,13 +92,9 @@ export function messageToSkeleton(
       value !== null &&
       value !== undefined
     ) {
-      // Recursively process nested objects
-      // Nested properties are typed as ProviderMessage for the recursive call
-      // though they may not strictly conform - the function handles this gracefully
-      result[key] = messageToSkeleton(
-        value as ProviderMessage,
-        maxContentLength,
-      );
+      // Recursively process nested objects - function handles arbitrary structures
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result[key] = messageToSkeleton(value as any, maxContentLength);
     } else {
       // Pass through primitive values
       result[key] = value;
