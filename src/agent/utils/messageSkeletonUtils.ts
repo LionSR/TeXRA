@@ -93,9 +93,12 @@ export function messageToSkeleton(
       value !== undefined
     ) {
       // Recursively process nested objects
-      // Note: We pass 'any' here since nested properties within a message
-      // are not necessarily ProviderMessage instances themselves
-      result[key] = messageToSkeleton(value as any, maxContentLength);
+      // Nested properties are typed as ProviderMessage for the recursive call
+      // though they may not strictly conform - the function handles this gracefully
+      result[key] = messageToSkeleton(
+        value as ProviderMessage,
+        maxContentLength,
+      );
     } else {
       // Pass through primitive values
       result[key] = value;
