@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports - agent
-import { AgentSharedStoreCodec } from '@agent/core/AgentSharedStore';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -99,7 +98,7 @@ export const ToolUseSnapshotStore = {
       streamId: payload.streamId,
       agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
-      store: AgentSharedStoreCodec.encode(payload.store),
+      store: payload.store.toSnapshot(),
       lastUpdated: Date.now(),
     } as const;
 
