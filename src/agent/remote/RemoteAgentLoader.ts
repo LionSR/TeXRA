@@ -9,6 +9,7 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -226,16 +227,14 @@ export class RemoteAgentLoader {
       } catch (error) {
         // If this is the last candidate, throw the error
         if (candidateName === candidateNames[candidateNames.length - 1]) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
           logger.error(
             CHANNEL,
-            `Failed to load remote agent "${agentName}": ${errorMessage}`,
+            `Failed to load remote agent "${agentName}": ${toErrorMessage(error)}`,
           );
           throw error;
         }
         // Otherwise, store the error and continue to next candidate
-        lastError = error instanceof Error ? error : new Error(String(error));
+        lastError = error instanceof Error ? error : new Error(toErrorMessage(error));
         logger.debug(
           CHANNEL,
           `Failed to load candidate "${candidateName}", trying next: ${lastError.message}`,
@@ -293,9 +292,7 @@ export class RemoteAgentLoader {
         agentCategory: row.agent_category,
       })) as RemoteAgentMetadata[];
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.error(CHANNEL, `Error listing remote agents: ${errorMessage}`);
+      logger.error(CHANNEL, `Error listing remote agents: ${toErrorMessage(error)}`);
       return [];
     }
   }
@@ -342,11 +339,9 @@ export class RemoteAgentLoader {
         agentCategory: data.agent_category,
       } as RemoteAgentMetadata;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
       logger.error(
         CHANNEL,
-        `Error fetching metadata for ${agentName}: ${errorMessage}`,
+        `Error fetching metadata for ${agentName}: ${toErrorMessage(error)}`,
       );
       return null;
     }
