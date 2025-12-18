@@ -17,13 +17,26 @@ import { toJSONSchema } from 'zod';
 
 /** SDK Message types */
 type SystemMessage = { role: 'system'; content: string };
+
+/** Content part types for multimodal messages */
+type TextContentPart = { type: 'text'; text: string };
+type ImageUrlContentPart = {
+  type: 'image_url';
+  image_url: { url: string; detail?: 'auto' | 'low' | 'high' };
+};
+type ContentPart = TextContentPart | ImageUrlContentPart;
+
 type UserMessage = {
   role: 'user';
-  content: string | Array<{ type: 'text'; text: string }>;
+  content: string | ContentPart[];
 };
+/** Assistant message content part (for prefill support with Claude via OpenRouter) */
+type AssistantContentPart = { type: 'text'; text: string };
+
 type AssistantMessage = {
   role: 'assistant';
-  content?: string | null;
+  /** Content can be string, array of content parts (for Claude prefill), or null */
+  content?: string | AssistantContentPart[] | null;
   reasoning?: string | null;
   toolCalls?: Array<{
     id: string;
@@ -67,6 +80,7 @@ interface ChatStreamingChoice {
     content?: string | null;
     reasoning?: string | null;
     toolCalls?: Array<{
+      index?: number;
       id?: string;
       function?: { name?: string; arguments?: string };
     }>;
@@ -104,7 +118,9 @@ interface ChatGenerationParams {
   streamOptions?: { includeUsage?: boolean } | null;
   tools?: ToolDefinitionJson[];
   toolChoice?: 'auto' | 'none' | 'required';
-  reasoning?: { effort?: string | null };
+  reasoning?: { effort?: string | null; enabled?: boolean };
+  /** Include reasoning content in response (required for O1-style models) */
+  includeReasoning?: boolean;
 }
 
 // Local imports - agent components
@@ -291,6 +307,7 @@ export class ModelHandlerOpenRouter extends ModelHandler<
         this.config.capabilities.supportsReasoningEffort &&
         this.config.capabilities.reasoningEffort
       ) {
+        // O1-style models: use effort level + includeReasoning flag
         params.reasoning = {
           effort: this.validateReasoningEffort(
             this.config.capabilities.reasoningEffort,
@@ -298,6 +315,10 @@ export class ModelHandlerOpenRouter extends ModelHandler<
             ? E
             : never,
         };
+        params.includeReasoning = true;
+      } else {
+        // DeepSeek-style models: use enabled flag
+        params.reasoning = { enabled: true };
       }
     }
 
@@ -339,7 +360,11 @@ export class ModelHandlerOpenRouter extends ModelHandler<
       let accumulatedContent = '';
       let accumulatedReasoning = '';
       let accumulatedUsage: ChatGenerationTokenUsage | undefined;
-      const accumulatedToolCalls: AssistantMessage['toolCalls'] = [];
+      // Track tool calls by index - streaming sends id/name first, then arguments in subsequent chunks
+      const toolCallsMap = new Map<
+        number,
+        { id: string; name: string; arguments: string }
+      >();
 
       for await (const chunk of stream) {
         const choice = chunk.choices[0] as ChatStreamingChoice | undefined;
@@ -363,17 +388,25 @@ export class ModelHandlerOpenRouter extends ModelHandler<
           thinking.append(reasoningDelta);
         }
 
-        // Accumulate tool calls
+        // Accumulate tool calls by index - streaming sends parts incrementally
         if (choice.delta?.toolCalls) {
           for (const tc of choice.delta.toolCalls) {
-            if (tc.id && tc.function?.name) {
-              accumulatedToolCalls?.push({
-                id: tc.id,
-                type: 'function',
-                function: {
-                  name: tc.function.name,
-                  arguments: tc.function.arguments ?? '{}',
-                },
+            const idx = tc.index ?? 0;
+            const existing = toolCallsMap.get(idx);
+            if (existing) {
+              // Append arguments to existing tool call
+              if (tc.function?.arguments) {
+                existing.arguments += tc.function.arguments;
+              }
+              // Update id/name if provided (shouldn't happen, but handle gracefully)
+              if (tc.id) existing.id = tc.id;
+              if (tc.function?.name) existing.name = tc.function.name;
+            } else {
+              // Create new tool call entry
+              toolCallsMap.set(idx, {
+                id: tc.id ?? '',
+                name: tc.function?.name ?? '',
+                arguments: tc.function?.arguments ?? '',
               });
             }
           }
@@ -386,6 +419,21 @@ export class ModelHandlerOpenRouter extends ModelHandler<
 
         // Build final response from last chunk
         if (choice.finishReason) {
+          // Convert toolCallsMap to array format, filtering out incomplete entries
+          const accumulatedToolCalls: AssistantMessage['toolCalls'] = [];
+          for (const [, tc] of toolCallsMap) {
+            if (tc.id && tc.name) {
+              accumulatedToolCalls.push({
+                id: tc.id,
+                type: 'function',
+                function: {
+                  name: tc.name,
+                  arguments: tc.arguments || '{}',
+                },
+              });
+            }
+          }
+
           finalResponse = {
             id: chunk.id,
             choices: [
@@ -397,7 +445,7 @@ export class ModelHandlerOpenRouter extends ModelHandler<
                   content: accumulatedContent,
                   reasoning: accumulatedReasoning || undefined,
                   toolCalls:
-                    accumulatedToolCalls && accumulatedToolCalls.length > 0
+                    accumulatedToolCalls.length > 0
                       ? accumulatedToolCalls
                       : undefined,
                 },
@@ -457,16 +505,18 @@ export class ModelHandlerOpenRouter extends ModelHandler<
     }
 
     // Build user content
-    const userContent: Array<{ type: 'text'; text: string }> = [
-      { type: 'text', text: userPrefix },
-    ];
+    const userContent: ContentPart[] = [{ type: 'text', text: userPrefix }];
 
-    // Add media if provided
+    // Add media if provided (including both text labels and image_url content)
     if (mediaFiles && this.config.capabilities.supportsVision) {
       const formattedMediaContent = await this.createMediaMessage(mediaFiles);
       for (const media of formattedMediaContent) {
-        if (typeof media === 'object' && 'text' in media) {
-          userContent.push({ type: 'text', text: media.text as string });
+        if (typeof media === 'object') {
+          if ('text' in media && media.type === 'text') {
+            userContent.push({ type: 'text', text: media.text as string });
+          } else if ('image_url' in media && media.type === 'image_url') {
+            userContent.push(media as ImageUrlContentPart);
+          }
         }
       }
     }
@@ -988,19 +1038,18 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     if (lastMessage?.role === 'assistant') {
       const assistantMsg = lastMessage as AssistantMessage;
       if (Array.isArray(assistantMsg.content)) {
-        const lastPart = (
-          assistantMsg.content as Array<{ type: string; text?: string }>
-        ).at(-1);
+        const lastPart = assistantMsg.content.at(-1);
         if (lastPart && 'text' in lastPart) {
           lastPart.text = bestConnector + newResponse;
         }
       } else if (typeof assistantMsg.content === 'string') {
+        // Convert string content to array format for Claude prefill support
         assistantMsg.content = [
           {
             type: 'text',
             text: workspaceState.assembly.accumulatedOutput,
           },
-        ] as unknown as string;
+        ];
       }
     }
   }
@@ -1013,7 +1062,8 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   ): void {
     const lastMessage = messages.at(-1);
     if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
-      messages.push({
+      // Use array content format for Claude prefill support
+      const assistantMsg: AssistantMessage = {
         role: 'assistant',
         content: [
           {
@@ -1021,7 +1071,8 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
             text: workspaceState.assembly.accumulatedOutput,
           },
         ],
-      } as unknown as AssistantMessage);
+      };
+      messages.push(assistantMsg);
     }
   }
 }
