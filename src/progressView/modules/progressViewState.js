@@ -2,7 +2,6 @@
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
 import { ToggleStateStore } from '@common/ToggleStateStore.js';
-import { hasOwn } from '@common/objectUtils.js';
 
 /**
  * Manages task groups in the progress view.
@@ -89,11 +88,11 @@ class TaskGroups {
       return;
     }
 
-    if (hasOwn(updates, 'status') && updates.status) {
+    if (Object.hasOwn(updates, 'status') && updates.status) {
       group.status = updates.status;
     }
     if (
-      hasOwn(updates, 'endTime') &&
+      Object.hasOwn(updates, 'endTime') &&
       updates.endTime !== undefined &&
       updates.endTime !== null
     ) {
