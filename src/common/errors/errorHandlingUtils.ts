@@ -7,6 +7,19 @@
  * - Provides both silent logging and user-visible error display
  * - Handles various error types (Error objects, strings, primitives, etc.)
  *
+ * ## Error Utility Guide
+ *
+ * | Function | Returns | Use Case |
+ * |----------|---------|----------|
+ * | `toErrorMessage(err)` | `string` (always) | Guaranteed string conversion for logging |
+ * | `formatError(prefix, err)` | `string` | Combine prefix with error message |
+ * | `logErrorMessage(...)` | `string` | Log and return formatted error |
+ * | `showLoggedErrorMessage(...)` | `Promise<string>` | Log and show to user |
+ *
+ * For optional extraction or serialization, see `@utils/core/stringCore`:
+ * - `extractErrorMessage(err)` - returns `string | undefined`
+ * - `serializeError(err)` - converts Error to plain object
+ *
  * @fileoverview Error handling utilities for consistent logging and user feedback
  * @author TeXRA.ai
  */
