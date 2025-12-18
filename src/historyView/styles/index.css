@@ -170,10 +170,15 @@ mark.current-match {
   );
 }
 
-/* Session kind badge - extends .badge-flex from common.css */
+/* Session kind badge */
 .session-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
   padding: var(--spacing-tiny) var(--spacing-medium);
   border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
 }
 
 .session-kind-badge .codicon {
