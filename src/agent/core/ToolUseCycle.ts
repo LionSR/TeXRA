@@ -27,6 +27,7 @@ import {
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState } from './flows/RetryState';
+import type { FileInteractionStateSnapshot } from './AgentWorkspaceState';
 
 // Import and re-export from single source of truth
 import type { ToolUseCycleOptions } from './flows/CycleServices';
@@ -117,7 +118,7 @@ export async function runToolUseCycle<C = unknown>(
  */
 function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
-  const interactions = store.workspace.interactions.toJSON();
+  const interactions: FileInteractionStateSnapshot = store.workspace.interactions.toSnapshot();
 
   if (interactions.edits.length === 0) {
     return;
