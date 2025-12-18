@@ -5,14 +5,29 @@ import {
   CHEVRON_RIGHT_CLASS,
 } from './iconConstants.js';
 
-function getTagName(element) {
+/**
+ * Safely get the lowercase tag name of an element.
+ * @param {Element|null|undefined} element - The element to check
+ * @returns {string} The lowercase tag name, or empty string if invalid
+ */
+export function getTagName(element) {
   return typeof element?.tagName === 'string'
     ? element.tagName.toLowerCase()
     : '';
 }
 
+/**
+ * Check if an element has a specific tag name (case-insensitive).
+ * @param {Element|null|undefined} element - The element to check
+ * @param {string} tagName - The tag name to compare against
+ * @returns {boolean} True if the element has the specified tag name
+ */
+export function isTagName(element, tagName) {
+  return getTagName(element) === tagName.toLowerCase();
+}
+
 function isVsCodeSelectElement(element) {
-  return getTagName(element) === 'vscode-single-select';
+  return isTagName(element, 'vscode-single-select');
 }
 
 function setChevronIconImpl(
@@ -22,7 +37,7 @@ function setChevronIconImpl(
 ) {
   if (!element) return;
   let icon = element;
-  if (icon.tagName.toLowerCase() !== 'i') {
+  if (!isTagName(icon, 'i')) {
     icon = element.querySelector('i');
     if (!icon) {
       icon = document.createElement('i');
@@ -341,5 +356,19 @@ export function clearElementContent(elementOrId) {
       : elementOrId;
   if (element) {
     element.innerHTML = '';
+  }
+}
+
+/**
+ * Safely set text content of a child element matching a selector.
+ * @param {HTMLElement} parent - The parent element to search within
+ * @param {string} selector - CSS selector for the child element
+ * @param {string} text - The text content to set
+ */
+export function safeSetTextContent(parent, selector, text) {
+  if (!parent) return;
+  const element = parent.querySelector(selector);
+  if (element) {
+    element.textContent = text;
   }
 }
