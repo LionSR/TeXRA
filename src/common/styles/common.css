@@ -60,12 +60,11 @@ body {
   /* Accent color */
   --color-accent: var(--vscode-activityBarBadge-background);
 
-  /* Legacy aliases (keep for backwards compatibility) */
-  --background-color: var(--vscode-sideBar-background);
+  /* Additional semantic aliases (actively used) */
+  --background-color: var(--color-bg-secondary);
   --text-color: var(--vscode-sideBar-foreground);
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
-  --focus-border: var(--vscode-focusBorder);
 
   /* Typography */
   --font-size: var(--vscode-font-size);
@@ -204,13 +203,6 @@ vscode-toolbar-button {
 
 .hidden.is-visible {
   display: flex;
-}
-
-/* Text utilities */
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ==========================================================================
