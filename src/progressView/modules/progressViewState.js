@@ -137,7 +137,6 @@ class TaskGroups {
   }
 }
 
-
 /**
  * Manages stream status information.
  */
@@ -219,7 +218,7 @@ class RunScopedMap {
       return null;
     }
     const runs = this.getStreamMap(streamId);
-    return runs ? runs.get(runId) || null : null;
+    return runs?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
@@ -254,7 +253,7 @@ class RunScopedMap {
     if (targetStream == null) {
       return null;
     }
-    return this._data.get(targetStream) || null;
+    return this._data.get(targetStream) ?? null;
   }
 
   streamEntries() {
@@ -294,11 +293,11 @@ export class ProgressViewState {
   }
 
   _resolveStreamId(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       return streamId;
     }
 
-    if (this.activeStream !== undefined && this.activeStream !== null) {
+    if (this.activeStream != null) {
       return this.activeStream;
     }
 
@@ -498,12 +497,7 @@ export class ProgressViewState {
   }
 
   setPendingInstruction(streamId, instruction) {
-    if (
-      streamId === undefined ||
-      streamId === null ||
-      !instruction ||
-      !instruction.text
-    ) {
+    if (streamId == null || !instruction || !instruction.text) {
       return;
     }
 
@@ -520,10 +514,10 @@ export class ProgressViewState {
   }
 
   takePendingInstruction(streamId) {
-    if (streamId === undefined || streamId === null) {
+    if (streamId == null) {
       return null;
     }
-    const pending = this.pendingInstructions.get(streamId) || null;
+    const pending = this.pendingInstructions.get(streamId) ?? null;
     if (pending) {
       this.pendingInstructions.delete(streamId);
     }
@@ -531,7 +525,7 @@ export class ProgressViewState {
   }
 
   clearPendingInstruction(streamId) {
-    if (streamId === undefined || streamId === null) {
+    if (streamId == null) {
       return;
     }
     this.pendingInstructions.delete(streamId);
@@ -571,7 +565,7 @@ export class ProgressViewState {
   }
 
   clearRunInstructions(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -598,7 +592,7 @@ export class ProgressViewState {
   }
 
   clearRunFiles(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -627,7 +621,7 @@ export class ProgressViewState {
   }
 
   clearRunMissingOutputs(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -670,7 +664,7 @@ export class ProgressViewState {
       return;
     }
 
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       this.runUsage.clearStream(streamId);
       return;
     }
