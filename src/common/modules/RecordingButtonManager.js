@@ -2,6 +2,7 @@
 import {
   addEventListenerSafely,
   safeGetElementById,
+  getTagName,
 } from '@common/domUtils.js';
 import { createCodicon } from '@common/templateUtils.js';
 
@@ -53,10 +54,7 @@ export class RecordingButtonManager {
 
     const iconName = this.isRecording ? this.stopIcon : this.startIcon;
     const title = this.isRecording ? this.stopTitle : this.startTitle;
-    const tagName =
-      typeof this.button.tagName === 'string'
-        ? this.button.tagName.toLowerCase()
-        : '';
+    const tagName = getTagName(this.button);
     const isVsCodeButton =
       tagName === 'vscode-button' || tagName === 'vscode-toolbar-button';
 
