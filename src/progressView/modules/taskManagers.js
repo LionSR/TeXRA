@@ -8,7 +8,6 @@ import {
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
-import { hasOwn } from '@common/objectUtils.js';
 
 /**
  * Manages task group DOM operations.
@@ -227,8 +226,8 @@ export class TaskGroupDomManager {
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
-    const hasStatusUpdate = hasOwn(updates, 'status');
-    const hasEndTimeUpdate = hasOwn(updates, 'endTime');
+    const hasStatusUpdate = Object.hasOwn(updates, 'status');
+    const hasEndTimeUpdate = Object.hasOwn(updates, 'endTime');
 
     if (hasStatusUpdate && updates.status) {
       group.status = updates.status;
