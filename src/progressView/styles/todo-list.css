@@ -5,8 +5,8 @@
 
 .todo-list-container {
   display: none;
-  border-top: 1px solid var(--vscode-panel-border);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   background-color: transparent;
   padding: var(--spacing-small) var(--spacing-medium);
 }
@@ -20,7 +20,7 @@
   align-items: center;
   gap: var(--spacing-tiny);
   font-weight: 500;
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   margin-bottom: var(--spacing-small);
 }
 
@@ -40,7 +40,7 @@
   align-items: flex-start;
   gap: var(--spacing-small);
   padding: var(--spacing-tiny) 0;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   line-height: 1.4;
 }
 
@@ -62,7 +62,7 @@
 }
 
 .todo-item--pending .todo-item__icon {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 .todo-item--in-progress {
@@ -78,10 +78,10 @@
 }
 
 .todo-item--completed .todo-item__icon {
-  color: var(--vscode-testing-iconPassed);
+  color: var(--color-success);
 }
 
 .todo-item--completed .todo-item__content {
   text-decoration: line-through;
-  text-decoration-color: var(--vscode-descriptionForeground);
+  text-decoration-color: var(--color-text-secondary);
 }

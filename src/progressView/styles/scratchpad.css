@@ -15,7 +15,7 @@
 
 .tool-use-label {
   font-weight: 600;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   margin-bottom: var(--spacing-small);
 }
 
@@ -33,7 +33,7 @@
 .tool-use-separator {
   margin: var(--spacing-small) 0;
   border: none;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--color-border);
   opacity: 0.3;
 }
 

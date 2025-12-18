@@ -5,14 +5,14 @@
 
 /* File metadata styling */
 .file-list-content .file-var {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   opacity: 0.8;
   font-size: 0.9em;
   margin-left: var(--spacing-tiny);
 }
 
 .file-list-content .file-source {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   opacity: 0.6;
   font-size: 0.85em;
   font-style: italic;
@@ -35,7 +35,7 @@
 
 /* Document tag info styling */
 .xml-link-container .document-tag {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   opacity: 0.8;
   font-style: italic;
 }
@@ -44,7 +44,7 @@
 .xml-link-container .xml-fix-hint {
   flex-basis: 100%;
   margin-top: var(--spacing-tiny);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: 0.9em;
   display: flex;
   align-items: center;
@@ -53,9 +53,9 @@
 
 .xml-link-container .xml-fix-hint .codicon {
   opacity: 1;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
 }
 
 .xml-link-container .xml-fix-hint strong {
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
 }
