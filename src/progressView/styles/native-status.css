@@ -10,7 +10,7 @@
   gap: var(--spacing-small);
   padding: var(--spacing-small) var(--spacing-medium);
   margin: var(--spacing-small) 0;
-  border-left: var(--border-thin) solid var(--vscode-panel-border);
+  border-left: var(--border-thin) solid var(--color-border);
   border-radius: var(--border-radius-large);
   background-color: var(--vscode-sideBarSectionHeader-background, transparent);
   font-size: var(--font-size-sm);
@@ -27,7 +27,7 @@
 }
 
 .native-status-time {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
