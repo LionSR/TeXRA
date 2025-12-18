@@ -43,7 +43,7 @@
 
 /* Timestamp color */
 .timestamp {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 /* Level colors */
@@ -90,8 +90,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-small);
-  color: var(--vscode-descriptionForeground);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .log-header__primary {
@@ -139,7 +139,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: 500;
   white-space: nowrap;
@@ -166,7 +166,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   opacity: 0.9;
 }
@@ -178,7 +178,7 @@
 
 .run-summary__label {
   font-weight: 500;
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 .run-summary__value {
@@ -210,7 +210,7 @@
   transform: translateX(-50%);
   padding: var(--spacing-small) var(--spacing-medium);
   background: var(--background-color);
-  border: var(--border-thin) solid var(--vscode-panel-border);
+  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--border-radius-large);
   font-size: var(--font-size-sm);
   white-space: nowrap;
@@ -254,7 +254,7 @@
 /* Generated files list */
 .files-container {
   padding: var(--spacing-small);
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--color-border);
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
   max-height: var(--height-large);
@@ -262,13 +262,13 @@
 }
 
 .usage-summary-footer {
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--color-border);
   background-color: var(--vscode-sideBarSectionHeader-background);
   padding: var(--spacing-small) var(--spacing-medium);
   display: flex;
   justify-content: flex-end;
   font-size: var(--font-size-sm);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 .usage-summary-footer .run-summary {
@@ -298,7 +298,7 @@
   text-decoration: none;
   flex-shrink: 0;
   font-size: var(--font-size-sm);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 /* Remove left spacing when only one stat is shown */
 .file-stats span:first-child {
@@ -355,7 +355,7 @@
 
 /* Group usage display styling */
 .group-usage {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   opacity: var(--opacity-subtle);
   font-weight: normal;
@@ -394,7 +394,7 @@
   .follow-up-container {
     display: none;
     padding: var(--spacing-small);
-    border-top: 1px solid var(--vscode-panel-border);
+    border-top: 1px solid var(--color-border);
     gap: var(--spacing-small);
   }
 

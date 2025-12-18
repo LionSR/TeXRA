@@ -12,7 +12,7 @@
 
 .user-message {
   background-color: var(--vscode-editor-selectionBackground);
-  border-left: 3px solid var(--vscode-textLink-foreground);
+  border-left: 3px solid var(--color-text-link);
   padding: var(--spacing-small) var(--spacing-medium);
   max-width: 85%;
   margin-left: var(--spacing-xlarge);
@@ -27,7 +27,7 @@
 }
 
 .user-message-icon {
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   font-size: var(--font-size-sm);
 }
 
