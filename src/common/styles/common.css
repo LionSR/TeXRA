@@ -20,7 +20,47 @@ body {
 }
 
 :root {
-  /* Colors */
+  /* ==========================================================================
+     Semantic Color Aliases - Single source of truth for VS Code theme colors
+     Use these instead of --vscode-* variables directly
+     ========================================================================== */
+
+  /* Text colors */
+  --color-text-primary: var(--vscode-foreground);
+  --color-text-secondary: var(--vscode-descriptionForeground);
+  --color-text-link: var(--vscode-textLink-foreground);
+  --color-text-link-active: var(--vscode-textLink-activeForeground);
+  --color-text-editor: var(--vscode-editor-foreground);
+
+  /* Background colors */
+  --color-bg-primary: var(--vscode-editor-background);
+  --color-bg-secondary: var(--vscode-sideBar-background);
+  --color-bg-hover: var(--vscode-list-hoverBackground);
+  --color-bg-active: var(--vscode-list-activeSelectionBackground);
+  --color-bg-input: var(--vscode-input-background);
+  --color-bg-header: var(--vscode-sideBarSectionHeader-background);
+  --color-bg-code: var(--vscode-textCodeBlock-background);
+
+  /* Border colors */
+  --color-border: var(--vscode-panel-border);
+  --color-border-input: var(--vscode-input-border);
+  --color-border-widget: var(--vscode-widget-border);
+  --color-border-focus: var(--vscode-focusBorder);
+
+  /* Status colors */
+  --color-success: var(--vscode-testing-iconPassed);
+  --color-error: var(--vscode-errorForeground);
+  --color-warning: var(--vscode-editorWarning-foreground);
+  --color-info: var(--vscode-editorInfo-foreground);
+
+  /* Badge colors */
+  --color-badge-bg: var(--vscode-badge-background);
+  --color-badge-fg: var(--vscode-badge-foreground);
+
+  /* Accent color */
+  --color-accent: var(--vscode-activityBarBadge-background);
+
+  /* Legacy aliases (keep for backwards compatibility) */
   --background-color: var(--vscode-sideBar-background);
   --text-color: var(--vscode-sideBar-foreground);
   --button-hover-background: var(--vscode-button-hoverBackground);
