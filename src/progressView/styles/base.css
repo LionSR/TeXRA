@@ -1,17 +1,14 @@
 /**
  * Base styles for ProgressView
  * Core layout and structure
+ * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 body {
   padding: 0;
-  margin: 0;
   display: flex;
   height: 100vh;
-  font-family: var(--font-family);
-  font-size: var(--font-size);
   background-color: var(--background-color);
-  color: var(--vscode-editor-foreground);
 }
 
 .main-container {

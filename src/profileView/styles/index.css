@@ -1,17 +1,16 @@
 /*
  * Profile view styles
+ * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 /* Base styles */
 body {
-  font-family: var(--font-family);
-  color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   padding: var(--spacing-xlarge);
 }
 
 h1 {
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   margin-bottom: var(--spacing-xlarge);
 }
 
@@ -20,7 +19,7 @@ h2 {
   margin-top: var(--spacing-xlarge);
   margin-bottom: var(--spacing-medium);
   font-size: 1.2em;
-  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
   padding-bottom: var(--spacing-small);
 }
 
@@ -104,7 +103,7 @@ h2 {
 
 .not-authenticated p {
   margin-bottom: var(--spacing-xlarge);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 /* Remote agents section */
@@ -123,7 +122,7 @@ h2 {
 .agents-table td {
   padding: var(--spacing-medium) var(--spacing-medium);
   text-align: left;
-  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
 }
 
 .agents-table th {
@@ -140,7 +139,7 @@ h2 {
 
 .agent-name {
   font-weight: 500;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   white-space: nowrap;
 }
 
@@ -195,8 +194,8 @@ h2 {
 
 .multi-output-badge.not-supported {
   background: var(--vscode-input-background);
-  color: var(--vscode-descriptionForeground);
-  border: 1px solid var(--vscode-panel-border);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
 }
 
 /* Select button */
@@ -206,7 +205,7 @@ h2 {
 
 /* No agents message */
 .no-agents {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-style: italic;
   padding: var(--spacing-xlarge);
   text-align: center;
@@ -214,7 +213,7 @@ h2 {
 
 /* Loading state */
 .loading {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -225,7 +224,7 @@ h2 {
 }
 
 .api-access-description {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   margin-bottom: var(--spacing-medium);
 }
 
@@ -241,7 +240,7 @@ h2 {
   gap: var(--spacing-medium);
   padding: var(--spacing-medium);
   background: var(--vscode-input-background);
-  border: var(--border-thin) solid var(--vscode-panel-border);
+  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--border-radius);
   cursor: pointer;
   transition: border-color 0.2s ease;
@@ -274,7 +273,7 @@ h2 {
 
 .option-description {
   font-size: var(--font-size-sm);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 .enabled-providers-info {
@@ -283,5 +282,5 @@ h2 {
   background: var(--vscode-textBlockQuote-background);
   border-radius: var(--border-radius);
   font-size: var(--font-size-sm);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
