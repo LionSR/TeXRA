@@ -3,6 +3,7 @@
 
 // Import standardized commands
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { AGENT_CATEGORY } from '@common/constants/agentTypes.js';
 
 // Export command map for convenience
 export const COMMANDS = HISTORY_VIEW_COMMANDS;
@@ -31,8 +32,6 @@ export const LABELS = {
   MORE_DETAILS: 'More details',
 };
 
-// Agent category constants - must match AgentCategory enum in AgentDataclass.ts
-export const AGENT_CATEGORY = {
-  WORKFLOW: 'workflow',
-  TOOL_USE: 'toolUse',
-};
+// Re-export from shared constants
+// Must match AgentCategory enum in AgentDataclass.ts
+export { AGENT_CATEGORY };

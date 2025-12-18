@@ -1,42 +1,13 @@
 // Local imports - history view
 import { WebviewStateManager } from '@common/webviewState.js';
-
-const restoreToggleStates = (savedState) =>
-  Array.isArray(savedState.toggleStates)
-    ? Object.fromEntries(savedState.toggleStates)
-    : {};
-
-const createToggleStateStore = (saveCallback) => {
-  let states = {};
-
-  return {
-    set(id, expanded) {
-      if (!id) return;
-      states = { ...states, [id]: expanded };
-      if (saveCallback) saveCallback();
-    },
-    get(id) {
-      return states[id];
-    },
-    entries() {
-      return Object.entries(states);
-    },
-    load(data) {
-      states = { ...data };
-    },
-    clearAll() {
-      states = {};
-      if (saveCallback) saveCallback();
-    },
-  };
-};
+import { ToggleStateStore } from '@common/ToggleStateStore.js';
 
 export class HistoryViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.searchIndex = 0;
     this.totalMatches = 0;
-    this.toggleStates = createToggleStateStore(() => this.save());
+    this.toggleStates = new ToggleStateStore(() => this.save());
   }
 
   initialize() {
@@ -44,8 +15,9 @@ export class HistoryViewState {
     const saved = typeof state === 'object' && state !== null ? state : {};
     this.searchIndex = saved.searchIndex || 0;
     this.totalMatches = saved.totalMatches || 0;
-    const restoredToggleStates = restoreToggleStates(saved);
-    this.toggleStates.load(restoredToggleStates);
+    if (Array.isArray(saved.toggleStates)) {
+      this.toggleStates.load(saved.toggleStates);
+    }
   }
 
   save() {

@@ -226,14 +226,8 @@ export class TaskGroupDomManager {
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
-    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'status',
-    );
-    const hasEndTimeUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'endTime',
-    );
+    const hasStatusUpdate = Object.hasOwn(updates, 'status');
+    const hasEndTimeUpdate = Object.hasOwn(updates, 'endTime');
 
     if (hasStatusUpdate && updates.status) {
       group.status = updates.status;
