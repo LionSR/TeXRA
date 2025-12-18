@@ -9,10 +9,10 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
-import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
+import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
