@@ -6,13 +6,43 @@
  * and make the codebase more maintainable.
  */
 
+/* ==========================================================================
+   Body Reset - Base styling shared across all views
+   Each view can override with layout-specific properties
+   ========================================================================== */
+
+body {
+  margin: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-editor-foreground);
+  box-sizing: border-box;
+}
+
 :root {
-  /* Colors */
-  --background-color: var(--vscode-sideBar-background);
+  /* ==========================================================================
+     Semantic Color Aliases - Single source of truth for VS Code theme colors
+     ========================================================================== */
+
+  /* Text colors */
+  --color-text-secondary: var(--vscode-descriptionForeground);
+  --color-text-link: var(--vscode-textLink-foreground);
+  --color-text-link-active: var(--vscode-textLink-activeForeground);
+
+  /* Background colors */
+  --color-bg-secondary: var(--vscode-sideBar-background);
+
+  /* Border colors */
+  --color-border: var(--vscode-panel-border);
+
+  /* Status colors */
+  --color-success: var(--vscode-testing-iconPassed);
+
+  /* Aliases used by components */
+  --background-color: var(--color-bg-secondary);
   --text-color: var(--vscode-sideBar-foreground);
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
-  --focus-border: var(--vscode-focusBorder);
 
   /* Typography */
   --font-size: var(--vscode-font-size);
@@ -83,15 +113,15 @@ vscode-toolbar-button {
   flex-shrink: 0;
 }
 
-/* Common clickable link style (actually used in progressView) */
+/* Common clickable link style (used in progressView) */
 .clickable-link {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   text-decoration: none;
 }
 
 .clickable-link:hover {
-  color: var(--vscode-textLink-activeForeground);
+  color: var(--color-text-link-active);
   text-decoration: underline;
 }
 
@@ -151,13 +181,6 @@ vscode-toolbar-button {
 
 .hidden.is-visible {
   display: flex;
-}
-
-/* Text utilities */
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ==========================================================================
