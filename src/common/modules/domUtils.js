@@ -304,3 +304,42 @@ export function setExpandedState(element, selector, isExpanded) {
     parent.dataset.expanded = isExpanded ? 'true' : 'false';
   }
 }
+
+/**
+ * Scroll an element to its bottom.
+ * Handles both VS Code webview elements (scrollPos/scrollMax) and standard DOM elements.
+ * @param {HTMLElement} element - The element to scroll
+ */
+export function scrollToBottom(element) {
+  if (!element) {
+    return;
+  }
+
+  // Handle VS Code webview scroll elements
+  if (
+    typeof element.scrollPos === 'number' &&
+    typeof element.scrollMax === 'number'
+  ) {
+    element.scrollPos = element.scrollMax;
+    return;
+  }
+
+  // Handle standard DOM elements
+  if ('scrollTop' in element && 'scrollHeight' in element) {
+    element.scrollTop = element.scrollHeight;
+  }
+}
+
+/**
+ * Clear the inner HTML of an element.
+ * @param {HTMLElement|string} elementOrId - The element or its ID
+ */
+export function clearElementContent(elementOrId) {
+  const element =
+    typeof elementOrId === 'string'
+      ? safeGetElementById(elementOrId)
+      : elementOrId;
+  if (element) {
+    element.innerHTML = '';
+  }
+}
