@@ -1,11 +1,10 @@
 /*
  * History view styles
+ * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 /* Base styles */
 body {
-  font-family: var(--font-family);
-  color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   padding: var(--spacing-xlarge);
 }
@@ -171,15 +170,10 @@ mark.current-match {
   );
 }
 
-/* Session kind badge */
+/* Session kind badge - extends .badge-flex from common.css */
 .session-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  padding: var(--spacing-xsmall) var(--spacing-medium);
+  padding: var(--spacing-tiny) var(--spacing-medium);
   border-radius: var(--border-radius);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
 }
 
 .session-kind-badge .codicon {

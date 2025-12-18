@@ -1,11 +1,10 @@
 /*
  * Profile view styles
+ * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 /* Base styles */
 body {
-  font-family: var(--font-family);
-  color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   padding: var(--spacing-xlarge);
 }
@@ -52,13 +51,11 @@ h2 {
   color: var(--vscode-foreground);
 }
 
-/* Tier badge */
+/* Tier badge - extends .badge from common.css */
 .tier-badge {
-  display: inline-block;
   padding: var(--spacing-small) var(--spacing-medium);
   border-radius: var(--border-radius);
   text-transform: uppercase;
-  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
@@ -149,12 +146,8 @@ h2 {
   max-width: 300px;
 }
 
-/* Visibility badges */
+/* Visibility badges - extends .badge from common.css */
 .visibility-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
   text-transform: lowercase;
 }
 
@@ -168,24 +161,15 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Category badges */
+/* Category badges - extends .badge from common.css */
 .category-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Multi-output badges */
+/* Multi-output badges - extends .badge from common.css */
 .multi-output-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  /* Badge styling from common.css */
 }
 
 .multi-output-badge.supported {
