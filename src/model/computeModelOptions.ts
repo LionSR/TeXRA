@@ -1,11 +1,11 @@
 // Local imports - model utilities
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
-import { getConfig } from '@utils/config';
 import {
   canUseServerSideKeys,
   isProviderEnabledForServerSideKeys,
 } from '@auth/serverSideKeyAccess';
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { getConfig } from '@utils/config';
 
 /**
  * Format context window number for display

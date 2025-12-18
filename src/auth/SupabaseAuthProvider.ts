@@ -9,8 +9,8 @@ import {
   AUTH_CALLBACK_TIMEOUT_MS,
   type OAuthProvider,
 } from './config';
-import type { SupabaseUriHandler } from './UriHandler';
 import { clearServerSideKeyAccessCache } from './serverSideKeyAccess';
+import type { SupabaseUriHandler } from './UriHandler';
 
 /** Default session expiry time in milliseconds (1 hour) */
 const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
