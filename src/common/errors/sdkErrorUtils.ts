@@ -32,6 +32,7 @@ import {
 
 // Local imports - core utilities
 import { extractErrorMessage, isObject, isString } from '@utils/core';
+import { toErrorMessage } from './errorHandlingUtils';
 
 /**
  * Structured representation of a provider HTTP failure.
@@ -613,7 +614,7 @@ export function buildErrorLogData(
   context?: ErrorLogContext,
 ): ErrorLogData {
   const formatted = formatProviderHttpError(err);
-  const rawMessage = err instanceof Error ? err.message : String(err);
+  const rawMessage = toErrorMessage(err);
 
   return {
     ...formatted,

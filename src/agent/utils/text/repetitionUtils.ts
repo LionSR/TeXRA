@@ -1,6 +1,5 @@
 // Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
-import * as difflib from 'difflib';
 
 // Local imports - logging
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
@@ -20,10 +19,9 @@ export interface RepetitionResult {
 }
 
 /**
- * Checks for massive repetition using diff-match-patch
+ * Checks for massive repetition between two responses using diff-match-patch.
+ * Returns true if the longest matching substring exceeds the threshold.
  */
-
-// TODO: the following functions seem not DRY. Need to refactor into one with the more prominent used one as the default.
 export function checkForMassiveRepetition(
   lastResponse: string,
   newResponse: string,
@@ -68,53 +66,6 @@ export function checkForMassiveRepetition(
     logger.error(
       CHANNEL,
       `Error checking repetition with DMP: ${toErrorMessage(err)}`,
-    );
-    throw err;
-  }
-}
-
-/**
- * Checks for massive repetition using difflib (similar to Python implementation)
- */
-export function checkRepetitionDifflib(
-  lastResponse: string,
-  newResponse: string,
-): RepetitionResult {
-  try {
-    const sequenceMatcher = new difflib.SequenceMatcher(
-      null,
-      lastResponse,
-      newResponse,
-    );
-    const ratio = sequenceMatcher.ratio();
-    const match = sequenceMatcher.findLongestMatch(
-      0,
-      lastResponse.length,
-      0,
-      newResponse.length,
-    );
-    const longestMatch = lastResponse.slice(match[0], match[0] + match[2]);
-    const massiveRepetitionDetected =
-      longestMatch.length > REPETITION_DETECTION_THRESHOLD;
-
-    if (massiveRepetitionDetected) {
-      logger.debug(CHANNEL, `Repetition ratio: ${ratio}`);
-      logger.debug(
-        CHANNEL,
-        `Longest matching substring (preview): ${longestMatch.slice(0, REPETITION_PREVIEW_LENGTH)}`,
-      );
-      logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
-    }
-
-    return {
-      massiveRepetitionDetected,
-      ratio,
-      longestMatch,
-    };
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error checking repetition with difflib: ${toErrorMessage(err)}`,
     );
     throw err;
   }
