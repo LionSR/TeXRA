@@ -86,7 +86,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
  * agent being resolved. Parent definitions always load their base variant so
  * that inherited prompts remain consistent with the author's expectations.
  */
-interface LoadAgentOptions {
+export interface LoadAgentOptions {
   preferMultiple?: boolean;
 }
 
