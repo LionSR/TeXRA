@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
 import {
@@ -170,23 +171,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           `Magic link sign-in successful for ${result.session.account.label}`,
         );
       } catch (storeError) {
-        const errorMsg =
-          storeError instanceof Error ? storeError.message : String(storeError);
         logger.error(
           'SupabaseAuthProvider',
-          `Failed to store session: ${errorMsg}`,
+          `Failed to store session: ${toErrorMessage(storeError)}`,
         );
         void vscode.window.showErrorMessage(
           `Sign-in failed: Could not save session`,
         );
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseAuthProvider',
-        `Error processing magic link callback: ${errorMsg}`,
+        `Error processing magic link callback: ${toErrorMessage(error)}`,
       );
-      void vscode.window.showErrorMessage(`Sign-in failed: ${errorMsg}`);
+      void vscode.window.showErrorMessage(`Sign-in failed: ${toErrorMessage(error)}`);
     } finally {
       this.isProcessingCallback = false;
     }
@@ -314,10 +312,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return [this.toVSCodeSession(session)];
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseAuthProvider',
-        `Error loading session: ${errorMsg}`,
+        `Error loading session: ${toErrorMessage(error)}`,
       );
       return [];
     }
@@ -422,10 +419,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         changed: [],
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseAuthProvider',
-        `Error removing session: ${errorMsg}`,
+        `Error removing session: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -475,11 +471,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
             resolve(result.session);
           } catch (error) {
-            const errorMsg =
-              error instanceof Error ? error.message : String(error);
             logger.error(
               'SupabaseAuthProvider',
-              `Error processing OAuth callback: ${errorMsg}`,
+              `Error processing OAuth callback: ${toErrorMessage(error)}`,
             );
             reject(error);
           }
@@ -552,10 +546,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return refreshed;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseAuthProvider',
-        `Error refreshing session: ${errorMsg}`,
+        `Error refreshing session: ${toErrorMessage(error)}`,
       );
       return null;
     }

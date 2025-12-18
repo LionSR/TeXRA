@@ -1,5 +1,6 @@
 // Local imports - logger
 import type { AgentLogger } from '@logger/AgentLogger';
+import { serializeError } from '@utils/core';
 
 /**
  * Type for error boundary functions created by createErrorBoundary.
@@ -10,6 +11,14 @@ export type ErrorBoundaryFn = (
   fn: () => unknown | Promise<unknown>,
 ) => void;
 
+/** Serialize an error for logging, preserving original error reference. */
+function serializeErrorForLog(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return { ...serializeError(error), error };
+  }
+  return { error };
+}
+
 export function createErrorBoundary(
   logger: AgentLogger,
   moduleName: string,
@@ -19,19 +28,11 @@ export function createErrorBoundary(
       const result = fn();
       if (result && typeof (result as Promise<unknown>).catch === 'function') {
         void (result as Promise<unknown>).catch((error) => {
-          const details =
-            error instanceof Error
-              ? { message: error.message, stack: error.stack, error }
-              : { error };
-          logger.error(`[${moduleName}] ${context}`, { data: details });
+          logger.error(`[${moduleName}] ${context}`, { data: serializeErrorForLog(error) });
         });
       }
     } catch (error) {
-      const details =
-        error instanceof Error
-          ? { message: error.message, stack: error.stack, error }
-          : { error };
-      logger.error(`[${moduleName}] ${context}`, { data: details });
+      logger.error(`[${moduleName}] ${context}`, { data: serializeErrorForLog(error) });
     }
   };
 }
