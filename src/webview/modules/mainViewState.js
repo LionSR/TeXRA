@@ -310,14 +310,11 @@ export class MainViewState {
     const normalizedSessionType = normalizeSessionType(sessionTypeValue);
     const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
     if (activeSelectId) {
-      const defaultAgent = getSessionDefaultAgent(normalizedSessionType);
       const agentValue = safeGetElementValue(activeSelectId) ?? '';
-      const resolvedAgent =
-        agentValue || getSelectDefaultValue(activeSelectId, defaultAgent);
-      if (!agentValue && resolvedAgent) {
-        safeSetElementValue(activeSelectId, resolvedAgent);
-      }
-      state.agent = resolvedAgent ?? '';
+      // Save the actual DOM value, not a computed default.
+      // DOM modification during save() can trigger unexpected change events.
+      // If agent is empty, restore() or applySessionType() will handle defaults.
+      state.agent = agentValue;
       state.isToolUseAgent = normalizedSessionType === SESSION_TYPES.TOOL_USE;
     }
 
