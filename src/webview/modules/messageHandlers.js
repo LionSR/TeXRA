@@ -174,11 +174,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
         this._applyModelOptions(select, m.options);
       },
-      [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: (m) => {
+      /**
+       * Handles SET_AGENT_OPTIONS command to update agent dropdowns.
+       *
+       * Like SET_MODEL_OPTIONS, waits for select elements to appear before applying.
+       * Uses a disposer pattern to handle race conditions when multiple messages
+       * arrive before elements are ready.
+       */
+      [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: async (m) => {
         const optionsPayload = m.options ?? {};
-        let applied = false;
-
-        [
+        const configs = [
           {
             id: AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
             html: optionsPayload.workflow ?? '',
@@ -187,20 +192,54 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             id: AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
             html: optionsPayload.toolUse ?? '',
           },
-        ].forEach(({ id, html }) => {
-          if (!id) {
-            return;
-          }
-          const select = document.getElementById(id);
+        ];
+
+        let applied = false;
+
+        for (const { id, html } of configs) {
+          if (!id) continue;
+
+          let select = document.getElementById(id);
           if (!isSelectLikeElement(select)) {
-            return;
+            // Wait for element to appear, similar to SET_MODEL_OPTIONS
+            const waitHandle = waitForElement(`#${id}`);
+
+            // Cancel any previous waiter for this element
+            const waiterKey = `_disposeAgentWaiter_${id}`;
+            if (this[waiterKey]) {
+              this[waiterKey]();
+            }
+
+            const disposeHandle = () => {
+              waitHandle.dispose();
+              if (this[waiterKey] === disposeHandle) {
+                this[waiterKey] = null;
+              }
+            };
+            this[waiterKey] = disposeHandle;
+
+            select = await waitHandle.promise;
+
+            // Check if superseded or disposed
+            if (this[waiterKey] !== disposeHandle || this._isDisposed) {
+              continue;
+            }
+            this[waiterKey] = null;
+
+            if (!isSelectLikeElement(select)) {
+              console.warn(
+                `SET_AGENT_OPTIONS: Agent select '${id}' not found after waiting`,
+              );
+              continue;
+            }
           }
+
           this._applyAgentOptions(select, html);
           applied = true;
-        });
+        }
 
         if (!applied) {
-          console.warn('SET_AGENT_OPTIONS: Agent select elements not found');
+          console.warn('SET_AGENT_OPTIONS: No agent select elements found');
         }
       },
       /**
@@ -679,7 +718,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _restoreModelSelection(selectElement, previousValue) {
     const savedValue = mainViewState.get?.()?.model ?? '';
     // Prioritize saved state over previous UI value for consistency
-    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+    const restored = this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+
+    // If restoration failed but we have a saved value, preserve it in state.
+    // The DOM will show the fallback, but state keeps the user's preference.
+    // This prevents losing the selection when options temporarily change
+    // (e.g., due to API key changes or provider availability).
+    if (!restored && savedValue) {
+      mainViewState.update({ model: savedValue });
+    }
   }
 
   _getActiveAgentSelection() {
