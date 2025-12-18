@@ -234,7 +234,8 @@ export class RemoteAgentLoader {
           throw error;
         }
         // Otherwise, store the error and continue to next candidate
-        lastError = error instanceof Error ? error : new Error(toErrorMessage(error));
+        lastError =
+          error instanceof Error ? error : new Error(toErrorMessage(error));
         logger.debug(
           CHANNEL,
           `Failed to load candidate "${candidateName}", trying next: ${lastError.message}`,
@@ -292,7 +293,10 @@ export class RemoteAgentLoader {
         agentCategory: row.agent_category,
       })) as RemoteAgentMetadata[];
     } catch (error) {
-      logger.error(CHANNEL, `Error listing remote agents: ${toErrorMessage(error)}`);
+      logger.error(
+        CHANNEL,
+        `Error listing remote agents: ${toErrorMessage(error)}`,
+      );
       return [];
     }
   }

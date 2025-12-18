@@ -184,7 +184,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'SupabaseAuthProvider',
         `Error processing magic link callback: ${toErrorMessage(error)}`,
       );
-      void vscode.window.showErrorMessage(`Sign-in failed: ${toErrorMessage(error)}`);
+      void vscode.window.showErrorMessage(
+        `Sign-in failed: ${toErrorMessage(error)}`,
+      );
     } finally {
       this.isProcessingCallback = false;
     }

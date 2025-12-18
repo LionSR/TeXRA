@@ -72,7 +72,10 @@ export class SupabaseClient {
       );
       return session?.accessToken || null;
     } catch (error) {
-      logger.error('SupabaseClient', `Error getting access token: ${toErrorMessage(error)}`);
+      logger.error(
+        'SupabaseClient',
+        `Error getting access token: ${toErrorMessage(error)}`,
+      );
       return null;
     }
   }
@@ -134,7 +137,10 @@ export class SupabaseClient {
       }
       return data.user;
     } catch (error) {
-      logger.error('SupabaseClient', `Error getting user: ${toErrorMessage(error)}`);
+      logger.error(
+        'SupabaseClient',
+        `Error getting user: ${toErrorMessage(error)}`,
+      );
       return null;
     }
   }

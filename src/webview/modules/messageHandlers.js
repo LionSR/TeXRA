@@ -720,7 +720,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _restoreModelSelection(selectElement, previousValue) {
     const savedValue = mainViewState.get?.()?.model ?? '';
     // Prioritize saved state over previous UI value for consistency
-    const restored = this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+    const restored = this._restoreSelectValue(selectElement, [
+      savedValue,
+      previousValue,
+    ]);
 
     // If restoration failed but we have a saved value, preserve it in state.
     // The DOM will show the fallback, but state keeps the user's preference.

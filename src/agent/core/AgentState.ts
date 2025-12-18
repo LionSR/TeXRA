@@ -131,7 +131,9 @@ export const AgentRunStateSnapshotSchema = z.object({
  * Single source of truth for AgentRunState serialization format.
  * Uses z.output<> to get the type after parsing (all fields required).
  */
-export type AgentRunStateSnapshot = z.output<typeof AgentRunStateSnapshotSchema>;
+export type AgentRunStateSnapshot = z.output<
+  typeof AgentRunStateSnapshotSchema
+>;
 
 export class AgentRunState {
   public totalRounds: number;
@@ -147,7 +149,9 @@ export class AgentRunState {
   /** Deserialize from a snapshot. Validates and applies schema defaults. */
   static fromSnapshot(snapshot: unknown): AgentRunState {
     const parsed = AgentRunStateSnapshotSchema.parse(snapshot);
-    const usageAccumulator = RunUsageAccumulator.fromSnapshot(parsed.usageAccumulator);
+    const usageAccumulator = RunUsageAccumulator.fromSnapshot(
+      parsed.usageAccumulator,
+    );
     const state = new AgentRunState(usageAccumulator);
     state.totalRounds = parsed.totalRounds;
     state.totalResponseTimeMs = parsed.totalResponseTimeMs;
