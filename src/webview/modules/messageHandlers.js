@@ -179,7 +179,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
        *
        * Like SET_MODEL_OPTIONS, waits for select elements to appear before applying.
        * Uses a disposer pattern to handle race conditions when multiple messages
-       * arrive before elements are ready.
+       * arrive before elements are ready. Aborts entirely if superseded to prevent
+       * stale data from overwriting newer options.
        */
       [MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS]: async (m) => {
         const optionsPayload = m.options ?? {};
@@ -220,9 +221,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
             select = await waitHandle.promise;
 
-            // Check if superseded or disposed
+            // Check if superseded or disposed - abort entirely to prevent
+            // stale data from this message overwriting newer options
             if (this[waiterKey] !== disposeHandle || this._isDisposed) {
-              continue;
+              return;
             }
             this[waiterKey] = null;
 
