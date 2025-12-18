@@ -344,31 +344,3 @@ export function scrollToBottom(element) {
     element.scrollTop = element.scrollHeight;
   }
 }
-
-/**
- * Clear the inner HTML of an element.
- * @param {HTMLElement|string} elementOrId - The element or its ID
- */
-export function clearElementContent(elementOrId) {
-  const element =
-    typeof elementOrId === 'string'
-      ? safeGetElementById(elementOrId)
-      : elementOrId;
-  if (element) {
-    element.innerHTML = '';
-  }
-}
-
-/**
- * Safely set text content of a child element matching a selector.
- * @param {HTMLElement} parent - The parent element to search within
- * @param {string} selector - CSS selector for the child element
- * @param {string} text - The text content to set
- */
-export function safeSetTextContent(parent, selector, text) {
-  if (!parent) return;
-  const element = parent.querySelector(selector);
-  if (element) {
-    element.textContent = text;
-  }
-}
