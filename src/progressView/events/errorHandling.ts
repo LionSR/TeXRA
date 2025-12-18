@@ -28,11 +28,15 @@ export function createErrorBoundary(
       const result = fn();
       if (result && typeof (result as Promise<unknown>).catch === 'function') {
         void (result as Promise<unknown>).catch((error) => {
-          logger.error(`[${moduleName}] ${context}`, { data: serializeErrorForLog(error) });
+          logger.error(`[${moduleName}] ${context}`, {
+            data: serializeErrorForLog(error),
+          });
         });
       }
     } catch (error) {
-      logger.error(`[${moduleName}] ${context}`, { data: serializeErrorForLog(error) });
+      logger.error(`[${moduleName}] ${context}`, {
+        data: serializeErrorForLog(error),
+      });
     }
   };
 }

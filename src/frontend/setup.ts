@@ -185,7 +185,10 @@ export async function refreshModelListIfNeeded(): Promise<void> {
     );
     logger.info('extension', 'Model list refresh completed successfully');
   } catch (err) {
-    logger.error('extension', `Failed to refresh model list: ${toErrorMessage(err)}`);
+    logger.error(
+      'extension',
+      `Failed to refresh model list: ${toErrorMessage(err)}`,
+    );
   }
 }
 
