@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
-// Local imports - logging
+// Local imports - agent
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -15,8 +15,6 @@ import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
 } from '@utils/config';
-
-// Local file imports
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
@@ -100,7 +98,7 @@ export const ToolUseSnapshotStore = {
       streamId: payload.streamId,
       agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
-      store: payload.store.toJSON(),
+      store: payload.store.toSnapshot(),
       lastUpdated: Date.now(),
     } as const;
 
