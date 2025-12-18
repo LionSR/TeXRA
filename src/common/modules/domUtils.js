@@ -5,14 +5,29 @@ import {
   CHEVRON_RIGHT_CLASS,
 } from './iconConstants.js';
 
-function getTagName(element) {
+/**
+ * Safely get the lowercase tag name of an element.
+ * @param {Element|null|undefined} element - The element to check
+ * @returns {string} The lowercase tag name, or empty string if invalid
+ */
+export function getTagName(element) {
   return typeof element?.tagName === 'string'
     ? element.tagName.toLowerCase()
     : '';
 }
 
+/**
+ * Check if an element has a specific tag name (case-insensitive).
+ * @param {Element|null|undefined} element - The element to check
+ * @param {string} tagName - The tag name to compare against
+ * @returns {boolean} True if the element has the specified tag name
+ */
+export function isTagName(element, tagName) {
+  return getTagName(element) === tagName.toLowerCase();
+}
+
 function isVsCodeSelectElement(element) {
-  return getTagName(element) === 'vscode-single-select';
+  return isTagName(element, 'vscode-single-select');
 }
 
 function setChevronIconImpl(
@@ -22,7 +37,7 @@ function setChevronIconImpl(
 ) {
   if (!element) return;
   let icon = element;
-  if (icon.tagName.toLowerCase() !== 'i') {
+  if (!isTagName(icon, 'i')) {
     icon = element.querySelector('i');
     if (!icon) {
       icon = document.createElement('i');
@@ -302,5 +317,30 @@ export function setExpandedState(element, selector, isExpanded) {
   const parent = element?.closest(selector);
   if (parent) {
     parent.dataset.expanded = isExpanded ? 'true' : 'false';
+  }
+}
+
+/**
+ * Scroll an element to its bottom.
+ * Handles both VS Code webview elements (scrollPos/scrollMax) and standard DOM elements.
+ * @param {HTMLElement} element - The element to scroll
+ */
+export function scrollToBottom(element) {
+  if (!element) {
+    return;
+  }
+
+  // Handle VS Code webview scroll elements
+  if (
+    typeof element.scrollPos === 'number' &&
+    typeof element.scrollMax === 'number'
+  ) {
+    element.scrollPos = element.scrollMax;
+    return;
+  }
+
+  // Handle standard DOM elements
+  if ('scrollTop' in element && 'scrollHeight' in element) {
+    element.scrollTop = element.scrollHeight;
   }
 }
