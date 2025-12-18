@@ -16,12 +16,11 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 /**
  * Create file related handlers.
  * @param {Object} ctx
- * @param {Function} ctx.postHandle
  * @param {Function} ctx.getElement
  * @param {Function} ctx.setToggleIcon
  */
 export function createFileHandlers(ctx) {
-  const { postHandle, getElement, setToggleIcon } = ctx;
+  const { getElement, setToggleIcon } = ctx;
 
   /**
    * Helper to get restoration options for a file select.
@@ -36,20 +35,22 @@ export function createFileHandlers(ctx) {
     };
   };
 
+  // Note: File handlers do NOT call postHandle() because:
+  // 1. fileSelect.update already handles state management
+  // 2. Calling restore() after would be redundant and could cause issues
+  //    if the state was modified during the async file list refresh
   const createSetFileHandler = (fileType, domId) => (message) => {
     const options = getRestorationOptions(domId);
     fileSelect.update(domId, message.files, options);
-    postHandle();
   };
 
   const createFileSelectedHandler = (fileType, domId) => (message) => {
     safeSetElementValue(domId, message.filePath);
-    postHandle();
+    mainViewState.update({ [domId]: message.filePath });
   };
 
   const createSetFilesHandler = (fileType, listId, toggleId) => (message) => {
     fileList.update(listId, toggleId, message.files);
-    postHandle();
   };
 
   const handlers = {};
@@ -96,18 +97,17 @@ export function createFileHandlers(ctx) {
       const toggleIcon = getElement('toggleMediaFiles');
       setToggleIcon(toggleIcon, true);
     }
-
-    postHandle();
+    // No postHandle needed - fileList.update handles state
   }
 
   function handleSetDefaultOutputFiles(message) {
     fileSelect.setAgentDefaultOutputFiles(message.files || []);
-    postHandle();
+    // No postHandle needed - just storing defaults
   }
 
   function handleSetRecentCommits(message) {
     fileSelect.handleRecentCommits(message);
-    postHandle();
+    // No postHandle needed - handleRecentCommits updates the dropdown
   }
 
   function handleSetCurrentFile(message) {
@@ -115,7 +115,7 @@ export function createFileHandlers(ctx) {
       fileType: message.fileType,
       filePath: message.filePath,
     });
-    postHandle();
+    // No postHandle needed - handleSetCurrentFile dispatches change event
   }
 
   function handleSetSelectedCommit(message) {
@@ -123,7 +123,7 @@ export function createFileHandlers(ctx) {
       commitHash: message.commitHash,
       commitLabel: message.commitLabel,
     });
-    postHandle();
+    // No postHandle needed - handleSetSelectedCommit dispatches change event
   }
 
   function handleSetOpenedFiles(message) {
@@ -143,7 +143,7 @@ export function createFileHandlers(ctx) {
 
       fileList.update(multipleFileId, toggleId, filesToAdd);
     }
-    postHandle();
+    // No postHandle needed - fileList.update handles state
   }
 
   function handleSetBaseFile(message) {
@@ -158,7 +158,7 @@ export function createFileHandlers(ctx) {
       // Read value after update to get the actual restored value
       fileSelect.updateEdited(currentBaseFileDiv.value);
     }
-    postHandle();
+    // No postHandle needed - fileSelect.update handles state
   }
 
   handlers[MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES] =
