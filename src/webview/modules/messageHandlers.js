@@ -744,6 +744,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._disposeModelWaiter();
       this._disposeModelWaiter = null;
     }
+    // Clean up any pending agent waiters from previous setup
+    this._cleanupAgentWaiters();
     super.setup();
     this._setupAgentSelectListeners();
     if (requestData) {
@@ -777,12 +779,28 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._tooltipListeners = [];
   }
 
+  /** Clean up any pending agent waiters to prevent dangling MutationObservers. */
+  _cleanupAgentWaiters() {
+    // Clean up waiters for both agent select types
+    [
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+    ].forEach((id) => {
+      const waiterKey = `_disposeAgentWaiter_${id}`;
+      if (this[waiterKey]) {
+        this[waiterKey]();
+        this[waiterKey] = null;
+      }
+    });
+  }
+
   cleanup() {
     this._isDisposed = true;
     if (this._disposeModelWaiter) {
       this._disposeModelWaiter();
       this._disposeModelWaiter = null;
     }
+    this._cleanupAgentWaiters();
 
     this._cleanupTooltipListeners();
     super.cleanup();
