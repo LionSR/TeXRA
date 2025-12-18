@@ -3,5 +3,11 @@
  */
 
 export { toPosixPath, getPathSegments, normalizeLatexPath } from './pathCore';
-export { isNonEmptyString, isString, extractErrorMessage } from './stringCore';
+export {
+  isNonEmptyString,
+  isString,
+  extractErrorMessage,
+  serializeError,
+  type SerializedError,
+} from './stringCore';
 export { contentToString, isObject, type MessageContent } from './typeGuards';
