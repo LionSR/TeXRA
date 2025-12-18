@@ -118,7 +118,8 @@ export async function runToolUseCycle<C = unknown>(
  */
 function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
-  const interactions: FileInteractionStateSnapshot = store.workspace.interactions.toSnapshot();
+  const interactions: FileInteractionStateSnapshot =
+    store.workspace.interactions.toSnapshot();
 
   if (interactions.edits.length === 0) {
     return;
