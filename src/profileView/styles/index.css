@@ -51,11 +51,13 @@ h2 {
   color: var(--vscode-foreground);
 }
 
-/* Tier badge - extends .badge from common.css */
+/* Tier badge */
 .tier-badge {
+  display: inline-block;
   padding: var(--spacing-small) var(--spacing-medium);
   border-radius: var(--border-radius);
   text-transform: uppercase;
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
@@ -146,8 +148,12 @@ h2 {
   max-width: 300px;
 }
 
-/* Visibility badges - extends .badge from common.css */
+/* Visibility badges */
 .visibility-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
   text-transform: lowercase;
 }
 
@@ -161,15 +167,24 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Category badges - extends .badge from common.css */
+/* Category badges */
 .category-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Multi-output badges - extends .badge from common.css */
+/* Multi-output badges */
 .multi-output-badge {
-  /* Badge styling from common.css */
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
 }
 
 .multi-output-badge.supported {
