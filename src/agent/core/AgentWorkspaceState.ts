@@ -28,7 +28,9 @@ export const ResponseAssemblyStateSnapshotSchema = z.object({
   lastResponse: z.string().default(''),
   accumulatedOutput: z.string().default(''),
 });
-export type ResponseAssemblyStateSnapshot = z.output<typeof ResponseAssemblyStateSnapshotSchema>;
+export type ResponseAssemblyStateSnapshot = z.output<
+  typeof ResponseAssemblyStateSnapshotSchema
+>;
 
 /**
  * Workspace assembly state keeps track of the model's textual output so the
@@ -114,7 +116,10 @@ export class FileInteractionState {
     const state = new FileInteractionState();
     parsed.readFiles.forEach((path) => state.readFiles.add(path));
     for (const entry of parsed.edits) {
-      state.edits.set(entry.path, { added: entry.added, removed: entry.removed });
+      state.edits.set(entry.path, {
+        added: entry.added,
+        removed: entry.removed,
+      });
     }
     return state;
   }
@@ -202,15 +207,20 @@ export class FileInteractionState {
  * Legacy snapshots stored plain strings; new snapshots store FileLocation objects.
  * Transform normalizes legacy strings to FileLocation on parse.
  */
-const MediaFileEntrySchema = z.union([z.string(), FileLocationSchema]).transform(
-  (entry): FileLocation => (typeof entry === 'string' ? pathToLocation(entry) : entry),
-);
+const MediaFileEntrySchema = z
+  .union([z.string(), FileLocationSchema])
+  .transform(
+    (entry): FileLocation =>
+      typeof entry === 'string' ? pathToLocation(entry) : entry,
+  );
 
 /** Schema for MediaAttachmentState serialization */
 export const MediaAttachmentStateSnapshotSchema = z.object({
   files: z.array(MediaFileEntrySchema).default([]),
 });
-export type MediaAttachmentStateSnapshot = z.output<typeof MediaAttachmentStateSnapshotSchema>;
+export type MediaAttachmentStateSnapshot = z.output<
+  typeof MediaAttachmentStateSnapshotSchema
+>;
 
 export class MediaAttachmentState {
   public readonly files: FileLocation[] = [];
@@ -265,7 +275,9 @@ export const ReasoningCacheStateSnapshotSchema = z.object({
   thinkingBlocks: z.array(ThinkingBlockSchema).default([]),
   thinkingAdded: z.boolean().default(false),
 });
-export type ReasoningCacheStateSnapshot = z.output<typeof ReasoningCacheStateSnapshotSchema>;
+export type ReasoningCacheStateSnapshot = z.output<
+  typeof ReasoningCacheStateSnapshotSchema
+>;
 
 export class ReasoningCacheState {
   public thinkingBlocks: ThinkingBlock[] = [];
@@ -342,7 +354,9 @@ export class ServerToolContentState {
 export const DocumentStatsStateSnapshotSchema = z.object({
   texcountStats: z.string().nullable().default(null),
 });
-export type DocumentStatsStateSnapshot = z.output<typeof DocumentStatsStateSnapshotSchema>;
+export type DocumentStatsStateSnapshot = z.output<
+  typeof DocumentStatsStateSnapshotSchema
+>;
 
 export class DocumentStatsState {
   public texcountStats: string | null = null;
@@ -442,11 +456,20 @@ export class TodoState {
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
 export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSnapshotSchema.default({ lastResponse: '', accumulatedOutput: '' }),
+  assembly: ResponseAssemblyStateSnapshotSchema.default({
+    lastResponse: '',
+    accumulatedOutput: '',
+  }),
   media: MediaAttachmentStateSnapshotSchema.default({ files: [] }),
-  reasoning: ReasoningCacheStateSnapshotSchema.default({ thinkingBlocks: [], thinkingAdded: false }),
+  reasoning: ReasoningCacheStateSnapshotSchema.default({
+    thinkingBlocks: [],
+    thinkingAdded: false,
+  }),
   document: DocumentStatsStateSnapshotSchema.default({ texcountStats: null }),
-  interactions: FileInteractionStateSnapshotSchema.default({ readFiles: [], edits: [] }),
+  interactions: FileInteractionStateSnapshotSchema.default({
+    readFiles: [],
+    edits: [],
+  }),
   todos: TodoStateSnapshotSchema.default({ todos: [] }),
 });
 
@@ -532,4 +555,3 @@ export class AgentWorkspaceState {
     this.serverToolContent.reset();
   }
 }
-
