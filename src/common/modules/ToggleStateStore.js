@@ -63,30 +63,12 @@ export class ToggleStateStore {
   }
 
   /**
-   * Get all entries as a plain object.
-   * @returns {Object<string, boolean>} Object mapping ids to states
-   */
-  toObject() {
-    return Object.fromEntries(this._states);
-  }
-
-  /**
    * Load state from serialized array data (e.g., from entries()).
    * @param {Array<[string, boolean]>} data - Array of [id, state] pairs
    */
   load(data) {
     if (Array.isArray(data)) {
       this._states = new Map(data);
-    }
-  }
-
-  /**
-   * Load state from a plain object.
-   * @param {Object<string, boolean>} data - Object mapping ids to states
-   */
-  loadFromObject(data) {
-    if (data && typeof data === 'object') {
-      this._states = new Map(Object.entries(data));
     }
   }
 }
