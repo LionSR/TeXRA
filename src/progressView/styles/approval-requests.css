@@ -22,7 +22,7 @@
 .approval-request__path {
   font-family: var(--vscode-editor-font-family);
   font-size: 0.85rem;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   word-break: break-word;
 }
 
@@ -44,7 +44,7 @@
 }
 
 .approval-request__diff-label {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: 0.75rem;
   opacity: 0.9;
 }

@@ -9,7 +9,7 @@
   flex: 1;
   min-width: 200px;
   font-size: var(--font-size-sm);
-  border-left: var(--border-thin) solid var(--vscode-panel-border);
+  border-left: var(--border-thin) solid var(--color-border);
   height: 100%;
   overflow: visible;
   background-color: var(--background-color);
@@ -23,7 +23,7 @@
 
 .clear-all-container {
   flex-shrink: 0;
-  border-top: var(--border-thin) solid var(--vscode-panel-border);
+  border-top: var(--border-thin) solid var(--color-border);
   padding: var(--spacing-small);
 }
 
