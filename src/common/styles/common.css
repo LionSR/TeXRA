@@ -6,6 +6,19 @@
  * and make the codebase more maintainable.
  */
 
+/* ==========================================================================
+   Body Reset - Base styling shared across all views
+   Each view can override with layout-specific properties
+   ========================================================================== */
+
+body {
+  margin: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-editor-foreground);
+  box-sizing: border-box;
+}
+
 :root {
   /* Colors */
   --background-color: var(--vscode-sideBar-background);
@@ -144,7 +157,7 @@ vscode-toolbar-button {
    Utility Classes
    ========================================================================== */
 
-/* Visibility */
+/* Visibility - Single source of truth for show/hide patterns */
 .hidden {
   display: none;
 }
@@ -153,11 +166,114 @@ vscode-toolbar-button {
   display: flex;
 }
 
+/* Block-level visibility toggle (for containers that should be block when visible) */
+.hidden-block {
+  display: none;
+}
+
+.hidden-block.is-visible {
+  display: block;
+}
+
 /* Text utilities */
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Meta/secondary text - description foreground with smaller font */
+.text-meta {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ==========================================================================
+   Flex Layout Utilities
+   ========================================================================== */
+
+/* Flex row with centered alignment */
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Flex row with small gap */
+.flex-row-gap-sm {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+/* Flex row with medium gap */
+.flex-row-gap-md {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+/* Flex column layout */
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Flex column with small gap */
+.flex-col-gap-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+}
+
+/* Flex column with medium gap */
+.flex-col-gap-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+/* ==========================================================================
+   Badge Base Class
+   ========================================================================== */
+
+/* Base badge styling - extend with color variants */
+.badge {
+  display: inline-block;
+  padding: var(--spacing-tiny) var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+/* Badge with flex alignment (for icons) */
+.badge-flex {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   Panel/Box Container Base
+   ========================================================================== */
+
+/* Standard panel box with border */
+.panel-box {
+  background-color: var(--background-color);
+  border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+  border-radius: var(--border-radius);
+  padding: var(--spacing-medium);
+}
+
+/* Panel box with larger border radius */
+.panel-box-lg {
+  background-color: var(--background-color);
+  border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
+  border-radius: var(--border-radius-large);
+  padding: var(--spacing-large);
 }
 
 /* ==========================================================================
