@@ -1,18 +1,15 @@
 /**
  * Base styles for Webview
  * Core layout and structure
+ * Note: Base body styles (margin, font-family, font-size, box-sizing) inherited from common.css
  */
 
 body {
   background-color: transparent;
   color: var(--text-color);
-  font-family: var(--font-family);
-  font-size: var(--font-size);
   font-weight: var(--font-weight);
   min-height: 100vh;
-  margin: 0;
   padding: var(--spacing-medium);
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
 }
@@ -105,7 +102,7 @@ vscode-option.disabled-option,
 vscode-option.disabled-model,
 vscode-option.disabled-agent,
 vscode-option[data-requires-key='true'] {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   opacity: var(--opacity-subtle);
   font-style: italic;
   background-color: var(--vscode-input-background);

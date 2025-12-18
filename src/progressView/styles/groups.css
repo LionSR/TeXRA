@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   background-color: transparent;
-  border-left: var(--border-medium) solid var(--vscode-panel-border);
+  border-left: var(--border-medium) solid var(--color-border);
 }
 
 /* Minimal styling for top-level task headers */
@@ -111,6 +111,6 @@
   top: 50%;
   width: var(--spacing-medium);
   height: var(--border-thin);
-  background-color: var(--vscode-panel-border);
+  background-color: var(--color-border);
   display: none; /* Start hidden, only show on advanced view option */
 }

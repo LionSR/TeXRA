@@ -1,11 +1,10 @@
 /*
  * History view styles
+ * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
  */
 
 /* Base styles */
 body {
-  font-family: var(--font-family);
-  color: var(--vscode-editor-foreground);
   background-color: var(--vscode-editor-background);
   padding: var(--spacing-xlarge);
 }
@@ -44,7 +43,7 @@ h2 {
 
 .match-count {
   font-size: var(--font-size-sm);
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   min-width: calc(var(--height-button) * 2);
   text-align: center;
 }
@@ -88,7 +87,7 @@ mark.current-match {
 }
 
 .history-timestamp {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-small);
 }
@@ -127,7 +126,7 @@ mark.current-match {
 .empty-state {
   text-align: center;
   margin-top: calc(var(--spacing-xlarge) + var(--spacing-xlarge));
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
 }
 
 /* Collapsible content */
@@ -176,7 +175,7 @@ mark.current-match {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-small);
-  padding: var(--spacing-xsmall) var(--spacing-medium);
+  padding: var(--spacing-tiny) var(--spacing-medium);
   border-radius: var(--border-radius);
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -204,6 +203,6 @@ mark.current-match {
 
 /* Empty/unset value styling */
 .history-none {
-  color: var(--vscode-descriptionForeground);
+  color: var(--color-text-secondary);
   font-style: italic;
 }
