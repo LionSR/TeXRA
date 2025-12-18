@@ -1,6 +1,7 @@
 // Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
+import { ToggleStateStore } from '@common/ToggleStateStore.js';
 
 /**
  * Manages task groups in the progress view.
@@ -87,15 +88,11 @@ class TaskGroups {
       return;
     }
 
-    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'status',
-    );
-    if (hasStatusUpdate && updates.status) {
+    if (Object.hasOwn(updates, 'status') && updates.status) {
       group.status = updates.status;
     }
     if (
-      Object.prototype.hasOwnProperty.call(updates, 'endTime') &&
+      Object.hasOwn(updates, 'endTime') &&
       updates.endTime !== undefined &&
       updates.endTime !== null
     ) {
@@ -137,52 +134,6 @@ class TaskGroups {
     if (children.size === 0) {
       this.childrenByParent.delete(parentId);
     }
-  }
-}
-
-/**
- * Manages group toggle states with persistence.
- */
-class ToggleStates {
-  constructor(saveCallback) {
-    this.states = new Map();
-    this.saveCallback = saveCallback;
-  }
-
-  set(id, collapsed) {
-    this.states.set(id, collapsed);
-    this.saveCallback?.();
-  }
-
-  get(id) {
-    return this.states.get(id);
-  }
-
-  clearSelection(ids) {
-    if (!Array.isArray(ids)) {
-      return;
-    }
-    ids.forEach((id) => {
-      if (id) {
-        this.states.delete(id);
-      }
-    });
-    this.saveCallback?.();
-  }
-
-  clearAll() {
-    this.states.clear();
-    this.saveCallback?.();
-  }
-
-  /** Get all entries for serialization */
-  entries() {
-    return [...this.states.entries()];
-  }
-
-  /** Load from serialized data */
-  load(data) {
-    this.states = new Map(data);
   }
 }
 
@@ -267,7 +218,7 @@ class RunScopedMap {
       return null;
     }
     const runs = this.getStreamMap(streamId);
-    return runs ? runs.get(runId) || null : null;
+    return runs?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
@@ -302,7 +253,7 @@ class RunScopedMap {
     if (targetStream == null) {
       return null;
     }
-    return this._data.get(targetStream) || null;
+    return this._data.get(targetStream) ?? null;
   }
 
   streamEntries() {
@@ -336,17 +287,17 @@ export class ProgressViewState {
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
-    this.toggleStates = new ToggleStates(() => this.saveToggleStates());
+    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
     this.streamStatuses = new StreamStatuses();
     this.executionIdAvailability = new ExecutionIdAvailability();
   }
 
   _resolveStreamId(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       return streamId;
     }
 
-    if (this.activeStream !== undefined && this.activeStream !== null) {
+    if (this.activeStream != null) {
       return this.activeStream;
     }
 
@@ -546,12 +497,7 @@ export class ProgressViewState {
   }
 
   setPendingInstruction(streamId, instruction) {
-    if (
-      streamId === undefined ||
-      streamId === null ||
-      !instruction ||
-      !instruction.text
-    ) {
+    if (streamId == null || !instruction || !instruction.text) {
       return;
     }
 
@@ -568,10 +514,10 @@ export class ProgressViewState {
   }
 
   takePendingInstruction(streamId) {
-    if (streamId === undefined || streamId === null) {
+    if (streamId == null) {
       return null;
     }
-    const pending = this.pendingInstructions.get(streamId) || null;
+    const pending = this.pendingInstructions.get(streamId) ?? null;
     if (pending) {
       this.pendingInstructions.delete(streamId);
     }
@@ -579,7 +525,7 @@ export class ProgressViewState {
   }
 
   clearPendingInstruction(streamId) {
-    if (streamId === undefined || streamId === null) {
+    if (streamId == null) {
       return;
     }
     this.pendingInstructions.delete(streamId);
@@ -619,7 +565,7 @@ export class ProgressViewState {
   }
 
   clearRunInstructions(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -646,7 +592,7 @@ export class ProgressViewState {
   }
 
   clearRunFiles(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -675,7 +621,7 @@ export class ProgressViewState {
   }
 
   clearRunMissingOutputs(streamId) {
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
       if (targetStream == null) {
         return;
@@ -718,7 +664,7 @@ export class ProgressViewState {
       return;
     }
 
-    if (streamId !== undefined && streamId !== null) {
+    if (streamId != null) {
       this.runUsage.clearStream(streamId);
       return;
     }

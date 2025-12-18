@@ -21,6 +21,7 @@ import {
   safeGetElementChecked,
   isSelectLikeElement,
   getSelectedOptionElement,
+  isTagName,
 } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -333,8 +334,7 @@ export class SettingsButtonManager extends BaseUIManager {
           let sessionType;
           const target = event?.target;
           if (target instanceof HTMLElement) {
-            const isRadio = target.tagName.toLowerCase() === 'vscode-radio';
-            if (isRadio) {
+            if (isTagName(target, 'vscode-radio')) {
               sessionType =
                 target.dataset.sessionType || target.getAttribute('value');
             }

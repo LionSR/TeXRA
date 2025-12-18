@@ -1,8 +1,8 @@
 // Local imports - common
-// None
+import { safeGetElementById } from './domUtils.js';
 
 /**
- * Base class for DOM handlers.
+ * Base class for DOM handlers and UI managers.
  * Stores manager instances and cleans up event listeners and managers.
  */
 export class BaseDomHandler {
@@ -21,12 +21,36 @@ export class BaseDomHandler {
   addListener(elementOrId, event, handler) {
     const element =
       typeof elementOrId === 'string'
-        ? document.getElementById(elementOrId)
+        ? safeGetElementById(elementOrId)
         : elementOrId;
     if (element) {
       element.addEventListener(event, handler);
       this._listeners.push({ element, event, handler });
     }
+  }
+
+  /**
+   * Remove a previously registered event handler and stop tracking it.
+   * @param {HTMLElement|string} elementOrId - Element or its ID
+   * @param {string} event - Event type
+   * @param {EventListenerOrEventListenerObject} handler - Handler function
+   */
+  removeListener(elementOrId, event, handler) {
+    const element =
+      typeof elementOrId === 'string'
+        ? safeGetElementById(elementOrId)
+        : elementOrId;
+    if (!element) {
+      return;
+    }
+
+    element.removeEventListener(event, handler);
+    this._listeners = this._listeners.filter(
+      (listener) =>
+        listener.element !== element ||
+        listener.event !== event ||
+        listener.handler !== handler,
+    );
   }
 
   /**
