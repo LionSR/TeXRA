@@ -5,7 +5,10 @@ import { strict as assert } from 'assert';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { createSharedStore } from '@agent/core/AgentSharedStore';
+import {
+  createSharedStore,
+  type AgentSharedStoreSnapshot,
+} from '@agent/core/AgentSharedStore';
 import {
   resumeFromSnapshot,
   sendFollowUp,
@@ -19,7 +22,7 @@ import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersiste
 
 describe('ToolUseFollowUpCoordinator', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
-  const workspace = new AgentWorkspaceState();
+  const workspace = AgentWorkspaceState.create();
   const store = createSharedStore({
     roundIndex: 0,
     runState: new AgentRunState(),
@@ -41,7 +44,7 @@ describe('ToolUseFollowUpCoordinator', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    store: store.toJSON(),
+    store: store.toSnapshot(),
     lastUpdated: Date.now(),
   };
 
