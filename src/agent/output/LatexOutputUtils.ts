@@ -1,8 +1,8 @@
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { runLatexFormatter } from '@latex/texFormatter';
 import { WorkspaceFS } from '@utils/files';
+import { runLatexFormatter } from '@latex/texFormatter';
 
 import type { FileLocation } from './types';
 
