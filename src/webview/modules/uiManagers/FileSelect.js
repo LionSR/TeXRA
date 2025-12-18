@@ -64,10 +64,20 @@ export class FileSelect {
       safeSetElementValue(id, restoredValue);
     }
 
-    // Sync state: update to restored value, or clear stale value if file no longer exists
-    const hasStaleState = storedValue && !sortedFiles.includes(storedValue);
-    if (restoredValue || hasStaleState) {
-      mainViewState.update({ [id]: restoredValue ?? '' });
+    // Only update state if we successfully restored a value.
+    // Do NOT clear state when file is not in list - the file may temporarily
+    // not appear during refresh cycles, and clearing would lose the user's selection.
+    //
+    // INTENTIONAL STATE/UI DIVERGENCE: If the selected file is not in the list,
+    // the UI shows "None" but state preserves the original selection. This allows:
+    // - Recovery when file temporarily disappears (e.g., during refresh)
+    // - Persistence across agent changes that don't affect file availability
+    //
+    // Consumers should be aware that state[id] may not match UI in edge cases.
+    // The execution flow reads from DOM, so a missing file will correctly result
+    // in no file being sent. The user can manually clear via the empty button.
+    if (restoredValue) {
+      mainViewState.update({ [id]: restoredValue });
     }
   }
 
