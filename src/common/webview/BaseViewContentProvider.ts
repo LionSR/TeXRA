@@ -190,6 +190,11 @@ export abstract class BaseViewContentProvider {
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
       streamStatusUri: this.getCommonUri(webview, 'constants/streamStatus.js'),
       todoStatusUri: this.getCommonUri(webview, 'constants/todoStatus.js'),
+      agentTypesUri: this.getCommonUri(webview, 'constants/agentTypes.js'),
+      toggleStateStoreUri: this.getCommonUri(
+        webview,
+        'modules/ToggleStateStore.js',
+      ),
       vscodeElementsBundleUri: this.getNodeModulesUri(
         webview,
         '@vscode-elements/elements/dist/bundled.js',
