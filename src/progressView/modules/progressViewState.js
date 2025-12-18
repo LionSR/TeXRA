@@ -1,6 +1,7 @@
 // Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
+import { ToggleStateStore } from '@common/ToggleStateStore.js';
 
 /**
  * Manages task groups in the progress view.
@@ -140,51 +141,6 @@ class TaskGroups {
   }
 }
 
-/**
- * Manages group toggle states with persistence.
- */
-class ToggleStates {
-  constructor(saveCallback) {
-    this.states = new Map();
-    this.saveCallback = saveCallback;
-  }
-
-  set(id, collapsed) {
-    this.states.set(id, collapsed);
-    this.saveCallback?.();
-  }
-
-  get(id) {
-    return this.states.get(id);
-  }
-
-  clearSelection(ids) {
-    if (!Array.isArray(ids)) {
-      return;
-    }
-    ids.forEach((id) => {
-      if (id) {
-        this.states.delete(id);
-      }
-    });
-    this.saveCallback?.();
-  }
-
-  clearAll() {
-    this.states.clear();
-    this.saveCallback?.();
-  }
-
-  /** Get all entries for serialization */
-  entries() {
-    return [...this.states.entries()];
-  }
-
-  /** Load from serialized data */
-  load(data) {
-    this.states = new Map(data);
-  }
-}
 
 /**
  * Manages stream status information.
@@ -336,7 +292,7 @@ export class ProgressViewState {
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
-    this.toggleStates = new ToggleStates(() => this.saveToggleStates());
+    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
     this.streamStatuses = new StreamStatuses();
     this.executionIdAvailability = new ExecutionIdAvailability();
   }

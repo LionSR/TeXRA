@@ -13,6 +13,7 @@ import { getSharedLogEntryFormatter } from './formatters/index.js';
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 import { vscode } from '@common/webviewContext.js';
+import { scrollToBottom } from '@common/domUtils.js';
 
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
@@ -21,24 +22,6 @@ import { vscode } from '@common/webviewContext.js';
 const state = progressViewState;
 const dom = progressViewDomHandler;
 const pendingLogUpdates = new Map();
-
-function scrollToBottom(element) {
-  if (!element) {
-    return;
-  }
-
-  if (
-    typeof element.scrollPos === 'number' &&
-    typeof element.scrollMax === 'number'
-  ) {
-    element.scrollPos = element.scrollMax;
-    return;
-  }
-
-  if ('scrollTop' in element && 'scrollHeight' in element) {
-    element.scrollTop = element.scrollHeight;
-  }
-}
 
 // Create formatter instances
 
