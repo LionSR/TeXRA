@@ -22,3 +22,22 @@ export function extractErrorMessage(err: unknown): string | undefined {
   }
   return undefined;
 }
+
+/** Serialized error object shape. */
+export interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+}
+
+/**
+ * Serialize an Error object to a plain object for logging or transport.
+ * Returns a structured object with name, message, and optional stack.
+ */
+export function serializeError(err: Error): SerializedError {
+  return {
+    name: err.name,
+    message: err.message,
+    stack: err.stack,
+  };
+}

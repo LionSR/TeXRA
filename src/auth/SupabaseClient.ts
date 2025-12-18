@@ -4,6 +4,7 @@ import {
   User,
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   type UserAuthContext,
@@ -71,8 +72,7 @@ export class SupabaseClient {
       );
       return session?.accessToken || null;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseClient', `Error getting access token: ${errorMsg}`);
+      logger.error('SupabaseClient', `Error getting access token: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -110,10 +110,9 @@ export class SupabaseClient {
         refreshToken: session.refreshToken,
       };
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseClient',
-        `Error getting session tokens: ${errorMsg}`,
+        `Error getting session tokens: ${toErrorMessage(error)}`,
       );
       return null;
     }
@@ -135,8 +134,7 @@ export class SupabaseClient {
       }
       return data.user;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseClient', `Error getting user: ${errorMsg}`);
+      logger.error('SupabaseClient', `Error getting user: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -203,10 +201,9 @@ export class SupabaseClient {
 
       return result.data;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(
         'SupabaseClient',
-        `Error getting user auth context: ${errorMsg}`,
+        `Error getting user auth context: ${toErrorMessage(error)}`,
       );
       return defaultContext;
     }
