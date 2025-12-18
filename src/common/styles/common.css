@@ -22,11 +22,15 @@ body {
 :root {
   /* ==========================================================================
      Semantic Color Aliases - Single source of truth for VS Code theme colors
+
+     TODO: Migrate remaining --vscode-* usages across CSS files to use these
+     aliases. Currently only todo-list.css and placeholder.css are migrated.
      ========================================================================== */
 
   /* Text colors */
   --color-text-secondary: var(--vscode-descriptionForeground);
   --color-text-link: var(--vscode-textLink-foreground);
+  --color-text-link-active: var(--vscode-textLink-activeForeground);
 
   /* Background colors */
   --color-bg-secondary: var(--vscode-sideBar-background);
@@ -112,15 +116,15 @@ vscode-toolbar-button {
   flex-shrink: 0;
 }
 
-/* Common clickable link style (actually used in progressView) */
+/* Common clickable link style (used in progressView) */
 .clickable-link {
   cursor: pointer;
-  color: var(--vscode-textLink-foreground);
+  color: var(--color-text-link);
   text-decoration: none;
 }
 
 .clickable-link:hover {
-  color: var(--vscode-textLink-activeForeground);
+  color: var(--color-text-link-active);
   text-decoration: underline;
 }
 
