@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -121,7 +122,7 @@ export async function activate(context: vscode.ExtensionContext) {
   loadAgents().catch((err) => {
     logger.error(
       'extension',
-      `Failed to initialize agent index: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to initialize agent index: ${toErrorMessage(err)}`,
     );
   });
 
@@ -187,11 +188,9 @@ export async function activate(context: vscode.ExtensionContext) {
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
       logger.error(
         'extension',
-        `Failed to initialize Supabase authentication: ${errorMessage}`,
+        `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
       );
     }
   }

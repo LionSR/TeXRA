@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
@@ -184,8 +185,7 @@ export async function refreshModelListIfNeeded(): Promise<void> {
     );
     logger.info('extension', 'Model list refresh completed successfully');
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error('extension', `Failed to refresh model list: ${errorMessage}`);
+    logger.error('extension', `Failed to refresh model list: ${toErrorMessage(err)}`);
   }
 }
 
