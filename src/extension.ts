@@ -19,13 +19,13 @@ import { FileLister } from '@frontend/files';
 import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { initializeServerSideKeyAccess } from '@/auth/serverSideKeyAccess';
 import * as logger from '@logger/logUtils';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
+import { initializeServerSideKeyAccess } from '@/auth/serverSideKeyAccess';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
