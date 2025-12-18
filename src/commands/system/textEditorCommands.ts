@@ -37,14 +37,19 @@ async function handleTestTextEditor(): Promise<void> {
     const filePath = WorkspaceFS.relativePath(editor.document.fileName);
     logger.info(CHANNEL, `Testing text editor tool with file: ${filePath}`);
 
-    // Get command to test
-    const command = await vscode.window.showQuickPick(
-      ['view', 'str_replace', 'insert', 'create', 'undo_edit'],
-      {
-        placeHolder: 'Select a command to test',
-        canPickMany: false,
-      },
-    );
+    // Command options - must match EditorCommand type from @tools/types
+    const editorCommands = [
+      'view',
+      'str_replace',
+      'insert',
+      'create',
+      'undo_edit',
+    ] as const satisfies readonly ToolCallInput['command'][];
+
+    const command = await vscode.window.showQuickPick([...editorCommands], {
+      placeHolder: 'Select a command to test',
+      canPickMany: false,
+    });
 
     if (!command) {
       return; // User cancelled
@@ -57,8 +62,11 @@ async function handleTestTextEditor(): Promise<void> {
       `Created TextEditorTool instance with command: ${command}`,
     );
 
-    // Prepare input based on selected command
-    const input: ToolCallInput = { command: command as any, path: filePath };
+    // Type assertion is safe: editorCommands array uses satisfies to ensure sync with EditorCommand
+    const input: ToolCallInput = {
+      command: command as ToolCallInput['command'],
+      path: filePath,
+    };
 
     switch (command) {
       case 'view':

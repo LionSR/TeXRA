@@ -66,6 +66,7 @@ export async function executeCommand(
       : { ...process.env };
     env.PATH = extendEnvPath(env.PATH);
 
+    // Normalize 'utf-8' to 'utf8' for Node.js/execa compatibility
     const encodingOption: BufferEncoding =
       options.encoding && options.encoding.toLowerCase() === 'utf-8'
         ? 'utf8'
@@ -74,7 +75,9 @@ export async function executeCommand(
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: encodingOption as any, // execa v9 type compatibility
+      // Cast needed: execa v9 uses stricter EncodingOption type that doesn't fully overlap
+      // with Node's BufferEncoding. In practice, common encodings (utf8, ascii, etc.) work.
+      encoding: encodingOption as any,
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
