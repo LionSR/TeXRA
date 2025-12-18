@@ -68,7 +68,7 @@ const MAX_ERROR_LENGTH = 500;
  * ```
  */
 export function formatError(prefix: string, err: unknown): string {
-  let detail = err instanceof Error ? err.message : String(err);
+  let detail = toErrorMessage(err);
 
   // Truncate overly long error details for better readability
   if (detail.length > MAX_ERROR_LENGTH) {
