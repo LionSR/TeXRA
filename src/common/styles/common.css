@@ -22,9 +22,6 @@ body {
 :root {
   /* ==========================================================================
      Semantic Color Aliases - Single source of truth for VS Code theme colors
-
-     TODO: Migrate remaining --vscode-* usages across CSS files to use these
-     aliases. Currently only todo-list.css and placeholder.css are migrated.
      ========================================================================== */
 
   /* Text colors */
