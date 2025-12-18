@@ -49,7 +49,11 @@ export const AgentSharedStoreSnapshotSchema = z.object({
   user: UserVariableChannelsSchema,
 });
 
-export type AgentSharedStoreSnapshot = z.infer<
+/**
+ * Output type for AgentSharedStore serialization.
+ * Uses z.output<> to get the type after parsing (all fields required).
+ */
+export type AgentSharedStoreSnapshot = z.output<
   typeof AgentSharedStoreSnapshotSchema
 >;
 
@@ -65,14 +69,43 @@ export class AgentSharedStore {
   private readonly runState: AgentRunState;
   private readonly workspaceState: AgentWorkspaceState;
   private readonly userChannels: UserVariableChannels;
-  private readonly onRoundFinalized?: AgentRoundFinalizedCallback;
+  private _onRoundFinalized?: AgentRoundFinalizedCallback;
 
   constructor(config: AgentSharedStoreOptions) {
     this.roundState = config.round;
     this.runState = config.run;
     this.workspaceState = config.workspace;
     this.userChannels = config.user;
-    this.onRoundFinalized = config.onRoundFinalized;
+    this._onRoundFinalized = config.onRoundFinalized;
+  }
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): AgentSharedStore {
+    const parsed = AgentSharedStoreSnapshotSchema.parse(snapshot);
+    return new AgentSharedStore({
+      round: ConversationRoundState.fromSnapshot(parsed.round),
+      run: AgentRunState.fromSnapshot(parsed.run),
+      workspace: AgentWorkspaceState.fromSnapshot(parsed.workspace),
+      user: {
+        input: Object.freeze({ ...parsed.user.input }),
+        transient: { ...parsed.user.transient },
+        output: { ...parsed.user.output },
+      },
+    });
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): AgentSharedStoreSnapshot {
+    return {
+      round: this.roundState.toSnapshot(),
+      run: this.runState.toSnapshot(),
+      workspace: this.workspaceState.toSnapshot(),
+      user: {
+        input: { ...this.userChannels.input },
+        transient: { ...this.userChannels.transient },
+        output: { ...this.userChannels.output },
+      },
+    };
   }
 
   get round(): ConversationRoundState {
@@ -100,50 +133,24 @@ export class AgentSharedStore {
     return this.userChannels;
   }
 
+  /**
+   * Set the callback to be called when a round is finalized.
+   * Useful for attaching callbacks after deserialization since callbacks
+   * are not serialized.
+   */
+  setOnRoundFinalized(callback: AgentRoundFinalizedCallback | undefined): void {
+    this._onRoundFinalized = callback;
+  }
+
   async finalizeRound(): Promise<void> {
     this.runState.recordRound(this.roundState);
-    if (this.onRoundFinalized) {
-      await this.onRoundFinalized({
+    if (this._onRoundFinalized) {
+      await this._onRoundFinalized({
         round: this.roundState,
         run: this.runState,
         workspace: this.workspaceState,
       });
     }
-  }
-
-  toJSON(): AgentSharedStoreSnapshot {
-    return {
-      round: this.roundState.toJSON(),
-      run: this.runState.toJSON(),
-      workspace: this.workspaceState.toJSON(),
-      user: {
-        input: { ...this.userChannels.input },
-        transient: { ...this.userChannels.transient },
-        output: { ...this.userChannels.output },
-      },
-    };
-  }
-
-  static fromJSON(
-    snapshot: AgentSharedStoreSnapshot,
-    options?: { onRoundFinalized?: AgentRoundFinalizedCallback },
-  ): AgentSharedStore {
-    const round = ConversationRoundState.fromJSON(snapshot.round);
-    const run = AgentRunState.fromJSON(snapshot.run);
-    const workspace = AgentWorkspaceState.fromJSON(snapshot.workspace);
-    const storeUserChannels: UserVariableChannels = {
-      input: Object.freeze({ ...snapshot.user.input }),
-      transient: { ...snapshot.user.transient },
-      output: { ...snapshot.user.output },
-    };
-
-    return new AgentSharedStore({
-      round,
-      run,
-      workspace,
-      user: storeUserChannels,
-      onRoundFinalized: options?.onRoundFinalized,
-    });
   }
 }
 
@@ -170,10 +177,13 @@ export function createSharedStore(
     if (!snapshot) {
       throw new Error('Shared store snapshot is required.');
     }
-    AgentSharedStoreSnapshotSchema.parse(snapshot);
-    return AgentSharedStore.fromJSON(snapshot, {
-      onRoundFinalized: args.onRoundFinalized,
-    });
+    const store = AgentSharedStore.fromSnapshot(snapshot);
+
+    // Attach callback post-creation if provided (callbacks are not serialized)
+    if (args.onRoundFinalized) {
+      store.setOnRoundFinalized(args.onRoundFinalized);
+    }
+    return store;
   }
 
   const initialRound =

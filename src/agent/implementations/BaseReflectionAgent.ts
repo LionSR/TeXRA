@@ -313,7 +313,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.currentMessages = messages;
     this.currentRunState = runState;
     // Fresh workspace state per round - populated during execution
-    this.currentWorkspaceState = new AgentWorkspaceState();
+    this.currentWorkspaceState = AgentWorkspaceState.create();
     this.resetTransientUserVars({ CURRENT_ROUND: roundIndex });
   }
 
