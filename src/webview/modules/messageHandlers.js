@@ -579,30 +579,52 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       (opt) => opt.value === value,
     );
 
+    // Clear 'selected' attribute from all existing options first.
+    // vscode-single-select reads the 'selected' property during slotchange.
+    Array.from(selectElement.children).forEach((opt) => {
+      opt.removeAttribute('selected');
+      if ('selected' in opt) {
+        opt.selected = false;
+      }
+    });
+
+    // Determine the target option - either existing or newly created
+    let targetOption = existingOption;
+
     // If option doesn't exist, create a placeholder with clean display name.
     // SET_AGENT_OPTIONS will replace this with properly decorated options.
-    if (!existingOption) {
-      const option = document.createElement('vscode-option');
-      option.value = value;
+    if (!targetOption) {
+      targetOption = document.createElement('vscode-option');
+      targetOption.value = value;
 
       // Extract clean name from source:name format
       const parsed = this._parseAgentKey(value);
       const displayName = parsed ? parsed.name : value;
 
-      option.textContent = displayName;
-      option.dataset.label = displayName;
+      targetOption.textContent = displayName;
+      targetOption.dataset.label = displayName;
 
       // Set source-based data attributes for basic styling
       if (parsed) {
-        option.dataset.source = parsed.source;
+        targetOption.dataset.source = parsed.source;
         if (parsed.source === 'remote') {
-          option.dataset.remote = 'true';
+          targetOption.dataset.remote = 'true';
         } else if (parsed.source === 'custom') {
-          option.dataset.custom = 'true';
+          targetOption.dataset.custom = 'true';
         }
       }
 
-      selectElement.appendChild(option);
+      // Mark as selected BEFORE appending so slotchange picks it up
+      targetOption.setAttribute('selected', '');
+      targetOption.selected = true;
+
+      selectElement.appendChild(targetOption);
+    } else {
+      // For existing options, set selected attribute
+      targetOption.setAttribute('selected', '');
+      if ('selected' in targetOption) {
+        targetOption.selected = true;
+      }
     }
 
     // Set the value and dispatch change event to update the component's display
