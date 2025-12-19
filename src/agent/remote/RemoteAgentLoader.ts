@@ -1,6 +1,11 @@
+/**
+ * Remote Agent Loader - loads agent configurations from Supabase.
+ */
+
 import * as vscode from 'vscode';
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
+
 import {
   AgentSetting,
   AgentPrompt,
@@ -14,25 +19,18 @@ import * as logger from '@logger/logUtils';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 
+import {
+  RemoteAgentMetadataSchema,
+  type RemoteAgentMetadata,
+  type RemoteAgentConfig,
+  type RemoteAgentLoadOptions,
+} from './types';
+
+// Re-export types for backward compatibility
+export type { RemoteAgentMetadata, RemoteAgentConfig } from './types';
+
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
-
-export interface RemoteAgentMetadata {
-  id: string;
-  name: string;
-  description: string;
-  /** Visibility levels - array of groups that can access this agent */
-  visibility: string[];
-  /** Agent category: 'workflow' or 'toolUse' */
-  agentCategory?: string;
-}
-
-export interface RemoteAgentConfig {
-  name: string;
-  settings: AgentSetting;
-  prompts: AgentPrompt;
-  metadata: RemoteAgentMetadata;
-}
 
 /**
  * Loader for remote agents stored in Supabase.
@@ -46,7 +44,7 @@ export class RemoteAgentLoader {
    */
   static async loadRemoteAgent(
     agentName: string,
-    options?: { preferMultiple?: boolean },
+    options?: RemoteAgentLoadOptions,
   ): Promise<RemoteAgentConfig> {
     // Check if user is authenticated
     const isAuth = await SupabaseClient.isAuthenticated();
@@ -207,11 +205,14 @@ export class RemoteAgentLoader {
           name: validated.name || agentName,
           settings: validatedSettings,
           prompts: validatedPrompts,
+          // Fallback metadata when database lookup fails
+          // Default to public visibility as a safe assumption
           metadata: metadata || {
             id: '',
             name: agentName,
-            description: description || '',
+            description: description || undefined,
             visibility: ['public'],
+            agentCategory: undefined,
           },
         };
       } catch (error) {
@@ -274,14 +275,27 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      // Map snake_case DB columns to camelCase interface
-      return (data || []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        visibility: row.visibility,
-        agentCategory: row.agent_category,
-      })) as RemoteAgentMetadata[];
+      // Map snake_case DB columns to camelCase and validate
+      // Use safeParse to filter invalid records without breaking the entire list
+      return (data || [])
+        .map((row) => {
+          const result = RemoteAgentMetadataSchema.safeParse({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            visibility: row.visibility,
+            agentCategory: row.agent_category,
+          });
+          if (!result.success) {
+            logger.warn(
+              CHANNEL,
+              `Invalid metadata for agent "${row.name}": ${result.error.message}`,
+            );
+            return null;
+          }
+          return result.data;
+        })
+        .filter((item): item is RemoteAgentMetadata => item !== null);
     } catch (error) {
       logger.error(
         CHANNEL,
@@ -325,13 +339,21 @@ export class RemoteAgentLoader {
         return null;
       }
 
-      return {
+      const result = RemoteAgentMetadataSchema.safeParse({
         id: data.id,
         name: data.name,
         description: data.description,
         visibility: data.visibility,
         agentCategory: data.agent_category,
-      } as RemoteAgentMetadata;
+      });
+      if (!result.success) {
+        logger.warn(
+          CHANNEL,
+          `Invalid metadata for agent "${agentName}": ${result.error.message}`,
+        );
+        return null;
+      }
+      return result.data;
     } catch (error) {
       logger.error(
         CHANNEL,
