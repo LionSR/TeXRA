@@ -2,6 +2,12 @@
 import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
+// Local imports - model types
+import {
+  ToolDefinitionSchema,
+  type ToolDefinition,
+} from '@model/ToolDefinition';
+
 // Local imports - tools
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
@@ -85,3 +91,70 @@ export function resetDefaultToolRegistry(): void {
  * @deprecated Prefer getDefaultToolRegistry() for IToolRegistry interface.
  */
 export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
+
+/**
+ * Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores.
+ */
+const VALID_TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Validates a tool name contains only allowed characters.
+ * @returns true if valid, false otherwise
+ */
+function isValidToolName(name: string): boolean {
+  return VALID_TOOL_NAME_PATTERN.test(name);
+}
+
+/**
+ * Raw tool configuration from YAML - can be a string name or partial definition.
+ * Object form must have a name and can include optional description/parameters.
+ */
+export type RawToolConfig =
+  | string
+  | (Partial<ToolDefinition> & { name: string });
+
+/**
+ * Resolve raw tool configurations to ToolDefinition objects.
+ * Handles both string names (resolved from registry) and partial definitions.
+ *
+ * @param tools - Array of raw tool configs (strings or objects with name)
+ * @param warnOnMissing - Optional callback for logging warnings about missing/invalid tools
+ * @returns Array of resolved ToolDefinition objects
+ */
+export function resolveToolDefinitions(
+  tools: RawToolConfig[],
+  warnOnMissing?: (toolName: string) => void,
+): ToolDefinition[] {
+  return tools.map((item): ToolDefinition => {
+    if (typeof item === 'string') {
+      // Validate tool name format - warn but preserve original name for debugging
+      if (!isValidToolName(item)) {
+        warnOnMissing?.(item);
+        return { name: item };
+      }
+      const tool = DEFAULT_TOOL_REGISTRY[item];
+      if (!tool) {
+        warnOnMissing?.(item);
+        return { name: item };
+      }
+      return tool.definition;
+    }
+    // Validate tool name format for object form - warn but preserve original name
+    if (!isValidToolName(item.name)) {
+      warnOnMissing?.(item.name);
+      return { name: item.name };
+    }
+    if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+      warnOnMissing?.(item.name);
+    }
+    // Validate against schema - if invalid, return minimal definition
+    // Note: Cast is safe because ToolDefinitionSchema validates structure;
+    // ToolDefinition type adds provider-specific param types that are additive.
+    const parsed = ToolDefinitionSchema.safeParse(item);
+    if (parsed.success) {
+      return parsed.data as ToolDefinition;
+    }
+    // Fallback: return just the name if validation fails
+    return { name: item.name };
+  });
+}
