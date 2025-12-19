@@ -1656,7 +1656,7 @@
     "dotenv": "^17.2.3",
     "execa": "^9.6.1",
     "fast-xml-parser": "^5.3.3",
-    "fs-extra": "^11.3.2",
+    "fs-extra": "^11.3.3",
     "glob": "^13.0.0",
     "gpt-tokenizer": "^3.4.0",
     "he": "^1.2.0",
