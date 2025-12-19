@@ -148,11 +148,10 @@ export function resolveToolDefinitions(
       warnOnMissing?.(item.name);
     }
     // Validate against schema - if invalid, return minimal definition
-    // Note: Cast is safe because ToolDefinitionSchema validates structure;
-    // ToolDefinition type adds provider-specific param types that are additive.
     const parsed = ToolDefinitionSchema.safeParse(item);
     if (parsed.success) {
-      return parsed.data as ToolDefinition;
+      // Safe: ToolDefinition extends SerializableToolDefinition (schema output)
+      return parsed.data;
     }
     // Fallback: return just the name if validation fails
     return { name: item.name };
