@@ -16,8 +16,16 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
  */
 export function messageToSkeleton(
   message: ProviderMessage | ProviderMessage[],
+  maxContentLength?: number,
+): unknown;
+export function messageToSkeleton(
+  message: Record<string, unknown>,
+  maxContentLength?: number,
+): unknown;
+export function messageToSkeleton(
+  message: ProviderMessage | ProviderMessage[] | Record<string, unknown>,
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): any {
+): unknown {
   if (!message) {
     return null;
   }
@@ -30,40 +38,54 @@ export function messageToSkeleton(
     return typeof message;
   }
 
-  const result: any = {};
+  const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(message)) {
     if (key === 'content') {
       if (Array.isArray(value)) {
         // Handle content arrays (common in Anthropic responses)
-        result[key] = value.map((item: any) => {
-          if (typeof item === 'object') {
-            const itemSkeleton: any = { type: item.type };
+        result[key] = value.map((item: unknown) => {
+          if (typeof item === 'object' && item !== null) {
+            const typedItem = item as Record<string, unknown>;
+            const itemSkeleton: Record<string, unknown> = {
+              type: typedItem.type,
+            };
 
-            if (item.text) {
+            if (
+              typeof typedItem.text === 'string' &&
+              typedItem.text.length > 0
+            ) {
+              const text = typedItem.text;
               const truncatedText =
-                item.text.length > maxContentLength
-                  ? `${item.text.substring(0, maxContentLength)}... (${item.text.length} chars)`
-                  : item.text;
+                text.length > maxContentLength
+                  ? `${text.substring(0, maxContentLength)}... (${text.length} chars)`
+                  : text;
               itemSkeleton.text = truncatedText;
             }
 
-            if (item.source) {
-              itemSkeleton.source = { type: item.source.type };
-              if (item.source.media_type) {
-                itemSkeleton.source.media_type = item.source.media_type;
+            if (
+              typeof typedItem.source === 'object' &&
+              typedItem.source !== null
+            ) {
+              const source = typedItem.source as Record<string, unknown>;
+              const sourceSkeleton: Record<string, unknown> = {
+                type: source.type,
+              };
+              if (source.media_type) {
+                sourceSkeleton.media_type = source.media_type;
               }
-              if (item.source.data) {
-                itemSkeleton.source.data = `[base64 data: ${item.source.data.length} chars]`;
+              if (typeof source.data === 'string') {
+                sourceSkeleton.data = `[base64 data: ${source.data.length} chars]`;
               }
+              itemSkeleton.source = sourceSkeleton;
             }
 
-            if (item.cache_control) {
-              itemSkeleton.cache_control = item.cache_control;
+            if (typedItem.cache_control) {
+              itemSkeleton.cache_control = typedItem.cache_control;
             }
 
-            if (item.thinking) {
-              itemSkeleton.thinking = `[thinking data: ${item.thinking.length} chars]`;
+            if (typeof typedItem.thinking === 'string') {
+              itemSkeleton.thinking = `[thinking data: ${typedItem.thinking.length} chars]`;
             }
 
             return itemSkeleton;
@@ -92,10 +114,11 @@ export function messageToSkeleton(
       value !== null &&
       value !== undefined
     ) {
-      // Recursively process nested objects
-      // Note: We pass 'any' here since nested properties within a message
-      // are not necessarily ProviderMessage instances themselves
-      result[key] = messageToSkeleton(value as any, maxContentLength);
+      // Recursively process nested objects using Record<string, unknown> overload
+      result[key] = messageToSkeleton(
+        value as Record<string, unknown>,
+        maxContentLength,
+      );
     } else {
       // Pass through primitive values
       result[key] = value;
