@@ -23,6 +23,14 @@ import {
   setUseIncludedModelAccess,
   getUseIncludedModelAccess,
 } from '@/auth/serverSideKeyAccess';
+import {
+  getTierConfig,
+  getAllowedModelsForTier,
+  getEnabledProvidersForTier,
+} from '@/auth/tierModelAccess';
+
+/** Max tier constant. */
+const MAX_TIER = 'Max';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
@@ -75,6 +83,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         remoteAgents: [],
         apiAccessMode: 'personal',
         enabledProviders: [],
+        allowedModels: [], // No models for unauthenticated users
       });
       return;
     }
@@ -94,15 +103,39 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
-    // Get model access settings for Ultra tier users
+    // Get model access settings for Ultra and Max tier users
     const isUltra = authContext.tier === ULTRA_TIER;
+    const isMax = authContext.tier === MAX_TIER;
+    const hasTierAccess = isUltra || isMax;
     const useIncludedAccess = getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
-    // Fetch enabled providers from relay server (only for Ultra tier)
+    // Fetch enabled providers and tier config for users with tier access
     let enabledProviders: string[] = [];
-    if (isUltra) {
-      enabledProviders = await getEnabledProviders();
+    let allowedModels: string[] | null = null;
+    let tierProviders: string[] = [];
+
+    if (hasTierAccess) {
+      // Fetch tier config and enabled providers in parallel
+      const [tierConfig, serverProviders] = await Promise.all([
+        getTierConfig(),
+        getEnabledProviders(),
+      ]);
+
+      // For Ultra tier, use all enabled providers from server
+      // For Max tier, use the tier-specific provider list
+      if (isUltra) {
+        enabledProviders = serverProviders;
+        allowedModels = null; // null = all models
+      } else if (isMax && tierConfig) {
+        // Max tier uses the tier-specific configuration
+        tierProviders = getEnabledProvidersForTier(MAX_TIER, tierConfig);
+        // Filter to only providers actually enabled on server
+        enabledProviders = tierProviders.filter((p) =>
+          serverProviders.includes(p),
+        );
+        allowedModels = getAllowedModelsForTier(MAX_TIER, tierConfig);
+      }
     }
 
     await webview.postMessage({
@@ -117,6 +150,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       remoteAgents,
       apiAccessMode,
       enabledProviders,
+      // New fields for Max tier support
+      allowedModels, // null = all models (Ultra), array = specific models (Max)
     });
   }
 
