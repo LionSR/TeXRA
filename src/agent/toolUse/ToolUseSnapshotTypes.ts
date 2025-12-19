@@ -38,6 +38,8 @@ export type ToolUseSessionSnapshot = z.infer<
  * AgentSharedStore class instance with methods (e.g., toSnapshot()), not a plain
  * data structure. Zod schemas cannot validate class instances with private fields.
  * The store is serialized to AgentSharedStoreSnapshot during the save operation.
+ *
+ * @see ToolUseSessionSnapshotSchema - SSOT for the serialized snapshot format
  */
 export interface SaveToolUseSnapshotPayload {
   executionId: ExecutionId;
