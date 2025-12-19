@@ -1,9 +1,18 @@
 /**
  * Helper for determining server-side API key access.
  *
- * Server-side keys allow Ultra tier users to access AI models without
+ * Server-side keys allow Max and Ultra tier users to access AI models without
  * providing their own API keys. The keys are stored as Supabase Edge
  * Function secrets and accessed via the relay function.
+ *
+ * TIER-BASED ACCESS:
+ * -----------------
+ * - Ultra tier: Access to ALL models via relay (full access)
+ * - Max tier: Access to a SUBSET of cheaper models via relay (e.g., Gemini Flash, Deepseek)
+ * - Free tier: No server-side key access (must bring own keys)
+ *
+ * The list of models available for each tier is configured remotely via
+ * the `/relay/tier-config` endpoint, allowing updates without extension changes.
  *
  * PER-PROVIDER ENABLEMENT:
  * -----------------------
@@ -17,8 +26,8 @@
  * before `shouldUseServerSideKeysSync()` will return true. This is because:
  *
  * 1. `canUseServerSideKeys()` performs the async authentication and tier check
- * 2. It also fetches the list of enabled providers from the server
- * 3. Results are cached in `accessCache` and `providersCache`
+ * 2. It also fetches the list of enabled providers and tier config from the server
+ * 3. Results are cached in `accessCache`, `providersCache`, and tier config cache
  * 4. `shouldUseServerSideKeysSync()` uses these cached values for sync decisions
  *
  * Call Sequence:
@@ -39,7 +48,17 @@
 
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
-import { SUPABASE_CUSTOM_DOMAIN, ULTRA_TIER } from './config';
+import { SUPABASE_CUSTOM_DOMAIN, ULTRA_TIER, type UserTier } from './config';
+import {
+  getTierConfig,
+  getTierConfigSync,
+  isModelAvailableForTier,
+  clearTierConfigCache,
+  type TierModelConfig,
+} from './tierModelAccess';
+
+/** Max tier constant for tier checks. */
+const MAX_TIER: UserTier = 'Max';
 
 /**
  * Global state key for the "use included model access" preference.
@@ -106,6 +125,8 @@ interface AccessCache {
   timestamp: number;
   /** Sync-accessible result (populated when promise resolves). */
   lastKnownResult: boolean;
+  /** The user's tier (for model-level access checks). */
+  userTier: UserTier | null;
 }
 
 /** Encapsulated cache state for maintainability. */
@@ -119,6 +140,7 @@ const accessCache: AccessCache = {
   promise: null,
   timestamp: 0,
   lastKnownResult: false,
+  userTier: null,
 };
 
 /**
@@ -191,30 +213,39 @@ export function clearServerSideKeyAccessCache(): void {
   accessCache.promise = null;
   accessCache.timestamp = 0;
   accessCache.lastKnownResult = false;
+  accessCache.userTier = null;
   providersCache.providers = [];
   providersCache.timestamp = 0;
   providersCache.promise = null;
+  // Also clear tier config cache
+  clearTierConfigCache();
 }
 
 /**
  * Internal function to fetch access status.
+ * Returns true if user has Ultra OR Max tier (model filtering happens separately).
  */
 async function fetchAccessStatus(): Promise<boolean> {
   try {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     if (!isAuthenticated) {
       accessCache.lastKnownResult = false;
+      accessCache.userTier = null;
       return false;
     }
 
     const tier = await SupabaseClient.getUserTier();
-    // Explicitly check for Ultra tier - undefined/null/errors all result in false
-    const hasAccess = tier === ULTRA_TIER;
+    accessCache.userTier = tier;
+
+    // Allow access for both Ultra and Max tiers
+    // Model-level filtering for Max tier is handled by isModelAvailableForTier
+    const hasAccess = tier === ULTRA_TIER || tier === MAX_TIER;
     accessCache.lastKnownResult = hasAccess;
     return hasAccess;
   } catch (_err) {
     // On any error (network, auth, etc.), deny access and allow retry
     accessCache.lastKnownResult = false;
+    accessCache.userTier = null;
     return false;
   }
 }
@@ -284,14 +315,17 @@ export function getEnabledProvidersSync(): string[] {
  * Requirements:
  * 1. The experimental setting must be enabled
  * 2. User must be authenticated
- * 3. User must have Ultra tier
+ * 3. User must have Ultra OR Max tier
  * 4. At least one provider must be enabled on the server
+ *
+ * Note: For Max tier users, model-level access is determined by the
+ * tier configuration. Use canUseServerSideKeysForModel() for model-specific checks.
  *
  * Results are cached for 5 minutes to avoid repeated database calls.
  * Uses Promise-based caching to prevent race conditions.
  *
- * This function also fetches the list of enabled providers from the server,
- * priming the cache for shouldUseServerSideKeysSync().
+ * This function also fetches the list of enabled providers and tier config
+ * from the server, priming the cache for shouldUseServerSideKeysSync().
  */
 export async function canUseServerSideKeys(): Promise<boolean> {
   // Check setting first (fast, no network)
@@ -315,10 +349,11 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   // avoid hammering the auth service on repeated failures.
   accessCache.timestamp = now;
   accessCache.promise = (async () => {
-    // Fetch both access status and enabled providers in parallel
+    // Fetch access status, enabled providers, and tier config in parallel
     const [hasAccess, providers] = await Promise.all([
       fetchAccessStatus(),
       getEnabledProviders(),
+      getTierConfig(), // Prime the tier config cache
     ]);
 
     // Must have access AND at least one enabled provider
@@ -329,12 +364,53 @@ export async function canUseServerSideKeys(): Promise<boolean> {
 }
 
 /**
+ * Check if a specific model is available via server-side keys for the current user.
+ *
+ * This is the model-aware version of canUseServerSideKeys():
+ * - Ultra tier: All models available (if provider is enabled)
+ * - Max tier: Only models in the tier config's allowed list
+ * - Free tier: No server-side access
+ *
+ * @param modelName - The model name to check (e.g., "gemini2flash", "opus45T")
+ * @returns true if the model is available via server-side keys
+ */
+export async function canUseServerSideKeysForModel(
+  modelName: string,
+): Promise<boolean> {
+  // First check basic access (tier + setting + providers)
+  const hasAccess = await canUseServerSideKeys();
+  if (!hasAccess) {
+    return false;
+  }
+
+  const tier = accessCache.userTier;
+  if (!tier) {
+    return false;
+  }
+
+  // Ultra tier gets access to all models
+  if (tier === ULTRA_TIER) {
+    return true;
+  }
+
+  // Max tier needs model-level check against tier config
+  if (tier === MAX_TIER) {
+    const config = await getTierConfig();
+    return isModelAvailableForTier(tier, modelName, config);
+  }
+
+  // Free tier has no access
+  return false;
+}
+
+/**
  * Synchronous check if server-side keys should be used for routing.
  *
  * IMPORTANT: This only returns true if:
  * 1. The setting is enabled
  * 2. The provider is enabled on the server (has API key configured)
  * 3. A previous async check (canUseServerSideKeys) confirmed access
+ * 4. For Max tier: the model must be in the tier's allowed list (if modelName provided)
  *
  * PREREQUISITE: canUseServerSideKeys() must have been called and completed
  * before this function will return true. This typically happens when:
@@ -359,8 +435,14 @@ export async function canUseServerSideKeys(): Promise<boolean> {
  * request and passing it through both code paths.
  *
  * This synchronous function is needed because getBaseUrl() is synchronous.
+ *
+ * @param provider - The provider to check (e.g., "openai", "anthropic")
+ * @param modelName - Optional model name for Max tier model-level checks
  */
-export function shouldUseServerSideKeysSync(provider: string): boolean {
+export function shouldUseServerSideKeysSync(
+  provider: string,
+  modelName?: string,
+): boolean {
   // Setting must be enabled
   if (!isServerSideKeysSettingEnabled()) {
     return false;
@@ -374,7 +456,29 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
 
   // Must have confirmed access from a prior async check
   // This ensures routing and API key decisions are synchronized
-  return accessCache.lastKnownResult === true;
+  if (accessCache.lastKnownResult !== true) {
+    return false;
+  }
+
+  // For Ultra tier, all models are available
+  if (accessCache.userTier === ULTRA_TIER) {
+    return true;
+  }
+
+  // For Max tier, check model-level access if modelName is provided
+  if (accessCache.userTier === MAX_TIER && modelName) {
+    const config = getTierConfigSync();
+    return isModelAvailableForTier(MAX_TIER, modelName, config);
+  }
+
+  // If no modelName provided for Max tier, return true (caller will check separately)
+  // This maintains backward compatibility with existing code
+  if (accessCache.userTier === MAX_TIER) {
+    return true;
+  }
+
+  // Free tier has no access
+  return false;
 }
 
 /**
@@ -388,6 +492,16 @@ export function shouldUseServerSideKeysSync(provider: string): boolean {
  */
 export function isProviderEnabledForServerSideKeys(provider: string): boolean {
   return providersCache.providers.includes(provider.toLowerCase());
+}
+
+/**
+ * Get the cached user tier (synchronous).
+ * Returns null if tier hasn't been fetched yet.
+ *
+ * This is useful for UI components that need to display tier-specific content.
+ */
+export function getCachedUserTier(): UserTier | null {
+  return accessCache.userTier;
 }
 
 /**

@@ -7,6 +7,8 @@ import { safeGetElementById } from '@common/domUtils.js';
 
 /** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
 const ULTRA_TIER = 'Ultra';
+/** Max tier value - must match MAX_TIER in src/auth/config.ts */
+const MAX_TIER = 'Max';
 
 /**
  * Manages the agents table rendering and interactions.
@@ -42,6 +44,7 @@ export class AgentsTable {
    * @param {Array} options.remoteAgents - Array of remote agent objects
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
+   * @param {string[]|null} options.allowedModels - Array of allowed model names (null = all for Ultra)
    */
   render({
     authenticated,
@@ -51,6 +54,7 @@ export class AgentsTable {
     remoteAgents,
     apiAccessMode,
     enabledProviders,
+    allowedModels,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
@@ -110,13 +114,20 @@ export class AgentsTable {
         : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show API access section only for Ultra tier
+    // Show API access section for Max and Ultra tiers
     if (apiAccessSection) {
       const isUltra = tier === ULTRA_TIER;
-      apiAccessSection.style.display = isUltra ? 'block' : 'none';
+      const isMax = tier === MAX_TIER;
+      const hasTierAccess = isUltra || isMax;
+      apiAccessSection.style.display = hasTierAccess ? 'block' : 'none';
 
-      if (isUltra) {
-        this.renderApiAccessSection(apiAccessMode, enabledProviders);
+      if (hasTierAccess) {
+        this.renderApiAccessSection(
+          apiAccessMode,
+          enabledProviders,
+          allowedModels,
+          tier,
+        );
       }
     }
 
@@ -134,16 +145,19 @@ export class AgentsTable {
   }
 
   /**
-   * Render the API access section for Ultra tier users.
+   * Render the API access section for Max and Ultra tier users.
    * @param {string} apiAccessMode - 'included' or 'personal'
    * @param {string[]} enabledProviders - Array of enabled provider names
+   * @param {string[]|null} allowedModels - Array of allowed model names (null = all for Ultra)
+   * @param {string} tier - User's tier ('Max' or 'Ultra')
    */
-  renderApiAccessSection(apiAccessMode, enabledProviders) {
+  renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels, tier) {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
+    const modelsInfo = safeGetElementById(ELEMENT_IDS.ALLOWED_MODELS_INFO);
 
     // Set the current mode
     if (includedRadio) {
@@ -163,10 +177,30 @@ export class AgentsTable {
         const providerNames = enabledProviders
           .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
           .join(', ');
-        providersInfo.textContent = `Available: ${providerNames}`;
+        providersInfo.textContent = `Providers: ${providerNames}`;
         providersInfo.style.display = 'block';
       } else {
         providersInfo.style.display = 'none';
+      }
+    }
+
+    // Show allowed models info for Max tier when using included access
+    if (modelsInfo) {
+      if (apiAccessMode === 'included' && tier === MAX_TIER) {
+        if (allowedModels && allowedModels.length > 0) {
+          modelsInfo.textContent = `Models: ${allowedModels.length} included`;
+          modelsInfo.title = allowedModels.join(', ');
+          modelsInfo.style.display = 'block';
+        } else {
+          modelsInfo.textContent = 'No models configured';
+          modelsInfo.style.display = 'block';
+        }
+      } else if (apiAccessMode === 'included' && tier === ULTRA_TIER) {
+        modelsInfo.textContent = 'All models included';
+        modelsInfo.title = '';
+        modelsInfo.style.display = 'block';
+      } else {
+        modelsInfo.style.display = 'none';
       }
     }
 
