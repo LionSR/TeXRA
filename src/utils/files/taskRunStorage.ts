@@ -107,6 +107,59 @@ export function createExternalLocation(
 }
 
 /**
+ * Result of resolving a path against a workspace.
+ * Used internally by path resolution functions.
+ */
+type ResolvedPath =
+  | { kind: 'workspace'; absolutePath: string; relativePath: string }
+  | { kind: 'external'; absolutePath: string };
+
+/**
+ * Resolve a path (absolute or relative) against a workspace root.
+ * This is the shared logic for path resolution used by createLocation,
+ * createRawOutputLocation, and pathToLocation.
+ *
+ * @param inputPath - Absolute or workspace-relative path
+ * @param workspaceRoot - The workspace root directory (or undefined if no workspace)
+ * @returns Resolved path info with kind, absolutePath, and relativePath (for workspace paths)
+ */
+function resolvePathAgainstWorkspace(
+  inputPath: string,
+  workspaceRoot: string | undefined,
+): ResolvedPath {
+  if (!inputPath) {
+    if (!workspaceRoot) {
+      return { kind: 'external', absolutePath: '' };
+    }
+    return { kind: 'workspace', absolutePath: workspaceRoot, relativePath: '' };
+  }
+
+  const normalized = path.normalize(inputPath);
+
+  if (path.isAbsolute(normalized)) {
+    // Absolute path - check if within workspace
+    if (workspaceRoot) {
+      const relative = path.relative(workspaceRoot, normalized);
+      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+        return { kind: 'workspace', absolutePath: normalized, relativePath: relative };
+      }
+    }
+    return { kind: 'external', absolutePath: normalized };
+  }
+
+  // Relative path
+  if (!workspaceRoot) {
+    // No workspace - resolve to absolute using process.cwd()
+    const absolutePath = path.resolve(normalized);
+    return { kind: 'external', absolutePath };
+  }
+
+  // Resolve relative path against workspace
+  const absolutePath = path.join(workspaceRoot, normalized);
+  return { kind: 'workspace', absolutePath, relativePath: normalized };
+}
+
+/**
  * Get the full path to a specific task run directory.
  * @param id - The execution ID for the task run
  * @returns The full path to the task run directory
@@ -421,38 +474,22 @@ export class TaskRunFileService {
    * @returns FileLocation (runStorage if executionId available, workspace otherwise)
    */
   public createRawOutputLocation(inputPath: string): FileLocation {
-    const workspaceRoot = this.workspaceRoot;
-    if (!workspaceRoot) {
-      return createExternalLocation(inputPath);
-    }
+    const resolved = resolvePathAgainstWorkspace(inputPath, this.workspaceRoot);
 
-    const normalized = inputPath ? path.normalize(inputPath) : '';
-
-    // Handle absolute paths: convert to workspace-relative if within workspace
-    let relativePath: string;
-    let absolutePath: string;
-
-    if (path.isAbsolute(normalized)) {
-      relativePath = path.relative(workspaceRoot, normalized);
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        return createExternalLocation(normalized);
-      }
-      absolutePath = normalized;
-    } else {
-      relativePath = normalized;
-      absolutePath = path.join(workspaceRoot, normalized);
+    if (resolved.kind === 'external') {
+      return createExternalLocation(resolved.absolutePath);
     }
 
     // Always route to run storage when executionId is available
     const executionId = this.activeExecutionId;
     if (executionId) {
       const runDir = getRunDir(executionId);
-      const runAbsolute = path.join(runDir, relativePath);
-      return createRunStorageLocation(runAbsolute, relativePath, executionId);
+      const runAbsolute = path.join(runDir, resolved.relativePath);
+      return createRunStorageLocation(runAbsolute, resolved.relativePath, executionId);
     }
 
     // Fallback to workspace when no execution context
-    return createWorkspaceLocation(absolutePath, relativePath);
+    return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
   }
 
   /**
@@ -471,30 +508,10 @@ export class TaskRunFileService {
    * @returns FileLocation (workspace, runStorage, or external based on path and mode)
    */
   public createLocation(inputPath: string): FileLocation {
-    const workspaceRoot = this.workspaceRoot;
-    if (!workspaceRoot) {
-      return createExternalLocation(inputPath);
-    }
+    const resolved = resolvePathAgainstWorkspace(inputPath, this.workspaceRoot);
 
-    // Normalize path separators for current platform
-    const normalized = inputPath ? path.normalize(inputPath) : '';
-
-    // Handle absolute paths: convert to workspace-relative if within workspace
-    let relativePath: string;
-    let absolutePath: string;
-
-    if (path.isAbsolute(normalized)) {
-      // Absolute path - check if it's within the workspace
-      relativePath = path.relative(workspaceRoot, normalized);
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        // Path is outside workspace - return as external location
-        return createExternalLocation(normalized);
-      }
-      absolutePath = normalized;
-    } else {
-      // Relative path - resolve against workspace
-      relativePath = normalized;
-      absolutePath = path.join(workspaceRoot, normalized);
+    if (resolved.kind === 'external') {
+      return createExternalLocation(resolved.absolutePath);
     }
 
     // Check if run storage is enabled
@@ -502,13 +519,13 @@ export class TaskRunFileService {
     if (executionId && this.useRunStorage) {
       const runDir = this.metadata.runDirectory;
       if (runDir) {
-        const runAbsolute = path.join(runDir, relativePath);
-        return createRunStorageLocation(runAbsolute, relativePath, executionId);
+        const runAbsolute = path.join(runDir, resolved.relativePath);
+        return createRunStorageLocation(runAbsolute, resolved.relativePath, executionId);
       }
     }
 
     // Default to workspace location
-    return createWorkspaceLocation(absolutePath, relativePath);
+    return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
   }
 
   /**
@@ -582,40 +599,23 @@ export function getComparablePath(location: FileLocation): string {
  * @returns FileLocation (workspace or external, never runStorage)
  */
 export function pathToLocation(target: string): FileLocation {
+  const workspaceRoot = WorkspaceFS.getPath();
+
+  // Special case: empty path requires workspace
   if (!target) {
-    // Empty strings should resolve to workspace root or error
-    const workspaceRoot = WorkspaceFS.getPath();
     if (!workspaceRoot) {
       throw new Error('Cannot resolve empty path without workspace');
     }
     return createWorkspaceLocation(workspaceRoot, '');
   }
 
-  if (!path.isAbsolute(target)) {
-    const workspaceRoot = WorkspaceFS.getPath();
-    if (!workspaceRoot) {
-      // Relative path without workspace: resolve to absolute using process.cwd()
-      const absolutePath = path.resolve(target);
-      return createExternalLocation(absolutePath);
-    }
-    // path.join() normalizes automatically
-    const absolutePath = path.join(workspaceRoot, target);
-    return createWorkspaceLocation(absolutePath, target);
+  const resolved = resolvePathAgainstWorkspace(target, workspaceRoot);
+
+  if (resolved.kind === 'external') {
+    return createExternalLocation(resolved.absolutePath);
   }
 
-  // Normalize only at entry point from external strings
-  const normalized = path.normalize(target);
-
-  // Check if in workspace
-  const workspaceRoot = WorkspaceFS.getPath();
-  if (workspaceRoot) {
-    const relative = path.relative(workspaceRoot, normalized);
-    if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-      return createWorkspaceLocation(normalized, relative);
-    }
-  }
-
-  return createExternalLocation(normalized);
+  return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
 }
 
 /**
