@@ -301,6 +301,18 @@ export function extractLatexBetweenDocumentClass(
 }
 
 /**
+ * Regex pattern for matching document opening tags with name attributes.
+ * Single source of truth for document name extraction.
+ * Group 1: name attribute value
+ *
+ * Note: Case-sensitive to match XML spec and primary extraction path
+ * (addCdataToTagsMultiple + XMLParser). The fallback regex extraction
+ * is case-insensitive as a safety net but counter should reflect
+ * what primary path can extract.
+ */
+export const DOCUMENT_NAME_REGEX = /<document[^>]*name="([^"]*)"[^>]*>/;
+
+/**
  * Extract multiple document elements from an XML container tag
  * Used as a fallback for extracting documents when XML parsing fails
  */
@@ -313,7 +325,8 @@ export function extractMultipleTextFromTag(
     content: string,
   ): Array<{ content: string; name: string }> => {
     const results: Array<{ content: string; name: string }> = [];
-    const documentRegex = /<document.*?name="(.*?)".*?>(.*?)<\/document>/gs;
+    // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
+    const documentRegex = /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
 
     let documentMatch;
     while ((documentMatch = documentRegex.exec(content)) !== null) {
