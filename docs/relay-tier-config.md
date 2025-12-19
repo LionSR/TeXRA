@@ -26,7 +26,7 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
 {
   "tiers": {
     "Max": {
-      "models": ["gemini2flash", "gemini2flashLite", "deepseekV3", "deepseekChat"],
+      "models": ["gemini3f", "gemini25f", "gemini25f-", "deepseek", "deepseekT", "dsv3"],
       "providers": ["google", "deepseek"]
     },
     "Ultra": {
@@ -60,12 +60,26 @@ interface TierModelConfig {
 
 Model names must match the short names defined in `src/model/ModelRegistry.ts`. Examples:
 
+### Cheap Models (Good for Max Tier)
+
 | Model Name | Full Name | Provider | Pricing (in/out per 1M) |
 |------------|-----------|----------|-------------------------|
-| `gemini2flash` | gemini-2.0-flash | Google | $0.10/$0.40 |
-| `gemini2flashLite` | gemini-2.0-flash-lite | Google | $0.02/$0.08 |
-| `deepseekV3` | deepseek-chat | Deepseek | $0.14/$0.28 |
-| `deepseekReasoner` | deepseek-reasoner | Deepseek | $0.55/$2.19 |
+| `gemini3f` | gemini-3-flash-preview | Google | $0.30/$2.50 |
+| `gemini25f` | gemini-2.5-flash | Google | $0.30/$2.50 |
+| `gemini25f-` | gemini-2.5-flash-lite | Google | $0.10/$0.40 |
+| `deepseek` | deepseek-chat (V3.2) | Deepseek | $0.28/$0.42 |
+| `deepseekT` | deepseek-reasoner (V3.2 Thinking) | Deepseek | $0.28/$0.42 |
+| `dsv3` | deepseek-chat-v3 | Deepseek | $0.14/$0.28 |
+
+### Expensive Models (Ultra Tier Only)
+
+| Model Name | Full Name | Provider | Pricing (in/out per 1M) |
+|------------|-----------|----------|-------------------------|
+| `gemini3p` | gemini-3-pro-preview | Google | $2.00/$12.00 |
+| `gemini25p` | gemini-2.5-pro | Google | $1.25/$10.00 |
+| `dsr1` | deepseek-r1 | Deepseek | $4.00/$4.00 |
+| `opus45T` | claude-opus-4-5 | Anthropic | $15.00/$75.00 |
+| `gpt5pro` | gpt-5-pro | OpenAI | $10.00/$40.00 |
 
 ## Implementation Details
 
@@ -113,17 +127,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 const TIER_CONFIG = {
   tiers: {
     Max: {
-      // Cheaper models for Max tier
+      // Cheaper models for Max tier (Gemini Flash + DeepSeek)
       models: [
-        "gemini2flash",
-        "gemini2flashLite",
-        "deepseekV3",
-        "deepseekChat",
+        "gemini3f",      // Gemini 3 Flash - $0.30/$2.50
+        "gemini25f",     // Gemini 2.5 Flash - $0.30/$2.50
+        "gemini25f-",    // Gemini 2.5 Flash Lite - $0.10/$0.40
+        "deepseek",      // DeepSeek V3.2 - $0.28/$0.42
+        "deepseekT",     // DeepSeek V3.2 Thinking - $0.28/$0.42
+        "dsv3",          // DeepSeek V3 - $0.14/$0.28
       ],
       providers: ["google", "deepseek"]
     },
     Ultra: {
-      // All models for Ultra tier
+      // All models for Ultra tier (including expensive ones like Opus, GPT-5 Pro)
       models: "*",
       providers: ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope"]
     }
