@@ -141,6 +141,7 @@ export class ExecutionManager {
           .filter((f: string | null): f is string => f !== null),
       ),
       editedFile: null,
+      workflowContext: null,
       toolConfig,
       agentType: session.agentType,
       session,

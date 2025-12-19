@@ -41,6 +41,10 @@ const AgentConfigBaseSchema = z
     instruction: z.string().prefault(''),
     useMultipleOutputs: z.boolean().prefault(false),
 
+    // Optional context from a prior workflow agent execution
+    // Used when chaining workflow output into a tool-use agent for refinement
+    workflowContext: z.string().nullable().prefault(null),
+
     // Legacy field for backward compatibility - prefer session.agentType
     agentType: z.enum(AgentType).optional(),
     // Canonical session descriptor - single source of truth

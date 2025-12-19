@@ -86,6 +86,8 @@ function getBasicVars(
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
+    // Context from prior workflow agent execution (for chaining agents)
+    WORKFLOW_CONTEXT: agentConfig.workflowContext,
     IS_OPENAI_MODEL: modelHandler.isOpenai,
     IS_ANTHROPIC_MODEL: modelHandler.isAnthropic,
     IS_GOOGLE_MODEL: modelHandler.isGoogle,

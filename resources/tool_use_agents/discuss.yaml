@@ -61,4 +61,12 @@ prompts:
     (4) Be willing to revise your position based on new arguments or evidence.
     (5) Distinguish between established knowledge and your own interpretations.
   userRequest: |
+    {% if WORKFLOW_CONTEXT %}
+    <workflow_output>
+    The following content was produced by a previous workflow agent. The user would like to discuss or refine this output:
+
+    {{ WORKFLOW_CONTEXT }}
+    </workflow_output>
+
+    {% endif %}
     {{ INSTRUCTION }}

@@ -27,6 +27,7 @@ import {
   registerAgentCreatorCommands,
   registerFollowUpCommand,
   registerResumeAgentCommand,
+  registerContinueWithChatCommand,
 } from '@commands/agent';
 import {
   registerTestCommands,
@@ -101,6 +102,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     progressView: registerProgressViewCommands(context),
     followUp: registerFollowUpCommand(context),
     resumeAgent: registerResumeAgentCommand(context),
+    continueWithChat: registerContinueWithChatCommand(context),
     openFile: registerOpenFileCommands(context),
     help: registerHelpCommands(context),
     mainView: registerMainViewCommands(context),
