@@ -99,7 +99,9 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.logger = context.logger;
     this.modelHandler.setLogger(this.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
-    this.usageMonitor = new UsageMonitor(this.modelHandler, context);
+    this.usageMonitor = new UsageMonitor(this.modelHandler, context, {
+      agentName: agentConfig.agent,
+    });
   }
 
   /** Initialize the API client. */
