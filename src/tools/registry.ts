@@ -118,7 +118,7 @@ export type RawToolConfig =
  * Handles both string names (resolved from registry) and partial definitions.
  *
  * @param tools - Array of raw tool configs (strings or objects with name)
- * @param warnOnMissing - Optional callback for logging warnings about missing tools
+ * @param warnOnMissing - Optional callback for logging warnings about missing/invalid tools
  * @returns Array of resolved ToolDefinition objects
  */
 export function resolveToolDefinitions(
@@ -127,10 +127,10 @@ export function resolveToolDefinitions(
 ): ToolDefinition[] {
   return tools.map((item): ToolDefinition => {
     if (typeof item === 'string') {
-      // Validate tool name format
+      // Validate tool name format - warn but preserve original name for debugging
       if (!isValidToolName(item)) {
-        warnOnMissing?.(`Invalid tool name format: "${item}"`);
-        return { name: 'invalid_tool' };
+        warnOnMissing?.(item);
+        return { name: item };
       }
       const tool = DEFAULT_TOOL_REGISTRY[item];
       if (!tool) {
@@ -139,10 +139,10 @@ export function resolveToolDefinitions(
       }
       return tool.definition;
     }
-    // Validate tool name format for object form
+    // Validate tool name format for object form - warn but preserve original name
     if (!isValidToolName(item.name)) {
-      warnOnMissing?.(`Invalid tool name format: "${item.name}"`);
-      return { name: 'invalid_tool' };
+      warnOnMissing?.(item.name);
+      return { name: item.name };
     }
     if (!DEFAULT_TOOL_REGISTRY[item.name]) {
       warnOnMissing?.(item.name);
