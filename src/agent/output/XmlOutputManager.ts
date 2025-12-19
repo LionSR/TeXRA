@@ -19,7 +19,7 @@ import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
+import xmlUtils, { DOCUMENT_NAME_REGEX } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { getFileDirectory } from './displayUtils';
@@ -159,12 +159,55 @@ export class XmlOutputManager {
     }
   }
 
+  /**
+   * Count the number of document tag occurrences with name attributes.
+   * Only counts documents that can be extracted (those with name="...").
+   *
+   * Note: Case-sensitive to match the primary extraction path (CDATA wrapping
+   * and XMLParser are both case-sensitive). This ensures the count reflects
+   * what can actually be extracted, avoiding false warnings.
+   */
+  private countDocumentTags(content: string): number {
+    // Use global version of shared pattern (case-sensitive)
+    const globalPattern = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
+    const matches = content.match(globalPattern);
+    return matches ? matches.length : 0;
+  }
+
+  /**
+   * Log a warning when some or all documents failed to extract.
+   * Uses the existing missingOutputs message type to show the XML reminder.
+   */
+  private warnPartialExtraction(
+    outputLocation: FileLocation,
+    expectedCount: number,
+    extractedCount: number,
+  ): void {
+    if (expectedCount > 0 && expectedCount > extractedCount) {
+      // Generate placeholder names for the missing documents
+      const missingCount = expectedCount - extractedCount;
+      const missing = Array.from(
+        { length: missingCount },
+        (_, i) => `<unextracted document ${i + 1}>`,
+      );
+
+      this.logger.missingOutputs({
+        missing,
+        xmlFile: outputLocation.absolutePath,
+        documentTag: this.agentSetting.documentTag,
+      });
+    }
+  }
+
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
+
+    // Count expected document tags before processing
+    const expectedDocumentCount = this.countDocumentTags(outputContent);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -185,6 +228,11 @@ export class XmlOutputManager {
         documentTag,
       );
       if (documents) {
+        this.warnPartialExtraction(
+          outputLocation,
+          expectedDocumentCount,
+          documents.length,
+        );
         return this.processMultipleLatexDocuments(documents, outputLocation);
       }
       this.logger.debugInternal(
@@ -195,11 +243,17 @@ export class XmlOutputManager {
         documentTag,
       );
       if (fallbackDocuments) {
+        this.warnPartialExtraction(
+          outputLocation,
+          expectedDocumentCount,
+          fallbackDocuments.length,
+        );
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
           outputLocation,
         );
       }
+      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
       return [];
     } catch (err) {
       this.logger.debugInternal(
@@ -210,11 +264,17 @@ export class XmlOutputManager {
         documentTag,
       );
       if (fallbackDocuments) {
+        this.warnPartialExtraction(
+          outputLocation,
+          expectedDocumentCount,
+          fallbackDocuments.length,
+        );
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
           outputLocation,
         );
       }
+      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
       throw err;
     }
   }
@@ -299,7 +359,7 @@ export class XmlOutputManager {
 
     const xmlContent = await AbsoluteFS.read(outputLocation.absolutePath);
     let original = '';
-    const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
+    const nameMatch = xmlContent.match(DOCUMENT_NAME_REGEX);
     if (nameMatch && nameMatch[1]) {
       original = nameMatch[1].trim();
     }
