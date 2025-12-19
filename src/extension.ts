@@ -21,6 +21,7 @@ import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
+import { UsageLogService } from '@logger/UsageLogService';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
@@ -213,6 +214,12 @@ export async function activate(context: vscode.ExtensionContext) {
     persistedToolUseSessions.map((snapshot) => snapshot.streamId),
   );
 
+  // Initialize usage logging service for backend analytics
+  const extensionVersion = context.extension.packageJSON?.version as
+    | string
+    | undefined;
+  UsageLogService.initialize({}, extensionVersion);
+
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
 
@@ -329,6 +336,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
+
+  // Flush any pending usage logs before deactivating
+  await UsageLogService.dispose();
 
   // Clean up persisted tool-use sessions when extension deactivates
   ToolUseSessionPersistence.clearAllPersistedSnapshots();

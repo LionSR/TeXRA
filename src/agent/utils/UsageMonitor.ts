@@ -12,6 +12,15 @@ import type {
 
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import { UsageLogService } from '@logger/UsageLogService';
+
+/**
+ * Optional metadata for usage logging.
+ */
+export interface UsageMonitorMetadata {
+  /** Agent name for backend logging */
+  agentName?: string;
+}
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -32,6 +41,7 @@ export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
     private readonly context: AgentExecutionContext,
+    private readonly metadata?: UsageMonitorMetadata,
   ) {}
 
   async recordUsage(
@@ -93,8 +103,40 @@ export class UsageMonitor {
       // workflow agents (task group ID) and tool-use agents (executionId)
       const storageKey = this.context.storageKey;
       usageReporter.report(payload, storageKey);
+
+      // Log to backend for analytics (non-blocking, fire-and-forget)
+      this.logToBackend(totals, stateGlobal.totalResponseTimeMs);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
+    }
+  }
+
+  /**
+   * Log usage to backend for analytics.
+   * Non-blocking - errors are caught and logged, never thrown.
+   */
+  private logToBackend(
+    totals: ReturnType<AgentRunState['usageAccumulator']['getTotals']>,
+    totalResponseTimeMs: number,
+  ): void {
+    try {
+      const modelConfig = this.modelHandler.config;
+
+      UsageLogService.log({
+        model: modelConfig.fullName,
+        provider: modelConfig.provider.toLowerCase() as any,
+        agentName: this.metadata?.agentName,
+        inputTokens: totals.totalInputTokens,
+        outputTokens: totals.totalOutputTokens,
+        cost: Number(totals.totalCost.toFixed(6)),
+        responseTimeMs: Math.round(totalResponseTimeMs),
+        cachedInputTokens: totals.totalCacheReadInputTokens || undefined,
+        reasoningTokens: totals.totalReasoningTokens || undefined,
+        streamId: this.context.streamId,
+      });
+    } catch (error) {
+      // Silently ignore backend logging errors - this should never block the main flow
+      this.context.logger.debug(`Backend usage logging failed: ${error}`);
     }
   }
 }
