@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.1] - 2025-12-19
+
+### Features
+
+- Added **Gemini 3 Flash** (`gemini3f`) to the default models list.
+- Chat and tool-use agents can now be hosted as remote agents.
+
+### Bug Fixes
+
+- Fixed LaTeX-style backtick quotes in document name extraction.
+- Fixed dropdown option selection not updating visually.
+- Fixed cloud icon sizing inconsistency in agent dropdown.
+- Fixed tool name handling in tool definitions resolver.
+- Fixed absolute path handling in file location creation.
+- Fixed agent and model selection reverting to defaults.
+
+### Improvements
+
+- Updated core dependencies: Supabase, fs-extra, OpenAI, webpack.
+
 ## [0.35.0] - 2025-12-16
 
 ### Bug Fixes
