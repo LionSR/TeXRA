@@ -15,10 +15,10 @@ export const UNICODE_REPLACEMENTS: ReplacementCategory = {
     // Note: Unicode MINUS SIGN U+2212 ('−') is handled by replaceMathUnicode
 
     // ===== Quote character replacements (globally safe) =====
-    '’': "'", // right single quote (U+2019) / APOSTROPHE (U+02BC) often confusable
-    '‘': "'", // left single quote (U+2018)
-    '”': "''", // right double quote (U+201D)
-    '“': '``', // left double quote (U+201C)
+    '\u2019': "'", // right single quote (U+2019) to ASCII apostrophe
+    '\u2018': "'", // left single quote (U+2018) to ASCII apostrophe
+    '\u201D': '"', // right double quote (U+201D) to ASCII double quote
+    '\u201C': '"', // left double quote (U+201C) to ASCII double quote
     ʼ: "'", // MODIFIER LETTER APOSTROPHE (U+02BC)
     ʾ: "'", // MODIFIER LETTER RIGHT HALF RING (U+02BE) - sometimes misused as quote
     '՚': "'", // ARMENIAN APOSTROPHE (U+055A) - sometimes misused as quote
