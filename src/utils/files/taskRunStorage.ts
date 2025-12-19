@@ -415,63 +415,100 @@ export class TaskRunFileService {
    *
    * Falls back to workspace location only when no executionId is available.
    *
-   * @param relativePath - Workspace-relative path (e.g., "paper__agent__r0_model.xml")
+   * Accepts both absolute and workspace-relative paths for robustness.
+   *
+   * @param inputPath - Absolute or workspace-relative path (e.g., "paper__agent__r0_model.xml")
    * @returns FileLocation (runStorage if executionId available, workspace otherwise)
    */
-  public createRawOutputLocation(relativePath: string): FileLocation {
+  public createRawOutputLocation(inputPath: string): FileLocation {
     const workspaceRoot = this.workspaceRoot;
     if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
+      return createExternalLocation(inputPath);
     }
 
-    const normalized = relativePath ? path.normalize(relativePath) : '';
+    const normalized = inputPath ? path.normalize(inputPath) : '';
+
+    // Handle absolute paths: convert to workspace-relative if within workspace
+    let relativePath: string;
+    let absolutePath: string;
+
+    if (path.isAbsolute(normalized)) {
+      relativePath = path.relative(workspaceRoot, normalized);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        return createExternalLocation(normalized);
+      }
+      absolutePath = normalized;
+    } else {
+      relativePath = normalized;
+      absolutePath = path.join(workspaceRoot, normalized);
+    }
 
     // Always route to run storage when executionId is available
     const executionId = this.activeExecutionId;
     if (executionId) {
       const runDir = getRunDir(executionId);
-      const runAbsolute = path.join(runDir, normalized);
-      return createRunStorageLocation(runAbsolute, normalized, executionId);
+      const runAbsolute = path.join(runDir, relativePath);
+      return createRunStorageLocation(runAbsolute, relativePath, executionId);
     }
 
     // Fallback to workspace when no execution context
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+    return createWorkspaceLocation(absolutePath, relativePath);
   }
 
   /**
-   * Create a FileLocation from a workspace-relative path, with run-storage awareness.
+   * Create a FileLocation from a path, with run-storage awareness.
    * This is the preferred method for creating output file locations.
+   *
+   * Accepts both absolute and workspace-relative paths. Absolute paths within
+   * the workspace are automatically converted to relative paths internally.
+   * Paths outside the workspace are returned as external locations.
    *
    * Path normalization is handled internally - you can pass paths with either
    * forward slashes or backslashes, and the function will normalize them for
    * the current platform. It's safe to pass already-normalized paths.
    *
-   * @param relativePath - Workspace-relative path (e.g., "paper.tex" or "sub/paper.tex")
-   * @returns FileLocation (workspace or runStorage based on current mode)
+   * @param inputPath - Absolute or workspace-relative path
+   * @returns FileLocation (workspace, runStorage, or external based on path and mode)
    */
-  public createLocation(relativePath: string): FileLocation {
+  public createLocation(inputPath: string): FileLocation {
     const workspaceRoot = this.workspaceRoot;
     if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
+      return createExternalLocation(inputPath);
     }
 
-    // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
-    const normalized = relativePath ? path.normalize(relativePath) : '';
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+    // Normalize path separators for current platform
+    const normalized = inputPath ? path.normalize(inputPath) : '';
+
+    // Handle absolute paths: convert to workspace-relative if within workspace
+    let relativePath: string;
+    let absolutePath: string;
+
+    if (path.isAbsolute(normalized)) {
+      // Absolute path - check if it's within the workspace
+      relativePath = path.relative(workspaceRoot, normalized);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        // Path is outside workspace - return as external location
+        return createExternalLocation(normalized);
+      }
+      absolutePath = normalized;
+    } else {
+      // Relative path - resolve against workspace
+      relativePath = normalized;
+      absolutePath = path.join(workspaceRoot, normalized);
+    }
 
     // Check if run storage is enabled
     const executionId = this.activeExecutionId;
     if (executionId && this.useRunStorage) {
       const runDir = this.metadata.runDirectory;
       if (runDir) {
-        const runAbsolute = path.join(runDir, normalized);
-        return createRunStorageLocation(runAbsolute, normalized, executionId);
+        const runAbsolute = path.join(runDir, relativePath);
+        return createRunStorageLocation(runAbsolute, relativePath, executionId);
       }
     }
 
     // Default to workspace location
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+    return createWorkspaceLocation(absolutePath, relativePath);
   }
 
   /**
