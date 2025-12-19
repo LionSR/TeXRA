@@ -1,6 +1,7 @@
 // Local imports - model utilities
 import {
   canUseServerSideKeys,
+  canUseServerSideKeysForModel,
   isProviderEnabledForServerSideKeys,
 } from '@auth/serverSideKeyAccess';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
@@ -36,15 +37,18 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * Models missing a required key receive data-requires-key="true" so the
  * webview can handle API key setup prompts and display a red ✗ indicator.
  *
- * When server-side keys are enabled (experimental feature for Ultra users),
- * models from supported providers are marked as available even without local keys.
+ * Server-side key access is tier-based:
+ * - Ultra tier: All models available via relay (if provider enabled)
+ * - Max tier: Only specific cheaper models available via relay (configured remotely)
+ * - Free tier: Must bring own API keys
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
   const hasOpenRouter = await SecretManager.apiKeyExists('openRouter');
 
-  // Check if server-side API keys are available (Ultra tier + setting enabled)
-  const hasServerSideKeys = await canUseServerSideKeys();
+  // Prime the server-side keys cache (fetches tier config + enabled providers)
+  // This ensures canUseServerSideKeysForModel has the data it needs
+  const hasAnyServerSideAccess = await canUseServerSideKeys();
 
   const optionTags = await Promise.all(
     models.map(async (model) => {
@@ -56,10 +60,16 @@ export async function computeModelOptions(): Promise<string> {
       const provider = config.provider;
       let available = false;
 
-      // Check if server-side keys are available for this provider
-      // isProviderEnabledForServerSideKeys checks the server's list of enabled providers
-      if (hasServerSideKeys && isProviderEnabledForServerSideKeys(provider)) {
-        available = true;
+      // Check if server-side keys are available for THIS SPECIFIC MODEL
+      // This handles tier-based access:
+      // - Ultra: all models if provider enabled
+      // - Max: only models in the tier config's allowed list
+      if (
+        hasAnyServerSideAccess &&
+        isProviderEnabledForServerSideKeys(provider)
+      ) {
+        // For model-specific check, we need to verify this exact model is allowed
+        available = await canUseServerSideKeysForModel(model);
       }
 
       // Check if the provider requires an API key (only if not already available via server-side)
