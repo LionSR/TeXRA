@@ -616,6 +616,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         output?.finalize(finalOutputText);
 
         // Ensure text field excludes thinking content
+        // Part.thought is a native property of the Google GenAI SDK Part interface
         const candidateContent = baseResponse.candidates?.[0]?.content;
         if (candidateContent?.parts) {
           const filteredParts = candidateContent.parts.filter(
