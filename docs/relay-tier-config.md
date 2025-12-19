@@ -26,8 +26,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
 {
   "tiers": {
     "Max": {
-      "models": ["gemini3f", "gemini25f", "gemini25f-", "deepseek", "deepseekT", "dsv3"],
-      "providers": ["google", "deepseek"]
+      "models": ["sonnet45T", "gemini3f", "gemini25f", "gemini25f-", "deepseek", "deepseekT", "dsv3"],
+      "providers": ["anthropic", "google", "deepseek"]
     },
     "Ultra": {
       "models": "*",
@@ -64,6 +64,7 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 
 | Model Name | Full Name | Provider | Pricing (in/out per 1M) |
 |------------|-----------|----------|-------------------------|
+| `sonnet45T` | claude-sonnet-4-5 (Thinking) | Anthropic | $3.00/$15.00 |
 | `gemini3f` | gemini-3-flash-preview | Google | $0.30/$2.50 |
 | `gemini25f` | gemini-2.5-flash | Google | $0.30/$2.50 |
 | `gemini25f-` | gemini-2.5-flash-lite | Google | $0.10/$0.40 |
@@ -127,8 +128,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 const TIER_CONFIG = {
   tiers: {
     Max: {
-      // Cheaper models for Max tier (Gemini Flash + DeepSeek)
+      // Cheaper models for Max tier (Sonnet 4.5T + Gemini Flash + DeepSeek)
       models: [
+        "sonnet45T",     // Claude Sonnet 4.5 Thinking - $3.00/$15.00
         "gemini3f",      // Gemini 3 Flash - $0.30/$2.50
         "gemini25f",     // Gemini 2.5 Flash - $0.30/$2.50
         "gemini25f-",    // Gemini 2.5 Flash Lite - $0.10/$0.40
@@ -136,7 +138,7 @@ const TIER_CONFIG = {
         "deepseekT",     // DeepSeek V3.2 Thinking - $0.28/$0.42
         "dsv3",          // DeepSeek V3 - $0.14/$0.28
       ],
-      providers: ["google", "deepseek"]
+      providers: ["anthropic", "google", "deepseek"]
     },
     Ultra: {
       // All models for Ultra tier (including expensive ones like Opus, GPT-5 Pro)
