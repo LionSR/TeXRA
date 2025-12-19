@@ -1,62 +1,38 @@
 // Third-party imports
 import { z, type ZodType } from 'zod';
 
-// Third-party imports - provider tool definitions
-import type { FunctionDefinition } from 'openai/resources/shared';
-import type { Tool as AnthropicTool } from '@anthropic-ai/sdk/resources/messages/messages';
-import type { Schema as GeminiSchema } from '@google/genai/dist/genai';
-
 // ============================================================================
-// Tool Definition Schema
+// Tool Definition Schema - Single Source of Truth
 // ============================================================================
 
 /**
  * Zod schema for validating tool definition structure.
- *
- * Design notes:
- * - Uses z.object() (not strictObject) with passthrough() to allow runtime-only
- *   fields like `zodSchema` that are added by defineTool()
- * - The schema validates the serializable fields (name, description, parameters)
- * - The TypeScript `ToolDefinition` type provides full typing including runtime fields
- *
- * This separation is intentional:
- * - Schema: validates data structure from YAML/JSON
- * - Type: provides full TypeScript typing for runtime usage
+ * This is the SINGLE SOURCE OF TRUTH - types are derived from this schema.
  */
-export const ToolDefinitionSchema = z
-  .object({
-    /** Name of the tool or function */
-    name: z.string(),
-    /** Optional description for the model */
-    description: z.string().optional(),
-    /** Parameter schema or provider specific metadata */
-    parameters: z.record(z.string(), z.unknown()).optional(),
-  })
-  .passthrough();
+export const ToolDefinitionSchema = z.strictObject({
+  /** Name of the tool or function */
+  name: z.string(),
+  /** Optional description for the model */
+  description: z.string().optional(),
+  /** Parameter schema (JSON Schema format) */
+  parameters: z.record(z.string(), z.unknown()).optional(),
+});
 
 // ============================================================================
-// Tool Definition Type
+// Tool Definition Types - Derived from Schema
 // ============================================================================
 
 /**
- * Full tool definition type used across model providers.
- *
- * Note: This type is NOT derived from ToolDefinitionSchema via z.infer because:
- * 1. `parameters` needs provider-specific types (OpenAI, Anthropic, Gemini)
- * 2. `zodSchema` is a runtime-only field (ZodType can't be validated by Zod)
- *
- * The schema validates structure; this type provides TypeScript typing.
+ * Serializable tool definition - derived from schema.
+ * Used for YAML configs, persistence, and validation.
  */
-export type ToolDefinition = {
-  /** Name of the tool or function */
-  name: string;
-  /** Optional description for the model */
-  description?: string;
-  /** Parameter schema - accepts provider-specific formats */
-  parameters?:
-    | FunctionDefinition['parameters']
-    | AnthropicTool['input_schema']
-    | GeminiSchema;
+export type SerializableToolDefinition = z.infer<typeof ToolDefinitionSchema>;
+
+/**
+ * Full tool definition with runtime-only fields.
+ * Extends the serializable type with fields that can't be validated by Zod.
+ */
+export type ToolDefinition = SerializableToolDefinition & {
   /**
    * Original Zod schema for SDK-native Zod support (runtime-only, not serialized).
    * When present, conversion functions use native toJSONSchema() for conversion.
@@ -64,6 +40,12 @@ export type ToolDefinition = {
    */
   zodSchema?: ZodType;
 };
+
+// Compile-time assertion: ToolDefinition extends SerializableToolDefinition
+type _AssertExtends = ToolDefinition extends SerializableToolDefinition
+  ? true
+  : never;
+const _assertExtends: _AssertExtends = true;
 
 // ============================================================================
 // Type Guards and Utilities
