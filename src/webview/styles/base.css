@@ -116,7 +116,7 @@ vscode-option[data-requires-key='true'] {
   font-style: normal;
 }
 
-vscode-option[data-multiple='true'] {
+vscode-option {
   font-family: codicon, var(--vscode-font-family);
 }
 
