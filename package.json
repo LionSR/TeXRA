@@ -128,6 +128,7 @@
             },
             "default": [
               "gemini3p",
+              "gemini3f",
               "sonnet45T",
               "opus45T",
               "gpt52",
