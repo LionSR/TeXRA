@@ -33,7 +33,10 @@ export const RemoteAgentMetadataSchema = z.object({
   /** Visibility can be NULL in the database, transformed to undefined */
   visibility: z.array(z.string()).nullable().transform(nullToUndefined),
   /** Agent category: 'workflow' or 'toolUse' */
-  agentCategory: z.nativeEnum(AgentCategory).nullable().transform(nullToUndefined),
+  agentCategory: z
+    .nativeEnum(AgentCategory)
+    .nullable()
+    .transform(nullToUndefined),
 });
 
 export type RemoteAgentMetadata = z.infer<typeof RemoteAgentMetadataSchema>;

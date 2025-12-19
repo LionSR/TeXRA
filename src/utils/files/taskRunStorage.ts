@@ -141,7 +141,11 @@ function resolvePathAgainstWorkspace(
     if (workspaceRoot) {
       const relative = path.relative(workspaceRoot, normalized);
       if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-        return { kind: 'workspace', absolutePath: normalized, relativePath: relative };
+        return {
+          kind: 'workspace',
+          absolutePath: normalized,
+          relativePath: relative,
+        };
       }
     }
     return { kind: 'external', absolutePath: normalized };
@@ -485,11 +489,18 @@ export class TaskRunFileService {
     if (executionId) {
       const runDir = getRunDir(executionId);
       const runAbsolute = path.join(runDir, resolved.relativePath);
-      return createRunStorageLocation(runAbsolute, resolved.relativePath, executionId);
+      return createRunStorageLocation(
+        runAbsolute,
+        resolved.relativePath,
+        executionId,
+      );
     }
 
     // Fallback to workspace when no execution context
-    return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
+    return createWorkspaceLocation(
+      resolved.absolutePath,
+      resolved.relativePath,
+    );
   }
 
   /**
@@ -520,12 +531,19 @@ export class TaskRunFileService {
       const runDir = this.metadata.runDirectory;
       if (runDir) {
         const runAbsolute = path.join(runDir, resolved.relativePath);
-        return createRunStorageLocation(runAbsolute, resolved.relativePath, executionId);
+        return createRunStorageLocation(
+          runAbsolute,
+          resolved.relativePath,
+          executionId,
+        );
       }
     }
 
     // Default to workspace location
-    return createWorkspaceLocation(resolved.absolutePath, resolved.relativePath);
+    return createWorkspaceLocation(
+      resolved.absolutePath,
+      resolved.relativePath,
+    );
   }
 
   /**
