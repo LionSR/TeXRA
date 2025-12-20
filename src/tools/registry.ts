@@ -1,5 +1,5 @@
 // Local imports - core types
-import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
+import type { IToolRegistry } from '@agent/core/ToolTypes';
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
