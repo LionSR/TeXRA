@@ -5,11 +5,6 @@ import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
-/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
-const ULTRA_TIER = 'Ultra';
-/** Max tier value - must match MAX_TIER in src/auth/config.ts */
-const MAX_TIER = 'Max';
-
 /**
  * Manages the agents table rendering and interactions.
  */
@@ -45,6 +40,7 @@ export class AgentsTable {
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
    * @param {string[]|null} options.allowedModels - Array of allowed model names (null = all for Ultra)
+   * @param {{ ultra: string, max: string }} options.tierConstants - Tier label constants
    */
   render({
     authenticated,
@@ -55,6 +51,7 @@ export class AgentsTable {
     apiAccessMode,
     enabledProviders,
     allowedModels,
+    tierConstants,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
@@ -64,6 +61,7 @@ export class AgentsTable {
     );
     const noAgentsMessage = safeGetElementById(ELEMENT_IDS.NO_AGENTS_MESSAGE);
     const apiAccessSection = safeGetElementById(ELEMENT_IDS.API_ACCESS_SECTION);
+    const tierLabels = tierConstants ?? {};
 
     if (
       !profileInfo ||
@@ -116,8 +114,8 @@ export class AgentsTable {
 
     // Show API access section for Max and Ultra tiers
     if (apiAccessSection) {
-      const isUltra = tier === ULTRA_TIER;
-      const isMax = tier === MAX_TIER;
+      const isUltra = tier === tierLabels.ultra;
+      const isMax = tier === tierLabels.max;
       const hasTierAccess = isUltra || isMax;
       apiAccessSection.style.display = hasTierAccess ? 'block' : 'none';
 
@@ -127,6 +125,7 @@ export class AgentsTable {
           enabledProviders,
           allowedModels,
           tier,
+          tierLabels,
         );
       }
     }
@@ -150,14 +149,28 @@ export class AgentsTable {
    * @param {string[]} enabledProviders - Array of enabled provider names
    * @param {string[]|null} allowedModels - Array of allowed model names (null = all for Ultra)
    * @param {string} tier - User's tier ('Max' or 'Ultra')
+   * @param {{ ultra?: string, max?: string }} tierConstants - Tier label constants
    */
-  renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels, tier) {
+  renderApiAccessSection(
+    apiAccessMode,
+    enabledProviders,
+    allowedModels,
+    tier,
+    tierConstants,
+  ) {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
     const modelsInfo = safeGetElementById(ELEMENT_IDS.ALLOWED_MODELS_INFO);
+    const resolvedAllowedModels = Array.isArray(allowedModels)
+      ? allowedModels
+      : allowedModels === null
+        ? null
+        : [];
+    const isUltra = tier === tierConstants?.ultra;
+    const isMax = tier === tierConstants?.max;
 
     // Set the current mode
     if (includedRadio) {
@@ -190,19 +203,16 @@ export class AgentsTable {
     // - []: no models configured (error state)
     // - [...]: specific models allowed
     if (modelsInfo) {
-      if (
-        apiAccessMode === 'included' &&
-        (tier === MAX_TIER || tier === ULTRA_TIER)
-      ) {
-        if (allowedModels === null) {
+      if (apiAccessMode === 'included' && (isUltra || isMax)) {
+        if (resolvedAllowedModels === null) {
           // null means all models are allowed
           modelsInfo.textContent = 'All models included';
           modelsInfo.title = '';
           modelsInfo.style.display = 'block';
-        } else if (allowedModels.length > 0) {
+        } else if (resolvedAllowedModels.length > 0) {
           // Specific models allowed
-          modelsInfo.textContent = `Models: ${allowedModels.length} included`;
-          modelsInfo.title = allowedModels.join(', ');
+          modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
+          modelsInfo.title = resolvedAllowedModels.join(', ');
           modelsInfo.style.display = 'block';
         } else {
           // Empty array means no models configured
