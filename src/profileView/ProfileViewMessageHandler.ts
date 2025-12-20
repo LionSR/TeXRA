@@ -17,7 +17,7 @@ import {
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
-import { ULTRA_TIER } from '@/auth/config';
+import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import {
   getEnabledProviders,
   setUseIncludedModelAccess,
@@ -28,9 +28,6 @@ import {
   getAllowedModelsForTier,
   getEnabledProvidersForTier,
 } from '@/auth/tierModelAccess';
-
-/** Max tier constant. */
-const MAX_TIER = 'Max';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });

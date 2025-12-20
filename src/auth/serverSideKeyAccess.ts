@@ -20,6 +20,17 @@
  * the list of enabled providers from `/relay/providers` and caches it.
  * This allows the server to enable/disable providers without client updates.
  *
+ * CACHE STALENESS:
+ * ---------------
+ * Tier and access information is cached for 5 minutes (CACHE_TTL_MS).
+ * If a user's tier changes server-side (e.g., upgrade from Max to Ultra,
+ * or downgrade), they won't see the change until:
+ * 1. The cache expires (5 minutes), OR
+ * 2. They sign out and back in (clears cache via clearServerSideKeyAccessCache)
+ *
+ * This is intentional to avoid excessive auth service calls. For immediate
+ * tier updates, users should sign out and sign back in.
+ *
  * INITIALIZATION REQUIREMENTS:
  * ----------------------------
  * The `canUseServerSideKeys()` async function MUST be called at least once
@@ -48,17 +59,18 @@
 
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
-import { SUPABASE_CUSTOM_DOMAIN, ULTRA_TIER, type UserTier } from './config';
+import {
+  SUPABASE_CUSTOM_DOMAIN,
+  ULTRA_TIER,
+  MAX_TIER,
+  type UserTier,
+} from './config';
 import {
   getTierConfig,
   getTierConfigSync,
   isModelAvailableForTier,
   clearTierConfigCache,
-  type TierModelConfig,
 } from './tierModelAccess';
-
-/** Max tier constant for tier checks. */
-const MAX_TIER: UserTier = 'Max';
 
 /**
  * Global state key for the "use included model access" preference.
