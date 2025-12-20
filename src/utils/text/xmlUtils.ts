@@ -97,7 +97,6 @@ function convertLatexToMarkdown(latex: string): string {
 }
 
 function detectInputFormat(text: string): outputFormat {
-  // const htmlRegex = /<[^>]+>/; // this is wrong, as we might have some xml tags to separte scratchpad
   if (LATEX_PATTERN.test(text)) {
     return outputFormat.LaTeX;
   } else if (HTML_PATTERN.test(text)) {
