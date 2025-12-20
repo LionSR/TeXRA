@@ -44,7 +44,7 @@ export class DiffStatsManager {
         }
       }
       return { added, removed };
-    } catch {
+    } catch (_err) {
       return {};
     }
   }

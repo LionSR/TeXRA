@@ -355,7 +355,7 @@ export function extractOpenAIWebSearchResults(
 export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname;
-  } catch {
+  } catch (_err) {
     return '';
   }
 }
