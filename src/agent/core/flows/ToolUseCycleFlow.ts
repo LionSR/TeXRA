@@ -783,7 +783,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           if (exists) {
             toAdd.push(location);
           }
-        } catch {
+        } catch (_err) {
           // Ignore errors when checking existence
         }
       }
