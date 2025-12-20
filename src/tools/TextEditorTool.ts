@@ -25,7 +25,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError, cliResult, toolResult } from './result';
-import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
+import { FileHistoryEntry } from './types';
 
 // Local imports - approval helpers
 
@@ -47,7 +47,11 @@ export const TextEditorInputSchema = z.strictObject({
   insert_line: z.number().optional(),
 });
 
+/** Derived from TextEditorInputSchema - single source of truth */
 export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
+
+/** Command type derived from TextEditorInputSchema */
+export type EditorCommand = TextEditorInput['command'];
 
 /**
  * Implementation of Anthropic's text editor tool for VS Code
