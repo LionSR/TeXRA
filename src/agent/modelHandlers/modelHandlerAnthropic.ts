@@ -101,7 +101,6 @@ import type {
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
-  BetaRawMessageStreamEvent,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,

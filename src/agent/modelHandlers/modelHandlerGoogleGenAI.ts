@@ -1,5 +1,4 @@
 // Standard library imports
-import * as path from 'path';
 import { Buffer } from 'buffer';
 import { randomUUID } from 'node:crypto';
 
@@ -36,7 +35,6 @@ import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
-  ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';

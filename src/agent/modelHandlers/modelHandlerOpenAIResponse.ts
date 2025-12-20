@@ -12,7 +12,6 @@ import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   type OpenAIAPIResponseUsage,
-  type ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -66,7 +65,7 @@ import type {
   OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
-import type { Reasoning, ReasoningEffort } from 'openai/resources/shared';
+import type { Reasoning } from 'openai/resources/shared';
 import type {
   EasyInputMessage,
   Response,
@@ -179,7 +178,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
-  private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
   /** Statuses indicating the background response is still processing. */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =

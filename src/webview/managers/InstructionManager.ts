@@ -12,7 +12,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
-import { sleep } from '@utils/helpers';
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
 import {
   polishTextWithAI,
