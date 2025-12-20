@@ -14,7 +14,7 @@ export function normalizeUrl(input: string): string {
     const url = new URL(input.includes('://') ? input : `https://${input}`);
     const withoutProtocol = `${url.host}${url.pathname}`;
     return withoutProtocol.replace(/\/+$/, '');
-  } catch {
+  } catch (_err) {
     return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   }
 }

@@ -73,7 +73,7 @@ export class LatexDiffManager {
   private async resolveSymlinks(target: string): Promise<string> {
     try {
       return await fs.realpath(target);
-    } catch {
+    } catch (_err) {
       return target;
     }
   }

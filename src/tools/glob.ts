@@ -74,7 +74,7 @@ export class GlobTool extends defineTool({
           relativePath,
           mtime: stat.mtime ?? 0,
         };
-      } catch {
+      } catch (_err) {
         return { relativePath, mtime: 0 };
       }
     });

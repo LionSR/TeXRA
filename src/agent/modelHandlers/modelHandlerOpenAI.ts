@@ -356,7 +356,7 @@ export class ModelHandlerOpenAI<
             try {
               const totalUsage = await stream.totalUsage();
               finalResponse = { ...finalResponse, usage: totalUsage };
-            } catch {
+            } catch (_err) {
               // totalUsage() may fail if stream ended abnormally
             }
           }

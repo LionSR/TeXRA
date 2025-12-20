@@ -212,7 +212,7 @@ async function fetchAccessStatus(): Promise<boolean> {
     const hasAccess = tier === ULTRA_TIER;
     accessCache.lastKnownResult = hasAccess;
     return hasAccess;
-  } catch {
+  } catch (_err) {
     // On any error (network, auth, etc.), deny access and allow retry
     accessCache.lastKnownResult = false;
     return false;
