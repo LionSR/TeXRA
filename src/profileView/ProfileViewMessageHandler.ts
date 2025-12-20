@@ -81,6 +81,10 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         apiAccessMode: 'personal',
         enabledProviders: [],
         allowedModels: [], // No models for unauthenticated users
+        tierConstants: {
+          ultra: ULTRA_TIER,
+          max: MAX_TIER,
+        },
       });
       return;
     }
@@ -151,6 +155,10 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       enabledProviders,
       // New fields for Max tier support
       allowedModels, // null = all models (Ultra), array = specific models (Max)
+      tierConstants: {
+        ultra: ULTRA_TIER,
+        max: MAX_TIER,
+      },
     });
   }
 
