@@ -17,7 +17,7 @@ const HistoryIdMessage = z.object({ historyId: z.string().min(1) });
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
-  constructor(private readonly _context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     super('HistoryView');
   }
 
