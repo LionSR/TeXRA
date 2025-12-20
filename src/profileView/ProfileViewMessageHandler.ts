@@ -43,7 +43,7 @@ type RemoteAgentPayload = z.infer<typeof RemoteAgentPayloadSchema>;
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
-  constructor(private readonly _context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     super('ProfileView');
   }
 
