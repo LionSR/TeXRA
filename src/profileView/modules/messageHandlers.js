@@ -26,7 +26,8 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       remoteAgents: message.remoteAgents,
       apiAccessMode: message.apiAccessMode,
       enabledProviders: message.enabledProviders || [],
-      allowedModels: message.allowedModels ?? [],
+      allowedModels:
+        message.allowedModels === undefined ? [] : message.allowedModels,
       tierConstants: message.tierConstants,
     });
 
@@ -39,7 +40,8 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       remoteAgents: message.remoteAgents,
       apiAccessMode: message.apiAccessMode,
       enabledProviders: message.enabledProviders || [],
-      allowedModels: message.allowedModels ?? [],
+      allowedModels:
+        message.allowedModels === undefined ? [] : message.allowedModels,
       tierConstants: message.tierConstants,
     });
   }
