@@ -63,6 +63,7 @@ import {
   SUPABASE_CUSTOM_DOMAIN,
   ULTRA_TIER,
   MAX_TIER,
+  SERVER_SIDE_CACHE_TTL_MS,
   type UserTier,
 } from './config';
 import {
@@ -119,9 +120,6 @@ export const SERVER_SIDE_PROVIDERS = [
 ] as const;
 
 export type ServerSideProvider = (typeof SERVER_SIDE_PROVIDERS)[number];
-
-/** Cache TTL for all server-side key access checks (5 minutes). */
-const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** Cache state for enabled providers fetched from the relay server. */
 interface ProvidersCache {
@@ -201,10 +199,11 @@ export async function setUseIncludedModelAccess(value: boolean): Promise<void> {
     // Clear cache BEFORE fetching fresh data
     clearServerSideKeyAccessCache();
 
-    // If enabling, pre-fetch providers so cache is warm when listeners refresh
-    // This ensures model options are computed with the latest provider list
+    // If enabling, pre-fetch providers AND tier config so cache is warm
+    // This ensures model options are computed with the latest data
+    // and sync access via getTierConfigSync() works immediately
     if (value) {
-      await getEnabledProviders();
+      await Promise.all([getEnabledProviders(), getTierConfig()]);
     }
 
     _onDidChangeModelAccess.fire(value);
@@ -302,7 +301,10 @@ export async function getEnabledProviders(): Promise<string[]> {
   const now = Date.now();
 
   // Check if cache is still valid
-  if (providersCache.promise && now - providersCache.timestamp < CACHE_TTL_MS) {
+  if (
+    providersCache.promise &&
+    now - providersCache.timestamp < SERVER_SIDE_CACHE_TTL_MS
+  ) {
     return providersCache.promise;
   }
 
@@ -351,7 +353,10 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   const now = Date.now();
 
   // Check if cache is still valid
-  if (accessCache.promise && now - accessCache.timestamp < CACHE_TTL_MS) {
+  if (
+    accessCache.promise &&
+    now - accessCache.timestamp < SERVER_SIDE_CACHE_TTL_MS
+  ) {
     return accessCache.promise;
   }
 
@@ -406,8 +411,9 @@ export async function canUseServerSideKeysForModel(
   }
 
   // Max tier needs model-level check against tier config
+  // Use sync version since canUseServerSideKeys() already primed the cache
   if (tier === MAX_TIER) {
-    const config = await getTierConfig();
+    const config = getTierConfigSync();
     return isModelAvailableForTier(tier, modelName, config);
   }
 
