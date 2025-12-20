@@ -163,8 +163,11 @@ export async function getTierConfig(): Promise<TierModelConfig | null> {
   }
 
   // Create new cache entry with proper config sync
-  // Only update timestamp on successful fetch to allow immediate retry on failure
-  tierConfigCache.promise = fetchTierConfigFromServer().then((result) => {
+  // Set promise synchronously to prevent race conditions - subsequent calls
+  // within the same tick will use this promise instead of creating their own.
+  // Only update timestamp on successful fetch to allow immediate retry on failure.
+  const fetchPromise = fetchTierConfigFromServer();
+  tierConfigCache.promise = fetchPromise.then((result) => {
     if (result !== null) {
       tierConfigCache.timestamp = Date.now();
       tierConfigCache.config = result;
@@ -315,7 +318,14 @@ export function getEffectiveProvidersForTier(
   serverEnabledProviders: string[],
 ): string[] {
   const tierProviders = getEnabledProvidersForTier(tier, config);
-  return tierProviders.filter((p) => serverEnabledProviders.includes(p));
+  // Normalize to lowercase for case-insensitive comparison (consistent with
+  // isProviderAvailableForTier and isProviderEnabledForServerSideKeys)
+  const normalizedServerProviders = serverEnabledProviders.map((p) =>
+    p.toLowerCase(),
+  );
+  return tierProviders.filter((p) =>
+    normalizedServerProviders.includes(p.toLowerCase()),
+  );
 }
 
 /**
