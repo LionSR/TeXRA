@@ -19,16 +19,6 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Auto-generated replacements - for easily maintainable pattern groups
     // ====================================================================
 
-    // ===== Environment spacing fixes =====
-    // Examples:
-    // \n\n\begin{align} -> \n\begin{align}
-    // \end{equation}\n\n -> \end{equation}\n
-    // const envSpacingPatterns = generateEnvironmentSpacingFixes(
-    //   MATH_ENVIRONMENTS.slice(0, 2),
-    // );
-    // Object.assign(patterns, envSpacingPatterns);
-    // This is too aggressive
-
     // ===== Linebreak fixes within environments =====
     // Examples:
     // \n\n\end{align} -> \n\end{align}
