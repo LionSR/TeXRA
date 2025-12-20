@@ -110,7 +110,6 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     // Fetch enabled providers and tier config for users with tier access
     let enabledProviders: string[] = [];
     let allowedModels: string[] | null = null;
-    let tierProviders: string[] = [];
 
     if (hasTierAccess) {
       // Fetch tier config and enabled providers in parallel
@@ -126,12 +125,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         allowedModels = null; // null = all models
       } else if (isMax && tierConfig) {
         // Max tier uses the tier-specific configuration
-        tierProviders = getEnabledProvidersForTier(MAX_TIER, tierConfig);
+        const tierProviders = getEnabledProvidersForTier(MAX_TIER, tierConfig);
         // Filter to only providers actually enabled on server
         enabledProviders = tierProviders.filter((p) =>
           serverProviders.includes(p),
         );
         allowedModels = getAllowedModelsForTier(MAX_TIER, tierConfig);
+      } else if (isMax) {
+        enabledProviders = [];
+        allowedModels = [];
       }
     }
 
