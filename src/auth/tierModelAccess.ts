@@ -142,7 +142,6 @@ async function fetchTierConfigFromServer(): Promise<TierModelConfig | null> {
       return null;
     }
 
-    tierConfigCache.config = parsed.data;
     return parsed.data;
   } catch (error) {
     console.error('[TierModelAccess] Error fetching tier config:', error);
@@ -172,9 +171,13 @@ export async function getTierConfig(): Promise<TierModelConfig | null> {
     return tierConfigCache.promise;
   }
 
-  // Create new cache entry
+  // Create new cache entry with proper config sync
   tierConfigCache.timestamp = now;
-  tierConfigCache.promise = fetchTierConfigFromServer();
+  tierConfigCache.promise = fetchTierConfigFromServer().then((result) => {
+    // Update sync-accessible config only on successful fetch
+    tierConfigCache.config = result;
+    return result;
+  });
 
   return tierConfigCache.promise;
 }

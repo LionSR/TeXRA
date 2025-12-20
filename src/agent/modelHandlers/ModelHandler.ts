@@ -225,7 +225,10 @@ export abstract class ModelHandler<
    *
    * Returns true only if:
    * 1. Model is not openRouterOnly (those always use OpenRouter)
-   * 2. shouldUseServerSideKeysSync confirms access (setting enabled, provider supported, Ultra tier)
+   * 2. shouldUseServerSideKeysSync confirms access:
+   *    - Setting enabled
+   *    - Provider supported
+   *    - Ultra tier (all models) OR Max tier with this specific model allowed
    */
   protected shouldUseServerSideKeys(): boolean {
     // Skip openRouterOnly models - these should always route through OpenRouter
@@ -233,7 +236,9 @@ export abstract class ModelHandler<
     if (this.config.openRouterOnly) {
       return false;
     }
-    return shouldUseServerSideKeysSync(this.config.provider);
+    // Pass both provider AND model name for tier-based model filtering
+    // Max tier users only get access to specific cheaper models
+    return shouldUseServerSideKeysSync(this.config.provider, this.config.name);
   }
 
   /**
