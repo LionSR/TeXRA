@@ -87,6 +87,9 @@ export type UserTier = z.infer<typeof UserTierSchema>;
 /** Ultra tier constant for server-side API key access checks. */
 export const ULTRA_TIER: UserTier = 'Ultra';
 
+/** Max tier constant for server-side API key access (cheaper models). */
+export const MAX_TIER: UserTier = 'Max';
+
 /**
  * User's authorization context.
  * Permissions are visibility values stored in profiles.permissions column.
