@@ -30,7 +30,12 @@
  */
 
 import { z } from 'zod';
-import { SUPABASE_CUSTOM_DOMAIN, UserTier, UserTierSchema } from './config';
+import {
+  SUPABASE_CUSTOM_DOMAIN,
+  UserTier,
+  UserTierSchema,
+  SERVER_SIDE_CACHE_TTL_MS,
+} from './config';
 
 // ============================================================================
 // Schema Definitions
@@ -60,9 +65,6 @@ export type TierModelConfig = z.infer<typeof TierModelConfigSchema>;
 // ============================================================================
 // Cache Management
 // ============================================================================
-
-/** Cache TTL for tier configuration (5 minutes). */
-const TIER_CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** Cache state for tier configuration. */
 interface TierConfigCache {
@@ -166,7 +168,7 @@ export async function getTierConfig(): Promise<TierModelConfig | null> {
   // Check if cache is still valid
   if (
     tierConfigCache.promise &&
-    now - tierConfigCache.timestamp < TIER_CONFIG_CACHE_TTL_MS
+    now - tierConfigCache.timestamp < SERVER_SIDE_CACHE_TTL_MS
   ) {
     return tierConfigCache.promise;
   }
