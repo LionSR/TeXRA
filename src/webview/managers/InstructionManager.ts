@@ -30,7 +30,7 @@ logger.initialize(CHANNEL);
 export class InstructionManager {
   private webview: vscode.WebviewView | undefined;
 
-  constructor(private readonly _context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     setTimeout(async () => {
       try {
         await StorageFS.ensureDir(PASTED_DIR);
