@@ -135,7 +135,6 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 
   // If already markdown, return as-is
   if (format === outputFormat.MARKDOWN) {
-    // return text.trim();
     return text;
   }
 
