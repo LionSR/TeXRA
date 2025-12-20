@@ -149,12 +149,6 @@ const isBetaRedactedThinkingBlock = (
   block: BetaContentBlock,
 ): block is BetaRedactedThinkingBlock => block.type === 'redacted_thinking';
 
-/** Type guard for any thinking-related content block in Beta API responses */
-const _isAnyBetaThinkingBlock = (
-  block: BetaContentBlock,
-): block is BetaThinkingContent =>
-  isBetaThinkingBlock(block) || isBetaRedactedThinkingBlock(block);
-
 /** Type guard for thinking block params in message content */
 const isThinkingBlockParam = (
   block: ContentBlockParam,
@@ -1484,8 +1478,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const thinkingBlocks = Array.isArray(secondLastMessage.content)
           ? secondLastMessage.content.filter(isAnyThinkingBlockParam)
           : [];
-
-        // Text blocks filtering removed - was unused
 
         // Anthropic models should include thinking blocks first in the content array
         // Add all thinking blocks from workspaceState if we have them

@@ -352,50 +352,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Audio input is documented but not functional in the Responses API
       // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
       // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
-      // TODO: Re-enable when OpenAI makes this functional
+      // Audio input not yet supported in OpenAI Responses API
       if (media.media_category === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
         );
         return [];
       }
-
-      // Commented out until audio input is functional in Responses API
-      // if (media.media_category === 'audio') {
-      //   if (!this.capabilities.supportsNativeAudio) {
-      //     this.logger.warn(
-      //       `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
-      //     );
-      //     return [];
-      //   }
-      //
-      //   let audioFormat = media.media_type;
-      //   if (media.media_type.includes('/')) {
-      //     audioFormat = media.media_type.split('/')[1];
-      //   }
-      //
-      //   const normalizedFormat =
-      //     audioFormat === 'mp3' || audioFormat === 'wav'
-      //       ? audioFormat
-      //       : undefined;
-      //   if (!normalizedFormat) {
-      //     this.logger.warn(
-      //       `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
-      //     );
-      //     return [];
-      //   }
-      //
-      //   return [
-      //     this.createInputText(`Audio: ${media.file_name}`),
-      //     {
-      //       type: 'input_audio',
-      //       input_audio: {
-      //         data: media.data,
-      //         format: normalizedFormat,
-      //       },
-      //     } as ResponseInputAudio as ResponseInputContent,
-      //   ];
-      // }
 
       if (mediaType === 'application/pdf') {
         return [
@@ -539,7 +502,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const _endTag = options.endTag; // Unused but kept for compatibility
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
@@ -915,8 +877,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let current = initialResponse;
     const responseId = initialResponse.id;
     const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
-    const _maxRetries =
-      ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
     let pollCount = 0;
     const initialStatus = current.status ?? 'unknown';
