@@ -26,7 +26,7 @@ import {
 import {
   getTierConfig,
   getAllowedModelsForTier,
-  getEnabledProvidersForTier,
+  getEffectiveProvidersForTier,
 } from '@/auth/tierModelAccess';
 
 // --- Message Schemas ---
@@ -123,16 +123,16 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       ]);
 
       // For Ultra tier, use all enabled providers from server
-      // For Max tier, use the tier-specific provider list
+      // For Max tier, use the tier-specific provider list filtered by server
       if (isUltra) {
         enabledProviders = serverProviders;
         allowedModels = null; // null = all models
       } else if (isMax && tierConfig) {
         // Max tier uses the tier-specific configuration
-        const tierProviders = getEnabledProvidersForTier(MAX_TIER, tierConfig);
-        // Filter to only providers actually enabled on server
-        enabledProviders = tierProviders.filter((p) =>
-          serverProviders.includes(p),
+        enabledProviders = getEffectiveProvidersForTier(
+          MAX_TIER,
+          tierConfig,
+          serverProviders,
         );
         allowedModels = getAllowedModelsForTier(MAX_TIER, tierConfig);
       } else if (isMax) {
