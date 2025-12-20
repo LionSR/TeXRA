@@ -190,7 +190,10 @@ export class AgentsTable {
     // - []: no models configured (error state)
     // - [...]: specific models allowed
     if (modelsInfo) {
-      if (apiAccessMode === 'included' && (tier === MAX_TIER || tier === ULTRA_TIER)) {
+      if (
+        apiAccessMode === 'included' &&
+        (tier === MAX_TIER || tier === ULTRA_TIER)
+      ) {
         if (allowedModels === null) {
           // null means all models are allowed
           modelsInfo.textContent = 'All models included';
@@ -204,6 +207,7 @@ export class AgentsTable {
         } else {
           // Empty array means no models configured
           modelsInfo.textContent = 'No models configured';
+          modelsInfo.title = '';
           modelsInfo.style.display = 'block';
         }
       } else {
