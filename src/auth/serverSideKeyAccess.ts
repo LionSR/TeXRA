@@ -70,6 +70,7 @@ import {
   getTierConfig,
   getTierConfigSync,
   isModelAvailableForTier,
+  isProviderAvailableForTier,
   clearTierConfigCache,
 } from './tierModelAccess';
 
@@ -483,12 +484,17 @@ export function shouldUseServerSideKeysSync(
     return true;
   }
 
-  // For Max tier, require model-level checks for each request.
+  // For Max tier, require both provider and model-level checks.
+  // The tier config defines which providers and models are allowed for Max tier.
   if (accessCache.userTier === MAX_TIER) {
     if (!modelName) {
       return false;
     }
     const config = getTierConfigSync();
+    // Check both provider and model restrictions from tier config
+    if (!isProviderAvailableForTier(MAX_TIER, normalizedProvider, config)) {
+      return false;
+    }
     return isModelAvailableForTier(MAX_TIER, modelName, config);
   }
 
