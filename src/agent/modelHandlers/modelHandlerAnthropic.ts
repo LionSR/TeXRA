@@ -414,9 +414,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
-      // useStreaming = true; should consider to be true by default
-      // temperature already deleted above for reasoning models
-
       const sonnetBetas = this.getMutableBetas(options);
       sonnetBetas.length = 0;
       sonnetBetas.push(SONNET_37_OUTPUT_BETA);
@@ -554,10 +551,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         edits: contextManagementEdits,
       } satisfies BetaContextManagementConfig;
     }
-
-    // this.logger.debug(
-    //   `CreateResponse options: ${JSON.stringify(options, null, 2)}`,
-    // );
 
     let response: BetaMessage;
 
