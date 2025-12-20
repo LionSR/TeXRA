@@ -184,21 +184,28 @@ export class AgentsTable {
       }
     }
 
-    // Show allowed models info for Max tier when using included access
+    // Show allowed models info when using included access
+    // allowedModels semantics:
+    // - null: all models (Ultra tier, or Max tier with models: "*")
+    // - []: no models configured (error state)
+    // - [...]: specific models allowed
     if (modelsInfo) {
-      if (apiAccessMode === 'included' && tier === MAX_TIER) {
-        if (allowedModels && allowedModels.length > 0) {
+      if (apiAccessMode === 'included' && (tier === MAX_TIER || tier === ULTRA_TIER)) {
+        if (allowedModels === null) {
+          // null means all models are allowed
+          modelsInfo.textContent = 'All models included';
+          modelsInfo.title = '';
+          modelsInfo.style.display = 'block';
+        } else if (allowedModels.length > 0) {
+          // Specific models allowed
           modelsInfo.textContent = `Models: ${allowedModels.length} included`;
           modelsInfo.title = allowedModels.join(', ');
           modelsInfo.style.display = 'block';
         } else {
+          // Empty array means no models configured
           modelsInfo.textContent = 'No models configured';
           modelsInfo.style.display = 'block';
         }
-      } else if (apiAccessMode === 'included' && tier === ULTRA_TIER) {
-        modelsInfo.textContent = 'All models included';
-        modelsInfo.title = '';
-        modelsInfo.style.display = 'block';
       } else {
         modelsInfo.style.display = 'none';
       }
