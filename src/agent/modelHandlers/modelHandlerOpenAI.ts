@@ -719,7 +719,6 @@ export class ModelHandlerOpenAI<
         let newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume stop
         let stopReason = OPENAI_CHAT_FINISH.STOP;
-        // let stopReason = OPENAI_CHAT_FINISH.LENGTH;
         if (responseObject.choices?.[0]?.finish_reason) {
           stopReason = responseObject.choices[0].finish_reason;
         }
