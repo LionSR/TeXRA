@@ -8,7 +8,6 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
-import { K_SLICE } from '@utils/config';
 import { isString, isObject } from '@utils/core';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 

@@ -14,7 +14,6 @@ import type {
   AddTaskGroupPayload,
   UpdateTaskGroupPayload,
   RunScopedPayload,
-  TaskGroupStatus,
   UpdateTodosPayload,
 } from './schemas';
 
