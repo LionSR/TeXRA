@@ -8,11 +8,11 @@ The tier configuration system allows Max tier users to access a subset of cheape
 
 ## Tier Hierarchy
 
-| Tier | Model Access | API Keys Required |
-|------|--------------|-------------------|
-| **Ultra** | All models | No (included) |
-| **Max** | Subset of cheaper models | No (included) |
-| **free** | None via relay | Yes (user's own) |
+| Tier      | Model Access             | API Keys Required |
+| --------- | ------------------------ | ----------------- |
+| **Ultra** | All models               | No (included)     |
+| **Max**   | Subset of cheaper models | No (included)     |
+| **free**  | None via relay           | Yes (user's own)  |
 
 ## Endpoint
 
@@ -26,12 +26,31 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
 {
   "tiers": {
     "Max": {
-      "models": ["sonnet45T", "gpt41-", "gpt41--", "gpt4o-", "gemini3f", "gemini25f", "gemini25f-", "deepseek", "deepseekT", "dsv3"],
+      "models": [
+        "sonnet45T",
+        "gpt41-",
+        "gpt41--",
+        "gpt4o-",
+        "gemini3f",
+        "gemini25f",
+        "gemini25f-",
+        "deepseek",
+        "deepseekT",
+        "dsv3"
+      ],
       "providers": ["openai", "anthropic", "google", "deepseek"]
     },
     "Ultra": {
       "models": "*",
-      "providers": ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope"]
+      "providers": [
+        "openai",
+        "anthropic",
+        "google",
+        "xai",
+        "deepseek",
+        "moonshot",
+        "dashscope"
+      ]
     }
   }
 }
@@ -42,7 +61,7 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
 ```typescript
 interface TierAccessConfig {
   /** Model access: "*" for all models, or array of specific model names */
-  models: "*" | string[];
+  models: '*' | string[];
   /** Providers enabled for this tier */
   providers: string[];
 }
@@ -62,28 +81,28 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 
 ### Cheap Models (Good for Max Tier)
 
-| Model Name | Full Name | Provider | Pricing (in/out per 1M) |
-|------------|-----------|----------|-------------------------|
-| `sonnet45T` | claude-sonnet-4-5 (Thinking) | Anthropic | $3.00/$15.00 |
-| `gpt41-` | gpt-4.1-mini | OpenAI | $0.40/$1.60 |
-| `gpt41--` | gpt-4.1-nano | OpenAI | $0.10/$0.40 |
-| `gpt4o-` | gpt-4o-mini | OpenAI | $0.15/$0.60 |
-| `gemini3f` | gemini-3-flash-preview | Google | $0.30/$2.50 |
-| `gemini25f` | gemini-2.5-flash | Google | $0.30/$2.50 |
-| `gemini25f-` | gemini-2.5-flash-lite | Google | $0.10/$0.40 |
-| `deepseek` | deepseek-chat (V3.2) | Deepseek | $0.28/$0.42 |
-| `deepseekT` | deepseek-reasoner (V3.2 Thinking) | Deepseek | $0.28/$0.42 |
-| `dsv3` | deepseek-chat-v3 | Deepseek | $0.14/$0.28 |
+| Model Name   | Full Name                         | Provider  | Pricing (in/out per 1M) |
+| ------------ | --------------------------------- | --------- | ----------------------- |
+| `sonnet45T`  | claude-sonnet-4-5 (Thinking)      | Anthropic | $3.00/$15.00            |
+| `gpt41-`     | gpt-4.1-mini                      | OpenAI    | $0.40/$1.60             |
+| `gpt41--`    | gpt-4.1-nano                      | OpenAI    | $0.10/$0.40             |
+| `gpt4o-`     | gpt-4o-mini                       | OpenAI    | $0.15/$0.60             |
+| `gemini3f`   | gemini-3-flash-preview            | Google    | $0.30/$2.50             |
+| `gemini25f`  | gemini-2.5-flash                  | Google    | $0.30/$2.50             |
+| `gemini25f-` | gemini-2.5-flash-lite             | Google    | $0.10/$0.40             |
+| `deepseek`   | deepseek-chat (V3.2)              | Deepseek  | $0.28/$0.42             |
+| `deepseekT`  | deepseek-reasoner (V3.2 Thinking) | Deepseek  | $0.28/$0.42             |
+| `dsv3`       | deepseek-chat-v3                  | Deepseek  | $0.14/$0.28             |
 
 ### Expensive Models (Ultra Tier Only)
 
-| Model Name | Full Name | Provider | Pricing (in/out per 1M) |
-|------------|-----------|----------|-------------------------|
-| `gemini3p` | gemini-3-pro-preview | Google | $2.00/$12.00 |
-| `gemini25p` | gemini-2.5-pro | Google | $1.25/$10.00 |
-| `dsr1` | deepseek-r1 | Deepseek | $4.00/$4.00 |
-| `opus45T` | claude-opus-4-5 | Anthropic | $15.00/$75.00 |
-| `gpt5pro` | gpt-5-pro | OpenAI | $10.00/$40.00 |
+| Model Name  | Full Name            | Provider  | Pricing (in/out per 1M) |
+| ----------- | -------------------- | --------- | ----------------------- |
+| `gemini3p`  | gemini-3-pro-preview | Google    | $2.00/$12.00            |
+| `gemini25p` | gemini-2.5-pro       | Google    | $1.25/$10.00            |
+| `dsr1`      | deepseek-r1          | Deepseek  | $4.00/$4.00             |
+| `opus45T`   | claude-opus-4-5      | Anthropic | $15.00/$75.00           |
+| `gpt5pro`   | gpt-5-pro            | OpenAI    | $10.00/$40.00           |
 
 ## Implementation Details
 
@@ -96,6 +115,7 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 ### Fallback Behavior
 
 If the endpoint returns an error or is unavailable:
+
 1. Max tier users get no server-side access (fallback to own keys)
 2. Ultra tier users fall back to the `/relay/providers` enabled list
 
@@ -126,53 +146,61 @@ User selects model
 
 ```typescript
 // supabase/functions/relay/tier-config/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const TIER_CONFIG = {
   tiers: {
     Max: {
       // Cheaper models for Max tier (Sonnet 4.5T + GPT minis + Gemini Flash + DeepSeek)
       models: [
-        "sonnet45T",     // Claude Sonnet 4.5 Thinking - $3.00/$15.00
-        "gpt41-",        // GPT-4.1 Mini - $0.40/$1.60
-        "gpt41--",       // GPT-4.1 Nano - $0.10/$0.40
-        "gpt4o-",        // GPT-4o Mini - $0.15/$0.60
-        "gemini3f",      // Gemini 3 Flash - $0.30/$2.50
-        "gemini25f",     // Gemini 2.5 Flash - $0.30/$2.50
-        "gemini25f-",    // Gemini 2.5 Flash Lite - $0.10/$0.40
-        "deepseek",      // DeepSeek V3.2 - $0.28/$0.42
-        "deepseekT",     // DeepSeek V3.2 Thinking - $0.28/$0.42
-        "dsv3",          // DeepSeek V3 - $0.14/$0.28
+        'sonnet45T', // Claude Sonnet 4.5 Thinking - $3.00/$15.00
+        'gpt41-', // GPT-4.1 Mini - $0.40/$1.60
+        'gpt41--', // GPT-4.1 Nano - $0.10/$0.40
+        'gpt4o-', // GPT-4o Mini - $0.15/$0.60
+        'gemini3f', // Gemini 3 Flash - $0.30/$2.50
+        'gemini25f', // Gemini 2.5 Flash - $0.30/$2.50
+        'gemini25f-', // Gemini 2.5 Flash Lite - $0.10/$0.40
+        'deepseek', // DeepSeek V3.2 - $0.28/$0.42
+        'deepseekT', // DeepSeek V3.2 Thinking - $0.28/$0.42
+        'dsv3', // DeepSeek V3 - $0.14/$0.28
       ],
-      providers: ["openai", "anthropic", "google", "deepseek"]
+      providers: ['openai', 'anthropic', 'google', 'deepseek'],
     },
     Ultra: {
       // All models for Ultra tier (including expensive ones like Opus, GPT-5 Pro)
-      models: "*",
-      providers: ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope"]
-    }
-  }
-}
+      models: '*',
+      providers: [
+        'openai',
+        'anthropic',
+        'google',
+        'xai',
+        'deepseek',
+        'moonshot',
+        'dashscope',
+      ],
+    },
+  },
+};
 
 serve(async (req) => {
   // CORS headers
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      }
-    })
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
   }
 
   return new Response(JSON.stringify(TIER_CONFIG), {
     headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-    }
-  })
-})
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+});
 ```
 
 ## Updating the Configuration
