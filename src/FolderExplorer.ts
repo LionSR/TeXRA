@@ -25,7 +25,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private builtInAgentsPath = '';
 
   constructor(
-    private _workspaceRoot: string | undefined,
+    _workspaceRoot: string | undefined,
     _context?: vscode.ExtensionContext,
   ) {
     agentDirectories.builtIn().then((p) => {
