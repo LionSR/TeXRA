@@ -28,28 +28,12 @@ export interface TextEditorToolParams extends BetaToolUnionParam {
     | 'text_editor_20250429';
 }
 
-/**
- * Command types for the text editor tool
- */
-export type EditorCommand =
-  | 'view'
-  | 'create'
-  | 'str_replace'
-  | 'insert'
-  | 'undo_edit';
-
-/**
- * Interface for the tool call input
- */
-export interface ToolCallInput {
-  command: EditorCommand;
-  path: string;
-  file_text?: string;
-  view_range?: [number, number];
-  old_str?: string;
-  new_str?: string;
-  insert_line?: number;
-}
+// Re-export schema-derived types from TextEditorTool (single source of truth)
+export {
+  EditorCommand,
+  TextEditorInput,
+  TextEditorInput as ToolCallInput, // Alias for backward compatibility
+} from './TextEditorTool';
 
 /**
  * Interface for file history entries

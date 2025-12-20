@@ -7,21 +7,18 @@ import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
-export interface UserVariableChannels {
-  input: Readonly<Record<string, any>>;
-  transient: Record<string, any>;
-  output: Record<string, any>;
-}
-
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy user variable channels that may contain removed or renamed fields.
  */
 export const UserVariableChannelsSchema = z.object({
-  input: z.record(z.string(), z.unknown()),
+  input: z.record(z.string(), z.unknown()).readonly(),
   transient: z.record(z.string(), z.unknown()),
   output: z.record(z.string(), z.unknown()),
 });
+
+/** Derived from UserVariableChannelsSchema - single source of truth */
+export type UserVariableChannels = z.infer<typeof UserVariableChannelsSchema>;
 
 export interface AgentCycleBaseOptions<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;

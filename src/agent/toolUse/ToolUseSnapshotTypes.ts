@@ -26,10 +26,19 @@ export const ToolUseSessionSnapshotSchema = z.object({
   lastUpdated: z.number(),
 });
 
+/** Derived from ToolUseSessionSnapshotSchema - single source of truth */
 export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema
 >;
 
+/**
+ * Input payload for saving a tool-use session snapshot.
+ *
+ * NOTE: This is a manual interface (not schema-derived) because `store` is an
+ * AgentSharedStore class instance with methods (e.g., toSnapshot()), not a plain
+ * data structure. Zod schemas cannot validate class instances with private fields.
+ * The store is serialized to AgentSharedStoreSnapshot during the save operation.
+ */
 export interface SaveToolUseSnapshotPayload {
   executionId: ExecutionId;
   streamId: StreamTabId;
