@@ -584,13 +584,6 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
-
-    // const role = this.config.capabilities.supportsIntermDevMsgs
-    // ? 'system'
-    // : 'user';
-    // technically we can use system for the follow-up round messages, but it does not support images...
-    // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
-    // system role does not support images/audio
     const role = 'user';
 
     if (
