@@ -422,7 +422,7 @@ export async function canUseServerSideKeysForModel(
  * 1. The setting is enabled
  * 2. The provider is enabled on the server (has API key configured)
  * 3. A previous async check (canUseServerSideKeys) confirmed access
- * 4. For Max tier: the model must be in the tier's allowed list (if modelName provided)
+ * 4. For Max tier: the model must be in the tier's allowed list
  *
  * PREREQUISITE: canUseServerSideKeys() must have been called and completed
  * before this function will return true. This typically happens when:
@@ -449,7 +449,7 @@ export async function canUseServerSideKeysForModel(
  * This synchronous function is needed because getBaseUrl() is synchronous.
  *
  * @param provider - The provider to check (e.g., "openai", "anthropic")
- * @param modelName - Optional model name for Max tier model-level checks
+ * @param modelName - Model name for Max tier model-level checks (required for Max)
  */
 export function shouldUseServerSideKeysSync(
   provider: string,
@@ -477,16 +477,13 @@ export function shouldUseServerSideKeysSync(
     return true;
   }
 
-  // For Max tier, check model-level access if modelName is provided
-  if (accessCache.userTier === MAX_TIER && modelName) {
+  // For Max tier, require model-level checks for each request.
+  if (accessCache.userTier === MAX_TIER) {
+    if (!modelName) {
+      return false;
+    }
     const config = getTierConfigSync();
     return isModelAvailableForTier(MAX_TIER, modelName, config);
-  }
-
-  // If no modelName provided for Max tier, return true (caller will check separately)
-  // This maintains backward compatibility with existing code
-  if (accessCache.userTier === MAX_TIER) {
-    return true;
   }
 
   // Free tier has no access
