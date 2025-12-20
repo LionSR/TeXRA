@@ -57,7 +57,6 @@ function isOAuthProvider(value: string | undefined): value is OAuthProvider {
  */
 export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private static readonly SESSION_KEY = 'texra.supabase.session';
-  private static readonly PROVIDER_ID = 'texra-supabase';
   private static instance: SupabaseAuthProvider | null = null;
 
   private _onDidChangeSessions =
@@ -253,8 +252,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /** Get sessions from secure storage. */
   async getSessions(
-    scopes?: readonly string[],
-    options?: vscode.AuthenticationProviderSessionOptions,
+    _scopes?: readonly string[],
+    _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
     const sessionData = await this.context.secrets.get(
       SupabaseAuthProvider.SESSION_KEY,
