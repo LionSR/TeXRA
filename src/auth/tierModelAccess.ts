@@ -95,19 +95,6 @@ export function clearTierConfigCache(): void {
 // ============================================================================
 
 /**
- * Default tier configuration used when server is unreachable.
- * This ensures graceful degradation - Max users get no access,
- * Ultra users fall back to the enabled providers list from /relay/providers.
- */
-const DEFAULT_TIER_CONFIG: TierModelConfig = {
-  tiers: {
-    free: { models: [], providers: [] },
-    Max: { models: [], providers: [] },
-    Ultra: { models: '*', providers: [] }, // providers filled from /relay/providers
-  },
-};
-
-/**
  * Fetch tier configuration from the relay server.
  * This is a public endpoint that returns the tier-based model access config.
  */
@@ -153,7 +140,8 @@ async function fetchTierConfigFromServer(): Promise<TierModelConfig | null> {
 
 /**
  * Get the tier configuration from the server.
- * Results are cached for 5 minutes.
+ * Successful results are cached for 5 minutes.
+ * Failed fetches are NOT cached, allowing immediate retry.
  *
  * Returns null if:
  * - Server is unreachable
@@ -165,19 +153,22 @@ async function fetchTierConfigFromServer(): Promise<TierModelConfig | null> {
 export async function getTierConfig(): Promise<TierModelConfig | null> {
   const now = Date.now();
 
-  // Check if cache is still valid
+  // Check if cache is still valid (only cache successful fetches)
   if (
     tierConfigCache.promise &&
+    tierConfigCache.config !== null &&
     now - tierConfigCache.timestamp < SERVER_SIDE_CACHE_TTL_MS
   ) {
     return tierConfigCache.promise;
   }
 
   // Create new cache entry with proper config sync
-  tierConfigCache.timestamp = now;
+  // Only update timestamp on successful fetch to allow immediate retry on failure
   tierConfigCache.promise = fetchTierConfigFromServer().then((result) => {
-    // Update sync-accessible config only on successful fetch
-    tierConfigCache.config = result;
+    if (result !== null) {
+      tierConfigCache.timestamp = Date.now();
+      tierConfigCache.config = result;
+    }
     return result;
   });
 
@@ -303,6 +294,28 @@ export function getEnabledProvidersForTier(
 
   const tierConfig = config.tiers[tier];
   return tierConfig?.providers ?? [];
+}
+
+/**
+ * Get the effective list of providers for a tier, filtered by what's
+ * actually enabled on the server.
+ *
+ * This combines the tier config with the server's enabled providers list
+ * to return only providers that are both allowed for the tier AND have
+ * API keys configured on the server.
+ *
+ * @param tier - User's tier
+ * @param config - The tier configuration
+ * @param serverEnabledProviders - Providers with API keys on the server
+ * @returns Array of provider names that are both tier-allowed and server-enabled
+ */
+export function getEffectiveProvidersForTier(
+  tier: UserTier,
+  config: TierModelConfig | null,
+  serverEnabledProviders: string[],
+): string[] {
+  const tierProviders = getEnabledProvidersForTier(tier, config);
+  return tierProviders.filter((p) => serverEnabledProviders.includes(p));
 }
 
 /**
