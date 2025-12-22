@@ -356,7 +356,8 @@ function isProviderAllowedForTier(tier: string, provider: string): boolean {
  */
 function extractModelFromPath(apiPath: string): string | null {
   // Google GenAI pattern: /models/{model-name}:{method}
-  const googleMatch = apiPath.match(/^models\/([^:]+)/);
+  // Note: apiPath includes leading slash from parseRequestPath
+  const googleMatch = apiPath.match(/^\/models\/([^:]+)/);
   if (googleMatch) {
     return googleMatch[1];
   }
