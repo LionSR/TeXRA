@@ -25,6 +25,10 @@ import {
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
+import {
+  RoundContext,
+  RoundContextCollection,
+} from '@agent/core/RoundContext';
 
 // Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -91,10 +95,13 @@ export interface AgentRuntimeXmlExports {
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private static readonly ERR_ROUND_NOT_INITIALIZED =
     'Round context not initialized. Call beginRound() first.';
-  /** File paths for each round's raw model output - always workspace or runStorage */
-  protected outputFile: AgentFileLocation[];
-  /** Multi-file output locations per round - always workspace or runStorage */
-  protected outputFiles: { [key: number]: AgentFileLocation[] };
+
+  /**
+   * Unified round context collection - single source of truth for per-round data.
+   * Replaces the previous parallel arrays (outputFile, roundStates, workspaceStates, roundOutputs).
+   */
+  protected readonly rounds: RoundContextCollection = new RoundContextCollection();
+
   /** Base input files - always workspace or runStorage */
   protected baseFiles: AgentFileLocation[];
   protected override agentSetting: AgentWorkflowSetting;
@@ -104,9 +111,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
-  public roundStates: ConversationRoundState[] = [];
-  public workspaceStates: AgentWorkspaceState[] = [];
-  public roundOutputs: RoundOutput[] = [];
+
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
     documents: [],
@@ -122,6 +127,30 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private currentMessages: any[] = [];
   private currentRunState: AgentRunState | null = null;
   private currentWorkspaceState: AgentWorkspaceState | null = null;
+
+  // ============================================================================
+  // Backwards compatibility accessors (delegate to rounds collection)
+  // ============================================================================
+
+  /** @deprecated Use rounds.get(index)?.roundState instead */
+  public get roundStates(): ConversationRoundState[] {
+    return this.rounds.all().map((r) => r.roundState).filter((s): s is ConversationRoundState => s !== null);
+  }
+
+  /** @deprecated Use rounds.get(index)?.workspaceState instead */
+  public get workspaceStates(): AgentWorkspaceState[] {
+    return this.rounds.all().map((r) => r.workspaceState).filter((s): s is AgentWorkspaceState => s !== null);
+  }
+
+  /** @deprecated Use rounds.get(index)?.output instead */
+  public get roundOutputs(): RoundOutput[] {
+    return this.rounds.all().map((r) => r.output).filter((o): o is RoundOutput => o !== null);
+  }
+
+  /** @deprecated Use rounds.get(index)?.outputLocation instead */
+  protected get outputFile(): AgentFileLocation[] {
+    return this.rounds.all().map((r) => r.outputLocation);
+  }
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -147,11 +176,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Initialize fileService first so we can use it below
     this.fileService = new TaskRunFileService(context.executionId);
 
-    this.outputFile = new Array<AgentFileLocation>(numRounds);
-    this.outputFiles = {};
-    for (let i = 0; i < numRounds; i++) {
-      this.outputFiles[i] = [];
-    }
     // Base files are ALWAYS workspace locations (inputs from workspace)
     // Even in run-storage mode, we snapshot FROM workspace TO run storage
     this.baseFiles =
@@ -167,13 +191,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           ];
 
     // Check scratchpad usage
-    // this is not so neat
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
-    // Set output files for all rounds
+    // Initialize round contexts with output locations
     for (let i = 0; i < numRounds; i++) {
-      this.outputFile[i] = this.getOutputFileLocation(i);
+      this.rounds.create({
+        outputLocation: this.getOutputFileLocation(i),
+      });
     }
 
     // Initialize logging
@@ -201,7 +226,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
-      this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
 
       // Set the resumed storageKey on context and outputHandler BEFORE hydrating
@@ -223,9 +247,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       let hydratedCount = 0;
 
       try {
-        for (const round of sortedRounds) {
-          const output = await this.outputHandler.getRoundArtifacts(round);
-          this.roundOutputs[round] = output;
+        for (const roundIndex of sortedRounds) {
+          const output = await this.outputHandler.getRoundArtifacts(roundIndex);
+          // Update the round context with hydrated output
+          const roundContext = this.rounds.get(roundIndex);
+          if (roundContext) {
+            roundContext.setOutput(output);
+          }
         }
 
         hydratedCount = sortedRounds.length;
@@ -393,7 +421,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       });
 
       const output = await this.outputHandler.getRoundArtifacts(currRound);
-      this.roundOutputs[currRound] = output;
+      // Update the round context with output artifacts
+      const roundContext = this.rounds.get(currRound);
+      if (roundContext) {
+        roundContext.setOutput(output);
+      }
       return output;
     };
 
@@ -465,7 +497,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const roundIndex = this.currentRoundIndex;
     const runState = this.currentRunState;
     const workspaceState = this.currentWorkspaceState;
-    const outputLocation = this.outputFile[roundIndex];
+    const outputLocation = this.rounds.getRequired(roundIndex).outputLocation;
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
@@ -759,10 +791,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param result - The result returned by the reflection round execution
    */
   public recordRoundResult(result: ReflectionRoundResult): void {
-    this.roundStates.push(result.roundState);
-    this.workspaceStates.push(result.workspaceState);
-    if (result.output) {
-      this.roundOutputs[result.output.round] = result.output;
+    // Update the round context with execution results
+    const roundContext = this.rounds.get(this.currentRoundIndex);
+    if (roundContext) {
+      roundContext.setExecutionState(result.roundState, result.workspaceState);
+      if (result.output) {
+        roundContext.setOutput(result.output);
+      }
     }
 
     // Clear the active round flag to allow next round to begin
@@ -836,7 +871,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const previousHydratedRounds = this.hydratedRoundCount;
     const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {
-      this.roundOutputs = [];
+      // Clear any stale outputs from previous runs
+      this.rounds.clearOutputs();
     }
     this.runtimeXmlExports = {
       tagContents: {},
@@ -909,9 +945,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
 
     // Find the most recent round with XML summary data
-    // No need to search through cached roundOutputs - check in reverse order
-    for (let round = this.roundOutputs.length - 1; round >= 0; round--) {
-      const output = this.roundOutputs[round];
+    // Iterate through rounds in reverse to find the latest with data
+    const allRounds = this.rounds.all();
+    for (let i = allRounds.length - 1; i >= 0; i--) {
+      const roundContext = allRounds[i];
+      const output = roundContext.output;
       if (!output) continue;
 
       const xml = output.xmlSummary;

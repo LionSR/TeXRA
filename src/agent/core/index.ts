@@ -23,3 +23,4 @@ export * from './ToolTypes';
 export * from './IAgent';
 export * from './ResponseCycle';
 export * from './ToolUseCycle';
+export * from './RoundContext';

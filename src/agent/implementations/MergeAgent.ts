@@ -37,10 +37,9 @@ export class MergeAgent extends DirectAgent {
       agentPath,
       context,
     );
-    this.outputFile = [
-      this.getOutputFileLocation(0),
-      this.getOutputFileLocation(1),
-    ];
+    // Override output locations for merge operations
+    this.rounds.updateOutputLocation(0, this.getOutputFileLocation(0));
+    this.rounds.updateOutputLocation(1, this.getOutputFileLocation(1));
   }
 
   /**
