@@ -3,12 +3,7 @@
  */
 import { z } from 'zod';
 import { DiffStatsSchema } from '@agent/types/DiffTypes';
-import {
-  FileLocationSchema,
-  type FileLocation,
-  type AgentFileLocation,
-} from '@utils/files';
-export type { FileLocation, AgentFileLocation };
+import { FileLocationSchema, type FileLocation } from '@utils/files';
 
 /** Minimal output file reference - source name + location */
 export const OutputFileSchema = z.strictObject({
