@@ -24,8 +24,6 @@ import { getPathSegments } from '@utils/core';
 // Local file imports
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
-import { AbsoluteFS } from './absoluteFS';
-import { flexibleFS } from './flexibleFS';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
@@ -191,12 +189,6 @@ function getRunStoragePaths(
 async function ensureParentDir(filePath: string): Promise<void> {
   const parentDir = path.dirname(filePath);
   await fs.mkdir(parentDir, { recursive: true });
-}
-
-async function removeIfExists(target: string): Promise<void> {
-  if (await AbsoluteFS.exists(target)) {
-    await AbsoluteFS.delete(target, { recursive: true, useTrash: false });
-  }
 }
 
 async function createSymlink(

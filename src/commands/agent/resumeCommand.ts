@@ -15,7 +15,7 @@ interface ResumeAgentCommandPayload {
 }
 
 export function registerResumeAgentCommand(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): vscode.Disposable {
   return vscode.commands.registerCommand(
     'texra.resumeAgent',

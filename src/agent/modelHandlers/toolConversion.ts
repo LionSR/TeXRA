@@ -12,7 +12,6 @@ import type {
   Tool as GeminiTool,
   FunctionDeclaration,
   Schema,
-  GoogleSearch,
 } from '@google/genai/dist/genai';
 import type {
   ChatCompletionTool,
