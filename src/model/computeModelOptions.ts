@@ -45,7 +45,8 @@ export async function computeModelOptions(): Promise<string> {
   // Prime the server-side keys cache (fetches tier config + enabled providers)
   // This ensures canUseServerSideKeysForModel has the data it needs
   const serverSideKeyService = getServerSideKeyService();
-  const hasAnyServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
+  const hasAnyServerSideAccess =
+    await serverSideKeyService.canUseServerSideKeys();
 
   // Build option tags for each model
   // Server-side checks are sync (caches primed above), personal key checks are async
@@ -70,7 +71,9 @@ export async function computeModelOptions(): Promise<string> {
       if (!available) {
         if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
           try {
-            available = await SecretManager.apiKeyExists(provider as ApiProvider);
+            available = await SecretManager.apiKeyExists(
+              provider as ApiProvider,
+            );
           } catch (error) {
             console.warn(`Failed to check API key for ${provider}:`, error);
           }

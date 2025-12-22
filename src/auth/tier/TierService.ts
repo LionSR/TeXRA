@@ -82,7 +82,10 @@ export class TierService {
       const parsed = TierModelConfigSchema.safeParse(data);
 
       if (!parsed.success) {
-        console.error(`${LOG_PREFIX} Invalid tier config response:`, parsed.error);
+        console.error(
+          `${LOG_PREFIX} Invalid tier config response:`,
+          parsed.error,
+        );
         return null;
       }
 

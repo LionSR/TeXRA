@@ -16,7 +16,10 @@
 import * as vscode from 'vscode';
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { getTierService } from '../tier';
-import { ServerSideKeyService, type AuthProvider } from './ServerSideKeyService';
+import {
+  ServerSideKeyService,
+  type AuthProvider,
+} from './ServerSideKeyService';
 
 // Types
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
