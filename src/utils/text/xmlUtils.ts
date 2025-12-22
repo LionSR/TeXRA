@@ -8,7 +8,6 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
-import { K_SLICE } from '@utils/config';
 import { isString, isObject } from '@utils/core';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
@@ -326,7 +325,8 @@ export function extractMultipleTextFromTag(
   ): Array<{ content: string; name: string }> => {
     const results: Array<{ content: string; name: string }> = [];
     // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
-    const documentRegex = /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
+    const documentRegex =
+      /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
 
     let documentMatch;
     while ((documentMatch = documentRegex.exec(content)) !== null) {
