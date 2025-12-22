@@ -50,7 +50,7 @@ export interface AuthProvider {
  *
  * USAGE PATTERN:
  * 1. Call async methods first to prime caches: canUseServerSideKeys()
- * 2. Then use sync methods for fast checks: canUseProviderSync(), canUseModelSync()
+ * 2. Then use sync methods for fast checks: isProviderOnServer(), canUseModelSync()
  *
  * Sync methods return false if caches aren't primed - use isCachePrimed() to check.
  */
@@ -286,7 +286,7 @@ export class ServerSideKeyService {
 
   /**
    * Check if a provider has API keys configured on the server.
-   * This is a low-level check - use canUseProviderSync() for access checks.
+   * All tiers have access to the same providers.
    */
   isProviderOnServer(provider: string): boolean {
     return this.providers.includes(provider.toLowerCase());
@@ -412,8 +412,7 @@ export class ServerSideKeyService {
       return false;
     }
 
-    const normalizedProvider = provider.toLowerCase();
-    if (!this.isProviderOnServer(normalizedProvider)) {
+    if (!this.isProviderOnServer(provider.toLowerCase())) {
       return false;
     }
 
@@ -430,43 +429,8 @@ export class ServerSideKeyService {
       return false;
     }
 
-    // Check tier-specific restrictions
-    if (
-      !this.tierService.isProviderAvailable(this.userTier, normalizedProvider)
-    ) {
-      return false;
-    }
-
+    // Check model is allowed for user's tier
     return this.tierService.isModelAvailable(this.userTier, modelName);
-  }
-
-  /**
-   * Synchronous check if a provider can be used by the current user.
-   * Combines server availability + tier restrictions.
-   * Returns false if caches aren't primed.
-   */
-  canUseProviderSync(provider: string): boolean {
-    const normalizedProvider = provider.toLowerCase();
-
-    // Must be on server
-    if (!this.isProviderOnServer(normalizedProvider)) {
-      return false;
-    }
-
-    // Ultra tier has full access
-    if (this.hasFullAccess()) {
-      return true;
-    }
-
-    if (!this.userTier) {
-      return false;
-    }
-
-    // Check tier-specific restrictions
-    return this.tierService.isProviderAvailable(
-      this.userTier,
-      normalizedProvider,
-    );
   }
 
   // ==========================================================================
@@ -492,25 +456,12 @@ export class ServerSideKeyService {
   }
 
   /**
-   * Get the effective providers for the current user's tier.
-   * Returns providers that are both allowed for the tier AND enabled on server.
+   * Get the providers available for the current user.
+   * Returns providers enabled on the server.
    * Call canUseServerSideKeys() first to prime caches.
    */
   getEffectiveProvidersForCurrentUser(): string[] {
-    if (!this.userTier) {
-      return [];
-    }
-
-    // Ultra tier has access to all server-enabled providers
-    if (this.hasFullAccess()) {
-      return this.providers;
-    }
-
-    return this.tierService.getEffectiveProviders(
-      this.userTier,
-      this.tierService.getConfigSync(),
-      this.providers,
-    );
+    return this.providers;
   }
 
   /**
