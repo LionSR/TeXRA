@@ -47,6 +47,7 @@ export class FileLineageCalculator {
   /**
    * Calculate mapping from current output paths to their base file origins.
    * Uses 'contains' strategy - output filename should contain base filename.
+   * Returns a map from output path to base location.
    */
   private calculateBaseToOutputMapping(
     currentLocations: FileLocation[],
@@ -57,23 +58,26 @@ export class FileLineageCalculator {
       'contains',
     );
 
-    // Invert the mapping: output path -> base location
-    const baseToOutput = new Map<string, FileLocation>();
+    // Invert: forward is basePath -> outputLoc, we need outputPath -> baseLoc
+    const result = new Map<string, FileLocation>();
+    const baseByPath = new Map(
+      this.baseFiles.map((f) => [getComparablePath(f), f]),
+    );
+
     for (const [basePath, outputLoc] of forwardMapping) {
-      const baseLoc = this.baseFiles.find(
-        (f) => getComparablePath(f) === basePath,
-      );
+      const baseLoc = baseByPath.get(basePath);
       if (baseLoc) {
-        baseToOutput.set(getComparablePath(outputLoc), baseLoc);
+        result.set(getComparablePath(outputLoc), baseLoc);
       }
     }
 
-    return baseToOutput;
+    return result;
   }
 
   /**
    * Calculate mapping from current output paths to their previous round counterparts.
    * Uses 'basename' strategy with round number stripping for inter-round matching.
+   * Returns a map from output path to previous round location.
    */
   private calculatePrevToOutputMapping(
     prevLocations: FileLocation[],
@@ -90,29 +94,25 @@ export class FileLineageCalculator {
       true, // Strip round numbers for matching
     );
 
-    // Invert the mapping: output path -> previous location
-    const prevToOutput = new Map<string, FileLocation>();
+    // Invert: forward is prevPath -> outputLoc, we need outputPath -> prevLoc
+    const result = new Map<string, FileLocation>();
+    const prevByPath = new Map(
+      prevLocations.map((f) => [getComparablePath(f), f]),
+    );
+
     for (const [prevPath, outputLoc] of forwardMapping) {
-      const prevLoc = prevLocations.find(
-        (f) => getComparablePath(f) === prevPath,
-      );
+      const prevLoc = prevByPath.get(prevPath);
       if (prevLoc) {
-        prevToOutput.set(getComparablePath(outputLoc), prevLoc);
+        result.set(getComparablePath(outputLoc), prevLoc);
       }
     }
 
-    return prevToOutput;
+    return result;
   }
 
   /**
-   * Calculate origin mapping using multiple heuristics to match output files
+   * Calculate origin mapping using prioritized heuristics to match output files
    * to their original base files.
-   *
-   * Matching heuristics (in order):
-   * 1. Exact match: basename === source
-   * 2. Name without extension match
-   * 3. Base name matches source (without extension)
-   * 4. Source matches base name (without extension)
    */
   private calculateOriginMapping(
     currentOutputs: OutputFileInfo[],
@@ -130,23 +130,46 @@ export class FileLineageCalculator {
 
   /**
    * Find the base file that matches the given source name.
-   * Uses multiple heuristics for flexible matching.
+   * Tries heuristics in priority order (first match wins):
+   * 1. Exact match: basename === source
+   * 2. Names without extensions match
+   * 3. Base name (no ext) matches source
+   * 4. Source (no ext) matches base name
    */
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
 
-    return this.baseFiles.find((baseLoc) => {
-      const baseName = this.getBaseName(baseLoc);
-      const baseNameNoExt = path.parse(baseName).name;
+    // Priority 1: Exact match
+    for (const baseLoc of this.baseFiles) {
+      if (this.getBaseName(baseLoc) === source) {
+        return baseLoc;
+      }
+    }
 
-      // Try multiple matching strategies
-      return (
-        baseName === source || // Exact match
-        baseNameNoExt === sourceNoExt || // Names without extensions match
-        baseNameNoExt === source || // Base name matches source
-        baseName === sourceNoExt // Source name matches base
-      );
-    });
+    // Priority 2: Names without extensions match
+    for (const baseLoc of this.baseFiles) {
+      const baseNameNoExt = path.parse(this.getBaseName(baseLoc)).name;
+      if (baseNameNoExt === sourceNoExt) {
+        return baseLoc;
+      }
+    }
+
+    // Priority 3: Base name (no ext) matches source exactly
+    for (const baseLoc of this.baseFiles) {
+      const baseNameNoExt = path.parse(this.getBaseName(baseLoc)).name;
+      if (baseNameNoExt === source) {
+        return baseLoc;
+      }
+    }
+
+    // Priority 4: Source (no ext) matches base name exactly
+    for (const baseLoc of this.baseFiles) {
+      if (this.getBaseName(baseLoc) === sourceNoExt) {
+        return baseLoc;
+      }
+    }
+
+    return undefined;
   }
 
   /**
