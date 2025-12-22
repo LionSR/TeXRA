@@ -1,7 +1,7 @@
 // Local imports - model utilities
 import {
   canUseServerSideKeys,
-  canUseServerSideKeysForModel,
+  isModelAvailableForCurrentTierSync,
   isProviderAvailableForCurrentTier,
 } from '@auth/serverSideKeyAccess';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
@@ -64,12 +64,13 @@ export async function computeModelOptions(): Promise<string> {
       // This handles tier-based access:
       // - Ultra: all models if provider enabled
       // - Max: only models in the tier config's allowed list AND provider in tier's list
+      // Use sync versions since canUseServerSideKeys() already primed the caches
       if (
         hasAnyServerSideAccess &&
-        isProviderAvailableForCurrentTier(provider)
+        isProviderAvailableForCurrentTier(provider) &&
+        isModelAvailableForCurrentTierSync(model)
       ) {
-        // For model-specific check, we need to verify this exact model is allowed
-        available = await canUseServerSideKeysForModel(model);
+        available = true;
       }
 
       // Check if the provider requires an API key (only if not already available via server-side)
