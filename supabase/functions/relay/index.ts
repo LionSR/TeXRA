@@ -1,8 +1,13 @@
 /**
- * Relay Edge Function - Server-side API key proxy for Ultra users.
+ * Relay Edge Function - Server-side API key proxy for Ultra and Max tier users.
  *
- * This function acts as a transparent proxy for AI API requests, allowing Ultra
- * tier users to access AI models without providing their own API keys.
+ * This function acts as a transparent proxy for AI API requests, allowing
+ * paid tier users to access AI models without providing their own API keys.
+ *
+ * TIER HIERARCHY:
+ * - Ultra: Access to ALL models via relay
+ * - Max: Access to a SUBSET of cheaper models via relay (configured below)
+ * - free: No relay access (must bring own keys)
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -14,7 +19,8 @@
  *
  * Endpoints:
  * - GET /relay/providers - Returns list of providers with configured API keys (public)
- * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra tier)
+ * - GET /relay/tier-config - Returns tier-based model access configuration (public)
+ * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra/Max tier)
  *
  * Example: /relay/openai/v1/chat/completions
  *
@@ -25,10 +31,151 @@
  */
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.3.3';
+const RELAY_VERSION = '1.4.0';
 
-/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
+/** Tier values - must match constants in src/auth/config.ts */
 const ULTRA_TIER = 'Ultra';
+const MAX_TIER = 'Max';
+
+// ============================================================================
+// Tier-Based Model Access Configuration
+// ============================================================================
+
+/**
+ * Configuration for which models and providers are available for each tier.
+ * This is the SERVER-SIDE source of truth for tier access.
+ *
+ * IMPORTANT: Keep this synchronized with docs/relay-tier-config.md
+ *
+ * Model naming follows src/model/ModelRegistry.ts short names.
+ */
+interface TierAccessConfig {
+  /** Model access: "*" for all models, or array of specific model short names */
+  models: '*' | string[];
+  /** Providers enabled for this tier */
+  providers: string[];
+}
+
+interface TierModelConfig {
+  tiers: {
+    Max?: TierAccessConfig;
+    Ultra?: TierAccessConfig;
+  };
+}
+
+/**
+ * Max tier allowed models - uses API model names (fullName from ModelRegistry).
+ *
+ * IMPORTANT: This list uses the actual model names sent to provider APIs,
+ * NOT the TeXRA short names. Keep synchronized with:
+ * - src/model/providers/*.ts (fullName field)
+ * - docs/relay-tier-config.md
+ *
+ * Model patterns are used for prefix matching to handle version suffixes.
+ */
+const MAX_TIER_MODEL_PATTERNS: string[] = [
+  // Anthropic - Sonnet 4.5 (thinking mode uses same model name)
+  'claude-sonnet-4-5',
+
+  // OpenAI - GPT-4.1 Mini/Nano and GPT-4o Mini
+  'gpt-4.1-mini', // Matches gpt-4.1-mini-2025-04-14, etc.
+  'gpt-4.1-nano', // Matches gpt-4.1-nano-2025-04-14, etc.
+  'gpt-4o-mini', // Matches gpt-4o-mini-2024-07-18, etc.
+
+  // Google - Gemini Pro and Flash models
+  'gemini-3-pro', // Matches gemini-3-pro-preview
+  'gemini-2.5-pro', // Matches gemini-2.5-pro
+  'gemini-3-flash', // Matches gemini-3-flash-preview
+  'gemini-2.5-flash', // Matches gemini-2.5-flash, gemini-2.5-flash-lite-preview-*
+  'gemini-flash', // Matches gemini-flash-latest
+
+  // DeepSeek - Chat and Reasoner (V3.2)
+  'deepseek-chat', // DeepSeek V3.2 and V3
+  'deepseek-reasoner', // DeepSeek V3.2 Thinking
+];
+
+const TIER_CONFIG: TierModelConfig = {
+  tiers: {
+    Max: {
+      // Max tier: Sonnet 4.5T + GPT minis + Gemini (all) + DeepSeek (except R1)
+      // GUARDS (Ultra-only): Opus, GPT-5 series, DeepSeek R1
+      // Note: 'models' here is for the tier-config API response (short names for client)
+      // Actual validation uses MAX_TIER_MODEL_PATTERNS (full API names)
+      models: [
+        'sonnet45T',
+        'gpt41-',
+        'gpt41--',
+        'gpt4o-',
+        'gemini3p',
+        'gemini25p',
+        'gemini3f',
+        'gemini25f',
+        'gemini25f-',
+        'deepseek',
+        'deepseekT',
+        'dsv3',
+      ],
+      providers: ['openai', 'anthropic', 'google', 'deepseek'],
+    },
+    Ultra: {
+      // All models for Ultra tier (including expensive ones like Opus, GPT-5 Pro)
+      models: '*',
+      providers: [
+        'openai',
+        'anthropic',
+        'google',
+        'xai',
+        'deepseek',
+        'moonshot',
+        'dashscope',
+      ],
+    },
+  },
+};
+
+/**
+ * Check if a model is allowed for a given tier.
+ * For Max tier, uses prefix pattern matching against MAX_TIER_MODEL_PATTERNS
+ * to handle version suffixes in model names.
+ */
+function isModelAllowedForTier(
+  tier: string,
+  modelName: string | null,
+): boolean {
+  if (tier === ULTRA_TIER) {
+    return true; // Ultra gets all models
+  }
+
+  if (tier === MAX_TIER) {
+    // Model name is required for Max tier validation
+    if (!modelName) return false;
+
+    // Use pattern matching - model name must start with one of the allowed patterns
+    const normalizedModel = modelName.toLowerCase();
+    return MAX_TIER_MODEL_PATTERNS.some((pattern) =>
+      normalizedModel.startsWith(pattern.toLowerCase()),
+    );
+  }
+
+  return false; // free tier gets no relay access
+}
+
+/**
+ * Check if a provider is allowed for a given tier.
+ */
+function isProviderAllowedForTier(tier: string, provider: string): boolean {
+  if (tier === ULTRA_TIER) {
+    const ultraConfig = TIER_CONFIG.tiers.Ultra;
+    return ultraConfig?.providers.includes(provider) ?? false;
+  }
+
+  if (tier === MAX_TIER) {
+    const maxConfig = TIER_CONFIG.tiers.Max;
+    return maxConfig?.providers.includes(provider) ?? false;
+  }
+
+  return false;
+}
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -273,6 +420,19 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Handle /tier-config endpoint - returns tier-based model access configuration
+  // This is a public endpoint (no auth required) so clients can cache the config
+  // and show appropriate UI (disabled models, upgrade prompts, etc.)
+  if (
+    url.pathname.endsWith('/relay/tier-config') ||
+    url.pathname === '/tier-config'
+  ) {
+    return new Response(JSON.stringify(TIER_CONFIG), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     // 1. Parse the request path
     const parsed = parseRequestPath(url.pathname);
@@ -372,7 +532,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 5. Check user tier is Ultra
+    // 5. Check user tier (Ultra or Max)
     const { data: profile, error: profileError } = await userClient
       .from('profiles')
       .select('tier')
@@ -392,17 +552,71 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (profile.tier !== ULTRA_TIER) {
+    const userTier = profile.tier;
+
+    // Check if user has any relay access (Ultra or Max tier)
+    if (userTier !== ULTRA_TIER && userTier !== MAX_TIER) {
       return new Response(
         JSON.stringify({
           _relay: RELAY_VERSION,
-          error: 'Ultra tier required for server-side API keys',
+          error: 'Paid tier required for server-side API keys',
         }),
         {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       );
+    }
+
+    // 5a. Check if provider is allowed for user's tier
+    if (!isProviderAllowedForTier(userTier, provider)) {
+      return new Response(
+        JSON.stringify({
+          _relay: RELAY_VERSION,
+          error: `Provider '${provider}' is not available for ${userTier} tier`,
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
+    // 5b. For Max tier, validate the model is allowed
+    // We need to read the request body to extract the model name
+    // Clone the request so we can read body twice (once for model, once for forwarding)
+    let requestBody: string | null = null;
+    let modelName: string | null = null;
+
+    if (userTier === MAX_TIER && req.method !== 'GET') {
+      // Read and clone the body
+      requestBody = await req.text();
+
+      try {
+        const bodyJson = JSON.parse(requestBody);
+        // Different providers use different field names for the model
+        // OpenAI/Anthropic/most: "model"
+        // Some may use other fields, but "model" is standard
+        modelName = bodyJson.model || null;
+      } catch {
+        // If body is not JSON, can't extract model - will fail validation below
+      }
+
+      // Validate model is allowed for Max tier
+      if (!isModelAllowedForTier(MAX_TIER, modelName)) {
+        return new Response(
+          JSON.stringify({
+            _relay: RELAY_VERSION,
+            error: modelName
+              ? `Model '${modelName}' is not available for Max tier. Please upgrade to Ultra for access.`
+              : 'Could not determine model from request. Max tier requires explicit model specification.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        );
+      }
     }
 
     // 6. Get server-side API key
@@ -481,10 +695,19 @@ Deno.serve(async (req: Request) => {
 
     let upstreamResponse: Response;
     try {
+      // Use pre-read body for Max tier (we already consumed req.body for model validation)
+      // For Ultra tier or GET requests, use the original request body
+      const bodyToSend =
+        req.method !== 'GET'
+          ? requestBody !== null
+            ? requestBody
+            : req.body
+          : undefined;
+
       upstreamResponse = await fetch(targetUrl, {
         method: req.method,
         headers: upstreamHeaders,
-        body: req.method !== 'GET' ? req.body : undefined,
+        body: bodyToSend,
         signal: abortController.signal,
       });
     } catch (error) {
