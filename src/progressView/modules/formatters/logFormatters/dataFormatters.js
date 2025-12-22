@@ -37,7 +37,7 @@ export const formatFileList = (normalizedPayload, logId) => {
     try {
       const parsedJson = JSON.parse(normalizedPayload.decodedText);
       parsed = normalizeFileListEntries(parsedJson) || undefined;
-    } catch {
+    } catch (_err) {
       // Fall through to raw display
     }
   }
