@@ -16,3 +16,6 @@ webview-common/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 docs/.vitepress/.temp/core
+
+resources/poster
+resources/poster-app
