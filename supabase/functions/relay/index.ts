@@ -338,6 +338,26 @@ function isProviderAllowedForTier(tier: string, provider: string): boolean {
   return false;
 }
 
+/**
+ * Extract model name from URL path for providers that embed it in the URL.
+ *
+ * Google GenAI SDK uses paths like:
+ * - /models/gemini-2.5-flash:generateContent
+ * - /models/gemini-2.5-pro:streamGenerateContent
+ *
+ * @param apiPath - The API path after the provider prefix
+ * @returns The model name or null if not found
+ */
+function extractModelFromPath(apiPath: string): string | null {
+  // Google GenAI pattern: /models/{model-name}:{method}
+  const googleMatch = apiPath.match(/^models\/([^:]+)/);
+  if (googleMatch) {
+    return googleMatch[1];
+  }
+
+  return null;
+}
+
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 // Provider configurations
@@ -747,7 +767,13 @@ Deno.serve(async (req: Request) => {
         // Some may use other fields, but "model" is standard
         modelName = bodyJson.model || null;
       } catch {
-        // If body is not JSON, can't extract model - will fail validation below
+        // If body is not JSON, can't extract model from body
+      }
+
+      // Fallback: extract model from URL path for providers that embed it there
+      // Google GenAI SDK uses paths like /models/gemini-2.5-flash:generateContent
+      if (!modelName) {
+        modelName = extractModelFromPath(apiPath);
       }
 
       // Validate model is allowed for user's tier
