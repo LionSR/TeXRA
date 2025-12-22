@@ -74,6 +74,7 @@ export class ServerSideKeyService {
   private globalState: vscode.Memento | null = null;
   private readonly _onDidChangeModelAccess = new vscode.EventEmitter<boolean>();
   private readonly _onCacheCleared = new vscode.EventEmitter<void>();
+  private readonly _tierServiceClearSubscription: vscode.Disposable;
 
   /**
    * Event that fires when the "use included model access" setting changes.
@@ -99,7 +100,8 @@ export class ServerSideKeyService {
     private readonly tierService: TierService,
   ) {
     // TierService clears its own cache when we fire the event
-    this._onCacheCleared.event(() => {
+    // Store subscription to dispose later (prevents memory leak)
+    this._tierServiceClearSubscription = this._onCacheCleared.event(() => {
       this.tierService.clearCache();
     });
   }
@@ -111,6 +113,7 @@ export class ServerSideKeyService {
   initialize(context: vscode.ExtensionContext): void {
     context.subscriptions.push(this._onDidChangeModelAccess);
     context.subscriptions.push(this._onCacheCleared);
+    context.subscriptions.push(this._tierServiceClearSubscription);
     this.globalState = context.globalState;
     this.useIncludedModelAccess = this.globalState.get<boolean>(
       USE_INCLUDED_ACCESS_KEY,
@@ -124,6 +127,7 @@ export class ServerSideKeyService {
   dispose(): void {
     this._onDidChangeModelAccess.dispose();
     this._onCacheCleared.dispose();
+    this._tierServiceClearSubscription.dispose();
   }
 
   // ==========================================================================
@@ -334,6 +338,9 @@ export class ServerSideKeyService {
       return false;
     }
 
+    // Check if tier config is already cached (sync check).
+    // Ultra tier doesn't need tier config, so it's always "available".
+    // If cache miss, the async fetch below will populate it.
     const tierConfigAvailable =
       this.hasFullAccess() || this.tierService.getConfigSync() !== null;
 
@@ -342,6 +349,7 @@ export class ServerSideKeyService {
     }
 
     this.accessFetchPromise = (async () => {
+      // Fetch all required data in parallel
       const [hasAccess, providers, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
         this.getEnabledProviders(),
