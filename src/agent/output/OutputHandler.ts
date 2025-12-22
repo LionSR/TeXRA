@@ -16,6 +16,7 @@ import {
   flexibleFS,
   pathToLocation,
   getComparablePath,
+  type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -25,7 +26,6 @@ import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
 import {
-  type FileLocation,
   type OutputFileInfo,
   type OutputXmlSummary,
   type RoundFileMapping,
