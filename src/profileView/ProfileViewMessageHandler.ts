@@ -19,7 +19,6 @@ import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
-import { getTierService } from '@/auth/tier';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
@@ -60,9 +59,16 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
-    const isAuth = await SupabaseClient.isAuthenticated();
+    // Use ServerSideKeyService as the single point of entry for access checks
+    // This primes all caches (providers, tier config, user tier) in one call
+    const serverSideKeyService = getServerSideKeyService();
+    const hasServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
 
-    if (!isAuth) {
+    // Check authentication via cached result (tier is null if not authenticated)
+    const userTier = serverSideKeyService.getUserTier();
+    const isAuthenticated = userTier !== null;
+
+    if (!isAuthenticated) {
       await webview.postMessage({
         command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
         authenticated: false,
@@ -81,6 +87,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    // Get user details for display (email, permissions for remote agent visibility)
+    // These are not cached in ServerSideKeyService as they're display-only
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
 
@@ -96,38 +104,18 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
-    // Get model access settings - all authenticated users have access (Researcher Access Program)
-    const serverSideKeyService = getServerSideKeyService();
-    const tierService = getTierService();
-
-    const isUltra = authContext.tier === ULTRA_TIER;
+    // Get model access settings from the service (caches already primed)
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
-    // Fetch tier config and enabled providers for all authenticated users
-    const [tierConfig, serverProviders] = await Promise.all([
-      tierService.getConfig(),
-      serverSideKeyService.getEnabledProviders(),
-    ]);
-
-    let enabledProviders: string[] = [];
-    let allowedModels: string[] | null = null;
-
-    // For Ultra tier, use all enabled providers from server
-    // For Max/free tiers, use the tier-specific provider list filtered by server
-    if (isUltra) {
-      enabledProviders = serverProviders;
-      allowedModels = null; // null = all models
-    } else if (tierConfig) {
-      // Max and free tiers use tier-specific configuration
-      const userTier = authContext.tier;
-      enabledProviders = tierService.getEffectiveProviders(
-        userTier,
-        tierConfig,
-        serverProviders,
-      );
-      allowedModels = tierService.getAllowedModels(userTier, tierConfig);
-    }
+    // Use service methods that encapsulate tier-specific logic
+    // These handle Ultra vs Max/free tier differences internally
+    const enabledProviders = hasServerSideAccess
+      ? serverSideKeyService.getEffectiveProvidersForCurrentUser()
+      : [];
+    const allowedModels = hasServerSideAccess
+      ? serverSideKeyService.getAllowedModelsForCurrentUser()
+      : [];
 
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
@@ -136,7 +124,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier: authContext.tier,
+      tier: userTier,
       permissions: authContext.permissions,
       remoteAgents,
       apiAccessMode,
