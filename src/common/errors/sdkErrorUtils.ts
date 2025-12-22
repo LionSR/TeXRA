@@ -67,7 +67,7 @@ export interface ProviderHttpErrorDetails {
 function safeGetReasonPhrase(statusCode: number): string | undefined {
   try {
     return getReasonPhrase(statusCode);
-  } catch {
+  } catch (_err) {
     return undefined;
   }
 }

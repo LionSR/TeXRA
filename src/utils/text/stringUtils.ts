@@ -12,7 +12,7 @@ export function objectToLogString(obj: any, maxLength: number = 1000): string {
     return json.length > maxLength
       ? `${json.substring(0, maxLength)}... (${json.length} chars)`
       : json;
-  } catch {
+  } catch (_err) {
     return String(obj);
   }
 }
