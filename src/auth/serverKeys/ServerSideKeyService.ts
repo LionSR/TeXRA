@@ -2,8 +2,7 @@
  * ServerSideKeyService - OOP service for server-side API key access.
  *
  * Encapsulates provider fetching, access determination, settings management,
- * and relay URL routing. This replaces the module-level functions with a
- * proper class that can be tested and injected.
+ * and relay URL routing.
  *
  * RESEARCHER ACCESS PROGRAM:
  * All server-side API key access is provided as a convenience for researchers.
@@ -48,6 +47,12 @@ export interface AuthProvider {
 
 /**
  * Service for managing server-side API key access.
+ *
+ * USAGE PATTERN:
+ * 1. Call async methods first to prime caches: canUseServerSideKeys()
+ * 2. Then use sync methods for fast checks: canUseProviderSync(), canUseModelSync()
+ *
+ * Sync methods return false if caches aren't primed - use isCachePrimed() to check.
  */
 export class ServerSideKeyService {
   // Providers cache
@@ -61,15 +66,25 @@ export class ServerSideKeyService {
   private accessFetchPromise: Promise<boolean> | null = null;
   private userTier: UserTier | null = null;
 
+  // Cache state tracking
+  private _isCachePrimed = false;
+
   // Settings
   private useIncludedModelAccess = true;
   private globalState: vscode.Memento | null = null;
   private readonly _onDidChangeModelAccess = new vscode.EventEmitter<boolean>();
+  private readonly _onCacheCleared = new vscode.EventEmitter<void>();
 
   /**
    * Event that fires when the "use included model access" setting changes.
    */
   readonly onDidChangeModelAccess = this._onDidChangeModelAccess.event;
+
+  /**
+   * Event that fires when caches are cleared.
+   * TierService listens to this to clear its own cache.
+   */
+  readonly onCacheCleared = this._onCacheCleared.event;
 
   /**
    * Create a new ServerSideKeyService.
@@ -82,7 +97,12 @@ export class ServerSideKeyService {
     private readonly baseUrl: string,
     private readonly authProvider: AuthProvider,
     private readonly tierService: TierService,
-  ) {}
+  ) {
+    // TierService clears its own cache when we fire the event
+    this._onCacheCleared.event(() => {
+      this.tierService.clearCache();
+    });
+  }
 
   /**
    * Initialize the service with VS Code extension context.
@@ -90,6 +110,7 @@ export class ServerSideKeyService {
    */
   initialize(context: vscode.ExtensionContext): void {
     context.subscriptions.push(this._onDidChangeModelAccess);
+    context.subscriptions.push(this._onCacheCleared);
     this.globalState = context.globalState;
     this.useIncludedModelAccess = this.globalState.get<boolean>(
       USE_INCLUDED_ACCESS_KEY,
@@ -102,6 +123,26 @@ export class ServerSideKeyService {
    */
   dispose(): void {
     this._onDidChangeModelAccess.dispose();
+    this._onCacheCleared.dispose();
+  }
+
+  // ==========================================================================
+  // Tier Helpers (eliminates duplicated Ultra checks)
+  // ==========================================================================
+
+  /**
+   * Check if the current user has full access (Ultra tier).
+   * Ultra tier users can access all models without restrictions.
+   */
+  private hasFullAccess(): boolean {
+    return this.userTier === ULTRA_TIER;
+  }
+
+  /**
+   * Get the current user's tier. Returns null if not authenticated/cached.
+   */
+  getUserTier(): UserTier | null {
+    return this.userTier;
   }
 
   // ==========================================================================
@@ -154,10 +195,20 @@ export class ServerSideKeyService {
   // ==========================================================================
 
   /**
+   * Check if caches have been primed by an async call.
+   * Sync methods return false if not primed.
+   */
+  isCachePrimed(): boolean {
+    return this._isCachePrimed;
+  }
+
+  /**
    * Clear all caches.
    * Call this when user signs in/out.
+   * Fires onCacheCleared event so TierService can clear its cache too.
    */
   clearAllCaches(): void {
+    this._isCachePrimed = false;
     this.accessResult = false;
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
@@ -165,21 +216,8 @@ export class ServerSideKeyService {
     this.providers = [];
     this.providersTimestamp = 0;
     this.providersFetchPromise = null;
-    this.tierService.clearCache();
-  }
-
-  /**
-   * Get the cached user tier (synchronous).
-   */
-  getCachedUserTier(): UserTier | null {
-    return this.userTier;
-  }
-
-  /**
-   * Get the cached providers list (synchronous).
-   */
-  getCachedProviders(): string[] {
-    return this.providers;
+    // Fire event so TierService clears its own cache (proper encapsulation)
+    this._onCacheCleared.fire();
   }
 
   // ==========================================================================
@@ -236,15 +274,17 @@ export class ServerSideKeyService {
 
   /**
    * Get the cached list of enabled providers (synchronous).
+   * Returns empty array if cache not primed.
    */
   getEnabledProvidersSync(): string[] {
     return this.providers;
   }
 
   /**
-   * Check if a provider is enabled on the server.
+   * Check if a provider has API keys configured on the server.
+   * This is a low-level check - use canUseProviderSync() for access checks.
    */
-  isProviderEnabled(provider: string): boolean {
+  isProviderOnServer(provider: string): boolean {
     return this.providers.includes(provider.toLowerCase());
   }
 
@@ -281,6 +321,7 @@ export class ServerSideKeyService {
 
   /**
    * Check if the current user can use server-side API keys.
+   * This primes all caches for subsequent sync calls.
    *
    * Requirements:
    * 1. The setting must be enabled
@@ -294,7 +335,7 @@ export class ServerSideKeyService {
     }
 
     const tierConfigAvailable =
-      this.userTier === ULTRA_TIER || this.tierService.getConfigSync() !== null;
+      this.hasFullAccess() || this.tierService.getConfigSync() !== null;
 
     if (this.isAccessCacheValid() && tierConfigAvailable) {
       return this.accessFetchPromise!;
@@ -307,10 +348,10 @@ export class ServerSideKeyService {
         this.tierService.getConfig(),
       ]);
 
-      const tierConfigRequired =
-        this.userTier !== ULTRA_TIER && tierConfig === null;
+      const tierConfigRequired = !this.hasFullAccess() && tierConfig === null;
       if (hasAccess && providers.length > 0 && !tierConfigRequired) {
         this.accessTimestamp = Date.now();
+        this._isCachePrimed = true;
       }
 
       return hasAccess && providers.length > 0;
@@ -328,18 +369,20 @@ export class ServerSideKeyService {
       return false;
     }
 
-    return this.isModelAvailableForCurrentTierSync(modelName);
+    return this.canUseModelSync(modelName);
   }
 
   /**
    * Synchronous check if a model is available for the current user's tier.
+   * Returns false if caches aren't primed - call canUseServerSideKeys() first.
    */
-  isModelAvailableForCurrentTierSync(modelName: string): boolean {
+  canUseModelSync(modelName: string): boolean {
     if (!this.userTier) {
       return false;
     }
 
-    if (this.userTier === ULTRA_TIER) {
+    // Ultra tier has full access to all models
+    if (this.hasFullAccess()) {
       return true;
     }
 
@@ -348,10 +391,11 @@ export class ServerSideKeyService {
 
   /**
    * Synchronous check if server-side keys should be used for routing.
+   * Returns false if caches aren't primed - call canUseServerSideKeys() first.
    *
    * IMPORTANT: This only returns true if:
    * 1. The setting is enabled
-   * 2. The provider is enabled on the server
+   * 2. The provider has keys on the server
    * 3. A previous async check confirmed access
    * 4. For non-Ultra tier: the model must be in the tier's allowed list
    */
@@ -361,7 +405,7 @@ export class ServerSideKeyService {
     }
 
     const normalizedProvider = provider.toLowerCase();
-    if (!this.providers.includes(normalizedProvider)) {
+    if (!this.isProviderOnServer(normalizedProvider)) {
       return false;
     }
 
@@ -369,7 +413,8 @@ export class ServerSideKeyService {
       return false;
     }
 
-    if (this.userTier === ULTRA_TIER) {
+    // Ultra tier has full access
+    if (this.hasFullAccess()) {
       return true;
     }
 
@@ -377,6 +422,7 @@ export class ServerSideKeyService {
       return false;
     }
 
+    // Check tier-specific restrictions
     if (!this.tierService.isProviderAvailable(this.userTier, normalizedProvider)) {
       return false;
     }
@@ -385,16 +431,20 @@ export class ServerSideKeyService {
   }
 
   /**
-   * Check if a provider is available for the current user's tier.
+   * Synchronous check if a provider can be used by the current user.
+   * Combines server availability + tier restrictions.
+   * Returns false if caches aren't primed.
    */
-  isProviderAvailableForCurrentTier(provider: string): boolean {
+  canUseProviderSync(provider: string): boolean {
     const normalizedProvider = provider.toLowerCase();
 
-    if (!this.providers.includes(normalizedProvider)) {
+    // Must be on server
+    if (!this.isProviderOnServer(normalizedProvider)) {
       return false;
     }
 
-    if (this.userTier === ULTRA_TIER) {
+    // Ultra tier has full access
+    if (this.hasFullAccess()) {
       return true;
     }
 
@@ -402,7 +452,37 @@ export class ServerSideKeyService {
       return false;
     }
 
+    // Check tier-specific restrictions
     return this.tierService.isProviderAvailable(this.userTier, normalizedProvider);
+  }
+
+  // ==========================================================================
+  // Backward Compatibility Aliases
+  // ==========================================================================
+
+  /** @deprecated Use canUseModelSync() instead */
+  isModelAvailableForCurrentTierSync(modelName: string): boolean {
+    return this.canUseModelSync(modelName);
+  }
+
+  /** @deprecated Use canUseProviderSync() instead */
+  isProviderAvailableForCurrentTier(provider: string): boolean {
+    return this.canUseProviderSync(provider);
+  }
+
+  /** @deprecated Use isProviderOnServer() instead */
+  isProviderEnabled(provider: string): boolean {
+    return this.isProviderOnServer(provider);
+  }
+
+  /** @deprecated Use getUserTier() instead */
+  getCachedUserTier(): UserTier | null {
+    return this.getUserTier();
+  }
+
+  /** @deprecated Use getEnabledProvidersSync() instead */
+  getCachedProviders(): string[] {
+    return this.getEnabledProvidersSync();
   }
 
   // ==========================================================================
