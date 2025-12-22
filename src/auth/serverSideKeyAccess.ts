@@ -354,25 +354,41 @@ export async function canUseServerSideKeys(): Promise<boolean> {
   const now = Date.now();
 
   // Check if cache is still valid
+  // For Max tier, also require tier config to be successfully loaded
+  // This allows retry if tier-config endpoint was temporarily down
   if (
-    accessCache.promise &&
+    accessCache.promise !== null &&
     now - accessCache.timestamp < SERVER_SIDE_CACHE_TTL_MS
   ) {
-    return accessCache.promise;
+    // For Max tier, also require tier config to be available
+    // This allows retry if tier-config endpoint was temporarily down
+    const tierConfigAvailable =
+      accessCache.userTier !== MAX_TIER || getTierConfigSync() !== null;
+    if (tierConfigAvailable) {
+      return accessCache.promise;
+    }
   }
 
   // Create new cache entry (Promise-based to prevent race conditions)
-  // Note: fetchAccessStatus() handles errors internally and returns false,
-  // so transient failures are cached for the TTL. This is intentional to
-  // avoid hammering the auth service on repeated failures.
-  accessCache.timestamp = now;
+  // Set promise synchronously to prevent duplicate fetches within same tick.
+  // Timestamp is set after successful fetch to allow retry on failure.
   accessCache.promise = (async () => {
     // Fetch access status, enabled providers, and tier config in parallel
-    const [hasAccess, providers] = await Promise.all([
+    const [hasAccess, providers, tierConfig] = await Promise.all([
       fetchAccessStatus(),
       getEnabledProviders(),
       getTierConfig(), // Prime the tier config cache
     ]);
+
+    // Only update timestamp if:
+    // 1. User has access AND providers are available, AND
+    // 2. For Max tier: tier config was successfully fetched
+    // This allows immediate retry if tier-config endpoint failed
+    const tierConfigRequired =
+      accessCache.userTier === MAX_TIER && tierConfig === null;
+    if (hasAccess && providers.length > 0 && !tierConfigRequired) {
+      accessCache.timestamp = Date.now();
+    }
 
     // Must have access AND at least one enabled provider
     return hasAccess && providers.length > 0;
