@@ -512,23 +512,204 @@ interface IToolUseExecutor {
 
 ---
 
-## Recommended Priority
+---
 
-1. **HIGH:** Consolidate parallel arrays into unified `RoundContext`
-2. **HIGH:** Move type definitions to single source locations
-3. **MEDIUM:** Flatten agent class hierarchy with composition
-4. **MEDIUM:** Remove unnecessary hook wrappers
-5. **LOW:** Refactor PocketFlow usage to follow pattern correctly or remove it
+## Nuanced Evaluation: What Actually Provides Value
+
+After deeper analysis, some patterns that initially appeared as overhead actually provide real benefits:
+
+### Patterns That PROVIDE GENUINE VALUE
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 PATTERNS WORTH KEEPING                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. PocketFlow Node RETRY MECHANISM                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  class ResponseModelInvocationNode extends Node {                 │       │
+│  │    constructor() {                                                │       │
+│  │      const config = getNodeRetryConfig();                        │       │
+│  │      super(config.maxRetries, config.wait);  // ← Built-in retry │       │
+│  │    }                                                              │       │
+│  │                                                                   │       │
+│  │    async execFallback(prepRes, error) {                          │       │
+│  │      // ← Called when retries exhausted                          │       │
+│  │      return determineFallbackAction(...);                        │       │
+│  │    }                                                              │       │
+│  │  }                                                                │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  BENEFIT: Handles API retry logic with configurable backoff                │
+│           Abort signal integration for user cancellation                   │
+│           Clean separation of auto-retry vs manual retry                   │
+│                                                                             │
+│  2. CYCLE FLOW GRAPH STRUCTURE                                             │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  prepNode → invokeNode → processNode → continuationNode          │       │
+│  │                 │              │               │                 │       │
+│  │                 ↓              │               ↓                 │       │
+│  │           retryWaitNode        │         (CONTINUE → prepNode)   │       │
+│  │                 │              │                                 │       │
+│  │                 ↓              │                                 │       │
+│  │         (MANUAL_RETRY → invokeNode)                              │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  BENEFIT: Explicit control flow for retry loops and continuations          │
+│           Complex state machine would be harder to express otherwise       │
+│                                                                             │
+│  3. SERVICES INJECTION PATTERN (_params.services)                          │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // Immutable dependencies via params                            │       │
+│  │  const { options, store } = this._params.services;               │       │
+│  │                                                                   │       │
+│  │  // Mutable state via shared                                     │       │
+│  │  const { state } = shared;                                        │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  BENEFIT: Clear separation enables testing and composition                 │
+│           Services remain stable while state mutates                       │
+│                                                                             │
+│  4. STATE SERIALIZATION (Zod + toSnapshot/fromSnapshot)                    │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  static fromSnapshot(snapshot: unknown): AgentSharedStore {       │       │
+│  │    const parsed = AgentSharedStoreSnapshotSchema.parse(snapshot);│       │
+│  │    return new AgentSharedStore({...});                            │       │
+│  │  }                                                                │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  BENEFIT: Enables session persistence and resume                           │
+│           Schema validation catches corruption/migration issues            │
+│                                                                             │
+│  5. RETRY STATE MANAGEMENT                                                 │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  RetryState → determineFallbackAction() → applyFallbackResult() │       │
+│  │       ↓                                                          │       │
+│  │  AWAIT_RETRY → RetryWaitNode → MANUAL_RETRY (loop back)         │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  BENEFIT: Clean integration of auto-retry + manual retry + UI              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Patterns That ARE PURE OVERHEAD
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 PATTERNS TO ELIMINATE                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. PREP() PASSTHROUGH (violates PocketFlow intent, adds nothing)          │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // ResponseProcessNode, ResponseContinuationNode, etc.          │       │
+│  │  async prep(shared) { return shared; }  // ← Just returns shared │       │
+│  │  async exec(shared) { ... }             // ← Then accesses it    │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: 4+ nodes with meaningless prep() methods                        │
+│  FIX: Allow exec() to directly access shared when prep() adds no value    │
+│                                                                             │
+│  2. HOOK WRAPPERS (1-line delegations)                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // In BaseToolUseAgent.run()                                     │       │
+│  │  extendHooks: (baseHooks) => ({                                   │       │
+│  │    hasQueuedFollowUp: () => this.hasQueuedFollowUp(),            │       │
+│  │    waitForFollowUp: () => this.waitForFollowUp(),                │       │
+│  │    enterWaitingState: () => this.enterWaitingState(),            │       │
+│  │    // ... 10+ more 1-line wrappers                               │       │
+│  │  })                                                               │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: Adds indirection without abstraction benefit                    │
+│  FIX: Pass agent interface directly instead of hook object                 │
+│                                                                             │
+│  3. PARALLEL ARRAYS (require synchronized indices)                         │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  outputFile[roundIndex]                                          │       │
+│  │  roundStates[roundIndex]     // Must all stay                    │       │
+│  │  workspaceStates[roundIndex] // perfectly in                     │       │
+│  │  roundOutputs[roundIndex]    // sync by index                    │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: Bug-prone, violates single source of truth                      │
+│  FIX: Unified RoundContext[] with all data per round                       │
+│                                                                             │
+│  4. MUTABLE CURRENT-ROUND CONTEXT (duplicates flow state)                  │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // BaseReflectionAgent                                           │       │
+│  │  private currentRoundIndex: number = 0;       ┐                  │       │
+│  │  private currentMessages: any[] = [];         │ Duplicates       │       │
+│  │  private currentRunState: AgentRunState;      │ ReflectionRun    │       │
+│  │  private currentWorkspaceState: AgentWS;      ┘ State            │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: Two sources of truth for same data                              │
+│  FIX: Flow should own this state exclusively                               │
+│                                                                             │
+│  5. TYPE RE-EXPORTS (confusing import paths)                               │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // CycleServices.ts                                              │       │
+│  │  export interface ResponseCycleOptions { ... }                    │       │
+│  │                                                                   │       │
+│  │  // ResponseCycle.ts                                              │       │
+│  │  export type { ResponseCycleOptions } from './CycleServices';     │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: Unclear where types "live", multiple valid import paths         │
+│  FIX: Define types where they're primarily used                            │
+│                                                                             │
+│  6. runAgentFlow WRAPPER (mostly TypeScript gymnastics)                    │
+│  ┌─────────────────────────────────────────────────────────────────┐       │
+│  │  // 112 lines of complex type definitions for essentially:       │       │
+│  │  const shared = { agent, state, lifecycle, hooks };               │       │
+│  │  await flow.run(shared);                                          │       │
+│  └─────────────────────────────────────────────────────────────────┘       │
+│  OVERHEAD: Complex types for simple assembly                               │
+│  FIX: Inline with simpler types                                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Revised Recommendations
+
+### Keep (Good Patterns)
+
+| Pattern | Location | Why It Works |
+|---------|----------|--------------|
+| Node retry + execFallback | `ResponseModelInvocationNode` | Handles API retry cleanly |
+| Flow graph structure | `*CycleFlow.ts` | Enables complex control flow |
+| Services injection | `_params.services` | Clean dependency separation |
+| State serialization | `AgentSharedStore` | Enables session persistence |
+| RetryState module | `RetryState.ts` | Clean retry state machine |
+
+### Remove/Simplify (Overhead)
+
+| Issue | Location | Impact | Effort |
+|-------|----------|--------|--------|
+| Prep passthrough | 4+ nodes | LOW | LOW |
+| Hook wrappers | `BaseToolUseAgent` | MEDIUM | MEDIUM |
+| Parallel arrays | `BaseReflectionAgent` | HIGH | MEDIUM |
+| Current-round state | `BaseReflectionAgent` | MEDIUM | LOW |
+| Type re-exports | `ResponseCycle.ts` | LOW | LOW |
+
+---
+
+## Updated Priority
+
+1. **HIGH:** Consolidate parallel arrays into unified `RoundContext[]`
+2. **HIGH:** Remove duplicate "current round" mutable context from agent
+3. **MEDIUM:** Replace hook wrappers with direct interface passing
+4. **LOW:** Remove meaningless `prep()` passthroughs
+5. **LOW:** Consolidate type exports to single locations
+
+**Note:** The PocketFlow pattern itself is valuable when used for retry logic and flow control. The issue is misuse (prep passthrough, exec accessing shared), not the pattern itself.
 
 ---
 
 ## Conclusion
 
-The agent system has grown organically and accumulated architectural debt:
-- **Excess abstractions** add complexity without proportional benefit
-- **Single source of truth violations** create maintenance burden
-- **Separation of concerns issues** make the code difficult to understand and test
+The architecture is **better than initially assessed**. Key insights:
 
-The PocketFlow pattern, while elegant in theory, is not being used correctly - most nodes violate its core principle of keeping `exec()` pure and isolated from shared state.
+1. **PocketFlow's value is in retry/flow control**, not in prep/exec/post separation for every node
+2. **The cycle flow graphs genuinely simplify** complex retry and continuation logic
+3. **Services injection pattern is sound** and should be kept
 
-A targeted refactoring focusing on the high-priority items would significantly improve maintainability without requiring a complete rewrite.
+The real problems are:
+- **State duplication** (agent current-round fields vs flow state)
+- **Parallel arrays** instead of unified round context
+- **Excessive hook indirection** that adds no abstraction value
+
+A targeted refactoring (~2-3 files) would significantly improve the architecture without disrupting the genuinely useful patterns.
