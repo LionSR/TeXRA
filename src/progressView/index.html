@@ -206,7 +206,8 @@
               <vscode-toolbar-button
                 id="polishFollowUpBtn"
                 icon="sparkle"
-                label="Polish follow-up with AI"
+                label="Polish follow-up"
+                title="Polish follow-up with AI"
               ></vscode-toolbar-button>
               <vscode-progress-ring
                 id="polishFollowUpProgressContainer"
@@ -216,22 +217,26 @@
                 id="resetApprovalBypassBtn"
                 icon="shield"
                 label="Resume approval prompts"
+                title="Resume approval prompts"
                 hidden
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="recordFollowUpBtn"
                 icon="mic"
-                label="Record follow-up with microphone"
+                label="Record follow-up"
+                title="Record follow-up with microphone"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="clearFollowUpBtn"
                 icon="clear-all"
                 label="Clear input"
+                title="Clear input"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="sendFollowUpBtn"
                 icon="send"
                 label="Send"
+                title="Send follow-up message"
               ></vscode-toolbar-button>
             </div>
           </div>
@@ -249,26 +254,31 @@
                   class="compare-btn"
                   icon="diff"
                   label="Compare with base"
+                  title="Compare with base"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="accept-btn"
                   icon="check"
                   label="Accept edits"
+                  title="Accept edits"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="merge-btn"
                   icon="git-merge"
                   label="Merge edits"
+                  title="Merge edits"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="diff-btn"
                   icon="diff-single"
                   label="LaTeXdiff"
+                  title="LaTeXdiff"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="prev-btn"
                   icon="diff-added"
                   label="Compare with previous round"
+                  title="Compare with previous round"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -306,6 +316,7 @@
                 data-stream=""
                 icon="close"
                 label="Delete stream"
+                title="Delete stream"
               ></vscode-toolbar-button>
             </div>
           </template>
@@ -432,12 +443,14 @@
                 <vscode-toolbar-button
                   icon="refresh"
                   label="Retry"
+                  title="Retry"
                   data-action="retry"
                   >Retry</vscode-toolbar-button
                 >
                 <vscode-toolbar-button
                   icon="close"
                   label="Dismiss"
+                  title="Dismiss"
                   data-action="dismiss"
                   >Dismiss</vscode-toolbar-button
                 >
@@ -454,24 +467,28 @@
                 <vscode-toolbar-button
                   icon="diff"
                   label="Open diff"
+                  title="Open diff"
                   data-action="open"
                   >Open diff</vscode-toolbar-button
                 >
                 <vscode-toolbar-button
                   icon="check"
                   label="Approve"
+                  title="Approve"
                   data-action="approve"
                   >Approve</vscode-toolbar-button
                 >
                 <vscode-toolbar-button
                   icon="close"
                   label="Reject"
+                  title="Reject"
                   data-action="reject"
                   >Reject</vscode-toolbar-button
                 >
                 <vscode-toolbar-button
                   icon="shield"
-                  label="Approve &amp; Yolo this session"
+                  label="Approve & Yolo this session"
+                  title="Approve & Yolo this session"
                   data-action="approveAll"
                   data-toggle-action="resumeApprovals"
                   toggleable

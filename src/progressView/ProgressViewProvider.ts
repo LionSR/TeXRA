@@ -48,7 +48,6 @@ export class ProgressViewProvider
   protected readonly messageHandler: ProgressViewMessageHandler;
 
   // Infrastructure
-  private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _webviewReady = false;
   /**
@@ -75,7 +74,6 @@ export class ProgressViewProvider
     title: string = 'Tasks',
   ) {
     super(context);
-    this._extensionUri = context.extensionUri;
     this._viewTitle = title;
     this.logger = new AgentLogger('ProgressViewProvider');
 

@@ -1,15 +1,13 @@
-export * from './OutputHandler';
-export * from './IOutputHandler';
-export {
-  // Clean composable types
+export { OutputHandler } from './OutputHandler';
+export type { IOutputHandler } from './IOutputHandler';
+export type {
   OutputFile,
   OutputFileInfo,
   FileLineage,
   OutputXmlSummary,
   RoundOutput,
-  FileLocation,
+  RoundFileMapping,
 } from './types';
-export { getOutputFileName } from '@agent/utils/outputFileUtils';
 export {
   getFileBasename,
   getFileDirectory,
