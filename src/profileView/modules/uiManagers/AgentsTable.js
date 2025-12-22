@@ -113,7 +113,11 @@ export class AgentsTable {
     // All tiers have some server-side access (free=budget, Max=mid-tier, Ultra=all)
     if (apiAccessSection) {
       apiAccessSection.style.display = 'block';
-      this.renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels);
+      this.renderApiAccessSection(
+        apiAccessMode,
+        enabledProviders,
+        allowedModels,
+      );
     }
 
     // Show remote agents section for all authenticated users

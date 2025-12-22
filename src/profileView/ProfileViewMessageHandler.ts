@@ -84,7 +84,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     // Prime server-side key caches (providers, tier config, user tier)
     // This returns false if user disabled server-side access, but caches are still primed
     const serverSideKeyService = getServerSideKeyService();
-    const hasServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
+    const hasServerSideAccess =
+      await serverSideKeyService.canUseServerSideKeys();
 
     // Get user details for display (email, permissions for remote agent visibility)
     const user = await SupabaseClient.getUser();
@@ -186,7 +187,9 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       async ({ mode }) => {
         // Update the setting (also clears cache and fires change event)
         const useIncludedAccess = mode === 'included';
-        await getServerSideKeyService().setUseIncludedModelAccess(useIncludedAccess);
+        await getServerSideKeyService().setUseIncludedModelAccess(
+          useIncludedAccess,
+        );
 
         // Refresh profile data to reflect the change
         await this.sendProfileData(view.webview);

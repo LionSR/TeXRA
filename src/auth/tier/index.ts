@@ -20,16 +20,7 @@
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { TierService } from './TierService';
 
-// Types
-export {
-  TierAccessConfigSchema,
-  TierModelConfigSchema,
-  type TierAccessConfig,
-  type TierModelConfig,
-  type UserTier,
-} from './types';
-
-// Service class
+// Service class (internal use only)
 export { TierService };
 
 // ==========================================================================

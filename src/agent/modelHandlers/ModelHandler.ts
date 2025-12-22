@@ -243,7 +243,10 @@ export abstract class ModelHandler<
     }
     // Pass short name (this.config.name) for client-side tier validation.
     // The server will separately validate the actual API model name from the request.
-    return getServerSideKeyService().shouldUseServerSideKeysSync(this.config.provider, this.config.name);
+    return getServerSideKeyService().shouldUseServerSideKeysSync(
+      this.config.provider,
+      this.config.name,
+    );
   }
 
   /**
