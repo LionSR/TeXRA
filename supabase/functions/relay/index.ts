@@ -247,45 +247,32 @@ const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) =>
 );
 
 // Provider access by tier
-// All tiers include the same providers - model access is what differentiates tiers
-const FREE_TIER_PROVIDERS = [
+// Base providers available to all tiers - model access is what differentiates tiers
+const BASE_PROVIDERS = [
   'openai',
   'anthropic',
   'google',
   'deepseek',
   'xai',
   'moonshot',
-];
-const MAX_TIER_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'deepseek',
-  'xai',
-  'moonshot',
-];
-const ULTRA_TIER_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-];
+] as const;
+
+// Ultra tier gets additional providers (DashScope for Qwen models)
+const ULTRA_ONLY_PROVIDERS = ['dashscope'] as const;
+const ULTRA_TIER_PROVIDERS = [...BASE_PROVIDERS, ...ULTRA_ONLY_PROVIDERS];
 
 const TIER_CONFIG: TierModelConfig = {
   tiers: {
     free: {
       // Free tier: Budget models only (under $1/M input)
       models: FREE_TIER_SHORT_NAMES,
-      providers: FREE_TIER_PROVIDERS,
+      providers: [...BASE_PROVIDERS],
     },
     Max: {
       // Max tier: Free + mid-tier models ($1-3/M input)
       // GUARDS (Ultra-only): Opus, GPT-5 series, DeepSeek R1
       models: MAX_TIER_SHORT_NAMES,
-      providers: MAX_TIER_PROVIDERS,
+      providers: [...BASE_PROVIDERS],
     },
     Ultra: {
       // Ultra tier: All models including premium ($3+/M)
@@ -343,12 +330,9 @@ function isProviderAllowedForTier(tier: string, provider: string): boolean {
     return ULTRA_TIER_PROVIDERS.includes(provider);
   }
 
-  if (tier === MAX_TIER) {
-    return MAX_TIER_PROVIDERS.includes(provider);
-  }
-
-  if (tier === FREE_TIER) {
-    return FREE_TIER_PROVIDERS.includes(provider);
+  // Max and free tiers use the same base providers
+  if (tier === MAX_TIER || tier === FREE_TIER) {
+    return BASE_PROVIDERS.includes(provider as (typeof BASE_PROVIDERS)[number]);
   }
 
   return false;
