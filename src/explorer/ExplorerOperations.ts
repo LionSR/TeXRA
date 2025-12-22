@@ -55,7 +55,7 @@ export class ExplorerOperations {
   private editingItem: FileItem | undefined;
 
   constructor(
-    private workspaceRoot: string | undefined,
+    _workspaceRoot: string | undefined,
     _context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {

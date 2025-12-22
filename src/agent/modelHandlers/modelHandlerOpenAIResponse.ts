@@ -10,10 +10,7 @@ import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
 import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
-import {
-  type OpenAIAPIResponseUsage,
-  type ExtendedCompletionUsage,
-} from '@agent/core/ResponseUsage';
+import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
@@ -66,7 +63,7 @@ import type {
   OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
-import type { Reasoning, ReasoningEffort } from 'openai/resources/shared';
+import type { Reasoning } from 'openai/resources/shared';
 import type {
   EasyInputMessage,
   Response,
@@ -179,7 +176,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
-  private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
   /** Statuses indicating the background response is still processing. */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
@@ -352,50 +348,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Audio input is documented but not functional in the Responses API
       // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
       // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
-      // TODO: Re-enable when OpenAI makes this functional
+      // TODO: Re-enable when OpenAI makes audio input functional
       if (media.media_category === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
         );
         return [];
       }
-
-      // Commented out until audio input is functional in Responses API
-      // if (media.media_category === 'audio') {
-      //   if (!this.capabilities.supportsNativeAudio) {
-      //     this.logger.warn(
-      //       `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
-      //     );
-      //     return [];
-      //   }
-      //
-      //   let audioFormat = media.media_type;
-      //   if (media.media_type.includes('/')) {
-      //     audioFormat = media.media_type.split('/')[1];
-      //   }
-      //
-      //   const normalizedFormat =
-      //     audioFormat === 'mp3' || audioFormat === 'wav'
-      //       ? audioFormat
-      //       : undefined;
-      //   if (!normalizedFormat) {
-      //     this.logger.warn(
-      //       `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
-      //     );
-      //     return [];
-      //   }
-      //
-      //   return [
-      //     this.createInputText(`Audio: ${media.file_name}`),
-      //     {
-      //       type: 'input_audio',
-      //       input_audio: {
-      //         data: media.data,
-      //         format: normalizedFormat,
-      //       },
-      //     } as ResponseInputAudio as ResponseInputContent,
-      //   ];
-      // }
 
       if (mediaType === 'application/pdf') {
         return [
@@ -539,7 +498,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
-    const _endTag = options.endTag; // Unused but kept for compatibility
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
@@ -764,16 +722,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Extract plain text and usage information from the Responses API result.
+   *
+   * Note: OpenAI's Responses API streaming can sometimes return missing or null
+   * usage data, especially with thinking models through relay proxies. We handle
+   * this gracefully by using zero defaults rather than failing.
+   * See: https://github.com/openai/openai-agents-python/issues/1179
    */
   extractResponse(
     responseObject: Response,
     endTag: string,
   ): ExtractResponseResult {
+    // Handle missing usage gracefully - OpenAI streaming may not always include it
+    const usage: ResponseUsage = responseObject.usage ?? {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    };
     if (!responseObject.usage) {
-      throw new Error('Response object missing required usage information');
+      this.logger.warn(
+        'Response missing usage information - token counts will show as 0',
+      );
     }
-
-    const usage = responseObject.usage;
     let newResponse = responseObject.output_text?.trim() ?? '';
 
     if (!newResponse && responseObject.output) {
@@ -915,8 +886,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let current = initialResponse;
     const responseId = initialResponse.id;
     const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
-    const _maxRetries =
-      ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
     let pollCount = 0;
     const initialStatus = current.status ?? 'unknown';

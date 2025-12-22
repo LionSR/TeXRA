@@ -204,8 +204,6 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   const resolution = await getAgentPath(originalAgentName, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
-  const resolvedAgentName = resolution.resolvedName;
-
   const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     resolution,
     { preferMultiple: fullConfig.useMultipleOutputs },
@@ -330,12 +328,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
     // Create agent instance and extract its declared type
     const created = await createAgentFn(contextFactory);
     agent = created.agent;
-    const { agentType } = created;
     executionContext =
       created.context ?? executionContext ?? agent.getExecutionContext();
 
     contextLogger = executionContext.logger;
-    const sessionMetadata = agent.getSessionMetadata();
 
     if (executionId) {
       await ensureRunDir(executionId);

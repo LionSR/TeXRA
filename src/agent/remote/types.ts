@@ -8,8 +8,11 @@
 import { z } from 'zod';
 
 // Local imports - agent core
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  AgentSettingSchema,
+  AgentPromptSchema,
+} from '@agent/core/AgentDataclass';
 
 // Re-export LoadAgentOptions as RemoteAgentLoadOptions for API consistency
 export type { LoadAgentOptions as RemoteAgentLoadOptions } from '@agent/runtime/agentLoad';
@@ -42,11 +45,15 @@ export const RemoteAgentMetadataSchema = z.object({
 export type RemoteAgentMetadata = z.infer<typeof RemoteAgentMetadataSchema>;
 
 /**
- * Configuration loaded from a remote agent source.
+ * Schema for configuration loaded from a remote agent source.
+ * Composed from existing schemas - single source of truth.
  */
-export interface RemoteAgentConfig {
-  name: string;
-  settings: AgentSetting;
-  prompts: AgentPrompt;
-  metadata: RemoteAgentMetadata;
-}
+export const RemoteAgentConfigSchema = z.strictObject({
+  name: z.string(),
+  settings: AgentSettingSchema,
+  prompts: AgentPromptSchema,
+  metadata: RemoteAgentMetadataSchema,
+});
+
+/** Derived from RemoteAgentConfigSchema - single source of truth */
+export type RemoteAgentConfig = z.infer<typeof RemoteAgentConfigSchema>;

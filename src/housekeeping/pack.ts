@@ -193,10 +193,8 @@ export async function runPackMultiple(
     if (singleResult.status === 'success') {
       anyFilesPacked = true;
     }
-    // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
-        // logger.debug(CHANNEL, `Packing input file: ${file}`);
         const additionalResult = await runPackSingle(
           model,
           file,

@@ -356,7 +356,7 @@ export class ModelHandlerOpenAI<
             try {
               const totalUsage = await stream.totalUsage();
               finalResponse = { ...finalResponse, usage: totalUsage };
-            } catch {
+            } catch (_err) {
               // totalUsage() may fail if stream ended abnormally
             }
           }
@@ -584,13 +584,8 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
-
-    // const role = this.config.capabilities.supportsIntermDevMsgs
-    // ? 'system'
-    // : 'user';
-    // technically we can use system for the follow-up round messages, but it does not support images...
-    // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
-    // system role does not support images/audio
+    // OpenAI API: system role does not support images/audio
+    // Error: 400 Invalid 'messages[N]'. Image URLs are only allowed for messages with role 'user'
     const role = 'user';
 
     if (
@@ -726,7 +721,6 @@ export class ModelHandlerOpenAI<
         let newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume stop
         let stopReason = OPENAI_CHAT_FINISH.STOP;
-        // let stopReason = OPENAI_CHAT_FINISH.LENGTH;
         if (responseObject.choices?.[0]?.finish_reason) {
           stopReason = responseObject.choices[0].finish_reason;
         }

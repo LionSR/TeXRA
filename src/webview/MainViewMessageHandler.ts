@@ -40,7 +40,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
     this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context, {
@@ -391,7 +391,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.logger.debug(this.channel, `Information message: ${message.text}`);
   }
 
-  private async handleThemeRequest(message: any): Promise<void> {
+  private async handleThemeRequest(_message: unknown): Promise<void> {
     const webviewView = this.getActiveView();
     if (!webviewView) {
       return;
@@ -406,7 +406,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleDebugModeRequest(message: any): Promise<void> {
+  private async handleDebugModeRequest(_message: unknown): Promise<void> {
     const webviewView = this.getActiveView();
     if (!webviewView) {
       return;
@@ -431,7 +431,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
   }
 
-  private async handleShowAgentHistory(message: any): Promise<void> {
+  private async handleShowAgentHistory(_message: unknown): Promise<void> {
     await safeExecuteCommand('texra.showAgentHistory', [], this.viewName);
   }
 
