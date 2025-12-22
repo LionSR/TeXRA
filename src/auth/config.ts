@@ -84,10 +84,22 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
 export type UserTier = z.infer<typeof UserTierSchema>;
 
-/** Ultra tier constant for server-side API key access checks. */
+/**
+ * Ultra tier constant for server-side API key access checks.
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
 export const ULTRA_TIER: UserTier = 'Ultra';
 
-/** Max tier constant for server-side API key access (cheaper models). */
+/**
+ * Max tier constant for server-side API key access (cheaper models).
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
 export const MAX_TIER: UserTier = 'Max';
 
 /**
