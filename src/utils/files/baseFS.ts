@@ -49,7 +49,7 @@ export abstract class BaseFS {
     try {
       await vscode.workspace.fs.stat(this.toUri(target));
       return true;
-    } catch {
+    } catch (_err) {
       return false;
     }
   }
@@ -163,7 +163,7 @@ export abstract class BaseFS {
     try {
       const stats = await this.stat(target);
       return stats.type === vscode.FileType.Directory;
-    } catch {
+    } catch (_err) {
       return false;
     }
   }
@@ -175,7 +175,7 @@ export abstract class BaseFS {
     try {
       const stats = await this.stat(target);
       return stats.type === vscode.FileType.File;
-    } catch {
+    } catch (_err) {
       return false;
     }
   }
@@ -190,7 +190,7 @@ export abstract class BaseFS {
         (stats.type & vscode.FileType.SymbolicLink) ===
         vscode.FileType.SymbolicLink
       );
-    } catch {
+    } catch (_err) {
       return false;
     }
   }
