@@ -1,6 +1,10 @@
 /**
  * Tier-based model access module.
  *
+ * INTERNAL MODULE: This module is intended for use within the auth subsystem.
+ * External consumers should use ServerSideKeyService from '@auth/serverKeys'
+ * which provides a higher-level API and handles cache coordination.
+ *
  * Provides TierService for managing tier configuration and model access.
  *
  * RESEARCHER ACCESS PROGRAM:

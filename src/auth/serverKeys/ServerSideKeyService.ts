@@ -457,6 +457,62 @@ export class ServerSideKeyService {
   }
 
   // ==========================================================================
+  // High-Level Access Methods (for UI consumers)
+  // ==========================================================================
+
+  /**
+   * Get the list of allowed models for the current user's tier.
+   * Returns null if all models are allowed (Ultra), empty array if no access.
+   * Call canUseServerSideKeys() first to prime caches.
+   */
+  getAllowedModelsForCurrentUser(): string[] | null {
+    if (!this.userTier) {
+      return [];
+    }
+
+    // Ultra tier has access to all models
+    if (this.hasFullAccess()) {
+      return null;
+    }
+
+    return this.tierService.getAllowedModels(this.userTier);
+  }
+
+  /**
+   * Get the effective providers for the current user's tier.
+   * Returns providers that are both allowed for the tier AND enabled on server.
+   * Call canUseServerSideKeys() first to prime caches.
+   */
+  getEffectiveProvidersForCurrentUser(): string[] {
+    if (!this.userTier) {
+      return [];
+    }
+
+    // Ultra tier has access to all server-enabled providers
+    if (this.hasFullAccess()) {
+      return this.providers;
+    }
+
+    return this.tierService.getEffectiveProviders(
+      this.userTier,
+      this.tierService.getConfigSync(),
+      this.providers,
+    );
+  }
+
+  /**
+   * Get a user-friendly description of what's included for the current user's tier.
+   * Call canUseServerSideKeys() first to prime caches.
+   */
+  getAccessDescription(): string {
+    if (!this.userTier) {
+      return 'No included model access';
+    }
+
+    return this.tierService.getAccessDescription(this.userTier);
+  }
+
+  // ==========================================================================
   // Routing
   // ==========================================================================
 
