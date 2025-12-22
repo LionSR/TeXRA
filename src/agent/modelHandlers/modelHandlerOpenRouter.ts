@@ -183,7 +183,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         try {
           const totalUsage = await stream.totalUsage();
           response = { ...response, usage: totalUsage };
-        } catch {
+        } catch (_err) {
           // totalUsage() may fail if stream ended abnormally
         }
       }

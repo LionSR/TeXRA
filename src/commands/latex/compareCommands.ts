@@ -71,7 +71,6 @@ async function handleCompare(
     const baseFileName = path.basename(fileToUseLocation.absolutePath);
     const editedFileName = path.basename(editedLocation.absolutePath);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
-    // const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
     // If the ProgressBoard lives in the secondary sidebar, close the bottom
     // panel to give the diff view more space. If the view is in the panel

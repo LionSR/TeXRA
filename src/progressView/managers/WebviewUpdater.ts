@@ -9,7 +9,6 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 import {
-  STREAM_STATUS,
   type StreamStatus,
 } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';

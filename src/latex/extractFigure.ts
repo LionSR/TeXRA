@@ -75,8 +75,6 @@ export async function extractFigurePathsFromLatex(
       graphicspaths.push(normalizedPath);
     }
 
-    // logger.debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
-
     // Pre-process content to remove commented lines
     const processedLines = content
       .split('\n')
