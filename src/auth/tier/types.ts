@@ -20,20 +20,22 @@ export { UserTierSchema, type UserTier };
 /**
  * Schema for a single tier's model access configuration.
  * - models: Either "*" for all models, or an array of specific model names
- * - providers: Array of provider names enabled for this tier
  */
-export const TierAccessConfigSchema = z.object({
+export const TierModelsConfigSchema = z.object({
   /** Model access: "*" for all models, or array of specific model names */
   models: z.union([z.literal('*'), z.array(z.string())]),
-  /** Providers enabled for this tier */
-  providers: z.array(z.string()),
 });
-export type TierAccessConfig = z.infer<typeof TierAccessConfigSchema>;
+export type TierModelsConfig = z.infer<typeof TierModelsConfigSchema>;
 
 /**
  * Schema for the complete tier configuration response from the server.
+ * - providers: All supported providers (same for all tiers)
+ * - tiers: Per-tier model access configuration
  */
 export const TierModelConfigSchema = z.object({
-  tiers: z.record(UserTierSchema, TierAccessConfigSchema),
+  /** All supported providers (same for all tiers) */
+  providers: z.array(z.string()),
+  /** Per-tier model access */
+  tiers: z.record(UserTierSchema, TierModelsConfigSchema),
 });
 export type TierModelConfig = z.infer<typeof TierModelConfigSchema>;
