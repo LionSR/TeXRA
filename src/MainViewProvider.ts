@@ -12,7 +12,7 @@ import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
-import { onDidChangeModelAccess } from '@/auth/serverKeys';
+import { getServerSideKeyService } from '@/auth/serverKeys';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
@@ -87,7 +87,7 @@ export class MainViewProvider
 
     // Listen for model access setting changes (included vs personal keys)
     this.context.subscriptions.push(
-      onDidChangeModelAccess(() => {
+      getServerSideKeyService().onDidChangeModelAccess(() => {
         void this.refreshOptionsAndView();
       }),
     );
