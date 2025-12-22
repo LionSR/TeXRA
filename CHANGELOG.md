@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - Fixed tool name handling in tool definitions resolver.
 - Fixed absolute path handling in file location creation.
 - Fixed agent and model selection reverting to defaults.
+- Fixed missing usage info in OpenAI Responses API streaming.
+- Disabled automatic retries by default to give users explicit control.
+- Added tooltips to toolbar buttons across all webviews.
+- Clarified reference and auxiliary file selector tooltips.
 
 ### Improvements
 
