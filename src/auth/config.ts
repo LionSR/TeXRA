@@ -103,6 +103,15 @@ export const ULTRA_TIER: UserTier = 'Ultra';
 export const MAX_TIER: UserTier = 'Max';
 
 /**
+ * Free tier constant for server-side API key access (budget models).
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
+export const FREE_TIER: UserTier = 'free';
+
+/**
  * User's authorization context.
  * Permissions are visibility values stored in profiles.permissions column.
  */
