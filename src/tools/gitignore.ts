@@ -136,7 +136,7 @@ async function readWorkspaceGitignore(
       absolutePath: path.join(workspacePath, normalized),
       rules: parseGitignore(content),
     };
-  } catch {
+  } catch (_err) {
     return null;
   }
 }
@@ -155,7 +155,7 @@ async function readAbsoluteGitignore(
       absolutePath,
       rules: parseGitignore(content),
     };
-  } catch {
+  } catch (_err) {
     return null;
   }
 }
@@ -175,7 +175,7 @@ async function readGlobalGitignore(): Promise<GitignoreSource[]> {
     return sources.filter(
       (source): source is GitignoreSource => source !== null,
     );
-  } catch {
+  } catch (_err) {
     return [];
   }
 }
@@ -224,7 +224,7 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
       },
       ignoreFiles,
     };
-  } catch {
+  } catch (_err) {
     return EMPTY_GITIGNORE_MATCHER;
   }
 }

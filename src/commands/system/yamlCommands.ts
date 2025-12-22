@@ -146,7 +146,7 @@ export async function handleLoadSpecificAgent(
 }
 
 export async function handleParseYaml(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({
