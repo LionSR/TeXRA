@@ -4,29 +4,19 @@
  * This module handles remote configuration for which models are available
  * to each user tier without requiring their own API keys.
  *
- * TIER HIERARCHY:
- * - free: No server-side key access (must bring own keys)
- * - Max: Access to a subset of cheaper models via relay
- * - Ultra: Access to ALL models via relay (existing behavior)
+ * RESEARCHER ACCESS PROGRAM:
+ * All server-side API key access is provided as a convenience for researchers.
+ * Users can always choose between server-side keys or their own API keys.
+ *
+ * TIER HIERARCHY (cumulative access):
+ * - free: Budget models only (under $1/M input)
+ * - Max: Mid-tier models ($1-3/M) + all free tier models
+ * - Ultra: All models including premium ($3+/M input)
  *
  * REMOTE CONFIGURATION:
  * The relay server provides a /relay/tier-config endpoint that returns
  * which models are available for each tier. This allows updating model
  * access without requiring extension updates.
- *
- * Example server response:
- * {
- *   "tiers": {
- *     "Max": {
- *       "models": ["gemini2flash", "deepseekV3", "gemini2flashLite"],
- *       "providers": ["google", "deepseek"]
- *     },
- *     "Ultra": {
- *       "models": "*",
- *       "providers": ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope"]
- *     }
- *   }
- * }
  */
 
 import { z } from 'zod';
@@ -208,11 +198,6 @@ export function isModelAvailableForTier(
     return false;
   }
 
-  // Free tier never gets server-side key access
-  if (tier === 'free') {
-    return false;
-  }
-
   const tierConfig = config.tiers[tier];
   if (!tierConfig) {
     return false;
@@ -240,7 +225,7 @@ export function isProviderAvailableForTier(
   provider: string,
   config: TierModelConfig | null,
 ): boolean {
-  if (!config || tier === 'free') {
+  if (!config) {
     return false;
   }
 
@@ -263,7 +248,7 @@ export function getAllowedModelsForTier(
   tier: UserTier,
   config: TierModelConfig | null,
 ): string[] | null {
-  if (!config || tier === 'free') {
+  if (!config) {
     return [];
   }
 
@@ -291,7 +276,7 @@ export function getEnabledProvidersForTier(
   tier: UserTier,
   config: TierModelConfig | null,
 ): string[] {
-  if (!config || tier === 'free') {
+  if (!config) {
     return [];
   }
 
@@ -339,7 +324,7 @@ export function getTierAccessDescription(
   tier: UserTier,
   config: TierModelConfig | null,
 ): string {
-  if (!config || tier === 'free') {
+  if (!config) {
     return 'No included model access';
   }
 
