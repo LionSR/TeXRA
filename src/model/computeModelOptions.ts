@@ -64,8 +64,8 @@ export async function computeModelOptions(): Promise<string> {
       // Use sync versions since canUseServerSideKeys() already primed the caches
       if (
         hasAnyServerSideAccess &&
-        serverSideKeyService.isProviderAvailableForCurrentTier(provider) &&
-        serverSideKeyService.isModelAvailableForCurrentTierSync(model)
+        serverSideKeyService.canUseProviderSync(provider) &&
+        serverSideKeyService.canUseModelSync(model)
       ) {
         available = true;
       }
