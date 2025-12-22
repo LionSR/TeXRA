@@ -217,7 +217,7 @@ h2 {
   font-style: italic;
 }
 
-/* API Access section (Max and Ultra tiers) */
+/* API Access section (all authenticated users) */
 .api-access-section {
   margin-top: var(--spacing-xlarge);
   margin-bottom: var(--spacing-xlarge);
