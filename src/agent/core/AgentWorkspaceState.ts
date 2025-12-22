@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
+import { FlattenedEditRecordSchema } from '@tools/result';
 import {
   FileLocationSchema,
   pathToLocation,
@@ -85,15 +86,7 @@ export class ResponseAssemblyState {
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).default([]),
-  edits: z
-    .array(
-      z.object({
-        path: z.string(),
-        added: z.number().default(0),
-        removed: z.number().default(0),
-      }),
-    )
-    .default([]),
+  edits: z.array(FlattenedEditRecordSchema).default([]),
 });
 /**
  * Output type for FileInteractionState serialization.

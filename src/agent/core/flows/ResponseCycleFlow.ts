@@ -49,10 +49,7 @@ import {
   applyFallbackResult,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
-import type {
-  ResponseCycleOptions,
-  ResponseCycleParams,
-} from './CycleServices';
+import type { ResponseCycleParams } from './CycleServices';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */

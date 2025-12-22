@@ -8,7 +8,7 @@ import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { replaceInputCommands, flexibleFS } from '@utils/files';
+import { replaceInputCommands, flexibleFS, type FileLocation } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
@@ -21,7 +21,7 @@ import {
   cleanupLatexBackups,
 } from './LatexOutputUtils';
 import type { XmlOutputManager } from './XmlOutputManager';
-import type { FileLocation, OutputFileInfo, OutputXmlSummary } from './types';
+import type { OutputFileInfo, OutputXmlSummary } from './types';
 
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;

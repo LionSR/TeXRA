@@ -74,7 +74,7 @@ export function getExtraDirs(): string[] {
           .sort()
           .reverse();
         dirs.push(...matches);
-      } catch {
+      } catch (_err) {
         // ignore glob errors
       }
     }
@@ -143,7 +143,7 @@ export function getExtraDirs(): string[] {
     try {
       const matches = glob.sync(pattern).sort().reverse();
       dirs.push(...matches);
-    } catch {
+    } catch (_err) {
       // ignore glob errors
     }
   }
@@ -152,7 +152,7 @@ export function getExtraDirs(): string[] {
     try {
       const matches = glob.sync(pattern).sort().reverse();
       dirs.push(...matches);
-    } catch {
+    } catch (_err) {
       // ignore glob errors
     }
   }
@@ -253,7 +253,7 @@ export function findToolInCommonPaths(tool: string): string | null {
       if (result.exitCode === 0 && found) {
         return found;
       }
-    } catch {
+    } catch (_err) {
       // ignore kpsewhich errors
     }
   }
@@ -266,7 +266,7 @@ export function findToolInCommonPaths(tool: string): string | null {
       if (result.exitCode === 0 && found) {
         return found;
       }
-    } catch {
+    } catch (_err) {
       // ignore locate command errors
     }
   }
