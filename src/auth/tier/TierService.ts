@@ -43,12 +43,13 @@ export class TierService {
   }
 
   /**
-   * Check if the cache is valid (not expired and has data).
+   * Check if a fetch is in progress or cache is valid (not expired).
+   * Does NOT require cache data to be present - checking fetchPromise !== null
+   * with valid timestamp is enough to avoid duplicate fetches.
    */
   private isCacheValid(): boolean {
     return (
       this.fetchPromise !== null &&
-      this.cache !== null &&
       Date.now() - this.cacheTimestamp < SERVER_SIDE_CACHE_TTL_MS
     );
   }
@@ -101,10 +102,15 @@ export class TierService {
       return this.fetchPromise;
     }
 
+    // Set timestamp BEFORE creating promise to prevent race conditions
+    // where concurrent calls see fetchPromise !== null but timestamp is stale
+    this.cacheTimestamp = Date.now();
     this.fetchPromise = this.fetchFromServer().then((result) => {
       if (result !== null) {
-        this.cacheTimestamp = Date.now();
         this.cache = result;
+      } else {
+        // Reset timestamp on failure so next call retries
+        this.cacheTimestamp = 0;
       }
       return result;
     });
