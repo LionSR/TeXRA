@@ -128,30 +128,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private currentRunState: AgentRunState | null = null;
   private currentWorkspaceState: AgentWorkspaceState | null = null;
 
-  // ============================================================================
-  // Backwards compatibility accessors (delegate to rounds collection)
-  // ============================================================================
-
-  /** @deprecated Use rounds.get(index)?.roundState instead */
-  public get roundStates(): ConversationRoundState[] {
-    return this.rounds.all().map((r) => r.roundState).filter((s): s is ConversationRoundState => s !== null);
-  }
-
-  /** @deprecated Use rounds.get(index)?.workspaceState instead */
-  public get workspaceStates(): AgentWorkspaceState[] {
-    return this.rounds.all().map((r) => r.workspaceState).filter((s): s is AgentWorkspaceState => s !== null);
-  }
-
-  /** @deprecated Use rounds.get(index)?.output instead */
-  public get roundOutputs(): RoundOutput[] {
-    return this.rounds.all().map((r) => r.output).filter((o): o is RoundOutput => o !== null);
-  }
-
-  /** @deprecated Use rounds.get(index)?.outputLocation instead */
-  protected get outputFile(): AgentFileLocation[] {
-    return this.rounds.all().map((r) => r.outputLocation);
-  }
-
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
     agentConfig: AgentConfig,
@@ -317,7 +293,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    *
    * **Workspace State**: Creates a fresh `AgentWorkspaceState` for each round. This is intentional -
    * workspace state is round-specific and gets populated during round execution (input files,
-   * prompt files, etc.). Historical workspace states are preserved in `this.workspaceStates[]`
+   * prompt files, etc.). Historical workspace states are preserved in the `rounds` collection
    * by `recordRoundResult()`.
    *
    * @param roundIndex - Zero-based round index
@@ -927,7 +903,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      const currentOutputs = this.roundOutputs.filter(Boolean).length;
+      const currentOutputs = this.rounds.all().filter((r) => r.output !== null).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
         currentOutputs,
