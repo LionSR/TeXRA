@@ -195,7 +195,7 @@ async function logFileCategoriesWithExistence(
         files.map(async (filePath) => {
           try {
             return { path: filePath, ok: await WorkspaceFS.exists(filePath) };
-          } catch {
+          } catch (_err) {
             // Treat permission/access errors as non-existent
             return { path: filePath, ok: false };
           }

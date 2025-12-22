@@ -2,13 +2,13 @@
  * Dedicated stream handler for Anthropic responses.
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
 import {
   extractDomain,
   type WebSearchResult,
   type WebSearchResultEntry,
-} from '../types/ServerToolTypes';
+} from '@agent/modelHandlers/types/ServerToolTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
