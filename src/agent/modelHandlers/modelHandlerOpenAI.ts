@@ -584,6 +584,8 @@ export class ModelHandlerOpenAI<
     mediaFiles?: FileLocation[],
   ): Promise<any[]> {
     const roundContent: ChatCompletionContentPart[] = [];
+    // OpenAI API: system role does not support images/audio
+    // Error: 400 Invalid 'messages[N]'. Image URLs are only allowed for messages with role 'user'
     const role = 'user';
 
     if (
