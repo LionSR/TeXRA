@@ -325,17 +325,6 @@ function isModelAllowedForTier(
 }
 
 /**
- * Check if a provider is allowed for a given tier.
- * All tiers have access to the same providers - model access is what differentiates tiers.
- */
-function isProviderAllowedForTier(tier: string, provider: string): boolean {
-  if (tier === ULTRA_TIER || tier === MAX_TIER || tier === FREE_TIER) {
-    return ALL_PROVIDERS.includes(provider as (typeof ALL_PROVIDERS)[number]);
-  }
-  return false;
-}
-
-/**
  * Extract model name from URL path for providers that embed it in the URL.
  *
  * Google GenAI SDK uses paths like:
@@ -734,21 +723,7 @@ Deno.serve(async (req: Request) => {
     // Default to 'free' if no tier is set (authenticated but no subscription)
     const userTier = profile.tier || FREE_TIER;
 
-    // 5a. Check if provider is allowed for user's tier
-    if (!isProviderAllowedForTier(userTier, provider)) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: `Provider '${provider}' is not available for ${userTier} tier`,
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 5b. For non-Ultra tiers, validate the model is allowed
+    // 5. For non-Ultra tiers, validate the model is allowed
     // Ultra tier has unrestricted model access, but Max and free tiers
     // are limited to their respective model lists
     let requestBody: string | null = null;
