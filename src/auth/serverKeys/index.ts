@@ -1,6 +1,8 @@
 /**
  * Server-side API key access module.
  *
+ * Provides ServerSideKeyService for managing server-side API key access.
+ *
  * RESEARCHER ACCESS PROGRAM:
  * All server-side API key access is provided as a convenience for researchers.
  * Users can always choose between server-side keys or their own API keys.
@@ -9,61 +11,58 @@
  * - Ultra tier: Access to ALL models via relay (full access)
  * - Max tier: Mid-tier models ($1-3/M) + all free tier models
  * - free tier: Budget models only (under $1/M input)
- *
- * ARCHITECTURE:
- * - types.ts: Type definitions
- * - cache.ts: Cache management for providers and access
- * - settings.ts: User preference for included vs personal keys
- * - providers.ts: Fetching enabled providers from server
- * - access.ts: Access determination functions
- * - routing.ts: Relay URL generation
  */
+
+import * as vscode from 'vscode';
+import { SUPABASE_CUSTOM_DOMAIN } from '../config';
+import { SupabaseClient } from '../SupabaseClient';
+import { getTierService } from '../tier';
+import { ServerSideKeyService, type AuthProvider } from './ServerSideKeyService';
 
 // Types
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
 
-// Settings
-export {
-  initialize as initializeServerSideKeyAccess,
-  isEnabled as isServerSideKeysSettingEnabled,
-  getUseIncludedModelAccess,
-  onDidChangeModelAccess,
-} from './settings';
-import {
-  setUseIncludedModelAccess as _setUseIncludedModelAccess,
-} from './settings';
-import { getEnabledProviders } from './providers';
-import { getTierConfig } from '../tier';
+// Service class
+export { ServerSideKeyService, type AuthProvider };
+
+// ==========================================================================
+// Singleton Instance
+// ==========================================================================
+
+let _instance: ServerSideKeyService | null = null;
+
+const defaultAuthProvider: AuthProvider = {
+  isAuthenticated: () => SupabaseClient.isAuthenticated(),
+  getUserTier: () => SupabaseClient.getUserTier(),
+};
 
 /**
- * Set the "use included model access" preference.
- * When enabling, pre-fetches providers and tier config.
+ * Get the singleton ServerSideKeyService instance.
  */
-export async function setUseIncludedModelAccess(value: boolean): Promise<void> {
-  await _setUseIncludedModelAccess(value, async () => {
-    await Promise.all([getEnabledProviders(), getTierConfig()]);
-  });
+export function getServerSideKeyService(): ServerSideKeyService {
+  if (!_instance) {
+    _instance = new ServerSideKeyService(
+      `https://${SUPABASE_CUSTOM_DOMAIN}`,
+      defaultAuthProvider,
+      getTierService(),
+    );
+  }
+  return _instance;
 }
 
-// Cache
-export { clearAllCaches as clearServerSideKeyAccessCache } from './cache';
+/**
+ * Set a custom ServerSideKeyService instance (for testing).
+ */
+export function setServerSideKeyService(service: ServerSideKeyService): void {
+  _instance = service;
+}
 
-// Providers
-export {
-  getEnabledProviders,
-  getEnabledProvidersSync,
-  isProviderEnabledForServerSideKeys,
-} from './providers';
-
-// Access
-export {
-  canUseServerSideKeys,
-  canUseServerSideKeysForModel,
-  isModelAvailableForCurrentTierSync,
-  shouldUseServerSideKeysSync,
-  isProviderAvailableForCurrentTier,
-  getCachedUserTier,
-} from './access';
-
-// Routing
-export { getRelayBaseUrl } from './routing';
+/**
+ * Initialize the server-side key access module.
+ * Call this during extension activation.
+ */
+export function initializeServerSideKeyAccess(
+  context: vscode.ExtensionContext,
+): void {
+  getServerSideKeyService().initialize(context);
+}
