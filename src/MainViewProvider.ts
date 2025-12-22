@@ -45,7 +45,7 @@ export class MainViewProvider
     // Only register commands if they haven't been registered yet
     if (!MainViewProvider.commandsRegistered) {
       // Create a promise to check if the command exists and register if it doesn't
-      const registerCommandPromise = vscode.commands
+      vscode.commands
         .getCommands(true)
         .then((commands) => {
           if (!commands.includes('texra.getWebviewView')) {
