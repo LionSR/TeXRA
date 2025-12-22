@@ -284,8 +284,14 @@ const TIER_CONFIG: TierModelConfig = {
 
 /**
  * Check if a model is allowed for a given tier.
- * Uses prefix pattern matching against tier-specific API patterns
- * to handle version suffixes in model names.
+ *
+ * DUAL VALIDATION STRATEGY:
+ * - Client validates SHORT NAMES (e.g., "gpt41-") against tier config's model list
+ * - Server validates API NAMES (e.g., "gpt-4.1-mini") against API patterns here
+ * - Both are derived from RELAY_MODELS, the single source of truth
+ *
+ * Uses PREFIX pattern matching to handle version suffixes in model names.
+ * E.g., "gpt-4.1-mini-2025-04-14" matches pattern "gpt-4.1-mini"
  *
  * TIER ACCESS IS CUMULATIVE:
  * - Ultra: All models
