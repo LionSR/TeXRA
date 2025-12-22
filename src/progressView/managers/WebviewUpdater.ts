@@ -8,9 +8,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
-import {
-  type StreamStatus,
-} from '@common/constants/streamStatus';
+import { type StreamStatus } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
