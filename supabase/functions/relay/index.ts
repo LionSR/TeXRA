@@ -246,38 +246,34 @@ const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) =>
   m.apiPatterns.map((p) => p.toLowerCase()),
 );
 
-// Provider access by tier
-// Base providers available to all tiers - model access is what differentiates tiers
-const BASE_PROVIDERS = [
+// All providers available to all tiers - model access is what differentiates tiers
+const ALL_PROVIDERS = [
   'openai',
   'anthropic',
   'google',
   'deepseek',
   'xai',
   'moonshot',
+  'dashscope',
 ] as const;
-
-// Ultra tier gets additional providers (DashScope for Qwen models)
-const ULTRA_ONLY_PROVIDERS = ['dashscope'] as const;
-const ULTRA_TIER_PROVIDERS = [...BASE_PROVIDERS, ...ULTRA_ONLY_PROVIDERS];
 
 const TIER_CONFIG: TierModelConfig = {
   tiers: {
     free: {
       // Free tier: Budget models only (under $1/M input)
       models: FREE_TIER_SHORT_NAMES,
-      providers: [...BASE_PROVIDERS],
+      providers: [...ALL_PROVIDERS],
     },
     Max: {
       // Max tier: Free + mid-tier models ($1-3/M input)
       // GUARDS (Ultra-only): Opus, GPT-5 series, DeepSeek R1
       models: MAX_TIER_SHORT_NAMES,
-      providers: [...BASE_PROVIDERS],
+      providers: [...ALL_PROVIDERS],
     },
     Ultra: {
       // Ultra tier: All models including premium ($3+/M)
       models: '*',
-      providers: ULTRA_TIER_PROVIDERS,
+      providers: [...ALL_PROVIDERS],
     },
   },
 };
@@ -330,17 +326,12 @@ function isModelAllowedForTier(
 
 /**
  * Check if a provider is allowed for a given tier.
+ * All tiers have access to the same providers - model access is what differentiates tiers.
  */
 function isProviderAllowedForTier(tier: string, provider: string): boolean {
-  if (tier === ULTRA_TIER) {
-    return ULTRA_TIER_PROVIDERS.includes(provider);
+  if (tier === ULTRA_TIER || tier === MAX_TIER || tier === FREE_TIER) {
+    return ALL_PROVIDERS.includes(provider as (typeof ALL_PROVIDERS)[number]);
   }
-
-  // Max and free tiers use the same base providers
-  if (tier === MAX_TIER || tier === FREE_TIER) {
-    return BASE_PROVIDERS.includes(provider as (typeof BASE_PROVIDERS)[number]);
-  }
-
   return false;
 }
 
