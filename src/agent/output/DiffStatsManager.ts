@@ -5,8 +5,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@agent/types/DiffTypes';
 
 // Local imports
-import { flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import { flexibleFS, type FileLocation } from '@utils/files';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
@@ -49,5 +48,3 @@ export class DiffStatsManager {
     }
   }
 }
-
-export type { DiffStats } from '@agent/types/DiffTypes';
