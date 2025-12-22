@@ -457,35 +457,6 @@ export class ServerSideKeyService {
   }
 
   // ==========================================================================
-  // Backward Compatibility Aliases
-  // ==========================================================================
-
-  /** @deprecated Use canUseModelSync() instead */
-  isModelAvailableForCurrentTierSync(modelName: string): boolean {
-    return this.canUseModelSync(modelName);
-  }
-
-  /** @deprecated Use canUseProviderSync() instead */
-  isProviderAvailableForCurrentTier(provider: string): boolean {
-    return this.canUseProviderSync(provider);
-  }
-
-  /** @deprecated Use isProviderOnServer() instead */
-  isProviderEnabled(provider: string): boolean {
-    return this.isProviderOnServer(provider);
-  }
-
-  /** @deprecated Use getUserTier() instead */
-  getCachedUserTier(): UserTier | null {
-    return this.getUserTier();
-  }
-
-  /** @deprecated Use getEnabledProvidersSync() instead */
-  getCachedProviders(): string[] {
-    return this.getEnabledProvidersSync();
-  }
-
-  // ==========================================================================
   // Routing
   // ==========================================================================
 
