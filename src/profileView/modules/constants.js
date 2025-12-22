@@ -20,7 +20,7 @@ export const ELEMENT_IDS = {
   REMOTE_AGENTS_SECTION: 'remoteAgentsSection',
   AGENTS_TABLE_CONTAINER: 'agentsTableContainer',
   NO_AGENTS_MESSAGE: 'noAgentsMessage',
-  // API Access section (Max and Ultra tiers)
+  // API Access section (all authenticated users)
   API_ACCESS_SECTION: 'apiAccessSection',
   API_ACCESS_INCLUDED: 'apiAccessIncluded',
   API_ACCESS_PERSONAL: 'apiAccessPersonal',
