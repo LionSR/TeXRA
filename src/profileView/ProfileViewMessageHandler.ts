@@ -22,12 +22,12 @@ import {
   getEnabledProviders,
   setUseIncludedModelAccess,
   getUseIncludedModelAccess,
-} from '@/auth/serverSideKeyAccess';
+} from '@/auth/serverKeys';
 import {
   getTierConfig,
   getAllowedModelsForTier,
   getEffectiveProvidersForTier,
-} from '@/auth/tierModelAccess';
+} from '@/auth/tier';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });

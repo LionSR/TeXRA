@@ -26,7 +26,7 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { initializeServerSideKeyAccess } from '@/auth/serverSideKeyAccess';
+import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';

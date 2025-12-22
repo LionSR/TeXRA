@@ -3,7 +3,7 @@ import {
   canUseServerSideKeys,
   isModelAvailableForCurrentTierSync,
   isProviderAvailableForCurrentTier,
-} from '@auth/serverSideKeyAccess';
+} from '@auth/serverKeys';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';

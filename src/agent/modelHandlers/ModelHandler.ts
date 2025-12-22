@@ -3,7 +3,7 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+import { shouldUseServerSideKeysSync } from '@auth/serverKeys';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
