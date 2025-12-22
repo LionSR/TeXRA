@@ -193,10 +193,6 @@ export function hasEndTag(
     settings.documentTag && `</${settings.documentTag}>`,
   ];
 
-  // if (settings.agentType === AgentType.CoT){
-  //   endTagLists.push('\\end{document}');
-  // }
-  // this is not correct for multiple documents
   return endTagLists.some((tag) => tag && fileContent.includes(tag));
 }
 
