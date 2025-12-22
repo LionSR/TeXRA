@@ -4,14 +4,11 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - type
-import type { FileLocation } from '@agent/output/types';
-
 // Local imports - log
 import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils

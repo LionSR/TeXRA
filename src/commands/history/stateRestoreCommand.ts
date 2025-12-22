@@ -64,7 +64,6 @@ async function restoreState(state: TaskState) {
     }
 
     logger.info(CHANNEL, 'Main webview state restoration requested');
-    // vscode.window.showInformationMessage('Configuration restored to main view');
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }

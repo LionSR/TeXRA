@@ -54,8 +54,6 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     'resources',
     'tool_use_agents',
   );
-  const globalStoragePath = GlobalStorageFS.fullPath('agents');
-
   try {
     // Ensure the global storage agents directory exists
     await GlobalStorageFS.ensureDir('agents');

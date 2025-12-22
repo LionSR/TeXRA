@@ -24,7 +24,7 @@ export class DiffFileNameManager {
   }
 
   private generateRoundBasedFileName(
-    inputFile: string,
+    _inputFile: string,
     editedFile: string,
     inputRoundMatch: RegExpMatchArray,
     editedRoundMatch: RegExpMatchArray,

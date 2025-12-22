@@ -162,8 +162,8 @@ export abstract class BaseViewMessageHandler<
    * when the webview signals it is ready.
    */
   protected async handleWebviewReady(
-    message: any,
-    webviewView: T,
+    _message: unknown,
+    _webviewView: T,
   ): Promise<void> {
     this.logger.debug(this.channel, 'Webview ready signal received');
     // Subclasses can override for custom ready handling
