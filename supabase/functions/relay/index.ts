@@ -33,7 +33,16 @@
 // Relay version for debugging deployments
 const RELAY_VERSION = '1.4.0';
 
-/** Tier values - must match constants in src/auth/config.ts */
+/**
+ * Tier values - MUST match constants in src/auth/config.ts
+ *
+ * CROSS-REFERENCE: These are duplicated because the relay runs in Deno
+ * and cannot import from the TypeScript source. Keep in sync with:
+ * - src/auth/config.ts: ULTRA_TIER, MAX_TIER constants
+ * - Database: profiles.tier column values
+ *
+ * If adding/changing tiers, update ALL locations.
+ */
 const ULTRA_TIER = 'Ultra';
 const MAX_TIER = 'Max';
 
