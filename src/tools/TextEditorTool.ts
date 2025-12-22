@@ -25,7 +25,6 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 import { ToolResult, ToolError, cliResult, toolResult } from './result';
-import { FileHistoryEntry } from './types';
 
 // Local imports - approval helpers
 
