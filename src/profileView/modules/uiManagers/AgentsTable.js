@@ -215,9 +215,17 @@ export class AgentsTable {
           modelsInfo.title = resolvedAllowedModels.join(', ');
           modelsInfo.style.display = 'block';
         } else {
-          // Empty array means no models configured
-          modelsInfo.textContent = 'No models configured';
-          modelsInfo.title = '';
+          // Empty array means either:
+          // 1. Tier config fetch failed (when enabledProviders is also empty)
+          // 2. Config explicitly has no models (unlikely but possible)
+          // Show helpful message based on context
+          const configFetchFailed = enabledProviders.length === 0;
+          modelsInfo.textContent = configFetchFailed
+            ? 'Unable to load models'
+            : 'No models configured';
+          modelsInfo.title = configFetchFailed
+            ? 'Try signing out and back in to refresh'
+            : '';
           modelsInfo.style.display = 'block';
         }
       } else {
