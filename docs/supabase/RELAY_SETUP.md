@@ -4,7 +4,13 @@ This guide explains how to deploy and configure the Relay Edge Function for serv
 
 ## Overview
 
-The Relay function allows **Ultra** tier users to access AI models without providing their own API keys. The API keys are stored as Supabase secrets and the relay forwards requests to the appropriate provider.
+The Relay function allows authenticated users to access AI models without providing their own API keys. Access is tier-based:
+
+- **Ultra**: All models including premium ($3+/M input)
+- **Max**: Mid-tier models ($1-3/M) + all free tier models
+- **free**: Budget models only (under $1/M input)
+
+The API keys are stored as Supabase secrets and the relay forwards requests to the appropriate provider.
 
 ## Supported Providers
 
@@ -79,13 +85,13 @@ Examples:
 ## Security
 
 - **Authentication**: All requests must include a valid Supabase JWT
-- **Authorization**: Only users with `tier = 'Ultra'` can use the relay
+- **Authorization**: Model access is tier-based (see Overview above)
 - **API Keys**: Stored as Supabase secrets (never exposed to clients)
 - **CORS**: Configured for web access
 
 ## Client-Side Settings
 
-Ultra tier users can toggle between "Included Access" and "Use My Own Keys" in the Profile view. By default, Ultra users have included access enabled.
+All authenticated users can toggle between "Included Access" and "Use My Own Keys" in the Profile view. By default, included access is enabled.
 
 When using included access:
 
@@ -110,19 +116,29 @@ curl -X POST \
 
 ## Error Responses
 
-| Status | Error                  | Description                              |
-| ------ | ---------------------- | ---------------------------------------- |
-| 400    | Invalid path           | URL doesn't match expected format        |
-| 400    | Unsupported provider   | Provider not in supported list           |
-| 401    | Missing authorization  | No Authorization header                  |
-| 401    | Invalid token          | JWT is invalid or expired                |
-| 403    | Profile not found      | User has no profile record               |
-| 403    | Ultra tier required    | User is not Ultra tier                   |
-| 503    | API key not configured | Server doesn't have API key for provider |
+| Status | Error                      | Description                                    |
+| ------ | -------------------------- | ---------------------------------------------- |
+| 400    | Invalid path               | URL doesn't match expected format              |
+| 400    | Unsupported provider       | Provider not in supported list                 |
+| 401    | Missing authorization      | No Authorization header                        |
+| 401    | Invalid token              | JWT is invalid or expired                      |
+| 403    | Profile not found          | User has no profile record                     |
+| 403    | Provider not available     | Provider not enabled for user's tier           |
+| 403    | Model not available        | Model not in user's tier allowed list          |
+| 503    | API key not configured     | Server doesn't have API key for provider       |
+
+## Deployment
+
+To update the relay function after changes:
+
+```bash
+supabase functions deploy relay
+```
+
+Changes take effect immediately. Client caches expire after 5 minutes.
 
 ## Future Enhancements
 
 - [ ] Rate limiting per user
 - [ ] Usage tracking and quotas
-- [ ] Model-level restrictions
 - [ ] Cost tracking per user
