@@ -1,11 +1,11 @@
 // Local imports - agent
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import type { FileLocation } from '@utils/files';
 
 // Local file imports
 import type { LatexDiffManager } from './LatexDiffManager';
 import type {
-  FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
