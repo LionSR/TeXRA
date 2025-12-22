@@ -52,7 +52,7 @@ export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 
 // Retry defaults
 // Default to 0 automatic retries - users must click retry button
-export const DEFAULT_MODEL_RETRY_ATTEMPTS = 0;
+export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 0;
 export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
 
 /** Determine whether tool-use session persistence is enabled. */
@@ -80,7 +80,7 @@ export function getToolUsePersistenceTtlHours(): number {
 export function getModelRetryMaxAttempts(): number {
   return getConfig<number>(
     'texra.model.retry.maxAttempts',
-    DEFAULT_MODEL_RETRY_ATTEMPTS,
+    DEFAULT_MODEL_RETRY_MAX_ATTEMPTS,
   );
 }
 
