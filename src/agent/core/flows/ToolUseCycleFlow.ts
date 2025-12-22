@@ -19,7 +19,6 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Internal imports - use core ToolTypes as single source of truth
 import {
   extractToolAttachments,
-  type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
@@ -783,7 +782,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           if (exists) {
             toAdd.push(location);
           }
-        } catch {
+        } catch (_err) {
           // Ignore errors when checking existence
         }
       }

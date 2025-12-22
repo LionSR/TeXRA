@@ -38,6 +38,13 @@ When updating CHANGELOG.md:
 - Keep the directory structure aligned among different webviews (webview, historyView, progressView). Use the same folder names for modules of the same type and functionality but in different webviews.
 - Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `src/progressView/managers/`.
 
+### Naming conventions
+
+- **Const object naming**:
+  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `StreamStatusService`, `AgentSharedStoreRegistry`)
+  - Use **camelCase** for simple command/function namespaces (e.g., `agentCommands`, `latexCommands`)
+- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `STREAM_STATUS`)
+
 ### Directory organization
 
 - `src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.

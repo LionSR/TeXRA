@@ -50,7 +50,6 @@ import {
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
 import type {
-  ResponseCycleOptions,
   ResponseCycleParams,
 } from './CycleServices';
 
