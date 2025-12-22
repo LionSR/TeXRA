@@ -159,31 +159,6 @@ export class TierService {
   }
 
   /**
-   * Check if a provider is enabled for a user tier.
-   *
-   * @param tier - User's tier (free, Max, Ultra)
-   * @param provider - The provider to check (e.g., "google")
-   * @param config - Optional config override (uses cached if not provided)
-   */
-  isProviderAvailable(
-    tier: UserTier,
-    provider: string,
-    config?: TierModelConfig | null,
-  ): boolean {
-    const cfg = config ?? this.cache;
-    if (!cfg) {
-      return false;
-    }
-
-    const tierConfig = cfg.tiers[tier];
-    if (!tierConfig) {
-      return false;
-    }
-
-    return tierConfig.providers.includes(provider.toLowerCase());
-  }
-
-  /**
    * Get the list of allowed models for a specific tier.
    * Returns null if all models are allowed ("*").
    */
@@ -209,41 +184,12 @@ export class TierService {
   }
 
   /**
-   * Get the list of enabled providers for a specific tier.
+   * Get the list of supported providers from the tier config.
+   * All tiers have access to the same providers.
    */
-  getEnabledProviders(
-    tier: UserTier,
-    config?: TierModelConfig | null,
-  ): string[] {
+  getProviders(config?: TierModelConfig | null): string[] {
     const cfg = config ?? this.cache;
-    if (!cfg) {
-      return [];
-    }
-
-    const tierConfig = cfg.tiers[tier];
-    return tierConfig?.providers ?? [];
-  }
-
-  /**
-   * Get the effective list of providers for a tier, filtered by what's
-   * actually enabled on the server.
-   *
-   * @param tier - User's tier
-   * @param config - The tier configuration
-   * @param serverEnabledProviders - Providers with API keys on the server
-   */
-  getEffectiveProviders(
-    tier: UserTier,
-    config: TierModelConfig | null | undefined,
-    serverEnabledProviders: string[],
-  ): string[] {
-    const tierProviders = this.getEnabledProviders(tier, config);
-    const normalizedServerProviders = serverEnabledProviders.map((p) =>
-      p.toLowerCase(),
-    );
-    return tierProviders.filter((p) =>
-      normalizedServerProviders.includes(p.toLowerCase()),
-    );
+    return cfg?.providers ?? [];
   }
 
   /**

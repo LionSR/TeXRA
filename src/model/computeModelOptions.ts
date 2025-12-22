@@ -62,7 +62,7 @@ export async function computeModelOptions(): Promise<string> {
       // Determine availability - server-side checks are sync after priming
       const hasServerSideForModel =
         hasAnyServerSideAccess &&
-        serverSideKeyService.canUseProviderSync(provider) &&
+        serverSideKeyService.isProviderOnServer(provider) &&
         serverSideKeyService.canUseModelSync(model);
 
       let available = hasServerSideForModel;
