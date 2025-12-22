@@ -15,7 +15,6 @@
 
 import * as vscode from 'vscode';
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
-import { SupabaseClient } from '../SupabaseClient';
 import { getTierService } from '../tier';
 import { ServerSideKeyService, type AuthProvider } from './ServerSideKeyService';
 
@@ -31,20 +30,14 @@ export { ServerSideKeyService, type AuthProvider };
 
 let _instance: ServerSideKeyService | null = null;
 
-const defaultAuthProvider: AuthProvider = {
-  isAuthenticated: () => SupabaseClient.isAuthenticated(),
-  getUserTier: () => SupabaseClient.getUserTier(),
-};
-
 /**
  * Get the singleton ServerSideKeyService instance.
+ * Throws if not initialized - call initializeServerSideKeyAccess() first.
  */
 export function getServerSideKeyService(): ServerSideKeyService {
   if (!_instance) {
-    _instance = new ServerSideKeyService(
-      `https://${SUPABASE_CUSTOM_DOMAIN}`,
-      defaultAuthProvider,
-      getTierService(),
+    throw new Error(
+      'ServerSideKeyService not initialized. Call initializeServerSideKeyAccess() first.',
     );
   }
   return _instance;
@@ -60,9 +53,18 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
 /**
  * Initialize the server-side key access module.
  * Call this during extension activation.
+ *
+ * @param context - VS Code extension context
+ * @param authProvider - Provider for authentication state checks
  */
 export function initializeServerSideKeyAccess(
   context: vscode.ExtensionContext,
+  authProvider: AuthProvider,
 ): void {
-  getServerSideKeyService().initialize(context);
+  _instance = new ServerSideKeyService(
+    `https://${SUPABASE_CUSTOM_DOMAIN}`,
+    authProvider,
+    getTierService(),
+  );
+  _instance.initialize(context);
 }
