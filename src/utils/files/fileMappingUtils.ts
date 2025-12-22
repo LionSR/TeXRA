@@ -170,11 +170,6 @@ export async function replaceInputCommands(
     return;
   }
 
-  // Both workspace and runStorage have relativePath; external uses absolutePath
-  const baseFilePaths = baseFiles.map((f) =>
-    f.kind !== 'external' ? f.relativePath : f.absolutePath,
-  );
-
   const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
 
   if (baseToOutputMap.size === 0) {
