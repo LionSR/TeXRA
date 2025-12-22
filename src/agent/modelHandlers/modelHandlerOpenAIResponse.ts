@@ -350,7 +350,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Audio input is documented but not functional in the Responses API
       // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
       // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
-      // Audio input not yet supported in OpenAI Responses API
+      // TODO: Re-enable when OpenAI makes audio input functional
       if (media.media_category === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
