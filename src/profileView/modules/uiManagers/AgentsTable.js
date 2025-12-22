@@ -40,7 +40,6 @@ export class AgentsTable {
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
    * @param {string[]|null} options.allowedModels - Array of allowed model names (null = all for Ultra)
-   * @param {{ ultra: string, max: string }} options.tierConstants - Tier label constants
    */
   render({
     authenticated,
@@ -51,7 +50,6 @@ export class AgentsTable {
     apiAccessMode,
     enabledProviders,
     allowedModels,
-    tierConstants,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
@@ -61,7 +59,6 @@ export class AgentsTable {
     );
     const noAgentsMessage = safeGetElementById(ELEMENT_IDS.NO_AGENTS_MESSAGE);
     const apiAccessSection = safeGetElementById(ELEMENT_IDS.API_ACCESS_SECTION);
-    const tierLabels = tierConstants ?? {};
 
     if (
       !profileInfo ||
@@ -112,22 +109,11 @@ export class AgentsTable {
         : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show API access section for Max and Ultra tiers
+    // Show API access section for all authenticated users
+    // All tiers have some server-side access (free=budget, Max=mid-tier, Ultra=all)
     if (apiAccessSection) {
-      const isUltra = tier === tierLabels.ultra;
-      const isMax = tier === tierLabels.max;
-      const hasTierAccess = isUltra || isMax;
-      apiAccessSection.style.display = hasTierAccess ? 'block' : 'none';
-
-      if (hasTierAccess) {
-        this.renderApiAccessSection(
-          apiAccessMode,
-          enabledProviders,
-          allowedModels,
-          tier,
-          tierLabels,
-        );
-      }
+      apiAccessSection.style.display = 'block';
+      this.renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels);
     }
 
     // Show remote agents section for all authenticated users
@@ -144,20 +130,13 @@ export class AgentsTable {
   }
 
   /**
-   * Render the API access section for Max and Ultra tier users.
+   * Render the API access section for all authenticated users.
+   * All tiers have server-side access: free (budget), Max (mid-tier), Ultra (all).
    * @param {string} apiAccessMode - 'included' or 'personal'
    * @param {string[]} enabledProviders - Array of enabled provider names
    * @param {string[]|null} allowedModels - Array of allowed model names (null = all for Ultra)
-   * @param {string} tier - User's tier ('Max' or 'Ultra')
-   * @param {{ ultra?: string, max?: string }} tierConstants - Tier label constants
    */
-  renderApiAccessSection(
-    apiAccessMode,
-    enabledProviders,
-    allowedModels,
-    tier,
-    tierConstants,
-  ) {
+  renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels) {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const providersInfo = safeGetElementById(
@@ -169,8 +148,6 @@ export class AgentsTable {
       : allowedModels === null
         ? null
         : [];
-    const isUltra = tier === tierConstants?.ultra;
-    const isMax = tier === tierConstants?.max;
 
     // Set the current mode
     if (includedRadio) {
@@ -199,11 +176,11 @@ export class AgentsTable {
 
     // Show allowed models info when using included access
     // allowedModels semantics:
-    // - null: all models (Ultra tier, or Max tier with models: "*")
+    // - null: all models (Ultra tier)
     // - []: no models configured (error state)
-    // - [...]: specific models allowed
+    // - [...]: specific models allowed (Max and free tiers)
     if (modelsInfo) {
-      if (apiAccessMode === 'included' && (isUltra || isMax)) {
+      if (apiAccessMode === 'included') {
         if (resolvedAllowedModels === null) {
           // null means all models are allowed
           modelsInfo.textContent = 'All models included';
