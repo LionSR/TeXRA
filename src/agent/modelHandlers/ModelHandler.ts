@@ -3,7 +3,7 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { shouldUseServerSideKeysSync } from '@auth/serverKeys';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
@@ -243,7 +243,7 @@ export abstract class ModelHandler<
     }
     // Pass short name (this.config.name) for client-side tier validation.
     // The server will separately validate the actual API model name from the request.
-    return shouldUseServerSideKeysSync(this.config.provider, this.config.name);
+    return getServerSideKeyService().shouldUseServerSideKeysSync(this.config.provider, this.config.name);
   }
 
   /**

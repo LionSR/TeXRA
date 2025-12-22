@@ -18,16 +18,8 @@ import {
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
-import {
-  getEnabledProviders,
-  setUseIncludedModelAccess,
-  getUseIncludedModelAccess,
-} from '@/auth/serverKeys';
-import {
-  getTierConfig,
-  getAllowedModelsForTier,
-  getEffectiveProvidersForTier,
-} from '@/auth/tier';
+import { getServerSideKeyService } from '@/auth/serverKeys';
+import { getTierService } from '@/auth/tier';
 
 // --- Message Schemas ---
 const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
@@ -105,14 +97,17 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }));
 
     // Get model access settings - all authenticated users have access (Researcher Access Program)
+    const serverSideKeyService = getServerSideKeyService();
+    const tierService = getTierService();
+
     const isUltra = authContext.tier === ULTRA_TIER;
-    const useIncludedAccess = getUseIncludedModelAccess();
+    const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
     // Fetch tier config and enabled providers for all authenticated users
     const [tierConfig, serverProviders] = await Promise.all([
-      getTierConfig(),
-      getEnabledProviders(),
+      tierService.getConfig(),
+      serverSideKeyService.getEnabledProviders(),
     ]);
 
     let enabledProviders: string[] = [];
@@ -126,12 +121,12 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     } else if (tierConfig) {
       // Max and free tiers use tier-specific configuration
       const userTier = authContext.tier;
-      enabledProviders = getEffectiveProvidersForTier(
+      enabledProviders = tierService.getEffectiveProviders(
         userTier,
         tierConfig,
         serverProviders,
       );
-      allowedModels = getAllowedModelsForTier(userTier, tierConfig);
+      allowedModels = tierService.getAllowedModels(userTier, tierConfig);
     }
 
     await webview.postMessage({
@@ -205,7 +200,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       async ({ mode }) => {
         // Update the setting (also clears cache and fires change event)
         const useIncludedAccess = mode === 'included';
-        await setUseIncludedModelAccess(useIncludedAccess);
+        await getServerSideKeyService().setUseIncludedModelAccess(useIncludedAccess);
 
         // Refresh profile data to reflect the change
         await this.sendProfileData(view.webview);

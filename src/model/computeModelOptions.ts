@@ -1,9 +1,5 @@
 // Local imports - model utilities
-import {
-  canUseServerSideKeys,
-  isModelAvailableForCurrentTierSync,
-  isProviderAvailableForCurrentTier,
-} from '@auth/serverKeys';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
@@ -48,7 +44,8 @@ export async function computeModelOptions(): Promise<string> {
 
   // Prime the server-side keys cache (fetches tier config + enabled providers)
   // This ensures canUseServerSideKeysForModel has the data it needs
-  const hasAnyServerSideAccess = await canUseServerSideKeys();
+  const serverSideKeyService = getServerSideKeyService();
+  const hasAnyServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
 
   const optionTags = await Promise.all(
     models.map(async (model) => {
@@ -67,8 +64,8 @@ export async function computeModelOptions(): Promise<string> {
       // Use sync versions since canUseServerSideKeys() already primed the caches
       if (
         hasAnyServerSideAccess &&
-        isProviderAvailableForCurrentTier(provider) &&
-        isModelAvailableForCurrentTierSync(model)
+        serverSideKeyService.isProviderAvailableForCurrentTier(provider) &&
+        serverSideKeyService.isModelAvailableForCurrentTierSync(model)
       ) {
         available = true;
       }
