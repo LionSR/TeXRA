@@ -64,57 +64,57 @@ interface TierModelConfig {
 }
 
 /**
- * Max tier allowed models - uses API model names (fullName from ModelRegistry).
+ * SINGLE SOURCE OF TRUTH for Max tier model access.
  *
- * IMPORTANT: This list uses the actual model names sent to provider APIs,
- * NOT the TeXRA short names. Keep synchronized with:
- * - src/model/providers/*.ts (fullName field)
+ * Each entry maps:
+ * - shortName: TeXRA UI identifier (returned to client via /relay/tier-config)
+ * - apiPattern: Full API model name prefix for server-side validation
+ *
+ * IMPORTANT: When adding/removing models, update ONLY this array.
+ * Both TIER_CONFIG and isModelAllowedForTier() derive from this.
+ *
+ * Keep synchronized with:
+ * - src/model/providers/*.ts (fullName field must match apiPattern prefix)
  * - docs/relay-tier-config.md
- *
- * Model patterns are used for prefix matching to handle version suffixes.
  */
-const MAX_TIER_MODEL_PATTERNS: string[] = [
+interface MaxTierModel {
+  shortName: string; // UI identifier (e.g., "gpt41-")
+  apiPattern: string; // API name prefix for validation (e.g., "gpt-4.1-mini")
+}
+
+const MAX_TIER_MODELS: MaxTierModel[] = [
   // Anthropic - Sonnet 4.5 (thinking mode uses same model name)
-  'claude-sonnet-4-5',
+  { shortName: 'sonnet45T', apiPattern: 'claude-sonnet-4-5' },
 
   // OpenAI - GPT-4.1 Mini/Nano and GPT-4o Mini
-  'gpt-4.1-mini', // Matches gpt-4.1-mini-2025-04-14, etc.
-  'gpt-4.1-nano', // Matches gpt-4.1-nano-2025-04-14, etc.
-  'gpt-4o-mini', // Matches gpt-4o-mini-2024-07-18, etc.
+  { shortName: 'gpt41-', apiPattern: 'gpt-4.1-mini' },
+  { shortName: 'gpt41--', apiPattern: 'gpt-4.1-nano' },
+  { shortName: 'gpt4o-', apiPattern: 'gpt-4o-mini' },
 
   // Google - Gemini Pro and Flash models
-  'gemini-3-pro', // Matches gemini-3-pro-preview
-  'gemini-2.5-pro', // Matches gemini-2.5-pro
-  'gemini-3-flash', // Matches gemini-3-flash-preview
-  'gemini-2.5-flash', // Matches gemini-2.5-flash, gemini-2.5-flash-lite-preview-*
-  'gemini-flash', // Matches gemini-flash-latest
+  { shortName: 'gemini3p', apiPattern: 'gemini-3-pro' },
+  { shortName: 'gemini25p', apiPattern: 'gemini-2.5-pro' },
+  { shortName: 'gemini3f', apiPattern: 'gemini-3-flash' },
+  { shortName: 'gemini25f', apiPattern: 'gemini-2.5-flash' },
+  { shortName: 'gemini25f', apiPattern: 'gemini-flash' }, // gemini-flash-latest alias
+  { shortName: 'gemini25f-', apiPattern: 'gemini-2.5-flash-lite' },
 
   // DeepSeek - Chat and Reasoner (V3.2)
-  'deepseek-chat', // DeepSeek V3.2 and V3
-  'deepseek-reasoner', // DeepSeek V3.2 Thinking
+  { shortName: 'deepseek', apiPattern: 'deepseek-chat' },
+  { shortName: 'deepseekT', apiPattern: 'deepseek-reasoner' },
+  { shortName: 'dsv3', apiPattern: 'deepseek-chat' }, // V3 uses same API model
 ];
+
+// Derived arrays (auto-generated from MAX_TIER_MODELS)
+const MAX_TIER_SHORT_NAMES = [...new Set(MAX_TIER_MODELS.map((m) => m.shortName))];
+const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.map((m) => m.apiPattern.toLowerCase());
 
 const TIER_CONFIG: TierModelConfig = {
   tiers: {
     Max: {
       // Max tier: Sonnet 4.5T + GPT minis + Gemini (all) + DeepSeek (except R1)
       // GUARDS (Ultra-only): Opus, GPT-5 series, DeepSeek R1
-      // Note: 'models' here is for the tier-config API response (short names for client)
-      // Actual validation uses MAX_TIER_MODEL_PATTERNS (full API names)
-      models: [
-        'sonnet45T',
-        'gpt41-',
-        'gpt41--',
-        'gpt4o-',
-        'gemini3p',
-        'gemini25p',
-        'gemini3f',
-        'gemini25f',
-        'gemini25f-',
-        'deepseek',
-        'deepseekT',
-        'dsv3',
-      ],
+      models: MAX_TIER_SHORT_NAMES,
       providers: ['openai', 'anthropic', 'google', 'deepseek'],
     },
     Ultra: {
@@ -135,7 +135,7 @@ const TIER_CONFIG: TierModelConfig = {
 
 /**
  * Check if a model is allowed for a given tier.
- * For Max tier, uses prefix pattern matching against MAX_TIER_MODEL_PATTERNS
+ * For Max tier, uses prefix pattern matching against MAX_TIER_API_PATTERNS
  * to handle version suffixes in model names.
  */
 function isModelAllowedForTier(
@@ -151,9 +151,10 @@ function isModelAllowedForTier(
     if (!modelName) return false;
 
     // Use pattern matching - model name must start with one of the allowed patterns
+    // MAX_TIER_API_PATTERNS is already lowercased during derivation
     const normalizedModel = modelName.toLowerCase();
-    return MAX_TIER_MODEL_PATTERNS.some((pattern) =>
-      normalizedModel.startsWith(pattern.toLowerCase()),
+    return MAX_TIER_API_PATTERNS.some((pattern) =>
+      normalizedModel.startsWith(pattern),
     );
   }
 
