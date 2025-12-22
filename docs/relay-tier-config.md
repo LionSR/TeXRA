@@ -104,10 +104,11 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 | ----------- | --------------- | --------- | ----------------------- |
 | `opus45`    | claude-opus-4-5 | Anthropic | $15.00/$75.00           |
 | `opus45T`   | claude-opus-4-5 (Thinking) | Anthropic | $15.00/$75.00 |
-| `gpt5pro`   | gpt-5-pro       | OpenAI    | $10.00/$40.00           |
-| `gpt5`      | gpt-5           | OpenAI    | ~$5.00/$20.00           |
-| `gpt51`     | gpt-5.1         | OpenAI    | ~$5.00/$20.00           |
-| `gpt52`     | gpt-5.2         | OpenAI    | ~$5.00/$20.00           |
+| `gpt5pro`   | gpt-5-pro       | OpenAI    | $15.00/$120.00          |
+| `gpt52pro`  | gpt-5.2-pro     | OpenAI    | $21.00/$168.00          |
+| `gpt5`      | gpt-5           | OpenAI    | $1.25/$10.00            |
+| `gpt51`     | gpt-5.1         | OpenAI    | $1.25/$10.00            |
+| `gpt52`     | gpt-5.2         | OpenAI    | $1.75/$14.00            |
 | `dsr1`      | deepseek-r1     | Deepseek  | $4.00/$4.00             |
 
 ## Implementation Details
