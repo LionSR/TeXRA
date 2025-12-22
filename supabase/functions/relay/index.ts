@@ -68,7 +68,8 @@ interface TierModelConfig {
  *
  * Each entry maps:
  * - shortName: TeXRA UI identifier (returned to client via /relay/tier-config)
- * - apiPattern: Full API model name prefix for server-side validation
+ * - apiPatterns: Array of full API model name prefixes for server-side validation
+ *                (supports multiple patterns for aliases like gemini-flash-latest)
  *
  * IMPORTANT: When adding/removing models, update ONLY this array.
  * Both TIER_CONFIG and isModelAllowedForTier() derive from this.
@@ -79,35 +80,38 @@ interface TierModelConfig {
  */
 interface MaxTierModel {
   shortName: string; // UI identifier (e.g., "gpt41-")
-  apiPattern: string; // API name prefix for validation (e.g., "gpt-4.1-mini")
+  apiPatterns: string[]; // API name prefixes for validation (e.g., ["gpt-4.1-mini"])
 }
 
 const MAX_TIER_MODELS: MaxTierModel[] = [
   // Anthropic - Sonnet 4.5 (thinking mode uses same model name)
-  { shortName: 'sonnet45T', apiPattern: 'claude-sonnet-4-5' },
+  { shortName: 'sonnet45T', apiPatterns: ['claude-sonnet-4-5'] },
 
   // OpenAI - GPT-4.1 Mini/Nano and GPT-4o Mini
-  { shortName: 'gpt41-', apiPattern: 'gpt-4.1-mini' },
-  { shortName: 'gpt41--', apiPattern: 'gpt-4.1-nano' },
-  { shortName: 'gpt4o-', apiPattern: 'gpt-4o-mini' },
+  { shortName: 'gpt41-', apiPatterns: ['gpt-4.1-mini'] },
+  { shortName: 'gpt41--', apiPatterns: ['gpt-4.1-nano'] },
+  { shortName: 'gpt4o-', apiPatterns: ['gpt-4o-mini'] },
 
   // Google - Gemini Pro and Flash models
-  { shortName: 'gemini3p', apiPattern: 'gemini-3-pro' },
-  { shortName: 'gemini25p', apiPattern: 'gemini-2.5-pro' },
-  { shortName: 'gemini3f', apiPattern: 'gemini-3-flash' },
-  { shortName: 'gemini25f', apiPattern: 'gemini-2.5-flash' },
-  { shortName: 'gemini25f', apiPattern: 'gemini-flash' }, // gemini-flash-latest alias
-  { shortName: 'gemini25f-', apiPattern: 'gemini-2.5-flash-lite' },
+  { shortName: 'gemini3p', apiPatterns: ['gemini-3-pro'] },
+  { shortName: 'gemini25p', apiPatterns: ['gemini-2.5-pro'] },
+  { shortName: 'gemini3f', apiPatterns: ['gemini-3-flash'] },
+  // gemini25f maps to multiple API names (versioned + latest alias)
+  { shortName: 'gemini25f', apiPatterns: ['gemini-2.5-flash', 'gemini-flash'] },
+  { shortName: 'gemini25f-', apiPatterns: ['gemini-2.5-flash-lite'] },
 
   // DeepSeek - Chat and Reasoner (V3.2)
-  { shortName: 'deepseek', apiPattern: 'deepseek-chat' },
-  { shortName: 'deepseekT', apiPattern: 'deepseek-reasoner' },
-  { shortName: 'dsv3', apiPattern: 'deepseek-chat' }, // V3 uses same API model
+  // Note: deepseek and dsv3 use same API model name (deepseek-chat)
+  { shortName: 'deepseek', apiPatterns: ['deepseek-chat'] },
+  { shortName: 'deepseekT', apiPatterns: ['deepseek-reasoner'] },
+  { shortName: 'dsv3', apiPatterns: ['deepseek-chat'] },
 ];
 
 // Derived arrays (auto-generated from MAX_TIER_MODELS)
-const MAX_TIER_SHORT_NAMES = [...new Set(MAX_TIER_MODELS.map((m) => m.shortName))];
-const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.map((m) => m.apiPattern.toLowerCase());
+const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
+const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) =>
+  m.apiPatterns.map((p) => p.toLowerCase()),
+);
 
 const TIER_CONFIG: TierModelConfig = {
   tiers: {
