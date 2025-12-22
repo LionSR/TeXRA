@@ -31,6 +31,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
         "gpt41-",
         "gpt41--",
         "gpt4o-",
+        "gemini3p",
+        "gemini25p",
         "gemini3f",
         "gemini25f",
         "gemini25f-",
@@ -87,6 +89,8 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 | `gpt41-`     | gpt-4.1-mini                      | OpenAI    | $0.40/$1.60             |
 | `gpt41--`    | gpt-4.1-nano                      | OpenAI    | $0.10/$0.40             |
 | `gpt4o-`     | gpt-4o-mini                       | OpenAI    | $0.15/$0.60             |
+| `gemini3p`   | gemini-3-pro-preview              | Google    | $2.00/$12.00            |
+| `gemini25p`  | gemini-2.5-pro                    | Google    | $1.25/$10.00            |
 | `gemini3f`   | gemini-3-flash-preview            | Google    | $0.30/$2.50             |
 | `gemini25f`  | gemini-2.5-flash                  | Google    | $0.30/$2.50             |
 | `gemini25f-` | gemini-2.5-flash-lite             | Google    | $0.10/$0.40             |
@@ -96,13 +100,15 @@ Model names must match the short names defined in `src/model/ModelRegistry.ts`. 
 
 ### Expensive Models (Ultra Tier Only)
 
-| Model Name  | Full Name            | Provider  | Pricing (in/out per 1M) |
-| ----------- | -------------------- | --------- | ----------------------- |
-| `gemini3p`  | gemini-3-pro-preview | Google    | $2.00/$12.00            |
-| `gemini25p` | gemini-2.5-pro       | Google    | $1.25/$10.00            |
-| `dsr1`      | deepseek-r1          | Deepseek  | $4.00/$4.00             |
-| `opus45T`   | claude-opus-4-5      | Anthropic | $15.00/$75.00           |
-| `gpt5pro`   | gpt-5-pro            | OpenAI    | $10.00/$40.00           |
+| Model Name  | Full Name       | Provider  | Pricing (in/out per 1M) |
+| ----------- | --------------- | --------- | ----------------------- |
+| `opus45`    | claude-opus-4-5 | Anthropic | $15.00/$75.00           |
+| `opus45T`   | claude-opus-4-5 (Thinking) | Anthropic | $15.00/$75.00 |
+| `gpt5pro`   | gpt-5-pro       | OpenAI    | $10.00/$40.00           |
+| `gpt5`      | gpt-5           | OpenAI    | ~$5.00/$20.00           |
+| `gpt51`     | gpt-5.1         | OpenAI    | ~$5.00/$20.00           |
+| `gpt52`     | gpt-5.2         | OpenAI    | ~$5.00/$20.00           |
+| `dsr1`      | deepseek-r1     | Deepseek  | $4.00/$4.00             |
 
 ## Implementation Details
 
@@ -151,12 +157,15 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const TIER_CONFIG = {
   tiers: {
     Max: {
-      // Cheaper models for Max tier (Sonnet 4.5T + GPT minis + Gemini Flash + DeepSeek)
+      // Max tier: Sonnet 4.5T + GPT minis + Gemini (all) + DeepSeek
+      // Guards only: Opus, GPT-5 series, DeepSeek R1
       models: [
         'sonnet45T', // Claude Sonnet 4.5 Thinking - $3.00/$15.00
         'gpt41-', // GPT-4.1 Mini - $0.40/$1.60
         'gpt41--', // GPT-4.1 Nano - $0.10/$0.40
         'gpt4o-', // GPT-4o Mini - $0.15/$0.60
+        'gemini3p', // Gemini 3 Pro - $2.00/$12.00
+        'gemini25p', // Gemini 2.5 Pro - $1.25/$10.00
         'gemini3f', // Gemini 3 Flash - $0.30/$2.50
         'gemini25f', // Gemini 2.5 Flash - $0.30/$2.50
         'gemini25f-', // Gemini 2.5 Flash Lite - $0.10/$0.40
