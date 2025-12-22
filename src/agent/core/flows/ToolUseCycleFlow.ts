@@ -17,9 +17,7 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
-import {
-  extractToolAttachments,
-} from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
