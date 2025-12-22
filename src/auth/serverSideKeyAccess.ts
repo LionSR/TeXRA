@@ -401,6 +401,23 @@ export async function canUseServerSideKeysForModel(
     return false;
   }
 
+  // Use sync version since cache is now primed
+  return isModelAvailableForCurrentTierSync(modelName);
+}
+
+/**
+ * Synchronous check if a model is available for the current user's tier.
+ *
+ * PREREQUISITE: canUseServerSideKeys() must have been called and completed
+ * to prime the caches. If caches are not primed, returns false.
+ *
+ * Use this in loops where you've already verified server-side access
+ * to avoid per-model Promise overhead.
+ *
+ * @param modelName - The model name to check
+ * @returns true if the model is available for the current tier
+ */
+export function isModelAvailableForCurrentTierSync(modelName: string): boolean {
   const tier = accessCache.userTier;
   if (!tier) {
     return false;
@@ -412,7 +429,6 @@ export async function canUseServerSideKeysForModel(
   }
 
   // Max tier needs model-level check against tier config
-  // Use sync version since canUseServerSideKeys() already primed the cache
   if (tier === MAX_TIER) {
     const config = getTierConfigSync();
     return isModelAvailableForTier(tier, modelName, config);
