@@ -369,9 +369,20 @@ export async function canUseServerSideKeys(): Promise<boolean> {
     }
   }
 
-  // Create new cache entry (Promise-based to prevent race conditions)
-  // Set promise synchronously to prevent duplicate fetches within same tick.
-  // Timestamp is set after successful fetch to allow retry on failure.
+  // CACHE PATTERN: Promise deduplication with conditional timestamp
+  //
+  // How it works:
+  // 1. accessCache.promise is assigned SYNCHRONOUSLY (IIFE returns Promise immediately)
+  //    → This prevents duplicate fetches if called multiple times before first completes
+  // 2. accessCache.timestamp is updated INSIDE the async block after success
+  //    → Failed fetches don't update timestamp, allowing immediate retry
+  // 3. Cache validity check (above) uses timestamp + promise together
+  //    → Valid cache = fresh timestamp + existing promise
+  //
+  // Why this is safe:
+  // - Promise assignment is synchronous (no race between assignment and return)
+  // - Concurrent calls during async execution return the SAME promise
+  // - Timestamp only updates after resolution, so failed fetches allow retry
   accessCache.promise = (async () => {
     // Fetch access status, enabled providers, and tier config in parallel
     const [hasAccess, providers, tierConfig] = await Promise.all([
