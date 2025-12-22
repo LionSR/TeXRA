@@ -431,7 +431,9 @@ export class ServerSideKeyService {
     }
 
     // Check tier-specific restrictions
-    if (!this.tierService.isProviderAvailable(this.userTier, normalizedProvider)) {
+    if (
+      !this.tierService.isProviderAvailable(this.userTier, normalizedProvider)
+    ) {
       return false;
     }
 
@@ -461,7 +463,10 @@ export class ServerSideKeyService {
     }
 
     // Check tier-specific restrictions
-    return this.tierService.isProviderAvailable(this.userTier, normalizedProvider);
+    return this.tierService.isProviderAvailable(
+      this.userTier,
+      normalizedProvider,
+    );
   }
 
   // ==========================================================================
