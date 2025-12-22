@@ -420,10 +420,16 @@ export async function canUseServerSideKeys(): Promise<boolean> {
  *
  * This is the model-aware version of canUseServerSideKeys():
  * - Ultra tier: All models available (if provider is enabled)
- * - Max tier: Only models in the tier config's allowed list
- * - Free tier: No server-side access
+ * - Max tier: Mid-tier models ($1-3/M) + all free tier models
+ * - free tier: Budget models only (under $1/M input)
  *
- * @param modelName - The model name to check (e.g., "gemini2flash", "opus45T")
+ * MODEL VALIDATION STRATEGY:
+ * - Client validates using SHORT NAMES (e.g., "gpt41-", "gemini25f")
+ * - Server validates using API PATTERNS (e.g., "gpt-4.1-mini", "gemini-2.5-flash")
+ * - Both are defined in RELAY_MODELS as the single source of truth
+ * - This ensures UI filtering matches actual API request validation
+ *
+ * @param modelName - The model SHORT NAME to check (e.g., "gemini2flash", "opus45T")
  * @returns true if the model is available via server-side keys
  */
 export async function canUseServerSideKeysForModel(
