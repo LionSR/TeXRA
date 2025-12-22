@@ -270,7 +270,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         if (!refreshed) {
           await this.removeSession(session.id);
           const action = await vscode.window.showWarningMessage(
-            'Your TeXRA session has expired. Please sign in again to use remote agents.',
+            'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.',
             'Sign In',
           );
           if (action === 'Sign In') {
@@ -295,7 +295,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       if (error || !data.user) {
         await this.removeSession(session.id);
         const action = await vscode.window.showWarningMessage(
-          'Your TeXRA session is no longer valid. Please sign in again to use remote agents.',
+          'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
           'Sign In',
         );
         if (action === 'Sign In') {
