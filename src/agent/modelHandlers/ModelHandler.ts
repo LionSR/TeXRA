@@ -228,7 +228,12 @@ export abstract class ModelHandler<
    * 2. shouldUseServerSideKeysSync confirms access:
    *    - Setting enabled
    *    - Provider supported
-   *    - Ultra tier (all models) OR Max tier with this specific model allowed
+   *    - Tier-based model access (Ultra=all, Max/free=specific models)
+   *
+   * MODEL VALIDATION STRATEGY:
+   * - Client validates SHORT NAMES (this.config.name) against tier config
+   * - Server validates API NAMES (from request body) against API patterns
+   * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
    */
   protected shouldUseServerSideKeys(): boolean {
     // Skip openRouterOnly models - these should always route through OpenRouter
@@ -236,8 +241,8 @@ export abstract class ModelHandler<
     if (this.config.openRouterOnly) {
       return false;
     }
-    // Pass both provider AND model name for tier-based model filtering
-    // Max tier users only get access to specific cheaper models
+    // Pass short name (this.config.name) for client-side tier validation.
+    // The server will separately validate the actual API model name from the request.
     return shouldUseServerSideKeysSync(this.config.provider, this.config.name);
   }
 
