@@ -1,8 +1,7 @@
 /**
  * Tier-based model access module.
  *
- * This module handles configuration for which models are available
- * to each user tier without requiring their own API keys.
+ * Provides TierService for managing tier configuration and model access.
  *
  * RESEARCHER ACCESS PROGRAM:
  * All server-side API key access is provided as a convenience for researchers.
@@ -14,6 +13,9 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
+import { SUPABASE_CUSTOM_DOMAIN } from '../config';
+import { TierService } from './TierService';
+
 // Types
 export {
   TierAccessConfigSchema,
@@ -23,18 +25,28 @@ export {
   type UserTier,
 } from './types';
 
-// Cache management
-export { clearCache as clearTierConfigCache } from './cache';
+// Service class
+export { TierService };
 
-// Remote fetching
-export { getTierConfig, getTierConfigSync } from './remote';
+// ==========================================================================
+// Singleton Instance
+// ==========================================================================
 
-// Validation
-export {
-  isModelAvailableForTier,
-  isProviderAvailableForTier,
-  getAllowedModelsForTier,
-  getEnabledProvidersForTier,
-  getEffectiveProvidersForTier,
-  getTierAccessDescription,
-} from './validation';
+let _instance: TierService | null = null;
+
+/**
+ * Get the singleton TierService instance.
+ */
+export function getTierService(): TierService {
+  if (!_instance) {
+    _instance = new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`);
+  }
+  return _instance;
+}
+
+/**
+ * Set a custom TierService instance (for testing).
+ */
+export function setTierService(service: TierService): void {
+  _instance = service;
+}

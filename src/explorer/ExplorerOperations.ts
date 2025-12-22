@@ -52,6 +52,7 @@ logger.initialize(CHANNEL);
 export class ExplorerOperations {
   private builtInAgentsPath = '';
   private builtInToolUsePath = '';
+  private editingItem: FileItem | null = null;
 
   constructor(
     _workspaceRoot: string | undefined,
@@ -264,7 +265,7 @@ export class ExplorerOperations {
       await vscode.window.showTextDocument(doc);
     }
 
-    this.editingItem = undefined;
+    this.editingItem = null;
     item.editing = false;
     this.refresh();
   }
