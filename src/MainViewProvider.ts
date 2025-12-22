@@ -12,7 +12,7 @@ import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
-import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
+import { onDidChangeModelAccess } from '@/auth/serverKeys';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';

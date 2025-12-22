@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { canUseServerSideKeys } from '@auth/serverSideKeyAccess';
+import { canUseServerSideKeys } from '@auth/serverKeys';
 
 export type ApiProvider = (typeof SecretManager.API_PROVIDERS)[number];
 
