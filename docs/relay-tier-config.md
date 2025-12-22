@@ -282,7 +282,7 @@ No extension update required.
 ## Related Files
 
 - `supabase/functions/relay/index.ts` - Single source of truth for tier models
-- `src/auth/tierModelAccess.ts` - Tier configuration fetching and caching
-- `src/auth/serverSideKeyAccess.ts` - Server-side key access logic
+- `src/auth/tier/TierService.ts` - Tier configuration fetching and caching
+- `src/auth/serverKeys/ServerSideKeyService.ts` - Server-side key access logic
 - `src/model/computeModelOptions.ts` - Model availability computation
 - `src/profileView/` - UI for displaying tier access info
