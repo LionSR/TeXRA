@@ -19,7 +19,6 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Internal imports - use core ToolTypes as single source of truth
 import {
   extractToolAttachments,
-  type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {

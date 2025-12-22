@@ -37,7 +37,6 @@ interface BuildSummaryParams {
   visibleCount: number;
   actualStartLine: number | null;
   actualEndLine: number | null;
-  requestedStartLine: number;
   requestedEndLine: number;
   truncated: boolean;
   rangeProvided: boolean;
@@ -113,7 +112,6 @@ export class ReadFileTool extends defineTool({
       visibleCount,
       actualStartLine,
       actualEndLine,
-      requestedStartLine,
       requestedEndLine,
       truncated,
       rangeProvided: Boolean(input.range),
@@ -145,7 +143,6 @@ export class ReadFileTool extends defineTool({
     visibleCount,
     actualStartLine,
     actualEndLine,
-    requestedStartLine,
     requestedEndLine,
     truncated,
     rangeProvided,
