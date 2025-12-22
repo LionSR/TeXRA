@@ -104,41 +104,34 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       supportsMultipleOutput: !!entry.multiplePath,
     }));
 
-    // Get model access settings for Ultra and Max tier users
+    // Get model access settings - all authenticated users have access (Researcher Access Program)
     const isUltra = authContext.tier === ULTRA_TIER;
-    const isMax = authContext.tier === MAX_TIER;
-    const hasTierAccess = isUltra || isMax;
     const useIncludedAccess = getUseIncludedModelAccess();
     const apiAccessMode = useIncludedAccess ? 'included' : 'personal';
 
-    // Fetch enabled providers and tier config for users with tier access
+    // Fetch tier config and enabled providers for all authenticated users
+    const [tierConfig, serverProviders] = await Promise.all([
+      getTierConfig(),
+      getEnabledProviders(),
+    ]);
+
     let enabledProviders: string[] = [];
     let allowedModels: string[] | null = null;
 
-    if (hasTierAccess) {
-      // Fetch tier config and enabled providers in parallel
-      const [tierConfig, serverProviders] = await Promise.all([
-        getTierConfig(),
-        getEnabledProviders(),
-      ]);
-
-      // For Ultra tier, use all enabled providers from server
-      // For Max tier, use the tier-specific provider list filtered by server
-      if (isUltra) {
-        enabledProviders = serverProviders;
-        allowedModels = null; // null = all models
-      } else if (isMax && tierConfig) {
-        // Max tier uses the tier-specific configuration
-        enabledProviders = getEffectiveProvidersForTier(
-          MAX_TIER,
-          tierConfig,
-          serverProviders,
-        );
-        allowedModels = getAllowedModelsForTier(MAX_TIER, tierConfig);
-      } else if (isMax) {
-        enabledProviders = [];
-        allowedModels = [];
-      }
+    // For Ultra tier, use all enabled providers from server
+    // For Max/free tiers, use the tier-specific provider list filtered by server
+    if (isUltra) {
+      enabledProviders = serverProviders;
+      allowedModels = null; // null = all models
+    } else if (tierConfig) {
+      // Max and free tiers use tier-specific configuration
+      const userTier = authContext.tier;
+      enabledProviders = getEffectiveProvidersForTier(
+        userTier,
+        tierConfig,
+        serverProviders,
+      );
+      allowedModels = getAllowedModelsForTier(userTier, tierConfig);
     }
 
     await webview.postMessage({

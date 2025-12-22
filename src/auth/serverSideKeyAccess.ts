@@ -1,15 +1,20 @@
 /**
  * Helper for determining server-side API key access.
  *
- * Server-side keys allow Max and Ultra tier users to access AI models without
+ * Server-side keys allow authenticated users to access AI models without
  * providing their own API keys. The keys are stored as Supabase Edge
  * Function secrets and accessed via the relay function.
  *
- * TIER-BASED ACCESS:
- * -----------------
+ * RESEARCHER ACCESS PROGRAM:
+ * -------------------------
+ * All server-side API key access is provided as a convenience for researchers.
+ * Users can always choose between server-side keys or their own API keys.
+ *
+ * TIER-BASED ACCESS (cumulative):
+ * -------------------------------
  * - Ultra tier: Access to ALL models via relay (full access)
- * - Max tier: Access to a SUBSET of cheaper models via relay (e.g., Gemini Flash, Deepseek)
- * - Free tier: No server-side key access (must bring own keys)
+ * - Max tier: Mid-tier models ($1-3/M) + all free tier models
+ * - free tier: Budget models only (under $1/M input)
  *
  * The list of models available for each tier is configured remotely via
  * the `/relay/tier-config` endpoint, allowing updates without extension changes.
@@ -63,6 +68,7 @@ import {
   SUPABASE_CUSTOM_DOMAIN,
   ULTRA_TIER,
   MAX_TIER,
+  FREE_TIER,
   SERVER_SIDE_CACHE_TTL_MS,
   type UserTier,
 } from './config';
@@ -235,7 +241,8 @@ export function clearServerSideKeyAccessCache(): void {
 
 /**
  * Internal function to fetch access status.
- * Returns true if user has Ultra OR Max tier (model filtering happens separately).
+ * Returns true if user is authenticated (all tiers get server-side access).
+ * Model-level filtering is handled separately by isModelAvailableForTier.
  */
 async function fetchAccessStatus(): Promise<boolean> {
   try {
@@ -247,13 +254,13 @@ async function fetchAccessStatus(): Promise<boolean> {
     }
 
     const tier = await SupabaseClient.getUserTier();
-    accessCache.userTier = tier;
+    // Default to free tier if no tier is set (consistent with relay server)
+    accessCache.userTier = tier || FREE_TIER;
 
-    // Allow access for both Ultra and Max tiers
-    // Model-level filtering for Max tier is handled by isModelAvailableForTier
-    const hasAccess = tier === ULTRA_TIER || tier === MAX_TIER;
-    accessCache.lastKnownResult = hasAccess;
-    return hasAccess;
+    // All authenticated users get server-side access (Researcher Access Program)
+    // Model-level filtering is handled by isModelAvailableForTier based on tier
+    accessCache.lastKnownResult = true;
+    return true;
   } catch (_err) {
     // On any error (network, auth, etc.), deny access and allow retry
     accessCache.lastKnownResult = false;
@@ -455,14 +462,9 @@ export function isModelAvailableForCurrentTierSync(modelName: string): boolean {
     return true;
   }
 
-  // Max tier needs model-level check against tier config
-  if (tier === MAX_TIER) {
-    const config = getTierConfigSync();
-    return isModelAvailableForTier(tier, modelName, config);
-  }
-
-  // Free tier has no access
-  return false;
+  // Max and free tiers need model-level check against tier config
+  const config = getTierConfigSync();
+  return isModelAvailableForTier(tier, modelName, config);
 }
 
 /**
@@ -527,23 +529,19 @@ export function shouldUseServerSideKeysSync(
     return true;
   }
 
-  // For Max tier, require both provider AND model validation.
+  // For Max and free tiers, require both provider AND model validation.
   // The provider must be in the tier's allowed providers list,
   // and the model must be in the tier's allowed models list.
-  if (accessCache.userTier === MAX_TIER) {
-    if (!modelName) {
-      return false;
-    }
-    const config = getTierConfigSync();
-    // Check provider is allowed for this tier (not just globally enabled)
-    if (!isProviderAvailableForTier(MAX_TIER, normalizedProvider, config)) {
-      return false;
-    }
-    return isModelAvailableForTier(MAX_TIER, modelName, config);
+  const tier = accessCache.userTier;
+  if (!tier || !modelName) {
+    return false;
   }
-
-  // Free tier has no access
-  return false;
+  const config = getTierConfigSync();
+  // Check provider is allowed for this tier (not just globally enabled)
+  if (!isProviderAvailableForTier(tier, normalizedProvider, config)) {
+    return false;
+  }
+  return isModelAvailableForTier(tier, modelName, config);
 }
 
 /**
@@ -567,7 +565,7 @@ export function isProviderEnabledForServerSideKeys(provider: string): boolean {
  *
  * This combines two checks:
  * 1. Provider must be globally enabled on the server (has API key)
- * 2. For Max tier: Provider must also be in the tier's allowed providers list
+ * 2. Provider must be in the tier's allowed providers list
  *
  * Use this in UI code to accurately show provider availability.
  *
@@ -587,14 +585,13 @@ export function isProviderAvailableForCurrentTier(provider: string): boolean {
     return true;
   }
 
-  // Max tier needs tier-specific provider check
-  if (accessCache.userTier === MAX_TIER) {
-    const config = getTierConfigSync();
-    return isProviderAvailableForTier(MAX_TIER, normalizedProvider, config);
+  // Max and free tiers need tier-specific provider check
+  const tier = accessCache.userTier;
+  if (!tier) {
+    return false;
   }
-
-  // Free tier has no server-side access
-  return false;
+  const config = getTierConfigSync();
+  return isProviderAvailableForTier(tier, normalizedProvider, config);
 }
 
 /**
