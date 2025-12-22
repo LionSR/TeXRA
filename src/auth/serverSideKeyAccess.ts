@@ -484,14 +484,15 @@ export function shouldUseServerSideKeysSync(
     return true;
   }
 
-  // For Max tier, require both provider and model-level checks.
-  // The tier config defines which providers and models are allowed for Max tier.
+  // For Max tier, require both provider AND model validation.
+  // The provider must be in the tier's allowed providers list,
+  // and the model must be in the tier's allowed models list.
   if (accessCache.userTier === MAX_TIER) {
     if (!modelName) {
       return false;
     }
     const config = getTierConfigSync();
-    // Check both provider and model restrictions from tier config
+    // Check provider is allowed for this tier (not just globally enabled)
     if (!isProviderAvailableForTier(MAX_TIER, normalizedProvider, config)) {
       return false;
     }
@@ -508,11 +509,49 @@ export function shouldUseServerSideKeysSync(
  * This checks against the cached list of enabled providers fetched from
  * the relay server. Returns false if providers haven't been fetched yet.
  *
+ * Note: This only checks the GLOBAL providers list, not tier-specific restrictions.
+ * For Max tier users, use isProviderAvailableForCurrentTier() instead.
+ *
  * Note: This accepts both string literals and ModelProvider enum values.
  * The toLowerCase() call ensures case-insensitive matching.
  */
 export function isProviderEnabledForServerSideKeys(provider: string): boolean {
   return providersCache.providers.includes(provider.toLowerCase());
+}
+
+/**
+ * Check if a provider is available for the current user's tier.
+ *
+ * This combines two checks:
+ * 1. Provider must be globally enabled on the server (has API key)
+ * 2. For Max tier: Provider must also be in the tier's allowed providers list
+ *
+ * Use this in UI code to accurately show provider availability.
+ *
+ * @param provider - The provider to check (e.g., "openai", "anthropic")
+ * @returns true if the provider is available for the current user
+ */
+export function isProviderAvailableForCurrentTier(provider: string): boolean {
+  const normalizedProvider = provider.toLowerCase();
+
+  // Must be globally enabled on server
+  if (!providersCache.providers.includes(normalizedProvider)) {
+    return false;
+  }
+
+  // Ultra tier gets all globally enabled providers
+  if (accessCache.userTier === ULTRA_TIER) {
+    return true;
+  }
+
+  // Max tier needs tier-specific provider check
+  if (accessCache.userTier === MAX_TIER) {
+    const config = getTierConfigSync();
+    return isProviderAvailableForTier(MAX_TIER, normalizedProvider, config);
+  }
+
+  // Free tier has no server-side access
+  return false;
 }
 
 /**
