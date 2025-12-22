@@ -116,16 +116,16 @@ curl -X POST \
 
 ## Error Responses
 
-| Status | Error                      | Description                                    |
-| ------ | -------------------------- | ---------------------------------------------- |
-| 400    | Invalid path               | URL doesn't match expected format              |
-| 400    | Unsupported provider       | Provider not in supported list                 |
-| 401    | Missing authorization      | No Authorization header                        |
-| 401    | Invalid token              | JWT is invalid or expired                      |
-| 403    | Profile not found          | User has no profile record                     |
-| 403    | Provider not available     | Provider not enabled for user's tier           |
-| 403    | Model not available        | Model not in user's tier allowed list          |
-| 503    | API key not configured     | Server doesn't have API key for provider       |
+| Status | Error                  | Description                              |
+| ------ | ---------------------- | ---------------------------------------- |
+| 400    | Invalid path           | URL doesn't match expected format        |
+| 400    | Unsupported provider   | Provider not in supported list           |
+| 401    | Missing authorization  | No Authorization header                  |
+| 401    | Invalid token          | JWT is invalid or expired                |
+| 403    | Profile not found      | User has no profile record               |
+| 403    | Provider not available | Provider not enabled for user's tier     |
+| 403    | Model not available    | Model not in user's tier allowed list    |
+| 503    | API key not configured | Server doesn't have API key for provider |
 
 ## Deployment
 
