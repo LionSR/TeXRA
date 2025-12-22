@@ -1,4 +1,4 @@
-import { getRelayBaseUrl } from '@auth/serverSideKeyAccess';
+import { getRelayBaseUrl } from '@auth/serverKeys';
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
