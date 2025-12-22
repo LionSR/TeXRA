@@ -59,14 +59,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
-    // Use ServerSideKeyService as the single point of entry for access checks
-    // This primes all caches (providers, tier config, user tier) in one call
-    const serverSideKeyService = getServerSideKeyService();
-    const hasServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
-
-    // Check authentication via cached result (tier is null if not authenticated)
-    const userTier = serverSideKeyService.getUserTier();
-    const isAuthenticated = userTier !== null;
+    // Check authentication status directly - this is independent of server-side key settings
+    const isAuthenticated = await SupabaseClient.isAuthenticated();
 
     if (!isAuthenticated) {
       await webview.postMessage({
@@ -87,8 +81,12 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    // Prime server-side key caches (providers, tier config, user tier)
+    // This returns false if user disabled server-side access, but caches are still primed
+    const serverSideKeyService = getServerSideKeyService();
+    const hasServerSideAccess = await serverSideKeyService.canUseServerSideKeys();
+
     // Get user details for display (email, permissions for remote agent visibility)
-    // These are not cached in ServerSideKeyService as they're display-only
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
 
@@ -124,7 +122,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         email: user?.email || 'N/A',
         id: user?.id || '',
       },
-      tier: userTier,
+      tier: authContext.tier,
       permissions: authContext.permissions,
       remoteAgents,
       apiAccessMode,
