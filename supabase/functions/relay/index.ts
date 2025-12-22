@@ -1,13 +1,27 @@
 /**
- * Relay Edge Function - Server-side API key proxy for Ultra and Max tier users.
+ * Relay Edge Function - Server-side API key proxy for authenticated users.
  *
- * This function acts as a transparent proxy for AI API requests, allowing
- * paid tier users to access AI models without providing their own API keys.
+ * ============================================================================
+ * RESEARCHER ACCESS PROGRAM
+ * ============================================================================
+ * This relay provides server-side API keys as a convenience for researchers
+ * and academics. Users can ALWAYS choose between:
+ * - Server-side keys (no API key needed, subject to fair use)
+ * - Their own API keys (full control, no restrictions)
  *
- * TIER HIERARCHY:
- * - Ultra: Access to ALL models via relay
- * - Max: Access to a SUBSET of cheaper models via relay (configured below)
- * - free: No relay access (must bring own keys)
+ * FAIR USE POLICY:
+ * - Personal research and academic use only
+ * - No commercial use or production deployments
+ * - No automated/bot access or bulk operations
+ * - Excessive usage may result in account suspension
+ *
+ * Users can toggle between server and personal API keys in their profile.
+ * ============================================================================
+ *
+ * TIER HIERARCHY (cumulative access):
+ * - Ultra: All models including premium ($3+/M input)
+ * - Max: Mid-tier models ($1-3/M) + all free tier models
+ * - free: Budget models only (under $1/M input)
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -38,13 +52,19 @@ const RELAY_VERSION = '1.4.0';
  *
  * CROSS-REFERENCE: These are duplicated because the relay runs in Deno
  * and cannot import from the TypeScript source. Keep in sync with:
- * - src/auth/config.ts: ULTRA_TIER, MAX_TIER constants
+ * - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
  * - Database: profiles.tier column values
  *
  * If adding/changing tiers, update ALL locations.
+ *
+ * TIER HIERARCHY (ascending access):
+ * - free: Budget models only (under $1/M input)
+ * - Max: Free tier models + mid-tier models ($1-3/M input)
+ * - Ultra: All models including premium ($3+/M input)
  */
 const ULTRA_TIER = 'Ultra';
 const MAX_TIER = 'Max';
+const FREE_TIER = 'free';
 
 // ============================================================================
 // Tier-Based Model Access Configuration
@@ -67,89 +87,221 @@ interface TierAccessConfig {
 
 interface TierModelConfig {
   tiers: {
+    free?: TierAccessConfig;
     Max?: TierAccessConfig;
     Ultra?: TierAccessConfig;
   };
 }
 
+// ============================================================================
+// SINGLE SOURCE OF TRUTH: Relay Model Configuration
+// ============================================================================
 /**
- * SINGLE SOURCE OF TRUTH for Max tier model access.
- *
- * Each entry maps:
+ * Each model entry specifies:
  * - shortName: TeXRA UI identifier (returned to client via /relay/tier-config)
  * - apiPatterns: Array of full API model name prefixes for server-side validation
  *                (supports multiple patterns for aliases like gemini-flash-latest)
+ * - minTier: Minimum tier required to access this model
+ *
+ * TIER ACCESS IS CUMULATIVE:
+ * - free tier: Models where minTier = 'free'
+ * - Max tier: Models where minTier = 'free' OR 'Max'
+ * - Ultra tier: All models (including minTier = 'Ultra')
  *
  * IMPORTANT: When adding/removing models, update ONLY this array.
- * Both TIER_CONFIG and isModelAllowedForTier() derive from this.
+ * All derived arrays and TIER_CONFIG are auto-generated from this.
  *
  * Keep synchronized with:
  * - src/model/providers/*.ts (fullName field must match apiPattern prefix)
  * - docs/relay-tier-config.md
  */
-interface MaxTierModel {
+type MinTier = 'free' | 'Max' | 'Ultra';
+
+interface RelayModel {
   shortName: string; // UI identifier (e.g., "gpt41-")
-  apiPatterns: string[]; // API name prefixes for validation (e.g., ["gpt-4.1-mini"])
+  apiPatterns: string[]; // API name prefixes for validation
+  minTier: MinTier; // Minimum tier required
 }
 
-const MAX_TIER_MODELS: MaxTierModel[] = [
-  // Anthropic - Sonnet 4.5 (thinking mode uses same model name)
-  { shortName: 'sonnet45T', apiPatterns: ['claude-sonnet-4-5'] },
+const RELAY_MODELS: RelayModel[] = [
+  // =========================================================================
+  // FREE TIER: Budget models (under $1/M input)
+  // Available to all authenticated users without subscription.
+  // =========================================================================
 
-  // OpenAI - GPT-4.1 Mini/Nano and GPT-4o Mini
-  { shortName: 'gpt41-', apiPatterns: ['gpt-4.1-mini'] },
-  { shortName: 'gpt41--', apiPatterns: ['gpt-4.1-nano'] },
-  { shortName: 'gpt4o-', apiPatterns: ['gpt-4o-mini'] },
+  // Anthropic - Haiku models (very cheap)
+  { shortName: 'haiku3', apiPatterns: ['claude-3-haiku'], minTier: 'free' }, // $0.25/$1.25
+  { shortName: 'haiku35', apiPatterns: ['claude-3-5-haiku'], minTier: 'free' }, // $0.80/$4.00
 
-  // Google - Gemini Pro and Flash models
-  { shortName: 'gemini3p', apiPatterns: ['gemini-3-pro'] },
-  { shortName: 'gemini25p', apiPatterns: ['gemini-2.5-pro'] },
-  { shortName: 'gemini3f', apiPatterns: ['gemini-3-flash'] },
+  // OpenAI - Mini/Nano models (very cheap)
+  { shortName: 'gpt41-', apiPatterns: ['gpt-4.1-mini'], minTier: 'free' }, // $0.40/$1.60
+  { shortName: 'gpt41--', apiPatterns: ['gpt-4.1-nano'], minTier: 'free' }, // $0.10/$0.40
+  { shortName: 'gpt4o-', apiPatterns: ['gpt-4o-mini'], minTier: 'free' }, // $0.15/$0.60
+
+  // Google - Flash models (very cheap)
+  { shortName: 'gemini3f', apiPatterns: ['gemini-3-flash'], minTier: 'free' }, // $0.30/$2.50
   // gemini25f maps to multiple API names (versioned + latest alias)
-  { shortName: 'gemini25f', apiPatterns: ['gemini-2.5-flash', 'gemini-flash'] },
-  { shortName: 'gemini25f-', apiPatterns: ['gemini-2.5-flash-lite'] },
+  {
+    shortName: 'gemini25f',
+    apiPatterns: ['gemini-2.5-flash', 'gemini-flash'],
+    minTier: 'free',
+  }, // $0.30/$2.50
+  {
+    shortName: 'gemini25f-',
+    apiPatterns: ['gemini-2.5-flash-lite'],
+    minTier: 'free',
+  }, // $0.10/$0.40
 
-  // DeepSeek - Chat and Reasoner (V3.2)
-  // Note: deepseek and dsv3 use same API model name (deepseek-chat)
-  { shortName: 'deepseek', apiPatterns: ['deepseek-chat'] },
-  { shortName: 'deepseekT', apiPatterns: ['deepseek-reasoner'] },
-  { shortName: 'dsv3', apiPatterns: ['deepseek-chat'] },
+  // DeepSeek - Chat and Reasoner (very cheap)
+  { shortName: 'deepseek', apiPatterns: ['deepseek-chat'], minTier: 'free' }, // $0.28/$0.42
+  {
+    shortName: 'deepseekT',
+    apiPatterns: ['deepseek-reasoner'],
+    minTier: 'free',
+  }, // $0.28/$0.42
+
+  // xAI - Grok Mini (very cheap)
+  { shortName: 'grok3-', apiPatterns: ['grok-3-mini'], minTier: 'free' }, // $0.30/$0.50
+
+  // Moonshot - Kimi models (very cheap)
+  { shortName: 'kimi128k', apiPatterns: ['moonshot-v1-128k'], minTier: 'free' }, // $0.28/$1.12
+  {
+    shortName: 'kimi128kv',
+    apiPatterns: ['moonshot-v1-128k-vision'],
+    minTier: 'free',
+  }, // $0.35/$1.40
+  {
+    shortName: 'kimit',
+    apiPatterns: ['kimi-thinking-preview'],
+    minTier: 'free',
+  }, // $0.42/$1.68
+  { shortName: 'kimi2', apiPatterns: ['kimi-k2-0905'], minTier: 'free' }, // $0.60/$2.50
+  { shortName: 'kimi2T', apiPatterns: ['kimi-k2-thinking'], minTier: 'free' }, // $0.56/$2.22
+
+  // =========================================================================
+  // MAX TIER: Mid-tier models ($1-3/M input)
+  // Requires Max subscription, includes all free tier models
+  // =========================================================================
+
+  // Anthropic - Haiku 4.5 and Sonnet 4.5
+  { shortName: 'haiku45', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
+  { shortName: 'haiku45T', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
+  {
+    shortName: 'sonnet45T',
+    apiPatterns: ['claude-sonnet-4-5'],
+    minTier: 'Max',
+  }, // $3.00/$15.00
+
+  // Google - Gemini Pro models
+  { shortName: 'gemini3p', apiPatterns: ['gemini-3-pro'], minTier: 'Max' }, // $2.00/$12.00
+  { shortName: 'gemini25p', apiPatterns: ['gemini-2.5-pro'], minTier: 'Max' }, // $1.25/$10.00
+
+  // xAI - Grok 2 models
+  { shortName: 'grok2', apiPatterns: ['grok-2-1212'], minTier: 'Max' }, // $2.00/$10.00
+  { shortName: 'grok2v', apiPatterns: ['grok-2-1212-vision'], minTier: 'Max' }, // $2.00/$10.00
+
+  // Moonshot - Kimi Turbo models (faster but pricier)
+  { shortName: 'kimi2+', apiPatterns: ['kimi-k2-turbo'], minTier: 'Max' }, // $2.24/$8.88
+  {
+    shortName: 'kimi2T+',
+    apiPatterns: ['kimi-k2-thinking-turbo'],
+    minTier: 'Max',
+  }, // $2.24/$8.88
+
+  // =========================================================================
+  // ULTRA TIER: Premium models ($3+/M input)
+  // Requires Ultra subscription (models: '*' grants all access)
+  // Examples: Opus, GPT-5 series, DeepSeek R1, Grok 3/4
+  // These are NOT listed here since Ultra uses models: '*'
+  // =========================================================================
 ];
 
-// Derived arrays (auto-generated from MAX_TIER_MODELS)
+// ============================================================================
+// Derived Arrays (auto-generated from RELAY_MODELS)
+// ============================================================================
+
+/** Get models available for a specific tier (cumulative access) */
+function getModelsForTier(tier: MinTier): RelayModel[] {
+  if (tier === 'Ultra') return RELAY_MODELS; // Ultra gets everything
+  if (tier === 'Max')
+    return RELAY_MODELS.filter(
+      (m) => m.minTier === 'free' || m.minTier === 'Max',
+    );
+  return RELAY_MODELS.filter((m) => m.minTier === 'free');
+}
+
+// Pre-computed arrays for each tier
+const FREE_TIER_MODELS = getModelsForTier('free');
+const MAX_TIER_MODELS = getModelsForTier('Max');
+
+const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
 const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
+
+const FREE_TIER_API_PATTERNS = FREE_TIER_MODELS.flatMap((m) =>
+  m.apiPatterns.map((p) => p.toLowerCase()),
+);
 const MAX_TIER_API_PATTERNS = MAX_TIER_MODELS.flatMap((m) =>
   m.apiPatterns.map((p) => p.toLowerCase()),
 );
 
+// Provider access by tier
+// All tiers include the same providers - model access is what differentiates tiers
+const FREE_TIER_PROVIDERS = [
+  'openai',
+  'anthropic',
+  'google',
+  'deepseek',
+  'xai',
+  'moonshot',
+];
+const MAX_TIER_PROVIDERS = [
+  'openai',
+  'anthropic',
+  'google',
+  'deepseek',
+  'xai',
+  'moonshot',
+];
+const ULTRA_TIER_PROVIDERS = [
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'dashscope',
+];
+
 const TIER_CONFIG: TierModelConfig = {
   tiers: {
+    free: {
+      // Free tier: Budget models only (under $1/M input)
+      models: FREE_TIER_SHORT_NAMES,
+      providers: FREE_TIER_PROVIDERS,
+    },
     Max: {
-      // Max tier: Sonnet 4.5T + GPT minis + Gemini (all) + DeepSeek (except R1)
+      // Max tier: Free + mid-tier models ($1-3/M input)
       // GUARDS (Ultra-only): Opus, GPT-5 series, DeepSeek R1
       models: MAX_TIER_SHORT_NAMES,
-      providers: ['openai', 'anthropic', 'google', 'deepseek'],
+      providers: MAX_TIER_PROVIDERS,
     },
     Ultra: {
-      // All models for Ultra tier (including expensive ones like Opus, GPT-5 Pro)
+      // Ultra tier: All models including premium ($3+/M)
       models: '*',
-      providers: [
-        'openai',
-        'anthropic',
-        'google',
-        'xai',
-        'deepseek',
-        'moonshot',
-        'dashscope',
-      ],
+      providers: ULTRA_TIER_PROVIDERS,
     },
   },
 };
 
 /**
  * Check if a model is allowed for a given tier.
- * For Max tier, uses prefix pattern matching against MAX_TIER_API_PATTERNS
+ * Uses prefix pattern matching against tier-specific API patterns
  * to handle version suffixes in model names.
+ *
+ * TIER ACCESS IS CUMULATIVE:
+ * - Ultra: All models
+ * - Max: MAX_TIER_API_PATTERNS (includes free tier models)
+ * - free: FREE_TIER_API_PATTERNS (budget models only)
  */
 function isModelAllowedForTier(
   tier: string,
@@ -159,19 +311,26 @@ function isModelAllowedForTier(
     return true; // Ultra gets all models
   }
 
-  if (tier === MAX_TIER) {
-    // Model name is required for Max tier validation
-    if (!modelName) return false;
+  // Model name is required for Max and free tier validation
+  if (!modelName) return false;
 
-    // Use pattern matching - model name must start with one of the allowed patterns
-    // MAX_TIER_API_PATTERNS is already lowercased during derivation
-    const normalizedModel = modelName.toLowerCase();
+  // Use pattern matching - model name must start with one of the allowed patterns
+  // API patterns are already lowercased during derivation
+  const normalizedModel = modelName.toLowerCase();
+
+  if (tier === MAX_TIER) {
     return MAX_TIER_API_PATTERNS.some((pattern) =>
       normalizedModel.startsWith(pattern),
     );
   }
 
-  return false; // free tier gets no relay access
+  if (tier === FREE_TIER) {
+    return FREE_TIER_API_PATTERNS.some((pattern) =>
+      normalizedModel.startsWith(pattern),
+    );
+  }
+
+  return false; // Unknown tier gets no access
 }
 
 /**
@@ -179,13 +338,15 @@ function isModelAllowedForTier(
  */
 function isProviderAllowedForTier(tier: string, provider: string): boolean {
   if (tier === ULTRA_TIER) {
-    const ultraConfig = TIER_CONFIG.tiers.Ultra;
-    return ultraConfig?.providers.includes(provider) ?? false;
+    return ULTRA_TIER_PROVIDERS.includes(provider);
   }
 
   if (tier === MAX_TIER) {
-    const maxConfig = TIER_CONFIG.tiers.Max;
-    return maxConfig?.providers.includes(provider) ?? false;
+    return MAX_TIER_PROVIDERS.includes(provider);
+  }
+
+  if (tier === FREE_TIER) {
+    return FREE_TIER_PROVIDERS.includes(provider);
   }
 
   return false;
@@ -566,21 +727,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const userTier = profile.tier;
-
-    // Check if user has any relay access (Ultra or Max tier)
-    if (userTier !== ULTRA_TIER && userTier !== MAX_TIER) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Paid tier required for server-side API keys',
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
+    // Default to 'free' if no tier is set (authenticated but no subscription)
+    const userTier = profile.tier || FREE_TIER;
 
     // 5a. Check if provider is allowed for user's tier
     if (!isProviderAllowedForTier(userTier, provider)) {
@@ -596,13 +744,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 5b. For Max tier, validate the model is allowed
-    // We need to read the request body to extract the model name
-    // Clone the request so we can read body twice (once for model, once for forwarding)
+    // 5b. For non-Ultra tiers, validate the model is allowed
+    // Ultra tier has unrestricted model access, but Max and free tiers
+    // are limited to their respective model lists
     let requestBody: string | null = null;
     let modelName: string | null = null;
 
-    if (userTier === MAX_TIER && req.method !== 'GET') {
+    if (userTier !== ULTRA_TIER && req.method !== 'GET') {
       // Read and clone the body
       requestBody = await req.text();
 
@@ -616,14 +764,20 @@ Deno.serve(async (req: Request) => {
         // If body is not JSON, can't extract model - will fail validation below
       }
 
-      // Validate model is allowed for Max tier
-      if (!isModelAllowedForTier(MAX_TIER, modelName)) {
+      // Validate model is allowed for user's tier
+      if (!isModelAllowedForTier(userTier, modelName)) {
+        const tierName = userTier === FREE_TIER ? 'free' : userTier;
+        const upgradeHint =
+          userTier === FREE_TIER
+            ? 'Upgrade to Max for more models.'
+            : 'Upgrade to Ultra for access.';
+
         return new Response(
           JSON.stringify({
             _relay: RELAY_VERSION,
             error: modelName
-              ? `Model '${modelName}' is not available for Max tier. Please upgrade to Ultra for access.`
-              : 'Could not determine model from request. Max tier requires explicit model specification.',
+              ? `Model '${modelName}' is not available for ${tierName} tier. ${upgradeHint}`
+              : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
           }),
           {
             status: 403,
