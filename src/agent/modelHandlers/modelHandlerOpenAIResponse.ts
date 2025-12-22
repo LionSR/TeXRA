@@ -10,9 +10,7 @@ import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
 import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
-import {
-  type OpenAIAPIResponseUsage,
-} from '@agent/core/ResponseUsage';
+import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';

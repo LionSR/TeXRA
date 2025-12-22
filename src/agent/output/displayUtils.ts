@@ -2,7 +2,8 @@
 import * as path from 'path';
 
 // Local imports
-import type { OutputFileInfo, FileLocation } from './types';
+import type { FileLocation } from '@utils/files';
+import type { OutputFileInfo } from './types';
 
 /**
  * Get display label for a file.
