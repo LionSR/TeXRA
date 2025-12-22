@@ -134,6 +134,8 @@ const RELAY_MODELS: RelayModel[] = [
   { shortName: 'haiku35', apiPatterns: ['claude-3-5-haiku'], minTier: 'free' }, // $0.80/$4.00
 
   // OpenAI - Mini/Nano models (very cheap)
+  { shortName: 'gpt5-', apiPatterns: ['gpt-5-mini'], minTier: 'free' }, // $0.25/$2.00
+  { shortName: 'gpt5--', apiPatterns: ['gpt-5-nano'], minTier: 'free' }, // $0.05/$0.40
   { shortName: 'gpt41-', apiPatterns: ['gpt-4.1-mini'], minTier: 'free' }, // $0.40/$1.60
   { shortName: 'gpt41--', apiPatterns: ['gpt-4.1-nano'], minTier: 'free' }, // $0.10/$0.40
   { shortName: 'gpt4o-', apiPatterns: ['gpt-4o-mini'], minTier: 'free' }, // $0.15/$0.60

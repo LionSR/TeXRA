@@ -51,6 +51,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
       "models": [
         "haiku3",
         "haiku35",
+        "gpt5-",
+        "gpt5--",
         "gpt41-",
         "gpt41--",
         "gpt4o-",
@@ -79,6 +81,8 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
       "models": [
         "haiku3",
         "haiku35",
+        "gpt5-",
+        "gpt5--",
         "gpt41-",
         "gpt41--",
         "gpt4o-",
@@ -159,6 +163,8 @@ Available to all authenticated users.
 | ------------ | --------------------------------- | --------- | ----------------------- |
 | `haiku3`     | claude-3-haiku                    | Anthropic | $0.25/$1.25             |
 | `haiku35`    | claude-3-5-haiku                  | Anthropic | $0.80/$4.00             |
+| `gpt5-`      | gpt-5-mini                        | OpenAI    | $0.25/$2.00             |
+| `gpt5--`     | gpt-5-nano                        | OpenAI    | $0.05/$0.40             |
 | `gpt41-`     | gpt-4.1-mini                      | OpenAI    | $0.40/$1.60             |
 | `gpt41--`    | gpt-4.1-nano                      | OpenAI    | $0.10/$0.40             |
 | `gpt4o-`     | gpt-4o-mini                       | OpenAI    | $0.15/$0.60             |
