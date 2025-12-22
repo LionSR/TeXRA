@@ -142,7 +142,7 @@ async function readCurrentContent(
 
   try {
     return await fs.readFile(uri.fsPath, 'utf8');
-  } catch {
+  } catch (_err) {
     return fallback;
   }
 }

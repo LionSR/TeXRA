@@ -567,7 +567,6 @@ async function runLatexdiffFromMetadata(params: {
     mathMarkup,
     generateBetweenRoundDiffs,
     progress,
-    fileService,
   } = params;
 
   const immediateResults: DiffRunResult[] = [];

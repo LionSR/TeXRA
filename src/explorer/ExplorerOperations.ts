@@ -52,10 +52,9 @@ logger.initialize(CHANNEL);
 export class ExplorerOperations {
   private builtInAgentsPath = '';
   private builtInToolUsePath = '';
-  private editingItem: FileItem | undefined;
 
   constructor(
-    private workspaceRoot: string | undefined,
+    _workspaceRoot: string | undefined,
     _context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
