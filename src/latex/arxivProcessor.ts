@@ -108,7 +108,7 @@ export class ArxivSourceProcessor {
         if (destPath) {
           await AbsoluteFS.delete(destPath);
         }
-      } catch {
+      } catch (_err) {
         // ignore errors deleting destPath
       }
       throw err;
