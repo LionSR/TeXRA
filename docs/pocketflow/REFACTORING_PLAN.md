@@ -55,33 +55,37 @@
 
 ### Risk Assessment
 
-| Factor | Status |
-|--------|--------|
-| Test Coverage | ❌ **None** - High risk |
-| Consumers | 4 agent implementations |
-| CycleFlows | ✅ Keep - properly designed |
-| RunFlows | ❌ Refactor - hook orchestrators |
-| Shared Infra | ⚠️ Simplify - over-engineered |
+| Factor        | Status                           |
+| ------------- | -------------------------------- |
+| Test Coverage | ❌ **None** - High risk          |
+| Consumers     | 4 agent implementations          |
+| CycleFlows    | ✅ Keep - properly designed      |
+| RunFlows      | ❌ Refactor - hook orchestrators |
+| Shared Infra  | ⚠️ Simplify - over-engineered    |
 
 ---
 
 ## Guiding Principles
 
 ### 1. Don't Break What Works
+
 - **CycleFlows are good** - ResponseCycleFlow and ToolUseCycleFlow are proper PocketFlow
 - Keep them, only fix prep/exec/post violations within them
 
 ### 2. Incremental Refactoring
+
 - No big bang rewrite
 - Each phase should leave the codebase working
 - Can be merged independently
 
 ### 3. Accept Differences
+
 - Reflection and ToolUse agents are fundamentally different
 - Stop trying to make them share "generic" infrastructure
 - Duplication is better than wrong abstraction
 
 ### 4. Logic in Nodes, Not Hooks
+
 - Current: Nodes call hooks, hooks contain logic
 - Target: Nodes contain logic, hooks are minimal callbacks
 
@@ -106,13 +110,17 @@ describe('ReflectionRunFlow', () => {
   it('loops for multiple rounds when shouldContinue is true', async () => {
     const mockAgent = createMockReflectionAgent({
       totalRounds: 3,
-      shouldContinue: true
+      shouldContinue: true,
     });
     // ...
   });
 
-  it('handles interruption mid-round', async () => { /* ... */ });
-  it('handles round execution error', async () => { /* ... */ });
+  it('handles interruption mid-round', async () => {
+    /* ... */
+  });
+  it('handles round execution error', async () => {
+    /* ... */
+  });
 });
 ```
 
@@ -121,8 +129,12 @@ describe('ReflectionRunFlow', () => {
 ```typescript
 // test/agent/flows/common/lifecycle.test.ts
 describe('lifecycle state management', () => {
-  it('transitions pending → running → completed', () => { /* ... */ });
-  it('transitions to error state on failure', () => { /* ... */ });
+  it('transitions pending → running → completed', () => {
+    /* ... */
+  });
+  it('transitions to error state on failure', () => {
+    /* ... */
+  });
 });
 ```
 
@@ -131,9 +143,15 @@ describe('lifecycle state management', () => {
 ```typescript
 // test/agent/flows/ResponseCycleFlow.test.ts
 describe('ResponseCycleFlow', () => {
-  it('prep extracts correct data from shared', async () => { /* ... */ });
-  it('exec performs pure computation', async () => { /* ... */ });
-  it('post writes results and returns correct action', async () => { /* ... */ });
+  it('prep extracts correct data from shared', async () => {
+    /* ... */
+  });
+  it('exec performs pure computation', async () => {
+    /* ... */
+  });
+  it('post writes results and returns correct action', async () => {
+    /* ... */
+  });
 });
 ```
 
@@ -148,6 +166,7 @@ describe('ResponseCycleFlow', () => {
 ### 2.1 Fix prep() Returning Shared
 
 **Current** (`ResponseProcessNode`):
+
 ```typescript
 async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
   return shared;  // VIOLATION
@@ -155,6 +174,7 @@ async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
 ```
 
 **Refactored**:
+
 ```typescript
 interface ProcessPrepResult {
   shouldStop: boolean;
@@ -181,6 +201,7 @@ async prep(shared: ResponseCycleShared<C>): Promise<ProcessPrepResult> {
 ### 2.2 Move Side Effects from exec() to post()
 
 **Current** (`ToolUseProcessNode.exec()`):
+
 ```typescript
 async exec(shared) {
   // ...
@@ -191,6 +212,7 @@ async exec(shared) {
 ```
 
 **Refactored**:
+
 ```typescript
 async exec(prepRes: ProcessPrepResult): Promise<ProcessExecResult> {
   // Pure computation only - return data
@@ -216,10 +238,10 @@ async post(shared, prepRes, execRes): Promise<string | undefined> {
 
 ### 2.3 Affected Files
 
-| File | Changes |
-|------|---------|
+| File                   | Changes                                               |
+| ---------------------- | ----------------------------------------------------- |
 | `ResponseCycleFlow.ts` | Fix `ResponseProcessNode`, `ResponseContinuationNode` |
-| `ToolUseCycleFlow.ts` | Fix `ToolUseProcessNode`, `ToolUseDispatchNode` |
+| `ToolUseCycleFlow.ts`  | Fix `ToolUseProcessNode`, `ToolUseDispatchNode`       |
 
 **Deliverable**: CycleFlows with proper prep/exec/post separation.
 
@@ -233,12 +255,12 @@ async post(shared, prepRes, execRes): Promise<string | undefined> {
 
 ```typescript
 // 5 separate functions
-createLifecycleState(phase)
-beginLifecyclePhase(lifecycle, phase)
-setLifecyclePhase(lifecycle, phase)
-setLifecycleStatus(lifecycle, status)
-failLifecycle(lifecycle, error)
-completeLifecycle(lifecycle)
+createLifecycleState(phase);
+beginLifecyclePhase(lifecycle, phase);
+setLifecyclePhase(lifecycle, phase);
+setLifecycleStatus(lifecycle, status);
+failLifecycle(lifecycle, error);
+completeLifecycle(lifecycle);
 ```
 
 ### 3.2 Replace with State Machine
@@ -254,9 +276,15 @@ class AgentLifecycle<Phase extends string> {
     this._phase = initialPhase;
   }
 
-  get phase(): Phase { return this._phase; }
-  get status(): AgentLifecycleStatus { return this._status; }
-  get error(): unknown { return this._error; }
+  get phase(): Phase {
+    return this._phase;
+  }
+  get status(): AgentLifecycleStatus {
+    return this._status;
+  }
+  get error(): unknown {
+    return this._error;
+  }
 
   begin(phase: Phase): void {
     this._phase = phase;
@@ -277,7 +305,9 @@ class AgentLifecycle<Phase extends string> {
     return { phase: this._phase, status: this._status, error: this._error };
   }
 
-  static fromJSON<P extends string>(data: LifecycleSnapshot<P>): AgentLifecycle<P> {
+  static fromJSON<P extends string>(
+    data: LifecycleSnapshot<P>,
+  ): AgentLifecycle<P> {
     const lifecycle = new AgentLifecycle(data.phase);
     lifecycle._status = data.status;
     lifecycle._error = data.error;
@@ -421,8 +451,9 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionShared<C>> {
       agent,
       currentRound: state.currentRound,
       totalRounds: state.totalRounds,
-      shouldFinalize: state.currentRound >= state.totalRounds ||
-                      agent.isInterruptionRequested(),
+      shouldFinalize:
+        state.currentRound >= state.totalRounds ||
+        agent.isInterruptionRequested(),
     };
   }
 
@@ -447,8 +478,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionShared<C>> {
     shared.state.conversation = execRes.result.messages;
     shared.state.continueRounds = execRes.result.shouldContinue;
 
-    if (!shared.state.continueRounds ||
-        shared.state.currentRound >= shared.state.totalRounds) {
+    if (
+      !shared.state.continueRounds ||
+      shared.state.currentRound >= shared.state.totalRounds
+    ) {
       return 'finalize';
     }
 
@@ -471,7 +504,7 @@ class ReflectionFinalizeNode<C> extends BaseNode<ReflectionShared<C>> {
 
   async post(shared, prepRes, execRes) {
     shared.lifecycle.complete();
-    return undefined;  // End flow
+    return undefined; // End flow
   }
 }
 
@@ -484,7 +517,7 @@ export function createReflectionFlow<C>(): Flow<ReflectionShared<C>> {
   initNode.on('round', roundNode);
   initNode.on('finalize', finalizeNode);
 
-  roundNode.on('continue', roundNode);  // Loop
+  roundNode.on('continue', roundNode); // Loop
   roundNode.on('finalize', finalizeNode);
 
   return new Flow(initNode);
@@ -510,14 +543,15 @@ export function createReflectionFlow<C>(): Flow<ReflectionShared<C>> {
 ### 6.1 Current Problem
 
 `ToolUseCycleNode.exec()` is just a hook orchestrator:
+
 ```typescript
 while (true) {
-  await hooks.runCycle();          // HOOK
+  await hooks.runCycle(); // HOOK
   await hooks.persistCheckpoint(); // HOOK
   if (hooks.checkInterruption()) return;
   await hooks.enterWaitingState(); // HOOK
   const followUp = await hooks.waitForFollowUp(); // HOOK
-  await hooks.applyFollowUp();     // HOOK
+  await hooks.applyFollowUp(); // HOOK
 }
 ```
 
@@ -526,7 +560,9 @@ while (true) {
 ```typescript
 // ToolUseFlow.ts
 
-class ToolUseInitNode<C> extends BaseNode<ToolUseShared<C>> { /* ... */ }
+class ToolUseInitNode<C> extends BaseNode<ToolUseShared<C>> {
+  /* ... */
+}
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseShared<C>> {
   async prep(shared) {
@@ -588,7 +624,7 @@ class ToolUseCheckNode<C> extends BaseNode<ToolUseShared<C>> {
       return 'finalize';
     }
     if (execRes.hasQueuedFollowUp) {
-      return 'apply';  // Skip waiting, apply queued follow-up
+      return 'apply'; // Skip waiting, apply queued follow-up
     }
     return 'wait';
   }
@@ -627,7 +663,7 @@ class ToolUseApplyNode<C> extends BaseNode<ToolUseShared<C>> {
     // Actual apply logic HERE
     const updatedMessages = await this.applyFollowUp(
       prepRes.followUp,
-      prepRes.messages
+      prepRes.messages,
     );
     return { messages: updatedMessages };
   }
@@ -635,11 +671,13 @@ class ToolUseApplyNode<C> extends BaseNode<ToolUseShared<C>> {
   async post(shared, prepRes, execRes) {
     shared.state.messages = execRes.messages;
     shared.state.pendingFollowUp = null;
-    return 'execute';  // Loop back to cycle
+    return 'execute'; // Loop back to cycle
   }
 }
 
-class ToolUseFinalizeNode<C> extends BaseNode<ToolUseShared<C>> { /* ... */ }
+class ToolUseFinalizeNode<C> extends BaseNode<ToolUseShared<C>> {
+  /* ... */
+}
 
 export function createToolUseFlow<C>(): Flow<ToolUseShared<C>> {
   const initNode = new ToolUseInitNode<C>();
@@ -666,7 +704,7 @@ export function createToolUseFlow<C>(): Flow<ToolUseShared<C>> {
   waitNode.on('apply', applyNode);
   waitNode.on('finalize', finalizeNode);
 
-  applyNode.on('execute', executeNode);  // Loop back
+  applyNode.on('execute', executeNode); // Loop back
 
   return new Flow(initNode);
 }
@@ -744,7 +782,9 @@ KEEP:
 // Before: Complex executeAgentRunFlow with hooks
 abstract class BaseAgent {
   protected async executeAgentRunFlow(options: ComplexOptions) {
-    return runAgentFlow({ /* lots of config */ });
+    return runAgentFlow({
+      /* lots of config */
+    });
   }
 }
 
@@ -793,27 +833,27 @@ Phase 7: Cleanup                                ══════════�
 
 ## Success Metrics
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Abstraction layers | 10 | 4 |
-| common/ infra files | 10 | 2 |
-| common/ infra lines | ~600 | ~100 |
-| Hook methods (ToolUse) | 12 | 3-4 |
-| Nodes doing real work | 8 | 16 |
-| Nodes that are shells | 5 | 0 |
-| Test coverage | 0% | >80% |
+| Metric                 | Before | After |
+| ---------------------- | ------ | ----- |
+| Abstraction layers     | 10     | 4     |
+| common/ infra files    | 10     | 2     |
+| common/ infra lines    | ~600   | ~100  |
+| Hook methods (ToolUse) | 12     | 3-4   |
+| Nodes doing real work  | 8      | 16    |
+| Nodes that are shells  | 5      | 0     |
+| Test coverage          | 0%     | >80%  |
 
 ---
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| No tests | Phase 1 creates test coverage first |
+| Risk                    | Mitigation                                          |
+| ----------------------- | --------------------------------------------------- |
+| No tests                | Phase 1 creates test coverage first                 |
 | 4 agent implementations | Incremental migration, keep old code until verified |
-| CycleFlows are complex | Only fix violations, don't restructure |
-| ToolUse async waiting | WaitNode handles it properly with async exec |
-| Serialization breaks | Keep schemas, update types carefully |
+| CycleFlows are complex  | Only fix violations, don't restructure              |
+| ToolUse async waiting   | WaitNode handles it properly with async exec        |
+| Serialization breaks    | Keep schemas, update types carefully                |
 
 ---
 
@@ -822,6 +862,7 @@ Phase 7: Cleanup                                ══════════�
 ### Q: Should we keep any shared infrastructure?
 
 **A**: Yes, but minimal:
+
 - `AgentLifecycle` class (Phase 3)
 - `types.ts` for core interfaces
 - `runStateSchemas.ts` for serialization
@@ -829,6 +870,7 @@ Phase 7: Cleanup                                ══════════�
 ### Q: Should ReflectionFlow and ToolUseFlow share code?
 
 **A**: No. They're fundamentally different:
+
 - Reflection: Simple loop (init → rounds → finalize)
 - ToolUse: Interactive state machine (with waiting, follow-ups)
 
@@ -837,6 +879,7 @@ Accept the duplication. Wrong abstraction is worse than repetition.
 ### Q: What about the agent implementations (DirectAgent, CoTAgent, etc.)?
 
 **A**: They don't need to change much:
+
 - They override `executeRound()` or similar methods
-- The flow orchestration is internal to Base*Agent
+- The flow orchestration is internal to Base\*Agent
 - Only BaseReflectionAgent and BaseToolUseAgent need updates
