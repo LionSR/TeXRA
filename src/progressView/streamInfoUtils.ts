@@ -104,10 +104,11 @@ export function buildStreamInfos(
         sessionKind: sessionCategory,
         isToolAgent,
       },
-      // When taskState is available, use actual output files count.
+      // When taskState is available, check useMultipleOutputs flag OR actual output files count.
       // When taskState is null, fall back to the hint from setActiveStream event.
+      // This mirrors the hint calculation in executeAgent.ts for consistent UI behavior.
       hasMultipleOutputs: taskState
-        ? outputs.length > 1
+        ? (taskState.agentConfig.useMultipleOutputs || outputs.length > 1)
         : (hints.hasMultipleOutputs ?? false),
       isRemote,
       lastTimestamp,
