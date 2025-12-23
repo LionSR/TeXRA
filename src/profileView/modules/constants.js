@@ -26,6 +26,9 @@ export const ELEMENT_IDS = {
   API_ACCESS_PERSONAL: 'apiAccessPersonal',
   ENABLED_PROVIDERS_INFO: 'enabledProvidersInfo',
   ALLOWED_MODELS_INFO: 'allowedModelsInfo',
+  // Access expiration
+  ACCESS_EXPIRATION_ROW: 'accessExpirationRow',
+  ACCESS_EXPIRATION: 'accessExpiration',
 };
 
 // CSS class names used across modules

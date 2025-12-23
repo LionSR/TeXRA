@@ -43,6 +43,7 @@ const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 export interface AuthProvider {
   isAuthenticated(): Promise<boolean>;
   getUserTier(): Promise<UserTier>;
+  getAccessToken(): Promise<string | null>;
 }
 
 /**
@@ -354,12 +355,23 @@ export class ServerSideKeyService {
     }
 
     this.accessFetchPromise = (async () => {
+      // Get auth token for tier-config request (to get expiration status)
+      const authToken =
+        (await this.authProvider.getAccessToken()) ?? undefined;
+
       // Fetch all required data in parallel
       const [hasAccess, providers, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
         this.getEnabledProviders(),
-        this.tierService.getConfig(),
+        this.tierService.getConfig(authToken),
       ]);
+
+      // Check if access has expired
+      if (this.tierService.isAccessExpired()) {
+        console.log(`${LOG_PREFIX} User access has expired`);
+        this.accessResult = false;
+        return false;
+      }
 
       const tierConfigRequired = !this.hasFullAccess() && tierConfig === null;
       if (hasAccess && providers.length > 0 && !tierConfigRequired) {
@@ -479,6 +491,15 @@ export class ServerSideKeyService {
     }
 
     return this.tierService.getAccessDescription(this.userTier);
+  }
+
+  /**
+   * Get the expiration date for the current user's access.
+   * Returns null if no expiration (lifetime access) or status not available.
+   * Call canUseServerSideKeys() first to prime caches.
+   */
+  getAccessExpirationDate(): Date | null {
+    return this.tierService.getExpirationDate();
   }
 
   // ==========================================================================
