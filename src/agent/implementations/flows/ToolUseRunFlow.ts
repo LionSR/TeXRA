@@ -22,17 +22,6 @@ import {
 // Schema export for serialization reference (runtime uses class instances)
 export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
 
-interface ToolUsePrepareResult<C> {
-  messages: ProviderMessage[];
-  store: AgentSharedStore;
-  shouldSkipCycle: boolean;
-  cycleOptions: ToolUseCycleOptions<C>;
-}
-
-type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
-
-type ToolUseCycleExecResult = NodeExecResult<void>;
-
 /**
  * Tool use run phase - single source of truth for tool-use agent flow phases.
  */
@@ -57,20 +46,9 @@ export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
 export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 /**
- * Runtime state for tool-use agent runs.
- *
- * Schema alignment: This interface corresponds to {@link ToolUseRunStateSchema}
- * for serialization. The runtime uses class instances (AgentRunState, AgentSharedStore)
- * while the schema uses snapshot representations for JSON compatibility.
+ * Schema for ToolUseRunHooks - runtime object with methods.
+ * Uses z.custom for type safety without runtime validation.
  */
-export interface ToolUseRunState<C = unknown> {
-  conversation: ProviderMessage[];
-  cycleOptions: ToolUseCycleOptions<C> | null;
-  shouldSkipCycle: boolean;
-  store: AgentSharedStore | null;
-  runState: AgentRunState;
-}
-
 export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   prepareState(): Promise<{
     messages: ProviderMessage[];
@@ -100,6 +78,21 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 
+/**
+ * Runtime state for tool-use agent runs.
+ *
+ * Schema alignment: This interface corresponds to {@link ToolUseRunStateSchema}
+ * for serialization. The runtime uses class instances (AgentRunState, AgentSharedStore)
+ * while the schema uses snapshot representations for JSON compatibility.
+ */
+export interface ToolUseRunState<C = unknown> {
+  conversation: ProviderMessage[];
+  cycleOptions: ToolUseCycleOptions<C> | null;
+  shouldSkipCycle: boolean;
+  store: AgentSharedStore | null;
+  runState: AgentRunState;
+}
+
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
   BaseToolUseAgent<C>,
   ToolUseRunState<C>,
@@ -107,9 +100,59 @@ export type ToolUseRunShared<C = unknown> = AgentRunShared<
   ToolUseRunHooks<C>
 >;
 
-interface ToolUsePrepareNodePrepResult<C> {
-  hooks: ToolUseRunHooks<C>;
-}
+// ============================================================================
+// Prep Result Schemas - Single source of truth for node prep results
+// ============================================================================
+
+/**
+ * Schema for ToolUsePrepareResult - the result of prepare execution.
+ * Uses z.custom for runtime objects that can't be validated.
+ */
+const createToolUsePrepareResultSchema = <C>() =>
+  z.object({
+    messages: z.custom<ProviderMessage[]>(),
+    store: z.custom<AgentSharedStore>(),
+    shouldSkipCycle: z.boolean(),
+    cycleOptions: z.custom<ToolUseCycleOptions<C>>(),
+  });
+
+type ToolUsePrepareResult<C> = z.infer<
+  ReturnType<typeof createToolUsePrepareResultSchema<C>>
+>;
+
+type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
+
+type ToolUseCycleExecResult = NodeExecResult<void>;
+
+/**
+ * Schema for ToolUsePrepareNode prep result.
+ */
+const createToolUsePrepareNodePrepResultSchema = <C>() =>
+  z.object({
+    hooks: z.custom<ToolUseRunHooks<C>>(),
+  });
+
+type ToolUsePrepareNodePrepResult<C> = z.infer<
+  ReturnType<typeof createToolUsePrepareNodePrepResultSchema<C>>
+>;
+
+/**
+ * Schema for ToolUseCycleNode prep result.
+ */
+const createToolUseCycleNodePrepResultSchema = <C>() =>
+  z.object({
+    hooks: z.custom<ToolUseRunHooks<C>>(),
+    state: z.custom<ToolUseRunState<C>>(),
+    cycleOptions: z.custom<ToolUseCycleOptions<C>>(),
+  });
+
+type ToolUseCycleNodePrepResult<C> = z.infer<
+  ReturnType<typeof createToolUseCycleNodePrepResultSchema<C>>
+>;
+
+// ============================================================================
+// Node Implementations
+// ============================================================================
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(
@@ -162,12 +205,6 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
     return FlowTransition.EXECUTE;
   }
-}
-
-interface ToolUseCycleNodePrepResult<C> {
-  hooks: ToolUseRunHooks<C>;
-  state: ToolUseRunState<C>;
-  cycleOptions: ToolUseCycleOptions<C>;
 }
 
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
