@@ -53,7 +53,7 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): Promise<void> => {
-    const { stream, session } = payload;
+    const { stream, session, isRemote } = payload;
 
     if (!stream) {
       return;
@@ -67,6 +67,12 @@ export function createStreamStatusEvents(
 
     if (session) {
       state.setSessionKindHint(stream, session.agentCategory);
+    }
+
+    // Store isRemote hint so the UI can show the remote indicator
+    // before the full TaskState is set
+    if (isRemote !== undefined) {
+      state.setIsRemoteHint(stream, isRemote);
     }
 
     const currentFilter = state.agentTypeFilter;

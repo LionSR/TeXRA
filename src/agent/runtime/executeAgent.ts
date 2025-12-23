@@ -15,6 +15,7 @@ import {
 import {
   resolveAgent,
   getMultipleName,
+  isRemoteAgent,
   type ResolvedAgent,
 } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
@@ -411,6 +412,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
               bus.emit('setActiveStream', {
                 stream: activeStreamId,
                 session: metadata,
+                isRemote: isRemoteAgent(config.agent),
               });
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 

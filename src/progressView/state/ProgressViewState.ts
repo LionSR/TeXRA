@@ -80,6 +80,14 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
+  /**
+   * Ephemeral remote-agent hints keyed by stream ID.
+   *
+   * When a stream becomes active before its {@link TaskState} is persisted,
+   * progress events populate this map so the UI can immediately show the
+   * remote indicator. Once canonical metadata is stored the entry is cleared.
+   */
+  private _isRemoteHints: Map<StreamTabId, boolean> = new Map();
   private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   /**
    * Ephemeral todos storage keyed by stream ID.
@@ -203,6 +211,19 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  // Remote agent hint management (non-persistent)
+  setIsRemoteHint(streamTabId: StreamTabId, isRemote: boolean): void {
+    this._isRemoteHints.set(streamTabId, isRemote);
+  }
+
+  getIsRemoteHint(streamTabId: StreamTabId): boolean | undefined {
+    return this._isRemoteHints.get(streamTabId);
+  }
+
+  clearIsRemoteHint(streamTabId: StreamTabId): void {
+    this._isRemoteHints.delete(streamTabId);
   }
 
   // Todo management (ephemeral, non-persistent)
@@ -458,6 +479,7 @@ export class ProgressViewState {
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, cloneTaskState(taskState));
     this.clearSessionKindHint(streamTabId);
+    this.clearIsRemoteHint(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
