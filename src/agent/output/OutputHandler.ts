@@ -22,16 +22,17 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 import { DiffStatsManager } from './DiffStatsManager';
 import { FileLineageCalculator } from './FileLineageCalculator';
-import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
-import {
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundFileMapping,
-  type RoundOutput,
-} from './types';
 import { XmlOutputManager } from './XmlOutputManager';
+
+import type { IOutputHandler } from './IOutputHandler';
+import type {
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundFileMapping,
+  RoundOutput,
+} from './types';
 
 interface RoundData {
   outputs: OutputFileInfo[];

@@ -36,6 +36,7 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       enabledProviders: message.enabledProviders || [],
       allowedModels,
       tierConstants: message.tierConstants,
+      accessExpiresAt: message.accessExpiresAt ?? null,
     });
 
     // Update UI
@@ -49,6 +50,7 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
       enabledProviders: message.enabledProviders || [],
       allowedModels,
       tierConstants: message.tierConstants,
+      accessExpiresAt: message.accessExpiresAt ?? null,
     });
   }
 }
