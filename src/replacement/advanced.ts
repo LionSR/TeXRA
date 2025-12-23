@@ -37,8 +37,6 @@ export function applyLatexQuotesFormatting(text: string): string {
     const startIndex = documentMatch.index;
     const endIndex = startIndex + fullMatch.length;
 
-    // logger.debug(CHANNEL, `Processing document block #${documentCount}`);
-
     // Store tikzpicture environments to avoid processing them
     const tikzEnvironments: string[] = [];
     const tikzRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
