@@ -47,7 +47,7 @@
 import { TIER_CONFIG, isModelAllowedForTier } from './models.ts';
 
 // Relay version for debugging deployments
-const RELAY_VERSION = '1.5.0';
+const RELAY_VERSION = '1.6.0';
 
 /**
  * Tier values - MUST match constants in src/auth/config.ts
@@ -81,6 +81,42 @@ function extractModelFromPath(apiPath: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Calculate user access status from profile data.
+ * Used for tier-config response to show expiration warnings in UI.
+ */
+function calculateAccessStatus(
+  tier: string | null,
+  accessExpiresAt: string | null,
+): {
+  tier: string | null;
+  accessExpiresAt: string | null;
+  isExpired: boolean;
+  daysRemaining: number | null;
+} {
+  if (!accessExpiresAt) {
+    // No expiration = lifetime access
+    return {
+      tier,
+      accessExpiresAt: null,
+      isExpired: false,
+      daysRemaining: null,
+    };
+  }
+
+  const expiresAt = new Date(accessExpiresAt);
+  const now = new Date();
+  const diffMs = expiresAt.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  return {
+    tier,
+    accessExpiresAt,
+    isExpired: daysRemaining < 0,
+    daysRemaining,
+  };
 }
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -327,12 +363,55 @@ Deno.serve(async (req: Request) => {
   }
 
   // Handle /tier-config endpoint - returns tier-based model access configuration
-  // This is a public endpoint (no auth required) so clients can cache the config
-  // and show appropriate UI (disabled models, upgrade prompts, etc.)
+  // Public endpoint returns just the config. When authenticated, also returns
+  // the user's access status including expiration info.
   if (
     url.pathname.endsWith('/relay/tier-config') ||
     url.pathname === '/tier-config'
   ) {
+    // Check if user is authenticated to include their access status
+    const jwtToken = extractJwtFromRequest(req);
+    if (jwtToken) {
+      try {
+        const supabaseClient = createClient(
+          supabaseUrl,
+          supabaseAnonKey,
+          {
+            global: { headers: { Authorization: `Bearer ${jwtToken}` } },
+          },
+        );
+
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabaseClient
+            .from('profiles')
+            .select('tier, access_expires_at')
+            .eq('user_id', user.id)
+            .single();
+
+          if (profile) {
+            const userStatus = calculateAccessStatus(
+              profile.tier,
+              profile.access_expires_at,
+            );
+            return new Response(
+              JSON.stringify({
+                ...TIER_CONFIG,
+                userStatus,
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            );
+          }
+        }
+      } catch {
+        // If auth fails, fall through to public response
+      }
+    }
+
+    // Public response (no auth or auth failed)
     return new Response(JSON.stringify(TIER_CONFIG), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -438,10 +517,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 5. Check user tier (Ultra or Max)
+    // 5. Check user tier and access expiration
     const { data: profile, error: profileError } = await userClient
       .from('profiles')
-      .select('tier')
+      .select('tier, access_expires_at')
       .eq('user_id', user.id)
       .single();
 
@@ -456,6 +535,26 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       );
+    }
+
+    // Check if researcher access has expired
+    // null access_expires_at = lifetime access (special grants only)
+    if (profile.access_expires_at) {
+      const expiresAt = new Date(profile.access_expires_at);
+      if (expiresAt < new Date()) {
+        return new Response(
+          JSON.stringify({
+            _relay: RELAY_VERSION,
+            error: 'Your researcher access has expired. Please contact support to renew.',
+            expired: true,
+            expiresAt: profile.access_expires_at,
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        );
+      }
     }
 
     // Default to 'free' if no tier is set (authenticated but no subscription)

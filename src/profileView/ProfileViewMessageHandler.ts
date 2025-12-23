@@ -116,6 +116,9 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       ? serverSideKeyService.getAllowedModelsForCurrentUser()
       : [];
 
+    // Get access expiration date (call after canUseServerSideKeys primes caches)
+    const accessExpiresAt = serverSideKeyService.getAccessExpirationDate();
+
     await webview.postMessage({
       command: PROFILE_VIEW_COMMANDS.UPDATE_PROFILE,
       authenticated: true,
@@ -134,6 +137,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         ultra: ULTRA_TIER,
         max: MAX_TIER,
       },
+      // Access expiration date (null = no expiration / lifetime access)
+      accessExpiresAt: accessExpiresAt?.toISOString() ?? null,
     });
   }
 
