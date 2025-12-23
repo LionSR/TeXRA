@@ -73,8 +73,9 @@ const FREE_TIER = 'free';
  */
 function extractModelFromPath(apiPath: string): string | null {
   // Google GenAI pattern: /models/{model-name}:{method}
+  // Also handles /v1beta/models/... and /v1/models/... patterns
   // Note: apiPath includes leading slash from parseRequestPath
-  const googleMatch = apiPath.match(/^\/models\/([^:]+)/);
+  const googleMatch = apiPath.match(/^(?:\/v1(?:beta)?)?\/models\/([^:]+)/);
   if (googleMatch) {
     return googleMatch[1];
   }
