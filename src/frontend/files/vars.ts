@@ -18,8 +18,8 @@ export async function setVarFromFile(
   filePath: string,
   varName: string,
   userVars: Record<string, any>,
-  logger: AgentLogger,
-  source: string,
+  _logger: AgentLogger,
+  _source: string,
   absolute: boolean = false,
 ): Promise<boolean> {
   try {

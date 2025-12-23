@@ -1,12 +1,8 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
-import { WorkspaceFS } from './workspaceFS';
 import type { FileLocation } from './taskRunStorage';
 
 const CHANNEL = 'flexibleFS';

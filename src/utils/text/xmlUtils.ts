@@ -8,7 +8,6 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
-import { K_SLICE } from '@utils/config';
 import { isString, isObject } from '@utils/core';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
@@ -97,7 +96,6 @@ function convertLatexToMarkdown(latex: string): string {
 }
 
 function detectInputFormat(text: string): outputFormat {
-  // const htmlRegex = /<[^>]+>/; // this is wrong, as we might have some xml tags to separte scratchpad
   if (LATEX_PATTERN.test(text)) {
     return outputFormat.LaTeX;
   } else if (HTML_PATTERN.test(text)) {
@@ -136,7 +134,6 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 
   // If already markdown, return as-is
   if (format === outputFormat.MARKDOWN) {
-    // return text.trim();
     return text;
   }
 
@@ -326,7 +323,8 @@ export function extractMultipleTextFromTag(
   ): Array<{ content: string; name: string }> => {
     const results: Array<{ content: string; name: string }> = [];
     // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
-    const documentRegex = /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
+    const documentRegex =
+      /<document[^>]*name="([^"]*)"[^>]*>(.*?)<\/document>/gs;
 
     let documentMatch;
     while ((documentMatch = documentRegex.exec(content)) !== null) {
