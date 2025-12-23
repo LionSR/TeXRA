@@ -161,22 +161,17 @@ Available to all authenticated users.
 
 | Model Name   | Full Name                         | Provider  | Pricing (in/out per 1M) |
 | ------------ | --------------------------------- | --------- | ----------------------- |
-| `haiku3`     | claude-3-haiku                    | Anthropic | $0.25/$1.25             |
-| `haiku35`    | claude-3-5-haiku                  | Anthropic | $0.80/$4.00             |
 | `gpt5-`      | gpt-5-mini                        | OpenAI    | $0.25/$2.00             |
 | `gpt5--`     | gpt-5-nano                        | OpenAI    | $0.05/$0.40             |
 | `gpt41-`     | gpt-4.1-mini                      | OpenAI    | $0.40/$1.60             |
 | `gpt41--`    | gpt-4.1-nano                      | OpenAI    | $0.10/$0.40             |
 | `gpt4o-`     | gpt-4o-mini                       | OpenAI    | $0.15/$0.60             |
 | `gemini3f`   | gemini-3-flash-preview            | Google    | $0.30/$2.50             |
-| `gemini25f`  | gemini-2.5-flash                  | Google    | $0.30/$2.50             |
-| `gemini25f-` | gemini-2.5-flash-lite             | Google    | $0.10/$0.40             |
 | `deepseek`   | deepseek-chat (V3.2)              | Deepseek  | $0.28/$0.42             |
 | `deepseekT`  | deepseek-reasoner (V3.2 Thinking) | Deepseek  | $0.28/$0.42             |
 | `grok3-`     | grok-3-mini-beta                  | xAI       | $0.30/$0.50             |
 | `kimi128k`   | moonshot-v1-128k                  | Moonshot  | $0.28/$1.12             |
 | `kimi128kv`  | moonshot-v1-128k-vision           | Moonshot  | $0.35/$1.40             |
-| `kimit`      | kimi-thinking-preview             | Moonshot  | $0.42/$1.68             |
 | `kimi2`      | kimi-k2-0905-preview              | Moonshot  | $0.60/$2.50             |
 | `kimi2T`     | kimi-k2-thinking                  | Moonshot  | $0.56/$2.22             |
 
@@ -208,9 +203,7 @@ Available to Ultra tier subscribers (includes all lower tier models).
 | `gpt52pro` | gpt-5.2-pro                | OpenAI    | $21.00/$168.00          |
 | `gpt5`     | gpt-5                      | OpenAI    | $1.25/$10.00            |
 | `gpt51`    | gpt-5.1                    | OpenAI    | $1.25/$10.00            |
-| `gpt52`    | gpt-5.2                    | OpenAI    | $1.75/$14.00            |
-| `dsr1`     | deepseek-r1                | Deepseek  | $4.00/$4.00             |
-| `grok3`    | grok-3-beta                | xAI       | $3.00/$15.00            |
+| `gpt52`    | gpt-5.2                    | OpenAI    | $1.75/$14.00            |         |
 | `grok4`    | grok-4-0709                | xAI       | $3.00/$15.00            |
 
 ## Implementation Details
