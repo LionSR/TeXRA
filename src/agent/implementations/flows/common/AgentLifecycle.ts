@@ -20,13 +20,22 @@ export const AgentLifecycleStatusSchema = z.enum([
 export type AgentLifecycleStatus = z.infer<typeof AgentLifecycleStatusSchema>;
 
 /**
- * Snapshot for serialization - plain object representation.
+ * Schema for lifecycle snapshot - single source of truth.
+ * Phase is a generic string to allow different phase enums per agent type.
  */
-export interface AgentLifecycleSnapshot<Phase extends string> {
-  phase: Phase;
-  status: AgentLifecycleStatus;
-  error?: unknown;
-}
+export const AgentLifecycleSnapshotSchema = z.object({
+  phase: z.string(),
+  status: AgentLifecycleStatusSchema,
+  error: z.unknown().optional(),
+});
+
+/**
+ * Snapshot for serialization - derived from schema.
+ */
+export type AgentLifecycleSnapshot<Phase extends string = string> = Omit<
+  z.infer<typeof AgentLifecycleSnapshotSchema>,
+  'phase'
+> & { phase: Phase };
 
 /**
  * State machine for agent lifecycle management.
@@ -130,14 +139,17 @@ export class AgentLifecycle<Phase extends string> {
   }
 
   /**
-   * Create from serialized snapshot.
+   * Create from serialized snapshot with validation.
+   * @throws {z.ZodError} if the snapshot data is invalid
    */
   static fromSnapshot<P extends string>(
     data: AgentLifecycleSnapshot<P>,
   ): AgentLifecycle<P> {
-    const lifecycle = new AgentLifecycle(data.phase);
-    lifecycle._status = data.status;
-    lifecycle._error = data.error;
+    // Validate the snapshot data
+    const validated = AgentLifecycleSnapshotSchema.parse(data);
+    const lifecycle = new AgentLifecycle(validated.phase as P);
+    lifecycle._status = validated.status;
+    lifecycle._error = validated.error;
     return lifecycle;
   }
 }
