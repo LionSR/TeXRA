@@ -9,6 +9,12 @@
  * - free: Budget models only (under $1/M input)
  * - Max: Mid-tier models ($1-3/M) + all free tier models
  * - Ultra: All models including premium ($3+/M input)
+ *
+ * ACCESS EXPIRATION:
+ * - All researcher access has an expiration date to prevent abuse
+ * - access_expires_at: null = lifetime access (special grants only)
+ * - Expired access returns 403 from relay with expired flag
+ * - Tier info preserved when expired for easy reactivation
  */
 
 import { z } from 'zod';
@@ -16,6 +22,22 @@ import { UserTierSchema, type UserTier } from '../config';
 
 // Re-export for convenience
 export { UserTierSchema, type UserTier };
+
+/**
+ * Schema for user access status including expiration.
+ * Returned by the relay /tier-config endpoint for authenticated users.
+ */
+export const UserAccessStatusSchema = z.object({
+  /** User's subscription tier */
+  tier: UserTierSchema.nullable(),
+  /** When access expires (ISO string), null = no expiration */
+  accessExpiresAt: z.string().nullable(),
+  /** Whether access is currently expired */
+  isExpired: z.boolean(),
+  /** Days until expiration (negative if expired, null if no expiration) */
+  daysRemaining: z.number().nullable(),
+});
+export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
 
 /**
  * Schema for a single tier's model access configuration.
