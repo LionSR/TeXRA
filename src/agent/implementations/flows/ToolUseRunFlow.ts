@@ -14,7 +14,6 @@ import {
   createAgentRunFlow,
   createAgentFinalizeNode,
   AgentLifecycle,
-  runNodeExecution,
   type AgentRunHooks,
   type AgentRunShared,
   type NodeExecResult,
@@ -118,14 +117,18 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async exec(
     shared: ToolUseRunShared<C>,
   ): Promise<ToolUsePrepareExecResult<C>> {
-    return runNodeExecution(async () => {
+    try {
       const prepared = await shared.hooks.prepareState();
       const cycleOptions = shared.hooks.buildCycleOptions(prepared.store);
       return {
-        ...prepared,
-        cycleOptions,
-      } satisfies ToolUsePrepareResult<C>;
-    });
+        result: {
+          ...prepared,
+          cycleOptions,
+        } satisfies ToolUsePrepareResult<C>,
+      };
+    } catch (error) {
+      return { error };
+    }
   }
 
   async post(
@@ -163,7 +166,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     const { hooks, state } = shared;
     const cycleOptions = state.cycleOptions!;
 
-    return runNodeExecution(async () => {
+    try {
       while (true) {
         if (!state.shouldSkipCycle) {
           if (!state.store) {
@@ -177,7 +180,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
         }
 
         if (hooks.checkInterruption()) {
-          return;
+          return { result: undefined };
         }
 
         if (hooks.hasQueuedFollowUp()) {
@@ -188,7 +191,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
         const followUp = await hooks.waitForFollowUp();
         if (!followUp || hooks.checkInterruption()) {
-          return;
+          return { result: undefined };
         }
 
         await hooks.markRunning();
@@ -199,7 +202,9 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
         );
         state.conversation = [...updatedMessages];
       }
-    });
+    } catch (error) {
+      return { error };
+    }
   }
 
   async post(
