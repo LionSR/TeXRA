@@ -30,6 +30,11 @@ export interface AgentInitNodeConfig<Shared extends AgentInitShared<any, any>> {
 
 type AgentInitExecResult = NodeExecVoidResult;
 
+interface AgentInitPrepResult<Shared extends AgentInitShared<any, any>> {
+  hooks: Shared['hooks'];
+  shared: Shared; // Needed for beforeInitialize callback
+}
+
 export class AgentInitNode<
   Shared extends AgentInitShared<any, any>,
 > extends BaseNode<Shared> {
@@ -37,18 +42,20 @@ export class AgentInitNode<
     super();
   }
 
-  async prep(shared: Shared): Promise<Shared> {
-    shared.lifecycle.begin(this.config.phase);
-    return shared;
+  async prep(shared: Shared): Promise<AgentInitPrepResult<Shared>> {
+    // Pure extraction - no side effects
+    return { hooks: shared.hooks, shared };
   }
 
-  async exec(shared: Shared): Promise<AgentInitExecResult> {
+  async exec(
+    prepRes: AgentInitPrepResult<Shared>,
+  ): Promise<AgentInitExecResult> {
     try {
-      const runStage = await shared.hooks.start();
-      await shared.hooks.init(runStage);
+      const runStage = await prepRes.hooks.start();
+      await prepRes.hooks.init(runStage);
       if (this.config.beforeInitialize) {
         try {
-          await this.config.beforeInitialize(shared);
+          await this.config.beforeInitialize(prepRes.shared);
         } catch (hookError) {
           const contextualError =
             hookError instanceof Error
@@ -64,7 +71,7 @@ export class AgentInitNode<
           throw contextualError;
         }
       }
-      await shared.hooks.initializeClient();
+      await prepRes.hooks.initializeClient();
       return {};
     } catch (error) {
       return { error };
@@ -73,9 +80,12 @@ export class AgentInitNode<
 
   async post(
     shared: Shared,
-    _prepRes: Shared,
+    _prepRes: AgentInitPrepResult<Shared>,
     execRes: AgentInitExecResult,
   ): Promise<string | undefined> {
+    // Lifecycle transition at start of post
+    shared.lifecycle.begin(this.config.phase);
+
     if (execRes.error) {
       shared.lifecycle.fail(execRes.error);
       if (this.config.onFailure) {
