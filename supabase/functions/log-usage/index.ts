@@ -309,6 +309,30 @@ Deno.serve(async (req: Request) => {
       ? createClient(supabaseUrl, supabaseServiceKey)
       : userClient;
 
+    // Check for duplicate batch (idempotency for retries)
+    const { data: existingBatch } = await adminClient
+      .from('usage_logs')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('batch_id', batch.batchId)
+      .limit(1);
+
+    if (existingBatch && existingBatch.length > 0) {
+      // Batch already processed - return success to prevent client retries
+      return new Response(
+        JSON.stringify({
+          _version: LOG_USAGE_VERSION,
+          success: true,
+          accepted: validEntries.length,
+          message: 'Batch already processed (deduplicated)',
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     const rows = validEntries.map((entry) => ({
       user_id: user.id,
       timestamp: entry.timestamp,
