@@ -58,6 +58,9 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   enabled: true,
 };
 
+/** Maximum queue size to prevent memory leaks if flush fails repeatedly */
+const MAX_QUEUE_SIZE = 1000;
+
 /**
  * Singleton service for logging API usage to the backend.
  *
@@ -97,6 +100,12 @@ class UsageLogServiceImpl {
   log(entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion'>): void {
     if (!this.config.enabled) {
       return;
+    }
+
+    // Prevent memory leaks if flush fails repeatedly
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      logger.warn(CHANNEL, 'Queue full, dropping oldest entry');
+      this.queue.shift();
     }
 
     const fullEntry: UsageLogEntry = {
