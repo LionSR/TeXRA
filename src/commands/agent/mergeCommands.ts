@@ -24,7 +24,7 @@ const CHANNEL = 'MergeCommands';
 logger.initialize(CHANNEL);
 
 async function handleMerge(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
   inputFile: string,
   baseFile: string,
   editedFile: string,

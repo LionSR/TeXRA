@@ -1,8 +1,42 @@
 /**
- * Relay Edge Function - Server-side API key proxy for Ultra users.
+ * Relay Edge Function - Server-side API key proxy for authenticated users.
  *
- * This function acts as a transparent proxy for AI API requests, allowing Ultra
- * tier users to access AI models without providing their own API keys.
+ * ============================================================================
+ * RESEARCHER ACCESS PROGRAM
+ * ============================================================================
+ * This relay provides server-side API keys as a convenience for researchers
+ * and academics. Users can ALWAYS choose between:
+ * - Server-side keys (no API key needed, subject to fair use)
+ * - Their own API keys (full control, no restrictions)
+ *
+ * FAIR USE POLICY:
+ * - Personal research and academic use only
+ * - No commercial use or production deployments
+ * - No automated/bot access or bulk operations
+ * - Excessive usage may result in account suspension
+ *
+ * Users can toggle between server and personal API keys in their profile.
+ * ============================================================================
+ *
+ * DATABASE REQUIREMENTS:
+ * The profiles table must have:
+ * - tier: text (values: 'Ultra', 'Max', 'free')
+ * - access_expires_at: timestamptz (null = no expiration / lifetime access)
+ *
+ * To add expiration column:
+ *   ALTER TABLE profiles ADD COLUMN access_expires_at timestamptz;
+ *
+ * To expire/blacklist a user:
+ *   UPDATE profiles SET access_expires_at = NOW() WHERE id = '<user-id>';
+ *
+ * To grant time-limited access:
+ *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days' WHERE id = '<user-id>';
+ * ============================================================================
+ *
+ * TIER HIERARCHY (cumulative access):
+ * - Ultra: All models including premium ($3+/M input)
+ * - Max: Mid-tier models ($1-3/M) + all free tier models
+ * - free: Budget models only (under $1/M input)
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -14,7 +48,8 @@
  *
  * Endpoints:
  * - GET /relay/providers - Returns list of providers with configured API keys (public)
- * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra tier)
+ * - GET /relay/tier-config - Returns tier-based model access configuration (public)
+ * - POST /relay/{provider}/{...path} - Proxy request to provider (requires Ultra/Max tier)
  *
  * Example: /relay/openai/v1/chat/completions
  *
@@ -24,26 +59,43 @@
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
-// Relay version for debugging deployments
-const RELAY_VERSION = '1.3.3';
+import { Hono } from 'jsr:@hono/hono@4.11.1';
+import { cors } from 'jsr:@hono/hono@4.11.1/cors';
+import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { TIER_CONFIG, isModelAllowedForTier } from './models.ts';
 
-/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
+// =============================================================================
+// Constants
+// =============================================================================
+
+const RELAY_VERSION = '1.7.0';
+
+/**
+ * Tier values - MUST match constants in src/auth/config.ts
+ *
+ * CROSS-REFERENCE: These are duplicated because the relay runs in Deno
+ * and cannot import from the TypeScript source. Keep in sync with:
+ * - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
+ * - Database: profiles.tier column values
+ */
 const ULTRA_TIER = 'Ultra';
+const FREE_TIER = 'free';
 
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+// Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
+const UPSTREAM_TIMEOUT_MS = 390000;
 
-// Provider configurations
-//
-// IMPORTANT: This list MUST stay synchronized with:
-// - SERVER_SIDE_PROVIDERS in src/auth/serverSideKeyAccess.ts
-// - Provider documentation in docs/supabase/RELAY_SETUP.md
-//
-// Note: baseUrl should NOT include trailing paths like /v1 since the full path
-// comes from the client request. The relay URL structure is:
-// /relay/{provider}/{...apiPath}
-// Example: /relay/openai/v1/chat/completions -> https://api.openai.com/v1/chat/completions
+// =============================================================================
+// Types
+// =============================================================================
 
-/** Supported provider keys for compile-time safety when adding providers. */
+type AuthType = 'bearer' | 'x-api-key' | 'x-goog-api-key';
+
+interface ProviderConfig {
+  baseUrl: string;
+  envKey: string;
+  authType: AuthType;
+}
+
 type ProviderKey =
   | 'openai'
   | 'anthropic'
@@ -53,509 +105,475 @@ type ProviderKey =
   | 'moonshot'
   | 'dashscope';
 
-interface ProviderConfig {
-  baseUrl: string;
-  authType: 'bearer' | 'x-api-key' | 'x-goog-api-key';
-  envKey: string;
-}
+// =============================================================================
+// Provider Configuration
+// =============================================================================
 
 const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
   openai: {
     baseUrl: 'https://api.openai.com',
-    authType: 'bearer',
     envKey: 'OPENAI_API_KEY',
+    authType: 'bearer',
   },
   anthropic: {
     baseUrl: 'https://api.anthropic.com',
-    authType: 'x-api-key',
     envKey: 'ANTHROPIC_API_KEY',
+    authType: 'x-api-key',
   },
   google: {
     baseUrl: 'https://generativelanguage.googleapis.com',
-    authType: 'x-goog-api-key',
     envKey: 'GOOGLE_API_KEY',
+    authType: 'x-goog-api-key',
   },
   xai: {
-    // Note: xAI API expects /v1 in the path, which comes from the client
     baseUrl: 'https://api.x.ai',
-    authType: 'bearer',
     envKey: 'XAI_API_KEY',
+    authType: 'bearer',
   },
   deepseek: {
     baseUrl: 'https://api.deepseek.com',
-    authType: 'bearer',
     envKey: 'DEEPSEEK_API_KEY',
+    authType: 'bearer',
   },
   moonshot: {
-    // Note: Moonshot API expects /v1 in the path, which comes from the client
     baseUrl: 'https://api.moonshot.cn',
-    authType: 'bearer',
     envKey: 'MOONSHOT_API_KEY',
+    authType: 'bearer',
   },
   dashscope: {
-    // Note: DashScope API expects /compatible-mode/v1 in the path, which comes from the client
     baseUrl: 'https://dashscope-intl.aliyuncs.com',
-    authType: 'bearer',
     envKey: 'DASHSCOPE_API_KEY',
+    authType: 'bearer',
   },
 };
 
-/** Type guard to check if a string is a valid provider key. */
-function isProviderKey(key: string): key is ProviderKey {
-  return key in PROVIDER_CONFIGS;
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+function getProviderConfig(provider: string): ProviderConfig | null {
+  return PROVIDER_CONFIGS[provider as ProviderKey] || null;
 }
 
-/** Get provider config with type safety. Returns undefined for unknown providers. */
-function getProviderConfig(provider: string): ProviderConfig | undefined {
-  return isProviderKey(provider) ? PROVIDER_CONFIGS[provider] : undefined;
+function getEnabledProviders(): string[] {
+  return Object.entries(PROVIDER_CONFIGS)
+    .filter(([, config]) => Deno.env.get(config.envKey))
+    .map(([name]) => name);
 }
-
-// CORS headers
-// Note: VS Code extensions make requests from the extension host (Node.js process),
-// not from a browser context, so Origin headers aren't typically present.
-// The wildcard is used for:
-// 1. Development/testing scenarios
-// 2. Webview contexts (which have origins like vscode-webview://*)
-// Security is enforced via JWT validation, not CORS origin checking.
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  // Allow common SDK headers from all providers
-  'Access-Control-Allow-Headers': [
-    // Standard headers
-    'authorization',
-    'content-type',
-    'accept',
-    // TeXRA auth headers
-    'x-texra-auth',
-    'x-client-info',
-    'apikey',
-    // Anthropic SDK headers
-    'x-api-key',
-    'anthropic-version',
-    'anthropic-beta',
-    'x-stainless-lang',
-    'x-stainless-package-version',
-    'x-stainless-os',
-    'x-stainless-arch',
-    'x-stainless-runtime',
-    'x-stainless-runtime-version',
-    // Google SDK headers
-    'x-goog-api-key',
-    'x-goog-api-client',
-    // OpenAI SDK headers
-    'openai-beta',
-    'openai-organization',
-    'openai-project',
-  ].join(', '),
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
 
 /**
  * Extract JWT token from request headers.
- *
- * SDKs send their credentials in provider-specific headers. When the user's JWT
- * is passed as the "apiKey" to the SDK, it arrives here in these headers.
- *
- * Priority order:
- * 1. Custom header: x-texra-auth: {token} (explicit TeXRA auth)
- * 2. Authorization: Bearer {token} (OpenAI SDK)
- * 3. x-api-key: {token} (Anthropic SDK)
- * 4. x-goog-api-key: {token} (Google SDK)
- *
- * Note: Query parameters were intentionally removed for security (they appear
- * in server logs, browser history, and referrer headers).
+ * SDKs use provider-specific headers, not standard Authorization.
  */
 function extractJwtFromRequest(req: Request): string | null {
-  // 1. Check custom TeXRA auth header (explicit auth for edge cases)
-  const texraAuth = req.headers.get('x-texra-auth');
-  if (texraAuth) {
-    return texraAuth;
+  // OpenAI SDK: Authorization: Bearer {jwt}
+  const authHeader = req.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
   }
 
-  // 2. Check Authorization header (OpenAI style)
-  const authHeader = req.headers.get('Authorization');
-  if (authHeader) {
-    // Handle "Bearer {token}" format
-    if (authHeader.startsWith('Bearer ')) {
-      return authHeader.substring(7);
-    }
-    // Handle raw token
-    return authHeader;
+  // Anthropic SDK: x-api-key: {jwt}
+  const anthropicKey = req.headers.get('x-api-key');
+  if (anthropicKey) {
+    return anthropicKey;
   }
 
-  // 3. Check x-api-key (Anthropic style)
-  const xApiKey = req.headers.get('x-api-key');
-  if (xApiKey) {
-    return xApiKey;
-  }
-
-  // 4. Check x-goog-api-key (Google style)
-  const googApiKey = req.headers.get('x-goog-api-key');
-  if (googApiKey) {
-    return googApiKey;
+  // Google SDK: x-goog-api-key: {jwt}
+  const googleKey = req.headers.get('x-goog-api-key');
+  if (googleKey) {
+    return googleKey;
   }
 
   return null;
 }
 
-// Path prefix constant for URL parsing
-const RELAY_PATH_PREFIX = '/relay/';
-
 /**
- * Get list of providers that have API keys configured.
- * Used by the /providers endpoint to inform clients which providers are available.
+ * Extract model name from URL path for providers that embed it there.
+ * Google GenAI SDK uses paths like /models/gemini-2.5-flash:generateContent
+ * or /v1beta/models/gemini-2.5-flash:generateContent
  */
-function getEnabledProviders(): string[] {
-  return Object.entries(PROVIDER_CONFIGS)
-    .filter(([_, config]) => {
-      const apiKey = Deno.env.get(config.envKey);
-      return apiKey && apiKey.length > 0;
-    })
-    .map(([provider]) => provider);
+function extractModelFromPath(apiPath: string): string | null {
+  const match = apiPath.match(/^(?:\/v1(?:beta)?)?\/models\/([^:]+)/);
+  return match ? match[1] : null;
 }
 
 /**
- * Parse the URL path to extract provider and API path.
- *
- * Format: /relay/{provider}/{...apiPath}
- * Note: Supabase Edge Functions receive paths like /functions/v1/relay/...
+ * Calculate access status for a user based on their tier and expiration date.
  */
-function parseRequestPath(pathname: string): {
-  provider: string;
-  apiPath: string;
-} | null {
-  // Find /relay/ in the path (handles /functions/v1/relay/... prefix from Supabase)
-  const relayIndex = pathname.indexOf(RELAY_PATH_PREFIX);
-  if (relayIndex === -1) {
-    return null;
+function calculateAccessStatus(
+  tier: string | null,
+  accessExpiresAt: string | null,
+): {
+  tier: string | null;
+  accessExpiresAt: string | null;
+  isExpired: boolean;
+  daysRemaining: number | null;
+} {
+  if (!accessExpiresAt) {
+    return {
+      tier,
+      accessExpiresAt: null,
+      isExpired: false,
+      daysRemaining: null,
+    };
   }
 
-  // Extract everything after /relay/
-  const withoutPrefix = pathname.substring(
-    relayIndex + RELAY_PATH_PREFIX.length,
+  const expiresAt = new Date(accessExpiresAt);
+  const now = new Date();
+  const diffMs = expiresAt.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const isExpired = daysRemaining <= 0;
+
+  return {
+    tier,
+    accessExpiresAt,
+    isExpired,
+    daysRemaining,
+  };
+}
+
+/**
+ * Create a JSON error response with relay metadata.
+ */
+function jsonError(
+  message: string,
+  status: number,
+  extra?: Record<string, unknown>,
+): Response {
+  return new Response(
+    JSON.stringify({ _relay: RELAY_VERSION, error: message, ...extra }),
+    {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    },
   );
-  const parts = withoutPrefix.split('/');
-
-  if (parts.length < 1 || !parts[0]) {
-    return null;
-  }
-
-  const provider = parts[0].toLowerCase();
-  const apiPath = '/' + parts.slice(1).join('/');
-  return { provider, apiPath };
 }
 
-Deno.serve(async (req: Request) => {
-  const url = new URL(req.url);
+// =============================================================================
+// Hono App
+// =============================================================================
 
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+const app = new Hono().basePath('/relay');
 
-  // Handle /providers endpoint - returns list of providers with configured API keys
-  // This is a public endpoint (no auth required) so clients know which providers
-  // are available before attempting to use them.
-  if (
-    url.pathname.endsWith('/relay/providers') ||
-    url.pathname === '/providers'
-  ) {
-    const enabledProviders = getEnabledProviders();
-    return new Response(
-      JSON.stringify({
-        _relay: RELAY_VERSION,
-        providers: enabledProviders,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
-    );
-  }
-
-  try {
-    // 1. Parse the request path
-    const parsed = parseRequestPath(url.pathname);
-    if (!parsed) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Invalid path. Expected: /relay/{provider}/{apiPath}',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    const { provider, apiPath } = parsed;
-
-    // 2. Validate provider
-    const providerConfig = getProviderConfig(provider);
-    if (!providerConfig) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: `Unsupported provider: ${provider}`,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 3. Extract JWT token from headers
-    const jwtToken = extractJwtFromRequest(req);
-    if (!jwtToken) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Missing authorization token',
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 4. Validate user and check tier
-    //
-    // SECURITY MODEL:
-    // - Use SUPABASE_ANON_KEY (not service role) so RLS policies apply
-    // - Pass user's JWT in Authorization header for authentication
-    // - auth.getUser() validates the JWT and returns the authenticated user
-    // - Profile query is protected by RLS: users can only read their own profile
-    //
-    // This provides defense-in-depth: even if there's a bug in our filtering,
-    // RLS prevents users from accessing other users' data.
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Missing required Supabase environment variables');
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Server configuration error',
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // Create client with the user's JWT for authentication
-    // RLS policies will apply based on the authenticated user
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${jwtToken}` } },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Invalid or expired token',
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 5. Check user tier is Ultra
-    const { data: profile, error: profileError } = await userClient
-      .from('profiles')
-      .select('tier')
-      .eq('user_id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Profile not found',
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    if (profile.tier !== ULTRA_TIER) {
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: 'Ultra tier required for server-side API keys',
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 6. Get server-side API key
-    const apiKey = Deno.env.get(providerConfig.envKey);
-    if (!apiKey) {
-      console.error(`[RELAY] API key not configured: ${providerConfig.envKey}`);
-      return new Response(
-        JSON.stringify({
-          _relay: RELAY_VERSION,
-          error: `API key not configured for ${provider}`,
-        }),
-        {
-          status: 503,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    // 7. Build target URL (include query string if present)
-    const targetUrl = `${providerConfig.baseUrl}${apiPath}${url.search}`;
-
-    // 8. Prepare headers for upstream request
-    // Forward all client headers except those we need to modify or skip
-    const upstreamHeaders = new Headers();
-
-    // Headers to skip (hop-by-hop, security-sensitive, or relay-specific)
-    const SKIP_HEADERS = new Set([
-      'host',
-      'connection',
-      'keep-alive',
-      'transfer-encoding',
-      'te',
-      'trailer',
-      'upgrade',
-      'proxy-authorization',
-      'proxy-connection',
-      // Auth headers we'll replace with real API key
+// CORS middleware
+app.use(
+  '*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: [
       'authorization',
       'x-api-key',
       'x-goog-api-key',
-      // TeXRA-specific headers that shouldn't go upstream
-      'x-texra-auth',
       'x-client-info',
-      'apikey', // Supabase's anon key header
-    ]);
+      'apikey',
+      'content-type',
+      'anthropic-version',
+      'anthropic-beta',
+      'x-stainless-lang',
+      'x-stainless-package-version',
+      'x-stainless-os',
+      'x-stainless-arch',
+      'x-stainless-runtime',
+      'x-stainless-runtime-version',
+    ],
+    exposeHeaders: ['content-length', 'content-type', 'x-request-id'],
+    maxAge: 86400,
+  }),
+);
 
-    // Copy all client headers except the ones we skip
-    req.headers.forEach((value, key) => {
-      if (!SKIP_HEADERS.has(key.toLowerCase())) {
-        upstreamHeaders.set(key, value);
-      }
-    });
+// =============================================================================
+// Public Routes
+// =============================================================================
 
-    // Set auth header based on provider (replaces any client auth)
-    if (providerConfig.authType === 'bearer') {
-      upstreamHeaders.set('Authorization', `Bearer ${apiKey}`);
-    } else if (providerConfig.authType === 'x-api-key') {
-      upstreamHeaders.set('x-api-key', apiKey);
-      // Ensure anthropic-version is set (required by Anthropic API)
-      if (!upstreamHeaders.has('anthropic-version')) {
-        upstreamHeaders.set('anthropic-version', '2023-06-01');
-      }
-    } else if (providerConfig.authType === 'x-goog-api-key') {
-      upstreamHeaders.set('x-goog-api-key', apiKey);
-    }
+/**
+ * GET /relay/providers - List of providers with configured API keys
+ */
+app.get('/providers', (c) => {
+  return c.json({ _relay: RELAY_VERSION, providers: getEnabledProviders() });
+});
 
-    // 9. Forward request to provider with timeout
-    // Use 390s timeout to maximize compatibility with Supabase paid plans (400s wall clock limit)
-    // Note: Free plans have 150s limit - thinking models may timeout on free tier
-    const UPSTREAM_TIMEOUT_MS = 390000;
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(
-      () => abortController.abort(),
-      UPSTREAM_TIMEOUT_MS,
-    );
+/**
+ * GET /relay/tier-config - Tier-based model access configuration
+ * Returns enabled providers (with API keys) instead of all supported providers.
+ * When authenticated, also includes user's access status.
+ */
+app.get('/tier-config', async (c) => {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const jwtToken = extractJwtFromRequest(c.req.raw);
 
-    let upstreamResponse: Response;
+  // Override static providers list with actually enabled providers
+  const config = { ...TIER_CONFIG, providers: getEnabledProviders() };
+
+  // Try to include user status if authenticated
+  if (jwtToken && supabaseUrl && supabaseAnonKey) {
     try {
-      upstreamResponse = await fetch(targetUrl, {
-        method: req.method,
-        headers: upstreamHeaders,
-        body: req.method !== 'GET' ? req.body : undefined,
-        signal: abortController.signal,
+      const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${jwtToken}` } },
       });
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        return new Response(
-          JSON.stringify({
-            _relay: RELAY_VERSION,
-            error: 'Upstream request timed out',
-          }),
-          {
-            status: 504,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          },
-        );
-      }
-      throw error;
-    }
-    clearTimeout(timeoutId);
 
-    // Log upstream errors server-side, but pass through original response to SDKs
-    // This preserves the provider's error format (error.message, error.type, etc.)
-    // so SDKs can parse and display meaningful error messages to users.
-    if (upstreamResponse.status >= 400) {
-      console.error(
-        `[RELAY] Upstream error: ${provider} ${upstreamResponse.status}`,
+      const {
+        data: { user },
+      } = await supabaseClient.auth.getUser();
+
+      if (user) {
+        const { data: profile } = await supabaseClient
+          .from('profiles')
+          .select('tier, access_expires_at')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profile) {
+          const userStatus = calculateAccessStatus(
+            profile.tier,
+            profile.access_expires_at,
+          );
+          return c.json({ ...config, userStatus });
+        }
+      }
+    } catch {
+      // Fall through to public response
+    }
+  }
+
+  return c.json(config);
+});
+
+// =============================================================================
+// Provider Proxy Route
+// =============================================================================
+
+/**
+ * ALL /relay/:provider/* - Proxy requests to upstream providers
+ */
+app.all('/:provider{[^/]+}/*', async (c) => {
+  const provider = c.req.param('provider').toLowerCase();
+  const apiPath = '/' + c.req.path.split('/').slice(3).join('/');
+
+  // 1. Validate provider
+  const providerConfig = getProviderConfig(provider);
+  if (!providerConfig) {
+    return jsonError(`Unsupported provider: ${provider}`, 400);
+  }
+
+  // 2. Extract JWT token
+  const jwtToken = extractJwtFromRequest(c.req.raw);
+  if (!jwtToken) {
+    return jsonError('Missing authorization token', 401);
+  }
+
+  // 3. Get Supabase config
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing required Supabase environment variables');
+    return jsonError('Server configuration error', 500);
+  }
+
+  // 4. Validate user and check tier
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${jwtToken}` } },
+  });
+
+  const {
+    data: { user },
+    error: userError,
+  } = await userClient.auth.getUser();
+
+  if (userError || !user) {
+    return jsonError('Invalid or expired token', 401);
+  }
+
+  // 5. Get user profile and check expiration
+  const { data: profile, error: profileError } = await userClient
+    .from('profiles')
+    .select('tier, access_expires_at')
+    .eq('user_id', user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return jsonError('Profile not found', 403);
+  }
+
+  // Check if access has expired
+  if (profile.access_expires_at) {
+    const expiresAt = new Date(profile.access_expires_at);
+    if (expiresAt < new Date()) {
+      return jsonError(
+        'Your researcher access has expired. Please contact support to renew.',
+        403,
+        { expired: true, expiresAt: profile.access_expires_at },
       );
-      // Pass through the original error response - don't wrap it
-      // SDKs expect specific error formats (e.g., { error: { message: "...", type: "..." } })
+    }
+  }
+
+  const userTier = profile.tier || FREE_TIER;
+
+  // 6. Validate model for non-Ultra tiers
+  let requestBody: string | null = null;
+  let modelName: string | null = null;
+
+  if (userTier !== ULTRA_TIER && c.req.method !== 'GET') {
+    requestBody = await c.req.text();
+
+    try {
+      const bodyJson = JSON.parse(requestBody);
+      modelName = bodyJson.model || null;
+    } catch {
+      // Not JSON, try extracting from path
     }
 
-    // 10. Return response with CORS headers
-    // Forward all response headers except hop-by-hop headers
-    const responseHeaders = new Headers(corsHeaders);
+    if (!modelName) {
+      modelName = extractModelFromPath(apiPath);
+    }
 
-    // Headers to skip in response (hop-by-hop or should not be forwarded)
-    const SKIP_RESPONSE_HEADERS = new Set([
-      'connection',
-      'keep-alive',
-      'transfer-encoding', // Let fetch handle this
-      'te',
-      'trailer',
-      'upgrade',
-    ]);
+    if (!isModelAllowedForTier(userTier, modelName)) {
+      const tierName = userTier === FREE_TIER ? 'free' : userTier;
+      const upgradeHint =
+        userTier === FREE_TIER
+          ? 'Upgrade to Max for more models.'
+          : 'Upgrade to Ultra for access.';
 
-    // Copy all upstream response headers except the ones we skip
-    upstreamResponse.headers.forEach((value, key) => {
-      if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
-        responseHeaders.set(key, value);
-      }
-    });
+      return jsonError(
+        modelName
+          ? `Model '${modelName}' is not available for ${tierName} tier. ${upgradeHint}`
+          : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
+        403,
+      );
+    }
+  }
 
-    // Disable buffering for streaming
-    responseHeaders.set('X-Accel-Buffering', 'no');
+  // 7. Get server-side API key
+  const apiKey = Deno.env.get(providerConfig.envKey);
+  if (!apiKey) {
+    console.error(`[RELAY] API key not configured: ${providerConfig.envKey}`);
+    return jsonError(`API key not configured for ${provider}`, 503);
+  }
 
-    return new Response(upstreamResponse.body, {
-      status: upstreamResponse.status,
-      headers: responseHeaders,
+  // 8. Build target URL
+  const url = new URL(c.req.url);
+  const targetUrl = `${providerConfig.baseUrl}${apiPath}${url.search}`;
+
+  // 9. Prepare upstream headers
+  const upstreamHeaders = new Headers();
+  const SKIP_HEADERS = new Set([
+    'host',
+    'connection',
+    'keep-alive',
+    'transfer-encoding',
+    'te',
+    'trailer',
+    'upgrade',
+    'proxy-authorization',
+    'proxy-connection',
+    'authorization',
+    'x-api-key',
+    'x-goog-api-key',
+    'x-texra-auth',
+    'x-client-info',
+    'apikey',
+  ]);
+
+  c.req.raw.headers.forEach((value, key) => {
+    if (!SKIP_HEADERS.has(key.toLowerCase())) {
+      upstreamHeaders.set(key, value);
+    }
+  });
+
+  // Set auth header based on provider
+  if (providerConfig.authType === 'bearer') {
+    upstreamHeaders.set('Authorization', `Bearer ${apiKey}`);
+  } else if (providerConfig.authType === 'x-api-key') {
+    upstreamHeaders.set('x-api-key', apiKey);
+    if (!upstreamHeaders.has('anthropic-version')) {
+      upstreamHeaders.set('anthropic-version', '2023-06-01');
+    }
+  } else if (providerConfig.authType === 'x-goog-api-key') {
+    upstreamHeaders.set('x-goog-api-key', apiKey);
+  }
+
+  // 10. Forward request with timeout
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(
+    () => abortController.abort(),
+    UPSTREAM_TIMEOUT_MS,
+  );
+
+  let upstreamResponse: Response;
+  try {
+    const bodyToSend =
+      c.req.method !== 'GET'
+        ? requestBody !== null
+          ? requestBody
+          : c.req.raw.body
+        : undefined;
+
+    upstreamResponse = await fetch(targetUrl, {
+      method: c.req.method,
+      headers: upstreamHeaders,
+      body: bodyToSend,
+      signal: abortController.signal,
     });
   } catch (error) {
-    // Log full error server-side for debugging, but don't expose details to clients
-    console.error('Relay error:', error);
-    return new Response(
-      JSON.stringify({
-        _relay: RELAY_VERSION,
-        error: 'Internal server error',
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return jsonError('Upstream request timed out', 504);
+    }
+    throw error;
+  }
+  clearTimeout(timeoutId);
+
+  if (upstreamResponse.status >= 400) {
+    console.error(
+      `[RELAY] Upstream error: ${provider} ${upstreamResponse.status}`,
     );
   }
+
+  // 11. Forward response with headers
+  const responseHeaders = new Headers();
+  const SKIP_RESPONSE_HEADERS = new Set([
+    'connection',
+    'keep-alive',
+    'transfer-encoding',
+    'te',
+    'trailer',
+    'upgrade',
+  ]);
+
+  upstreamResponse.headers.forEach((value, key) => {
+    if (!SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) {
+      responseHeaders.set(key, value);
+    }
+  });
+
+  responseHeaders.set('X-Accel-Buffering', 'no');
+
+  return new Response(upstreamResponse.body, {
+    status: upstreamResponse.status,
+    headers: responseHeaders,
+  });
 });
+
+// =============================================================================
+// Error Handler & Export
+// =============================================================================
+
+app.onError((err, c) => {
+  console.error('Relay error:', err);
+  return c.json({ _relay: RELAY_VERSION, error: 'Internal server error' }, 500);
+});
+
+// Handle requests that don't match /relay/* base path
+app.notFound((c) => {
+  return c.json(
+    {
+      _relay: RELAY_VERSION,
+      error: 'Invalid path. Expected: /relay/{provider}/{apiPath}',
+    },
+    400,
+  );
+});
+
+Deno.serve(app.fetch);

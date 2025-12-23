@@ -54,6 +54,20 @@ export const EditRecordSchema = z.object({
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
 
+/**
+ * Schema for flattened edit records used in state snapshots.
+ * Unlike EditRecordSchema (which nests lineChanges), this schema flattens
+ * added/removed directly on the object for simpler serialization.
+ *
+ * Used by: FileInteractionStateSnapshotSchema in AgentWorkspaceState.ts
+ */
+export const FlattenedEditRecordSchema = z.object({
+  path: z.string(),
+  added: z.number().default(0),
+  removed: z.number().default(0),
+});
+export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
+
 // ============================================================================
 // Diagnostics Types (not Zod - these are complex unions with external types)
 // ============================================================================

@@ -84,8 +84,32 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 export const UserTierSchema = z.enum(['free', 'Max', 'Ultra']);
 export type UserTier = z.infer<typeof UserTierSchema>;
 
-/** Ultra tier constant for server-side API key access checks. */
+/**
+ * Ultra tier constant for server-side API key access checks.
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
 export const ULTRA_TIER: UserTier = 'Ultra';
+
+/**
+ * Max tier constant for server-side API key access (cheaper models).
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
+export const MAX_TIER: UserTier = 'Max';
+
+/**
+ * Free tier constant for server-side API key access (budget models).
+ *
+ * CROSS-REFERENCE: Duplicated in supabase/functions/relay/index.ts
+ * because Deno Edge Functions cannot import TypeScript source.
+ * Update both locations when changing tier values.
+ */
+export const FREE_TIER: UserTier = 'free';
 
 /**
  * User's authorization context.
@@ -195,3 +219,6 @@ export function getAuthCallbackUri(uriScheme: string): string {
 
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */
 export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Cache TTL for server-side key access and tier config (5 minutes). */
+export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
