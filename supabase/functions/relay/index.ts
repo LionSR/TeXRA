@@ -59,9 +59,9 @@
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
-import { Hono } from 'jsr:@hono/hono@4.6.20';
-import { cors } from 'jsr:@hono/hono@4.6.20/cors';
-import { createClient } from 'jsr:@supabase/supabase-js@2.49.1';
+import { Hono } from 'jsr:@hono/hono@4.11.1';
+import { cors } from 'jsr:@hono/hono@4.11.1/cors';
+import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
 import { TIER_CONFIG, isModelAllowedForTier } from './models.ts';
 
 // =============================================================================
@@ -295,12 +295,16 @@ app.get('/providers', (c) => {
 
 /**
  * GET /relay/tier-config - Tier-based model access configuration
- * Public endpoint. When authenticated, includes user's access status.
+ * Returns enabled providers (with API keys) instead of all supported providers.
+ * When authenticated, also includes user's access status.
  */
 app.get('/tier-config', async (c) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const jwtToken = extractJwtFromRequest(c.req.raw);
+
+  // Override static providers list with actually enabled providers
+  const config = { ...TIER_CONFIG, providers: getEnabledProviders() };
 
   // Try to include user status if authenticated
   if (jwtToken && supabaseUrl && supabaseAnonKey) {
@@ -325,7 +329,7 @@ app.get('/tier-config', async (c) => {
             profile.tier,
             profile.access_expires_at,
           );
-          return c.json({ ...TIER_CONFIG, userStatus });
+          return c.json({ ...config, userStatus });
         }
       }
     } catch {
@@ -333,7 +337,7 @@ app.get('/tier-config', async (c) => {
     }
   }
 
-  return c.json(TIER_CONFIG);
+  return c.json(config);
 });
 
 // =============================================================================
