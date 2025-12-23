@@ -56,11 +56,6 @@ export interface AuthProvider {
  * Sync methods return false if caches aren't primed - use isCachePrimed() to check.
  */
 export class ServerSideKeyService {
-  // Providers cache
-  private providers: string[] = [];
-  private providersTimestamp = 0;
-  private providersFetchPromise: Promise<string[]> | null = null;
-
   // Access cache
   private accessResult = false;
   private accessTimestamp = 0;
@@ -183,12 +178,9 @@ export class ServerSideKeyService {
     if (changed) {
       this.clearAllCaches();
 
-      // Pre-fetch data when enabling
+      // Pre-fetch tier config (which includes providers) when enabling
       if (value) {
-        await Promise.all([
-          this.getEnabledProviders(),
-          this.tierService.getConfig(),
-        ]);
+        await this.tierService.getConfig();
       }
 
       this._onDidChangeModelAccess.fire(value);
@@ -218,76 +210,21 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
-    this.providers = [];
-    this.providersTimestamp = 0;
-    this.providersFetchPromise = null;
-    // Fire event so TierService clears its own cache (proper encapsulation)
+    // Fire event so TierService clears its own cache (which includes providers)
     this._onCacheCleared.fire();
   }
 
   // ==========================================================================
-  // Provider Fetching
+  // Provider Access (delegates to TierService)
   // ==========================================================================
-
-  private isProvidersCacheValid(): boolean {
-    return (
-      this.providersFetchPromise !== null &&
-      Date.now() - this.providersTimestamp < SERVER_SIDE_CACHE_TTL_MS
-    );
-  }
-
-  private async fetchProvidersFromServer(): Promise<string[]> {
-    try {
-      const url = `${this.baseUrl}/functions/v1/relay/providers`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        console.error(
-          `${LOG_PREFIX} Failed to fetch providers: ${response.status}`,
-        );
-        this.providers = []; // Clear stale cache on failure
-        this.providersTimestamp = 0; // Allow immediate retry
-        return [];
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data.providers)) {
-        this.providers = data.providers;
-        return data.providers;
-      }
-
-      this.providers = []; // Clear stale cache on invalid response
-      return [];
-    } catch (error) {
-      console.error(`${LOG_PREFIX} Error fetching providers:`, error);
-      this.providers = []; // Clear stale cache on error
-      this.providersTimestamp = 0; // Allow immediate retry
-      return [];
-    }
-  }
-
-  /**
-   * Get the list of enabled providers from the relay server.
-   */
-  async getEnabledProviders(): Promise<string[]> {
-    if (this.isProvidersCacheValid()) {
-      return this.providersFetchPromise!;
-    }
-
-    this.providersTimestamp = Date.now();
-    this.providersFetchPromise = this.fetchProvidersFromServer();
-    return this.providersFetchPromise;
-  }
 
   /**
    * Get the cached list of enabled providers (synchronous).
-   * Returns empty array if cache not primed.
+   * Returns empty array if tier config not fetched yet.
+   * Call canUseServerSideKeys() first to prime the cache.
    */
   getEnabledProvidersSync(): string[] {
-    return this.providers;
+    return this.tierService.getProviders();
   }
 
   /**
@@ -295,7 +232,7 @@ export class ServerSideKeyService {
    * All tiers have access to the same providers.
    */
   isProviderOnServer(provider: string): boolean {
-    return this.providers.includes(provider.toLowerCase());
+    return this.tierService.getProviders().includes(provider.toLowerCase());
   }
 
   // ==========================================================================
@@ -356,12 +293,12 @@ export class ServerSideKeyService {
 
     this.accessFetchPromise = (async () => {
       // Get auth token for tier-config request (to get expiration status)
-      const authToken = (await this.authProvider.getAccessToken()) ?? undefined;
+      const authToken =
+        (await this.authProvider.getAccessToken()) ?? undefined;
 
-      // Fetch all required data in parallel
-      const [hasAccess, providers, tierConfig] = await Promise.all([
+      // Fetch auth status and tier config (which includes providers)
+      const [hasAccess, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
-        this.getEnabledProviders(),
         this.tierService.getConfig(authToken),
       ]);
 
@@ -382,6 +319,9 @@ export class ServerSideKeyService {
         this.accessResult = false;
         return false;
       }
+
+      // Get providers from tier config (now includes only enabled providers)
+      const providers = this.tierService.getProviders();
 
       if (hasAccess && providers.length > 0) {
         this.accessTimestamp = Date.now();
@@ -487,7 +427,7 @@ export class ServerSideKeyService {
    * Call canUseServerSideKeys() first to prime caches.
    */
   getEffectiveProvidersForCurrentUser(): string[] {
-    return this.providers;
+    return this.tierService.getProviders();
   }
 
   /**
