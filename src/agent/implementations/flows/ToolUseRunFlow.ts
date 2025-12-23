@@ -13,11 +13,8 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import {
   createAgentRunFlow,
   createAgentFinalizeNode,
-  beginLifecyclePhase,
-  failLifecycle,
-  setLifecycleStatus,
+  AgentLifecycle,
   runNodeExecution,
-  type AgentLifecycleState,
   type AgentRunHooks,
   type AgentRunShared,
   type NodeExecResult,
@@ -59,7 +56,7 @@ export const ToolUseRunPhaseSchema = z.enum([
 
 export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
 
-export type ToolUseRunLifecycle = AgentLifecycleState<ToolUseRunPhase>;
+export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 /**
  * Runtime state for tool-use agent runs.
@@ -114,7 +111,7 @@ export type ToolUseRunShared<C = unknown> = AgentRunShared<
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    beginLifecyclePhase(shared.lifecycle, 'prepare');
+    shared.lifecycle.begin('prepare');
     return shared;
   }
 
@@ -140,7 +137,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       const error =
         execRes.error ??
         new Error('Failed to prepare tool-use run: no result from prepare');
-      failLifecycle(shared.lifecycle, error);
+      shared.lifecycle.fail(error);
       return FlowTransition.FINALIZE;
     }
 
@@ -150,7 +147,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.cycleOptions = cycleOptions;
     shared.state.store = store;
 
-    beginLifecyclePhase(shared.lifecycle, 'cycle');
+    shared.lifecycle.begin('cycle');
 
     return FlowTransition.EXECUTE;
   }
@@ -158,7 +155,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    beginLifecyclePhase(shared.lifecycle, 'cycle');
+    shared.lifecycle.begin('cycle');
     return shared;
   }
 
@@ -211,9 +208,9 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     execRes: ToolUseCycleExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
-      failLifecycle(shared.lifecycle, execRes.error);
+      shared.lifecycle.fail(execRes.error);
     } else {
-      setLifecycleStatus(shared.lifecycle, 'running');
+      shared.lifecycle.setStatus('running');
     }
 
     return FlowTransition.FINALIZE;
@@ -239,7 +236,7 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
     runCleanup: async ({ hooks }) => {
       await hooks.cleanup();
     },
-    onSuccess: ({ lifecycle }) => setLifecycleStatus(lifecycle, 'completed'),
+    onSuccess: ({ lifecycle }) => lifecycle.complete(),
     onSecondaryError: ({ hooks }, error) =>
       hooks.logFinalizeWarning?.(
         'Additional finalize error encountered.',
@@ -251,7 +248,7 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
     init: {
       phase: 'init',
       onSuccess: (shared) => {
-        beginLifecyclePhase(shared.lifecycle, 'prepare');
+        shared.lifecycle.begin('prepare');
         return FlowTransition.EXECUTE;
       },
     },
