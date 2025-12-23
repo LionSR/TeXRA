@@ -254,28 +254,11 @@ export class TierService {
   // ===========================================================================
 
   /**
-   * Get the user's access status (populated when fetching config with auth token).
-   * Returns null if not authenticated or status not fetched.
-   */
-  getUserAccessStatus(): UserAccessStatus | null {
-    return this.userStatus;
-  }
-
-  /**
    * Check if the user's access has expired.
    * Returns false if no expiration info available (allows access).
    */
   isAccessExpired(): boolean {
     return this.userStatus?.isExpired ?? false;
-  }
-
-  /**
-   * Get days remaining until access expires.
-   * Returns null if no expiration (lifetime access) or status not available.
-   * Negative values indicate days since expiration.
-   */
-  getDaysRemaining(): number | null {
-    return this.userStatus?.daysRemaining ?? null;
   }
 
   /**
