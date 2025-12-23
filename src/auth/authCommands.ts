@@ -279,7 +279,7 @@ export async function showAccountMenu(): Promise<void> {
         {
           label: '$(sign-in) Sign In',
           description:
-            'Sign in to access remote agents via the research access program',
+            'Access AI models and remote agents via Researcher Access Program',
           action: 'signIn' as const,
         },
       ];

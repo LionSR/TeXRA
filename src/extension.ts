@@ -26,7 +26,8 @@ import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
-import { initializeServerSideKeyAccess } from '@/auth/serverSideKeyAccess';
+import { initializeServerSideKeyAccess } from '@/auth/serverKeys';
+import { SupabaseClient } from '@/auth/SupabaseClient';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -105,7 +106,12 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
-  initializeServerSideKeyAccess(context);
+  // Initialize server-side key access with SupabaseClient as auth provider
+  initializeServerSideKeyAccess(context, {
+    isAuthenticated: () => SupabaseClient.isAuthenticated(),
+    getUserTier: () => SupabaseClient.getUserTier(),
+    getAccessToken: () => SupabaseClient.getAccessToken(),
+  });
 
   // Copy default agents BEFORE initializing the agent index
   // This ensures built-in agents are available when the index scans directories
