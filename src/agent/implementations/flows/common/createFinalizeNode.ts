@@ -6,7 +6,6 @@ import { END_GROUP_STATUS } from '@logger/messageTypes';
 
 // Internal imports
 import { finalizeLifecycle } from './finalizeLifecycle';
-import { setLifecyclePhase } from './lifecycle';
 
 // Type imports
 import type { AgentRunShared } from './types';
@@ -66,7 +65,7 @@ export function createAgentFinalizeNode<
     ): Promise<
       FinalizeNodeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>
     > {
-      setLifecyclePhase(shared.lifecycle, options.finalizePhase);
+      shared.lifecycle.setPhase(options.finalizePhase);
       return {
         lifecycle: shared.lifecycle,
         hooks: shared.hooks,
@@ -167,8 +166,7 @@ export function createStandardFinalizeNode<
       await hooks.cleanup();
     },
     onSuccess: ({ lifecycle }) => {
-      lifecycle.status = 'completed';
-      lifecycle.error = undefined;
+      lifecycle.complete();
     },
     onSecondaryError: options.onSecondaryError,
   });
