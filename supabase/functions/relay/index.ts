@@ -124,12 +124,15 @@ function calculateAccessStatus(
   const expiresAt = new Date(accessExpiresAt);
   const now = new Date();
   const diffMs = expiresAt.getTime() - now.getTime();
+  // Use Math.ceil so "1 day remaining" means expires within next 24h
   const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  // Use <= 0 because Math.ceil of small negative (e.g., -0.5) rounds to 0
+  const isExpired = daysRemaining <= 0;
 
   return {
     tier,
     accessExpiresAt,
-    isExpired: daysRemaining < 0,
+    isExpired,
     daysRemaining,
   };
 }
@@ -352,6 +355,10 @@ function parseRequestPath(pathname: string): {
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
 
+  // Get Supabase config (needed for authenticated endpoints)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -386,15 +393,11 @@ Deno.serve(async (req: Request) => {
   ) {
     // Check if user is authenticated to include their access status
     const jwtToken = extractJwtFromRequest(req);
-    if (jwtToken) {
+    if (jwtToken && supabaseUrl && supabaseAnonKey) {
       try {
-        const supabaseClient = createClient(
-          supabaseUrl,
-          supabaseAnonKey,
-          {
-            global: { headers: { Authorization: `Bearer ${jwtToken}` } },
-          },
-        );
+        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: `Bearer ${jwtToken}` } },
+        });
 
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (user) {
@@ -491,9 +494,6 @@ Deno.serve(async (req: Request) => {
     //
     // This provides defense-in-depth: even if there's a bug in our filtering,
     // RLS prevents users from accessing other users' data.
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error('Missing required Supabase environment variables');
       return new Response(
