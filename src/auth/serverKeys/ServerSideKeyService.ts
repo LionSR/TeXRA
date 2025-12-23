@@ -356,8 +356,7 @@ export class ServerSideKeyService {
 
     this.accessFetchPromise = (async () => {
       // Get auth token for tier-config request (to get expiration status)
-      const authToken =
-        (await this.authProvider.getAccessToken()) ?? undefined;
+      const authToken = (await this.authProvider.getAccessToken()) ?? undefined;
 
       // Fetch all required data in parallel
       const [hasAccess, providers, tierConfig] = await Promise.all([
@@ -373,8 +372,18 @@ export class ServerSideKeyService {
         return false;
       }
 
-      const tierConfigRequired = !this.hasFullAccess() && tierConfig === null;
-      if (hasAccess && providers.length > 0 && !tierConfigRequired) {
+      // Max/free users need tier config to know allowed models
+      // If tier config failed, report no access so UI shows API key banner
+      const tierConfigRequired = !this.hasFullAccess();
+      if (tierConfigRequired && tierConfig === null) {
+        console.log(
+          `${LOG_PREFIX} Tier config unavailable for non-Ultra user, denying access`,
+        );
+        this.accessResult = false;
+        return false;
+      }
+
+      if (hasAccess && providers.length > 0) {
         this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
       }
