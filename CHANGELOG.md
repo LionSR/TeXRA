@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Added **Gemini 3 Flash** (`gemini3f`) to the default models list.
 - Chat and tool-use agents can now be hosted as remote agents.
+- Introduced **Max tier** with access to premium models for subscribed users.
+- Added **Researcher Access Program** (free tier) with budget models including
+  GPT-5 Mini and Nano.
+- Added access expiration system for researcher access program.
 
 ### Bug Fixes
 
@@ -21,6 +25,11 @@ All notable changes to this project will be documented in this file.
 - Disabled automatic retries by default to give users explicit control.
 - Added tooltips to toolbar buttons across all webviews.
 - Clarified reference and auxiliary file selector tooltips.
+- Fixed provider cache stale state and Google model path extraction.
+- Fixed memory leak from undisposed event listener subscription.
+- API Access toggle now visible for all authenticated users.
+- Fixed tier config retry after transient failures.
+- Fixed race conditions in tier system caching.
 
 ### Improvements
 
