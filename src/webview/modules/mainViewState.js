@@ -95,6 +95,19 @@ export class MainViewState {
     // fires 'change' events on programmatic value changes, which would trigger
     // save() and capture partial/inconsistent DOM state
     this._isRestoring = false;
+    // Guard flag to prevent save() during option updates - similar to _isRestoring,
+    // this prevents capturing partial state while model/agent options are being
+    // replaced and restored
+    this._isApplyingOptions = false;
+  }
+
+  /**
+   * Set the options-applying guard flag.
+   * Call with true before applying options, false after restoration completes.
+   * @param {boolean} value - Whether options are currently being applied
+   */
+  setApplyingOptions(value) {
+    this._isApplyingOptions = value;
   }
 
   get() {
@@ -271,8 +284,10 @@ export class MainViewState {
 
   /** Persist current UI state */
   save() {
-    // Skip save during restore to prevent capturing partial/inconsistent state
-    if (this._isRestoring) {
+    // Skip save during restore or option updates to prevent capturing
+    // partial/inconsistent state (vscode-single-select fires change events
+    // during programmatic value changes and innerHTML replacement)
+    if (this._isRestoring || this._isApplyingOptions) {
       return;
     }
 
