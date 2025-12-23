@@ -247,6 +247,8 @@ export class ServerSideKeyService {
         console.error(
           `${LOG_PREFIX} Failed to fetch providers: ${response.status}`,
         );
+        this.providers = []; // Clear stale cache on failure
+        this.providersTimestamp = 0; // Allow immediate retry
         return [];
       }
 
@@ -256,9 +258,12 @@ export class ServerSideKeyService {
         return data.providers;
       }
 
+      this.providers = []; // Clear stale cache on invalid response
       return [];
     } catch (error) {
       console.error(`${LOG_PREFIX} Error fetching providers:`, error);
+      this.providers = []; // Clear stale cache on error
+      this.providersTimestamp = 0; // Allow immediate retry
       return [];
     }
   }
