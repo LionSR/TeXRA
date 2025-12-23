@@ -121,7 +121,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private hydrationPromise: Promise<void> | null = null;
   private hydratedRoundCount = 0;
 
-  // Current round execution context - set when round begins
+  // Active round execution context (transient state during round execution).
+  // These fields are set by beginRound(), used during execution, and cleared by recordRoundResult().
+  // This is a transactional pattern: data stays here until committed to RoundContext.
+  // On error, these are cleared without polluting RoundContext with partial state.
+  // Note: currentMessages and currentRunState are NOT per-round (run-level / mutable during execution).
   private isRoundActive = false;
   private currentRoundIndex: number = 0;
   private currentMessages: any[] = [];

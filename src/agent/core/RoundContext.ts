@@ -14,7 +14,7 @@ import type { RoundOutput, AgentFileLocation } from '@agent/output/types';
  */
 export class RoundContext {
   readonly index: number;
-  readonly outputLocation: AgentFileLocation;
+  outputLocation: AgentFileLocation;
   additionalOutputs: AgentFileLocation[];
   roundState: ConversationRoundState | null;
   workspaceState: AgentWorkspaceState | null;
@@ -93,17 +93,6 @@ export class RoundContextCollection {
   }
 
   updateOutputLocation(index: number, location: AgentFileLocation): void {
-    const round = this.rounds[index];
-    if (!round) {
-      throw new Error(`Round ${index} does not exist`);
-    }
-    this.rounds[index] = new RoundContext({
-      index: round.index,
-      outputLocation: location,
-      additionalOutputs: round.additionalOutputs,
-      roundState: round.roundState,
-      workspaceState: round.workspaceState,
-      output: round.output,
-    });
+    this.getRequired(index).outputLocation = location;
   }
 }
