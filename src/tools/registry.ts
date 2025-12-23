@@ -1,5 +1,5 @@
 // Local imports - core types
-import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
+import type { IToolRegistry } from '@agent/core/ToolTypes';
 import { createToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
@@ -33,37 +33,6 @@ import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 
-/**
- * Default tool instances as a plain Record.
- * @deprecated Use getDefaultToolRegistry() for IToolRegistry interface.
- */
-const DEFAULT_TOOLS: Record<string, ITool> = {
-  str_replace_editor: new TextEditorTool(),
-  diagnostics: new DiagnosticsTool(),
-  bash: new BashTool(),
-  read_file: new ReadFileTool(),
-  write_file: new WriteFileTool(),
-  edit_file: new EditFileTool(),
-  file_op: new FileOpTool(),
-  apply_path: new ApplyPathTool(),
-  glob: new GlobTool(),
-  grep: new GrepTool(),
-  ls: new LsTool(),
-  download_arxiv_source: new ArxivDownloadTool(),
-  arxiv_metadata: new ArxivMetadataTool(),
-  arxiv_search: new ArxivSearchTool(),
-  extract_figures: new ExtractLatexFiguresTool(),
-  extract_bib_entries: new ExtractBibliographyTool(),
-  extract_tikz_figures: new ExtractTikzFiguresTool(),
-  crossref_doi: new CrossrefDoiTool(),
-  crossref_search: new CrossrefSearchTool(),
-  wolfram: new WolframTool(),
-  texcount: new TexcountTool(),
-  web_fetch: new WebFetchTool(),
-  web_search: new WebSearchTool(),
-  todo_write: new TodoWriteTool(),
-};
-
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
 
@@ -73,7 +42,32 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = createToolRegistry(DEFAULT_TOOLS);
+    defaultRegistryInstance = createToolRegistry({
+      str_replace_editor: new TextEditorTool(),
+      diagnostics: new DiagnosticsTool(),
+      bash: new BashTool(),
+      read_file: new ReadFileTool(),
+      write_file: new WriteFileTool(),
+      edit_file: new EditFileTool(),
+      file_op: new FileOpTool(),
+      apply_path: new ApplyPathTool(),
+      glob: new GlobTool(),
+      grep: new GrepTool(),
+      ls: new LsTool(),
+      download_arxiv_source: new ArxivDownloadTool(),
+      arxiv_metadata: new ArxivMetadataTool(),
+      arxiv_search: new ArxivSearchTool(),
+      extract_figures: new ExtractLatexFiguresTool(),
+      extract_bib_entries: new ExtractBibliographyTool(),
+      extract_tikz_figures: new ExtractTikzFiguresTool(),
+      crossref_doi: new CrossrefDoiTool(),
+      crossref_search: new CrossrefSearchTool(),
+      wolfram: new WolframTool(),
+      texcount: new TexcountTool(),
+      web_fetch: new WebFetchTool(),
+      web_search: new WebSearchTool(),
+      todo_write: new TodoWriteTool(),
+    });
   }
   return defaultRegistryInstance;
 }
@@ -85,12 +79,6 @@ export function getDefaultToolRegistry(): IToolRegistry {
 export function resetDefaultToolRegistry(): void {
   defaultRegistryInstance = null;
 }
-
-/**
- * Default tool registry as a Record.
- * @deprecated Prefer getDefaultToolRegistry() for IToolRegistry interface.
- */
-export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
 
 /**
  * Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores.
@@ -132,7 +120,8 @@ export function resolveToolDefinitions(
         warnOnMissing?.(item);
         return { name: item };
       }
-      const tool = DEFAULT_TOOL_REGISTRY[item];
+      const registry = getDefaultToolRegistry();
+      const tool = registry.get(item);
       if (!tool) {
         warnOnMissing?.(item);
         return { name: item };
@@ -144,7 +133,8 @@ export function resolveToolDefinitions(
       warnOnMissing?.(item.name);
       return { name: item.name };
     }
-    if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+    const registry = getDefaultToolRegistry();
+    if (!registry.get(item.name)) {
       warnOnMissing?.(item.name);
     }
     // Validate against schema - if invalid, return minimal definition

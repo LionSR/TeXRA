@@ -137,7 +137,7 @@ export async function copyTextToClipboard(text) {
   try {
     await navigator.clipboard.writeText(normalized);
     return true;
-  } catch {
+  } catch (_err) {
     return false;
   }
 }
