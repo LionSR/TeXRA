@@ -294,7 +294,7 @@ Deno.serve(async (req: Request) => {
           _version: LOG_USAGE_VERSION,
           success: true,
           accepted: 0,
-          error: 'No valid entries in batch',
+          message: 'No valid entries in batch',
         }),
         {
           status: 200,
