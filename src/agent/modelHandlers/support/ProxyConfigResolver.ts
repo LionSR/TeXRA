@@ -1,4 +1,4 @@
-import { getRelayBaseUrl } from '@auth/serverSideKeyAccess';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
@@ -80,7 +80,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this decision
   // to ensure consistency between URL routing and API key retrieval.
   if (config.useServerSideKeys) {
-    const relayUrl = getRelayBaseUrl(config.provider);
+    const relayUrl = getServerSideKeyService().getRelayBaseUrl(config.provider);
     config.logger?.debug(
       `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
     );

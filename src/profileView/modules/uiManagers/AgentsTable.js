@@ -5,9 +5,6 @@ import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
 
-/** Ultra tier value - must match ULTRA_TIER in src/auth/config.ts */
-const ULTRA_TIER = 'Ultra';
-
 /**
  * Manages the agents table rendering and interactions.
  */
@@ -42,6 +39,8 @@ export class AgentsTable {
    * @param {Array} options.remoteAgents - Array of remote agent objects
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
+   * @param {string[]|null} options.allowedModels - Array of allowed model names (null = all for Ultra)
+   * @param {string|null} options.accessExpiresAt - ISO date string when access expires (null = no expiration)
    */
   render({
     authenticated,
@@ -51,6 +50,8 @@ export class AgentsTable {
     remoteAgents,
     apiAccessMode,
     enabledProviders,
+    allowedModels,
+    accessExpiresAt,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
@@ -100,6 +101,23 @@ export class AgentsTable {
       tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
     }
 
+    // Update access expiration display
+    const expirationRow = safeGetElementById(ELEMENT_IDS.ACCESS_EXPIRATION_ROW);
+    const expirationValue = safeGetElementById(ELEMENT_IDS.ACCESS_EXPIRATION);
+    if (expirationRow && expirationValue) {
+      if (accessExpiresAt) {
+        const expirationDate = new Date(accessExpiresAt);
+        expirationValue.textContent = expirationDate.toLocaleDateString(
+          undefined,
+          { year: 'numeric', month: 'short', day: 'numeric' },
+        );
+        expirationRow.style.display = 'flex';
+      } else {
+        // No expiration - don't show the row
+        expirationRow.style.display = 'none';
+      }
+    }
+
     // Update tier message based on whether user has any permissions
     const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
     if (tierMessage) {
@@ -110,14 +128,15 @@ export class AgentsTable {
         : LABELS.TIER_FREE_MESSAGE;
     }
 
-    // Show API access section only for Ultra tier
+    // Show API access section for all authenticated users
+    // All tiers have some server-side access (free=budget, Max=mid-tier, Ultra=all)
     if (apiAccessSection) {
-      const isUltra = tier === ULTRA_TIER;
-      apiAccessSection.style.display = isUltra ? 'block' : 'none';
-
-      if (isUltra) {
-        this.renderApiAccessSection(apiAccessMode, enabledProviders);
-      }
+      apiAccessSection.style.display = 'block';
+      this.renderApiAccessSection(
+        apiAccessMode,
+        enabledProviders,
+        allowedModels,
+      );
     }
 
     // Show remote agents section for all authenticated users
@@ -134,16 +153,24 @@ export class AgentsTable {
   }
 
   /**
-   * Render the API access section for Ultra tier users.
+   * Render the API access section for all authenticated users.
+   * All tiers have server-side access: free (budget), Max (mid-tier), Ultra (all).
    * @param {string} apiAccessMode - 'included' or 'personal'
    * @param {string[]} enabledProviders - Array of enabled provider names
+   * @param {string[]|null} allowedModels - Array of allowed model names (null = all for Ultra)
    */
-  renderApiAccessSection(apiAccessMode, enabledProviders) {
+  renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels) {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
+    const modelsInfo = safeGetElementById(ELEMENT_IDS.ALLOWED_MODELS_INFO);
+    const resolvedAllowedModels = Array.isArray(allowedModels)
+      ? allowedModels
+      : allowedModels === null
+        ? null
+        : [];
 
     // Set the current mode
     if (includedRadio) {
@@ -163,10 +190,46 @@ export class AgentsTable {
         const providerNames = enabledProviders
           .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
           .join(', ');
-        providersInfo.textContent = `Available: ${providerNames}`;
+        providersInfo.textContent = `Providers: ${providerNames}`;
         providersInfo.style.display = 'block';
       } else {
         providersInfo.style.display = 'none';
+      }
+    }
+
+    // Show allowed models info when using included access
+    // allowedModels semantics:
+    // - null: all models (Ultra tier)
+    // - []: no models configured (error state)
+    // - [...]: specific models allowed (Max and free tiers)
+    if (modelsInfo) {
+      if (apiAccessMode === 'included') {
+        if (resolvedAllowedModels === null) {
+          // null means all models are allowed
+          modelsInfo.textContent = 'All models included';
+          modelsInfo.title = '';
+          modelsInfo.style.display = 'block';
+        } else if (resolvedAllowedModels.length > 0) {
+          // Specific models allowed
+          modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
+          modelsInfo.title = resolvedAllowedModels.join(', ');
+          modelsInfo.style.display = 'block';
+        } else {
+          // Empty array means either:
+          // 1. Tier config fetch failed (when enabledProviders is also empty)
+          // 2. Config explicitly has no models (unlikely but possible)
+          // Show helpful message based on context
+          const configFetchFailed = enabledProviders.length === 0;
+          modelsInfo.textContent = configFetchFailed
+            ? 'Unable to load models'
+            : 'No models configured';
+          modelsInfo.title = configFetchFailed
+            ? 'Try signing out and back in to refresh'
+            : '';
+          modelsInfo.style.display = 'block';
+        }
+      } else {
+        modelsInfo.style.display = 'none';
       }
     }
 

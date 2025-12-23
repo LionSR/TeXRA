@@ -19,3 +19,5 @@ docs/.vitepress/.temp/core
 
 resources/poster
 resources/poster-app
+
+supabase/.temp
