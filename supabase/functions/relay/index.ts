@@ -18,6 +18,21 @@
  * Users can toggle between server and personal API keys in their profile.
  * ============================================================================
  *
+ * DATABASE REQUIREMENTS:
+ * The profiles table must have:
+ * - tier: text (values: 'Ultra', 'Max', 'free')
+ * - access_expires_at: timestamptz (null = no expiration / lifetime access)
+ *
+ * To add expiration column:
+ *   ALTER TABLE profiles ADD COLUMN access_expires_at timestamptz;
+ *
+ * To expire/blacklist a user:
+ *   UPDATE profiles SET access_expires_at = NOW() WHERE id = '<user-id>';
+ *
+ * To grant time-limited access:
+ *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days' WHERE id = '<user-id>';
+ * ============================================================================
+ *
  * TIER HIERARCHY (cumulative access):
  * - Ultra: All models including premium ($3+/M input)
  * - Max: Mid-tier models ($1-3/M) + all free tier models
