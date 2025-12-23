@@ -472,3 +472,434 @@ By following these recommendations, TeXRA will achieve:
 2. **Retry Safety**: Side effects only in `post()`, after retry loop
 3. **Clarity**: Clear data flow through node lifecycle
 4. **Maintainability**: Smaller, focused nodes easier to modify
+
+---
+
+# Part 2: Abstraction Layer Analysis
+
+## The Problem: 10 Layers Deep
+
+```
+┌─────────────────────────────────────────┐
+│  runAgentFlow()                         │  Layer 10
+├─────────────────────────────────────────┤
+│  Agent-Specific Flows                   │  Layer 9
+│  (ReflectionRunFlow / ToolUseRunFlow)   │
+├─────────────────────────────────────────┤
+│  createAgentRunFlow()                   │  Layer 8
+├─────────────────────────────────────────┤
+│  buildRunFlow()                         │  Layer 7
+├─────────────────────────────────────────┤
+│  AgentInitNode + createFinalizeNode()   │  Layer 6
+├─────────────────────────────────────────┤
+│  lifecycle helpers (5 functions)        │  Layer 5
+├─────────────────────────────────────────┤
+│  nodeExecution wrappers                 │  Layer 4
+├─────────────────────────────────────────┤
+│  CycleFlows (ResponseCycle/ToolUse)     │  Layer 3
+├─────────────────────────────────────────┤
+│  RetryState + CycleServices             │  Layer 2
+├─────────────────────────────────────────┤
+│  PocketFlow (BaseNode, Flow)            │  Layer 1
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Workflow Agent vs Tool-Use Agent: Deep Comparison
+
+### Architectural Diagram
+
+```mermaid
+flowchart TB
+    subgraph Shared["Shared Infrastructure"]
+        direction TB
+        createAgentRunFlow["createAgentRunFlow()"]
+        buildRunFlow["buildRunFlow()"]
+        AgentInitNode["AgentInitNode"]
+        createFinalizeNode["createAgentFinalizeNode()"]
+        lifecycle["lifecycle helpers<br/>(5 functions)"]
+        nodeExecution["runNodeExecution()<br/>runNodeEffect()"]
+
+        createAgentRunFlow --> buildRunFlow
+        createAgentRunFlow --> AgentInitNode
+        buildRunFlow --> createFinalizeNode
+        AgentInitNode --> lifecycle
+        AgentInitNode --> nodeExecution
+    end
+
+    subgraph Reflection["Reflection Agent"]
+        direction TB
+        R_Flow["ReflectionRunFlow"]
+        R_RoundNode["ReflectionRoundNode<br/>(1 node)"]
+        R_Hooks["ReflectionRunHooks<br/>(3 extra methods)"]
+        R_State["ReflectionRunState<br/>(5 fields)"]
+
+        R_Flow --> R_RoundNode
+    end
+
+    subgraph ToolUse["Tool-Use Agent"]
+        direction TB
+        T_Flow["ToolUseRunFlow"]
+        T_PrepNode["ToolUsePrepareNode"]
+        T_CycleNode["ToolUseCycleNode"]
+        T_Hooks["ToolUseRunHooks<br/>(12 extra methods!)"]
+        T_State["ToolUseRunState<br/>(5 fields)"]
+        T_CycleFlow["ToolUseCycleFlow<br/>(4 proper nodes)"]
+
+        T_Flow --> T_PrepNode --> T_CycleNode
+        T_CycleNode -.->|delegates to| T_CycleFlow
+    end
+
+    Shared --> Reflection
+    Shared --> ToolUse
+
+    style lifecycle fill:#FFB6C1
+    style nodeExecution fill:#FFB6C1
+    style T_Hooks fill:#FFB6C1
+```
+
+---
+
+## Side-by-Side Comparison
+
+| Aspect | Reflection Agent | Tool-Use Agent |
+|--------|-----------------|----------------|
+| **Purpose** | Multi-round text generation | Interactive tool calling |
+| **Phases** | idle → init → rounds → finalize | idle → init → prepare → cycle → finalize |
+| **Run-Level Nodes** | 1 (`ReflectionRoundNode`) | 2 (`PrepareNode`, `CycleNode`) |
+| **Hooks Interface** | 3 extra methods | **12 extra methods** |
+| **State Fields** | 5 simple fields | 5 fields + nullable types |
+| **Sub-flows Used** | None (inline) | `ToolUseCycleFlow` (4 nodes) |
+| **Complexity** | Simple | High |
+
+---
+
+## Reflection Agent: Simple Task, Over-Engineered
+
+### What It Actually Does
+
+```mermaid
+flowchart LR
+    Init["Initialize"] --> Round["Execute Round"]
+    Round -->|"continue"| Round
+    Round -->|"done"| Finalize["Finalize"]
+```
+
+**The actual logic is just a loop with 3 transitions.**
+
+### What PocketFlow Needs (Minimal)
+
+```typescript
+// ~30 lines - pure PocketFlow
+class RoundNode extends BaseNode<ReflectionShared> {
+  async prep(shared) {
+    return {
+      agent: shared.agent,
+      round: shared.currentRound,
+      shouldFinalize: shared.currentRound >= shared.totalRounds
+    };
+  }
+
+  async exec(prepRes) {
+    if (prepRes.shouldFinalize) return { done: true };
+    return await prepRes.agent.executeRound(prepRes.round);
+  }
+
+  async post(shared, prep, exec) {
+    if (exec.done) return 'finalize';
+    shared.currentRound++;
+    return exec.shouldContinue ? 'continue' : 'finalize';
+  }
+}
+
+// Flow setup
+const roundNode = new RoundNode();
+roundNode.on('continue', roundNode);
+const flow = new Flow(roundNode);
+```
+
+### What TeXRA Actually Has
+
+```
+createReflectionRunFlow() (225 lines)
+├── createAgentRunFlow()
+│   ├── new AgentInitNode(config)
+│   │   ├── beginLifecyclePhase()
+│   │   ├── runNodeEffect()
+│   │   │   └── hooks.start() → hooks.init() → hooks.initializeClient()
+│   │   └── failLifecycle() on error
+│   ├── links({ init }) => [...]  ← callback returning array
+│   └── buildRunFlow()
+│       └── init.next(finalize).on(FINALIZE)
+│           └── for (link of links) from.on(on, to)
+├── createAgentFinalizeNode()
+│   └── finalizeLifecycle()
+│       ├── runFinalize()
+│       └── runCleanup()
+└── ReflectionRoundNode
+    ├── agent.beginRound()
+    └── agent.executeCurrentRound()
+```
+
+**7 layers of factories and wrappers for a simple loop.**
+
+---
+
+## Tool-Use Agent: Where's The Logic?
+
+### The 12-Method Hooks Interface
+
+```typescript
+interface ToolUseRunHooks<C> extends AgentRunHooks {
+  // State setup (2)
+  prepareState(): Promise<{ messages, store, shouldSkipCycle }>;
+  buildCycleOptions(store): ToolUseCycleOptions<C>;
+
+  // Cycle execution (2)
+  runCycle(options, messages, store): Promise<void>;
+  persistCheckpoint(messages, store): Promise<void>;
+
+  // Interruption (1)
+  checkInterruption(): boolean;
+
+  // Interactive session (6)
+  hasQueuedFollowUp(): boolean;
+  enterWaitingState(): Promise<void>;
+  waitForFollowUp(): Promise<string | null>;
+  markRunning(): Promise<void>;
+  applyFollowUp(followUp, messages): Promise<ProviderMessage[]>;
+  clearPersistedSnapshot(): Promise<void>;
+
+  // Error handling (1)
+  logFinalizeWarning?(message, error): void;
+}
+```
+
+### ToolUseCycleNode.exec(): Just Calling Hooks!
+
+```typescript
+async exec(shared: ToolUseRunShared<C>): Promise<ToolUseCycleExecResult> {
+  return runNodeExecution(async () => {
+    while (true) {
+      if (!state.shouldSkipCycle) {
+        await hooks.runCycle(...);          // HOOK
+        await hooks.persistCheckpoint(...); // HOOK
+      }
+      if (hooks.checkInterruption()) return; // HOOK
+
+      if (hooks.hasQueuedFollowUp()) {       // HOOK
+        await hooks.clearPersistedSnapshot(); // HOOK
+      } else {
+        await hooks.enterWaitingState();     // HOOK
+      }
+
+      const followUp = await hooks.waitForFollowUp(); // HOOK
+      if (!followUp) return;
+
+      await hooks.markRunning();             // HOOK
+      await hooks.clearPersistedSnapshot();  // HOOK
+      await hooks.applyFollowUp(...);        // HOOK
+    }
+  });
+}
+```
+
+**The node is just an orchestrator calling 10 hooks in a loop!**
+
+---
+
+## The Abstraction Inversion Problem
+
+```mermaid
+flowchart TB
+    subgraph Current["Current: Logic in Hooks"]
+        RunFlow["ToolUseRunFlow<br/>(thin shell)"]
+        Hooks["Hooks Object<br/>(12 methods, ALL logic)"]
+        CycleFlow["ToolUseCycleFlow<br/>(proper PocketFlow)"]
+
+        RunFlow -->|"delegates to"| Hooks
+        Hooks -->|"calls internally"| CycleFlow
+    end
+
+    subgraph Ideal["Ideal: Logic in Nodes"]
+        RunFlow2["ToolUseRunFlow"]
+        WaitNode["WaitForInputNode"]
+        ApplyNode["ApplyFollowUpNode"]
+        CycleFlow2["ToolUseCycleFlow"]
+        Agent2["Agent<br/>(minimal callbacks)"]
+
+        RunFlow2 -->|"contains"| WaitNode
+        RunFlow2 -->|"contains"| ApplyNode
+        RunFlow2 -->|"contains"| CycleFlow2
+        WaitNode -->|"simple callback"| Agent2
+    end
+
+    style Hooks fill:#FFB6C1
+    style WaitNode fill:#90EE90
+    style ApplyNode fill:#90EE90
+```
+
+---
+
+## Quantified Analysis
+
+### Lines of Code by Layer
+
+| Layer | Lines | Purpose | Justified? |
+|-------|-------|---------|------------|
+| PocketFlow Core | 210 | Framework | ✅ Yes |
+| CycleFlows | 1,817 | Response/ToolUse cycles | ✅ Yes |
+| common/ infrastructure | ~600 | Builders, lifecycle, wrappers | ⚠️ Partially |
+| Run Flows | 492 | Orchestration | ❌ Over-built |
+
+**600 lines of infrastructure to support 492 lines of run flows**
+
+### Node Distribution
+
+```mermaid
+pie title "Node Categories"
+    "CycleFlow Nodes (proper PocketFlow)" : 8
+    "RunFlow Nodes (hook wrappers)" : 5
+```
+
+- **CycleFlows**: 8 nodes doing real work (model calls, tool dispatch)
+- **RunFlows**: 5 nodes that mostly delegate to hooks
+
+---
+
+## What Should Be Nodes vs Hooks
+
+### Current State
+
+| Component | Implementation | Problem |
+|-----------|----------------|---------|
+| Wait for follow-up | Hook method | Should be a WaitNode |
+| Apply follow-up | Hook method | Should be an ApplyNode |
+| Persist checkpoint | Hook method | Could be a PersistNode |
+| Enter waiting state | Hook method | UI concern, maybe ok as hook |
+| Check interruption | Hook method | Cross-cutting, ok as hook |
+
+### Proposed Split
+
+```mermaid
+flowchart LR
+    subgraph Nodes["Should Be Nodes"]
+        WaitNode["WaitForInputNode"]
+        ApplyNode["ApplyFollowUpNode"]
+        PersistNode["PersistCheckpointNode"]
+    end
+
+    subgraph Hooks["Can Stay as Hooks"]
+        checkInterruption["checkInterruption()"]
+        enterWaitingState["enterWaitingState()"]
+    end
+
+    style Nodes fill:#90EE90
+    style Hooks fill:#E6E6FA
+```
+
+---
+
+## Specific Recommendations
+
+### 1. Reflection Agent: Flatten to Single File
+
+```typescript
+// From 225 lines across 5 files → 80 lines in 1 file
+export class ReflectionFlow<C> extends Flow<ReflectionShared<C>> {
+  constructor(agent: BaseReflectionAgent<C>) {
+    const initNode = new InitNode(agent);
+    const roundNode = new RoundNode(agent);
+    const finalizeNode = new FinalizeNode(agent);
+
+    initNode.next(roundNode);
+    roundNode.on('continue', roundNode);
+    roundNode.on('finalize', finalizeNode);
+
+    super(initNode);
+  }
+}
+```
+
+### 2. Tool-Use Agent: Move Hook Logic into Nodes
+
+```typescript
+// Instead of hooks.waitForFollowUp() called from exec()
+class WaitForInputNode extends BaseNode<ToolUseShared> {
+  async prep(shared) {
+    return { streamId: shared.streamId, hasQueued: shared.hasQueuedFollowUp };
+  }
+
+  async exec(prepRes) {
+    if (prepRes.hasQueued) return { followUp: shared.queuedFollowUp };
+    return { followUp: await this.waitForInput(prepRes.streamId) };
+  }
+
+  async post(shared, prep, exec) {
+    if (!exec.followUp) return 'finalize';
+    shared.pendingFollowUp = exec.followUp;
+    return 'apply';
+  }
+}
+```
+
+### 3. Remove Wrapper Layers
+
+| Remove | Replace With |
+|--------|--------------|
+| `buildRunFlow()` + `createAgentRunFlow()` | Single `createFlow()` |
+| `runNodeExecution()` / `runNodeEffect()` | Inline try/catch |
+| 5 lifecycle setters | Single `lifecycle.transition(phase)` |
+| `NodeExecResult<T>` discriminated union | Native Promise + error |
+| `links()` callback pattern | Direct `node.on()` calls |
+
+### 4. Reduce Hook Interface
+
+```typescript
+// From 12+4 = 16 methods
+interface ToolUseRunHooks {
+  // 16 methods...
+}
+
+// To 5 essential callbacks
+interface ToolUseCallbacks {
+  onCycleComplete(messages: Message[]): Promise<void>;
+  onWaitingForInput(): Promise<void>;
+  onError(error: Error): void;
+  shouldInterrupt(): boolean;
+  persistState(snapshot: Snapshot): Promise<void>;
+}
+```
+
+---
+
+## Summary: Workflow vs Tool-Use
+
+|  | Workflow Agent | Tool-Use Agent |
+|--|----------------|----------------|
+| **Complexity Justified?** | ❌ No | ⚠️ Partially |
+| **Core Issue** | 7 layers for a loop | Logic in hooks, not nodes |
+| **CycleFlow Quality** | N/A (uses agent directly) | ✅ Good |
+| **RunFlow Quality** | ❌ Over-abstracted | ❌ Just hook orchestrator |
+| **Fix** | Flatten entirely | Move logic into nodes |
+
+### The Key Insight
+
+**CycleFlows are proper PocketFlow** — they have real nodes doing real work (model invocation, tool dispatch, response processing).
+
+**RunFlows are NOT PocketFlow** — they're just hook orchestrators wearing a PocketFlow costume. The nodes are shells that delegate everything to callback interfaces.
+
+This creates a split personality:
+- Bottom layer (CycleFlows): Clean, node-based architecture
+- Top layer (RunFlows): Callback-based architecture pretending to be nodes
+
+### Recommendation Priority
+
+| Priority | Change | Impact |
+|----------|--------|--------|
+| **High** | Flatten ReflectionRunFlow | Remove 5+ files, ~500 lines |
+| **High** | Move ToolUse hook logic into nodes | True PocketFlow compliance |
+| **Medium** | Merge buildRunFlow + createAgentRunFlow | Remove indirection |
+| **Medium** | Replace 5 lifecycle helpers with state machine | Cleaner state management |
+| **Low** | Remove NodeExecResult wrappers | Minor cleanup |
