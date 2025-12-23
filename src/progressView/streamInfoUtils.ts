@@ -103,7 +103,11 @@ export function buildStreamInfos(
         sessionKind: sessionCategory,
         isToolAgent,
       },
-      hasMultipleOutputs: outputs.length > 1,
+      // When taskState is available, use actual output files count.
+      // When taskState is null, fall back to the hint from setActiveStream event.
+      hasMultipleOutputs: taskState
+        ? outputs.length > 1
+        : (state.getHasMultipleOutputsHint(id) ?? false),
       isRemote,
       lastTimestamp,
       inputFile,
