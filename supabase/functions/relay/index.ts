@@ -79,7 +79,6 @@ const RELAY_VERSION = '1.7.0';
  * - Database: profiles.tier column values
  */
 const ULTRA_TIER = 'Ultra';
-const MAX_TIER = 'Max';
 const FREE_TIER = 'free';
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
@@ -248,16 +247,6 @@ function jsonError(
       headers: { 'Content-Type': 'application/json' },
     },
   );
-}
-
-/**
- * Create a JSON success response with relay metadata.
- */
-function jsonSuccess(data: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify({ _relay: RELAY_VERSION, ...data }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }
 
 // =============================================================================
