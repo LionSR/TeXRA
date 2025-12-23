@@ -32,6 +32,8 @@ const MAX_BUFFER_SIZE = 1000;
 interface SetActiveStreamPayload {
   stream: StreamTabId | null;
   session?: AgentSessionDescriptor | null;
+  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  isRemote?: boolean;
 }
 
 interface SetTaskStatePayload {

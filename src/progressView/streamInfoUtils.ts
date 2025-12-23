@@ -84,7 +84,12 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    const isRemote = isRemoteAgent(rawAgentName);
+    // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
+    // and isRemoteAgent can reliably determine the source. When taskState is null,
+    // rawAgentName is just the clean name from the stream ID, so fall back to the hint.
+    const isRemote = taskState
+      ? isRemoteAgent(rawAgentName)
+      : (state.getIsRemoteHint(id) ?? false);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
