@@ -13,12 +13,11 @@ import type {
 // Internal imports
 import {
   createAgentRunFlow,
-  createAgentFinalizeNode,
+  createStandardFinalizeNode,
   AgentLifecycle,
   type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
-import type { EndGroupStatus } from '@logger/messageTypes';
 
 // Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
 export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
@@ -182,19 +181,8 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = createAgentFinalizeNode<
-    ReflectionRunShared<C>,
-    EndGroupStatus
-  >({
+  const finalizeNode = createStandardFinalizeNode<ReflectionRunShared<C>>({
     finalizePhase: 'finalize',
-    computeStatus: ({ lifecycle }) => (lifecycle.error ? 'error' : 'stopped'),
-    runFinalize: async ({ hooks }, status) => {
-      await hooks.end(status);
-    },
-    runCleanup: async ({ hooks }) => {
-      await hooks.cleanup();
-    },
-    onSuccess: ({ lifecycle }) => lifecycle.complete(),
   });
 
   return createAgentRunFlow<ReflectionRunShared<C>>({
