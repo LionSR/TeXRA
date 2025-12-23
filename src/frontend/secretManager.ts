@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { canUseServerSideKeys } from '@auth/serverSideKeyAccess';
+import { getServerSideKeyService } from '@auth/serverKeys';
 
 export type ApiProvider = (typeof SecretManager.API_PROVIDERS)[number];
 
@@ -79,7 +79,7 @@ export class SecretManager {
 
     // Check if server-side keys are available (Ultra tier + enabled providers)
     // This returns true if user has Ultra tier and at least one provider is enabled
-    if (await canUseServerSideKeys()) {
+    if (await getServerSideKeyService().canUseServerSideKeys()) {
       return true;
     }
 
