@@ -67,22 +67,7 @@ export class AgentInitNode<
       const runStage = await prepRes.hooks.start();
       await prepRes.hooks.init(runStage);
       if (this.config.beforeInitialize) {
-        try {
-          await this.config.beforeInitialize(prepRes.shared);
-        } catch (hookError) {
-          const contextualError =
-            hookError instanceof Error
-              ? new Error(
-                  `Agent initialization failed in beforeInitialize: ${hookError.message}`,
-                  { cause: hookError },
-                )
-              : new Error(
-                  `Agent initialization failed in beforeInitialize: ${String(
-                    hookError,
-                  )}`,
-                );
-          throw contextualError;
-        }
+        await this.config.beforeInitialize(prepRes.shared);
       }
       await prepRes.hooks.initializeClient();
       return {};
