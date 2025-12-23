@@ -14,10 +14,7 @@ import type {
 import {
   createAgentRunFlow,
   createAgentFinalizeNode,
-  beginLifecyclePhase,
-  completeLifecycle,
-  failLifecycle,
-  type AgentLifecycleState,
+  AgentLifecycle,
   type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
@@ -45,7 +42,7 @@ export const ReflectionRunPhaseSchema = z.enum([
 
 export type ReflectionRunPhase = z.infer<typeof ReflectionRunPhaseSchema>;
 
-export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
+export type ReflectionRunLifecycle = AgentLifecycle<ReflectionRunPhase>;
 
 /**
  * Runtime state for reflection agent runs.
@@ -145,14 +142,14 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     const execResult = execRes as ReflectionRoundExec<C>;
 
     if (execResult.error) {
-      failLifecycle(shared.lifecycle, execResult.error);
+      shared.lifecycle.fail(execResult.error);
       return FlowTransition.FINALIZE;
     }
 
     const { result } = execResult;
     if (!result) {
       const missingResultError = new Error('Round result is missing.');
-      failLifecycle(shared.lifecycle, missingResultError);
+      shared.lifecycle.fail(missingResultError);
       return FlowTransition.FINALIZE;
     }
 
@@ -197,7 +194,7 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
     runCleanup: async ({ hooks }) => {
       await hooks.cleanup();
     },
-    onSuccess: ({ lifecycle }) => completeLifecycle(lifecycle),
+    onSuccess: ({ lifecycle }) => lifecycle.complete(),
   });
 
   return createAgentRunFlow<ReflectionRunShared<C>>({
@@ -207,7 +204,7 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
         shared.hooks.resetPromptBuilder();
       },
       onSuccess: (shared) => {
-        beginLifecyclePhase(shared.lifecycle, 'rounds');
+        shared.lifecycle.begin('rounds');
         return FlowTransition.ROUND;
       },
     },

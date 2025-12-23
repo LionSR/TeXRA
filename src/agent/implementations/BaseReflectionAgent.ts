@@ -39,7 +39,7 @@ import {
 } from '@agent/implementations/flows/ReflectionRunFlow';
 
 // Internal imports
-import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
+import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -865,7 +865,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
       sourceLocation: null,
     };
-    const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
+    const lifecycle = new AgentLifecycle<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();
 
