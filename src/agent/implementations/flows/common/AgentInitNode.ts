@@ -3,7 +3,7 @@ import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local file imports
-import { runNodeEffect, type NodeExecVoidResult } from './nodeExecution';
+import { type NodeExecVoidResult } from './nodeExecution';
 
 // Type imports
 import type { AgentRunHooks } from './types';
@@ -43,7 +43,7 @@ export class AgentInitNode<
   }
 
   async exec(shared: Shared): Promise<AgentInitExecResult> {
-    return runNodeEffect(async () => {
+    try {
       const runStage = await shared.hooks.start();
       await shared.hooks.init(runStage);
       if (this.config.beforeInitialize) {
@@ -65,7 +65,10 @@ export class AgentInitNode<
         }
       }
       await shared.hooks.initializeClient();
-    });
+      return {};
+    } catch (error) {
+      return { error };
+    }
   }
 
   async post(
