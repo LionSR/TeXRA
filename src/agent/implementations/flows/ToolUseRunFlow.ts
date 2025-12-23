@@ -12,13 +12,12 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 // Internal imports
 import {
   createAgentRunFlow,
-  createAgentFinalizeNode,
+  createStandardFinalizeNode,
   AgentLifecycle,
   type AgentRunHooks,
   type AgentRunShared,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
-import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 // Schema export for serialization reference (runtime uses class instances)
 export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
@@ -225,23 +224,11 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
-  const finalizeNode = createAgentFinalizeNode<
-    ToolUseRunShared<C>,
-    EndGroupStatus
-  >({
+  const finalizeNode = createStandardFinalizeNode<ToolUseRunShared<C>>({
     finalizePhase: 'finalize',
-    computeStatus: ({ lifecycle }) =>
-      lifecycle.status === 'error'
-        ? END_GROUP_STATUS.ERROR
-        : END_GROUP_STATUS.STOPPED,
-    runFinalize: async ({ hooks }, status) => {
+    beforeEnd: async ({ hooks }) => {
       await hooks.clearPersistedSnapshot();
-      await hooks.end(status);
     },
-    runCleanup: async ({ hooks }) => {
-      await hooks.cleanup();
-    },
-    onSuccess: ({ lifecycle }) => lifecycle.complete(),
     onSecondaryError: ({ hooks }, error) =>
       hooks.logFinalizeWarning?.(
         'Additional finalize error encountered.',
