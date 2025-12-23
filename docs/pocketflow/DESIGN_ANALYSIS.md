@@ -50,6 +50,7 @@ flowchart TB
 ```
 
 **Communication Patterns:**
+
 - **Shared Store**: Global mutable state (heap), nodes read in `prep`, write in `post`
 - **Params**: Immutable per-node config (stack), set by parent flow
 
@@ -93,22 +94,24 @@ flowchart TB
 ### What TeXRA Does Well
 
 #### 1. Services Pattern Implementation
+
 TeXRA correctly separates mutable state (`shared`) from immutable services (`_params.services`):
 
 ```typescript
 // Good: ResponseCycleShared separates concerns
 interface ResponseCycleShared<C> {
-  state: ResponseCycleState;      // Mutable runtime state
-  retryState: RetryState;         // Mutable retry tracking
+  state: ResponseCycleState; // Mutable runtime state
+  retryState: RetryState; // Mutable retry tracking
 }
 
 // Good: Services passed via params
 interface ResponseCycleParams<C> {
-  services: ResponseCycleServices<C>;  // Immutable
+  services: ResponseCycleServices<C>; // Immutable
 }
 ```
 
 #### 2. Clear Flow Transitions
+
 TeXRA uses an enum for transitions, making flow logic explicit:
 
 ```typescript
@@ -123,6 +126,7 @@ export enum FlowTransition {
 ```
 
 #### 3. Built-in Retry with Fallback
+
 `ResponseModelInvocationNode` correctly extends `Node` for automatic retry:
 
 ```typescript
@@ -160,6 +164,7 @@ flowchart LR
 ```
 
 **Current Code (ResponseProcessNode, lines 444-563):**
+
 ```typescript
 async exec(shared: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
   const { options, store } = this._params.services;
@@ -176,6 +181,7 @@ async exec(shared: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
 | `ToolUseDispatchNode` | ToolUseCycleFlow.ts:644 | `exec()` receives and reads `shared` |
 
 **Impact**:
+
 - Breaks isolation - `exec()` should be a pure function
 - Makes retries potentially non-idempotent
 - Harder to test in isolation
@@ -197,6 +203,7 @@ flowchart LR
 ```
 
 **Current Code:**
+
 ```typescript
 // ResponseProcessNode.prep() - line 440
 async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
@@ -205,6 +212,7 @@ async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
 ```
 
 **Correct Pattern Would Be:**
+
 ```typescript
 async prep(shared: ResponseCycleShared<C>): Promise<{
   shouldStop: boolean;
@@ -225,6 +233,7 @@ async prep(shared: ResponseCycleShared<C>): Promise<{
 **Principle**: `exec()` is for pure computation; side effects belong in `post()`.
 
 **Current Code (ToolUseProcessNode.exec(), lines 445-572):**
+
 ```typescript
 async exec(shared: ToolUseCycleShared<C>): Promise<...> {
   // ...
@@ -460,14 +469,15 @@ flowchart TB
 
 ## Summary: Action Items
 
-| Priority | Issue | Fix |
-|----------|-------|-----|
-| High | `exec()` accessing `shared` | Refactor to only use `prepRes` |
-| High | Side effects in `exec()` | Move all mutations to `post()` |
-| Medium | `prep()` returning `shared` | Extract specific fields needed |
-| Low | Large node methods | Consider splitting into focused nodes |
+| Priority | Issue                       | Fix                                   |
+| -------- | --------------------------- | ------------------------------------- |
+| High     | `exec()` accessing `shared` | Refactor to only use `prepRes`        |
+| High     | Side effects in `exec()`    | Move all mutations to `post()`        |
+| Medium   | `prep()` returning `shared` | Extract specific fields needed        |
+| Low      | Large node methods          | Consider splitting into focused nodes |
 
 By following these recommendations, TeXRA will achieve:
+
 1. **Testability**: `exec()` becomes a pure function
 2. **Retry Safety**: Side effects only in `post()`, after retry loop
 3. **Clarity**: Clear data flow through node lifecycle
@@ -563,15 +573,15 @@ flowchart TB
 
 ## Side-by-Side Comparison
 
-| Aspect | Reflection Agent | Tool-Use Agent |
-|--------|-----------------|----------------|
-| **Purpose** | Multi-round text generation | Interactive tool calling |
-| **Phases** | idle → init → rounds → finalize | idle → init → prepare → cycle → finalize |
-| **Run-Level Nodes** | 1 (`ReflectionRoundNode`) | 2 (`PrepareNode`, `CycleNode`) |
-| **Hooks Interface** | 3 extra methods | **12 extra methods** |
-| **State Fields** | 5 simple fields | 5 fields + nullable types |
-| **Sub-flows Used** | None (inline) | `ToolUseCycleFlow` (4 nodes) |
-| **Complexity** | Simple | High |
+| Aspect              | Reflection Agent                | Tool-Use Agent                           |
+| ------------------- | ------------------------------- | ---------------------------------------- |
+| **Purpose**         | Multi-round text generation     | Interactive tool calling                 |
+| **Phases**          | idle → init → rounds → finalize | idle → init → prepare → cycle → finalize |
+| **Run-Level Nodes** | 1 (`ReflectionRoundNode`)       | 2 (`PrepareNode`, `CycleNode`)           |
+| **Hooks Interface** | 3 extra methods                 | **12 extra methods**                     |
+| **State Fields**    | 5 simple fields                 | 5 fields + nullable types                |
+| **Sub-flows Used**  | None (inline)                   | `ToolUseCycleFlow` (4 nodes)             |
+| **Complexity**      | Simple                          | High                                     |
 
 ---
 
@@ -597,7 +607,7 @@ class RoundNode extends BaseNode<ReflectionShared> {
     return {
       agent: shared.agent,
       round: shared.currentRound,
-      shouldFinalize: shared.currentRound >= shared.totalRounds
+      shouldFinalize: shared.currentRound >= shared.totalRounds,
     };
   }
 
@@ -653,7 +663,7 @@ createReflectionRunFlow() (225 lines)
 ```typescript
 interface ToolUseRunHooks<C> extends AgentRunHooks {
   // State setup (2)
-  prepareState(): Promise<{ messages, store, shouldSkipCycle }>;
+  prepareState(): Promise<{ messages; store; shouldSkipCycle }>;
   buildCycleOptions(store): ToolUseCycleOptions<C>;
 
   // Cycle execution (2)
@@ -746,12 +756,12 @@ flowchart TB
 
 ### Lines of Code by Layer
 
-| Layer | Lines | Purpose | Justified? |
-|-------|-------|---------|------------|
-| PocketFlow Core | 210 | Framework | ✅ Yes |
-| CycleFlows | 1,817 | Response/ToolUse cycles | ✅ Yes |
-| common/ infrastructure | ~600 | Builders, lifecycle, wrappers | ⚠️ Partially |
-| Run Flows | 492 | Orchestration | ❌ Over-built |
+| Layer                  | Lines | Purpose                       | Justified?    |
+| ---------------------- | ----- | ----------------------------- | ------------- |
+| PocketFlow Core        | 210   | Framework                     | ✅ Yes        |
+| CycleFlows             | 1,817 | Response/ToolUse cycles       | ✅ Yes        |
+| common/ infrastructure | ~600  | Builders, lifecycle, wrappers | ⚠️ Partially  |
+| Run Flows              | 492   | Orchestration                 | ❌ Over-built |
 
 **600 lines of infrastructure to support 492 lines of run flows**
 
@@ -772,13 +782,13 @@ pie title "Node Categories"
 
 ### Current State
 
-| Component | Implementation | Problem |
-|-----------|----------------|---------|
-| Wait for follow-up | Hook method | Should be a WaitNode |
-| Apply follow-up | Hook method | Should be an ApplyNode |
-| Persist checkpoint | Hook method | Could be a PersistNode |
-| Enter waiting state | Hook method | UI concern, maybe ok as hook |
-| Check interruption | Hook method | Cross-cutting, ok as hook |
+| Component           | Implementation | Problem                      |
+| ------------------- | -------------- | ---------------------------- |
+| Wait for follow-up  | Hook method    | Should be a WaitNode         |
+| Apply follow-up     | Hook method    | Should be an ApplyNode       |
+| Persist checkpoint  | Hook method    | Could be a PersistNode       |
+| Enter waiting state | Hook method    | UI concern, maybe ok as hook |
+| Check interruption  | Hook method    | Cross-cutting, ok as hook    |
 
 ### Proposed Split
 
@@ -846,13 +856,13 @@ class WaitForInputNode extends BaseNode<ToolUseShared> {
 
 ### 3. Remove Wrapper Layers
 
-| Remove | Replace With |
-|--------|--------------|
-| `buildRunFlow()` + `createAgentRunFlow()` | Single `createFlow()` |
-| `runNodeExecution()` / `runNodeEffect()` | Inline try/catch |
-| 5 lifecycle setters | Single `lifecycle.transition(phase)` |
-| `NodeExecResult<T>` discriminated union | Native Promise + error |
-| `links()` callback pattern | Direct `node.on()` calls |
+| Remove                                    | Replace With                         |
+| ----------------------------------------- | ------------------------------------ |
+| `buildRunFlow()` + `createAgentRunFlow()` | Single `createFlow()`                |
+| `runNodeExecution()` / `runNodeEffect()`  | Inline try/catch                     |
+| 5 lifecycle setters                       | Single `lifecycle.transition(phase)` |
+| `NodeExecResult<T>` discriminated union   | Native Promise + error               |
+| `links()` callback pattern                | Direct `node.on()` calls             |
 
 ### 4. Reduce Hook Interface
 
@@ -876,13 +886,13 @@ interface ToolUseCallbacks {
 
 ## Summary: Workflow vs Tool-Use
 
-|  | Workflow Agent | Tool-Use Agent |
-|--|----------------|----------------|
-| **Complexity Justified?** | ❌ No | ⚠️ Partially |
-| **Core Issue** | 7 layers for a loop | Logic in hooks, not nodes |
-| **CycleFlow Quality** | N/A (uses agent directly) | ✅ Good |
-| **RunFlow Quality** | ❌ Over-abstracted | ❌ Just hook orchestrator |
-| **Fix** | Flatten entirely | Move logic into nodes |
+|                           | Workflow Agent            | Tool-Use Agent            |
+| ------------------------- | ------------------------- | ------------------------- |
+| **Complexity Justified?** | ❌ No                     | ⚠️ Partially              |
+| **Core Issue**            | 7 layers for a loop       | Logic in hooks, not nodes |
+| **CycleFlow Quality**     | N/A (uses agent directly) | ✅ Good                   |
+| **RunFlow Quality**       | ❌ Over-abstracted        | ❌ Just hook orchestrator |
+| **Fix**                   | Flatten entirely          | Move logic into nodes     |
 
 ### The Key Insight
 
@@ -891,15 +901,16 @@ interface ToolUseCallbacks {
 **RunFlows are NOT PocketFlow** — they're just hook orchestrators wearing a PocketFlow costume. The nodes are shells that delegate everything to callback interfaces.
 
 This creates a split personality:
+
 - Bottom layer (CycleFlows): Clean, node-based architecture
 - Top layer (RunFlows): Callback-based architecture pretending to be nodes
 
 ### Recommendation Priority
 
-| Priority | Change | Impact |
-|----------|--------|--------|
-| **High** | Flatten ReflectionRunFlow | Remove 5+ files, ~500 lines |
-| **High** | Move ToolUse hook logic into nodes | True PocketFlow compliance |
-| **Medium** | Merge buildRunFlow + createAgentRunFlow | Remove indirection |
-| **Medium** | Replace 5 lifecycle helpers with state machine | Cleaner state management |
-| **Low** | Remove NodeExecResult wrappers | Minor cleanup |
+| Priority   | Change                                         | Impact                      |
+| ---------- | ---------------------------------------------- | --------------------------- |
+| **High**   | Flatten ReflectionRunFlow                      | Remove 5+ files, ~500 lines |
+| **High**   | Move ToolUse hook logic into nodes             | True PocketFlow compliance  |
+| **Medium** | Merge buildRunFlow + createAgentRunFlow        | Remove indirection          |
+| **Medium** | Replace 5 lifecycle helpers with state machine | Cleaner state management    |
+| **Low**    | Remove NodeExecResult wrappers                 | Minor cleanup               |
