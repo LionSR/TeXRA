@@ -8,7 +8,11 @@ import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import type { AgentLogger, AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { replaceInputCommands, flexibleFS, type FileLocation } from '@utils/files';
+import {
+  replaceInputCommands,
+  flexibleFS,
+  type FileLocation,
+} from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
