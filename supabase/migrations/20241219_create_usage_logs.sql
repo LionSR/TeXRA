@@ -48,6 +48,10 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_model ON public.usage_logs(model);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_provider ON public.usage_logs(provider);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_batch_id ON public.usage_logs(batch_id);
 
+-- Composite index for deduplication queries
+CREATE INDEX IF NOT EXISTS idx_usage_logs_user_batch
+ON public.usage_logs(user_id, batch_id);
+
 -- Index for rate limiting queries (daily/monthly aggregates)
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_date
 ON public.usage_logs(user_id, DATE(timestamp));

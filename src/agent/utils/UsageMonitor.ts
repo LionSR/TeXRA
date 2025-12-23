@@ -9,6 +9,7 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
@@ -122,9 +123,14 @@ export class UsageMonitor {
     try {
       const modelConfig = this.modelHandler.config;
 
+      // Validate provider against schema, fallback to 'unknown' if invalid
+      const providerLower = modelConfig.provider.toLowerCase();
+      const parsedProvider = UsageProviderSchema.safeParse(providerLower);
+      const provider = parsedProvider.success ? parsedProvider.data : 'unknown';
+
       UsageLogService.log({
         model: modelConfig.fullName,
-        provider: modelConfig.provider.toLowerCase() as any,
+        provider,
         agentName: this.metadata?.agentName,
         inputTokens: totals.totalInputTokens,
         outputTokens: totals.totalOutputTokens,

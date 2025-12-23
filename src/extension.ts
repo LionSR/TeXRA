@@ -225,6 +225,10 @@ export async function activate(context: vscode.ExtensionContext) {
     | string
     | undefined;
   UsageLogService.initialize({}, extensionVersion);
+  // Add safety net disposable in case deactivate() isn't called
+  context.subscriptions.push({
+    dispose: () => void UsageLogService.dispose(),
+  });
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
