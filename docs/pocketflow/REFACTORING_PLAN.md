@@ -1,8 +1,40 @@
 # PocketFlow Abstraction Refactoring Plan
 
+## Refactoring Status
+
+| Phase | Description                             | Status      |
+| ----- | --------------------------------------- | ----------- |
+| 1     | Add Test Coverage                       | ⏭️ Skipped  |
+| 2     | Fix CycleFlow prep/exec/post violations | ✅ Complete |
+| 3     | Create AgentLifecycle class             | ✅ Complete |
+| 4     | Remove nodeExecution wrappers           | ✅ Complete |
+| 5     | Flatten ReflectionRunFlow               | ✅ Complete |
+| 6     | Refactor ToolUseRunFlow hook logic      | 🔮 Deferred |
+
+### Completed Changes
+
+- **Phase 2**: ResponseCycleFlow and ToolUseCycleFlow nodes now follow proper prep/exec/post separation. Side effects moved from exec() to post(). Added typed result interfaces.
+
+- **Phase 3**: Created `AgentLifecycle` class replacing 5 standalone lifecycle functions. Single source of truth for phase, status, and error state.
+
+- **Phase 4**: Removed `runNodeExecution` and `runNodeEffect` wrapper functions. Inlined try/catch directly in node exec methods. Kept the result types.
+
+- **Phase 5**: Consolidated finalize pattern using `createStandardFinalizeNode`. Both ReflectionRunFlow and ToolUseRunFlow now use the simplified factory.
+
+### Deferred Work
+
+**Phase 6** is deferred because:
+
+- Current hook orchestration pattern works correctly
+- Breaking the while-loop into separate nodes adds complexity
+- Without test coverage, high-risk refactoring should be avoided
+- The main PocketFlow violations have been addressed
+
+---
+
 ## Current State Analysis
 
-### Dependency Graph
+### Dependency Graph (After Refactoring)
 
 ```
                     ┌─────────────────────────────────────┐
@@ -27,41 +59,40 @@
         ▼                          ▼                          ▼
 ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
 │ ReflectionRunFlow │  │  ToolUseRunFlow   │  │   Common Infra    │
-│  (225 lines)      │  │   (267 lines)     │  │   (~600 lines)    │
+│  (~200 lines)     │  │   (~250 lines)    │  │   (~400 lines)    │
 └────────┬──────────┘  └────────┬──────────┘  └───────────────────┘
          │                      │                      │
          │                      │      ┌───────────────┴───────────────┐
          │                      │      │ createAgentRunFlow            │
          │                      │      │ buildRunFlow                  │
          │                      │      │ AgentInitNode                 │
-         │                      │      │ createFinalizeNode            │
-         │                      │      │ lifecycle (5 funcs)           │
-         │                      │      │ nodeExecution (2 funcs)       │
+         │                      │      │ createStandardFinalizeNode    │
+         │                      │      │ AgentLifecycle (class)        │
          │                      │      │ types, schemas                │
          │                      │      └───────────────────────────────┘
          │                      │
          │                      ▼
          │              ┌───────────────────┐
-         │              │  ToolUseCycleFlow │  ◄── GOOD: Real PocketFlow
+         │              │  ToolUseCycleFlow │  ◄── Proper prep/exec/post
          │              │   (939 lines)     │
          │              └───────────────────┘
          │
          ▼
 ┌───────────────────┐
-│ ResponseCycleFlow │  ◄── GOOD: Real PocketFlow
+│ ResponseCycleFlow │  ◄── Proper prep/exec/post
 │   (878 lines)     │
 └───────────────────┘
 ```
 
-### Risk Assessment
+### Risk Assessment (Updated)
 
-| Factor        | Status                           |
-| ------------- | -------------------------------- |
-| Test Coverage | ❌ **None** - High risk          |
-| Consumers     | 4 agent implementations          |
-| CycleFlows    | ✅ Keep - properly designed      |
-| RunFlows      | ❌ Refactor - hook orchestrators |
-| Shared Infra  | ⚠️ Simplify - over-engineered    |
+| Factor        | Status                                         |
+| ------------- | ---------------------------------------------- |
+| Test Coverage | ❌ **None** - Defer high-risk refactoring      |
+| Consumers     | 4 agent implementations                        |
+| CycleFlows    | ✅ Fixed - proper prep/exec/post separation    |
+| RunFlows      | ✅ Simplified - standard finalize pattern      |
+| Shared Infra  | ✅ Cleaned - AgentLifecycle class, no wrappers |
 
 ---
 
