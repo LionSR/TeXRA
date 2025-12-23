@@ -14,7 +14,12 @@
  */
 
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
-import { TierModelConfigSchema, type TierModelConfig } from './types';
+import {
+  TierModelConfigSchema,
+  UserAccessStatusSchema,
+  type TierModelConfig,
+  type UserAccessStatus,
+} from './types';
 
 const LOG_PREFIX = '[TierService]';
 
@@ -25,6 +30,9 @@ export class TierService {
   private cache: TierModelConfig | null = null;
   private cacheTimestamp = 0;
   private fetchPromise: Promise<TierModelConfig | null> | null = null;
+
+  /** User's access status including expiration (populated when fetching with auth) */
+  private userStatus: UserAccessStatus | null = null;
 
   /**
    * Create a new TierService.
@@ -40,6 +48,7 @@ export class TierService {
     this.cache = null;
     this.cacheTimestamp = 0;
     this.fetchPromise = null;
+    this.userStatus = null;
   }
 
   /**
@@ -56,14 +65,23 @@ export class TierService {
 
   /**
    * Fetch tier configuration from the relay server.
+   * @param authToken - Optional JWT token to include user access status in response
    */
-  private async fetchFromServer(): Promise<TierModelConfig | null> {
+  private async fetchFromServer(
+    authToken?: string,
+  ): Promise<TierModelConfig | null> {
     try {
       const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Include auth token if provided to get user-specific status
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(url, { method: 'GET', headers });
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -79,6 +97,15 @@ export class TierService {
       }
 
       const data = await response.json();
+
+      // Parse user status if present (returned when authenticated)
+      if (data.userStatus) {
+        const statusParsed = UserAccessStatusSchema.safeParse(data.userStatus);
+        if (statusParsed.success) {
+          this.userStatus = statusParsed.data;
+        }
+      }
+
       const parsed = TierModelConfigSchema.safeParse(data);
 
       if (!parsed.success) {
@@ -99,8 +126,9 @@ export class TierService {
   /**
    * Get the tier configuration from the server.
    * Successful results are cached for 5 minutes.
+   * @param authToken - Optional JWT to get user-specific access status
    */
-  async getConfig(): Promise<TierModelConfig | null> {
+  async getConfig(authToken?: string): Promise<TierModelConfig | null> {
     if (this.isCacheValid()) {
       return this.fetchPromise;
     }
@@ -108,7 +136,7 @@ export class TierService {
     // Set timestamp BEFORE creating promise to prevent race conditions
     // where concurrent calls see fetchPromise !== null but timestamp is stale
     this.cacheTimestamp = Date.now();
-    this.fetchPromise = this.fetchFromServer().then((result) => {
+    this.fetchPromise = this.fetchFromServer(authToken).then((result) => {
       if (result !== null) {
         this.cache = result;
       } else {
@@ -219,5 +247,43 @@ export class TierService {
     }
 
     return `${modelCount} model${modelCount === 1 ? '' : 's'} included`;
+  }
+
+  // ===========================================================================
+  // Access Expiration Methods
+  // ===========================================================================
+
+  /**
+   * Get the user's access status (populated when fetching config with auth token).
+   * Returns null if not authenticated or status not fetched.
+   */
+  getUserAccessStatus(): UserAccessStatus | null {
+    return this.userStatus;
+  }
+
+  /**
+   * Check if the user's access has expired.
+   * Returns false if no expiration info available (allows access).
+   */
+  isAccessExpired(): boolean {
+    return this.userStatus?.isExpired ?? false;
+  }
+
+  /**
+   * Get days remaining until access expires.
+   * Returns null if no expiration (lifetime access) or status not available.
+   * Negative values indicate days since expiration.
+   */
+  getDaysRemaining(): number | null {
+    return this.userStatus?.daysRemaining ?? null;
+  }
+
+  /**
+   * Get the access expiration date.
+   * Returns null if no expiration (lifetime access) or status not available.
+   */
+  getExpirationDate(): Date | null {
+    const expiresAt = this.userStatus?.accessExpiresAt;
+    return expiresAt ? new Date(expiresAt) : null;
   }
 }

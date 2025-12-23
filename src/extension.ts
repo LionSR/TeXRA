@@ -110,6 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeServerSideKeyAccess(context, {
     isAuthenticated: () => SupabaseClient.isAuthenticated(),
     getUserTier: () => SupabaseClient.getUserTier(),
+    getAccessToken: () => SupabaseClient.getAccessToken(),
   });
 
   // Copy default agents BEFORE initializing the agent index

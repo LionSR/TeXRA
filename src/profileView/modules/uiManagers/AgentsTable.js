@@ -40,6 +40,7 @@ export class AgentsTable {
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
    * @param {string[]|null} options.allowedModels - Array of allowed model names (null = all for Ultra)
+   * @param {string|null} options.accessExpiresAt - ISO date string when access expires (null = no expiration)
    */
   render({
     authenticated,
@@ -50,6 +51,7 @@ export class AgentsTable {
     apiAccessMode,
     enabledProviders,
     allowedModels,
+    accessExpiresAt,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
     const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
@@ -97,6 +99,23 @@ export class AgentsTable {
       tierBadge.textContent = tier;
       // Normalize tier to lowercase for CSS class consistency
       tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
+    }
+
+    // Update access expiration display
+    const expirationRow = safeGetElementById(ELEMENT_IDS.ACCESS_EXPIRATION_ROW);
+    const expirationValue = safeGetElementById(ELEMENT_IDS.ACCESS_EXPIRATION);
+    if (expirationRow && expirationValue) {
+      if (accessExpiresAt) {
+        const expirationDate = new Date(accessExpiresAt);
+        expirationValue.textContent = expirationDate.toLocaleDateString(
+          undefined,
+          { year: 'numeric', month: 'short', day: 'numeric' },
+        );
+        expirationRow.style.display = 'flex';
+      } else {
+        // No expiration - don't show the row
+        expirationRow.style.display = 'none';
+      }
     }
 
     // Update tier message based on whether user has any permissions
