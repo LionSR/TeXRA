@@ -59,7 +59,7 @@ export function buildStreamInfos(
 ): StreamTabInfo[] {
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
-    const sessionKindHint = state.getSessionKindHint(id);
+    const hints = state.getStreamHints(id);
     const logs = state.streamTabs.getMessages(id);
     const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
@@ -68,7 +68,8 @@ export function buildStreamInfos(
     // Extract clean agent name (strip source: prefix if present)
     const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
     const agentName = getCleanAgentName(rawAgentName);
-    let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
+    let sessionCategory =
+      taskState?.session?.agentCategory ?? hints.sessionCategory;
 
     // Filter logic: streams without category only show when filter is "all"
     if (!sessionCategory) {
@@ -89,7 +90,7 @@ export function buildStreamInfos(
     // rawAgentName is just the clean name from the stream ID, so fall back to the hint.
     const isRemote = taskState
       ? isRemoteAgent(rawAgentName)
-      : (state.getIsRemoteHint(id) ?? false);
+      : (hints.isRemote ?? false);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
@@ -107,7 +108,7 @@ export function buildStreamInfos(
       // When taskState is null, fall back to the hint from setActiveStream event.
       hasMultipleOutputs: taskState
         ? outputs.length > 1
-        : (state.getHasMultipleOutputsHint(id) ?? false),
+        : (hints.hasMultipleOutputs ?? false),
       isRemote,
       lastTimestamp,
       inputFile,
