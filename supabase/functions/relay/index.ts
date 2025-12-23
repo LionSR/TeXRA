@@ -166,11 +166,6 @@ function getEnabledProviders(): string[] {
  * SDKs use provider-specific headers, not standard Authorization.
  */
 function extractJwtFromRequest(req: Request): string | null {
-  // Debug: log all headers to diagnose auth issues
-  const headerNames: string[] = [];
-  req.headers.forEach((_, name) => headerNames.push(name));
-  console.log(`[relay] Request headers present: ${headerNames.join(', ')}`);
-
   // OpenAI SDK: Authorization: Bearer {jwt}
   const authHeader = req.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
@@ -189,7 +184,6 @@ function extractJwtFromRequest(req: Request): string | null {
     return googleKey;
   }
 
-  console.log('[relay] No auth header found in: authorization, x-api-key, x-goog-api-key');
   return null;
 }
 
