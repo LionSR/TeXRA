@@ -413,6 +413,9 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 stream: activeStreamId,
                 session: metadata,
                 isRemote: isRemoteAgent(config.agent),
+                hasMultipleOutputs:
+                  config.useMultipleOutputs ||
+                  (config.outputFiles?.length ?? 0) > 1,
               });
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 
