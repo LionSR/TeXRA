@@ -399,7 +399,9 @@ Deno.serve(async (req: Request) => {
           global: { headers: { Authorization: `Bearer ${jwtToken}` } },
         });
 
-        const { data: { user } } = await supabaseClient.auth.getUser();
+        const {
+          data: { user },
+        } = await supabaseClient.auth.getUser();
         if (user) {
           const { data: profile } = await supabaseClient
             .from('profiles')
@@ -560,7 +562,8 @@ Deno.serve(async (req: Request) => {
         return new Response(
           JSON.stringify({
             _relay: RELAY_VERSION,
-            error: 'Your researcher access has expired. Please contact support to renew.',
+            error:
+              'Your researcher access has expired. Please contact support to renew.',
             expired: true,
             expiresAt: profile.access_expires_at,
           }),
