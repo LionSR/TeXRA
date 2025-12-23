@@ -3,14 +3,14 @@ import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local file imports
-import { beginLifecyclePhase, failLifecycle } from './lifecycle';
 import { runNodeEffect, type NodeExecVoidResult } from './nodeExecution';
 
 // Type imports
-import type { AgentRunHooks, AgentLifecycleState } from './types';
+import type { AgentRunHooks } from './types';
+import type { AgentLifecycle } from './AgentLifecycle';
 
 export interface AgentInitShared<
-  Lifecycle extends AgentLifecycleState<string>,
+  Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
 > {
   lifecycle: Lifecycle;
@@ -38,7 +38,7 @@ export class AgentInitNode<
   }
 
   async prep(shared: Shared): Promise<Shared> {
-    beginLifecyclePhase(shared.lifecycle, this.config.phase);
+    shared.lifecycle.begin(this.config.phase);
     return shared;
   }
 
@@ -74,7 +74,7 @@ export class AgentInitNode<
     execRes: AgentInitExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
-      failLifecycle(shared.lifecycle, execRes.error);
+      shared.lifecycle.fail(execRes.error);
       if (this.config.onFailure) {
         return this.config.onFailure(shared, execRes.error);
       }

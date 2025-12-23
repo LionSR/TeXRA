@@ -1,6 +1,6 @@
 // Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
-import type { AgentLifecycleState } from './types';
+import type { AgentLifecycle } from './AgentLifecycle';
 
 export type NodeExecResult<T> =
   | { result: T; error?: undefined }
@@ -31,7 +31,7 @@ export async function runNodeEffect(
 }
 
 export interface FinalizeNodeContext<
-  Lifecycle extends AgentLifecycleState<string>,
+  Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
   Agent extends object = object,
 > {
