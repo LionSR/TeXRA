@@ -1,10 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent metadata
-import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  resolveAgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
 // Type imports
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import type { AgentType } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
@@ -36,6 +40,18 @@ import {
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { getConfig } from '@utils/config';
 import type { TodoItem } from '@eventBus/schemas';
+
+/**
+ * Schema for ephemeral stream metadata hints.
+ * Used to display UI indicators before TaskState is fully populated.
+ */
+export const StreamHintsSchema = z.object({
+  sessionCategory: z.nativeEnum(AgentCategory).optional(),
+  isRemote: z.boolean().optional(),
+  hasMultipleOutputs: z.boolean().optional(),
+});
+
+export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
 /**
  * Core state management for the progress view.
@@ -79,14 +95,7 @@ export class ProgressViewState {
    * indicators (session category, remote status, multiple outputs).
    * Once canonical metadata is stored via setTaskState, the entry is cleared.
    */
-  private _streamHints: Map<
-    StreamTabId,
-    {
-      sessionCategory?: AgentCategory;
-      isRemote?: boolean;
-      hasMultipleOutputs?: boolean;
-    }
-  > = new Map();
+  private _streamHints = new Map<StreamTabId, StreamHints>();
   private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   /**
    * Ephemeral todos storage keyed by stream ID.
@@ -198,48 +207,17 @@ export class ProgressViewState {
 
   // Stream metadata hint management (ephemeral, non-persistent)
   // Provides UI hints before TaskState is fully populated
-  updateStreamHints(
-    streamTabId: StreamTabId,
-    hints: {
-      sessionCategory?: AgentCategory;
-      isRemote?: boolean;
-      hasMultipleOutputs?: boolean;
-    },
-  ): void {
+  updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
     const existing = this._streamHints.get(streamTabId) ?? {};
     this._streamHints.set(streamTabId, { ...existing, ...hints });
   }
 
-  getStreamHints(streamTabId: StreamTabId): {
-    sessionCategory?: AgentCategory;
-    isRemote?: boolean;
-    hasMultipleOutputs?: boolean;
-  } {
+  getStreamHints(streamTabId: StreamTabId): StreamHints {
     return this._streamHints.get(streamTabId) ?? {};
   }
 
   clearStreamHints(streamTabId: StreamTabId): void {
     this._streamHints.delete(streamTabId);
-  }
-
-  // Legacy accessors for backward compatibility with existing code
-  setSessionKindHint(
-    streamTabId: StreamTabId,
-    sessionCategory: AgentCategory,
-  ): void {
-    this.updateStreamHints(streamTabId, { sessionCategory });
-  }
-
-  getSessionKindHint(streamTabId: StreamTabId): AgentCategory | undefined {
-    return this.getStreamHints(streamTabId).sessionCategory;
-  }
-
-  getIsRemoteHint(streamTabId: StreamTabId): boolean | undefined {
-    return this.getStreamHints(streamTabId).isRemote;
-  }
-
-  getHasMultipleOutputsHint(streamTabId: StreamTabId): boolean | undefined {
-    return this.getStreamHints(streamTabId).hasMultipleOutputs;
   }
 
   // Todo management (ephemeral, non-persistent)
