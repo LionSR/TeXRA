@@ -72,22 +72,21 @@ export class ProgressViewState {
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   /**
-   * Ephemeral session-kind hints keyed by stream ID.
+   * Ephemeral stream metadata hints keyed by stream ID.
    *
    * When a stream becomes active before its {@link TaskState} is persisted,
-   * progress events populate this map so the UI can immediately classify the
-   * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
-   * is cleared, so there is no need to persist these hints across sessions.
+   * progress events populate this map so the UI can immediately show correct
+   * indicators (session category, remote status, multiple outputs).
+   * Once canonical metadata is stored via setTaskState, the entry is cleared.
    */
-  private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
-  /**
-   * Ephemeral remote-agent hints keyed by stream ID.
-   *
-   * When a stream becomes active before its {@link TaskState} is persisted,
-   * progress events populate this map so the UI can immediately show the
-   * remote indicator. Once canonical metadata is stored the entry is cleared.
-   */
-  private _isRemoteHints: Map<StreamTabId, boolean> = new Map();
+  private _streamHints: Map<
+    StreamTabId,
+    {
+      sessionCategory?: AgentCategory;
+      isRemote?: boolean;
+      hasMultipleOutputs?: boolean;
+    }
+  > = new Map();
   private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   /**
    * Ephemeral todos storage keyed by stream ID.
@@ -197,33 +196,50 @@ export class ProgressViewState {
     this.saveAgentTypeFilter();
   }
 
-  // Session kind hint management (non-persistent)
+  // Stream metadata hint management (ephemeral, non-persistent)
+  // Provides UI hints before TaskState is fully populated
+  updateStreamHints(
+    streamTabId: StreamTabId,
+    hints: {
+      sessionCategory?: AgentCategory;
+      isRemote?: boolean;
+      hasMultipleOutputs?: boolean;
+    },
+  ): void {
+    const existing = this._streamHints.get(streamTabId) ?? {};
+    this._streamHints.set(streamTabId, { ...existing, ...hints });
+  }
+
+  getStreamHints(streamTabId: StreamTabId): {
+    sessionCategory?: AgentCategory;
+    isRemote?: boolean;
+    hasMultipleOutputs?: boolean;
+  } {
+    return this._streamHints.get(streamTabId) ?? {};
+  }
+
+  clearStreamHints(streamTabId: StreamTabId): void {
+    this._streamHints.delete(streamTabId);
+  }
+
+  // Legacy accessors for backward compatibility with existing code
   setSessionKindHint(
     streamTabId: StreamTabId,
     sessionCategory: AgentCategory,
   ): void {
-    this._sessionCategoryHints.set(streamTabId, sessionCategory);
+    this.updateStreamHints(streamTabId, { sessionCategory });
   }
 
   getSessionKindHint(streamTabId: StreamTabId): AgentCategory | undefined {
-    return this._sessionCategoryHints.get(streamTabId);
-  }
-
-  clearSessionKindHint(streamTabId: StreamTabId): void {
-    this._sessionCategoryHints.delete(streamTabId);
-  }
-
-  // Remote agent hint management (non-persistent)
-  setIsRemoteHint(streamTabId: StreamTabId, isRemote: boolean): void {
-    this._isRemoteHints.set(streamTabId, isRemote);
+    return this.getStreamHints(streamTabId).sessionCategory;
   }
 
   getIsRemoteHint(streamTabId: StreamTabId): boolean | undefined {
-    return this._isRemoteHints.get(streamTabId);
+    return this.getStreamHints(streamTabId).isRemote;
   }
 
-  clearIsRemoteHint(streamTabId: StreamTabId): void {
-    this._isRemoteHints.delete(streamTabId);
+  getHasMultipleOutputsHint(streamTabId: StreamTabId): boolean | undefined {
+    return this.getStreamHints(streamTabId).hasMultipleOutputs;
   }
 
   // Todo management (ephemeral, non-persistent)
@@ -478,8 +494,7 @@ export class ProgressViewState {
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, cloneTaskState(taskState));
-    this.clearSessionKindHint(streamTabId);
-    this.clearIsRemoteHint(streamTabId);
+    this.clearStreamHints(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
@@ -491,7 +506,7 @@ export class ProgressViewState {
 
   clearTaskState(streamTabId: StreamTabId): void {
     const didDelete = this.taskStates.delete(streamTabId);
-    this.clearSessionKindHint(streamTabId);
+    this.clearStreamHints(streamTabId);
     if (didDelete) {
       this.saveTaskStates();
       this.cleanupToolUseAgentRegistry();
@@ -551,7 +566,7 @@ export class ProgressViewState {
     ]);
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
-    this.clearSessionKindHint(stream);
+    this.clearStreamHints(stream);
     this.clearActiveRun(stream);
     this.clearTodos(stream);
 
@@ -579,7 +594,7 @@ export class ProgressViewState {
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
-    this._sessionCategoryHints.clear();
+    this._streamHints.clear();
     this._todos.clear();
     this._activeRunIds.clear();
     this._activeStream = '';
