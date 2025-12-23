@@ -293,8 +293,7 @@ export class ServerSideKeyService {
 
     this.accessFetchPromise = (async () => {
       // Get auth token for tier-config request (to get expiration status)
-      const authToken =
-        (await this.authProvider.getAccessToken()) ?? undefined;
+      const authToken = (await this.authProvider.getAccessToken()) ?? undefined;
 
       // Fetch auth status and tier config (which includes providers)
       const [hasAccess, tierConfig] = await Promise.all([

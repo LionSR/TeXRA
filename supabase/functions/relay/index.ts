@@ -141,7 +141,7 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
     authType: 'bearer',
   },
   dashscope: {
-    baseUrl: 'https://dashscope.aliyuncs.com',
+    baseUrl: 'https://dashscope-intl.aliyuncs.com',
     envKey: 'DASHSCOPE_API_KEY',
     authType: 'bearer',
   },
