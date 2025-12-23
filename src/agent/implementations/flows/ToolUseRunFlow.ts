@@ -107,18 +107,24 @@ export type ToolUseRunShared<C = unknown> = AgentRunShared<
   ToolUseRunHooks<C>
 >;
 
+interface ToolUsePrepareNodePrepResult<C> {
+  hooks: ToolUseRunHooks<C>;
+}
+
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    shared.lifecycle.begin('prepare');
-    return shared;
+  async prep(
+    shared: ToolUseRunShared<C>,
+  ): Promise<ToolUsePrepareNodePrepResult<C>> {
+    // Pure extraction - no side effects
+    return { hooks: shared.hooks };
   }
 
   async exec(
-    shared: ToolUseRunShared<C>,
+    prepRes: ToolUsePrepareNodePrepResult<C>,
   ): Promise<ToolUsePrepareExecResult<C>> {
     try {
-      const prepared = await shared.hooks.prepareState();
-      const cycleOptions = shared.hooks.buildCycleOptions(prepared.store);
+      const prepared = await prepRes.hooks.prepareState();
+      const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
       return {
         result: {
           ...prepared,
@@ -132,9 +138,12 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: ToolUseRunShared<C>,
+    _prepRes: ToolUsePrepareNodePrepResult<C>,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
+    // Lifecycle transition at start of post
+    shared.lifecycle.begin('prepare');
+
     if (execRes.error || !execRes.result) {
       const error =
         execRes.error ??
@@ -155,15 +164,29 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 }
 
+interface ToolUseCycleNodePrepResult<C> {
+  hooks: ToolUseRunHooks<C>;
+  state: ToolUseRunState<C>;
+  cycleOptions: ToolUseCycleOptions<C>;
+}
+
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    shared.lifecycle.begin('cycle');
-    return shared;
+  async prep(
+    shared: ToolUseRunShared<C>,
+  ): Promise<ToolUseCycleNodePrepResult<C>> {
+    // Pure extraction - no side effects
+    // Note: lifecycle.begin('cycle') is already called in ToolUsePrepareNode.post()
+    return {
+      hooks: shared.hooks,
+      state: shared.state,
+      cycleOptions: shared.state.cycleOptions!,
+    };
   }
 
-  async exec(shared: ToolUseRunShared<C>): Promise<ToolUseCycleExecResult> {
-    const { hooks, state } = shared;
-    const cycleOptions = state.cycleOptions!;
+  async exec(
+    prepRes: ToolUseCycleNodePrepResult<C>,
+  ): Promise<ToolUseCycleExecResult> {
+    const { hooks, state, cycleOptions } = prepRes;
 
     try {
       while (true) {
@@ -208,7 +231,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: ToolUseRunShared<C>,
+    _prepRes: ToolUseCycleNodePrepResult<C>,
     execRes: ToolUseCycleExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
