@@ -61,6 +61,9 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 /** Maximum queue size to prevent memory leaks if flush fails repeatedly */
 const MAX_QUEUE_SIZE = 1000;
 
+/** Request timeout in milliseconds */
+const REQUEST_TIMEOUT_MS = 10000;
+
 /**
  * Singleton service for logging API usage to the backend.
  *
@@ -132,28 +135,29 @@ class UsageLogServiceImpl {
       return;
     }
 
-    // Check authentication before attempting to send
-    const isAuth = await SupabaseClient.isAuthenticated();
-    if (!isAuth) {
-      logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
-      return;
-    }
-
+    // Set flushing flag BEFORE any async operations to prevent concurrent flushes
     this.isFlushing = true;
 
-    // Take current queue and reset
-    const entries = [...this.queue];
-    this.queue = [];
-
-    const batch: UsageLogBatch = {
-      entries,
-      batchId: randomUUID(),
-    };
-
-    logger.debug(CHANNEL, `Flushing ${entries.length} entries (batch: ${batch.batchId})`);
-
     try {
-      await this.sendWithRetry(batch);
+      // Get auth token once - eliminates duplicate round trip
+      const token = await SupabaseClient.getAccessToken();
+      if (!token) {
+        logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
+        return;
+      }
+
+      // Take current queue and reset atomically
+      const entries = this.queue;
+      this.queue = [];
+
+      const batch: UsageLogBatch = {
+        entries,
+        batchId: randomUUID(),
+      };
+
+      logger.debug(CHANNEL, `Flushing ${entries.length} entries (batch: ${batch.batchId})`);
+
+      await this.sendWithRetry(batch, token);
     } catch (error) {
       // Log error but don't re-throw - this is fire-and-forget
       logger.warn(
@@ -169,12 +173,15 @@ class UsageLogServiceImpl {
   /**
    * Send batch to backend with exponential backoff retry.
    */
-  private async sendWithRetry(batch: UsageLogBatch): Promise<UsageLogResponse> {
+  private async sendWithRetry(
+    batch: UsageLogBatch,
+    token: string,
+  ): Promise<UsageLogResponse> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
       try {
-        const response = await this.sendBatch(batch);
+        const response = await this.sendBatch(batch, token);
 
         if (response.success) {
           logger.debug(
@@ -190,8 +197,12 @@ class UsageLogServiceImpl {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        // Don't retry on auth errors
-        if (lastError.message.includes('401') || lastError.message.includes('403')) {
+        // Don't retry on auth errors or timeouts
+        if (
+          lastError.message.includes('401') ||
+          lastError.message.includes('403') ||
+          lastError.name === 'AbortError'
+        ) {
           throw lastError;
         }
 
@@ -210,37 +221,43 @@ class UsageLogServiceImpl {
   }
 
   /**
-   * Send a batch to the edge function.
+   * Send a batch to the edge function with timeout.
    */
-  private async sendBatch(batch: UsageLogBatch): Promise<UsageLogResponse> {
-    const token = await SupabaseClient.getAccessToken();
-    if (!token) {
-      throw new Error('No auth token available');
+  private async sendBatch(
+    batch: UsageLogBatch,
+    token: string,
+  ): Promise<UsageLogResponse> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(USAGE_LOG_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(batch),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const parsed = UsageLogResponseSchema.safeParse(data);
+
+      if (!parsed.success) {
+        logger.warn(CHANNEL, `Invalid response from server: ${parsed.error.message}`);
+        // Return a default success response if parsing fails but HTTP was OK
+        return { success: true, accepted: batch.entries.length };
+      }
+
+      return parsed.data;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const response = await fetch(USAGE_LOG_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(batch),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const parsed = UsageLogResponseSchema.safeParse(data);
-
-    if (!parsed.success) {
-      logger.warn(CHANNEL, `Invalid response from server: ${parsed.error.message}`);
-      // Return a default success response if parsing fails but HTTP was OK
-      return { success: true, accepted: batch.entries.length };
-    }
-
-    return parsed.data;
   }
 
   /**
