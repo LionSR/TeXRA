@@ -562,13 +562,7 @@ async function runLatexdiffFromMetadata(params: {
   progress: vscode.Progress<{ message?: string; increment?: number }>;
   fileService: TaskRunFileService;
 }): Promise<DiffRunOutcome> {
-  const {
-    rounds,
-    mathMarkup,
-    generateBetweenRoundDiffs,
-    progress,
-    fileService,
-  } = params;
+  const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
 
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
