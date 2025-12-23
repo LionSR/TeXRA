@@ -120,7 +120,8 @@ export function resolveToolDefinitions(
         warnOnMissing?.(item);
         return { name: item };
       }
-      const tool = getDefaultToolRegistry().get(item);
+      const registry = getDefaultToolRegistry();
+      const tool = registry.get(item);
       if (!tool) {
         warnOnMissing?.(item);
         return { name: item };
@@ -132,7 +133,8 @@ export function resolveToolDefinitions(
       warnOnMissing?.(item.name);
       return { name: item.name };
     }
-    if (!getDefaultToolRegistry().has(item.name)) {
+    const registry = getDefaultToolRegistry();
+    if (!registry.get(item.name)) {
       warnOnMissing?.(item.name);
     }
     // Validate against schema - if invalid, return minimal definition

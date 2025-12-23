@@ -722,16 +722,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Extract plain text and usage information from the Responses API result.
+   *
+   * Note: OpenAI's Responses API streaming can sometimes return missing or null
+   * usage data, especially with thinking models through relay proxies. We handle
+   * this gracefully by using zero defaults rather than failing.
+   * See: https://github.com/openai/openai-agents-python/issues/1179
    */
   extractResponse(
     responseObject: Response,
     endTag: string,
   ): ExtractResponseResult {
+    // Handle missing usage gracefully - OpenAI streaming may not always include it
+    const usage: ResponseUsage = responseObject.usage ?? {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens_details: { reasoning_tokens: 0 },
+    };
     if (!responseObject.usage) {
-      throw new Error('Response object missing required usage information');
+      this.logger.warn(
+        'Response missing usage information - token counts will show as 0',
+      );
     }
-
-    const usage = responseObject.usage;
     let newResponse = responseObject.output_text?.trim() ?? '';
 
     if (!newResponse && responseObject.output) {
