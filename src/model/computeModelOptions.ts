@@ -1,8 +1,5 @@
 // Local imports - model utilities
-import {
-  canUseServerSideKeys,
-  isProviderEnabledForServerSideKeys,
-} from '@auth/serverSideKeyAccess';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
@@ -36,16 +33,23 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * Models missing a required key receive data-requires-key="true" so the
  * webview can handle API key setup prompts and display a red ✗ indicator.
  *
- * When server-side keys are enabled (experimental feature for Ultra users),
- * models from supported providers are marked as available even without local keys.
+ * Server-side key access is tier-based:
+ * - Ultra tier: All models available via relay (if provider enabled)
+ * - Max tier: Only specific cheaper models available via relay (configured remotely)
+ * - Free tier: Must bring own API keys
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
   const hasOpenRouter = await SecretManager.apiKeyExists('openRouter');
 
-  // Check if server-side API keys are available (Ultra tier + setting enabled)
-  const hasServerSideKeys = await canUseServerSideKeys();
+  // Prime the server-side keys cache (fetches tier config + enabled providers)
+  // This ensures canUseServerSideKeysForModel has the data it needs
+  const serverSideKeyService = getServerSideKeyService();
+  const hasAnyServerSideAccess =
+    await serverSideKeyService.canUseServerSideKeys();
 
+  // Build option tags for each model
+  // Server-side checks are sync (caches primed above), personal key checks are async
   const optionTags = await Promise.all(
     models.map(async (model) => {
       const config = MODEL_CONFIGS[model];
@@ -54,43 +58,40 @@ export async function computeModelOptions(): Promise<string> {
       }
 
       const provider = config.provider;
-      let available = false;
 
-      // Check if server-side keys are available for this provider
-      // isProviderEnabledForServerSideKeys checks the server's list of enabled providers
-      if (hasServerSideKeys && isProviderEnabledForServerSideKeys(provider)) {
-        available = true;
-      }
+      // Determine availability - server-side checks are sync after priming
+      const hasServerSideForModel =
+        hasAnyServerSideAccess &&
+        serverSideKeyService.isProviderOnServer(provider) &&
+        serverSideKeyService.canUseModelSync(model);
 
-      // Check if the provider requires an API key (only if not already available via server-side)
-      if (
-        !available &&
-        SecretManager.API_PROVIDERS.includes(provider as ApiProvider)
-      ) {
-        try {
-          available = await SecretManager.apiKeyExists(provider as ApiProvider);
-        } catch (error) {
-          console.warn(`Failed to check API key for ${provider}:`, error);
-          available = false;
+      let available = hasServerSideForModel;
+
+      // Only check personal keys if not available via server-side
+      if (!available) {
+        if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+          try {
+            available = await SecretManager.apiKeyExists(
+              provider as ApiProvider,
+            );
+          } catch (error) {
+            console.warn(`Failed to check API key for ${provider}:`, error);
+          }
+        } else {
+          // Providers not in API_PROVIDERS don't require keys (e.g., OTHERS, COPILOT)
+          available = true;
         }
-      } else if (!available) {
-        // Models from providers that don't require API keys (not in API_PROVIDERS)
-        // are always available (e.g., OTHERS, COPILOT)
-        available = true;
+
+        // Check OpenRouter as fallback
+        if (!available && config.openrouterFullName && hasOpenRouter) {
+          available = true;
+        }
       }
 
-      // Check OpenRouter availability only if not already available and model supports it
-      if (!available && config.openrouterFullName && hasOpenRouter) {
-        available = true;
-      }
-
-      // Client-side adds the ✗ indicator based on data-requires-key attribute
-      const label = model;
+      // Build option tag with data attributes
       const requiresKeyAttr = available
         ? ''
         : ' data-requires-key="true" class="disabled-option disabled-model"';
-
-      // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
       const contextStr =
         config.contextWindow !== undefined
@@ -100,7 +101,6 @@ export async function computeModelOptions(): Promise<string> {
       const costStr = formatCost(config.inputPrice, config.outputPrice);
       const costAttr = costStr ? ` data-cost="${costStr}"` : '';
 
-      // Build description for tooltip (context and cost)
       const descriptionParts: string[] = [];
       if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
       if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
@@ -109,7 +109,7 @@ export async function computeModelOptions(): Promise<string> {
           ? ` description="${descriptionParts.join(' | ')}"`
           : '';
 
-      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${label}</vscode-option>`;
+      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${model}</vscode-option>`;
     }),
   );
 
