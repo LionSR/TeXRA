@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 // Internal imports
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -33,20 +31,12 @@ export interface AgentInitNodeConfig<Shared extends AgentInitShared<any, any>> {
 type AgentInitExecResult = NodeExecVoidResult;
 
 /**
- * Schema for AgentInitNode prep result - single source of truth.
- * Uses z.custom for runtime objects that can't be validated.
+ * Prep result for AgentInitNode - extracted from shared.
  */
-const createAgentInitPrepResultSchema = <
-  Shared extends AgentInitShared<any, any>,
->() =>
-  z.object({
-    hooks: z.custom<Shared['hooks']>(),
-    shared: z.custom<Shared>(), // Needed for beforeInitialize callback
-  });
-
-type AgentInitPrepResult<Shared extends AgentInitShared<any, any>> = z.infer<
-  ReturnType<typeof createAgentInitPrepResultSchema<Shared>>
->;
+interface AgentInitPrepResult<Shared extends AgentInitShared<any, any>> {
+  hooks: Shared['hooks'];
+  shared: Shared; // Needed for beforeInitialize callback
+}
 
 export class AgentInitNode<
   Shared extends AgentInitShared<any, any>,
