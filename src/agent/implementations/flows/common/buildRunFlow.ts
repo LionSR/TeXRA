@@ -1,12 +1,7 @@
 // Internal imports
 import { Flow, BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-
-interface FlowLink<Shared> {
-  from: BaseNode<Shared>;
-  on: string;
-  to?: BaseNode<Shared>;
-}
+import type { FlowLink } from './types';
 
 interface BuildRunFlowOptions<Shared> {
   init: BaseNode<Shared>;

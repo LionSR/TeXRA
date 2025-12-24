@@ -104,11 +104,11 @@ export type ToolUseRunShared<C = unknown> = AgentRunShared<
 >;
 
 // ============================================================================
-// Prep Result Types - for node prep/exec results
+// Result Types - Clean discriminated unions following PocketFlow patterns
 // ============================================================================
 
 /**
- * Result of prepare execution - passed from exec to post.
+ * Result of prepare execution.
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
@@ -120,52 +120,46 @@ interface ToolUsePrepareResult<C> {
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
 
 /**
- * Result of cycle execution - includes failure status for proper lifecycle handling.
- * - error: Exception thrown during execution
- * - failedWithError: Cycle failed after exhausting retries (not user cancellation)
- * - userCancelled: User cancelled the retry prompt
+ * Result of a single cycle execution.
+ * Uses 'kind' discriminant for clarity (matches PocketFlow's InvocationResult).
  */
-type ToolUseCycleExecResult =
-  | {
-      result: void;
-      error?: undefined;
-      failedWithError?: false;
-      userCancelled?: false;
-    }
-  | {
-      error: unknown;
-      result?: undefined;
-      failedWithError?: undefined;
-      userCancelled?: undefined;
-    }
-  | {
-      result?: undefined;
-      error?: undefined;
-      failedWithError: true;
-      errorMessage?: string;
-      userCancelled?: false;
-    }
-  | {
-      result?: undefined;
-      error?: undefined;
-      failedWithError?: false;
-      userCancelled: true;
-    };
+type CycleExecResult =
+  | { kind: 'success' }
+  | { kind: 'skipped' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'cancelled' };
 
 /**
- * Prep result for ToolUsePrepareNode - extracted from shared.
+ * Result of waiting for follow-up.
+ */
+type WaitExecResult =
+  | { kind: 'continue'; followUp: string }
+  | { kind: 'stop'; reason: 'interrupted' | 'no-followup' };
+
+/**
+ * Prep result for ToolUsePrepareNode.
  */
 interface ToolUsePrepareNodePrepResult<C> {
   hooks: ToolUseRunHooks<C>;
 }
 
 /**
- * Prep result for ToolUseCycleNode - extracted from shared.
+ * Prep result for ToolUseCycleNode.
  */
-interface ToolUseCycleNodePrepResult<C> {
-  hooks: ToolUseRunHooks<C>;
-  state: ToolUseRunState<C>;
+interface CycleNodePrepResult<C> {
+  shouldSkip: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
+  conversation: ProviderMessage[];
+  store: AgentSharedStore;
+  hooks: ToolUseRunHooks<C>;
+}
+
+/**
+ * Prep result for ToolUseWaitNode.
+ */
+interface WaitNodePrepResult {
+  interrupted: boolean;
+  followUp?: string;
 }
 
 // ============================================================================
@@ -225,121 +219,153 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 }
 
+/**
+ * Runs a single tool-use cycle.
+ *
+ * PocketFlow compliance:
+ * - prep(): Extract immutable data from shared state
+ * - exec(): Pure computation (call runCycle, no side effects)
+ * - post(): Side effects (persist checkpoint) + routing decision
+ */
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(
-    shared: ToolUseRunShared<C>,
-  ): Promise<ToolUseCycleNodePrepResult<C>> {
-    // Pure extraction - no side effects
-    // Note: lifecycle.begin('cycle') is already called in ToolUsePrepareNode.post()
+  async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
     return {
-      hooks: shared.hooks,
-      state: shared.state,
+      shouldSkip: shared.state.shouldSkipCycle,
       cycleOptions: shared.state.cycleOptions!,
+      conversation: shared.state.conversation,
+      store: shared.state.store!,
+      hooks: shared.hooks,
     };
   }
 
-  async exec(
-    prepRes: ToolUseCycleNodePrepResult<C>,
-  ): Promise<ToolUseCycleExecResult> {
-    const { hooks, state, cycleOptions } = prepRes;
-
-    try {
-      while (true) {
-        if (!state.shouldSkipCycle) {
-          if (!state.store) {
-            throw new Error('Tool-use store is not initialized.');
-          }
-          const cycleResult = await hooks.runCycle(
-            cycleOptions,
-            state.conversation,
-            state.store,
-          );
-
-          // Only persist successful cycles to avoid checkpointing failed state.
-          // User cancellation and errors should not be checkpointed.
-          if (!cycleResult.failedWithError && !cycleResult.userCancelled) {
-            await hooks.persistCheckpoint(state.conversation, state.store);
-          }
-
-          // Exit the loop if cycle failed or was cancelled, propagating status
-          if (cycleResult.failedWithError) {
-            return {
-              failedWithError: true,
-              errorMessage: cycleResult.errorMessage,
-            };
-          }
-          if (cycleResult.userCancelled) {
-            return { userCancelled: true };
-          }
-        } else {
-          state.shouldSkipCycle = false;
-        }
-
-        if (hooks.checkInterruption()) {
-          return { result: undefined };
-        }
-
-        if (hooks.hasQueuedFollowUp()) {
-          await hooks.clearPersistedSnapshot();
-        } else {
-          await hooks.enterWaitingState();
-        }
-
-        const followUp = await hooks.waitForFollowUp();
-        if (!followUp || hooks.checkInterruption()) {
-          return { result: undefined };
-        }
-
-        await hooks.markRunning();
-        await hooks.clearPersistedSnapshot();
-        const updatedMessages = await hooks.applyFollowUp(
-          followUp,
-          state.conversation,
-        );
-        state.conversation = [...updatedMessages];
-      }
-    } catch (error) {
-      return { error };
+  async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
+    // Handle skip (resume case) - pure decision, no side effects
+    if (prepRes.shouldSkip) {
+      return { kind: 'skipped' };
     }
+
+    // Pure: call the cycle, return result
+    const result = await prepRes.hooks.runCycle(
+      prepRes.cycleOptions,
+      prepRes.conversation,
+      prepRes.store,
+    );
+
+    if (result.failedWithError) {
+      return { kind: 'failed', message: result.errorMessage ?? 'Cycle failed' };
+    }
+    if (result.userCancelled) {
+      return { kind: 'cancelled' };
+    }
+    return { kind: 'success' };
   }
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: ToolUseCycleNodePrepResult<C>,
-    execRes: ToolUseCycleExecResult,
+    prepRes: CycleNodePrepResult<C>,
+    execRes: CycleExecResult,
   ): Promise<string | undefined> {
-    // Handle exception thrown during execution
-    if (execRes.error) {
-      shared.lifecycle.fail(execRes.error);
+    // Clear skip flag for next iteration (side effect in post)
+    if (prepRes.shouldSkip) {
+      shared.state.shouldSkipCycle = false;
+    }
+
+    switch (execRes.kind) {
+      case 'success':
+        // Persist checkpoint (side effect belongs in post)
+        await shared.hooks.persistCheckpoint(
+          shared.state.conversation,
+          shared.state.store!,
+        );
+        return FlowTransition.EXECUTE; // → WaitNode
+
+      case 'skipped':
+        return FlowTransition.EXECUTE; // → WaitNode
+
+      case 'failed':
+        shared.lifecycle.fail(new Error(execRes.message));
+        return FlowTransition.FINALIZE;
+
+      case 'cancelled':
+        // User cancelled - not an error, just finalize
+        return FlowTransition.FINALIZE;
+    }
+  }
+}
+
+/**
+ * Waits for user follow-up message between cycles.
+ *
+ * PocketFlow compliance:
+ * - prep(): I/O operations (waiting is I/O, OK in prep)
+ * - exec(): Pure transformation of prep result
+ * - post(): Side effects (apply follow-up) + routing decision
+ *
+ * Uses CONTINUE transition to loop back to CycleNode (like ReflectionRoundNode).
+ */
+class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
+  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
+    const { hooks } = shared;
+
+    // Check interruption first
+    if (hooks.checkInterruption()) {
+      return { interrupted: true };
+    }
+
+    // Handle waiting state (I/O - OK in prep)
+    if (hooks.hasQueuedFollowUp()) {
+      await hooks.clearPersistedSnapshot();
+    } else {
+      await hooks.enterWaitingState();
+    }
+
+    // Wait for follow-up (blocking I/O - OK in prep)
+    const followUp = await hooks.waitForFollowUp();
+
+    if (!followUp || hooks.checkInterruption()) {
+      return { interrupted: true };
+    }
+
+    return { interrupted: false, followUp };
+  }
+
+  async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
+    // Pure: just transform prep result to exec result
+    if (prepRes.interrupted) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+    if (!prepRes.followUp) {
+      return { kind: 'stop', reason: 'no-followup' };
+    }
+    return { kind: 'continue', followUp: prepRes.followUp };
+  }
+
+  async post(
+    shared: ToolUseRunShared<C>,
+    _prepRes: WaitNodePrepResult,
+    execRes: WaitExecResult,
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'stop') {
       return FlowTransition.FINALIZE;
     }
 
-    // Handle cycle failure (retries exhausted or non-retryable error)
-    if (execRes.failedWithError) {
-      const error = new Error(
-        execRes.errorMessage ?? 'Tool-use cycle failed with an error',
-      );
-      shared.lifecycle.fail(error);
-      return FlowTransition.FINALIZE;
-    }
+    // Apply follow-up (side effects belong in post)
+    await shared.hooks.markRunning();
+    await shared.hooks.clearPersistedSnapshot();
+    shared.state.conversation = await shared.hooks.applyFollowUp(
+      execRes.followUp,
+      shared.state.conversation,
+    );
 
-    // Handle user cancellation - don't set status to 'running', just finalize
-    // The finalize node will mark as 'completed' or 'stopped' based on lifecycle state
-    if (execRes.userCancelled) {
-      // Status remains as-is (likely 'running' from cycle start)
-      // Finalize will complete normally without error
-      return FlowTransition.FINALIZE;
-    }
-
-    // Normal completion - keep running status for follow-up cycles
-    shared.lifecycle.setStatus('running');
-    return FlowTransition.FINALIZE;
+    // Loop back to CycleNode (like ReflectionRoundNode uses CONTINUE)
+    return FlowTransition.CONTINUE;
   }
 }
 
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
+  const waitNode = new ToolUseWaitNode<C>();
   const finalizeNode = createStandardFinalizeNode<ToolUseRunShared<C>>({
     finalizePhase: 'finalize',
     beforeEnd: async ({ hooks }) => {
@@ -362,10 +388,17 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
     },
     finalize: finalizeNode,
     links: ({ init }) => [
+      // Init → Prepare
       { from: init, on: FlowTransition.EXECUTE, to: prepareNode },
+      // Prepare → Cycle (or Finalize on error)
       { from: prepareNode, on: FlowTransition.EXECUTE, to: cycleNode },
       { from: prepareNode, on: FlowTransition.FINALIZE },
+      // Cycle → Wait (or Finalize on error/cancel)
+      { from: cycleNode, on: FlowTransition.EXECUTE, to: waitNode },
       { from: cycleNode, on: FlowTransition.FINALIZE },
+      // Wait → Cycle (loop via CONTINUE) or Finalize (stop)
+      { from: waitNode, on: FlowTransition.CONTINUE, to: cycleNode },
+      { from: waitNode, on: FlowTransition.FINALIZE },
     ],
   });
 }
