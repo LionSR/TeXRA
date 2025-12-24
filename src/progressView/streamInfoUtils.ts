@@ -63,7 +63,6 @@ export function buildStreamInfos(
     const logs = state.streamTabs.getMessages(id);
     const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
-    const outputs = taskState?.agentConfig.outputFiles ?? [];
     const inputFile = taskState?.agentConfig.inputFile ?? '';
     // Extract clean agent name (strip source: prefix if present)
     const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
@@ -104,11 +103,10 @@ export function buildStreamInfos(
         sessionKind: sessionCategory,
         isToolAgent,
       },
-      // When taskState is available, check useMultipleOutputs flag OR actual output files count.
+      // useMultipleOutputs is the single source of truth (workflow-only concept).
       // When taskState is null, fall back to the hint from setActiveStream event.
-      // This mirrors the hint calculation in executeAgent.ts for consistent UI behavior.
       hasMultipleOutputs: taskState
-        ? (taskState.agentConfig.useMultipleOutputs || outputs.length > 1)
+        ? taskState.agentConfig.useMultipleOutputs
         : (hints.hasMultipleOutputs ?? false),
       isRemote,
       lastTimestamp,
