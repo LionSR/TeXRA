@@ -1,7 +1,11 @@
-// Local imports - agent
+// Local imports
+import { getServerSideKeyService } from '@auth/serverKeys';
+
+// Type imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
 
 // Internal imports
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
 
 // Type imports
@@ -22,7 +26,7 @@ export interface UsageMonitorMetadata {
   /** Agent name for backend logging */
   agentName?: string;
   /** Agent category: workflow or toolUse */
-  agentCategory?: 'workflow' | 'toolUse';
+  agentCategory?: `${AgentCategory}`;
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput?: boolean;
 }
@@ -132,6 +136,12 @@ export class UsageMonitor {
       const parsedProvider = UsageProviderSchema.safeParse(providerLower);
       const provider = parsedProvider.success ? parsedProvider.data : 'unknown';
 
+      // Check if server-side keys (relay) were used for this request
+      const usedRelay = getServerSideKeyService().shouldUseServerSideKeysSync(
+        modelConfig.provider,
+        modelConfig.name,
+      );
+
       UsageLogService.log({
         model: modelConfig.fullName,
         provider,
@@ -144,6 +154,7 @@ export class UsageMonitor {
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens: totals.totalCacheReadInputTokens,
         reasoningTokens: totals.totalReasoningTokens,
+        usedRelay,
         streamId: this.context.streamId,
       });
     } catch (error) {
