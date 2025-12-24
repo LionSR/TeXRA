@@ -130,49 +130,56 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           return;
         }
 
-        let select = document.getElementById('model');
-        if (!isSelectLikeElement(select)) {
-          const waitHandle = waitForElement('#model');
-
-          // Cancel any previous waiter to prevent race conditions
-          if (this._disposeModelWaiter) {
-            this._disposeModelWaiter();
-          }
-
-          // Create a disposer that cleans up this specific waiter
-          const disposeHandle = () => {
-            waitHandle.dispose();
-            // Only clear _disposeModelWaiter if this is still the active waiter
-            if (this._disposeModelWaiter === disposeHandle) {
-              this._disposeModelWaiter = null;
-            }
-          };
-          this._disposeModelWaiter = disposeHandle;
-
-          select = await waitHandle.promise;
-
-          // Check if this waiter is still active after the await
-          // If not, a newer waiter has taken over, so abort
-          if (this._disposeModelWaiter !== disposeHandle) {
-            return;
-          }
-          this._disposeModelWaiter = null;
-
-          // Check if disposed during await
-          if (this._isDisposed) {
-            return;
-          }
-
-          // Verify element was found
+        // Block saves for entire operation to prevent race conditions between
+        // await completing and _applyModelOptions starting
+        mainViewState.blockSave();
+        try {
+          let select = document.getElementById('model');
           if (!isSelectLikeElement(select)) {
-            console.warn(
-              'SET_MODEL_OPTIONS: Model select element not found after waiting',
-            );
-            return;
-          }
-        }
+            const waitHandle = waitForElement('#model');
 
-        this._applyModelOptions(select, m.options);
+            // Cancel any previous waiter to prevent race conditions
+            if (this._disposeModelWaiter) {
+              this._disposeModelWaiter();
+            }
+
+            // Create a disposer that cleans up this specific waiter
+            const disposeHandle = () => {
+              waitHandle.dispose();
+              // Only clear _disposeModelWaiter if this is still the active waiter
+              if (this._disposeModelWaiter === disposeHandle) {
+                this._disposeModelWaiter = null;
+              }
+            };
+            this._disposeModelWaiter = disposeHandle;
+
+            select = await waitHandle.promise;
+
+            // Check if this waiter is still active after the await
+            // If not, a newer waiter has taken over, so abort
+            if (this._disposeModelWaiter !== disposeHandle) {
+              return;
+            }
+            this._disposeModelWaiter = null;
+
+            // Check if disposed during await
+            if (this._isDisposed) {
+              return;
+            }
+
+            // Verify element was found
+            if (!isSelectLikeElement(select)) {
+              console.warn(
+                'SET_MODEL_OPTIONS: Model select element not found after waiting',
+              );
+              return;
+            }
+          }
+
+          this._applyModelOptions(select, m.options);
+        } finally {
+          mainViewState.unblockSave();
+        }
       },
       /**
        * Handles SET_AGENT_OPTIONS command to update agent dropdowns.
@@ -195,53 +202,60 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           },
         ];
 
-        let applied = false;
+        // Block saves for entire operation to prevent race conditions between
+        // await completing and _applyAgentOptions starting
+        mainViewState.blockSave();
+        try {
+          let applied = false;
 
-        for (const { id, html } of configs) {
-          if (!id) continue;
+          for (const { id, html } of configs) {
+            if (!id) continue;
 
-          let select = document.getElementById(id);
-          if (!isSelectLikeElement(select)) {
-            // Wait for element to appear, similar to SET_MODEL_OPTIONS
-            const waitHandle = waitForElement(`#${id}`);
-
-            // Cancel any previous waiter for this element
-            const waiterKey = `_disposeAgentWaiter_${id}`;
-            if (this[waiterKey]) {
-              this[waiterKey]();
-            }
-
-            const disposeHandle = () => {
-              waitHandle.dispose();
-              if (this[waiterKey] === disposeHandle) {
-                this[waiterKey] = null;
-              }
-            };
-            this[waiterKey] = disposeHandle;
-
-            select = await waitHandle.promise;
-
-            // Check if superseded or disposed - abort entirely to prevent
-            // stale data from this message overwriting newer options
-            if (this[waiterKey] !== disposeHandle || this._isDisposed) {
-              return;
-            }
-            this[waiterKey] = null;
-
+            let select = document.getElementById(id);
             if (!isSelectLikeElement(select)) {
-              console.warn(
-                `SET_AGENT_OPTIONS: Agent select '${id}' not found after waiting`,
-              );
-              continue;
+              // Wait for element to appear, similar to SET_MODEL_OPTIONS
+              const waitHandle = waitForElement(`#${id}`);
+
+              // Cancel any previous waiter for this element
+              const waiterKey = `_disposeAgentWaiter_${id}`;
+              if (this[waiterKey]) {
+                this[waiterKey]();
+              }
+
+              const disposeHandle = () => {
+                waitHandle.dispose();
+                if (this[waiterKey] === disposeHandle) {
+                  this[waiterKey] = null;
+                }
+              };
+              this[waiterKey] = disposeHandle;
+
+              select = await waitHandle.promise;
+
+              // Check if superseded or disposed - abort entirely to prevent
+              // stale data from this message overwriting newer options
+              if (this[waiterKey] !== disposeHandle || this._isDisposed) {
+                return;
+              }
+              this[waiterKey] = null;
+
+              if (!isSelectLikeElement(select)) {
+                console.warn(
+                  `SET_AGENT_OPTIONS: Agent select '${id}' not found after waiting`,
+                );
+                continue;
+              }
             }
+
+            this._applyAgentOptions(select, html);
+            applied = true;
           }
 
-          this._applyAgentOptions(select, html);
-          applied = true;
-        }
-
-        if (!applied) {
-          console.warn('SET_AGENT_OPTIONS: No agent select elements found');
+          if (!applied) {
+            console.warn('SET_AGENT_OPTIONS: No agent select elements found');
+          }
+        } finally {
+          mainViewState.unblockSave();
         }
       },
       /**
@@ -372,22 +386,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
-    // Block save() during option replacement and restoration.
-    // vscode-single-select may fire change events during innerHTML replacement
-    // or programmatic value setting, which would capture incorrect state.
-    mainViewState.blockSave();
-    try {
-      const previous = selectElement.value;
-      selectElement.innerHTML = optionsHtml;
-      this._restoreModelSelection(selectElement, previous);
-      getSelectOptionElements(selectElement).forEach((opt) => {
-        this._decorateModelOption(opt);
-      });
-
-      updateModelApiKeyBanner(selectElement);
-    } finally {
-      mainViewState.unblockSave();
-    }
+    // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
+    // fires change events during innerHTML replacement which would trigger save()
+    const previous = selectElement.value;
+    selectElement.innerHTML = optionsHtml;
+    this._restoreModelSelection(selectElement, previous);
+    getSelectOptionElements(selectElement).forEach((opt) => {
+      this._decorateModelOption(opt);
+    });
+    updateModelApiKeyBanner(selectElement);
   }
 
   _decorateModelOption(opt) {
@@ -423,24 +430,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
-    // Block save() during option replacement and restoration.
-    // vscode-single-select may fire change events during innerHTML replacement
-    // or programmatic value setting, which would capture incorrect state.
-    mainViewState.blockSave();
-    try {
-      const previous = selectElement.value;
-      selectElement.innerHTML = optionsHtml ?? '';
-      this._restoreAgentSelection(selectElement, previous);
-
-      getSelectOptionElements(selectElement).forEach((opt) => {
-        this._decorateAgentOption(opt);
-      });
-
-      // Update the select's tooltip to show selected agent info
-      this._updateAgentSelectTooltip(selectElement);
-    } finally {
-      mainViewState.unblockSave();
-    }
+    // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
+    // fires change events during innerHTML replacement which would trigger save()
+    const previous = selectElement.value;
+    selectElement.innerHTML = optionsHtml ?? '';
+    this._restoreAgentSelection(selectElement, previous);
+    getSelectOptionElements(selectElement).forEach((opt) => {
+      this._decorateAgentOption(opt);
+    });
+    // Update the select's tooltip to show selected agent info
+    this._updateAgentSelectTooltip(selectElement);
   }
 
   /**
