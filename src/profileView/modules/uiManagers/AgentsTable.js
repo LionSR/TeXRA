@@ -181,48 +181,14 @@ export class AgentsTable {
       }
     }
 
-    // Show allowed models info when using included access
-    // allowedModels semantics:
-    // - null: all models (Ultra tier)
-    // - []: no models configured (error state)
-    // - [...]: specific models allowed (Max and free tiers)
+    // Render model display section
     if (modelsInfo) {
-      if (apiAccessMode === 'included') {
-        if (resolvedAllowedModels === null) {
-          // null means all models are allowed
-          modelsInfo.textContent = 'All models included';
-          modelsInfo.title = '';
-          modelsInfo.style.display = 'block';
-          // Clean up any existing models list (Ultra doesn't need it)
-          this.clearModelsList(modelsInfo);
-        } else if (resolvedAllowedModels.length > 0) {
-          // Specific models allowed - display count and list
-          modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
-          modelsInfo.title = '';
-          modelsInfo.style.display = 'block';
-          // Render the model list below the count
-          this.renderModelsList(modelsInfo, resolvedAllowedModels);
-        } else {
-          // Empty array means either:
-          // 1. Tier config fetch failed (when enabledProviders is also empty)
-          // 2. Config explicitly has no models (unlikely but possible)
-          // Show helpful message based on context
-          const configFetchFailed = enabledProviders.length === 0;
-          modelsInfo.textContent = configFetchFailed
-            ? 'Unable to load models'
-            : 'No models configured';
-          modelsInfo.title = configFetchFailed
-            ? 'Try signing out and back in to refresh'
-            : '';
-          modelsInfo.style.display = 'block';
-          // Clean up any existing models list
-          this.clearModelsList(modelsInfo);
-        }
-      } else {
-        modelsInfo.style.display = 'none';
-        // Clean up any models list when switching to personal mode
-        this.clearModelsList(modelsInfo);
-      }
+      this.renderModelsDisplay(
+        modelsInfo,
+        apiAccessMode,
+        resolvedAllowedModels,
+        enabledProviders,
+      );
     }
 
     // Add event listeners (only once)
@@ -244,6 +210,50 @@ export class AgentsTable {
           }
         });
       }
+    }
+  }
+
+  /**
+   * Render the models display section based on access mode and allowed models.
+   * @param {HTMLElement} modelsInfo - The models info container element
+   * @param {string} apiAccessMode - 'included' or 'personal'
+   * @param {string[]|null} allowedModels - Array of model names, or null for all models
+   * @param {string[]} enabledProviders - Array of enabled provider names (for error detection)
+   */
+  renderModelsDisplay(modelsInfo, apiAccessMode, allowedModels, enabledProviders) {
+    // allowedModels semantics:
+    // - null: all models (Ultra tier)
+    // - []: no models configured (error state)
+    // - [...]: specific models allowed (Max and free tiers)
+    if (apiAccessMode === 'included') {
+      if (allowedModels === null) {
+        // null means all models are allowed (Ultra tier)
+        modelsInfo.textContent = 'All models included';
+        modelsInfo.title = '';
+        modelsInfo.style.display = 'block';
+        this.clearModelsList(modelsInfo);
+      } else if (allowedModels.length > 0) {
+        // Specific models allowed - display count and list
+        modelsInfo.textContent = `Models: ${allowedModels.length} included`;
+        modelsInfo.title = '';
+        modelsInfo.style.display = 'block';
+        this.renderModelsList(modelsInfo, allowedModels);
+      } else {
+        // Empty array - config fetch failed or no models configured
+        const configFetchFailed = enabledProviders.length === 0;
+        modelsInfo.textContent = configFetchFailed
+          ? 'Unable to load models'
+          : 'No models configured';
+        modelsInfo.title = configFetchFailed
+          ? 'Try signing out and back in to refresh'
+          : '';
+        modelsInfo.style.display = 'block';
+        this.clearModelsList(modelsInfo);
+      }
+    } else {
+      // Personal mode - hide models info and clean up
+      modelsInfo.style.display = 'none';
+      this.clearModelsList(modelsInfo);
     }
   }
 
