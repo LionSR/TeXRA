@@ -402,6 +402,7 @@
               ".txt",
               ".tex",
               ".md",
+              ".bib",
               ".bbl"
             ],
             "description": "File extensions to include when searching for reference files",
@@ -445,7 +446,6 @@
             "default": [
               ".pdf",
               ".bst",
-              ".bib",
               ".json",
               ".py",
               ".ipynb",
