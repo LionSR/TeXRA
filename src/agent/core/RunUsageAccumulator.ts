@@ -7,8 +7,8 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 
-/** Default values for run usage totals */
-const DEFAULT_TOTALS = {
+/** Default values for run usage totals - exported for use in schema defaults */
+export const DEFAULT_TOTALS = {
   firstInputTokens: 0,
   totalInputTokens: 0,
   totalOutputTokens: 0,
@@ -51,14 +51,20 @@ export type NormalizedUsageSnapshot = z.infer<
   typeof NormalizedUsageSnapshotSchema
 >;
 
-/** Schema for RunUsageAccumulator JSON serialization (input accepts partial totals) */
+/**
+ * Schema for RunUsageAccumulator JSON serialization.
+ * Input accepts partial totals; transform merges with defaults.
+ */
 export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.partial().default({}),
+  totals: RunUsageTotalsSchema.partial()
+    .default({})
+    .transform((partial) => ({ ...DEFAULT_TOTALS, ...partial })),
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).default([]),
 });
+
 /**
  * Output type for RunUsageAccumulator serialization.
- * Uses z.output<> to get the type after parsing (all fields required).
+ * Uses z.output<> to get the type after parsing (totals fully resolved).
  */
 export type RunUsageAccumulatorJSON = z.output<
   typeof RunUsageAccumulatorJSONSchema
@@ -68,14 +74,11 @@ export class RunUsageAccumulator {
   private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
 
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  /** Deserialize from a snapshot. Schema transform handles default merging. */
   static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
     const parsed = RunUsageAccumulatorJSONSchema.parse(snapshot);
     const acc = new RunUsageAccumulator();
-    // .partial().default({}) returns {} for missing totals, NOT the field defaults.
-    // Field-level defaults only apply when the field key is missing from a non-partial object.
-    // We need to spread DEFAULT_TOTALS to fill in any missing fields.
-    acc.totals = { ...DEFAULT_TOTALS, ...parsed.totals };
+    acc.totals = parsed.totals;
     acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
     return acc;
   }

@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
+import { ELEMENT_IDS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -35,7 +35,6 @@ export class AgentsTable {
    * @param {boolean} options.authenticated - Whether the user is authenticated
    * @param {object} options.user - User object with email and id
    * @param {string} options.tier - Primary group name (for backwards compatibility / display)
-   * @param {string[]} options.permissions - Array of permission strings
    * @param {Array} options.remoteAgents - Array of remote agent objects
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
@@ -46,7 +45,6 @@ export class AgentsTable {
     authenticated,
     user,
     tier,
-    permissions,
     remoteAgents,
     apiAccessMode,
     enabledProviders,
@@ -54,7 +52,6 @@ export class AgentsTable {
     accessExpiresAt,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
-    const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);
     const remoteAgentsSection = safeGetElementById(
       ELEMENT_IDS.REMOTE_AGENTS_SECTION,
@@ -64,7 +61,6 @@ export class AgentsTable {
 
     if (
       !profileInfo ||
-      !tierInfo ||
       !notAuthenticated ||
       !remoteAgentsSection ||
       !noAgentsMessage
@@ -75,7 +71,6 @@ export class AgentsTable {
     if (!authenticated) {
       // Show not authenticated state
       profileInfo.style.display = 'none';
-      tierInfo.style.display = 'none';
       notAuthenticated.style.display = 'block';
       remoteAgentsSection.style.display = 'none';
       if (apiAccessSection) apiAccessSection.style.display = 'none';
@@ -84,7 +79,6 @@ export class AgentsTable {
 
     // Show authenticated state
     profileInfo.style.display = 'block';
-    tierInfo.style.display = 'block';
     notAuthenticated.style.display = 'none';
 
     // Update user info
@@ -116,16 +110,6 @@ export class AgentsTable {
         // No expiration - don't show the row
         expirationRow.style.display = 'none';
       }
-    }
-
-    // Update tier message based on whether user has any permissions
-    const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
-    if (tierMessage) {
-      const hasAnyPermissions =
-        Array.isArray(permissions) && permissions.length > 0;
-      tierMessage.textContent = hasAnyPermissions
-        ? LABELS.TIER_PREMIUM_MESSAGE
-        : LABELS.TIER_FREE_MESSAGE;
     }
 
     // Show API access section for all authenticated users
@@ -197,40 +181,14 @@ export class AgentsTable {
       }
     }
 
-    // Show allowed models info when using included access
-    // allowedModels semantics:
-    // - null: all models (Ultra tier)
-    // - []: no models configured (error state)
-    // - [...]: specific models allowed (Max and free tiers)
+    // Render model display section
     if (modelsInfo) {
-      if (apiAccessMode === 'included') {
-        if (resolvedAllowedModels === null) {
-          // null means all models are allowed
-          modelsInfo.textContent = 'All models included';
-          modelsInfo.title = '';
-          modelsInfo.style.display = 'block';
-        } else if (resolvedAllowedModels.length > 0) {
-          // Specific models allowed
-          modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
-          modelsInfo.title = resolvedAllowedModels.join(', ');
-          modelsInfo.style.display = 'block';
-        } else {
-          // Empty array means either:
-          // 1. Tier config fetch failed (when enabledProviders is also empty)
-          // 2. Config explicitly has no models (unlikely but possible)
-          // Show helpful message based on context
-          const configFetchFailed = enabledProviders.length === 0;
-          modelsInfo.textContent = configFetchFailed
-            ? 'Unable to load models'
-            : 'No models configured';
-          modelsInfo.title = configFetchFailed
-            ? 'Try signing out and back in to refresh'
-            : '';
-          modelsInfo.style.display = 'block';
-        }
-      } else {
-        modelsInfo.style.display = 'none';
-      }
+      this.renderModelsDisplay(
+        modelsInfo,
+        apiAccessMode,
+        resolvedAllowedModels,
+        enabledProviders,
+      );
     }
 
     // Add event listeners (only once)
@@ -253,6 +211,79 @@ export class AgentsTable {
         });
       }
     }
+  }
+
+  /**
+   * Render the models display section based on access mode and allowed models.
+   * @param {HTMLElement} modelsInfo - The models info container element
+   * @param {string} apiAccessMode - 'included' or 'personal'
+   * @param {string[]|null} allowedModels - Array of model names, or null for all models
+   * @param {string[]} enabledProviders - Array of enabled provider names (for error detection)
+   */
+  renderModelsDisplay(modelsInfo, apiAccessMode, allowedModels, enabledProviders) {
+    // allowedModels semantics:
+    // - null: all models (Ultra tier)
+    // - []: no models configured (error state)
+    // - [...]: specific models allowed (Max and free tiers)
+    if (apiAccessMode === 'included') {
+      if (allowedModels === null) {
+        // null means all models are allowed (Ultra tier)
+        modelsInfo.textContent = 'All models included';
+        modelsInfo.title = '';
+        modelsInfo.style.display = 'block';
+        this.clearModelsList(modelsInfo);
+      } else if (allowedModels.length > 0) {
+        // Specific models allowed - display count and list
+        modelsInfo.textContent = `Models: ${allowedModels.length} included`;
+        modelsInfo.title = '';
+        modelsInfo.style.display = 'block';
+        this.renderModelsList(modelsInfo, allowedModels);
+      } else {
+        // Empty array - config fetch failed or no models configured
+        const configFetchFailed = enabledProviders.length === 0;
+        modelsInfo.textContent = configFetchFailed
+          ? 'Unable to load models'
+          : 'No models configured';
+        modelsInfo.title = configFetchFailed
+          ? 'Try signing out and back in to refresh'
+          : '';
+        modelsInfo.style.display = 'block';
+        this.clearModelsList(modelsInfo);
+      }
+    } else {
+      // Personal mode - hide models info and clean up
+      modelsInfo.style.display = 'none';
+      this.clearModelsList(modelsInfo);
+    }
+  }
+
+  /**
+   * Clear any existing models list from the DOM.
+   * @param {HTMLElement} container - The container element near the models list
+   */
+  clearModelsList(container) {
+    const existingList = container?.parentElement?.querySelector('.models-list');
+    if (existingList) {
+      existingList.remove();
+    }
+  }
+
+  /**
+   * Render the list of allowed models as a formatted list.
+   * @param {HTMLElement} container - The container element to append the list to
+   * @param {string[]} models - Array of model names
+   */
+  renderModelsList(container, models) {
+    // Remove any existing models list first
+    this.clearModelsList(container);
+
+    // Create the models list element
+    const modelsList = document.createElement('div');
+    modelsList.className = 'models-list';
+    modelsList.textContent = models.join(', ');
+
+    // Insert after the container (modelsInfo element)
+    container.parentElement?.insertBefore(modelsList, container.nextSibling);
   }
 
   /**

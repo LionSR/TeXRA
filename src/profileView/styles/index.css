@@ -82,19 +82,6 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Tier info box */
-.tier-info {
-  margin-top: var(--spacing-xlarge);
-  padding: var(--spacing-medium);
-  background: var(--vscode-textBlockQuote-background);
-  border-left: 3px solid var(--vscode-textBlockQuote-border);
-  border-radius: 0 var(--border-radius) var(--border-radius) 0;
-}
-
-.tier-info p {
-  margin: 0;
-}
-
 /* Not authenticated state */
 .not-authenticated {
   text-align: center;
@@ -286,6 +273,12 @@ h2 {
   color: var(--color-text-secondary);
 }
 
-.allowed-models-info {
-  cursor: help;
+.models-list {
+  margin-top: var(--spacing-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  background: var(--vscode-textBlockQuote-background);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
 }

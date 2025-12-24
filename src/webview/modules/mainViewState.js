@@ -91,10 +91,28 @@ function getSelectDefaultValue(selectId, fallback) {
 export class MainViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
-    // Guard flag to prevent save() during restore() - vscode-single-select
-    // fires 'change' events on programmatic value changes, which would trigger
-    // save() and capture partial/inconsistent DOM state
-    this._isRestoring = false;
+    // Counter to prevent save() during state restoration or option updates.
+    // vscode-single-select fires 'change' events on programmatic value changes,
+    // which would trigger save() and capture partial/inconsistent DOM state.
+    // Using a counter allows nesting (e.g., option update during restoration).
+    this._saveBlockCount = 0;
+  }
+
+  /**
+   * Block save() calls. Use with unblockSave() in a try/finally pattern.
+   * Supports nesting - each blockSave() must have a matching unblockSave().
+   */
+  blockSave() {
+    this._saveBlockCount++;
+  }
+
+  /**
+   * Unblock save() calls. Must be paired with a prior blockSave().
+   */
+  unblockSave() {
+    if (this._saveBlockCount > 0) {
+      this._saveBlockCount--;
+    }
   }
 
   get() {
@@ -154,15 +172,15 @@ export class MainViewState {
 
   /** Restore state from VS Code storage */
   restore() {
-    this._isRestoring = true;
+    this.blockSave();
     let needsSaveAfter = false;
     try {
       needsSaveAfter = this._restoreImpl();
     } finally {
-      this._isRestoring = false;
+      this.unblockSave();
     }
-    // If setDefaults() was called, its save() was skipped due to _isRestoring
-    // flag, so we need to save now after the flag is cleared
+    // If setDefaults() was called, its save() was skipped due to blockSave(),
+    // so we need to save now after unblockSave()
     if (needsSaveAfter) {
       this.save();
     }
@@ -271,8 +289,7 @@ export class MainViewState {
 
   /** Persist current UI state */
   save() {
-    // Skip save during restore to prevent capturing partial/inconsistent state
-    if (this._isRestoring) {
+    if (this._saveBlockCount > 0) {
       return;
     }
 

@@ -157,4 +157,4 @@ export {
 export { apiKeyCommands } from '@commands/api/apiKeyCommands';
 export { stateRestoreCommand, historyCommands } from '@commands/history';
 export { wolframToolCommands, wolframScriptCommands } from '@commands/wolfram';
-export { registerOpenFileCommands as openFileCommands } from '@commands/files';
+export { openFileCommands } from '@commands/files';
