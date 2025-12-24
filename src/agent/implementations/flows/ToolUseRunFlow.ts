@@ -59,7 +59,11 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
     store: AgentSharedStore,
-  ): Promise<{ failedWithError: boolean; userCancelled: boolean }>;
+  ): Promise<{
+    failedWithError: boolean;
+    errorMessage?: string;
+    userCancelled: boolean;
+  }>;
   checkInterruption(): boolean;
   hasQueuedFollowUp(): boolean;
   enterWaitingState(): Promise<void>;
@@ -115,7 +119,17 @@ interface ToolUsePrepareResult<C> {
 
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
 
-type ToolUseCycleExecResult = NodeExecResult<void>;
+/**
+ * Result of cycle execution - includes failure status for proper lifecycle handling.
+ * - error: Exception thrown during execution
+ * - failedWithError: Cycle failed after exhausting retries (not user cancellation)
+ * - userCancelled: User cancelled the retry prompt
+ */
+type ToolUseCycleExecResult =
+  | { result: void; error?: undefined; failedWithError?: false; userCancelled?: false }
+  | { error: unknown; result?: undefined; failedWithError?: undefined; userCancelled?: undefined }
+  | { result?: undefined; error?: undefined; failedWithError: true; errorMessage?: string; userCancelled?: false }
+  | { result?: undefined; error?: undefined; failedWithError?: false; userCancelled: true };
 
 /**
  * Prep result for ToolUsePrepareNode - extracted from shared.
@@ -226,9 +240,15 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
             await hooks.persistCheckpoint(state.conversation, state.store);
           }
 
-          // Exit the loop if cycle failed or was cancelled
-          if (cycleResult.failedWithError || cycleResult.userCancelled) {
-            return { result: undefined };
+          // Exit the loop if cycle failed or was cancelled, propagating status
+          if (cycleResult.failedWithError) {
+            return {
+              failedWithError: true,
+              errorMessage: cycleResult.errorMessage,
+            };
+          }
+          if (cycleResult.userCancelled) {
+            return { userCancelled: true };
           }
         } else {
           state.shouldSkipCycle = false;
@@ -267,12 +287,31 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     _prepRes: ToolUseCycleNodePrepResult<C>,
     execRes: ToolUseCycleExecResult,
   ): Promise<string | undefined> {
+    // Handle exception thrown during execution
     if (execRes.error) {
       shared.lifecycle.fail(execRes.error);
-    } else {
-      shared.lifecycle.setStatus('running');
+      return FlowTransition.FINALIZE;
     }
 
+    // Handle cycle failure (retries exhausted or non-retryable error)
+    if (execRes.failedWithError) {
+      const error = new Error(
+        execRes.errorMessage ?? 'Tool-use cycle failed with an error',
+      );
+      shared.lifecycle.fail(error);
+      return FlowTransition.FINALIZE;
+    }
+
+    // Handle user cancellation - don't set status to 'running', just finalize
+    // The finalize node will mark as 'completed' or 'stopped' based on lifecycle state
+    if (execRes.userCancelled) {
+      // Status remains as-is (likely 'running' from cycle start)
+      // Finalize will complete normally without error
+      return FlowTransition.FINALIZE;
+    }
+
+    // Normal completion - keep running status for follow-up cycles
+    shared.lifecycle.setStatus('running');
     return FlowTransition.FINALIZE;
   }
 }
