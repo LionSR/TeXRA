@@ -28,7 +28,6 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import {
   formatProviderHttpError,
-  extractErrorContext,
 } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
