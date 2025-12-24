@@ -11,7 +11,10 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -227,7 +230,7 @@ class ToolUsePrepNode<C> extends BaseNode<
  */
 interface ToolUseCallPrepResult {
   shouldStop: boolean;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
 }
 
 /**
@@ -451,9 +454,9 @@ interface ToolUseProcessExecResult {
   text?: string;
   endTurn: boolean;
   // Data for side effects in post()
-  serverToolContentBlocks?: import('@agent/modelHandlers/types/ServerToolTypes').ServerToolContentBlock[];
+  serverToolContentBlocks?: ServerToolContentBlock[];
   lastAssistantContent?: unknown[];
-  normalizedUsage?: import('@agent/types/NormalizedUsage').NormalizedUsage;
+  normalizedUsage?: NormalizedUsage;
   responseTime?: number;
   // Message to create if endTurn
   createAssistantMessage?: boolean;
@@ -562,9 +565,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Normalize usage if present
-    let normalizedUsage:
-      | import('@agent/types/NormalizedUsage').NormalizedUsage
-      | undefined;
+    let normalizedUsage: NormalizedUsage | undefined;
     if (usage) {
       normalizedUsage = options.modelHandler.normalizeUsage(
         usage,
