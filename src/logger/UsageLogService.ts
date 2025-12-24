@@ -5,7 +5,7 @@
  * - Non-blocking: Never delays the main execution flow
  * - Failure-tolerant: Errors are logged but never thrown to callers
  * - Batched: Collects events and flushes periodically to reduce requests
- * - Retry with backoff: Handles transient network failures gracefully
+ * - Fire-and-forget: If it fails, it fails - no retries
  *
  * Usage data includes:
  * - Token counts (input, output, cached, reasoning)
@@ -40,12 +40,6 @@ interface UsageLogConfig {
   /** Flush interval in milliseconds (default: 30000 = 30 seconds) */
   flushIntervalMs: number;
 
-  /** Maximum retry attempts (default: 3) */
-  maxRetries: number;
-
-  /** Base delay for exponential backoff in ms (default: 1000) */
-  baseRetryDelayMs: number;
-
   /** Whether logging is enabled (default: true) */
   enabled: boolean;
 }
@@ -53,8 +47,6 @@ interface UsageLogConfig {
 const DEFAULT_CONFIG: UsageLogConfig = {
   batchSize: 10,
   flushIntervalMs: 30000,
-  maxRetries: 3,
-  baseRetryDelayMs: 1000,
   enabled: true,
 };
 
@@ -67,7 +59,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 /**
  * Singleton service for logging API usage to the backend.
  *
- * Automatically batches and flushes usage entries with retry support.
+ * Automatically batches and flushes usage entries.
  * Completely non-blocking - errors are logged but never propagate.
  */
 class UsageLogServiceImpl {
@@ -139,7 +131,7 @@ class UsageLogServiceImpl {
     this.isFlushing = true;
 
     try {
-      // Get auth token once - eliminates duplicate round trip
+      // Get auth token
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
@@ -157,67 +149,25 @@ class UsageLogServiceImpl {
 
       logger.debug(CHANNEL, `Flushing ${entries.length} entries (batch: ${batch.batchId})`);
 
-      await this.sendWithRetry(batch, token);
+      const response = await this.sendBatch(batch, token);
+      if (response.success) {
+        logger.debug(
+          CHANNEL,
+          `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
+        );
+      } else {
+        logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
+      }
     } catch (error) {
       // Log error but don't re-throw - this is fire-and-forget
       logger.warn(
         CHANNEL,
-        `Failed to send usage batch after retries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to send usage batch: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       // Don't re-queue failed entries to avoid infinite loops
     } finally {
       this.isFlushing = false;
     }
-  }
-
-  /**
-   * Send batch to backend with exponential backoff retry.
-   */
-  private async sendWithRetry(
-    batch: UsageLogBatch,
-    token: string,
-  ): Promise<UsageLogResponse> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
-      try {
-        const response = await this.sendBatch(batch, token);
-
-        if (response.success) {
-          logger.debug(
-            CHANNEL,
-            `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-          );
-          return response;
-        } else {
-          // Server rejected the batch - don't retry
-          logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
-          return response;
-        }
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // Don't retry on auth errors or timeouts
-        if (
-          lastError.message.includes('401') ||
-          lastError.message.includes('403') ||
-          lastError.name === 'AbortError'
-        ) {
-          throw lastError;
-        }
-
-        // Exponential backoff: 1s, 2s, 4s, ...
-        const delayMs = this.config.baseRetryDelayMs * Math.pow(2, attempt);
-        logger.debug(
-          CHANNEL,
-          `Retry ${attempt + 1}/${this.config.maxRetries} in ${delayMs}ms: ${lastError.message}`,
-        );
-
-        await this.sleep(delayMs);
-      }
-    }
-
-    throw lastError || new Error('Max retries exceeded');
   }
 
   /**
@@ -292,7 +242,7 @@ class UsageLogServiceImpl {
     const maxWaitMs = 5000;
     const startTime = Date.now();
     while (this.isFlushing && Date.now() - startTime < maxWaitMs) {
-      await this.sleep(50);
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
     if (this.isFlushing) {
@@ -318,10 +268,6 @@ class UsageLogServiceImpl {
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled;
     logger.info(CHANNEL, `Usage logging ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
