@@ -36,6 +36,7 @@ type AgentInitExecResult = NodeExecVoidResult;
 interface AgentInitPrepResult<Shared extends AgentInitShared<any, any>> {
   hooks: Shared['hooks'];
   shared: Shared; // Needed for beforeInitialize callback
+  lifecycle: Shared['lifecycle'];
 }
 
 export class AgentInitNode<
@@ -47,12 +48,15 @@ export class AgentInitNode<
 
   async prep(shared: Shared): Promise<AgentInitPrepResult<Shared>> {
     // Pure extraction - no side effects
-    return { hooks: shared.hooks, shared };
+    return { hooks: shared.hooks, shared, lifecycle: shared.lifecycle };
   }
 
   async exec(
     prepRes: AgentInitPrepResult<Shared>,
   ): Promise<AgentInitExecResult> {
+    // Signal phase entry before work begins (status tracking, not flow state)
+    prepRes.lifecycle.begin(this.config.phase);
+
     try {
       const runStage = await prepRes.hooks.start();
       await prepRes.hooks.init(runStage);
@@ -71,9 +75,6 @@ export class AgentInitNode<
     _prepRes: AgentInitPrepResult<Shared>,
     execRes: AgentInitExecResult,
   ): Promise<string | undefined> {
-    // Lifecycle transition at start of post
-    shared.lifecycle.begin(this.config.phase);
-
     if (execRes.error) {
       shared.lifecycle.fail(execRes.error);
       if (this.config.onFailure) {
