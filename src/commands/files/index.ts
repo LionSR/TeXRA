@@ -6,5 +6,6 @@ export {
 export {
   openFile,
   openLabel,
+  openFileCommands,
   registerOpenFileCommands,
 } from './openFileCommands';
