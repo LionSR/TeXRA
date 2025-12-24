@@ -128,94 +128,14 @@ export function recordRetryError(
   state.lastError = error;
 }
 
-// ============================================================================
-// Shared retry prompt helper
-// ============================================================================
-
 /**
- * Options for the manual retry prompt helper.
+ * Result from manual retry prompt.
  */
-export interface ManualRetryPromptOptions {
-  /** Operation name for logging (e.g., 'Model invocation', 'Tool-use call') */
-  operationName: string;
-  /** Stream ID for status updates */
-  streamId: string;
-  /** Logger instance */
-  logger: AgentLogger;
-}
-
-/**
- * Result from manual retry prompt helper.
- */
-export interface ManualRetryPromptResult {
+interface ManualRetryPromptResult {
   /** Whether to retry (true) or proceed to fallback (false) */
   shouldRetry: boolean;
   /** Whether the user explicitly cancelled (only set when shouldRetry is false) */
   userCancelled: boolean;
-}
-
-/**
- * Shared helper for manual retry prompt logic.
- *
- * This extracts the common flow used by both ResponseModelInvocationNode
- * and ToolUseCallNode:
- * 1. Format error and check if retryable
- * 2. If not retryable, return immediately (no UI)
- * 3. Log error and emit waiting status
- * 4. Wait for user action via RetryRequestCoordinator
- * 5. Return whether to retry and if user cancelled
- *
- * @param error - The error that triggered the retry prompt
- * @param options - Options including operation name, stream ID, and logger
- * @returns Result indicating whether to retry and if user cancelled
- */
-export async function handleManualRetryPrompt(
-  error: Error,
-  options: ManualRetryPromptOptions,
-): Promise<ManualRetryPromptResult> {
-  const { operationName, streamId, logger } = options;
-
-  // Format error to check if retryable
-  const formatted = formatProviderHttpError(error);
-
-  // If not retryable, don't show UI - go straight to execFallback
-  if (!formatted.retryable) {
-    return { shouldRetry: false, userCancelled: false };
-  }
-
-  // Log the error before showing retry UI
-  logger.logErrorData(`${operationName} failed: ${formatted.message}`, {
-    message: formatted.message,
-    statusCode: formatted.statusCode,
-    retryable: formatted.retryable,
-  });
-
-  // Emit waiting status to UI
-  bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
-
-  // Wait for user action via the Promise-based coordinator
-  const result: RetryResult = await retryCoordinator.waitForUserAction(
-    streamId,
-    {
-      operation: operationName,
-      errorMessage: formatted.message,
-      logger,
-      timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
-    },
-  );
-
-  if (result.action === 'retry') {
-    logger.debug('Manual retry triggered');
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
-    return { shouldRetry: true, userCancelled: false };
-  }
-
-  // User cancelled or timeout
-  logger.info('Retry cancelled by user', {
-    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-  });
-  bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
-  return { shouldRetry: false, userCancelled: true };
 }
 
 // ============================================================================
@@ -343,6 +263,13 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
    * Manual retry prompt - called when auto-retries are exhausted.
    * Shows retry UI for retryable errors and waits for user action.
    *
+   * Flow:
+   * 1. Format error and check if retryable
+   * 2. If not retryable, return false immediately (no UI)
+   * 3. Log error and emit waiting status
+   * 4. Wait for user action via RetryRequestCoordinator
+   * 5. Return whether to retry
+   *
    * NOTE: This must be a regular method (not an arrow function) because
    * Node.clone() uses Object.assign. Arrow functions capture `this` at
    * construction time, so they would reference the original instance
@@ -351,13 +278,7 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
    * @returns true to restart auto-retry loop, false to proceed to execFallback
    */
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
-    const services = this.getServices();
-
-    const result = await handleManualRetryPrompt(error, {
-      operationName: this.getOperationName(),
-      streamId: services.options.context.streamId,
-      logger: services.options.logger,
-    });
+    const result = await this.handleManualRetryPrompt(error);
 
     // Track user cancellation to distinguish from actual failures in execFallback.
     // Note: This flag is only set when user explicitly cancelled a retryable error.
@@ -368,6 +289,61 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
     }
 
     return result.shouldRetry;
+  }
+
+  /**
+   * Handles the manual retry prompt UI flow.
+   * Extracted as a protected method for better cohesion with retry logic.
+   */
+  protected async handleManualRetryPrompt(
+    error: Error,
+  ): Promise<ManualRetryPromptResult> {
+    const services = this.getServices();
+    const operationName = this.getOperationName();
+    const streamId = services.options.context.streamId;
+    const logger = services.options.logger;
+
+    // Format error to check if retryable
+    const formatted = formatProviderHttpError(error);
+
+    // If not retryable, don't show UI - go straight to execFallback
+    if (!formatted.retryable) {
+      return { shouldRetry: false, userCancelled: false };
+    }
+
+    // Log the error before showing retry UI
+    logger.logErrorData(`${operationName} failed: ${formatted.message}`, {
+      message: formatted.message,
+      statusCode: formatted.statusCode,
+      retryable: formatted.retryable,
+    });
+
+    // Emit waiting status to UI
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+
+    // Wait for user action via the Promise-based coordinator
+    const result: RetryResult = await retryCoordinator.waitForUserAction(
+      streamId,
+      {
+        operation: operationName,
+        errorMessage: formatted.message,
+        logger,
+        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
+      },
+    );
+
+    if (result.action === 'retry') {
+      logger.debug('Manual retry triggered');
+      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      return { shouldRetry: true, userCancelled: false };
+    }
+
+    // User cancelled or timeout
+    logger.info('Retry cancelled by user', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    return { shouldRetry: false, userCancelled: true };
   }
 
   /**
@@ -476,6 +452,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
+  // At this point, result.kind === 'success' (all other cases handled above)
   // Handle success with empty response (server/network issue)
   // IMPORTANT: Record an error to prevent misclassification as user cancellation
   if (!result.response) {
@@ -489,7 +466,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
-  // Success with valid response - clear any previous error and return narrowed type
+  // Success with valid response - clear any previous error
   clearRetryError(retryState);
-  return result as T & { kind: 'success' };
+  return result;
 }
