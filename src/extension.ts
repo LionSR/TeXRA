@@ -193,9 +193,10 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         // Initialize usage logging service for backend analytics (only when auth is available)
-        const extensionVersion = context.extension.packageJSON?.version as
-          | string
-          | undefined;
+        const extensionVersion =
+          typeof context.extension.packageJSON?.version === 'string'
+            ? context.extension.packageJSON.version
+            : undefined;
         UsageLogService.initialize({}, extensionVersion);
         // Add safety net disposable in case deactivate() isn't called
         context.subscriptions.push({
