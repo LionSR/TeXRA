@@ -911,7 +911,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       if (execRes.interrupted) {
         state.shouldStop = true;
       }
-      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
