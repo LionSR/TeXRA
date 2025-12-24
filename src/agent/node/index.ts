@@ -115,6 +115,10 @@ class Node<
   /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
+   *
+   * NOTE: BaseNode.clone() uses Object.assign for shallow copy. Subclasses
+   * adding object/array properties must override clone() to deep-copy them,
+   * otherwise the original and clone will share the same references.
    */
   clone(): this {
     const cloned = super.clone();
@@ -131,8 +135,12 @@ class Node<
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
 
+    // Safety limit for manual retries to prevent infinite loops from buggy retryPrompt
+    const MAX_MANUAL_RETRIES = 100;
+    let manualRetryCount = 0;
+
     // Outer loop for manual retry (restarts auto-retry cycle)
-    while (true) {
+    while (manualRetryCount < MAX_MANUAL_RETRIES) {
       for (
         this.currentRetry = 0;
         this.currentRetry < effectiveMaxRetries;
@@ -150,7 +158,10 @@ class Node<
             // Auto-retries exhausted - try manual retry (unless aborted)
             if (!isAborted) {
               const shouldRetry = await this.retryPrompt(prepRes, e as Error);
-              if (shouldRetry) break; // Break inner loop to restart auto-retries
+              if (shouldRetry) {
+                manualRetryCount++;
+                break; // Break inner loop to restart auto-retries
+              }
             }
             return await this.execFallback(prepRes, e as Error);
           }
@@ -159,6 +170,11 @@ class Node<
       }
       // If we broke from inner loop, continue outer loop to restart auto-retries
     }
+
+    // Safeguard: if we somehow exit the loop without returning, throw
+    throw new Error(
+      `Node exceeded maximum manual retry limit (${MAX_MANUAL_RETRIES})`,
+    );
   }
 }
 class BatchNode<
