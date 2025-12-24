@@ -192,6 +192,16 @@ export async function activate(context: vscode.ExtensionContext) {
           }),
         );
 
+        // Initialize usage logging service for backend analytics (only when auth is available)
+        const extensionVersion = context.extension.packageJSON?.version as
+          | string
+          | undefined;
+        UsageLogService.initialize({}, extensionVersion);
+        // Add safety net disposable in case deactivate() isn't called
+        context.subscriptions.push({
+          dispose: () => void UsageLogService.dispose(),
+        });
+
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
@@ -219,16 +229,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const waitingStreams = new Set(
     persistedToolUseSessions.map((snapshot) => snapshot.streamId),
   );
-
-  // Initialize usage logging service for backend analytics
-  const extensionVersion = context.extension.packageJSON?.version as
-    | string
-    | undefined;
-  UsageLogService.initialize({}, extensionVersion);
-  // Add safety net disposable in case deactivate() isn't called
-  context.subscriptions.push({
-    dispose: () => void UsageLogService.dispose(),
-  });
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
