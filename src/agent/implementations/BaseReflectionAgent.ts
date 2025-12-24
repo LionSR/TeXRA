@@ -3,11 +3,12 @@ import type { IModelHandler } from '@agent/modelHandlers';
 // Internal imports
 import {
   OutputHandler,
-  IOutputHandler,
-  getOutputFileName,
+  type IOutputHandler,
   type RoundOutput,
   type OutputFileInfo,
+  type OutputXmlSummary,
 } from '@agent/output';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -77,12 +78,6 @@ export interface ReflectionRoundResult {
   output: RoundOutput | null;
 }
 
-export interface AgentRuntimeXmlExports {
-  tagContents: Record<string, string | string[]>;
-  documents: string[];
-  singleOutputFile: string | null;
-}
-
 /**
  * Abstract base class for agents that support multi-turn reflection.
  * Provides core functionality for processing inputs, managing state, and handling outputs
@@ -107,10 +102,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   public roundStates: ConversationRoundState[] = [];
   public workspaceStates: AgentWorkspaceState[] = [];
   public roundOutputs: RoundOutput[] = [];
-  public runtimeXmlExports: AgentRuntimeXmlExports = {
+  public runtimeXmlExports: OutputXmlSummary = {
     tagContents: {},
     documents: [],
     singleOutputFile: null,
+    sourceLocation: null,
   };
   protected readonly fileService: TaskRunFileService;
   private hydrationPromise: Promise<void> | null = null;
@@ -405,11 +401,21 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
+   * Determines whether XML structure should be ensured before processing.
+   * Override in subclasses to customize behavior:
+   * - DirectAgent: returns this.useScratchpad (only when scratchpad mode)
+   * - CoTAgent: returns true (always ensure XML structure)
+   */
+  protected shouldEnsureXmlStructure(): boolean {
+    return false;
+  }
+
+  /**
    * Processes output files for current round.
-   * This method orchestrates the overall output processing flow with clear separation of concerns:
-   * - LaTeX diff operations via diffManager.handleLatexdiffofOutput (only when endTurn is true)
-   *
-   * The actual file processing is handled separately in processOutputFiles.
+   * This method orchestrates the overall output processing flow:
+   * 1. Ensures XML structure if needed (based on shouldEnsureXmlStructure)
+   * 2. Processes output files via outputHandler
+   * 3. Handles latexdiff operations (only when endTurn is true)
    *
    * @returns Array of processed output file paths
    */
@@ -419,15 +425,30 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     _runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<OutputFileInfo[]> {
-    const { endTurn, stage } = options;
-    // If this is the end of a turn, handle latexdiff operations as a separate step
+    const { outputFile, endTurn, stage } = options;
+
+    // Process output files when turn ends
+    if (endTurn) {
+      this.logger.debug(`Processing output for round ${currRound}`);
+
+      // Ensure XML structure if needed (subclass-specific behavior)
+      if (this.shouldEnsureXmlStructure()) {
+        await this.outputHandler.ensureXmlStructure(
+          outputFile,
+          this.agentSetting.documentTag,
+        );
+      }
+
+      await this.outputHandler.processOutputFiles(outputFile, currRound, stage);
+    }
+
+    // Handle latexdiff operations if we have outputs
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
         this.baseFiles.map(async (f) => await flexibleFS.exists(f)),
       );
 
       if (existingBase.some((e) => e)) {
-        // Pass the process group ID to maintain proper nesting in the log hierarchy
         const mapping = this.outputHandler.getRoundMapping(currRound);
         await this.outputHandler.diffManager.handleLatexdiffofOutput(
           currRound,
@@ -842,6 +863,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       tagContents: {},
       documents: [],
       singleOutputFile: null,
+      sourceLocation: null,
     };
     const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
 
@@ -901,15 +923,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.runtimeXmlExports = this.computeRuntimeXmlExports();
   }
 
-  protected computeRuntimeXmlExports(): AgentRuntimeXmlExports {
-    const summary: AgentRuntimeXmlExports = {
-      tagContents: {},
-      documents: [],
-      singleOutputFile: null,
-    };
-
+  protected computeRuntimeXmlExports(): OutputXmlSummary {
     // Find the most recent round with XML summary data
-    // No need to search through cached roundOutputs - check in reverse order
     for (let round = this.roundOutputs.length - 1; round >= 0; round--) {
       const output = this.roundOutputs[round];
       if (!output) continue;
@@ -921,13 +936,21 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         xml.singleOutputFile !== null;
 
       if (hasData) {
-        summary.tagContents = { ...xml.tagContents };
-        summary.documents = [...xml.documents];
-        summary.singleOutputFile = xml.singleOutputFile;
-        break;
+        // Return a copy of the xmlSummary - this IS the single source of truth
+        return {
+          tagContents: { ...xml.tagContents },
+          documents: [...xml.documents],
+          singleOutputFile: xml.singleOutputFile,
+          sourceLocation: xml.sourceLocation,
+        };
       }
     }
 
-    return summary;
+    return {
+      tagContents: {},
+      documents: [],
+      singleOutputFile: null,
+      sourceLocation: null,
+    };
   }
 }

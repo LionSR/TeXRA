@@ -12,7 +12,7 @@ import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
-import { onDidChangeModelAccess } from '@/auth/serverSideKeyAccess';
+import { getServerSideKeyService } from '@/auth/serverKeys';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
@@ -45,21 +45,19 @@ export class MainViewProvider
     // Only register commands if they haven't been registered yet
     if (!MainViewProvider.commandsRegistered) {
       // Create a promise to check if the command exists and register if it doesn't
-      vscode.commands
-        .getCommands(true)
-        .then((commands) => {
-          if (!commands.includes('texra.getWebviewView')) {
-            this.context.subscriptions.push(
-              vscode.commands.registerCommand('texra.getWebviewView', () => {
-                return this._view as vscode.WebviewView;
-              }),
-            );
-            MainViewProvider.commandsRegistered = true;
-            return true;
-          }
+      vscode.commands.getCommands(true).then((commands) => {
+        if (!commands.includes('texra.getWebviewView')) {
+          this.context.subscriptions.push(
+            vscode.commands.registerCommand('texra.getWebviewView', () => {
+              return this._view as vscode.WebviewView;
+            }),
+          );
           MainViewProvider.commandsRegistered = true;
-          return false;
-        });
+          return true;
+        }
+        MainViewProvider.commandsRegistered = true;
+        return false;
+      });
 
       // Command registration is handled asynchronously
     }
@@ -87,7 +85,7 @@ export class MainViewProvider
 
     // Listen for model access setting changes (included vs personal keys)
     this.context.subscriptions.push(
-      onDidChangeModelAccess(() => {
+      getServerSideKeyService().onDidChangeModelAccess(() => {
         void this.refreshOptionsAndView();
       }),
     );
