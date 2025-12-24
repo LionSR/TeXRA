@@ -13,15 +13,11 @@ import type {
 // Internal imports
 import {
   createAgentRunFlow,
-  createAgentFinalizeNode,
-  beginLifecyclePhase,
-  completeLifecycle,
-  failLifecycle,
-  type AgentLifecycleState,
+  createStandardFinalizeNode,
+  AgentLifecycle,
   type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
-import type { EndGroupStatus } from '@logger/messageTypes';
 
 // Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
 export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
@@ -45,7 +41,7 @@ export const ReflectionRunPhaseSchema = z.enum([
 
 export type ReflectionRunPhase = z.infer<typeof ReflectionRunPhaseSchema>;
 
-export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
+export type ReflectionRunLifecycle = AgentLifecycle<ReflectionRunPhase>;
 
 /**
  * Runtime state for reflection agent runs.
@@ -145,14 +141,14 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     const execResult = execRes as ReflectionRoundExec<C>;
 
     if (execResult.error) {
-      failLifecycle(shared.lifecycle, execResult.error);
+      shared.lifecycle.fail(execResult.error);
       return FlowTransition.FINALIZE;
     }
 
     const { result } = execResult;
     if (!result) {
       const missingResultError = new Error('Round result is missing.');
-      failLifecycle(shared.lifecycle, missingResultError);
+      shared.lifecycle.fail(missingResultError);
       return FlowTransition.FINALIZE;
     }
 
@@ -185,19 +181,8 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = createAgentFinalizeNode<
-    ReflectionRunShared<C>,
-    EndGroupStatus
-  >({
+  const finalizeNode = createStandardFinalizeNode<ReflectionRunShared<C>>({
     finalizePhase: 'finalize',
-    computeStatus: ({ lifecycle }) => (lifecycle.error ? 'error' : 'stopped'),
-    runFinalize: async ({ hooks }, status) => {
-      await hooks.end(status);
-    },
-    runCleanup: async ({ hooks }) => {
-      await hooks.cleanup();
-    },
-    onSuccess: ({ lifecycle }) => completeLifecycle(lifecycle),
   });
 
   return createAgentRunFlow<ReflectionRunShared<C>>({
@@ -207,7 +192,7 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
         shared.hooks.resetPromptBuilder();
       },
       onSuccess: (shared) => {
-        beginLifecyclePhase(shared.lifecycle, 'rounds');
+        shared.lifecycle.begin('rounds');
         return FlowTransition.ROUND;
       },
     },

@@ -1,37 +1,37 @@
-import { z } from 'zod';
+/**
+ * @file Common types for agent flow execution.
+ *
+ * This module provides shared type infrastructure used by both workflow
+ * (reflection) and tool-use agent flows. These types enable a consistent
+ * execution pattern across different agent categories while allowing
+ * category-specific customization.
+ *
+ * ## Architecture
+ *
+ * The flow type system is built around these key abstractions:
+ *
+ * 1. **AgentLifecycle<Phase>** - State machine for lifecycle management
+ * 2. **AgentRunShared<A, State, Lifecycle, Hooks>** - Coordinates flow execution
+ * 3. **AgentRunHooks** - Core lifecycle callbacks (start, init, end, cleanup)
+ *
+ * Category-specific flows (workflow, tool-use) extend these types:
+ * - ReflectionRunState, ReflectionRunHooks, ReflectionRunShared
+ * - ToolUseRunState, ToolUseRunHooks, ToolUseRunShared
+ *
+ * @see ReflectionRunFlow.ts for workflow-specific types
+ * @see ToolUseRunFlow.ts for tool-use-specific types
+ */
 
+// Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
-
-/** Lifecycle status for agent runs. */
-export const AGENT_LIFECYCLE_STATUS = {
-  PENDING: 'pending',
-  RUNNING: 'running',
-  ERROR: 'error',
-  COMPLETED: 'completed',
-} as const;
-
-export const AgentLifecycleStatusSchema = z.enum([
-  AGENT_LIFECYCLE_STATUS.PENDING,
-  AGENT_LIFECYCLE_STATUS.RUNNING,
-  AGENT_LIFECYCLE_STATUS.ERROR,
-  AGENT_LIFECYCLE_STATUS.COMPLETED,
-]);
-
-export type AgentLifecycleStatus = z.infer<typeof AgentLifecycleStatusSchema>;
-
-/** Generic lifecycle state with category-specific phases. */
-export interface AgentLifecycleState<Phase extends string> {
-  phase: Phase;
-  status: AgentLifecycleStatus;
-  error?: unknown;
-}
+import type { AgentLifecycle } from './AgentLifecycle';
 
 /** Generic shared state for agent flow execution. */
 export interface AgentRunShared<
   A extends BaseAgent<any>,
   State,
-  Lifecycle extends AgentLifecycleState<string>,
+  Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
 > {
   agent: A;
