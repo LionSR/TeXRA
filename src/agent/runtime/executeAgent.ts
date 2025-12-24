@@ -15,6 +15,7 @@ import {
 import {
   resolveAgent,
   getMultipleName,
+  isRemoteAgent,
   type ResolvedAgent,
 } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
@@ -411,6 +412,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
               bus.emit('setActiveStream', {
                 stream: activeStreamId,
                 session: metadata,
+                isRemote: isRemoteAgent(config.agent),
+                // useMultipleOutputs is the single source of truth, already computed
+                // at config creation time (see ExecutionManager). Workflow-only concept.
+                hasMultipleOutputs: config.useMultipleOutputs,
               });
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 

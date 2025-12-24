@@ -1,10 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent metadata
-import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+import {
+  AgentCategory,
+  resolveAgentSessionDescriptor,
+} from '@agent/core/AgentDataclass';
 // Type imports
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import type { AgentType } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
@@ -36,6 +40,18 @@ import {
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { getConfig } from '@utils/config';
 import type { TodoItem } from '@eventBus/schemas';
+
+/**
+ * Schema for ephemeral stream metadata hints.
+ * Used to display UI indicators before TaskState is fully populated.
+ */
+export const StreamHintsSchema = z.object({
+  sessionCategory: z.nativeEnum(AgentCategory).optional(),
+  isRemote: z.boolean().optional(),
+  hasMultipleOutputs: z.boolean().optional(),
+});
+
+export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
 /**
  * Core state management for the progress view.
@@ -72,14 +88,14 @@ export class ProgressViewState {
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
   /**
-   * Ephemeral session-kind hints keyed by stream ID.
+   * Ephemeral stream metadata hints keyed by stream ID.
    *
    * When a stream becomes active before its {@link TaskState} is persisted,
-   * progress events populate this map so the UI can immediately classify the
-   * tab as workflow vs. tool-use. Once canonical metadata is stored the entry
-   * is cleared, so there is no need to persist these hints across sessions.
+   * progress events populate this map so the UI can immediately show correct
+   * indicators (session category, remote status, multiple outputs).
+   * Once canonical metadata is stored via setTaskState, the entry is cleared.
    */
-  private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
+  private _streamHints = new Map<StreamTabId, StreamHints>();
   private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   /**
    * Ephemeral todos storage keyed by stream ID.
@@ -189,20 +205,19 @@ export class ProgressViewState {
     this.saveAgentTypeFilter();
   }
 
-  // Session kind hint management (non-persistent)
-  setSessionKindHint(
-    streamTabId: StreamTabId,
-    sessionCategory: AgentCategory,
-  ): void {
-    this._sessionCategoryHints.set(streamTabId, sessionCategory);
+  // Stream metadata hint management (ephemeral, non-persistent)
+  // Provides UI hints before TaskState is fully populated
+  updateStreamHints(streamTabId: StreamTabId, hints: StreamHints): void {
+    const existing = this._streamHints.get(streamTabId) ?? {};
+    this._streamHints.set(streamTabId, { ...existing, ...hints });
   }
 
-  getSessionKindHint(streamTabId: StreamTabId): AgentCategory | undefined {
-    return this._sessionCategoryHints.get(streamTabId);
+  getStreamHints(streamTabId: StreamTabId): StreamHints {
+    return this._streamHints.get(streamTabId) ?? {};
   }
 
-  clearSessionKindHint(streamTabId: StreamTabId): void {
-    this._sessionCategoryHints.delete(streamTabId);
+  clearStreamHints(streamTabId: StreamTabId): void {
+    this._streamHints.delete(streamTabId);
   }
 
   // Todo management (ephemeral, non-persistent)
@@ -457,7 +472,7 @@ export class ProgressViewState {
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
     this.taskStates.set(streamTabId, cloneTaskState(taskState));
-    this.clearSessionKindHint(streamTabId);
+    this.clearStreamHints(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
@@ -469,7 +484,7 @@ export class ProgressViewState {
 
   clearTaskState(streamTabId: StreamTabId): void {
     const didDelete = this.taskStates.delete(streamTabId);
-    this.clearSessionKindHint(streamTabId);
+    this.clearStreamHints(streamTabId);
     if (didDelete) {
       this.saveTaskStates();
       this.cleanupToolUseAgentRegistry();
@@ -529,7 +544,7 @@ export class ProgressViewState {
     ]);
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
-    this.clearSessionKindHint(stream);
+    this.clearStreamHints(stream);
     this.clearActiveRun(stream);
     this.clearTodos(stream);
 
@@ -557,7 +572,7 @@ export class ProgressViewState {
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
-    this._sessionCategoryHints.clear();
+    this._streamHints.clear();
     this._todos.clear();
     this._activeRunIds.clear();
     this._activeStream = '';
