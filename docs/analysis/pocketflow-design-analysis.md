@@ -153,68 +153,12 @@
 
 ---
 
-## 4. Disharmony Analysis
+## 4. Disharmony Analysis (Agent Execution Nodes Only)
 
-### 4.1 FOUND: Manual Retry Loop Outside PocketFlow
+PocketFlow scope is limited to **agent execution nodes and flows** - the core infrastructure
+for running agents. Utilities like LaTeX diff commands or VS Code commands are out of scope.
 
-**Location:** `src/commands/agent/agentCreatorCommands.ts:252`
-
-```typescript
-// ❌ DISHARMONY: Manual retry loop bypasses PocketFlow framework
-for (let attempt = 0; attempt < 2; attempt++) {
-  const params: MessageCreateParams = {
-    model: ANTHROPIC_MODELS.opus41.fullName,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 2048,
-  };
-  const response = await anthropic.messages.create(params);
-  // ... validation and retry logic
-}
-```
-
-**Issue:** This command uses a manual `for` loop for retry instead of leveraging PocketFlow's `Node` class with `maxRetries`.
-
-**Recommendation:** Refactor to use a PocketFlow Node:
-
-```typescript
-// ✅ HARMONIOUS: Use PocketFlow Node with built-in retry
-class AgentYamlGeneratorNode extends Node {
-  constructor() {
-    super(2, 1); // maxRetries=2, wait=1s
-  }
-
-  async exec(prepRes: { prompt: string }): Promise<string> {
-    const response = await anthropic.messages.create({...});
-    const yaml = extractYaml(response);
-    const error = validateAgentYamlString(yaml);
-    if (error) throw new Error(error); // triggers retry
-    return yaml;
-  }
-
-  async execFallback(prepRes: unknown, error: Error): Promise<string> {
-    throw new Error('Failed to generate valid YAML after retries');
-  }
-}
-```
-
-### 4.2 ACCEPTABLE: Fallback Pattern (Not Retry)
-
-**Location:** `src/latex/latexdiff/diffCommandExecutor.ts`
-
-```typescript
-// ✓ ACCEPTABLE: This is a FALLBACK pattern, not retry
-// Tries with --flatten, falls back to without on specific error
-async executeWithFallback(commandBuilder, commandType, cwd) {
-  let result = await executeCommand(commandBuilder(true)); // with --flatten
-  if (!result.success && this.isBibliographyError(result.stderr)) {
-    result = await executeCommand(commandBuilder(false)); // without --flatten
-  }
-}
-```
-
-**Analysis:** This is a **strategy fallback**, not retry. It's trying a *different approach* on failure, which is a valid pattern outside PocketFlow's retry mechanism.
-
-### 4.3 HARMONIOUS: Model Handler Request Executor
+### 4.1 HARMONIOUS: Model Handler Request Executor
 
 **Location:** `src/agent/modelHandlers/utils/requestExecutor.ts`
 
@@ -240,7 +184,7 @@ export async function executeRequest<T>(options, request): Promise<T> {
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        POCKETFLOW HARMONY SCORECARD                          │
+│              POCKETFLOW HARMONY SCORECARD (Agent Execution Nodes)            │
 ├────────────────────────────────────────┬─────────────────┬──────────────────┤
 │ Principle                              │ Status          │ Notes            │
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
@@ -251,8 +195,7 @@ export async function executeRequest<T>(options, request): Promise<T> {
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
 │ Retry via Node maxRetries/wait         │ ✅ HARMONIOUS   │ All model calls  │
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
-│ No manual retry loops                  │ ❌ DISHARMONY   │ agentCreator     │
-│                                        │                 │ Commands.ts:252  │
+│ No manual retry loops in nodes         │ ✅ HARMONIOUS   │ Framework handles│
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
 │ execFallback() for graceful degrade    │ ✅ HARMONIOUS   │ Used properly    │
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
@@ -264,6 +207,9 @@ export async function executeRequest<T>(options, request): Promise<T> {
 ├────────────────────────────────────────┼─────────────────┼──────────────────┤
 │ Clone for isolation                    │ ✅ HARMONIOUS   │ Resets signal &  │
 │                                        │                 │ currentRetry     │
+├────────────────────────────────────────┼─────────────────┼──────────────────┤
+│ Request executor delegates retry       │ ✅ HARMONIOUS   │ No retry in      │
+│                                        │                 │ model handlers   │
 └────────────────────────────────────────┴─────────────────┴──────────────────┘
 
 * Documented exception: ResponseProcessNode, ResponseContinuationNode, etc.
@@ -274,16 +220,7 @@ export async function executeRequest<T>(options, request): Promise<T> {
 
 ## 6. Recommendations
 
-### 6.1 Fix Disharmony: Refactor agentCreatorCommands.ts
-
-Convert the manual retry loop to a proper PocketFlow Node or use the existing flow infrastructure:
-
-```typescript
-// Option A: Create a reusable YamlGeneratorNode
-// Option B: Use existing retry infrastructure with determineFallbackAction()
-```
-
-### 6.2 Documentation Enhancement
+### 6.1 Documentation Enhancement
 
 Add a PocketFlow compliance checklist to AGENTS.md:
 
@@ -296,7 +233,7 @@ Add a PocketFlow compliance checklist to AGENTS.md:
 - [ ] Return action strings from post() for flow transitions
 ```
 
-### 6.3 Consider: Runtime Config Validation
+### 6.2 Consider: Runtime Config Validation
 
 The current pattern of reading config at `_exec` time is an enhancement, but consider adding validation:
 
@@ -386,13 +323,17 @@ LEGEND:
 
 ## 8. Conclusion
 
-TeXRA's PocketFlow implementation is **largely harmonious** with core principles:
+TeXRA's PocketFlow implementation is **fully harmonious** with core principles:
 
 1. **Three-tier retry** elegantly separates concerns (auto → manual UI → state tracking)
 2. **Framework handles retry** - model handlers correctly delegate to flow layer
 3. **Clean node lifecycle** - prep/exec/post separation maintained
+4. **No disharmony** in agent execution nodes - retry is native to PocketFlow
 
-**One disharmony identified:**
-- `agentCreatorCommands.ts:252` uses manual retry loop
+**Key insight:** Retry is properly handled by the PocketFlow Node framework. The `requestExecutor.ts`
+explicitly states: *"Retry logic is handled at the flow level"* - and this is correctly implemented
+via `ResponseModelInvocationNode` and `ToolUseCallNode` which extend `Node` with proper
+`maxRetries`/`wait`/`execFallback` configuration.
 
-**Recommended action:** Refactor the agent creator to use PocketFlow Node with `maxRetries` parameter, maintaining consistency with the rest of the codebase.
+**Documented exception:** Some nodes pass shared through prep→exec for streaming/accumulation.
+This is intentional and documented in `ResponseCycleFlow.ts:100-103`.
