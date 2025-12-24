@@ -312,7 +312,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         // a change event which triggers save(). If model options haven't loaded
         // yet, save() would read incorrect values and corrupt the state.
         // We use update() below which bypasses save() and persists directly.
-        mainViewState.setApplyingOptions(true);
+        mainViewState.blockSave();
         try {
           // Set the value FIRST (creates placeholder if no match)
           // This must happen before applySessionType to prevent default override
@@ -343,7 +343,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           // Update the select's tooltip
           this._updateAgentSelectTooltip(selectElement);
         } finally {
-          mainViewState.setApplyingOptions(false);
+          mainViewState.unblockSave();
         }
       },
     };
@@ -372,10 +372,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
-    // Set guard flag to prevent save() during option replacement and restoration.
+    // Block save() during option replacement and restoration.
     // vscode-single-select may fire change events during innerHTML replacement
     // or programmatic value setting, which would capture incorrect state.
-    mainViewState.setApplyingOptions(true);
+    mainViewState.blockSave();
     try {
       const previous = selectElement.value;
       selectElement.innerHTML = optionsHtml;
@@ -386,7 +386,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
       updateModelApiKeyBanner(selectElement);
     } finally {
-      mainViewState.setApplyingOptions(false);
+      mainViewState.unblockSave();
     }
   }
 
@@ -423,10 +423,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
-    // Set guard flag to prevent save() during option replacement and restoration.
+    // Block save() during option replacement and restoration.
     // vscode-single-select may fire change events during innerHTML replacement
     // or programmatic value setting, which would capture incorrect state.
-    mainViewState.setApplyingOptions(true);
+    mainViewState.blockSave();
     try {
       const previous = selectElement.value;
       selectElement.innerHTML = optionsHtml ?? '';
@@ -439,7 +439,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       // Update the select's tooltip to show selected agent info
       this._updateAgentSelectTooltip(selectElement);
     } finally {
-      mainViewState.setApplyingOptions(false);
+      mainViewState.unblockSave();
     }
   }
 
@@ -798,10 +798,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _restoreModelSelection(selectElement, previousValue) {
     const savedValue = mainViewState.get?.()?.model ?? '';
     // Prioritize saved state over previous UI value for consistency
-    const { matched, matchedCandidate } = this._restoreSelectValue(
-      selectElement,
-      [savedValue, previousValue],
-    );
+    const { matched } = this._restoreSelectValue(selectElement, [
+      savedValue,
+      previousValue,
+    ]);
 
     if (!matched) {
       // Restoration failed - preserve the best available value in state.
