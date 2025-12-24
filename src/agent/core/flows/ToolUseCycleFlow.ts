@@ -5,6 +5,9 @@ import { BaseNode, Flow } from '@agent/node';
 import { isRemoteAgent } from '@agent/index';
 import {
   BaseCycleState,
+  BaseCycleShared,
+  BaseInvocationPrepResult,
+  BaseInvocationSuccessData,
   resetCycleState,
   CycleDebugContext,
   CycleDebugFileOptions,
@@ -42,7 +45,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
-  type RetryState,
   type InvocationResult,
   RetryableInvocationNode,
   handleInvocationResult,
@@ -157,20 +159,13 @@ function resetToolUseState(state: ToolUseCycleState): void {
 
 /**
  * Shared state for tool-use cycle flows.
- *
- * This contains only MUTABLE state that flows through nodes.
- * Services (options, store) are accessed via `_params.services`.
+ * Uses BaseCycleShared with ToolUseCycleState for type safety.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ToolUseCycleServices)
  */
-export interface ToolUseCycleShared<_C = unknown> {
-  /** Runtime state for this cycle */
-  state: ToolUseCycleState;
-  /** Retry state for model invocation errors */
-  retryState: RetryState;
-}
+export type ToolUseCycleShared<_C = unknown> = BaseCycleShared<ToolUseCycleState>;
 
 /**
  * Prepares a tool-use cycle by checking interruptions and setting up debug context.
@@ -234,22 +229,15 @@ class ToolUsePrepNode<C> extends BaseNode<
 
 /**
  * Data extracted by prep() for tool-use call.
- * This is the ONLY data exec() should use (PocketFlow compliance).
- *
- * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
- * which is the correct PocketFlow pattern for immutable configuration.
+ * Uses base type directly (no additional fields needed).
  */
-interface ToolUseCallPrepResult {
-  shouldStop: boolean;
-  messages: ProviderMessage[];
-}
+type ToolUseCallPrepResult = BaseInvocationPrepResult;
 
 /**
  * Success data for tool-use call.
+ * Extends base with debug context for message saving.
  */
-interface ToolUseCallSuccessData {
-  response: unknown;
-  responseTime?: number;
+interface ToolUseCallSuccessData extends BaseInvocationSuccessData {
   debugContext: CycleDebugContext;
   debugFileOptions: CycleDebugFileOptions;
 }
