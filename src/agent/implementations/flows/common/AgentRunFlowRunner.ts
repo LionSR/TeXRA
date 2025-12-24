@@ -1,11 +1,8 @@
 // Type imports
 import type { Flow } from '@agent/node';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
-import type {
-  AgentRunHooks,
-  AgentLifecycleState,
-  AgentRunShared,
-} from './types';
+import type { AgentLifecycle } from './AgentLifecycle';
+import type { AgentRunHooks, AgentRunShared } from './types';
 
 export type AgentRunHookOverrides = Partial<AgentRunHooks>;
 
@@ -13,7 +10,7 @@ type AgentRunFlowOptionsBase<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 > = {
@@ -29,7 +26,7 @@ type AgentRunFlowOptionsWithExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 > = AgentRunFlowOptionsBase<Shared> & {
@@ -40,7 +37,7 @@ type AgentRunFlowOptionsWithoutExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 > =
@@ -52,7 +49,7 @@ export type AgentRunFlowOptions<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 > =
@@ -63,7 +60,7 @@ function hasExtendHooks<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 >(
@@ -79,7 +76,7 @@ export async function runAgentFlow<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentLifecycleState<string>,
+    AgentLifecycle<string>,
     AgentRunHooks
   >,
 >(options: AgentRunFlowOptions<Shared>): Promise<Shared> {
