@@ -1,25 +1,23 @@
 /**
  * Retry state management for manual retry handling.
  *
- * Auto-retry is handled by PocketFlow's Node class (maxRetries, wait, execFallback).
- * This module only manages error state for manual retry UI integration.
+ * Auto-retry AND manual retry are now handled by PocketFlow's Node class:
+ * - maxRetries/wait for auto-retry
+ * - retryPrompt hook for manual retry UI
+ * - execFallback() called only when all retries exhausted
  *
- * Architecture:
- * - PocketFlow Node handles auto-retry internally via _exec() loop
- * - execFallback() is called when all auto-retries exhausted
- * - This module tracks the last error for UI display and caller reporting
+ * This module provides:
+ * - Configuration for Node retry parameters
+ * - Error state tracking for UI display and caller reporting
  */
 
 import type { ErrorLogContext } from '@common/errors/sdkErrorUtils';
-import type { AgentLogger } from '@logger/AgentLogger';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
-import { FlowTransition } from './FlowTransitions';
-
-/** Timeout for manual retry wait (5 minutes) - exported for BaseRetryWaitNode */
+/** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
 export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
@@ -122,118 +120,4 @@ export function recordRetryError(
   error: RetryErrorInfo,
 ): void {
   state.lastError = error;
-}
-
-// ============================================================================
-// Fallback handling (called from Node.execFallback via post())
-// ============================================================================
-
-/**
- * Result from execFallback that post() uses to determine flow transition.
- * Discriminated union ensures type-safe handling.
- */
-export type FallbackResult =
-  | { outcome: 'manual_retry'; error: RetryErrorInfo }
-  | { outcome: 'fail'; error: RetryErrorInfo };
-
-/**
- * Determines fallback action after all auto-retries are exhausted.
- * Called from Node.execFallback() to decide between manual retry and failure.
- *
- * @param retryable - Whether the error is retryable (from formatProviderHttpError)
- * @param message - Error message
- * @param statusCode - HTTP status code if available
- * @param context - Operation context from error enrichment (operation name, model)
- * @returns FallbackResult for post() to handle
- */
-export function determineFallbackAction(
-  retryable: boolean,
-  message: string,
-  statusCode?: number,
-  context?: ErrorLogContext,
-): FallbackResult {
-  const error: RetryErrorInfo = { message, statusCode, retryable, context };
-
-  if (retryable) {
-    // Error is retryable but auto-retries exhausted → offer manual retry
-    return { outcome: 'manual_retry', error };
-  }
-
-  // Non-retryable error → fail immediately
-  return { outcome: 'fail', error };
-}
-
-/**
- * Formats the error message with operation context for logging.
- * Includes the specific operation that failed (e.g., "google.chat.sendMessageStream").
- */
-function formatErrorMessage(
-  operationName: string,
-  error: RetryErrorInfo,
-  suffix?: string,
-): string {
-  const context = error.context;
-  const operation = context?.operation;
-
-  // Build base message
-  const prefix = suffix
-    ? `${operationName} failed ${suffix}`
-    : `${operationName} failed`;
-
-  // Add operation context if available and different from operationName
-  if (
-    operation &&
-    !operationName.toLowerCase().includes(operation.toLowerCase())
-  ) {
-    return `${prefix} [${operation}]: ${error.message}`;
-  }
-
-  return `${prefix}: ${error.message}`;
-}
-
-/**
- * Applies fallback result: records error, logs, and returns flow transition.
- * Called from post() after receiving FallbackResult from execFallback.
- *
- * This is the single source of truth for error logging (log at boundary principle).
- * The error context from enrichError() is included in the log message.
- *
- * @param result - The fallback result from determineFallbackAction
- * @param state - The retry state to update
- * @param logger - Logger for status messages
- * @param operationName - Name of the operation for log messages
- * @returns Flow transition string
- */
-export function applyFallbackResult(
-  result: FallbackResult,
-  state: RetryState,
-  logger: AgentLogger,
-  operationName: string,
-): string {
-  // Record error in state for caller/UI access
-  recordRetryError(state, result.error);
-
-  switch (result.outcome) {
-    case 'manual_retry':
-      logger.logErrorData(
-        formatErrorMessage(operationName, result.error),
-        result.error,
-      );
-      return FlowTransition.AWAIT_RETRY;
-
-    case 'fail':
-      logger.logErrorData(
-        formatErrorMessage(operationName, result.error, '(not retryable)'),
-        result.error,
-      );
-      return FlowTransition.COMPLETE;
-
-    default: {
-      // Exhaustiveness check: ensure all FallbackResult outcomes are handled
-      const _exhaustive: never = result;
-      throw new Error(
-        `Unhandled fallback outcome: ${(_exhaustive as FallbackResult).outcome}`,
-      );
-    }
-  }
 }
