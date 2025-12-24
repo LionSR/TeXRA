@@ -59,16 +59,16 @@ export function buildStreamInfos(
 ): StreamTabInfo[] {
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
-    const sessionKindHint = state.getSessionKindHint(id);
+    const hints = state.getStreamHints(id);
     const logs = state.streamTabs.getMessages(id);
     const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
-    const outputs = taskState?.agentConfig.outputFiles ?? [];
     const inputFile = taskState?.agentConfig.inputFile ?? '';
     // Extract clean agent name (strip source: prefix if present)
     const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
     const agentName = getCleanAgentName(rawAgentName);
-    let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
+    let sessionCategory =
+      taskState?.session?.agentCategory ?? hints.sessionCategory;
 
     // Filter logic: streams without category only show when filter is "all"
     if (!sessionCategory) {
@@ -84,7 +84,12 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    const isRemote = isRemoteAgent(rawAgentName);
+    // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
+    // and isRemoteAgent can reliably determine the source. When taskState is null,
+    // rawAgentName is just the clean name from the stream ID, so fall back to the hint.
+    const isRemote = taskState
+      ? isRemoteAgent(rawAgentName)
+      : (hints.isRemote ?? false);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
@@ -98,7 +103,11 @@ export function buildStreamInfos(
         sessionKind: sessionCategory,
         isToolAgent,
       },
-      hasMultipleOutputs: outputs.length > 1,
+      // useMultipleOutputs is the single source of truth (workflow-only concept).
+      // When taskState is null, fall back to the hint from setActiveStream event.
+      hasMultipleOutputs: taskState
+        ? taskState.agentConfig.useMultipleOutputs
+        : (hints.hasMultipleOutputs ?? false),
       isRemote,
       lastTimestamp,
       inputFile,
