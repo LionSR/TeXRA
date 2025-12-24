@@ -193,6 +193,8 @@ export class AgentsTable {
           modelsInfo.textContent = 'All models included';
           modelsInfo.title = '';
           modelsInfo.style.display = 'block';
+          // Clean up any existing models list (Ultra doesn't need it)
+          this.clearModelsList(modelsInfo);
         } else if (resolvedAllowedModels.length > 0) {
           // Specific models allowed - display count and list
           modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
@@ -213,9 +215,13 @@ export class AgentsTable {
             ? 'Try signing out and back in to refresh'
             : '';
           modelsInfo.style.display = 'block';
+          // Clean up any existing models list
+          this.clearModelsList(modelsInfo);
         }
       } else {
         modelsInfo.style.display = 'none';
+        // Clean up any models list when switching to personal mode
+        this.clearModelsList(modelsInfo);
       }
     }
 
@@ -242,16 +248,24 @@ export class AgentsTable {
   }
 
   /**
+   * Clear any existing models list from the DOM.
+   * @param {HTMLElement} container - The container element near the models list
+   */
+  clearModelsList(container) {
+    const existingList = container?.parentElement?.querySelector('.models-list');
+    if (existingList) {
+      existingList.remove();
+    }
+  }
+
+  /**
    * Render the list of allowed models as a formatted list.
    * @param {HTMLElement} container - The container element to append the list to
    * @param {string[]} models - Array of model names
    */
   renderModelsList(container, models) {
-    // Remove any existing models list
-    const existingList = container.parentElement?.querySelector('.models-list');
-    if (existingList) {
-      existingList.remove();
-    }
+    // Remove any existing models list first
+    this.clearModelsList(container);
 
     // Create the models list element
     const modelsList = document.createElement('div');
