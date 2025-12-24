@@ -17,7 +17,6 @@ import {
   retryCoordinator,
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
-import type { ErrorLogContext } from '@common/errors/sdkErrorUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -39,10 +38,7 @@ export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export interface RetryErrorInfo {
   message: string;
-  statusCode?: number;
   retryable: boolean;
-  /** Operation context from error enrichment (e.g., operation name, model) */
-  context?: ErrorLogContext;
 }
 
 /**
