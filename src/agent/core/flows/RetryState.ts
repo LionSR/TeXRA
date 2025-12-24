@@ -426,23 +426,14 @@ export interface InvocationResultHandlerOptions {
 }
 
 /**
- * Result of handling an invocation result.
- * - 'complete': Flow should return FlowTransition.COMPLETE
- * - 'continue': Flow should continue to next node
- */
-export type InvocationResultHandlerResult =
-  | { action: 'complete' }
-  | { action: 'continue' };
-
-/**
  * Handles common invocation result cases in post().
  *
  * This is the single source of truth for handling:
- * - 'skipped': Logs and returns COMPLETE
- * - 'cancelled': Clears retry error, sets state, returns COMPLETE
- * - 'failed': Records retry error, sets state, returns COMPLETE
- * - 'success' with empty response: Records error, sets state, returns COMPLETE
- * - 'success' with response: Returns continue
+ * - 'skipped': Logs and returns null (COMPLETE)
+ * - 'cancelled': Clears retry error, sets state, returns null (COMPLETE)
+ * - 'failed': Records retry error, sets state, returns null (COMPLETE)
+ * - 'success' with empty response: Records error, sets state, returns null (COMPLETE)
+ * - 'success' with response: Clears error, returns the narrowed success result
  *
  * IMPORTANT: This fixes the empty response misclassification bug by recording
  * an error when response is empty, preventing it from being detected as
@@ -452,20 +443,20 @@ export type InvocationResultHandlerResult =
  * @param state - Mutable cycle state (shouldStop, endTurn will be set)
  * @param retryState - Mutable retry state (lastError will be set/cleared)
  * @param options - Logger and operation name for messages
- * @returns Handler result indicating whether to complete or continue
+ * @returns The narrowed success result if successful, null if flow should complete
  */
-export function handleInvocationResult<T extends { response?: unknown }>(
+export function handleInvocationResult<T extends { response: unknown }>(
   result: InvocationResult<T>,
   state: { shouldStop: boolean; endTurn: boolean },
   retryState: RetryState,
   options: InvocationResultHandlerOptions,
-): InvocationResultHandlerResult {
+): (T & { kind: 'success' }) | null {
   const { logger, operationName } = options;
 
   // Handle skipped (shouldStop was true before invocation)
   if (result.kind === 'skipped') {
     logger.debug(`${operationName} skipped: shouldStop was already true`);
-    return { action: 'complete' };
+    return null;
   }
 
   // Handle user cancellation (do NOT record error - distinguishes from failure)
@@ -474,7 +465,7 @@ export function handleInvocationResult<T extends { response?: unknown }>(
     clearRetryError(retryState);
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
-    return { action: 'complete' };
+    return null;
   }
 
   // Handle failure (all retries exhausted or non-retryable error)
@@ -486,7 +477,7 @@ export function handleInvocationResult<T extends { response?: unknown }>(
     });
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
-    return { action: 'complete' };
+    return null;
   }
 
   // Handle success with empty response (server/network issue)
@@ -499,10 +490,10 @@ export function handleInvocationResult<T extends { response?: unknown }>(
     });
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
-    return { action: 'complete' };
+    return null;
   }
 
-  // Success with valid response - clear any previous error and continue
+  // Success with valid response - clear any previous error and return narrowed type
   clearRetryError(retryState);
-  return { action: 'continue' };
+  return result as T & { kind: 'success' };
 }
