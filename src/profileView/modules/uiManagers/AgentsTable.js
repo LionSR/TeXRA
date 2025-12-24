@@ -194,10 +194,12 @@ export class AgentsTable {
           modelsInfo.title = '';
           modelsInfo.style.display = 'block';
         } else if (resolvedAllowedModels.length > 0) {
-          // Specific models allowed
+          // Specific models allowed - display count and list
           modelsInfo.textContent = `Models: ${resolvedAllowedModels.length} included`;
-          modelsInfo.title = resolvedAllowedModels.join(', ');
+          modelsInfo.title = '';
           modelsInfo.style.display = 'block';
+          // Render the model list below the count
+          this.renderModelsList(modelsInfo, resolvedAllowedModels);
         } else {
           // Empty array means either:
           // 1. Tier config fetch failed (when enabledProviders is also empty)
@@ -237,6 +239,27 @@ export class AgentsTable {
         });
       }
     }
+  }
+
+  /**
+   * Render the list of allowed models as a formatted list.
+   * @param {HTMLElement} container - The container element to append the list to
+   * @param {string[]} models - Array of model names
+   */
+  renderModelsList(container, models) {
+    // Remove any existing models list
+    const existingList = container.parentElement?.querySelector('.models-list');
+    if (existingList) {
+      existingList.remove();
+    }
+
+    // Create the models list element
+    const modelsList = document.createElement('div');
+    modelsList.className = 'models-list';
+    modelsList.textContent = models.join(', ');
+
+    // Insert after the container (modelsInfo element)
+    container.parentElement?.insertBefore(modelsList, container.nextSibling);
   }
 
   /**

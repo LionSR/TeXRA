@@ -273,6 +273,12 @@ h2 {
   color: var(--color-text-secondary);
 }
 
-.allowed-models-info {
-  cursor: help;
+.models-list {
+  margin-top: var(--spacing-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  background: var(--vscode-textBlockQuote-background);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
 }
