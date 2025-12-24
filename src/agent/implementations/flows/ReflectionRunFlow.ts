@@ -5,6 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type {
   BaseReflectionAgent,
   ReflectionRoundResult,
@@ -48,13 +49,9 @@ export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
 /**
  * Runtime state for reflection agent runs.
- *
- * Schema alignment: This interface corresponds to {@link ReflectionRunStateSchema}
- * for serialization. The runtime uses AgentRunState class instances while the
- * schema uses AgentRunStateSnapshotSchema for JSON compatibility.
  */
 export interface ReflectionRunState {
-  conversation: any[];
+  conversation: ProviderMessage[];
   runState: AgentRunState;
   totalRounds: number;
   currentRound: number;
