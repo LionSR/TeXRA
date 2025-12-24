@@ -21,6 +21,10 @@ import { UsageLogService } from '@logger/UsageLogService';
 export interface UsageMonitorMetadata {
   /** Agent name for backend logging */
   agentName?: string;
+  /** Agent category: workflow or toolUse */
+  agentCategory?: 'workflow' | 'toolUse';
+  /** Whether this is a multiple-output workflow agent */
+  isMultipleOutput?: boolean;
 }
 
 /**
@@ -132,6 +136,8 @@ export class UsageMonitor {
         model: modelConfig.fullName,
         provider,
         agentName: this.metadata?.agentName,
+        agentCategory: this.metadata?.agentCategory,
+        isMultipleOutput: this.metadata?.isMultipleOutput,
         inputTokens: totals.totalInputTokens,
         outputTokens: totals.totalOutputTokens,
         cost: Number(totals.totalCost.toFixed(6)),

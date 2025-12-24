@@ -27,6 +27,12 @@ export const UsageLogEntrySchema = z.object({
   /** Agent name that initiated the request */
   agentName: z.string().optional(),
 
+  /** Agent category: workflow or toolUse */
+  agentCategory: z.enum(['workflow', 'toolUse']).optional(),
+
+  /** Whether this is a multiple-output workflow agent */
+  isMultipleOutput: z.boolean().optional(),
+
   /** Number of input tokens consumed */
   inputTokens: z.number().int().nonnegative(),
 
