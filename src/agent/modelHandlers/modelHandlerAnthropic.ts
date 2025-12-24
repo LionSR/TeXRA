@@ -48,7 +48,6 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
@@ -65,7 +64,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 
 // Internal imports
-import { K_SLICE, getConfig } from '@utils/config';
+import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
@@ -1161,8 +1160,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    this.logger.debug('Skipping continuation - assistant prefill is supported');
-    // No-op for models that support prefill
+    this.defaultAddContinueWithPrefill();
   }
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
@@ -1173,14 +1171,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    // Create continuation message with last K tokens
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation = createContinuationMessage(
-      agentSetting.endTag,
-      prefillTokens,
+    const userMessageContinuation = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
     );
 
-    // Add continuation message
     this.logger.debug(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
