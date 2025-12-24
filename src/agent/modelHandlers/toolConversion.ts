@@ -31,7 +31,9 @@ import type {
  * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
  * Shared utility used by all provider tool converters.
  */
-function convertToolSchema(def: ToolDefinition): Record<string, unknown> | null {
+function convertToolSchema(
+  def: ToolDefinition,
+): Record<string, unknown> | null {
   if (def.zodSchema) {
     return toJSONSchema(def.zodSchema) as Record<string, unknown>;
   }
@@ -159,7 +161,9 @@ export function toAnthropicTools(
 
     // Use Zod schema with ref support for complex types, else fallback
     const params = d.zodSchema
-      ? (toJSONSchema(d.zodSchema, { reused: 'ref' }) as AnthropicTool['input_schema'])
+      ? (toJSONSchema(d.zodSchema, {
+          reused: 'ref',
+        }) as AnthropicTool['input_schema'])
       : (d.parameters as AnthropicTool['input_schema'] | undefined);
 
     return {
