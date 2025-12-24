@@ -93,17 +93,23 @@ class Node<
    * Use this for manual retry prompts (e.g., showing UI to user).
    * The hook receives the prepRes and the last error.
    *
+   * NOTE: Override this as a regular method (not an arrow function property)
+   * because Node.clone() uses Object.assign, which copies instance properties.
+   * Arrow functions capture `this` lexically, so they would reference the
+   * original instance after cloning. Regular methods on the prototype work
+   * correctly because they get `this` from the call site.
+   *
    * @example
    * ```typescript
    * class MyNode extends Node<S, P> {
-   *   retryPrompt = async (prepRes, error) => {
+   *   async retryPrompt(prepRes: unknown, error: Error): Promise<boolean> {
    *     const result = await showRetryDialog(error.message);
    *     return result === 'retry';
-   *   };
+   *   }
    * }
    * ```
    */
-  retryPrompt?: (prepRes: unknown, error: Error) => Promise<boolean>;
+  async retryPrompt?(prepRes: unknown, error: Error): Promise<boolean>;
   /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
@@ -115,11 +121,15 @@ class Node<
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
+    // Guard against infinite loop: ensure at least 1 retry attempt
+    // This also documents the contract that maxRetries must be >= 1
+    const effectiveMaxRetries = Math.max(1, this.maxRetries);
+
     // Outer loop for manual retry (restarts auto-retry cycle)
     while (true) {
       for (
         this.currentRetry = 0;
-        this.currentRetry < this.maxRetries;
+        this.currentRetry < effectiveMaxRetries;
         this.currentRetry++
       ) {
         try {
@@ -128,7 +138,7 @@ class Node<
           // If abort signal is set and aborted, skip retries and go to fallback
           // This prevents unnecessary retries when the user intentionally cancelled
           const isAborted = this.signal?.aborted === true;
-          const isLastAutoRetry = this.currentRetry === this.maxRetries - 1;
+          const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
 
           if (isLastAutoRetry || isAborted) {
             // Auto-retries exhausted - try manual retry if configured
