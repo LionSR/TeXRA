@@ -20,11 +20,15 @@ export const ELEMENT_IDS = {
   REMOTE_AGENTS_SECTION: 'remoteAgentsSection',
   AGENTS_TABLE_CONTAINER: 'agentsTableContainer',
   NO_AGENTS_MESSAGE: 'noAgentsMessage',
-  // API Access section (Ultra tier only)
+  // API Access section (all authenticated users)
   API_ACCESS_SECTION: 'apiAccessSection',
   API_ACCESS_INCLUDED: 'apiAccessIncluded',
   API_ACCESS_PERSONAL: 'apiAccessPersonal',
   ENABLED_PROVIDERS_INFO: 'enabledProvidersInfo',
+  ALLOWED_MODELS_INFO: 'allowedModelsInfo',
+  // Access expiration
+  ACCESS_EXPIRATION_ROW: 'accessExpirationRow',
+  ACCESS_EXPIRATION: 'accessExpiration',
 };
 
 // CSS class names used across modules

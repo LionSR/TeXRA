@@ -3,7 +3,7 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { shouldUseServerSideKeysSync } from '@auth/serverSideKeyAccess';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
@@ -225,7 +225,15 @@ export abstract class ModelHandler<
    *
    * Returns true only if:
    * 1. Model is not openRouterOnly (those always use OpenRouter)
-   * 2. shouldUseServerSideKeysSync confirms access (setting enabled, provider supported, Ultra tier)
+   * 2. shouldUseServerSideKeysSync confirms access:
+   *    - Setting enabled
+   *    - Provider supported
+   *    - Tier-based model access (Ultra=all, Max/free=specific models)
+   *
+   * MODEL VALIDATION STRATEGY:
+   * - Client validates SHORT NAMES (this.config.name) against tier config
+   * - Server validates API NAMES (from request body) against API patterns
+   * - Both are defined in RELAY_MODELS, ensuring UI filtering matches API validation
    */
   protected shouldUseServerSideKeys(): boolean {
     // Skip openRouterOnly models - these should always route through OpenRouter
@@ -233,7 +241,12 @@ export abstract class ModelHandler<
     if (this.config.openRouterOnly) {
       return false;
     }
-    return shouldUseServerSideKeysSync(this.config.provider);
+    // Pass short name (this.config.name) for client-side tier validation.
+    // The server will separately validate the actual API model name from the request.
+    return getServerSideKeyService().shouldUseServerSideKeysSync(
+      this.config.provider,
+      this.config.name,
+    );
   }
 
   /**
