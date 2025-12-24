@@ -39,22 +39,31 @@ export interface ToolUseCycleInput<C = unknown> {
   store: AgentSharedStore;
 }
 
+export interface ToolUseCycleResult {
+  /** True if the cycle stopped due to an error (not user cancellation). */
+  failedWithError: boolean;
+  /** Error message if failedWithError is true. */
+  errorMessage?: string;
+  /** True if the user cancelled the retry wait (should stop gracefully). */
+  userCancelled: boolean;
+}
+
 /**
  * Executes a tool-use cycle for interactive agents.
  *
  * Tool-use cycles operate on messages in-place and continue until
- * user follow-up is required. They don't return a value because
- * control flow is managed by the interactive session lifecycle.
+ * user follow-up is required or an error/cancellation occurs.
  *
  * This is used by BaseToolUseAgent for reactive, session-based execution
  * where the agent responds to tools and waits for user input.
  *
  * @param input - Cycle input with options, messages, and store
- * @see runResponseCycle for workflow-based cycle execution that returns control flags
+ * @returns Result with failedWithError and userCancelled flags
+ * @see runResponseCycle for workflow-based cycle execution
  */
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,
-): Promise<void> {
+): Promise<ToolUseCycleResult> {
   const { options, store } = input;
   const { context } = options;
 
@@ -79,6 +88,7 @@ export async function runToolUseCycle<C = unknown>(
       toolCalls: undefined,
       text: undefined,
       stopReason: undefined,
+      endTurn: false, // Will be set to true if cycle completes normally
     } satisfies ToolUseCycleState,
     retryState: createRetryState(),
   };
@@ -99,6 +109,24 @@ export async function runToolUseCycle<C = unknown>(
 
   // Emit edited files to the progress view
   emitEditedFiles(input);
+
+  // Determine if the cycle failed due to an error (not user cancellation).
+  // User cancellation in retryPrompt does not record an error, so:
+  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
+  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
+  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
+  const failedWithError =
+    shared.state.shouldStop && !!shared.retryState.lastError;
+  const userCancelled =
+    shared.state.shouldStop &&
+    !shared.retryState.lastError &&
+    !shared.state.endTurn;
+
+  return {
+    failedWithError,
+    errorMessage: shared.retryState.lastError?.message,
+    userCancelled,
+  };
 }
 
 /**

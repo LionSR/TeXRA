@@ -2,12 +2,15 @@
 import * as path from 'path';
 
 // Local imports - core flow primitives
-import { BaseNode, Node, Flow } from '@agent/node';
+import { BaseNode, Flow } from '@agent/node';
 // Internal imports
 import { isRemoteAgent } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
+  BaseCycleShared,
+  BaseInvocationPrepResult,
+  BaseInvocationSuccessData,
   resetCycleState,
   CycleDebugContext,
   CycleDebugFileOptions,
@@ -26,10 +29,6 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 // Local imports - logging
 // Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import {
-  formatProviderHttpError,
-  extractErrorContext,
-} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { getSystemPromptWithRules } from '@utils/prompt';
@@ -42,15 +41,11 @@ import { bestConnectionMethod } from '@latex';
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
-  type RetryState,
-  type FallbackResult,
-  clearRetryError,
-  getNodeRetryConfig,
-  determineFallbackAction,
-  applyFallbackResult,
+  type InvocationResult,
+  RetryableInvocationNode,
+  handleInvocationResult,
 } from './RetryState';
-import { createRetryWaitNode } from './BaseRetryWaitNode';
-import type { ResponseCycleParams } from './CycleServices';
+import type { ResponseCycleParams, ResponseCycleServices } from './CycleServices';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -58,6 +53,19 @@ export interface ResponseCycleInputState {
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
+  /**
+   * Whether the last cycle ended normally (model said end_turn).
+   *
+   * Lifecycle:
+   * - Initialized to `false` when shared state is created
+   * - Set to `true` when model's stop_reason is 'end_turn'
+   * - Set to `false` on failures, cancellations, or empty responses
+   *
+   * Used by callers to distinguish between:
+   * - Normal completion: shouldStop=true, endTurn=true
+   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
+   * - Failure: shouldStop=true, endTurn=false, lastError defined
+   */
   endTurn: boolean;
   outputExists: boolean;
   systemPrompt?: string;
@@ -83,20 +91,13 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 
 /**
  * Shared state for response cycle flows.
- *
- * This contains only MUTABLE state that flows through nodes.
- * Services (options, store) are accessed via `_params.services`.
+ * Uses BaseCycleShared with ResponseCycleState for type safety.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export interface ResponseCycleShared<_C = unknown> {
-  /** Runtime state for this cycle */
-  state: ResponseCycleState;
-  /** Retry state for model invocation errors */
-  retryState: RetryState;
-}
+export type ResponseCycleShared<_C = unknown> = BaseCycleShared<ResponseCycleState>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -200,50 +201,48 @@ class ResponsePrepNode<C> extends BaseNode<
 
 /**
  * Data extracted by prep() for model invocation.
- * This is the ONLY data exec() should use (PocketFlow compliance).
- *
- * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
- * which is the correct PocketFlow pattern for immutable configuration.
+ * Extends base with optional system prompt for response generation.
  */
-interface InvocationPrepResult {
-  shouldStop: boolean;
-  messages: ProviderMessage[];
+interface InvocationPrepResult extends BaseInvocationPrepResult {
   systemPrompt?: string;
 }
 
 /**
- * Result type for model invocation.
- * - Success: Contains response from model
- * - Fallback: From execFallback when all auto-retries exhausted
- * - Skipped: When shouldStop is true
+ * Success data for model invocation.
+ * Uses base type directly (no additional fields needed).
  */
-type InvocationExecResult =
-  | { kind: 'success'; response: unknown; responseTime?: number }
-  | { kind: 'fallback'; result: FallbackResult }
-  | { kind: 'skipped' };
+type InvocationSuccessData = BaseInvocationSuccessData;
+
+/**
+ * Result type for model invocation (uses shared InvocationResult).
+ */
+type InvocationExecResult = InvocationResult<InvocationSuccessData>;
 
 /**
  * Handles model invocation with PocketFlow's built-in retry.
  *
- * Uses PocketFlow Node for auto-retry:
+ * Extends RetryableInvocationNode for shared retry logic:
  * - maxRetries and wait configured from user settings
  * - exec() throws on error, Node retries automatically
- * - execFallback() called when all auto-retries exhausted
+ * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
+ * - execFallback() called only when user cancels or error is non-retryable
  *
  * Flow transitions:
- * - AWAIT_RETRY: Manual retry (goes to RetryWaitNode)
  * - default: Continue to next node on success
- * - COMPLETE: Non-retryable error or user abort
+ * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
  *
  * Services accessed via `_params.services`: options
  */
-class ResponseModelInvocationNode<C> extends Node<
+class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
-  constructor() {
-    const config = getNodeRetryConfig();
-    super(config.maxRetries, config.wait);
+  protected getOperationName(): string {
+    return 'Model invocation';
+  }
+
+  protected getServices(): ResponseCycleServices<C> {
+    return this._params.services;
   }
 
   /**
@@ -257,23 +256,6 @@ class ResponseModelInvocationNode<C> extends Node<
       messages: state.messages,
       systemPrompt: state.systemPrompt,
     };
-  }
-
-  /**
-   * Read fresh retry config before starting the retry loop.
-   *
-   * This enables config changes to take effect without rebuilding the flow.
-   * Config is read once at the start of _exec(), before any retries begin,
-   * so the same config applies to all retry attempts within a single execution.
-   *
-   * Note: PocketFlow flows are single-threaded per request, so concurrent
-   * mutation is not a concern here.
-   */
-  async _exec(prepRes: unknown): Promise<unknown> {
-    const config = getNodeRetryConfig();
-    this.maxRetries = config.maxRetries;
-    this.wait = config.wait;
-    return super._exec(prepRes);
   }
 
   async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
@@ -318,31 +300,18 @@ class ResponseModelInvocationNode<C> extends Node<
       options.setAbortController(null);
     }
     // Note: Errors from createResponse() are caught by PocketFlow Node's
-    // retry loop in _exec(), which calls execFallback() when exhausted.
+    // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
 
   /**
-   * Called by PocketFlow Node when all auto-retries are exhausted.
-   * Determines whether to offer manual retry or fail.
+   * Called by PocketFlow Node when retryPrompt returns false.
+   * Uses base class getFallbackResult() for shared logic.
    */
   async execFallback(
     _prepRes: InvocationPrepResult,
     error: Error,
   ): Promise<InvocationExecResult> {
-    const formatted = formatProviderHttpError(error);
-    // Extract enriched context attached by requestExecutor (operation name, model)
-    const context = extractErrorContext(error);
-
-    // If abort signal was triggered, this was user cancellation - never offer retry
-    const retryable = this.signal?.aborted ? false : formatted.retryable;
-
-    const fallbackResult = determineFallbackAction(
-      retryable,
-      formatted.message,
-      formatted.statusCode,
-      context,
-    );
-    return { kind: 'fallback', result: fallbackResult };
+    return this.getFallbackResult(error);
   }
 
   async post(
@@ -353,57 +322,30 @@ class ResponseModelInvocationNode<C> extends Node<
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle skipped (shouldStop was true before invocation)
-    if (execRes.kind === 'skipped') {
-      options.logger.debug(
-        'Model invocation skipped: shouldStop was already true',
-      );
+    // Handle non-success cases (returns null) or get narrowed success result
+    const successRes = handleInvocationResult(execRes, state, retryState, {
+      logger: options.logger,
+      operationName: this.getOperationName(),
+    });
+
+    if (!successRes) {
       return FlowTransition.COMPLETE;
     }
 
-    // Handle fallback (all auto-retries exhausted)
-    if (execRes.kind === 'fallback') {
-      const transition = applyFallbackResult(
-        execRes.result,
-        retryState,
-        options.logger,
-        'Model invocation',
-      );
-
-      // Set state flags on failure
-      if (execRes.result.outcome === 'fail') {
-        state.shouldStop = true;
-        state.endTurn = false;
-      }
-
-      return transition;
-    }
-
-    // Handle success
-    clearRetryError(retryState);
-
-    if (!execRes.response) {
-      // Response was empty (shouldn't happen normally)
-      options.logger.warn(
-        'Model response was aborted or returned no data; output may be incomplete.',
-      );
-      state.shouldStop = true;
-      return FlowTransition.COMPLETE;
-    }
-
-    state.responseObject = execRes.response;
-    state.responseTime = execRes.responseTime;
+    // Apply success-specific side effects
+    state.responseObject = successRes.response;
+    state.responseTime = successRes.responseTime;
 
     if (state.debugContext && state.debugFileOptions) {
       await maybeSaveDebugObject({
-        object: execRes.response,
+        object: successRes.response,
         objectType: 'response',
         context: state.debugContext,
         fileOptions: state.debugFileOptions,
       });
     }
 
-    return undefined; // Continue to process node
+    return undefined;
   }
 }
 
@@ -931,32 +873,15 @@ export function createResponseCycleFlow<C>(): Flow<
 > {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ResponseModelInvocationNode<C>();
-  // Use shared retry wait node (single source of truth)
-  // Note: RetryWaitNode accesses services via its own accessor pattern
-  const retryWaitNode = createRetryWaitNode<ResponseCycleShared<C>>({
-    getStreamId: (_shared, params) =>
-      (params as ResponseCycleParams<C>).services.options.context.streamId,
-    getLogger: (_shared, params) =>
-      (params as ResponseCycleParams<C>).services.options.logger,
-    operationName: 'Model invocation',
-  });
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();
 
   // Main flow: prep → invoke → process → continuation
+  // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
+  // via maxRetries, wait, and retryPrompt. No separate RetryWaitNode needed.
   prepNode.next(invokeNode);
   invokeNode.next(processNode);
   processNode.next(continuationNode);
-
-  // Retry transition from invoke node:
-  // - AWAIT_RETRY: Go to retry wait node for manual retry
-  // Note: Auto-retry is handled internally by PocketFlow Node (maxRetries, wait)
-  invokeNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
-
-  // Retry wait node transitions:
-  // - MANUAL_RETRY: Loop back to invoke node after user triggers retry
-  // - COMPLETE: Exit flow if user cancels
-  retryWaitNode.on(FlowTransition.MANUAL_RETRY, invokeNode);
 
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
