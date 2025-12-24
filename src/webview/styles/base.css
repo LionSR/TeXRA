@@ -117,7 +117,10 @@ vscode-option[data-requires-key='true'] {
 }
 
 vscode-option {
-  font-family: codicon, var(--vscode-font-family);
+  /* Use only vscode-font-family to ensure consistent Unicode character sizing.
+     Codicon font doesn't include characters like ☁ (U+2601), causing
+     inconsistent fallback rendering when listed as primary font. */
+  font-family: var(--vscode-font-family);
 }
 
 vscode-option[data-tool-use='true'] {
