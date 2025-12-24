@@ -130,49 +130,56 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           return;
         }
 
-        let select = document.getElementById('model');
-        if (!isSelectLikeElement(select)) {
-          const waitHandle = waitForElement('#model');
-
-          // Cancel any previous waiter to prevent race conditions
-          if (this._disposeModelWaiter) {
-            this._disposeModelWaiter();
-          }
-
-          // Create a disposer that cleans up this specific waiter
-          const disposeHandle = () => {
-            waitHandle.dispose();
-            // Only clear _disposeModelWaiter if this is still the active waiter
-            if (this._disposeModelWaiter === disposeHandle) {
-              this._disposeModelWaiter = null;
-            }
-          };
-          this._disposeModelWaiter = disposeHandle;
-
-          select = await waitHandle.promise;
-
-          // Check if this waiter is still active after the await
-          // If not, a newer waiter has taken over, so abort
-          if (this._disposeModelWaiter !== disposeHandle) {
-            return;
-          }
-          this._disposeModelWaiter = null;
-
-          // Check if disposed during await
-          if (this._isDisposed) {
-            return;
-          }
-
-          // Verify element was found
+        // Block saves for entire operation to prevent race conditions between
+        // await completing and _applyModelOptions starting
+        mainViewState.blockSave();
+        try {
+          let select = document.getElementById('model');
           if (!isSelectLikeElement(select)) {
-            console.warn(
-              'SET_MODEL_OPTIONS: Model select element not found after waiting',
-            );
-            return;
-          }
-        }
+            const waitHandle = waitForElement('#model');
 
-        this._applyModelOptions(select, m.options);
+            // Cancel any previous waiter to prevent race conditions
+            if (this._disposeModelWaiter) {
+              this._disposeModelWaiter();
+            }
+
+            // Create a disposer that cleans up this specific waiter
+            const disposeHandle = () => {
+              waitHandle.dispose();
+              // Only clear _disposeModelWaiter if this is still the active waiter
+              if (this._disposeModelWaiter === disposeHandle) {
+                this._disposeModelWaiter = null;
+              }
+            };
+            this._disposeModelWaiter = disposeHandle;
+
+            select = await waitHandle.promise;
+
+            // Check if this waiter is still active after the await
+            // If not, a newer waiter has taken over, so abort
+            if (this._disposeModelWaiter !== disposeHandle) {
+              return;
+            }
+            this._disposeModelWaiter = null;
+
+            // Check if disposed during await
+            if (this._isDisposed) {
+              return;
+            }
+
+            // Verify element was found
+            if (!isSelectLikeElement(select)) {
+              console.warn(
+                'SET_MODEL_OPTIONS: Model select element not found after waiting',
+              );
+              return;
+            }
+          }
+
+          this._applyModelOptions(select, m.options);
+        } finally {
+          mainViewState.unblockSave();
+        }
       },
       /**
        * Handles SET_AGENT_OPTIONS command to update agent dropdowns.
@@ -195,53 +202,60 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           },
         ];
 
-        let applied = false;
+        // Block saves for entire operation to prevent race conditions between
+        // await completing and _applyAgentOptions starting
+        mainViewState.blockSave();
+        try {
+          let applied = false;
 
-        for (const { id, html } of configs) {
-          if (!id) continue;
+          for (const { id, html } of configs) {
+            if (!id) continue;
 
-          let select = document.getElementById(id);
-          if (!isSelectLikeElement(select)) {
-            // Wait for element to appear, similar to SET_MODEL_OPTIONS
-            const waitHandle = waitForElement(`#${id}`);
-
-            // Cancel any previous waiter for this element
-            const waiterKey = `_disposeAgentWaiter_${id}`;
-            if (this[waiterKey]) {
-              this[waiterKey]();
-            }
-
-            const disposeHandle = () => {
-              waitHandle.dispose();
-              if (this[waiterKey] === disposeHandle) {
-                this[waiterKey] = null;
-              }
-            };
-            this[waiterKey] = disposeHandle;
-
-            select = await waitHandle.promise;
-
-            // Check if superseded or disposed - abort entirely to prevent
-            // stale data from this message overwriting newer options
-            if (this[waiterKey] !== disposeHandle || this._isDisposed) {
-              return;
-            }
-            this[waiterKey] = null;
-
+            let select = document.getElementById(id);
             if (!isSelectLikeElement(select)) {
-              console.warn(
-                `SET_AGENT_OPTIONS: Agent select '${id}' not found after waiting`,
-              );
-              continue;
+              // Wait for element to appear, similar to SET_MODEL_OPTIONS
+              const waitHandle = waitForElement(`#${id}`);
+
+              // Cancel any previous waiter for this element
+              const waiterKey = `_disposeAgentWaiter_${id}`;
+              if (this[waiterKey]) {
+                this[waiterKey]();
+              }
+
+              const disposeHandle = () => {
+                waitHandle.dispose();
+                if (this[waiterKey] === disposeHandle) {
+                  this[waiterKey] = null;
+                }
+              };
+              this[waiterKey] = disposeHandle;
+
+              select = await waitHandle.promise;
+
+              // Check if superseded or disposed - abort entirely to prevent
+              // stale data from this message overwriting newer options
+              if (this[waiterKey] !== disposeHandle || this._isDisposed) {
+                return;
+              }
+              this[waiterKey] = null;
+
+              if (!isSelectLikeElement(select)) {
+                console.warn(
+                  `SET_AGENT_OPTIONS: Agent select '${id}' not found after waiting`,
+                );
+                continue;
+              }
             }
+
+            this._applyAgentOptions(select, html);
+            applied = true;
           }
 
-          this._applyAgentOptions(select, html);
-          applied = true;
-        }
-
-        if (!applied) {
-          console.warn('SET_AGENT_OPTIONS: No agent select elements found');
+          if (!applied) {
+            console.warn('SET_AGENT_OPTIONS: No agent select elements found');
+          }
+        } finally {
+          mainViewState.unblockSave();
         }
       },
       /**
@@ -308,33 +322,45 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           }
         }
 
-        // Set the value FIRST (creates placeholder if no match)
-        // This must happen before applySessionType to prevent default override
-        this._setAgentValue(selectId, targetValue);
+        // Guard against save() during this operation. _setAgentValue dispatches
+        // a change event which triggers save(). If model options haven't loaded
+        // yet, save() would read incorrect values and corrupt the state.
+        // We use update() below which bypasses save() and persists directly.
+        mainViewState.blockSave();
+        try {
+          // Set the value FIRST (creates placeholder if no match)
+          // This must happen before applySessionType to prevent default override
+          this._setAgentValue(selectId, targetValue);
 
-        // Update mainViewState to persist the selection
-        const stateKey =
-          targetSessionType === SESSION_TYPES.TOOL_USE
-            ? 'toolUseAgent'
-            : 'workflowAgent';
-        mainViewState.update({ [stateKey]: targetValue });
+          // Update mainViewState to persist the selection
+          // update() bypasses save() and persists directly via setState()
+          const stateKey =
+            targetSessionType === SESSION_TYPES.TOOL_USE
+              ? 'toolUseAgent'
+              : 'workflowAgent';
+          mainViewState.update({ [stateKey]: targetValue });
 
-        // NOW switch session type UI (shows correct dropdown, updates radio buttons)
-        // Pass skipSave: true since we already updated state via mainViewState.update()
-        // This prevents save() from reading stale DOM values for custom elements
-        mainViewState.applySessionType(targetSessionType, { skipSave: true });
+          // NOW switch session type UI (shows correct dropdown, updates radio buttons)
+          // Pass skipSave: true since we already updated state via mainViewState.update()
+          // This prevents save() from reading stale DOM values for custom elements
+          mainViewState.applySessionType(targetSessionType, { skipSave: true });
 
-        // Decorate the placeholder option if it was just created
-        // Re-query options since _setAgentValue may have added a new option
-        const currentOptions = getSelectOptionElements(selectElement);
-        const option = currentOptions.find((opt) => opt.value === targetValue);
-        if (option && !option.dataset.decorated) {
-          this._decorateAgentOption(option);
-          option.dataset.decorated = 'true';
+          // Decorate the placeholder option if it was just created
+          // Re-query options since _setAgentValue may have added a new option
+          const currentOptions = getSelectOptionElements(selectElement);
+          const option = currentOptions.find(
+            (opt) => opt.value === targetValue,
+          );
+          if (option && !option.dataset.decorated) {
+            this._decorateAgentOption(option);
+            option.dataset.decorated = 'true';
+          }
+
+          // Update the select's tooltip
+          this._updateAgentSelectTooltip(selectElement);
+        } finally {
+          mainViewState.unblockSave();
         }
-
-        // Update the select's tooltip
-        this._updateAgentSelectTooltip(selectElement);
       },
     };
   }
@@ -362,13 +388,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
+    // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
+    // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml;
     this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateModelOption(opt);
     });
-
     updateModelApiKeyBanner(selectElement);
   }
 
@@ -405,14 +432,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (!isSelectLikeElement(selectElement)) {
       return;
     }
+    // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
+    // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml ?? '';
     this._restoreAgentSelection(selectElement, previous);
-
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
-
     // Update the select's tooltip to show selected agent info
     this._updateAgentSelectTooltip(selectElement);
   }
@@ -680,20 +707,26 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    *
    * @param {HTMLElement} selectElement - The select element to restore
    * @param {string[]} candidates - Array of candidate values to try, in priority order
-   * @returns {boolean} True if a candidate was matched, false if fell back to default
+   * @returns {{ matched: boolean, matchedCandidate: string|null, domValue: string }}
+   *   - matched: true if a candidate was found in options
+   *   - matchedCandidate: the original candidate that was matched (null if fallback used)
+   *   - domValue: the final DOM value (may differ from candidate if migrated)
    */
   _restoreSelectValue(selectElement, candidates) {
     const filteredCandidates = candidates.filter(Boolean);
     const options = getSelectOptionElements(selectElement);
 
     // First try exact match
-    const exactMatch = filteredCandidates.find((value) =>
-      options.some((option) => option.value === value),
-    );
-
-    if (exactMatch) {
-      selectElement.value = exactMatch;
-      return true;
+    for (const candidate of filteredCandidates) {
+      const exactMatch = options.find((option) => option.value === candidate);
+      if (exactMatch) {
+        selectElement.value = candidate;
+        return {
+          matched: true,
+          matchedCandidate: candidate,
+          domValue: candidate,
+        };
+      }
     }
 
     // Migration: try matching by name suffix for old format values
@@ -707,53 +740,86 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       );
       if (suffixMatch) {
         selectElement.value = suffixMatch.value;
-        return true;
+        return {
+          matched: true,
+          matchedCandidate: candidate,
+          domValue: suffixMatch.value,
+        };
       }
     }
 
+    // Fallback to first enabled option
     const fallbackOption =
       options.find((option) => !option.disabled) ?? options[0];
-    if (fallbackOption) {
-      selectElement.value = fallbackOption.value;
+    const fallbackValue = fallbackOption?.value ?? '';
+    if (fallbackValue) {
+      selectElement.value = fallbackValue;
     }
-    return false;
+    return { matched: false, matchedCandidate: null, domValue: fallbackValue };
   }
 
   _restoreAgentSelection(selectElement, previousValue) {
     const sessionType = this._getSessionTypeForSelect(selectElement);
-    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
-    // Prioritize saved state over previous UI value for agents
-    const restored = this._restoreSelectValue(selectElement, [
-      savedValue,
-      previousValue,
-    ]);
+    if (!sessionType) {
+      // Unknown select element - can't determine which state key to use.
+      // Skip restoration to avoid DOM/state mismatch.
+      console.warn(
+        '_restoreAgentSelection: Unknown select element, skipping restoration',
+      );
+      return;
+    }
 
-    // If restoration failed, recreate placeholder to preserve the agent selection
-    // even when the agent isn't in the options (e.g., remote agent from another
-    // session, custom agent that was deleted). Check savedValue first, then previousValue.
-    if (!restored) {
+    const stateKey =
+      sessionType === SESSION_TYPES.TOOL_USE ? 'toolUseAgent' : 'workflowAgent';
+    const savedValue = this._getSavedAgentValue(sessionType);
+
+    // Prioritize saved state over previous UI value for agents
+    const { matched, matchedCandidate, domValue } = this._restoreSelectValue(
+      selectElement,
+      [savedValue, previousValue],
+    );
+
+    if (!matched) {
+      // Restoration failed - recreate placeholder to preserve the agent selection
+      // even when the agent isn't in the options (e.g., remote agent from another
+      // session, custom agent that was deleted).
       const valueToRestore = savedValue || previousValue;
       if (valueToRestore) {
         this._setAgentValue(selectElement.id, valueToRestore);
+        // Update state since _setAgentValue triggers a change event but save() is blocked
+        mainViewState.update({ [stateKey]: valueToRestore });
       }
+    } else if (matchedCandidate === savedValue) {
+      // savedValue was matched (exact or migrated) - update state if DOM value changed
+      if (domValue !== savedValue) {
+        // Migration occurred - persist the new format
+        mainViewState.update({ [stateKey]: domValue });
+      }
+      // else: exact match, state already correct
     }
+    // else: previousValue was matched - keep savedValue in state (user's preference preserved)
   }
 
   _restoreModelSelection(selectElement, previousValue) {
     const savedValue = mainViewState.get?.()?.model ?? '';
     // Prioritize saved state over previous UI value for consistency
-    const restored = this._restoreSelectValue(selectElement, [
+    const { matched } = this._restoreSelectValue(selectElement, [
       savedValue,
       previousValue,
     ]);
 
-    // If restoration failed but we have a saved value, preserve it in state.
-    // The DOM will show the fallback, but state keeps the user's preference.
-    // This prevents losing the selection when options temporarily change
-    // (e.g., due to API key changes or provider availability).
-    if (!restored && savedValue) {
-      mainViewState.update({ model: savedValue });
+    if (!matched) {
+      // Restoration failed - preserve the best available value in state.
+      // The DOM shows the fallback, but state keeps the user's preference.
+      const valueToPreserve = savedValue || previousValue;
+      if (valueToPreserve) {
+        mainViewState.update({ model: valueToPreserve });
+      }
     }
+    // Note: Models don't have migration (no source:name format).
+    // If matchedCandidate !== savedValue, previousValue was used.
+    // Keep savedValue in state - user's preference is preserved for when
+    // the model becomes available again (e.g., API key re-added).
   }
 
   _getActiveAgentSelection() {
@@ -916,20 +982,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // TaskState.session is the canonical source of truth for session metadata
     const canonicalSession = state.session || config.session;
 
-    const savedState = {};
-    const sessionType = this._restoreFormFields(
-      config,
-      savedState,
-      canonicalSession,
-    );
-    this._restoreFileArrays(config, savedState, activeFiles);
+    // Block saves during restoration - _setAgentValue dispatches change events
+    // which trigger save(), and we don't want to capture incomplete DOM state
+    mainViewState.blockSave();
+    try {
+      const savedState = {};
+      const sessionType = this._restoreFormFields(
+        config,
+        savedState,
+        canonicalSession,
+      );
+      this._restoreFileArrays(config, savedState, activeFiles);
 
-    // Store state for persistence and future restoration
-    mainViewState.set(savedState);
+      // Store state for persistence and future restoration
+      mainViewState.set(savedState);
 
-    // Apply session type UI changes (visibility, disabled states) without re-setting values.
-    // skipSave: true because we already have the correct state stored above.
-    mainViewState.applySessionType(sessionType, { skipSave: true });
+      // Apply session type UI changes (visibility, disabled states) without re-setting values.
+      // skipSave: true because we already have the correct state stored above.
+      mainViewState.applySessionType(sessionType, { skipSave: true });
+    } finally {
+      mainViewState.unblockSave();
+    }
 
     // Prevent _postHandle from calling mainViewState.restore()
     this._skipNextRestoreState = true;
