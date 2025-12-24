@@ -26,7 +26,9 @@ import { getConfig } from '@utils/config';
 
 // Local file imports
 import type { FileLocation } from '@utils/files';
+import { K_SLICE } from '@utils/config';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,
@@ -534,6 +536,28 @@ export abstract class ModelHandler<
       return content.includes('Your response got cut off');
     }
     return content.some((c) => c.text?.includes('Your response got cut off'));
+  }
+
+  /**
+   * Creates a continuation message for truncated responses.
+   * Shared implementation used by all model handlers that don't support assistant prefill.
+   * @returns The formatted continuation message string
+   */
+  protected createContinuationPrompt(
+    workspaceState: AgentWorkspaceState,
+    agentSetting: AgentSetting,
+  ): string {
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
+    return createContinuationMessage(agentSetting.endTag, prefillTokens);
+  }
+
+  /**
+   * Default implementation for models with prefill support.
+   * Most models with prefill don't need special continuation handling.
+   * Override in subclasses only if custom behavior is needed.
+   */
+  protected defaultAddContinueWithPrefill(): void {
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
   }
 
   /** Creates and configures a client instance for the specific model provider. */
