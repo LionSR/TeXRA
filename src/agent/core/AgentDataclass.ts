@@ -17,23 +17,36 @@ export enum AgentCategory {
   ToolUse = 'toolUse',
 }
 
-/** Further differentiator within each category. */
-export enum AgentType {
-  CoT = 'CoT',
-  Direct = 'direct',
-  ToolUse = 'toolUse',
-}
+/** Workflow-specific types. */
+export const WorkflowType = {
+  CoT: 'CoT',
+  Direct: 'direct',
+} as const;
+export type WorkflowType = (typeof WorkflowType)[keyof typeof WorkflowType];
+export const WorkflowTypeSchema = z.enum(['CoT', 'direct']);
+
+/** Tool-use-specific types. */
+export const ToolUseType = {
+  ToolUse: 'toolUse',
+} as const;
+export type ToolUseType = (typeof ToolUseType)[keyof typeof ToolUseType];
+export const ToolUseTypeSchema = z.enum(['toolUse']);
+
+/** Union of all agent types. */
+export type AgentType = WorkflowType | ToolUseType;
+export const AgentTypeSchema = z.enum(['CoT', 'direct', 'toolUse']);
+
+/** @deprecated Use WorkflowType or ToolUseType directly. */
+export const AgentType = { ...WorkflowType, ...ToolUseType } as const;
 
 // Re-export AgentSessionDescriptor from schema (single source of truth)
 export type { AgentSessionDescriptor } from './AgentSessionSchema';
 
-/**
- * Derive AgentCategory from AgentType.
- */
+/** Derive AgentCategory from AgentType. */
 export function deriveAgentCategory(
   agentType?: AgentType | null,
 ): AgentCategory {
-  return agentType === AgentType.ToolUse
+  return agentType === ToolUseType.ToolUse
     ? AgentCategory.ToolUse
     : AgentCategory.Workflow;
 }
@@ -54,7 +67,7 @@ export function resolveAgentSessionDescriptor(
 
 /** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
-  agentType: z.enum(AgentType).prefault(AgentType.CoT),
+  agentType: AgentTypeSchema.prefault(WorkflowType.CoT),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -92,7 +105,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
-  agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
+  agentType: WorkflowTypeSchema.prefault(WorkflowType.CoT),
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
@@ -105,7 +118,7 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
-  agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
+  agentType: ToolUseTypeSchema.prefault(ToolUseType.ToolUse),
 });
 
 /**
