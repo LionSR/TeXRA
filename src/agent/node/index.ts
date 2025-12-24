@@ -87,11 +87,11 @@ class Node<
     throw error;
   }
   /**
-   * Optional hook called when all auto-retries are exhausted.
+   * Hook called when all auto-retries are exhausted.
    * Return true to restart the auto-retry loop, false to proceed to execFallback.
    *
-   * Use this for manual retry prompts (e.g., showing UI to user).
-   * The hook receives the prepRes and the last error.
+   * Default implementation returns false (no manual retry).
+   * Override this for manual retry prompts (e.g., showing UI to user).
    *
    * NOTE: Override this as a regular method (not an arrow function property)
    * because Node.clone() uses Object.assign, which copies instance properties.
@@ -109,7 +109,9 @@ class Node<
    * }
    * ```
    */
-  async retryPrompt?(prepRes: unknown, error: Error): Promise<boolean>;
+  async retryPrompt(_prepRes: unknown, _error: Error): Promise<boolean> {
+    return false;
+  }
   /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
@@ -122,7 +124,11 @@ class Node<
   }
   async _exec(prepRes: unknown): Promise<unknown> {
     // Guard against infinite loop: ensure at least 1 retry attempt
-    // This also documents the contract that maxRetries must be >= 1
+    if (this.maxRetries < 1) {
+      console.warn(
+        `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
+      );
+    }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
 
     // Outer loop for manual retry (restarts auto-retry cycle)
@@ -141,8 +147,8 @@ class Node<
           const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
 
           if (isLastAutoRetry || isAborted) {
-            // Auto-retries exhausted - try manual retry if configured
-            if (this.retryPrompt && !isAborted) {
+            // Auto-retries exhausted - try manual retry (unless aborted)
+            if (!isAborted) {
               const shouldRetry = await this.retryPrompt(prepRes, e as Error);
               if (shouldRetry) break; // Break inner loop to restart auto-retries
             }
