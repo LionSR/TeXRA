@@ -23,9 +23,14 @@
  */
 
 // Type imports
+import type { BaseNode } from '@agent/node';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
+
+// ============================================================================
+// Core Flow Types
+// ============================================================================
 
 /** Generic shared state for agent flow execution. */
 export interface AgentRunShared<
@@ -39,5 +44,30 @@ export interface AgentRunShared<
   lifecycle: Lifecycle;
   hooks: Hooks;
 }
+
+/**
+ * Link between flow nodes. Single source of truth.
+ *
+ * Used by buildRunFlow and createAgentRunFlow to define the flow graph.
+ * When `to` is undefined, the link targets the finalize node.
+ */
+export interface FlowLink<Shared> {
+  from: BaseNode<Shared>;
+  on: string;
+  to?: BaseNode<Shared>;
+}
+
+/**
+ * Base type alias for flow shared state constraints.
+ *
+ * Use this instead of repeating the full generic constraint.
+ * Reduces duplication in AgentRunFlowRunner.ts and similar files.
+ */
+export type BaseFlowShared = AgentRunShared<
+  BaseAgent<any>,
+  any,
+  AgentLifecycle<string>,
+  AgentRunHooks
+>;
 
 export type { AgentRunHooks };
