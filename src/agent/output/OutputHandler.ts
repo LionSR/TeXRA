@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -14,26 +12,27 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
-  createFileMapping,
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
   getComparablePath,
+  type FileLocation,
 } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
-import { XmlOutputManager } from './XmlOutputManager';
-import {
-  type FileLocation,
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundFileMapping,
-  type RoundOutput,
-} from './types';
-import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
+import { FileLineageCalculator } from './FileLineageCalculator';
+import { LatexDiffManager } from './LatexDiffManager';
 import { OutputFileProcessor } from './OutputFileProcessor';
+import { XmlOutputManager } from './XmlOutputManager';
+
 import type { IOutputHandler } from './IOutputHandler';
+import type {
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundFileMapping,
+  RoundOutput,
+} from './types';
 
 interface RoundData {
   outputs: OutputFileInfo[];
@@ -61,6 +60,7 @@ export class OutputHandler implements IOutputHandler {
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
+  private readonly lineageCalculator: FileLineageCalculator;
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
@@ -102,6 +102,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
       this.fileService,
     );
+    this.lineageCalculator = new FileLineageCalculator(this.baseFiles);
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
     this._storageKey = null;
@@ -227,6 +228,13 @@ export class OutputHandler implements IOutputHandler {
     return (this.rounds.get(round)?.outputs.length ?? 0) > 0;
   }
 
+  public async ensureXmlStructure(
+    fileLocation: FileLocation,
+    documentTag: string,
+  ): Promise<void> {
+    await this.xmlManager.ensureCorrectXmlStructure(fileLocation, documentTag);
+  }
+
   private setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
     const data = this.ensureRoundData(round);
     data.outputs = outputs;
@@ -278,69 +286,10 @@ export class OutputHandler implements IOutputHandler {
   public getRoundMapping(currRound: number): RoundFileMapping {
     const currentData = this.rounds.get(currRound);
     const currentOutputs = currentData?.outputs ?? [];
-    const currentLocations = currentOutputs.map((entry) => entry.location);
-
-    const forwardBaseToOutput = createFileMapping(
-      this.baseFiles,
-      currentLocations,
-      'contains',
-    );
-
-    const baseToOutput = new Map<string, FileLocation>();
-    for (const [basePath, outputLoc] of forwardBaseToOutput) {
-      const baseLoc = this.baseFiles.find(
-        (f) => getComparablePath(f) === basePath,
-      );
-      if (baseLoc) {
-        baseToOutput.set(getComparablePath(outputLoc), baseLoc);
-      }
-    }
-
     const prevData = currRound > 0 ? this.rounds.get(currRound - 1) : undefined;
     const prevOutputs = prevData?.outputs ?? [];
-    const prevLocations = prevOutputs.map((entry) => entry.location);
 
-    const forwardPrevToOutput =
-      currRound > 0
-        ? createFileMapping(prevLocations, currentLocations, 'basename', true)
-        : new Map<string, FileLocation>();
-
-    const prevToOutput = new Map<string, FileLocation>();
-    if (currRound > 0) {
-      for (const [prevPath, outputLoc] of forwardPrevToOutput) {
-        const prevLoc = prevLocations.find(
-          (f) => getComparablePath(f) === prevPath,
-        );
-        if (prevLoc) {
-          prevToOutput.set(getComparablePath(outputLoc), prevLoc);
-        }
-      }
-    }
-
-    const originByOutput = new Map<string, FileLocation | undefined>();
-    for (const entry of currentOutputs) {
-      const matchingBase = this.baseFiles.find((baseLoc) => {
-        const baseName = path.basename(
-          baseLoc.kind !== 'external'
-            ? baseLoc.relativePath
-            : baseLoc.absolutePath,
-        );
-        const baseNameNoExt = path.parse(baseName).name;
-        const sourceNoExt = path.parse(entry.source).name;
-
-        return (
-          baseName === entry.source ||
-          baseNameNoExt === sourceNoExt ||
-          baseNameNoExt === entry.source ||
-          baseName === sourceNoExt
-        );
-      });
-
-      const outputPath = getComparablePath(entry.location);
-      originByOutput.set(outputPath, matchingBase);
-    }
-
-    return { baseToOutput, prevToOutput, originByOutput };
+    return this.lineageCalculator.calculateMapping(currentOutputs, prevOutputs);
   }
 
   public hydrateFromArtifacts(

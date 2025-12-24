@@ -10,7 +10,7 @@ import {
   AUTH_CALLBACK_TIMEOUT_MS,
   type OAuthProvider,
 } from './config';
-import { clearServerSideKeyAccessCache } from './serverSideKeyAccess';
+import { getServerSideKeyService } from './serverKeys';
 import type { SupabaseUriHandler } from './UriHandler';
 
 /** Default session expiry time in milliseconds (1 hour) */
@@ -153,7 +153,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           JSON.stringify(result.session),
         );
         // Clear server-side key access cache so it refetches with new auth state
-        clearServerSideKeyAccessCache();
+        getServerSideKeyService().clearAllCaches();
 
         this._onDidChangeSessions.fire({
           added: [this.toVSCodeSession(result.session)],
@@ -270,7 +270,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         if (!refreshed) {
           await this.removeSession(session.id);
           const action = await vscode.window.showWarningMessage(
-            'Your TeXRA session has expired. Please sign in again to use remote agents.',
+            'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.',
             'Sign In',
           );
           if (action === 'Sign In') {
@@ -295,7 +295,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       if (error || !data.user) {
         await this.removeSession(session.id);
         const action = await vscode.window.showWarningMessage(
-          'Your TeXRA session is no longer valid. Please sign in again to use remote agents.',
+          'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
           'Sign In',
         );
         if (action === 'Sign In') {
@@ -374,7 +374,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             JSON.stringify(session),
           );
           // Clear server-side key access cache so it refetches with new auth state
-          clearServerSideKeyAccessCache();
+          getServerSideKeyService().clearAllCaches();
           this._onDidChangeSessions.fire({
             added: [this.toVSCodeSession(session)],
             removed: [],
@@ -406,7 +406,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await SupabaseClient.getClient().auth.signOut();
       await this.context.secrets.delete(SupabaseAuthProvider.SESSION_KEY);
       // Clear server-side key cache when session is removed (handles automatic invalidation)
-      clearServerSideKeyAccessCache();
+      getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
         added: [],
         removed: [

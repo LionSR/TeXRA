@@ -1,10 +1,8 @@
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, type FileLocation } from '@utils/files';
 import { runLatexFormatter } from '@latex/texFormatter';
-
-import type { FileLocation } from './types';
 
 interface Logger {
   debug(message: string, options?: { messageType?: string }): void;

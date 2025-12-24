@@ -1,12 +1,11 @@
 // Local imports - agent
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import type { FileLocation } from '@utils/files';
 
 // Local file imports
-import { LatexDiffManager } from './LatexDiffManager';
-import { XmlOutputManager } from './XmlOutputManager';
-import {
-  type FileLocation,
+import type { LatexDiffManager } from './LatexDiffManager';
+import type {
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
@@ -18,11 +17,16 @@ export interface IOutputHandler {
   /** Map of generated output files by round. */
   outputFiles: { [key: number]: OutputFileInfo[] };
 
-  /** XML manager for parsing and splitting outputs. */
-  xmlManager: XmlOutputManager;
-
   /** Manager responsible for orchestrating latexdiff operations. */
   readonly diffManager: LatexDiffManager;
+
+  /**
+   * Ensure the XML output file has correct structure (closing tags, etc.).
+   */
+  ensureXmlStructure(
+    fileLocation: FileLocation,
+    documentTag: string,
+  ): Promise<void>;
 
   /** Ensure storage for a round and return its outputs. */
   ensureRound(round: number): OutputFileInfo[];
