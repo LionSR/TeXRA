@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - core flow primitives
-import { BaseNode, Node, Flow } from '@agent/node';
+import { BaseNode, Flow } from '@agent/node';
 // Internal imports
 import { isRemoteAgent } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -26,9 +26,6 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 // Local imports - logging
 // Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import {
-  formatProviderHttpError,
-} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { getSystemPromptWithRules } from '@utils/prompt';
@@ -42,12 +39,11 @@ import { bestConnectionMethod } from '@latex';
 import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
-  clearRetryError,
-  getNodeRetryConfig,
-  recordRetryError,
-  handleManualRetryPrompt,
+  type InvocationResult,
+  RetryableInvocationNode,
+  handleInvocationResult,
 } from './RetryState';
-import type { ResponseCycleParams } from './CycleServices';
+import type { ResponseCycleParams, ResponseCycleServices } from './CycleServices';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -209,22 +205,22 @@ interface InvocationPrepResult {
 }
 
 /**
- * Result type for model invocation.
- * - Success: Contains response from model
- * - Failed: When all retries exhausted or non-retryable error (records lastError)
- * - Cancelled: When user cancelled manual retry (does NOT record lastError)
- * - Skipped: When shouldStop is true
+ * Success data for model invocation.
  */
-type InvocationExecResult =
-  | { kind: 'success'; response: unknown; responseTime?: number }
-  | { kind: 'failed'; message: string }
-  | { kind: 'cancelled' }
-  | { kind: 'skipped' };
+interface InvocationSuccessData {
+  response: unknown;
+  responseTime?: number;
+}
+
+/**
+ * Result type for model invocation (uses shared InvocationResult).
+ */
+type InvocationExecResult = InvocationResult<InvocationSuccessData>;
 
 /**
  * Handles model invocation with PocketFlow's built-in retry.
  *
- * Uses PocketFlow Node for auto-retry AND manual retry via retryPrompt:
+ * Extends RetryableInvocationNode for shared retry logic:
  * - maxRetries and wait configured from user settings
  * - exec() throws on error, Node retries automatically
  * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
@@ -236,30 +232,16 @@ type InvocationExecResult =
  *
  * Services accessed via `_params.services`: options
  */
-class ResponseModelInvocationNode<C> extends Node<
+class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
-  /** Tracks if user cancelled manual retry (to distinguish from actual failures) */
-  private _userCancelled = false;
-
-  constructor() {
-    const config = getNodeRetryConfig();
-    super(config.maxRetries, config.wait);
+  protected getOperationName(): string {
+    return 'Model invocation';
   }
 
-  /**
-   * Reset user-cancelled flag on clone to prevent stale state.
-   *
-   * This override is necessary because BaseNode.clone() uses Object.assign,
-   * which copies instance properties including _userCancelled. Without this
-   * reset, a cloned node would inherit the cancelled state from a previous
-   * execution, causing incorrect behavior in execFallback().
-   */
-  clone(): this {
-    const cloned = super.clone();
-    cloned._userCancelled = false;
-    return cloned;
+  protected getServices(): ResponseCycleServices<C> {
+    return this._params.services;
   }
 
   /**
@@ -273,57 +255,6 @@ class ResponseModelInvocationNode<C> extends Node<
       messages: state.messages,
       systemPrompt: state.systemPrompt,
     };
-  }
-
-  /**
-   * Read fresh retry config before starting the retry loop.
-   *
-   * This enables config changes to take effect without rebuilding the flow.
-   * Config is read once at the start of _exec(), before any retries begin,
-   * so the same config applies to all retry attempts within a single execution.
-   *
-   * Note: PocketFlow flows are single-threaded per request, so concurrent
-   * mutation is not a concern here.
-   */
-  async _exec(prepRes: unknown): Promise<unknown> {
-    const config = getNodeRetryConfig();
-    this.maxRetries = config.maxRetries;
-    this.wait = config.wait;
-    return super._exec(prepRes);
-  }
-
-  /**
-   * Manual retry prompt - called when auto-retries are exhausted.
-   * Shows retry UI for retryable errors and waits for user action.
-   *
-   * NOTE: This must be a regular method (not an arrow function) because
-   * Node.clone() uses Object.assign. Arrow functions capture `this` at
-   * construction time, so they would reference the original instance
-   * instead of the clone after cloning.
-   *
-   * @returns true to restart auto-retry loop, false to proceed to execFallback
-   */
-  async retryPrompt(
-    _prepRes: unknown,
-    error: Error,
-  ): Promise<boolean> {
-    const { options } = this._params.services;
-
-    const result = await handleManualRetryPrompt(error, {
-      operationName: 'Model invocation',
-      streamId: options.context.streamId,
-      logger: options.logger,
-    });
-
-    // Track user cancellation to distinguish from actual failures in execFallback.
-    // Note: This flag is only set when user explicitly cancelled a retryable error.
-    // Non-retryable errors skip the retry UI and go directly to execFallback,
-    // where _userCancelled will be false (correctly treating them as failures).
-    if (result.userCancelled) {
-      this._userCancelled = true;
-    }
-
-    return result.shouldRetry;
   }
 
   async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
@@ -373,32 +304,13 @@ class ResponseModelInvocationNode<C> extends Node<
 
   /**
    * Called by PocketFlow Node when retryPrompt returns false.
-   * This means either the error was non-retryable or user cancelled.
+   * Uses base class getFallbackResult() for shared logic.
    */
   async execFallback(
     _prepRes: InvocationPrepResult,
     error: Error,
   ): Promise<InvocationExecResult> {
-    // User cancelled manual retry - return 'cancelled' (not 'failed')
-    // This ensures lastError is NOT recorded, distinguishing cancellation from failure
-    if (this._userCancelled) {
-      return { kind: 'cancelled' };
-    }
-
-    const formatted = formatProviderHttpError(error);
-    // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
-    if (!formatted.retryable) {
-      const { options } = this._params.services;
-      options.logger.logErrorData(
-        `Model invocation failed (not retryable): ${formatted.message}`,
-        {
-          message: formatted.message,
-          statusCode: formatted.statusCode,
-          retryable: formatted.retryable,
-        },
-      );
-    }
-    return { kind: 'failed', message: formatted.message };
+    return this.getFallbackResult(error);
   }
 
   async post(
@@ -409,53 +321,27 @@ class ResponseModelInvocationNode<C> extends Node<
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle skipped (shouldStop was true before invocation)
-    if (execRes.kind === 'skipped') {
-      options.logger.debug(
-        'Model invocation skipped: shouldStop was already true',
-      );
+    // Use shared handler for common result cases
+    const handlerResult = handleInvocationResult(execRes, state, retryState, {
+      logger: options.logger,
+      operationName: this.getOperationName(),
+    });
+
+    if (handlerResult.action === 'complete') {
       return FlowTransition.COMPLETE;
     }
 
-    // Handle user cancellation (do NOT record error - distinguishes from failure)
-    if (execRes.kind === 'cancelled') {
-      // Clear any previous error to ensure userCancelled detection works
-      clearRetryError(retryState);
-      state.shouldStop = true;
-      state.endTurn = false;
-      return FlowTransition.COMPLETE;
-    }
+    // At this point we know execRes.kind === 'success' with valid response
+    // (handleInvocationResult returns 'continue' only for success with response)
+    const successRes = execRes as InvocationSuccessData & { kind: 'success' };
 
-    // Handle failure (all retries exhausted or non-retryable error)
-    if (execRes.kind === 'failed') {
-      // Record error for caller access
-      recordRetryError(retryState, {
-        message: execRes.message,
-        retryable: false, // Already exhausted retries
-      });
-      state.shouldStop = true;
-      state.endTurn = false;
-      return FlowTransition.COMPLETE;
-    }
-
-    // Handle success
-    clearRetryError(retryState);
-
-    if (!execRes.response) {
-      // Response was empty (shouldn't happen normally)
-      options.logger.warn(
-        'Model response was aborted or returned no data; output may be incomplete.',
-      );
-      state.shouldStop = true;
-      return FlowTransition.COMPLETE;
-    }
-
-    state.responseObject = execRes.response;
-    state.responseTime = execRes.responseTime;
+    // Success case - apply response-specific side effects
+    state.responseObject = successRes.response;
+    state.responseTime = successRes.responseTime;
 
     if (state.debugContext && state.debugFileOptions) {
       await maybeSaveDebugObject({
-        object: execRes.response,
+        object: successRes.response,
         objectType: 'response',
         context: state.debugContext,
         fileOptions: state.debugFileOptions,
