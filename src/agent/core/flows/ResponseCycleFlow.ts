@@ -249,7 +249,14 @@ class ResponseModelInvocationNode<C> extends Node<
     super(config.maxRetries, config.wait);
   }
 
-  /** Reset user-cancelled flag on clone to prevent stale state */
+  /**
+   * Reset user-cancelled flag on clone to prevent stale state.
+   *
+   * This override is necessary because BaseNode.clone() uses Object.assign,
+   * which copies instance properties including _userCancelled. Without this
+   * reset, a cloned node would inherit the cancelled state from a previous
+   * execution, causing incorrect behavior in execFallback().
+   */
   clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
