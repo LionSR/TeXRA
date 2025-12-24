@@ -59,7 +59,7 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
     store: AgentSharedStore,
-  ): Promise<void>;
+  ): Promise<{ failedWithError: boolean; userCancelled: boolean }>;
   checkInterruption(): boolean;
   hasQueuedFollowUp(): boolean;
   enterWaitingState(): Promise<void>;
@@ -214,9 +214,22 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
           if (!state.store) {
             throw new Error('Tool-use store is not initialized.');
           }
-          await hooks.runCycle(cycleOptions, state.conversation, state.store);
+          const cycleResult = await hooks.runCycle(
+            cycleOptions,
+            state.conversation,
+            state.store,
+          );
+
           // Only persist successful cycles to avoid checkpointing failed state.
-          await hooks.persistCheckpoint(state.conversation, state.store);
+          // User cancellation and errors should not be checkpointed.
+          if (!cycleResult.failedWithError && !cycleResult.userCancelled) {
+            await hooks.persistCheckpoint(state.conversation, state.store);
+          }
+
+          // Exit the loop if cycle failed or was cancelled
+          if (cycleResult.failedWithError || cycleResult.userCancelled) {
+            return { result: undefined };
+          }
         } else {
           state.shouldSkipCycle = false;
         }

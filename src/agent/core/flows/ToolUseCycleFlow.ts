@@ -131,6 +131,8 @@ export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
   toolCalls?: SdkToolCall[];
   text?: string;
+  /** Whether the cycle ended normally (model said end_turn). Used to distinguish from user cancellation. */
+  endTurn: boolean;
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
@@ -138,6 +140,8 @@ function resetToolUseState(state: ToolUseCycleState): void {
   state.response = undefined;
   state.toolCalls = undefined;
   state.text = undefined;
+  // Note: endTurn is NOT reset here - it tracks whether the LAST cycle
+  // ended normally, which is needed for caller detection of user cancellation.
 }
 
 /**
@@ -198,6 +202,7 @@ class ToolUsePrepNode<C> extends BaseNode<
 
     if (prepRes.interrupted) {
       state.shouldStop = true;
+      state.endTurn = false; // Interrupted, not a normal completion
       return FlowTransition.COMPLETE;
     }
 
@@ -452,6 +457,7 @@ class ToolUseCallNode<C> extends Node<
       // Clear any previous error to ensure userCancelled detection works
       clearRetryError(retryState);
       state.shouldStop = true;
+      state.endTurn = false; // Not a normal completion
       return FlowTransition.COMPLETE;
     }
 
@@ -463,6 +469,7 @@ class ToolUseCallNode<C> extends Node<
         retryable: false, // Already exhausted retries
       });
       state.shouldStop = true;
+      state.endTurn = false; // Not a normal completion
       return FlowTransition.COMPLETE;
     }
 
@@ -713,6 +720,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       store.workspace.resetServerToolContent();
       store.workspace.resetReasoning();
       state.shouldStop = true;
+      state.endTurn = true; // Normal completion (model said end_turn)
       state.stopReason = execRes.stopReason;
       store.resetRound(nextRoundIndex);
       return FlowTransition.COMPLETE;
