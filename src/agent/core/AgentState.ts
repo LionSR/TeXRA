@@ -7,6 +7,7 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 import {
+  DEFAULT_TOTALS,
   RunUsageAccumulator,
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
@@ -121,8 +122,10 @@ export const AgentRunStateSnapshotSchema = z.object({
     .number()
     .nonnegative()
     .default(RUN_STATE_DEFAULTS.totalResponseTimeMs),
+  // Zod .default() requires OUTPUT type; DEFAULT_TOTALS satisfies TypeScript
+  // (runtime: inner schema defaults would handle {}, but types don't reflect that)
   usageAccumulator: RunUsageAccumulatorJSONSchema.default({
-    totals: {},
+    totals: DEFAULT_TOTALS,
     normalizedSnapshots: [],
   }),
 });
