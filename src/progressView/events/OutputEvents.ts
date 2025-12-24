@@ -72,7 +72,11 @@ const registerOutputFileListeners = (
   }),
   bus.on('updateMissingOutputs', ({ stream, storageKey, filesByRound }) => {
     withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-      await state.outputFiles.updateMissingOutputs(stream, storageKey, filesByRound);
+      await state.outputFiles.updateMissingOutputs(
+        stream,
+        storageKey,
+        filesByRound,
+      );
       sendRunMissingUpdate(state, updater, stream, storageKey);
     });
   }),
@@ -84,12 +88,16 @@ const registerOutputFileListeners = (
   }),
 ];
 
-export function createOutputEvents(shared: OutputEventsShared): OutputEventsModule {
+export function createOutputEvents(
+  shared: OutputEventsShared,
+): OutputEventsModule {
   const { withErrorBoundary } = shared;
 
   return {
     register(bus, state, updater) {
-      return toDisposables(registerOutputFileListeners(bus, state, updater, withErrorBoundary));
+      return toDisposables(
+        registerOutputFileListeners(bus, state, updater, withErrorBoundary),
+      );
     },
   };
 }

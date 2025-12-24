@@ -11,31 +11,33 @@ import type { AgentSessionDescriptor } from './AgentSessionSchema';
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
 
-/** Enum defining possible agent types */
-export enum AgentType {
-  CoT = 'CoT',
-  Direct = 'direct',
-  ToolUse = 'toolUse',
-}
-
-/**
- * Canonical session categories used throughout the extension UI.
- * Workflow sessions represent traditional direct/CoT executions while
- * toolUse isolates interactive tool panels.
- */
+/** Primary discriminator for agent families. */
 export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
 }
 
+/** Agent types within each category. */
+export enum AgentType {
+  // Workflow types
+  CoT = 'CoT',
+  Direct = 'direct',
+  // Tool-use types
+  ToolUse = 'toolUse',
+}
+
+/** Workflow-specific agent types. */
+export const WORKFLOW_TYPES = [AgentType.CoT, AgentType.Direct] as const;
+export type WorkflowAgentType = (typeof WORKFLOW_TYPES)[number];
+
+/** Tool-use-specific agent types. */
+export const TOOL_USE_TYPES = [AgentType.ToolUse] as const;
+export type ToolUseAgentType = (typeof TOOL_USE_TYPES)[number];
+
 // Re-export AgentSessionDescriptor from schema (single source of truth)
-// Note: The type is derived from AgentSessionDescriptorSchema in AgentSessionSchema.ts
 export type { AgentSessionDescriptor } from './AgentSessionSchema';
 
-/**
- * Derive the canonical {@link AgentCategory} from a specific agent type.
- * Defaults to {@link AgentCategory.Workflow} when the type is unknown.
- */
+/** Derive AgentCategory from AgentType. */
 export function deriveAgentCategory(
   agentType?: AgentType | null,
 ): AgentCategory {
@@ -58,9 +60,9 @@ export function resolveAgentSessionDescriptor(
   };
 }
 
-/** Shared fields for all agent settings (discriminator added per-variant). */
+/** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
-  agentType: z.enum(AgentType).prefault(AgentType.CoT),
+  agentType: z.nativeEnum(AgentType).prefault(AgentType.CoT),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -89,12 +91,12 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
-/** Workflow agents: only CoT/Direct types, adds workflow-specific fields. */
+/** Workflow agents: CoT or Direct patterns with workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
-  agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
   agentCategory: z
     .literal(AgentCategory.Workflow)
     .prefault(AgentCategory.Workflow),
+  agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
@@ -102,12 +104,12 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   isMultipleOutput: z.boolean().prefault(false),
 });
 
-/** Tool-use agents: forces ToolUse type, no workflow fields. */
+/** Tool-use agents: interactive agents with tool-calling capabilities. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
-  agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
   agentCategory: z
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
+  agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
 });
 
 /**
@@ -143,7 +145,6 @@ export const AgentSettingSchema = z.preprocess(
   ]),
 );
 
-/** Canonical union type - derive subtypes via Extract for type safety. */
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 export type AgentWorkflowSetting = Extract<
   AgentSetting,
@@ -155,7 +156,7 @@ export type AgentToolUseSetting = Extract<
 >;
 
 /**
- * Return the canonical session descriptor for a fully-materialized agent setting.
+ * Return the canonical session descriptor for an agent setting.
  */
 export function getAgentSessionDescriptor(
   setting: AgentSetting,
@@ -166,11 +167,18 @@ export function getAgentSessionDescriptor(
   };
 }
 
-/** Narrow an {@link AgentSetting} to the workflow variant. */
+/** Type guard for workflow settings. */
+export function isWorkflowSetting(
+  setting: AgentSetting,
+): setting is AgentWorkflowSetting {
+  return setting.agentCategory === AgentCategory.Workflow;
+}
+
+/** Narrow to workflow setting or throw. */
 export function requireWorkflowSetting(
   setting: AgentSetting,
 ): AgentWorkflowSetting {
-  if (setting.agentType === AgentType.ToolUse) {
+  if (!isWorkflowSetting(setting)) {
     throw new Error(
       'Expected workflow agent settings but received tool-use settings.',
     );
@@ -178,11 +186,8 @@ export function requireWorkflowSetting(
   return setting;
 }
 
-/** Default prompt templates for agent interactions. */
-
 /**
  * Checks if content contains a valid end marker.
- * @returns True if content contains endTag, document closing tag, or LaTeX document end
  */
 export function hasEndTag(
   settings: AgentSetting,
@@ -192,7 +197,6 @@ export function hasEndTag(
     settings.endTag,
     settings.documentTag && `</${settings.documentTag}>`,
   ];
-
   return endTagLists.some((tag) => tag && fileContent.includes(tag));
 }
 
@@ -208,11 +212,6 @@ export const AgentPromptSchema = z.strictObject({
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
-/**
- * Schema representing the full agent YAML definition.
- * Includes the root name, optional inheritance target,
- * settings block and prompt configuration.
- */
 const DefinitionBlockSchema = z.record(z.string(), z.unknown()).prefault({});
 
 export const AgentDefinitionSchema = z.strictObject({
@@ -225,7 +224,7 @@ export const AgentDefinitionSchema = z.strictObject({
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
-/** Parses a settings block into an {@link AgentSetting}. */
+/** Parses a settings block into an AgentSetting. */
 export function parseAgentSetting(settings: unknown): AgentSetting {
   return AgentSettingSchema.parse(settings);
 }
