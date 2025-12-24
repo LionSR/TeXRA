@@ -1,12 +1,9 @@
 import { z } from 'zod';
 
-// Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
-/**
- * Agent lifecycle status - single source of truth for agent run state.
- */
+/** Lifecycle status for agent runs. */
 export const AGENT_LIFECYCLE_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
@@ -23,12 +20,14 @@ export const AgentLifecycleStatusSchema = z.enum([
 
 export type AgentLifecycleStatus = z.infer<typeof AgentLifecycleStatusSchema>;
 
+/** Generic lifecycle state with category-specific phases. */
 export interface AgentLifecycleState<Phase extends string> {
   phase: Phase;
   status: AgentLifecycleStatus;
   error?: unknown;
 }
 
+/** Generic shared state for agent flow execution. */
 export interface AgentRunShared<
   A extends BaseAgent<any>,
   State,
