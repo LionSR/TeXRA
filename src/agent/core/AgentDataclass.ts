@@ -86,13 +86,9 @@ export const AgentSettingBaseSchema = z.strictObject({
       }),
     )
     .prefault([]),
-  tools: z
-    .array(
-      z.custom<ToolDefinition>(
-        (val) => ToolDefinitionSchema.safeParse(val).success,
-      ),
-    )
-    .prefault([]),
+
+  // ToolDefinition extends SerializableToolDefinition (schema output)
+  tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
 /** Workflow agents: CoT or Direct patterns with workflow-specific fields. */
@@ -117,13 +113,37 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 });
 
 /**
- * Union schema for agent settings.
- * Uses z.union (not discriminatedUnion) for backward compatibility.
+ * Normalize input to ensure agentCategory discriminator is present.
+ * Derives category from agentType when missing.
  */
-export const AgentSettingSchema = z.union([
-  AgentWorkflowSettingSchema,
-  AgentToolUseSettingSchema,
-]);
+const normalizeAgentSettingInput = (input: unknown): unknown => {
+  if (typeof input !== 'object' || input === null) {
+    return input;
+  }
+  const obj = input as Record<string, unknown>;
+  if (obj.agentCategory === undefined) {
+    return {
+      ...obj,
+      agentCategory:
+        obj.agentType === AgentType.ToolUse
+          ? AgentCategory.ToolUse
+          : AgentCategory.Workflow,
+    };
+  }
+  return input;
+};
+
+/**
+ * Union schema with preprocessing to normalize discriminator.
+ * Uses discriminatedUnion for O(1) lookup and better error messages.
+ */
+export const AgentSettingSchema = z.preprocess(
+  normalizeAgentSettingInput,
+  z.discriminatedUnion('agentCategory', [
+    AgentWorkflowSettingSchema,
+    AgentToolUseSettingSchema,
+  ]),
+);
 
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 export type AgentWorkflowSetting = Extract<
