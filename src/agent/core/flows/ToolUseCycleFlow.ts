@@ -322,12 +322,17 @@ class ToolUseCallNode<C> extends Node<
    * Manual retry prompt - called when auto-retries are exhausted.
    * Shows retry UI for retryable errors and waits for user action.
    *
+   * NOTE: This must be a regular method (not an arrow function) because
+   * Node.clone() uses Object.assign. Arrow functions capture `this` at
+   * construction time, so they would reference the original instance
+   * instead of the clone after cloning.
+   *
    * @returns true to restart auto-retry loop, false to proceed to execFallback
    */
-  retryPrompt = async (
+  async retryPrompt(
     _prepRes: unknown,
     error: Error,
-  ): Promise<boolean> => {
+  ): Promise<boolean> {
     const { options } = this._params.services;
     const streamId = options.context.streamId;
     const logger = options.logger;
@@ -374,7 +379,7 @@ class ToolUseCallNode<C> extends Node<
     });
     bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
     return false; // Proceed to execFallback (which will return 'cancelled')
-  };
+  }
 
   async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
     const { options, store } = this._params.services;
