@@ -54,14 +54,14 @@ interface UsageLogEntry {
 // Helpers
 // =============================================================================
 
-function jsonResponse(
-  body: Record<string, unknown>,
-  status: number,
-): Response {
-  return new Response(JSON.stringify({ _version: LOG_USAGE_VERSION, ...body }), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+function jsonResponse(body: Record<string, unknown>, status: number): Response {
+  return new Response(
+    JSON.stringify({ _version: LOG_USAGE_VERSION, ...body }),
+    {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    },
+  );
 }
 
 function errorResponse(error: string, status: number): Response {
