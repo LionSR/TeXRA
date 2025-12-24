@@ -8,6 +8,9 @@ import { isRemoteAgent } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
+  BaseCycleShared,
+  BaseInvocationPrepResult,
+  BaseInvocationSuccessData,
   resetCycleState,
   CycleDebugContext,
   CycleDebugFileOptions,
@@ -38,7 +41,6 @@ import { bestConnectionMethod } from '@latex';
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
-  type RetryState,
   type InvocationResult,
   RetryableInvocationNode,
   handleInvocationResult,
@@ -89,20 +91,13 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 
 /**
  * Shared state for response cycle flows.
- *
- * This contains only MUTABLE state that flows through nodes.
- * Services (options, store) are accessed via `_params.services`.
+ * Uses BaseCycleShared with ResponseCycleState for type safety.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export interface ResponseCycleShared<_C = unknown> {
-  /** Runtime state for this cycle */
-  state: ResponseCycleState;
-  /** Retry state for model invocation errors */
-  retryState: RetryState;
-}
+export type ResponseCycleShared<_C = unknown> = BaseCycleShared<ResponseCycleState>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -206,24 +201,17 @@ class ResponsePrepNode<C> extends BaseNode<
 
 /**
  * Data extracted by prep() for model invocation.
- * This is the ONLY data exec() should use (PocketFlow compliance).
- *
- * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
- * which is the correct PocketFlow pattern for immutable configuration.
+ * Extends base with optional system prompt for response generation.
  */
-interface InvocationPrepResult {
-  shouldStop: boolean;
-  messages: ProviderMessage[];
+interface InvocationPrepResult extends BaseInvocationPrepResult {
   systemPrompt?: string;
 }
 
 /**
  * Success data for model invocation.
+ * Uses base type directly (no additional fields needed).
  */
-interface InvocationSuccessData {
-  response: unknown;
-  responseTime?: number;
-}
+type InvocationSuccessData = BaseInvocationSuccessData;
 
 /**
  * Result type for model invocation (uses shared InvocationResult).
