@@ -13,8 +13,6 @@ export const ELEMENT_IDS = {
   USER_EMAIL: 'userEmail',
   USER_ID: 'userId',
   USER_TIER: 'userTier',
-  TIER_INFO: 'tierInfo',
-  TIER_MESSAGE: 'tierMessage',
   NOT_AUTHENTICATED: 'notAuthenticated',
   SIGN_IN_BTN: 'signInBtn',
   REMOTE_AGENTS_SECTION: 'remoteAgentsSection',
@@ -38,16 +36,6 @@ export const CLASS_NAMES = {
   AGENT_ROW: 'agent-row',
   SELECT_BTN: 'select-btn',
   TAG: 'tag',
-};
-
-// Text labels and messages
-export const LABELS = {
-  TIER_FREE_MESSAGE:
-    'Join the research access program to access more remote agents.',
-  TIER_PREMIUM_MESSAGE: 'You have access to remote agents.',
-  NO_AGENTS_MESSAGE:
-    'No remote agents available. Contact support@texra.ai for assistance.',
-  NOT_AUTHENTICATED_MESSAGE: 'You are not signed in to TeXRA.',
 };
 
 // Default values

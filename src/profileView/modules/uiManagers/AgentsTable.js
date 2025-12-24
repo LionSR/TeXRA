@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
+import { ELEMENT_IDS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -35,7 +35,6 @@ export class AgentsTable {
    * @param {boolean} options.authenticated - Whether the user is authenticated
    * @param {object} options.user - User object with email and id
    * @param {string} options.tier - Primary group name (for backwards compatibility / display)
-   * @param {string[]} options.permissions - Array of permission strings
    * @param {Array} options.remoteAgents - Array of remote agent objects
    * @param {string} options.apiAccessMode - 'included' or 'personal'
    * @param {string[]} options.enabledProviders - Array of enabled provider names
@@ -46,7 +45,6 @@ export class AgentsTable {
     authenticated,
     user,
     tier,
-    permissions,
     remoteAgents,
     apiAccessMode,
     enabledProviders,
@@ -54,7 +52,6 @@ export class AgentsTable {
     accessExpiresAt,
   }) {
     const profileInfo = safeGetElementById(ELEMENT_IDS.PROFILE_INFO);
-    const tierInfo = safeGetElementById(ELEMENT_IDS.TIER_INFO);
     const notAuthenticated = safeGetElementById(ELEMENT_IDS.NOT_AUTHENTICATED);
     const remoteAgentsSection = safeGetElementById(
       ELEMENT_IDS.REMOTE_AGENTS_SECTION,
@@ -64,7 +61,6 @@ export class AgentsTable {
 
     if (
       !profileInfo ||
-      !tierInfo ||
       !notAuthenticated ||
       !remoteAgentsSection ||
       !noAgentsMessage
@@ -75,7 +71,6 @@ export class AgentsTable {
     if (!authenticated) {
       // Show not authenticated state
       profileInfo.style.display = 'none';
-      tierInfo.style.display = 'none';
       notAuthenticated.style.display = 'block';
       remoteAgentsSection.style.display = 'none';
       if (apiAccessSection) apiAccessSection.style.display = 'none';
@@ -84,7 +79,6 @@ export class AgentsTable {
 
     // Show authenticated state
     profileInfo.style.display = 'block';
-    tierInfo.style.display = 'block';
     notAuthenticated.style.display = 'none';
 
     // Update user info
@@ -116,16 +110,6 @@ export class AgentsTable {
         // No expiration - don't show the row
         expirationRow.style.display = 'none';
       }
-    }
-
-    // Update tier message based on whether user has any permissions
-    const tierMessage = safeGetElementById(ELEMENT_IDS.TIER_MESSAGE);
-    if (tierMessage) {
-      const hasAnyPermissions =
-        Array.isArray(permissions) && permissions.length > 0;
-      tierMessage.textContent = hasAnyPermissions
-        ? LABELS.TIER_PREMIUM_MESSAGE
-        : LABELS.TIER_FREE_MESSAGE;
     }
 
     // Show API access section for all authenticated users
