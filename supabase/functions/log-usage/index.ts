@@ -37,6 +37,8 @@ interface UsageLogEntry {
   model: string;
   provider: string;
   agentName?: string;
+  agentCategory?: 'workflow' | 'toolUse';
+  isMultipleOutput?: boolean;
   inputTokens: number;
   outputTokens: number;
   cost: number;
@@ -94,11 +96,20 @@ function validateEntry(entry: unknown): UsageLogEntry | null {
     return null;
   }
 
+  // Validate agentCategory enum
+  const agentCategory =
+    e.agentCategory === 'workflow' || e.agentCategory === 'toolUse'
+      ? e.agentCategory
+      : undefined;
+
   return {
     timestamp: e.timestamp,
     model: e.model,
     provider: e.provider,
     agentName: typeof e.agentName === 'string' ? e.agentName : undefined,
+    agentCategory,
+    isMultipleOutput:
+      typeof e.isMultipleOutput === 'boolean' ? e.isMultipleOutput : undefined,
     inputTokens: e.inputTokens,
     outputTokens: e.outputTokens,
     cost: e.cost,
@@ -240,6 +251,8 @@ Deno.serve(async (req: Request) => {
       model: entry.model,
       provider: entry.provider,
       agent_name: entry.agentName,
+      agent_category: entry.agentCategory,
+      is_multiple_output: entry.isMultipleOutput,
       input_tokens: entry.inputTokens,
       output_tokens: entry.outputTokens,
       cost: entry.cost,

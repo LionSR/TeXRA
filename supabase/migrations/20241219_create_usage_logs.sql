@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
     model TEXT NOT NULL,
     provider TEXT NOT NULL,
     agent_name TEXT,
+    agent_category TEXT,  -- 'workflow' or 'toolUse'
+    is_multiple_output BOOLEAN,
 
     -- Token counts
     input_tokens INTEGER NOT NULL DEFAULT 0,
@@ -82,6 +84,8 @@ COMMENT ON COLUMN public.usage_logs.timestamp IS 'When the API call completed (c
 COMMENT ON COLUMN public.usage_logs.model IS 'Model identifier (e.g., claude-sonnet-4-20250514)';
 COMMENT ON COLUMN public.usage_logs.provider IS 'API provider (anthropic, openai, google, etc.)';
 COMMENT ON COLUMN public.usage_logs.agent_name IS 'Agent that initiated the request';
+COMMENT ON COLUMN public.usage_logs.agent_category IS 'Agent category: workflow or toolUse';
+COMMENT ON COLUMN public.usage_logs.is_multiple_output IS 'Whether agent produces multiple outputs';
 COMMENT ON COLUMN public.usage_logs.input_tokens IS 'Number of input tokens consumed';
 COMMENT ON COLUMN public.usage_logs.output_tokens IS 'Number of output tokens generated';
 COMMENT ON COLUMN public.usage_logs.cached_input_tokens IS 'Tokens served from provider cache';
