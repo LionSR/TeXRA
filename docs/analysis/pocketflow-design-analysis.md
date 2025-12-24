@@ -60,57 +60,56 @@
 **Retry Parameters:**
 - `maxRetries`: Total attempts (default: 1 = no retry)
 - `wait`: Backoff in seconds between retries (default: 0)
+- `retryPrompt(prepRes, error)`: Optional hook for manual retry (returns true to retry)
 - `execFallback(prepRes, error)`: Override for graceful degradation
 
 ---
 
-## 2. TeXRA's Three-Tier Retry Architecture
+## 2. TeXRA's Unified Retry Architecture
+
+**All retry (auto + manual) is now handled within the Node class.**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    TeXRA RETRY ARCHITECTURE                                  │
+│                    TeXRA UNIFIED RETRY (Node._exec)                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │ TIER 1: PocketFlow Auto-Retry (Node._exec)                             │ │
-│  │ ┌────────────────────────────────────────────────────────────────────┐ │ │
-│  │ │  • Transparent retry loop in framework                             │ │ │
-│  │ │  • Configured via getNodeRetryConfig() from user settings          │ │ │
-│  │ │  • Exponential backoff support                                     │ │ │
-│  │ │  • AbortSignal detection for user cancellation                     │ │ │
-│  │ └────────────────────────────────────────────────────────────────────┘ │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                              │                                               │
-│                              ▼ (auto-retries exhausted)                      │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │ TIER 2: Manual Retry UI (RetryWaitNode)                                │ │
-│  │ ┌────────────────────────────────────────────────────────────────────┐ │ │
-│  │ │  • User-facing retry dialog                                        │ │ │
-│  │ │  • 5-minute timeout for user decision                              │ │ │
-│  │ │  • Flow transition: AWAIT_RETRY → wait → MANUAL_RETRY or COMPLETE  │ │ │
-│  │ │  • RetryRequestCoordinator for async UI coordination               │ │ │
-│  │ └────────────────────────────────────────────────────────────────────┘ │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                              │                                               │
-│                              ▼ (tracks error for caller)                     │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │ TIER 3: Retry State (RetryState.ts)                                    │ │
-│  │ ┌────────────────────────────────────────────────────────────────────┐ │ │
-│  │ │  • Error tracking (retryable/non-retryable)                        │ │ │
-│  │ │  • determineFallbackAction() decides flow transition               │ │ │
-│  │ │  • applyFallbackResult() logs error and updates state              │ │ │
-│  │ │  • Single source of truth for error reporting                      │ │ │
-│  │ └────────────────────────────────────────────────────────────────────┘ │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
+│  while (true) {  ← Outer loop for manual retry                               │
+│    ┌──────────────────────────────────────────────────────────────────────┐ │
+│    │  for (currentRetry = 0; currentRetry < maxRetries; ...)              │ │
+│    │  ┌────────────────────────────────────────────────────────────────┐  │ │
+│    │  │  try {                                                          │  │ │
+│    │  │    return await this.exec(prepRes)  ← SUCCESS                  │  │ │
+│    │  │  } catch (e) {                                                  │  │ │
+│    │  │    if (lastAttempt || aborted) {                                │  │ │
+│    │  │      ┌──────────────────────────────────────────────────────┐  │  │ │
+│    │  │      │  if (retryPrompt && !aborted) {                      │  │  │ │
+│    │  │      │    const shouldRetry = await retryPrompt(prepRes, e) │  │  │ │
+│    │  │      │    if (shouldRetry) break  ← RESTART INNER LOOP      │  │  │ │
+│    │  │      │  }                                                   │  │  │ │
+│    │  │      │  return execFallback(prepRes, e)  ← FAILURE          │  │  │ │
+│    │  │      └──────────────────────────────────────────────────────┘  │  │ │
+│    │  │    }                                                            │  │ │
+│    │  │    await sleep(wait)  ← BACKOFF                                │  │ │
+│    │  │  }                                                              │  │ │
+│    │  └────────────────────────────────────────────────────────────────┘  │ │
+│    └──────────────────────────────────────────────────────────────────────┘ │
+│  }                                                                           │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+Benefits:
+• Single Node handles both auto-retry AND manual retry
+• No separate RetryWaitNode needed in flow graph
+• Simpler flow: prep → invoke → process → continuation
+• retryPrompt shows UI and returns true/false to control retry
 ```
 
 ---
 
 ## 3. Flow Composition Analysis
 
-### ResponseCycleFlow Structure
+### ResponseCycleFlow Structure (Simplified)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -123,15 +122,12 @@
 │  └──────┬───────┘                                                            │
 │         │ default                                                            │
 │         ▼                                                                    │
-│  ┌──────────────┐       ┌─────────────┐                                     │
-│  │  Response    │       │             │                                     │
-│  │   Model      │──────▶│ RetryWait   │  AWAIT_RETRY (manual retry UI)      │
-│  │ Invocation   │       │    Node     │                                     │
-│  │    Node      │       └──────┬──────┘                                     │
-│  │              │◀─────────────┘                                            │
-│  │  (extends    │    MANUAL_RETRY                                           │
-│  │   Node with  │                                                           │
-│  │ auto-retry)  │                                                           │
+│  ┌──────────────┐                                                            │
+│  │  Response    │  Model invocation with unified retry:                      │
+│  │   Model      │  • Auto-retry via maxRetries/wait                          │
+│  │ Invocation   │  • Manual retry via retryPrompt hook                       │
+│  │    Node      │  • retryPrompt shows UI, returns true to retry             │
+│  │  (Node)      │                                                            │
 │  └──────┬───────┘                                                            │
 │         │ default                                                            │
 │         ▼                                                                    │
@@ -147,6 +143,8 @@
 │  │ Continuation │                                                            │
 │  │    Node      │                                                            │
 │  └──────────────┘                                                            │
+│                                                                              │
+│  Note: No RetryWaitNode needed - retry handled inside InvocationNode        │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
