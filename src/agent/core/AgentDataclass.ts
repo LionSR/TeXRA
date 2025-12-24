@@ -11,20 +11,13 @@ import type { AgentSessionDescriptor } from './AgentSessionSchema';
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
 
-/**
- * Primary discriminator for agent families.
- * Use this to distinguish between workflow and tool-use agents.
- */
+/** Primary discriminator for agent families. */
 export enum AgentCategory {
   Workflow = 'workflow',
   ToolUse = 'toolUse',
 }
 
-/**
- * Legacy enum for agent types. Prefer using AgentCategory for discrimination.
- * - CoT/Direct are workflow patterns
- * - ToolUse maps to AgentCategory.ToolUse
- */
+/** Further differentiator within each category. */
 export enum AgentType {
   CoT = 'CoT',
   Direct = 'direct',
