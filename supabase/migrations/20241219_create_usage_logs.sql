@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
     -- Timing
-    timestamp TIMESTAMPTZ NOT NULL,
+    logged_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Model/Provider info
@@ -44,8 +44,8 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
 
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON public.usage_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_usage_logs_timestamp ON public.usage_logs(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_usage_logs_user_timestamp ON public.usage_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_logs_logged_at ON public.usage_logs(logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_logs_user_logged_at ON public.usage_logs(user_id, logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_model ON public.usage_logs(model);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_provider ON public.usage_logs(provider);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_batch_id ON public.usage_logs(batch_id);
@@ -56,10 +56,6 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_batch_id ON public.usage_logs(batch_id
 -- Rare race condition duplicates can be handled with DISTINCT on reads.
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_batch
 ON public.usage_logs(user_id, batch_id);
-
--- Index for rate limiting queries (daily/monthly aggregates)
-CREATE INDEX IF NOT EXISTS idx_usage_logs_user_date
-ON public.usage_logs(user_id, DATE(timestamp));
 
 -- Enable Row Level Security
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
@@ -80,7 +76,7 @@ GRANT SELECT ON public.usage_logs TO authenticated;
 -- Comment on table
 COMMENT ON TABLE public.usage_logs IS 'API usage logs for analytics and rate limiting';
 COMMENT ON COLUMN public.usage_logs.user_id IS 'User who made the API call';
-COMMENT ON COLUMN public.usage_logs.timestamp IS 'When the API call completed (client time)';
+COMMENT ON COLUMN public.usage_logs.logged_at IS 'When the API call completed (client time)';
 COMMENT ON COLUMN public.usage_logs.model IS 'Model identifier (e.g., claude-sonnet-4-20250514)';
 COMMENT ON COLUMN public.usage_logs.provider IS 'API provider (anthropic, openai, google, etc.)';
 COMMENT ON COLUMN public.usage_logs.agent_name IS 'Agent that initiated the request';
