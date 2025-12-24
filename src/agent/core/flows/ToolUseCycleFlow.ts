@@ -239,7 +239,8 @@ interface ToolUseCallPrepResult {
 /**
  * Result type for tool-use call.
  * - Success: Contains response from model
- * - Fallback: From execFallback when all auto-retries exhausted
+ * - Failed: When all retries exhausted or non-retryable error (records lastError)
+ * - Cancelled: When user cancelled manual retry (does NOT record lastError)
  * - Skipped: When shouldStop is true
  */
 type ToolUseCallResult =
@@ -251,6 +252,7 @@ type ToolUseCallResult =
       debugFileOptions: CycleDebugFileOptions;
     }
   | { kind: 'failed'; message: string }
+  | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
 /**
@@ -272,9 +274,19 @@ class ToolUseCallNode<C> extends Node<
   ToolUseCycleShared<C>,
   ToolUseCycleParams<C>
 > {
+  /** Tracks if user cancelled manual retry (to distinguish from actual failures) */
+  private _userCancelled = false;
+
   constructor() {
     const config = getNodeRetryConfig();
     super(config.maxRetries, config.wait);
+  }
+
+  /** Reset user-cancelled flag on clone to prevent stale state */
+  clone(): this {
+    const cloned = super.clone();
+    cloned._userCancelled = false;
+    return cloned;
   }
 
   /**
@@ -355,12 +367,13 @@ class ToolUseCallNode<C> extends Node<
       return true; // Restart auto-retry loop
     }
 
-    // User cancelled or timeout
+    // User cancelled or timeout - mark as cancelled (not a failure)
+    this._userCancelled = true;
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
     bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
-    return false; // Proceed to execFallback
+    return false; // Proceed to execFallback (which will return 'cancelled')
   };
 
   async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
@@ -421,6 +434,12 @@ class ToolUseCallNode<C> extends Node<
     _prepRes: ToolUseCallPrepResult,
     error: Error,
   ): Promise<ToolUseCallResult> {
+    // User cancelled manual retry - return 'cancelled' (not 'failed')
+    // This ensures lastError is NOT recorded, distinguishing cancellation from failure
+    if (this._userCancelled) {
+      return { kind: 'cancelled' };
+    }
+
     const formatted = formatProviderHttpError(error);
     // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
     if (!formatted.retryable) {
@@ -450,6 +469,14 @@ class ToolUseCallNode<C> extends Node<
       options.logger.debug(
         'Tool-use call skipped: shouldStop was already true',
       );
+      return FlowTransition.COMPLETE;
+    }
+
+    // Handle user cancellation (do NOT record error - distinguishes from failure)
+    if (execRes.kind === 'cancelled') {
+      // Clear any previous error to ensure userCancelled detection works
+      clearRetryError(retryState);
+      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
