@@ -87,6 +87,24 @@ class Node<
     throw error;
   }
   /**
+   * Optional hook called when all auto-retries are exhausted.
+   * Return true to restart the auto-retry loop, false to proceed to execFallback.
+   *
+   * Use this for manual retry prompts (e.g., showing UI to user).
+   * The hook receives the prepRes and the last error.
+   *
+   * @example
+   * ```typescript
+   * class MyNode extends Node<S, P> {
+   *   retryPrompt = async (prepRes, error) => {
+   *     const result = await showRetryDialog(error.message);
+   *     return result === 'retry';
+   *   };
+   * }
+   * ```
+   */
+  retryPrompt?: (prepRes: unknown, error: Error) => Promise<boolean>;
+  /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
    */
@@ -97,23 +115,34 @@ class Node<
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    for (
-      this.currentRetry = 0;
-      this.currentRetry < this.maxRetries;
-      this.currentRetry++
-    ) {
-      try {
-        return await this.exec(prepRes);
-      } catch (e) {
-        // If abort signal is set and aborted, skip retries and go to fallback
-        // This prevents unnecessary retries when the user intentionally cancelled
-        const isAborted = this.signal?.aborted === true;
-        if (this.currentRetry === this.maxRetries - 1 || isAborted)
-          return await this.execFallback(prepRes, e as Error);
-        if (this.wait > 0) await sleep(this.wait * 1000);
+    // Outer loop for manual retry (restarts auto-retry cycle)
+    while (true) {
+      for (
+        this.currentRetry = 0;
+        this.currentRetry < this.maxRetries;
+        this.currentRetry++
+      ) {
+        try {
+          return await this.exec(prepRes);
+        } catch (e) {
+          // If abort signal is set and aborted, skip retries and go to fallback
+          // This prevents unnecessary retries when the user intentionally cancelled
+          const isAborted = this.signal?.aborted === true;
+          const isLastAutoRetry = this.currentRetry === this.maxRetries - 1;
+
+          if (isLastAutoRetry || isAborted) {
+            // Auto-retries exhausted - try manual retry if configured
+            if (this.retryPrompt && !isAborted) {
+              const shouldRetry = await this.retryPrompt(prepRes, e as Error);
+              if (shouldRetry) break; // Break inner loop to restart auto-retries
+            }
+            return await this.execFallback(prepRes, e as Error);
+          }
+          if (this.wait > 0) await sleep(this.wait * 1000);
+        }
       }
+      // If we broke from inner loop, continue outer loop to restart auto-retries
     }
-    return undefined;
   }
 }
 class BatchNode<
