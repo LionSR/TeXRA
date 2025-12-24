@@ -8,12 +8,7 @@ import {
   type AgentInitShared,
 } from './AgentInitNode';
 import { buildRunFlow } from './buildRunFlow';
-
-interface FlowLink<Shared> {
-  from: BaseNode<Shared>;
-  on: string;
-  to?: BaseNode<Shared>;
-}
+import type { FlowLink } from './types';
 
 interface CreateAgentRunFlowOptions<Shared extends AgentInitShared<any, any>> {
   init: AgentInitNodeConfig<Shared>;

@@ -1,19 +1,13 @@
 // Type imports
 import type { Flow } from '@agent/node';
-import type { BaseAgent } from '@agent/implementations/BaseAgent';
-import type { AgentLifecycle } from './AgentLifecycle';
-import type { AgentRunHooks, AgentRunShared } from './types';
+import type { AgentRunHooks, AgentRunShared, BaseFlowShared } from './types';
 
 export type AgentRunHookOverrides = Partial<AgentRunHooks>;
 
-type AgentRunFlowOptionsBase<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
-> = {
+/**
+ * Base options for running an agent flow.
+ */
+type AgentRunFlowOptionsBase<Shared extends BaseFlowShared> = {
   agent: Shared['agent'];
   lifecycle: Shared['lifecycle'];
   createState(): Shared['state'];
@@ -22,48 +16,30 @@ type AgentRunFlowOptionsBase<
   prepareShared?(shared: Shared): void;
 };
 
-type AgentRunFlowOptionsWithExtend<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
-> = AgentRunFlowOptionsBase<Shared> & {
-  extendHooks: (baseHooks: AgentRunHooks) => Shared['hooks'];
-};
+/**
+ * Options when hooks need to be extended with flow-specific methods.
+ */
+type AgentRunFlowOptionsWithExtend<Shared extends BaseFlowShared> =
+  AgentRunFlowOptionsBase<Shared> & {
+    extendHooks: (baseHooks: AgentRunHooks) => Shared['hooks'];
+  };
 
-type AgentRunFlowOptionsWithoutExtend<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
-> =
+/**
+ * Options when base hooks are sufficient (no extension needed).
+ */
+type AgentRunFlowOptionsWithoutExtend<Shared extends BaseFlowShared> =
   Shared extends AgentRunShared<any, any, any, AgentRunHooks>
     ? AgentRunFlowOptionsBase<Shared> & { extendHooks?: undefined }
     : never;
 
-export type AgentRunFlowOptions<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
-> =
+/**
+ * Union of all valid options for running an agent flow.
+ */
+export type AgentRunFlowOptions<Shared extends BaseFlowShared> =
   | AgentRunFlowOptionsWithExtend<Shared>
   | AgentRunFlowOptionsWithoutExtend<Shared>;
 
-function hasExtendHooks<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
->(
+function hasExtendHooks<Shared extends BaseFlowShared>(
   options: AgentRunFlowOptions<Shared>,
 ): options is AgentRunFlowOptionsWithExtend<Shared> {
   return (
@@ -72,14 +48,14 @@ function hasExtendHooks<
   );
 }
 
-export async function runAgentFlow<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycle<string>,
-    AgentRunHooks
-  >,
->(options: AgentRunFlowOptions<Shared>): Promise<Shared> {
+/**
+ * Execute an agent flow with the given options.
+ *
+ * Creates shared state, assembles hooks, runs the flow, and handles errors.
+ */
+export async function runAgentFlow<Shared extends BaseFlowShared>(
+  options: AgentRunFlowOptions<Shared>,
+): Promise<Shared> {
   const state = options.createState();
 
   // Get hooks - either extend base hooks or use them directly
