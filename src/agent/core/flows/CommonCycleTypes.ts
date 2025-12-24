@@ -22,6 +22,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { RetryState } from './RetryState';
 
 /**
  * Base state interface shared by all cycle flows.
@@ -95,4 +96,47 @@ export function resetCycleState<T extends BaseCycleState>(
       state[field] = undefined as T[typeof field];
     }
   }
+}
+
+// ============================================================================
+// Shared Flow Container Types
+// ============================================================================
+
+/**
+ * Generic shared state wrapper for cycle flows.
+ * Combines mutable runtime state with retry tracking.
+ *
+ * @template TState - The specific cycle state type (must extend BaseCycleState)
+ */
+export interface BaseCycleShared<TState extends BaseCycleState> {
+  /** Runtime state for this cycle */
+  state: TState;
+  /** Retry state for model invocation errors */
+  retryState: RetryState;
+}
+
+// ============================================================================
+// Shared Prep/Exec Types for Invocation Nodes
+// ============================================================================
+
+/**
+ * Base prep result for model/tool invocation nodes.
+ * Contains the minimum data needed to decide whether to invoke.
+ */
+export interface BaseInvocationPrepResult {
+  /** Whether to skip invocation (flow is stopping) */
+  shouldStop: boolean;
+  /** Messages to send to the model */
+  messages: ProviderMessage[];
+}
+
+/**
+ * Base success data returned from model/tool invocations.
+ * Extended by specific flows with additional fields.
+ */
+export interface BaseInvocationSuccessData {
+  /** Raw response from the model */
+  response: unknown;
+  /** Time taken for the response in seconds */
+  responseTime?: number;
 }

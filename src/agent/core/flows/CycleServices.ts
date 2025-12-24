@@ -97,23 +97,20 @@ export interface ToolUseCycleServices<C = unknown> extends BaseCycleServices {
 }
 
 /**
- * Params type for response cycle nodes.
+ * Generic params type for cycle nodes.
  * Used with BaseNode's `_params` mechanism.
  *
  * Note: Index signature required to satisfy NonIterableObject constraint.
+ *
+ * @template TServices - The specific services type for this cycle
  */
-export interface ResponseCycleParams<C = unknown> {
+export interface CycleParams<TServices extends BaseCycleServices> {
   [key: string]: unknown;
-  services: ResponseCycleServices<C>;
+  services: TServices;
 }
 
-/**
- * Params type for tool-use cycle nodes.
- * Used with BaseNode's `_params` mechanism.
- *
- * Note: Index signature required to satisfy NonIterableObject constraint.
- */
-export interface ToolUseCycleParams<C = unknown> {
-  [key: string]: unknown;
-  services: ToolUseCycleServices<C>;
-}
+/** Params type for response cycle nodes. */
+export type ResponseCycleParams<C = unknown> = CycleParams<ResponseCycleServices<C>>;
+
+/** Params type for tool-use cycle nodes. */
+export type ToolUseCycleParams<C = unknown> = CycleParams<ToolUseCycleServices<C>>;
