@@ -46,13 +46,8 @@ import {
   clearRetryError,
   getNodeRetryConfig,
   recordRetryError,
-  MANUAL_RETRY_TIMEOUT_MS,
+  handleManualRetryPrompt,
 } from './RetryState';
-import {
-  retryCoordinator,
-  type RetryResult,
-} from '@agent/runtime/RetryRequestCoordinator';
-import { bus } from '@eventBus/ProgressEventBus';
 import type { ResponseCycleParams } from './CycleServices';
 
 export interface ResponseCycleInputState {
@@ -307,51 +302,22 @@ class ResponseModelInvocationNode<C> extends Node<
     error: Error,
   ): Promise<boolean> {
     const { options } = this._params.services;
-    const streamId = options.context.streamId;
-    const logger = options.logger;
 
-    // Format error to check if retryable
-    const formatted = formatProviderHttpError(error);
-
-    // If not retryable, don't show UI - go straight to execFallback
-    if (!formatted.retryable) {
-      return false;
-    }
-
-    // Log the error before showing retry UI
-    logger.logErrorData(`Model invocation failed: ${formatted.message}`, {
-      message: formatted.message,
-      statusCode: formatted.statusCode,
-      retryable: formatted.retryable,
+    const result = await handleManualRetryPrompt(error, {
+      operationName: 'Model invocation',
+      streamId: options.context.streamId,
+      logger: options.logger,
     });
 
-    // Emit waiting status to UI
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
-
-    // Wait for user action via the Promise-based coordinator
-    const result: RetryResult = await retryCoordinator.waitForUserAction(
-      streamId,
-      {
-        operation: 'Model invocation',
-        errorMessage: formatted.message,
-        logger,
-        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
-      },
-    );
-
-    if (result.action === 'retry') {
-      logger.debug('Manual retry triggered');
-      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
-      return true; // Restart auto-retry loop
+    // Track user cancellation to distinguish from actual failures in execFallback.
+    // Note: This flag is only set when user explicitly cancelled a retryable error.
+    // Non-retryable errors skip the retry UI and go directly to execFallback,
+    // where _userCancelled will be false (correctly treating them as failures).
+    if (result.userCancelled) {
+      this._userCancelled = true;
     }
 
-    // User cancelled or timeout - mark as cancelled (not a failure)
-    this._userCancelled = true;
-    logger.info('Retry cancelled by user', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
-    return false; // Proceed to execFallback (which will return 'cancelled')
+    return result.shouldRetry;
   }
 
   async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
