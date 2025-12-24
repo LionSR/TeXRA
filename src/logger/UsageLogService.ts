@@ -110,7 +110,10 @@ class UsageLogServiceImpl {
     };
 
     this.queue.push(fullEntry);
-    logger.debug(CHANNEL, `Queued usage entry (queue size: ${this.queue.length})`);
+    logger.debug(
+      CHANNEL,
+      `Queued usage entry (queue size: ${this.queue.length})`,
+    );
 
     // Flush immediately if batch size reached
     if (this.queue.length >= this.config.batchSize) {
@@ -147,7 +150,10 @@ class UsageLogServiceImpl {
         batchId: randomUUID(),
       };
 
-      logger.debug(CHANNEL, `Flushing ${entries.length} entries (batch: ${batch.batchId})`);
+      logger.debug(
+        CHANNEL,
+        `Flushing ${entries.length} entries (batch: ${batch.batchId})`,
+      );
 
       const response = await this.sendBatch(batch, token);
       if (response.success) {
@@ -199,7 +205,10 @@ class UsageLogServiceImpl {
       const parsed = UsageLogResponseSchema.safeParse(data);
 
       if (!parsed.success) {
-        logger.warn(CHANNEL, `Invalid response from server: ${parsed.error.message}`);
+        logger.warn(
+          CHANNEL,
+          `Invalid response from server: ${parsed.error.message}`,
+        );
         // Return a default success response if parsing fails but HTTP was OK
         return { success: true, accepted: batch.entries.length };
       }
