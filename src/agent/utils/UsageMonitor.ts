@@ -136,8 +136,8 @@ export class UsageMonitor {
         outputTokens: totals.totalOutputTokens,
         cost: Number(totals.totalCost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
-        cachedInputTokens: totals.totalCacheReadInputTokens || undefined,
-        reasoningTokens: totals.totalReasoningTokens || undefined,
+        cachedInputTokens: totals.totalCacheReadInputTokens,
+        reasoningTokens: totals.totalReasoningTokens,
         streamId: this.context.streamId,
       });
     } catch (error) {
