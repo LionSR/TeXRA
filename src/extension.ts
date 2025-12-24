@@ -21,6 +21,7 @@ import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
+import { UsageLogService } from '@logger/UsageLogService';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
@@ -191,6 +192,17 @@ export async function activate(context: vscode.ExtensionContext) {
           }),
         );
 
+        // Initialize usage logging service for backend analytics (only when auth is available)
+        const extensionVersion =
+          typeof context.extension.packageJSON?.version === 'string'
+            ? context.extension.packageJSON.version
+            : undefined;
+        UsageLogService.initialize({}, extensionVersion);
+        // Add safety net disposable in case deactivate() isn't called
+        context.subscriptions.push({
+          dispose: () => void UsageLogService.dispose(),
+        });
+
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
@@ -335,6 +347,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
+
+  // Flush any pending usage logs before deactivating
+  await UsageLogService.dispose();
 
   // Clean up persisted tool-use sessions when extension deactivates
   ToolUseSessionPersistence.clearAllPersistedSnapshots();
