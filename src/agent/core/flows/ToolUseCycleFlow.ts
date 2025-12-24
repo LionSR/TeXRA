@@ -129,7 +129,20 @@ export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
   toolCalls?: SdkToolCall[];
   text?: string;
-  /** Whether the cycle ended normally (model said end_turn). Used to distinguish from user cancellation. */
+  /**
+   * Whether the last cycle ended normally (model said end_turn).
+   *
+   * Lifecycle:
+   * - Initialized to `false` when shared state is created
+   * - Set to `true` when model's stop_reason is 'end_turn'
+   * - Set to `false` on failures, cancellations, or empty responses
+   * - NOT reset by resetToolUseState() - preserved across cycles
+   *
+   * Used by callers to distinguish between:
+   * - Normal completion: shouldStop=true, endTurn=true
+   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
+   * - Failure: shouldStop=true, endTurn=false, lastError defined
+   */
   endTurn: boolean;
 }
 
