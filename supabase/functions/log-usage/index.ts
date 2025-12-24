@@ -247,7 +247,7 @@ Deno.serve(async (req: Request) => {
 
     const rows = validEntries.map((entry) => ({
       user_id: user.id,
-      timestamp: entry.timestamp,
+      logged_at: entry.timestamp,
       model: entry.model,
       provider: entry.provider,
       agent_name: entry.agentName,
