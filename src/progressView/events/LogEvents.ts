@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -9,11 +6,8 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 // Local imports
 import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type {
-  BaseEventShared,
-  ProgressEventBusLike,
-  StatefulEventModule,
-} from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
+import { createStatefulEventDisposable, type ProgressEventBusLike } from './types';
 
 /**
  * Shared context for LogEvents module.
@@ -70,7 +64,6 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
       }
 
       const messages = state.streamTabs.getMessages(stream);
-
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing) return;
 
@@ -81,24 +74,13 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         return;
       }
 
-      if (logMessage.text !== undefined) {
-        existing.text = logMessage.text;
-      }
-      if (logMessage.messageType !== undefined) {
-        existing.messageType = logMessage.messageType;
-      }
-      if (logMessage.level) {
-        existing.level = logMessage.level;
-      }
-      if (logMessage.timestamp !== undefined) {
-        existing.timestamp = logMessage.timestamp;
-      }
-      if (logMessage.verbose !== undefined) {
-        existing.verbose = logMessage.verbose;
-      }
-      if (logMessage.data !== undefined) {
-        existing.data = logMessage.data;
-      }
+      // Update fields if provided
+      if (logMessage.text !== undefined) existing.text = logMessage.text;
+      if (logMessage.messageType !== undefined) existing.messageType = logMessage.messageType;
+      if (logMessage.level) existing.level = logMessage.level;
+      if (logMessage.timestamp !== undefined) existing.timestamp = logMessage.timestamp;
+      if (logMessage.verbose !== undefined) existing.verbose = logMessage.verbose;
+      if (logMessage.data !== undefined) existing.data = logMessage.data;
 
       await state.streamTabs.save();
 
@@ -109,22 +91,10 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
   };
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): vscode.Disposable[] {
+    register(bus, state, updater) {
       return [
-        new vscode.Disposable(
-          bus.on('addLogMessage', (payload) =>
-            handleAddLogMessage(payload, state, updater),
-          ),
-        ),
-        new vscode.Disposable(
-          bus.on('updateLogMessage', (payload) =>
-            handleUpdateLogMessage(payload, state, updater),
-          ),
-        ),
+        createStatefulEventDisposable(bus, 'addLogMessage', state, updater, handleAddLogMessage),
+        createStatefulEventDisposable(bus, 'updateLogMessage', state, updater, handleUpdateLogMessage),
       ];
     },
   };

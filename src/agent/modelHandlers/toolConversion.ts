@@ -23,18 +23,20 @@ import type {
   Tool as OpenAIResponseTool,
 } from 'openai/resources/responses/responses';
 
-// Local imports - agent
-// Local imports - types
-
 // ============================================================================
-// Native/Server Tool Configuration
+// Shared Tool Conversion Utilities
 // ============================================================================
 
 /**
- * Tools that are executed server-side by the provider.
- * These don't need local implementations - the provider handles them.
+ * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
+ * Shared utility used by all provider tool converters.
  */
-export const NATIVE_TOOL_NAMES = new Set(['web_search']);
+function convertToolSchema(def: ToolDefinition): Record<string, unknown> | null {
+  if (def.zodSchema) {
+    return toJSONSchema(def.zodSchema) as Record<string, unknown>;
+  }
+  return (def.parameters ?? null) as Record<string, unknown> | null;
+}
 
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
@@ -97,9 +99,6 @@ export interface OpenAIResponseToolOptions {
  * NOTE: We intentionally don't use zodResponsesFunction() here because it enables
  * strict mode, which requires all parameters to be required. Tools like Wolfram
  * have optional fields, so we must use strict: false for the Responses API.
- *
- * When a tool has a zodSchema, we use Zod's native toJSONSchema() for conversion
- * while keeping strict: false for compatibility with optional parameters.
  */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
@@ -112,35 +111,21 @@ export function toOpenAIResponseTools(
   for (const d of defs) {
     // Handle native web search tool (only if model supports it)
     if (d.name === 'web_search' && supportsNativeWebSearch) {
-      tools.push({
-        type: 'web_search',
-      } as WebSearchTool);
+      tools.push({ type: 'web_search' } as WebSearchTool);
       continue;
     }
 
     // Deep research models only support native tools (web_search, code_interpreter,
-    // file_search, mcp) and do NOT support function calling. When function calling
-    // is disabled, skip all remaining tools - they cannot be converted to function
-    // format, and native conversion for tools other than web_search is not yet
-    // implemented.
+    // file_search, mcp) and do NOT support function calling
     if (!supportsFunctionCalling) {
       continue;
     }
-
-    // Use native Zod conversion when schema is available, but keep strict: false
-    // to support tools with optional parameters (e.g., Wolfram timeout field)
-    const params = d.zodSchema
-      ? (toJSONSchema(d.zodSchema) as Record<string, unknown> | null)
-      : ((d.parameters ?? null) as Record<string, unknown> | null);
 
     tools.push({
       type: 'function',
       name: d.name,
       description: d.description,
-      parameters: params,
-      // Setting strict=true requires an explicit `required` array covering all
-      // parameters. Tools with optional fields need strict: false to avoid
-      // OpenAI Responses API schema errors.
+      parameters: convertToolSchema(d),
       strict: false,
     } as FunctionTool);
   }
@@ -158,10 +143,6 @@ export interface AnthropicToolOptions {
 
 /**
  * Convert generic ToolDefinition objects to Anthropic Tool format.
- *
- * When a tool has a zodSchema, uses Zod's native toJSONSchema() which:
- * - Converts Zod schema directly to JSON Schema
- * - Uses the same conversion pattern as Anthropic's betaZodTool() helper
  */
 export function toAnthropicTools(
   defs: ToolDefinition[],
@@ -170,33 +151,17 @@ export function toAnthropicTools(
   const { supportsNativeWebSearch = false } = options;
 
   return defs.map<ToolUnion>((d) => {
-    // Only use native tool types if the model supports them
+    // Check for native/server tools
     const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
-    if (remoteType) {
-      // web_search requires native support check
-      if (d.name === 'web_search' && !supportsNativeWebSearch) {
-        // Fall through to create as regular function tool
-      } else {
-        return {
-          name: d.name,
-          type: remoteType,
-        } as ToolUnion;
-      }
+    if (remoteType && (d.name !== 'web_search' || supportsNativeWebSearch)) {
+      return { name: d.name, type: remoteType } as ToolUnion;
     }
 
-    // Use native Zod conversion when schema is available
-    // This mirrors the Anthropic SDK's betaZodTool() implementation
-    if (d.zodSchema) {
-      const jsonSchema = toJSONSchema(d.zodSchema, { reused: 'ref' });
-      return {
-        name: d.name,
-        description: d.description,
-        input_schema: jsonSchema as AnthropicTool['input_schema'],
-      } as ToolUnion;
-    }
+    // Use Zod schema with ref support for complex types, else fallback
+    const params = d.zodSchema
+      ? (toJSONSchema(d.zodSchema, { reused: 'ref' }) as AnthropicTool['input_schema'])
+      : (d.parameters as AnthropicTool['input_schema'] | undefined);
 
-    // Fallback to pre-converted parameters for legacy definitions
-    const params = d.parameters as AnthropicTool['input_schema'] | undefined;
     return {
       name: d.name,
       description: d.description,
@@ -212,36 +177,17 @@ export function toAnthropicTools(
  * content generation API does NOT support combining googleSearch with
  * functionDeclarations - this is a Live API only feature.
  * See: https://ai.google.dev/gemini-api/docs/live-tools
- *
- * When a tool has a zodSchema, uses Zod's native toJSONSchema() for conversion.
- * All tools (including web_search) are converted to function declarations.
- *
- * @param defs Tool definitions to convert
  */
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  // Convert all tools to function declarations
-  // Native googleSearch is disabled until Live API support is added
-  const declarations: FunctionDeclaration[] = defs.map((d) => {
-    // Use native Zod conversion when schema is available
-    if (d.zodSchema) {
-      return {
-        name: d.name,
-        description: d.description,
-        parameters: toJSONSchema(d.zodSchema) as Schema | undefined,
-      };
-    }
-
-    // Fallback to pre-converted parameters for legacy definitions
-    return {
-      name: d.name,
-      description: d.description,
-      parameters: d.parameters as Schema | undefined,
-    };
-  });
+  const declarations: FunctionDeclaration[] = defs.map((d) => ({
+    name: d.name,
+    description: d.description,
+    parameters: convertToolSchema(d) as Schema | undefined,
+  }));
 
   return [{ functionDeclarations: declarations }];
 }
