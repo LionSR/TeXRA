@@ -111,6 +111,8 @@ export function createStatefulEventDisposable<K extends ProgressEvent>(
  * Converts an array of unsubscribe functions to Disposables.
  * Simplifies: `[a, b, c].map(d => new vscode.Disposable(d))` -> `toDisposables([a, b, c])`
  */
-export function toDisposables(unsubscribes: (() => void)[]): vscode.Disposable[] {
+export function toDisposables(
+  unsubscribes: (() => void)[],
+): vscode.Disposable[] {
   return unsubscribes.map((unsubscribe) => new vscode.Disposable(unsubscribe));
 }

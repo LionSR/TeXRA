@@ -7,7 +7,10 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { BaseEventShared, StatefulEventModule } from './types';
-import { createStatefulEventDisposable, type ProgressEventBusLike } from './types';
+import {
+  createStatefulEventDisposable,
+  type ProgressEventBusLike,
+} from './types';
 
 /**
  * Shared context for LogEvents module.
@@ -76,10 +79,13 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       // Update fields if provided
       if (logMessage.text !== undefined) existing.text = logMessage.text;
-      if (logMessage.messageType !== undefined) existing.messageType = logMessage.messageType;
+      if (logMessage.messageType !== undefined)
+        existing.messageType = logMessage.messageType;
       if (logMessage.level) existing.level = logMessage.level;
-      if (logMessage.timestamp !== undefined) existing.timestamp = logMessage.timestamp;
-      if (logMessage.verbose !== undefined) existing.verbose = logMessage.verbose;
+      if (logMessage.timestamp !== undefined)
+        existing.timestamp = logMessage.timestamp;
+      if (logMessage.verbose !== undefined)
+        existing.verbose = logMessage.verbose;
       if (logMessage.data !== undefined) existing.data = logMessage.data;
 
       await state.streamTabs.save();
@@ -93,8 +99,20 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
   return {
     register(bus, state, updater) {
       return [
-        createStatefulEventDisposable(bus, 'addLogMessage', state, updater, handleAddLogMessage),
-        createStatefulEventDisposable(bus, 'updateLogMessage', state, updater, handleUpdateLogMessage),
+        createStatefulEventDisposable(
+          bus,
+          'addLogMessage',
+          state,
+          updater,
+          handleAddLogMessage,
+        ),
+        createStatefulEventDisposable(
+          bus,
+          'updateLogMessage',
+          state,
+          updater,
+          handleUpdateLogMessage,
+        ),
       ];
     },
   };
