@@ -48,7 +48,10 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_model ON public.usage_logs(model);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_provider ON public.usage_logs(provider);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_batch_id ON public.usage_logs(batch_id);
 
--- Composite index for deduplication queries
+-- Composite index for batch deduplication queries
+-- Note: A batch contains multiple entries (rows), so we can't use a UNIQUE constraint.
+-- The edge function checks for existing batch_id before inserting.
+-- Rare race condition duplicates can be handled with DISTINCT on reads.
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_batch
 ON public.usage_logs(user_id, batch_id);
 
