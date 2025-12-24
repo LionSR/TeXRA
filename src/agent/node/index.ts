@@ -87,8 +87,38 @@ class Node<
     throw error;
   }
   /**
+   * Hook called when all auto-retries are exhausted.
+   * Return true to restart the auto-retry loop, false to proceed to execFallback.
+   *
+   * Default implementation returns false (no manual retry).
+   * Override this for manual retry prompts (e.g., showing UI to user).
+   *
+   * NOTE: Override this as a regular method (not an arrow function property)
+   * because Node.clone() uses Object.assign, which copies instance properties.
+   * Arrow functions capture `this` lexically, so they would reference the
+   * original instance after cloning. Regular methods on the prototype work
+   * correctly because they get `this` from the call site.
+   *
+   * @example
+   * ```typescript
+   * class MyNode extends Node<S, P> {
+   *   async retryPrompt(prepRes: unknown, error: Error): Promise<boolean> {
+   *     const result = await showRetryDialog(error.message);
+   *     return result === 'retry';
+   *   }
+   * }
+   * ```
+   */
+  async retryPrompt(_prepRes: unknown, _error: Error): Promise<boolean> {
+    return false;
+  }
+  /**
    * Override clone to reset execution-specific state.
    * Prevents stale signal/retry state from affecting new executions.
+   *
+   * NOTE: BaseNode.clone() uses Object.assign for shallow copy. Subclasses
+   * adding object/array properties must override clone() to deep-copy them,
+   * otherwise the original and clone will share the same references.
    */
   clone(): this {
     const cloned = super.clone();
@@ -97,23 +127,54 @@ class Node<
     return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
-    for (
-      this.currentRetry = 0;
-      this.currentRetry < this.maxRetries;
-      this.currentRetry++
-    ) {
-      try {
-        return await this.exec(prepRes);
-      } catch (e) {
-        // If abort signal is set and aborted, skip retries and go to fallback
-        // This prevents unnecessary retries when the user intentionally cancelled
-        const isAborted = this.signal?.aborted === true;
-        if (this.currentRetry === this.maxRetries - 1 || isAborted)
-          return await this.execFallback(prepRes, e as Error);
-        if (this.wait > 0) await sleep(this.wait * 1000);
-      }
+    // Guard against infinite loop: ensure at least 1 retry attempt
+    if (this.maxRetries < 1) {
+      console.warn(
+        `Node maxRetries must be >= 1, got ${this.maxRetries}. Using 1.`,
+      );
     }
-    return undefined;
+    const effectiveMaxRetries = Math.max(1, this.maxRetries);
+
+    // Safety limit for manual retries to prevent infinite loops from buggy retryPrompt
+    const MAX_MANUAL_RETRIES = 100;
+    let manualRetryCount = 0;
+
+    // Outer loop for manual retry (restarts auto-retry cycle)
+    while (manualRetryCount < MAX_MANUAL_RETRIES) {
+      for (
+        this.currentRetry = 0;
+        this.currentRetry < effectiveMaxRetries;
+        this.currentRetry++
+      ) {
+        try {
+          return await this.exec(prepRes);
+        } catch (e) {
+          // If abort signal is set and aborted, skip retries and go to fallback
+          // This prevents unnecessary retries when the user intentionally cancelled
+          const isAborted = this.signal?.aborted === true;
+          const isLastAutoRetry = this.currentRetry === effectiveMaxRetries - 1;
+
+          if (isLastAutoRetry || isAborted) {
+            // Auto-retries exhausted - try manual retry (unless aborted)
+            if (!isAborted) {
+              const shouldRetry = await this.retryPrompt(prepRes, e as Error);
+              if (shouldRetry) {
+                manualRetryCount++;
+                break; // Break inner loop to restart auto-retries
+              }
+            }
+            return await this.execFallback(prepRes, e as Error);
+          }
+          if (this.wait > 0) await sleep(this.wait * 1000);
+        }
+      }
+      // If we broke from inner loop, continue outer loop to restart auto-retries
+    }
+
+    // Safeguard: if we somehow exit the loop without returning, throw
+    throw new Error(
+      `Node exceeded maximum manual retry limit (${MAX_MANUAL_RETRIES})`,
+    );
   }
 }
 class BatchNode<
