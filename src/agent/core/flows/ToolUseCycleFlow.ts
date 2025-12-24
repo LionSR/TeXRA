@@ -28,10 +28,7 @@ import type {
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
-import {
-  formatProviderHttpError,
-  extractErrorContext,
-} from '@common/errors/sdkErrorUtils';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
