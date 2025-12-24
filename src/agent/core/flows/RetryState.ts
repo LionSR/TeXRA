@@ -208,7 +208,15 @@ type NodeParams = Partial<Record<string, unknown>> & {
  * ```
  */
 export abstract class RetryableInvocationNode<S, P extends NodeParams = NodeParams> extends Node<S, P> {
-  /** Tracks if user cancelled manual retry (to distinguish from actual failures) */
+  /**
+   * Tracks if user cancelled manual retry (to distinguish from actual failures).
+   *
+   * Design note: We use instance state rather than a UserCancelledError type because:
+   * 1. PocketFlow's retry loop catches all errors - we can't distinguish error types there
+   * 2. execFallback() receives the original error, not a wrapped cancellation
+   * 3. The flag is set in retryPrompt() and read in execFallback() - clear data flow
+   * 4. Manual retry protection (MAX_MANUAL_RETRIES=100) is in Node._exec()
+   */
   protected _userCancelled = false;
 
   constructor() {
@@ -231,10 +239,12 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
   /**
    * Reset user-cancelled flag on clone to prevent stale state.
    *
-   * This override is necessary because BaseNode.clone() uses Object.assign,
-   * which copies instance properties including _userCancelled. Without this
-   * reset, a cloned node would inherit the cancelled state from a previous
-   * execution, causing incorrect behavior in execFallback().
+   * IMPORTANT: BaseNode.clone() uses Object.assign (shallow copy).
+   * - Primitive properties like _userCancelled are copied by value (safe)
+   * - Object/array properties would share references (unsafe)
+   *
+   * If subclasses add object/array properties, they MUST override clone()
+   * to deep-copy them. Currently RetryableInvocationNode only has primitives.
    */
   clone(): this {
     const cloned = super.clone();
@@ -245,12 +255,17 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
   /**
    * Read fresh retry config before starting the retry loop.
    *
-   * This enables config changes to take effect without rebuilding the flow.
-   * Config is read once at the start of _exec(), before any retries begin,
-   * so the same config applies to all retry attempts within a single execution.
+   * This enables config changes (e.g., user adjusting retry settings)
+   * to take effect without rebuilding the flow.
    *
-   * Note: PocketFlow flows are single-threaded per request, so concurrent
-   * mutation is not a concern here.
+   * ## Why mutating instance state is safe here:
+   * 1. PocketFlow clones nodes before each execution (see Flow.run)
+   * 2. Config is read at the START of _exec(), before any retries
+   * 3. Same config applies to all retry attempts within one execution
+   * 4. Flows are single-threaded per request - no concurrent mutation
+   *
+   * The mutation pattern is intentional: it allows dynamic config while
+   * keeping the Node API simple (maxRetries/wait are base class fields).
    */
   async _exec(prepRes: unknown): Promise<unknown> {
     const config = getNodeRetryConfig();
