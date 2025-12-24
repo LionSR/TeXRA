@@ -14,6 +14,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - utilities
@@ -206,7 +207,7 @@ class ResponsePrepNode<C> extends BaseNode<
  */
 interface InvocationPrepResult {
   shouldStop: boolean;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
   systemPrompt?: string;
 }
 
@@ -414,7 +415,7 @@ interface ProcessPrepResult {
   shouldStop: boolean;
   responseObject: unknown;
   responseTime?: number;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
   outputLocation: AgentFileLocation;
   outputExists: boolean;
   /** Last response for connector calculation (read before update) */
@@ -452,7 +453,7 @@ interface ContinuationPrepResult {
   shouldStop: boolean;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
 }
 
 type ContinuationNodeResult = SkippableNodeResult<{
