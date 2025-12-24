@@ -65,20 +65,35 @@ export type ReflectionRunShared<C = unknown> = AgentRunShared<
   ReflectionRunHooks
 >;
 
-interface ReflectionRoundPrep<C> {
+// ============================================================================
+// Result Types - Clean discriminated unions following PocketFlow patterns
+// ============================================================================
+
+/**
+ * Prep result for ReflectionRoundNode.
+ */
+interface RoundNodePrepResult<C> {
   agent: BaseReflectionAgent<C>;
   state: ReflectionRunState;
   shouldFinalize: boolean;
   roundIndex: number;
 }
 
-interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
-  result?: ReflectionRoundResult;
-  error?: unknown;
-}
+/**
+ * Result of a single round execution.
+ * Uses 'kind' discriminant for clarity (matches ToolUseRunFlow pattern).
+ */
+type RoundExecResult =
+  | { kind: 'finalize' }
+  | { kind: 'success'; result: ReflectionRoundResult }
+  | { kind: 'error'; error: unknown };
+
+// ============================================================================
+// Node Implementation
+// ============================================================================
 
 class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
-  async prep(shared: ReflectionRunShared<C>): Promise<ReflectionRoundPrep<C>> {
+  async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult<C>> {
     const { agent, state } = shared;
     const shouldFinalize =
       state.currentRound >= state.totalRounds ||
@@ -93,11 +108,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     };
   }
 
-  async exec(
-    prepRes: ReflectionRoundPrep<C>,
-  ): Promise<ReflectionRoundPrep<C> | ReflectionRoundExec<C>> {
+  async exec(prepRes: RoundNodePrepResult<C>): Promise<RoundExecResult> {
+    // Early exit if should finalize
     if (prepRes.shouldFinalize) {
-      return prepRes;
+      return { kind: 'finalize' };
     }
 
     try {
@@ -111,10 +125,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       // Execute the round using agent's internal context
       const result = await prepRes.agent.executeCurrentRound();
 
-      return {
-        ...prepRes,
-        result,
-      };
+      return { kind: 'success', result };
     } catch (error) {
       const contextualError =
         error instanceof Error
@@ -122,60 +133,48 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
               cause: error,
             })
           : new Error(`Round ${prepRes.roundIndex} failed: ${String(error)}`);
-      return {
-        ...prepRes,
-        error: contextualError,
-      };
+      return { kind: 'error', error: contextualError };
     }
   }
 
   async post(
     shared: ReflectionRunShared<C>,
-    prepRes: ReflectionRoundPrep<C>,
-    execRes: ReflectionRoundPrep<C> | ReflectionRoundExec<C>,
+    _prepRes: RoundNodePrepResult<C>,
+    execRes: RoundExecResult,
   ): Promise<string | undefined> {
-    if (prepRes.shouldFinalize) {
-      return FlowTransition.FINALIZE;
+    switch (execRes.kind) {
+      case 'finalize':
+        return FlowTransition.FINALIZE;
+
+      case 'error':
+        shared.lifecycle.fail(execRes.error);
+        return FlowTransition.FINALIZE;
+
+      case 'success': {
+        const { result } = execRes;
+
+        // Record round result through agent API
+        shared.agent.recordRoundResult(result);
+
+        // Update flow state
+        shared.state.runState = result.runState;
+        shared.state.conversation = result.messages;
+        shared.state.continueRounds = result.shouldContinue;
+        shared.state.currentRound += 1;
+        shared.state.runState.incrementRounds();
+
+        // Check termination conditions
+        if (
+          shared.agent.isInterruptionRequested() ||
+          shared.state.currentRound >= shared.state.totalRounds ||
+          !shared.state.continueRounds
+        ) {
+          return FlowTransition.FINALIZE;
+        }
+
+        return FlowTransition.CONTINUE;
+      }
     }
-
-    const execResult = execRes as ReflectionRoundExec<C>;
-
-    if (execResult.error) {
-      shared.lifecycle.fail(execResult.error);
-      return FlowTransition.FINALIZE;
-    }
-
-    const { result } = execResult;
-    if (!result) {
-      const missingResultError = new Error('Round result is missing.');
-      shared.lifecycle.fail(missingResultError);
-      return FlowTransition.FINALIZE;
-    }
-
-    // Record round result through agent API instead of direct mutation
-    shared.agent.recordRoundResult(result);
-
-    // Update flow state
-    shared.state.runState = result.runState;
-    // Direct reference - messages aren't mutated by subsequent operations
-    shared.state.conversation = result.messages;
-    shared.state.continueRounds = result.shouldContinue;
-    shared.state.currentRound += 1;
-    shared.state.runState.incrementRounds();
-
-    if (shared.agent.isInterruptionRequested()) {
-      return FlowTransition.FINALIZE;
-    }
-
-    if (shared.state.currentRound >= shared.state.totalRounds) {
-      return FlowTransition.FINALIZE;
-    }
-
-    if (!shared.state.continueRounds) {
-      return FlowTransition.FINALIZE;
-    }
-
-    return FlowTransition.CONTINUE;
   }
 }
 
