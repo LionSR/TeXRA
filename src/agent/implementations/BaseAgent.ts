@@ -3,9 +3,11 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import {
+  AgentCategory,
   AgentPrompt,
   AgentSetting,
   type AgentSessionDescriptor,
+  type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
 import { IAgent, type AgentRunHooks } from '@agent/core/IAgent';
@@ -99,8 +101,16 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.logger = context.logger;
     this.modelHandler.setLogger(this.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
+    // Extract isMultipleOutput from workflow settings (undefined for tool-use)
+    const isMultipleOutput =
+      agentSetting.agentCategory === AgentCategory.Workflow
+        ? (agentSetting as AgentWorkflowSetting).isMultipleOutput
+        : undefined;
+
     this.usageMonitor = new UsageMonitor(this.modelHandler, context, {
       agentName: agentConfig.agent,
+      agentCategory: agentSetting.agentCategory,
+      isMultipleOutput,
     });
   }
 
