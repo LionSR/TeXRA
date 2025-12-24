@@ -220,7 +220,12 @@ export class AgentsTable {
    * @param {string[]|null} allowedModels - Array of model names, or null for all models
    * @param {string[]} enabledProviders - Array of enabled provider names (for error detection)
    */
-  renderModelsDisplay(modelsInfo, apiAccessMode, allowedModels, enabledProviders) {
+  renderModelsDisplay(
+    modelsInfo,
+    apiAccessMode,
+    allowedModels,
+    enabledProviders,
+  ) {
     // allowedModels semantics:
     // - null: all models (Ultra tier)
     // - []: no models configured (error state)
@@ -262,7 +267,8 @@ export class AgentsTable {
    * @param {HTMLElement} container - The container element near the models list
    */
   clearModelsList(container) {
-    const existingList = container?.parentElement?.querySelector('.models-list');
+    const existingList =
+      container?.parentElement?.querySelector('.models-list');
     if (existingList) {
       existingList.remove();
     }
