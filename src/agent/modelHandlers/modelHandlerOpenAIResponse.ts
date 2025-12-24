@@ -13,7 +13,6 @@ import { ConversationRoundState } from '@agent/core/AgentState';
 import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -860,7 +859,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    this.logger.debug('Skipping continuation - assistant prefill is supported');
+    this.defaultAddContinueWithPrefill();
   }
 
   private isBackgroundPending(response: Response): boolean {
@@ -1045,10 +1044,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation = createContinuationMessage(
-      agentSetting.endTag,
-      prefillTokens,
+    const userMessageContinuation = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
     );
 
     const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';

@@ -29,7 +29,6 @@ import {
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
@@ -806,8 +805,7 @@ export class ModelHandlerOpenAI<
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    this.logger.debug('Skipping continuation - assistant prefill is supported');
-    // No-op for models that support prefill
+    this.defaultAddContinueWithPrefill();
   }
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
@@ -818,14 +816,11 @@ export class ModelHandlerOpenAI<
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    // Create continuation message with last K tokens
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation = createContinuationMessage(
-      agentSetting.endTag,
-      prefillTokens,
+    const userMessageContinuation = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
     );
 
-    // Add continuation message
     this.logger.debug(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
