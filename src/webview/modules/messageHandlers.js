@@ -976,20 +976,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // TaskState.session is the canonical source of truth for session metadata
     const canonicalSession = state.session || config.session;
 
-    const savedState = {};
-    const sessionType = this._restoreFormFields(
-      config,
-      savedState,
-      canonicalSession,
-    );
-    this._restoreFileArrays(config, savedState, activeFiles);
+    // Block saves during restoration - _setAgentValue dispatches change events
+    // which trigger save(), and we don't want to capture incomplete DOM state
+    mainViewState.blockSave();
+    try {
+      const savedState = {};
+      const sessionType = this._restoreFormFields(
+        config,
+        savedState,
+        canonicalSession,
+      );
+      this._restoreFileArrays(config, savedState, activeFiles);
 
-    // Store state for persistence and future restoration
-    mainViewState.set(savedState);
+      // Store state for persistence and future restoration
+      mainViewState.set(savedState);
 
-    // Apply session type UI changes (visibility, disabled states) without re-setting values.
-    // skipSave: true because we already have the correct state stored above.
-    mainViewState.applySessionType(sessionType, { skipSave: true });
+      // Apply session type UI changes (visibility, disabled states) without re-setting values.
+      // skipSave: true because we already have the correct state stored above.
+      mainViewState.applySessionType(sessionType, { skipSave: true });
+    } finally {
+      mainViewState.unblockSave();
+    }
 
     // Prevent _postHandle from calling mainViewState.restore()
     this._skipNextRestoreState = true;
