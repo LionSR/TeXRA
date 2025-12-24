@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.1] - 2025-12-19
+
+### Features
+
+- Added **Gemini 3 Flash** (`gemini3f`) to the default models list.
+- Chat and tool-use agents can now be hosted as remote agents.
+- Introduced **Max tier** with access to premium models for subscribed users.
+- Added **Researcher Access Program** (free tier) with budget models including
+  GPT-5 Mini and Nano.
+- Added access expiration system for researcher access program.
+
+### Bug Fixes
+
+- Fixed LaTeX-style backtick quotes in document name extraction.
+- Fixed dropdown option selection not updating visually.
+- Fixed cloud icon sizing inconsistency in agent dropdown.
+- Fixed tool name handling in tool definitions resolver.
+- Fixed absolute path handling in file location creation.
+- Fixed agent and model selection reverting to defaults.
+- Fixed missing usage info in OpenAI Responses API streaming.
+- Disabled automatic retries by default to give users explicit control.
+- Added tooltips to toolbar buttons across all webviews.
+- Clarified reference and auxiliary file selector tooltips.
+- Fixed provider cache stale state and Google model path extraction.
+- Fixed memory leak from undisposed event listener subscription.
+- API Access toggle now visible for all authenticated users.
+- Fixed tier config retry after transient failures.
+- Fixed race conditions in tier system caching.
+
+### Improvements
+
+- Updated core dependencies: Supabase, fs-extra, OpenAI, webpack.
+
 ## [0.35.0] - 2025-12-16
 
 ### Bug Fixes
