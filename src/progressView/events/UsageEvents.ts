@@ -36,19 +36,26 @@ export function createUsageEvents(
           state,
           updater,
           ({ stream, usage, storageKey }) => {
-            withErrorBoundary('failed to handle updateStreamUsage', async () => {
-              const normalizedUsage: TokenUsageStats = {
-                inputTokens: Number(usage.inputTokens ?? 0),
-                outputTokens: Number(usage.outputTokens ?? 0),
-                cost: Number(usage.cost ?? 0),
-              };
+            withErrorBoundary(
+              'failed to handle updateStreamUsage',
+              async () => {
+                const normalizedUsage: TokenUsageStats = {
+                  inputTokens: Number(usage.inputTokens ?? 0),
+                  outputTokens: Number(usage.outputTokens ?? 0),
+                  cost: Number(usage.cost ?? 0),
+                };
 
-              await state.usageStats.setRunUsage(stream, storageKey, normalizedUsage);
+                await state.usageStats.setRunUsage(
+                  stream,
+                  storageKey,
+                  normalizedUsage,
+                );
 
-              if (state.activeStream === stream && updater.isAvailable()) {
-                updater.updateRunUsage(stream, storageKey, normalizedUsage);
-              }
-            });
+                if (state.activeStream === stream && updater.isAvailable()) {
+                  updater.updateRunUsage(stream, storageKey, normalizedUsage);
+                }
+              },
+            );
           },
         ),
       ];
