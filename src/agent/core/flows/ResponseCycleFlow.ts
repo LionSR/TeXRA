@@ -45,7 +45,10 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type { ResponseCycleParams, ResponseCycleServices } from './CycleServices';
+import type {
+  ResponseCycleParams,
+  ResponseCycleServices,
+} from './CycleServices';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -97,7 +100,8 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export type ResponseCycleShared<_C = unknown> = BaseCycleShared<ResponseCycleState>;
+export type ResponseCycleShared<_C = unknown> =
+  BaseCycleShared<ResponseCycleState>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are

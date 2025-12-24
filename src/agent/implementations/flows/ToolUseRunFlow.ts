@@ -126,10 +126,31 @@ type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
  * - userCancelled: User cancelled the retry prompt
  */
 type ToolUseCycleExecResult =
-  | { result: void; error?: undefined; failedWithError?: false; userCancelled?: false }
-  | { error: unknown; result?: undefined; failedWithError?: undefined; userCancelled?: undefined }
-  | { result?: undefined; error?: undefined; failedWithError: true; errorMessage?: string; userCancelled?: false }
-  | { result?: undefined; error?: undefined; failedWithError?: false; userCancelled: true };
+  | {
+      result: void;
+      error?: undefined;
+      failedWithError?: false;
+      userCancelled?: false;
+    }
+  | {
+      error: unknown;
+      result?: undefined;
+      failedWithError?: undefined;
+      userCancelled?: undefined;
+    }
+  | {
+      result?: undefined;
+      error?: undefined;
+      failedWithError: true;
+      errorMessage?: string;
+      userCancelled?: false;
+    }
+  | {
+      result?: undefined;
+      error?: undefined;
+      failedWithError?: false;
+      userCancelled: true;
+    };
 
 /**
  * Prep result for ToolUsePrepareNode - extracted from shared.
