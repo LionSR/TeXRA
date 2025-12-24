@@ -1,16 +1,13 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  ProgressEventBusLike,
-  StatefulEventModule,
+import type { BaseEventShared, StatefulEventModule } from './types';
+import {
+  createStatefulEventDisposable,
+  type ProgressEventBusLike,
 } from './types';
 
 /**
@@ -31,39 +28,30 @@ export function createUsageEvents(
   const { withErrorBoundary } = shared;
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): vscode.Disposable[] {
-      const updateStreamUsage = bus.on(
-        'updateStreamUsage',
-        ({ stream, usage, storageKey }) => {
-          withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            const normalizedUsage: TokenUsageStats = {
-              inputTokens: Number(usage.inputTokens ?? 0),
-              outputTokens: Number(usage.outputTokens ?? 0),
-              cost: Number(usage.cost ?? 0),
-            };
+    register(bus, state, updater) {
+      return [
+        createStatefulEventDisposable(
+          bus,
+          'updateStreamUsage',
+          state,
+          updater,
+          ({ stream, usage, storageKey }) => {
+            withErrorBoundary('failed to handle updateStreamUsage', async () => {
+              const normalizedUsage: TokenUsageStats = {
+                inputTokens: Number(usage.inputTokens ?? 0),
+                outputTokens: Number(usage.outputTokens ?? 0),
+                cost: Number(usage.cost ?? 0),
+              };
 
-            // storageKey is THE single source of truth - no fallbacks
-            await state.usageStats.setRunUsage(
-              stream,
-              storageKey,
-              normalizedUsage,
-            );
+              await state.usageStats.setRunUsage(stream, storageKey, normalizedUsage);
 
-            if (state.activeStream === stream && updater.isAvailable()) {
-              // Send only the changed run's usage instead of all runs
-              updater.updateRunUsage(stream, storageKey, normalizedUsage);
-            }
-          });
-        },
-      );
-
-      return [updateStreamUsage].map(
-        (dispose) => new vscode.Disposable(dispose),
-      );
+              if (state.activeStream === stream && updater.isAvailable()) {
+                updater.updateRunUsage(stream, storageKey, normalizedUsage);
+              }
+            });
+          },
+        ),
+      ];
     },
   };
 }
