@@ -11,7 +11,10 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -230,7 +233,7 @@ class ToolUsePrepNode<C> extends BaseNode<
  */
 interface ToolUseCallPrepResult {
   shouldStop: boolean;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
 }
 
 /**
@@ -484,7 +487,43 @@ class ToolUseCallNode<C> extends Node<
 }
 
 /**
+ * Data extracted by prep() for tool-use process.
+ * PocketFlow compliance: exec() should only use prepRes, not shared.
+ */
+interface ToolUseProcessPrepResult {
+  shouldStop: boolean;
+  response?: unknown;
+  responseTime?: number;
+}
+
+/**
+ * Result of exec() containing extracted data and all values needed for post() side effects.
+ * PocketFlow compliance: exec() returns computation results, post() applies side effects.
+ */
+interface ToolUseProcessExecResult {
+  skipped: boolean;
+  // Core results
+  toolCalls?: SdkToolCall[];
+  stopReason?: ProviderStopReason;
+  text?: string;
+  endTurn: boolean;
+  // Data for side effects in post()
+  serverToolContentBlocks?: ServerToolContentBlock[];
+  lastAssistantContent?: unknown[];
+  normalizedUsage?: NormalizedUsage;
+  responseTime?: number;
+  // Message to create if endTurn
+  createAssistantMessage?: boolean;
+  lastResponseUpdate?: string;
+}
+
+/**
  * Processes the model response to extract tool calls and usage data.
+ *
+ * PocketFlow compliance:
+ * - prep(): Extracts data from shared for exec()
+ * - exec(): Pure computation using prepRes and services (no side effects)
+ * - post(): Applies all side effects to shared/store
  *
  * Services accessed via `_params.services`: options, store
  */
@@ -492,28 +531,37 @@ class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared<C>,
   ToolUseCycleParams<C>
 > {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
-    return shared;
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: Only extract what exec() needs.
+   */
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseProcessPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      response: state.response,
+      responseTime: state.responseTime,
+    };
   }
 
-  async exec(shared: ToolUseCycleShared<C>): Promise<
-    SkippableNodeResult<{
-      toolCalls?: SdkToolCall[];
-      stopReason: ProviderStopReason;
-      text?: string;
-      endTurn: boolean;
-    }>
-  > {
-    const { options, store } = this._params.services;
-    const { state } = shared;
-    if (state.shouldStop || !state.response) {
-      return { skipped: true };
+  /**
+   * Process response and extract tool calls.
+   * PocketFlow compliance: Pure computation, no side effects on shared/store.
+   * Logging is allowed as it doesn't affect flow state.
+   */
+  async exec(
+    prepRes: ToolUseProcessPrepResult,
+  ): Promise<ToolUseProcessExecResult> {
+    if (prepRes.shouldStop || !prepRes.response) {
+      return { skipped: true, endTurn: false };
     }
 
+    const { options, store } = this._params.services;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
+    // Process thinking block (logging only, state stored in workspace)
     const thinking = options.modelHandler.processThinkingBlock(
-      state.response,
+      prepRes.response,
       store.workspace,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
@@ -527,20 +575,20 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const toolCalls = options.modelHandler.extractToolUse(state.response);
+    // Extract response data
+    const toolCalls = options.modelHandler.extractToolUse(prepRes.response);
     const {
       response: text,
       usage,
       stopReason,
-    } = options.modelHandler.extractResponse(state.response, '');
+    } = options.modelHandler.extractResponse(prepRes.response, '');
 
     // Single extraction for all server tool data (single source of truth)
     const serverToolData = options.modelHandler.extractServerToolData(
-      state.response,
+      prepRes.response,
     );
 
-    // Log web search results to progress view
-    // Skip when streaming - handlers emit during streaming for correct order
+    // Log web search results (logging doesn't affect flow state)
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
         options.logger.info('', {
@@ -551,17 +599,12 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    // Cache content blocks for use in follow-up messages
-    // Always assign to clear stale blocks from previous responses
-    store.workspace.serverToolContent.contentBlocks =
-      serverToolData.contentBlocks;
+    // Extract assistant content for follow-up messages
+    const lastAssistantContent = options.modelHandler.extractAssistantContent(
+      prepRes.response,
+    );
 
-    // Store full assistant content (excluding tool_use) to preserve original order
-    // This is used in createToolUseFollowUpMessages for correct message building
-    // Uses provider-agnostic extraction method
-    store.workspace.serverToolContent.lastAssistantContent =
-      options.modelHandler.extractAssistantContent(state.response);
-
+    // Log response text
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
         groupId,
@@ -575,67 +618,55 @@ class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    if (state.responseTime !== undefined) {
-      store.round.addResponseTime(state.responseTime);
-    }
-
+    // Normalize usage if present
+    let normalizedUsage: NormalizedUsage | undefined;
     if (usage) {
-      // Normalize usage once - this is the single source of truth
-      const normalizedUsage = options.modelHandler.normalizeUsage(
+      normalizedUsage = options.modelHandler.normalizeUsage(
         usage,
-        state.responseTime ?? 0,
+        prepRes.responseTime ?? 0,
       );
-      store.round.setNormalizedUsage(normalizedUsage);
-    } else {
-      store.round.clearUsage();
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
-      state.toolCalls = undefined;
-      // End turn - just preserve text. Server tool content (web_search) was already
-      // logged to progress view and is not needed in message history when stopping.
-      if (text) {
-        state.messages.push(options.modelHandler.createAssistantMessage(text));
-        store.workspace.assembly.updateLastResponse(text);
-      }
-      // Clear ephemeral state so stale data isn't used in subsequent requests
-      store.workspace.resetServerToolContent();
-      store.workspace.resetReasoning();
-      state.shouldStop = true;
       return {
         skipped: false,
-        value: { stopReason, text, endTurn: true },
+        stopReason,
+        text: text ?? undefined,
+        endTurn: true,
+        serverToolContentBlocks: serverToolData.contentBlocks,
+        lastAssistantContent,
+        normalizedUsage,
+        responseTime: prepRes.responseTime,
+        createAssistantMessage: Boolean(text),
+        lastResponseUpdate: text ?? undefined,
       };
     }
 
-    state.toolCalls = toolCalls;
-    state.text = text ?? undefined;
-    state.stopReason = stopReason;
-
     return {
       skipped: false,
-      value: {
-        toolCalls,
-        stopReason,
-        text: text ?? undefined,
-        endTurn: false,
-      },
+      toolCalls,
+      stopReason,
+      text: text ?? undefined,
+      endTurn: false,
+      serverToolContentBlocks: serverToolData.contentBlocks,
+      lastAssistantContent,
+      normalizedUsage,
+      responseTime: prepRes.responseTime,
     };
   }
 
+  /**
+   * Apply all side effects to shared/store.
+   * PocketFlow compliance: All mutations happen here.
+   */
   async post(
     shared: ToolUseCycleShared<C>,
-    _prepRes: unknown,
-    execRes: SkippableNodeResult<{
-      toolCalls?: SdkToolCall[];
-      stopReason: ProviderStopReason;
-      text?: string;
-      endTurn: boolean;
-    }>,
+    _prepRes: ToolUseProcessPrepResult,
+    execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const { store } = this._params.services;
+    const { options, store } = this._params.services;
     const { state } = shared;
 
     if (execRes.skipped) {
@@ -643,20 +674,54 @@ class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
+    // Apply side effects: server tool content
+    store.workspace.serverToolContent.contentBlocks =
+      execRes.serverToolContentBlocks ?? [];
+    store.workspace.serverToolContent.lastAssistantContent =
+      execRes.lastAssistantContent ?? [];
+
+    // Apply side effects: response time
+    if (execRes.responseTime !== undefined) {
+      store.round.addResponseTime(execRes.responseTime);
+    }
+
+    // Apply side effects: usage
+    if (execRes.normalizedUsage) {
+      store.round.setNormalizedUsage(execRes.normalizedUsage);
+    } else {
+      store.round.clearUsage();
+    }
+
+    // Finalize round
     const completedRound = store.round;
     await store.finalizeRound();
     store.run.incrementRounds();
-
     const nextRoundIndex = completedRound.roundIndex + 1;
 
-    if (execRes.value.endTurn) {
+    if (execRes.endTurn) {
+      // Apply side effects for end turn
+      state.toolCalls = undefined;
+      if (execRes.createAssistantMessage && execRes.text) {
+        state.messages.push(
+          options.modelHandler.createAssistantMessage(execRes.text),
+        );
+        store.workspace.assembly.updateLastResponse(execRes.text);
+      }
+      // Clear ephemeral state
+      store.workspace.resetServerToolContent();
+      store.workspace.resetReasoning();
       state.shouldStop = true;
-      state.stopReason = execRes.value.stopReason;
+      state.stopReason = execRes.stopReason;
       store.resetRound(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
 
+    // Apply side effects for continuing with tool calls
+    state.toolCalls = execRes.toolCalls;
+    state.text = execRes.text;
+    state.stopReason = execRes.stopReason;
     store.resetRound(nextRoundIndex);
+
     return undefined;
   }
 }
@@ -679,11 +744,34 @@ interface ToolExecutionResult {
 }
 
 /**
+ * Data extracted by prep() for tool dispatch.
+ * PocketFlow compliance: exec() should only use prepRes, not shared.
+ */
+interface ToolUseDispatchPrepResult {
+  shouldStop: boolean;
+  toolCalls: SdkToolCall[];
+  text?: string;
+}
+
+/**
+ * Result of exec() for tool dispatch.
+ * PocketFlow compliance: exec() returns computation results, post() applies side effects.
+ */
+type ToolUseDispatchExecResult =
+  | { skipped: true; interrupted: boolean }
+  | { skipped: false; calls: SdkToolCall[] };
+
+/**
  * Dispatches tool calls and processes their results.
  *
  * For Google handlers with multiple parallel calls, this node batches all
  * function calls into a single model message to properly preserve thought
  * signatures (required for Gemini 3 models).
+ *
+ * PocketFlow compliance:
+ * - prep(): Extracts data from shared for exec()
+ * - exec(): Pure computation using prepRes (no side effects)
+ * - post(): Applies all side effects to shared/store
  *
  * Services accessed via `_params.services`: options, store
  */
@@ -691,27 +779,42 @@ class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseCycleShared<C>,
   ToolUseCycleParams<C>
 > {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
-    return shared;
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: Only extract what exec() needs.
+   */
+  async prep(
+    shared: ToolUseCycleShared<C>,
+  ): Promise<ToolUseDispatchPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      toolCalls: state.toolCalls ?? [],
+      text: state.text,
+    };
   }
 
+  /**
+   * Check conditions for tool dispatch.
+   * PocketFlow compliance: Pure computation, no side effects.
+   */
   async exec(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<SkippableNodeResult<{ calls: SdkToolCall[] }>> {
+    prepRes: ToolUseDispatchPrepResult,
+  ): Promise<ToolUseDispatchExecResult> {
     const { options } = this._params.services;
-    const { state } = shared;
-    if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
-      return { skipped: true };
+
+    if (prepRes.shouldStop || prepRes.toolCalls.length === 0) {
+      return { skipped: true, interrupted: false };
     }
 
     if (await options.checkInterruption()) {
-      state.shouldStop = true;
-      return { skipped: true };
+      // Return interrupted flag - post() will apply the side effect
+      return { skipped: true, interrupted: true };
     }
 
     return {
       skipped: false,
-      value: { calls: state.toolCalls },
+      calls: prepRes.toolCalls,
     };
   }
 
@@ -845,22 +948,29 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
   }
 
+  /**
+   * Execute tool calls and apply side effects.
+   * PocketFlow compliance: All mutations happen here.
+   */
   async post(
     shared: ToolUseCycleShared<C>,
-    _prepRes: ToolUseCycleShared<C>,
-    execRes: SkippableNodeResult<{ calls: SdkToolCall[] }>,
+    prepRes: ToolUseDispatchPrepResult,
+    execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
     const { state } = shared;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
     if (execRes.skipped) {
-      state.shouldStop = true;
+      // Apply interrupted side effect if needed
+      if (execRes.interrupted) {
+        state.shouldStop = true;
+      }
       return FlowTransition.COMPLETE;
     }
 
-    const { calls } = execRes.value;
-    const assistantText = state.text ?? '';
+    const { calls } = execRes;
+    const assistantText = prepRes.text ?? '';
     const tracker = store.workspace.interactions;
     const todoState = store.workspace.todos;
 
