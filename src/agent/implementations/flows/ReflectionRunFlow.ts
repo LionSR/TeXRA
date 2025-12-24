@@ -49,21 +49,12 @@ export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
 /**
  * Runtime state for reflection agent runs.
- *
- * Schema alignment: This interface corresponds to {@link ReflectionRunStateSchema}
- * for serialization. The runtime uses AgentRunState class instances while the
- * schema uses AgentRunStateSnapshotSchema for JSON compatibility.
  */
 export interface ReflectionRunState {
-  /** Conversation history with typed messages */
   conversation: ProviderMessage[];
-  /** Accumulated run state across rounds */
   runState: AgentRunState;
-  /** Total number of rounds configured */
   totalRounds: number;
-  /** Current round index (0-based) */
   currentRound: number;
-  /** Whether to continue to the next round */
   continueRounds: boolean;
 }
 
