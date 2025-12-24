@@ -309,38 +309,46 @@ export abstract class ModelHandler<
     });
   }
 
+  /** Set of providers that use OpenAI-compatible API format. */
+  private static readonly OPENAI_COMPATIBLE_PROVIDERS = new Set([
+    ModelProvider.OPENAI,
+    ModelProvider.GOOGLE,
+    ModelProvider.OTHERS,
+    ModelProvider.DEEPSEEK,
+    ModelProvider.XAI,
+    ModelProvider.MOONSHOT,
+    ModelProvider.DASHSCOPE,
+    ModelProvider.ANTHROPIC,
+  ]);
+
   /** Checks if the model uses an OpenAI-compatible API format. */
   get isOpenaiCompatible(): boolean {
-    return [
-      ModelProvider.OPENAI,
-      ModelProvider.GOOGLE,
-      ModelProvider.OTHERS,
-      ModelProvider.DEEPSEEK,
-      ModelProvider.XAI,
-      ModelProvider.MOONSHOT,
-      ModelProvider.DASHSCOPE,
-      ModelProvider.ANTHROPIC,
-    ].includes(this.config.provider);
+    return ModelHandler.OPENAI_COMPATIBLE_PROVIDERS.has(this.config.provider);
+  }
+
+  /** Checks if the model is from a specific provider. */
+  isProvider(provider: ModelProvider): boolean {
+    return this.config.provider === provider;
   }
 
   /** Checks if the model is from Anthropic provider. */
   get isAnthropic(): boolean {
-    return this.config.provider === ModelProvider.ANTHROPIC;
+    return this.isProvider(ModelProvider.ANTHROPIC);
   }
 
   /** Checks if the model is from OpenAI provider. */
   get isOpenai(): boolean {
-    return this.config.provider === ModelProvider.OPENAI;
+    return this.isProvider(ModelProvider.OPENAI);
   }
 
   /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
-    return this.config.provider === ModelProvider.GOOGLE;
+    return this.isProvider(ModelProvider.GOOGLE);
   }
 
   /** Checks if the model is from DeepSeek provider. */
   get isDeepSeek(): boolean {
-    return this.config.provider === ModelProvider.DEEPSEEK;
+    return this.isProvider(ModelProvider.DEEPSEEK);
   }
 
   /**
