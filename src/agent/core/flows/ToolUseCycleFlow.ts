@@ -165,7 +165,8 @@ function resetToolUseState(state: ToolUseCycleState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ToolUseCycleServices)
  */
-export type ToolUseCycleShared<_C = unknown> = BaseCycleShared<ToolUseCycleState>;
+export type ToolUseCycleShared<_C = unknown> =
+  BaseCycleShared<ToolUseCycleState>;
 
 /**
  * Prepares a tool-use cycle by checking interruptions and setting up debug context.
