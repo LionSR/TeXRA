@@ -1,10 +1,10 @@
 /**
  * Request execution utilities for model handlers.
  *
- * NOTE: Retry logic is handled at the flow level (ResponseCycleFlow/ToolUseCycleFlow).
+ * NOTE: Retry logic is handled by PocketFlow Node (maxRetries, wait, retryPrompt).
  * Error logging follows the "log at the boundary" principle:
  * - Errors are enriched with operation context here (not logged)
- * - The final fallback handler (RetryState.applyFallbackResult) logs once with full context
+ * - Node's retryPrompt/execFallback logs once with full context
  * - This prevents duplicate log entries while preserving where errors originated
  */
 
