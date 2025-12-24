@@ -53,7 +53,7 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): Promise<void> => {
-    const { stream, session } = payload;
+    const { stream, session, isRemote, hasMultipleOutputs } = payload;
 
     if (!stream) {
       return;
@@ -65,9 +65,12 @@ export function createStreamStatusEvents(
 
     await state.streamTabs.ensureStream(stream);
 
-    if (session) {
-      state.setSessionKindHint(stream, session.agentCategory);
-    }
+    // Store hints so the UI can show indicators before the full TaskState is set
+    state.updateStreamHints(stream, {
+      sessionCategory: session?.agentCategory,
+      isRemote,
+      hasMultipleOutputs,
+    });
 
     const currentFilter = state.agentTypeFilter;
     const targetCategory = session?.agentCategory;
@@ -116,7 +119,7 @@ export function createStreamStatusEvents(
     const { streamTabId, executionId, taskState } = data;
 
     state.setTaskState(streamTabId, taskState);
-    state.clearSessionKindHint(streamTabId);
+    // Note: setTaskState already clears stream hints
 
     const normalizedState = state.getTaskState(streamTabId);
 
