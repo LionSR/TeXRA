@@ -14,6 +14,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - utilities
@@ -206,7 +207,7 @@ class ResponsePrepNode<C> extends BaseNode<
  */
 interface InvocationPrepResult {
   shouldStop: boolean;
-  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  messages: ProviderMessage[];
   systemPrompt?: string;
 }
 
@@ -406,6 +407,23 @@ class ResponseModelInvocationNode<C> extends Node<
   }
 }
 
+/**
+ * Data extracted by prep() for response processing.
+ * PocketFlow compliance: exec() should only use prepRes, not shared.
+ */
+interface ProcessPrepResult {
+  shouldStop: boolean;
+  responseObject: unknown;
+  responseTime?: number;
+  messages: ProviderMessage[];
+  outputLocation: AgentFileLocation;
+  outputExists: boolean;
+  /** Last response for connector calculation (read before update) */
+  lastResponse: string;
+  /** Accumulated output for updating (read before update) */
+  accumulatedOutput: string;
+}
+
 interface ProcessResult {
   stopReason: ProviderStopReason;
   newResponse?: string;
@@ -417,9 +435,26 @@ interface ProcessResult {
   /** Normalized usage - single source of truth */
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
+  /** Response time for store update in post() */
+  responseTime?: number;
+  /** Updated last response for store update in post() */
+  updatedLastResponse?: string;
+  /** Updated accumulated output for store update in post() */
+  updatedAccumulatedOutput?: string;
 }
 
 type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
+
+/**
+ * Data extracted by prep() for continuation decision.
+ * PocketFlow compliance: exec() should only use prepRes, not shared.
+ */
+interface ContinuationPrepResult {
+  shouldStop: boolean;
+  stopReason?: ProviderStopReason;
+  processedResponse?: string;
+  messages: ProviderMessage[];
+}
 
 type ContinuationNodeResult = SkippableNodeResult<{
   shouldEndTurn: boolean;
@@ -431,20 +466,37 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
  *
+ * PocketFlow compliance:
+ * - prep() extracts only the data needed by exec()
+ * - exec() performs pure computation, no side effects
+ * - post() applies all side effects (store updates)
+ *
  * Services accessed via `_params.services`: options, store
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
+  async prep(shared: ResponseCycleShared<C>): Promise<ProcessPrepResult> {
+    const { store } = this._params.services;
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      responseObject: state.responseObject,
+      responseTime: state.responseTime,
+      messages: state.messages,
+      outputLocation: state.outputLocation!,
+      outputExists: state.outputExists,
+      // Read store values before they're updated (for connector calculation)
+      lastResponse: store.workspace.assembly.lastResponse,
+      accumulatedOutput: store.workspace.assembly.accumulatedOutput,
+    };
   }
 
-  async exec(shared: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
+  async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
     const { options, store } = this._params.services;
-    const { state } = shared;
-    if (state.shouldStop || !state.responseObject) {
+
+    if (prepRes.shouldStop || !prepRes.responseObject) {
       return { skipped: true };
     }
 
@@ -458,7 +510,7 @@ class ResponseProcessNode<C> extends BaseNode<
         usage: responseUsage,
         stopReason,
       } = options.modelHandler.extractResponse(
-        state.responseObject,
+        prepRes.responseObject,
         options.agentSetting.endTag,
       );
 
@@ -466,10 +518,9 @@ class ResponseProcessNode<C> extends BaseNode<
         options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       }
 
-      if (state.responseTime !== undefined) {
-        store.round.addResponseTime(state.responseTime);
+      if (prepRes.responseTime !== undefined) {
         options.logger.debug(
-          `Response time: ${state.responseTime.toFixed(2)}s`,
+          `Response time: ${prepRes.responseTime.toFixed(2)}s`,
         );
       }
 
@@ -477,7 +528,7 @@ class ResponseProcessNode<C> extends BaseNode<
       options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
       const thinkingContent = options.modelHandler.processThinkingBlock(
-        state.responseObject,
+        prepRes.responseObject,
         store.workspace,
       );
       const useStreaming = options.modelHandler.getStreamingConfig();
@@ -504,12 +555,11 @@ class ResponseProcessNode<C> extends BaseNode<
       // Normalize usage once - this is the single source of truth
       const normalizedUsage = options.modelHandler.normalizeUsage(
         responseUsage,
-        state.responseTime ?? 0,
+        prepRes.responseTime ?? 0,
       );
-      store.round.setNormalizedUsage(normalizedUsage);
 
       const repetitionResult = checkForMassiveRepetition(
-        store.workspace.assembly.lastResponse,
+        prepRes.lastResponse,
         newResponse,
       );
 
@@ -522,27 +572,30 @@ class ResponseProcessNode<C> extends BaseNode<
         );
         options.logger.error('Message structure when repetition detected:');
         options.logger.error(
-          JSON.stringify(messageToSkeleton(state.messages), null, 2),
+          JSON.stringify(messageToSkeleton(prepRes.messages), null, 2),
         );
       }
 
       let processedResponse: string | undefined;
       let bestConnector: string | undefined;
+      let updatedLastResponse: string | undefined;
+      let updatedAccumulatedOutput: string | undefined;
+
       if (newResponse) {
         processedResponse = replacementEngine.applyAll(newResponse);
 
         if (!repetitionResult.massiveRepetitionDetected) {
           const connector = await bestConnectionMethod(
-            store.workspace.assembly.lastResponse.slice(-K_SLICE),
+            prepRes.lastResponse.slice(-K_SLICE),
             processedResponse.slice(0, K_SLICE),
           );
           bestConnector = connector.connector;
-          store.workspace.assembly.updateLastResponse(processedResponse);
-          store.workspace.assembly.updateAccumulatedOutput(
-            store.workspace.assembly.accumulatedOutput +
-              (bestConnector ?? '') +
-              processedResponse,
-          );
+          // Compute new values but don't update store (that's a side effect for post())
+          updatedLastResponse = processedResponse;
+          updatedAccumulatedOutput =
+            prepRes.accumulatedOutput +
+            (bestConnector ?? '') +
+            processedResponse;
         }
       }
 
@@ -558,6 +611,10 @@ class ResponseProcessNode<C> extends BaseNode<
           responseUsage,
           normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
+          // Pass data for post() to apply side effects
+          responseTime: prepRes.responseTime,
+          updatedLastResponse,
+          updatedAccumulatedOutput,
         },
       };
     });
@@ -565,7 +622,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
   async post(
     shared: ResponseCycleShared<C>,
-    _prepRes: ResponseCycleShared<C>,
+    prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
@@ -581,6 +638,26 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     const result = execRes.value;
+
+    // Apply side effects that were computed in exec()
+    // These updates are now in post() where they belong (PocketFlow compliance)
+    if (result.responseTime !== undefined) {
+      store.round.addResponseTime(result.responseTime);
+    }
+
+    if (result.normalizedUsage) {
+      store.round.setNormalizedUsage(result.normalizedUsage);
+    }
+
+    if (result.updatedLastResponse !== undefined) {
+      store.workspace.assembly.updateLastResponse(result.updatedLastResponse);
+    }
+
+    if (result.updatedAccumulatedOutput !== undefined) {
+      store.workspace.assembly.updateAccumulatedOutput(
+        result.updatedAccumulatedOutput,
+      );
+    }
 
     state.stopReason = result.stopReason;
     state.processedResponse = result.processedResponse;
@@ -607,11 +684,11 @@ class ResponseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const outputLocation = state.outputLocation;
+    const outputLocation = prepRes.outputLocation;
 
     await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
 
-    if (!state.outputExists) {
+    if (!prepRes.outputExists) {
       options.logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
       await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
       state.outputExists = true;
@@ -635,13 +712,9 @@ class ResponseProcessNode<C> extends BaseNode<
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
-    if (result.normalizedUsage) {
-      store.round.setNormalizedUsage(result.normalizedUsage);
-
-      options.logger.debug(
-        `Normalized usage: ${JSON.stringify(result.normalizedUsage)}`,
-      );
-    }
+    options.logger.debug(
+      `Normalized usage: ${JSON.stringify(result.normalizedUsage)}`,
+    );
 
     options.logger.debug('Response preview:');
     options.logger.debug(
@@ -683,25 +756,40 @@ class ResponseProcessNode<C> extends BaseNode<
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
  *
+ * PocketFlow compliance:
+ * - prep() extracts only the data needed by exec()
+ * - exec() performs pure computation using prepRes
+ * - post() applies all side effects
+ *
  * Services accessed via `_params.services`: options, store
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
+  async prep(shared: ResponseCycleShared<C>): Promise<ContinuationPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      stopReason: state.stopReason,
+      processedResponse: state.processedResponse,
+      messages: state.messages,
+    };
   }
 
-  async exec(shared: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
+  async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
     const { options, store } = this._params.services;
-    const { state } = shared;
-    if (state.shouldStop || !state.stopReason || !state.processedResponse) {
+
+    if (
+      prepRes.shouldStop ||
+      !prepRes.stopReason ||
+      !prepRes.processedResponse
+    ) {
       return { skipped: true };
     }
 
-    const stopReason = state.stopReason!;
-    const processedResponse = state.processedResponse!;
+    const stopReason = prepRes.stopReason;
+    const processedResponse = prepRes.processedResponse;
 
     const stage = await options.logger.stage('Continuation decision', {
       skip: true,
@@ -744,7 +832,7 @@ class ResponseContinuationNode<C> extends BaseNode<
 
   async post(
     shared: ResponseCycleShared<C>,
-    _prepRes: ResponseCycleShared<C>,
+    prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
@@ -773,7 +861,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const reachedTokenLimit = isTokenLimitStopReason(state.stopReason);
+    const reachedTokenLimit = isTokenLimitStopReason(prepRes.stopReason);
     const willContinue = shouldContinue || reachedTokenLimit;
 
     if (!willContinue) {
