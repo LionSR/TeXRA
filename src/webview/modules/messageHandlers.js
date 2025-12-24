@@ -348,7 +348,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           // Decorate the placeholder option if it was just created
           // Re-query options since _setAgentValue may have added a new option
           const currentOptions = getSelectOptionElements(selectElement);
-          const option = currentOptions.find((opt) => opt.value === targetValue);
+          const option = currentOptions.find(
+            (opt) => opt.value === targetValue,
+          );
           if (option && !option.dataset.decorated) {
             this._decorateAgentOption(option);
             option.dataset.decorated = 'true';
@@ -719,7 +721,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       const exactMatch = options.find((option) => option.value === candidate);
       if (exactMatch) {
         selectElement.value = candidate;
-        return { matched: true, matchedCandidate: candidate, domValue: candidate };
+        return {
+          matched: true,
+          matchedCandidate: candidate,
+          domValue: candidate,
+        };
       }
     }
 
