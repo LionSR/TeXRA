@@ -39,7 +39,6 @@ import {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
@@ -955,10 +954,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
-    const userMessageContinuation = createContinuationMessage(
-      agentSetting.endTag,
-      prefillTokens,
+    const userMessageContinuation = this.createContinuationPrompt(
+      workspaceState,
+      agentSetting,
     );
     this.logger.debug(`Adding continuation message.`);
     messages.push(
