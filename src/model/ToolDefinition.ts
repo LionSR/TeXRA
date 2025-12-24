@@ -12,17 +12,22 @@ import { z, type ZodType } from 'zod';
  * Note: zodSchema uses z.custom<ZodType>() because ZodType instances can't be
  * validated by Zod itself. This field is runtime-only (added by defineTool(),
  * not present in YAML configs) but acknowledged in the schema for type safety.
+ *
+ * Uses passthrough() to allow forward compatibility with future runtime fields
+ * without breaking validation when tools flow through AgentSettingSchema.
  */
-export const ToolDefinitionSchema = z.strictObject({
-  /** Name of the tool or function */
-  name: z.string(),
-  /** Optional description for the model */
-  description: z.string().optional(),
-  /** Parameter schema (JSON Schema format) */
-  parameters: z.record(z.string(), z.unknown()).optional(),
-  /** Runtime-only: original Zod schema for SDK-native conversion */
-  zodSchema: z.custom<ZodType>().optional(),
-});
+export const ToolDefinitionSchema = z
+  .object({
+    /** Name of the tool or function */
+    name: z.string(),
+    /** Optional description for the model */
+    description: z.string().optional(),
+    /** Parameter schema (JSON Schema format) */
+    parameters: z.record(z.string(), z.unknown()).optional(),
+    /** Runtime-only: original Zod schema for SDK-native conversion */
+    zodSchema: z.custom<ZodType>().optional(),
+  })
+  .passthrough();
 
 /** Tool definition type - derived from schema */
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
