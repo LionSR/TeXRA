@@ -282,10 +282,22 @@ class UsageLogServiceImpl {
 
   /**
    * Dispose the service - flush remaining entries and stop timer.
+   * Waits for any in-flight flush to complete before flushing remaining entries.
    */
   async dispose(): Promise<void> {
     this.stopFlushTimer();
+    this.config.enabled = false; // Prevent new entries during disposal
+
+    // Wait for any in-flight flush to complete
+    while (this.isFlushing) {
+      await this.sleep(50);
+    }
+
+    // Re-enable temporarily to flush remaining entries
+    this.config.enabled = true;
     await this.flush();
+    this.config.enabled = false;
+
     logger.debug(CHANNEL, 'UsageLogService disposed');
   }
 
