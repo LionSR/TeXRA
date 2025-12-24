@@ -51,6 +51,19 @@ export interface ResponseCycleInputState {
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
+  /**
+   * Whether the last cycle ended normally (model said end_turn).
+   *
+   * Lifecycle:
+   * - Initialized to `false` when shared state is created
+   * - Set to `true` when model's stop_reason is 'end_turn'
+   * - Set to `false` on failures, cancellations, or empty responses
+   *
+   * Used by callers to distinguish between:
+   * - Normal completion: shouldStop=true, endTurn=true
+   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
+   * - Failure: shouldStop=true, endTurn=false, lastError defined
+   */
   endTurn: boolean;
   outputExists: boolean;
   systemPrompt?: string;
