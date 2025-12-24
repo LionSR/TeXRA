@@ -210,7 +210,12 @@ Deno.serve(async (req: Request) => {
     // 6. Insert entries into database (service role for write access)
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check for duplicate batch (idempotency for retries)
+    // Check for duplicate batch (idempotency for client retries).
+    // Note: This has a small TOCTOU race window where concurrent retries could
+    // both pass the check. We accept this for analytics data because:
+    // - Race window is tiny (concurrent network retries are rare)
+    // - Duplicates can be filtered on read with DISTINCT ON (batch_id)
+    // - Advisory locks/separate tables add complexity with minimal benefit
     const { data: existingBatch } = await adminClient
       .from('usage_logs')
       .select('id')
