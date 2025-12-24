@@ -44,13 +44,16 @@ import xmlUtils from '@utils/text/xmlUtils';
 import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
-  type FallbackResult,
   clearRetryError,
   getNodeRetryConfig,
-  determineFallbackAction,
-  applyFallbackResult,
+  recordRetryError,
+  MANUAL_RETRY_TIMEOUT_MS,
 } from './RetryState';
-import { createRetryWaitNode } from './BaseRetryWaitNode';
+import {
+  retryCoordinator,
+  type RetryResult,
+} from '@agent/runtime/RetryRequestCoordinator';
+import { bus } from '@eventBus/ProgressEventBus';
 import type {
   ToolUseCycleOptions,
   ToolUseCycleServices,
@@ -244,21 +247,21 @@ type ToolUseCallResult =
       debugContext: CycleDebugContext;
       debugFileOptions: CycleDebugFileOptions;
     }
-  | { kind: 'fallback'; result: FallbackResult }
+  | { kind: 'failed'; message: string }
   | { kind: 'skipped' };
 
 /**
  * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
  *
- * Uses PocketFlow Node for auto-retry:
+ * Uses PocketFlow Node for auto-retry AND manual retry via retryPrompt:
  * - maxRetries and wait configured from user settings
  * - exec() throws on error, Node retries automatically
- * - execFallback() called when all auto-retries exhausted
+ * - retryPrompt() shows UI when auto-retries exhausted (if error is retryable)
+ * - execFallback() called only when user cancels or error is non-retryable
  *
  * Flow transitions:
- * - AWAIT_RETRY: Manual retry (goes to RetryWaitNode)
  * - default: Continue to next node on success
- * - COMPLETE: Non-retryable error or user abort
+ * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
  *
  * Services accessed via `_params.services`: options, store
  */
@@ -299,6 +302,63 @@ class ToolUseCallNode<C> extends Node<
     this.wait = config.wait;
     return super._exec(prepRes);
   }
+
+  /**
+   * Manual retry prompt - called when auto-retries are exhausted.
+   * Shows retry UI for retryable errors and waits for user action.
+   *
+   * @returns true to restart auto-retry loop, false to proceed to execFallback
+   */
+  retryPrompt = async (
+    _prepRes: unknown,
+    error: Error,
+  ): Promise<boolean> => {
+    const { options } = this._params.services;
+    const streamId = options.context.streamId;
+    const logger = options.logger;
+
+    // Format error to check if retryable
+    const formatted = formatProviderHttpError(error);
+
+    // If not retryable, don't show UI - go straight to execFallback
+    if (!formatted.retryable) {
+      return false;
+    }
+
+    // Log the error before showing retry UI
+    logger.logErrorData(`Tool-use call failed: ${formatted.message}`, {
+      message: formatted.message,
+      statusCode: formatted.statusCode,
+      retryable: formatted.retryable,
+    });
+
+    // Emit waiting status to UI
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+
+    // Wait for user action via the Promise-based coordinator
+    const result: RetryResult = await retryCoordinator.waitForUserAction(
+      streamId,
+      {
+        operation: 'Tool-use call',
+        errorMessage: formatted.message,
+        logger,
+        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
+      },
+    );
+
+    if (result.action === 'retry') {
+      logger.debug('Manual retry triggered');
+      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      return true; // Restart auto-retry loop
+    }
+
+    // User cancelled or timeout
+    logger.info('Retry cancelled by user', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    return false; // Proceed to execFallback
+  };
 
   async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
     const { options, store } = this._params.services;
@@ -347,31 +407,31 @@ class ToolUseCallNode<C> extends Node<
       options.setAbortController(null);
     }
     // Note: Errors from createResponse() are caught by PocketFlow Node's
-    // retry loop in _exec(), which calls execFallback() when exhausted.
+    // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
 
   /**
-   * Called by PocketFlow Node when all auto-retries are exhausted.
-   * Determines whether to offer manual retry or fail.
+   * Called by PocketFlow Node when retryPrompt returns false.
+   * This means either the error was non-retryable or user cancelled.
    */
   async execFallback(
     _prepRes: ToolUseCallPrepResult,
     error: Error,
   ): Promise<ToolUseCallResult> {
     const formatted = formatProviderHttpError(error);
-    // Extract enriched context attached by requestExecutor (operation name, model)
-    const context = extractErrorContext(error);
-
-    // If abort signal was triggered, this was user cancellation - never offer retry
-    const retryable = this.signal?.aborted ? false : formatted.retryable;
-
-    const fallbackResult = determineFallbackAction(
-      retryable,
-      formatted.message,
-      formatted.statusCode,
-      context,
-    );
-    return { kind: 'fallback', result: fallbackResult };
+    // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
+    if (!formatted.retryable) {
+      const { options } = this._params.services;
+      options.logger.logErrorData(
+        `Tool-use call failed (not retryable): ${formatted.message}`,
+        {
+          message: formatted.message,
+          statusCode: formatted.statusCode,
+          retryable: formatted.retryable,
+        },
+      );
+    }
+    return { kind: 'failed', message: formatted.message };
   }
 
   async post(
@@ -390,21 +450,15 @@ class ToolUseCallNode<C> extends Node<
       return FlowTransition.COMPLETE;
     }
 
-    // Handle fallback (all auto-retries exhausted)
-    if (execRes.kind === 'fallback') {
-      const transition = applyFallbackResult(
-        execRes.result,
-        retryState,
-        options.logger,
-        'Tool-use call',
-      );
-
-      // Set state flags on failure
-      if (execRes.result.outcome === 'fail') {
-        state.shouldStop = true;
-      }
-
-      return transition;
+    // Handle failure (all retries exhausted or non-retryable error)
+    if (execRes.kind === 'failed') {
+      // Record error for caller access
+      recordRetryError(retryState, {
+        message: execRes.message,
+        retryable: false, // Already exhausted retries
+      });
+      state.shouldStop = true;
+      return FlowTransition.COMPLETE;
     }
 
     // Handle success
@@ -904,32 +958,15 @@ export function createToolUseCycleFlow<C>(): Flow<
 > {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
-  // Use shared retry wait node (single source of truth)
-  // Note: RetryWaitNode accesses services via its own accessor pattern
-  const retryWaitNode = createRetryWaitNode<ToolUseCycleShared<C>>({
-    getStreamId: (_shared, params) =>
-      (params as ToolUseCycleParams<C>).services.options.context.streamId,
-    getLogger: (_shared, params) =>
-      (params as ToolUseCycleParams<C>).services.options.logger,
-    operationName: 'Tool-use call',
-  });
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
 
   // Main flow: prep → call → process → dispatch
+  // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
+  // via maxRetries, wait, and retryPrompt. No separate RetryWaitNode needed.
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
-
-  // Retry transition from call node:
-  // - AWAIT_RETRY: Go to retry wait node for manual retry
-  // Note: Auto-retry is handled internally by PocketFlow Node (maxRetries, wait)
-  callNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
-
-  // Retry wait node transitions:
-  // - MANUAL_RETRY: Loop back to call node after user triggers retry
-  // - COMPLETE: Exit flow if user cancels
-  retryWaitNode.on(FlowTransition.MANUAL_RETRY, callNode);
 
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
