@@ -1,11 +1,8 @@
-// Local file imports
-import { failLifecycle } from './lifecycle';
-
 // Type imports
-import type { AgentLifecycleState } from './types';
+import type { AgentLifecycle } from './AgentLifecycle';
 
 interface FinalizeLifecycleOptions<Phase extends string> {
-  lifecycle: AgentLifecycleState<Phase>;
+  lifecycle: AgentLifecycle<Phase>;
   runFinalize: () => Promise<void>;
   runCleanup: () => Promise<void>;
   onSuccess: () => void;
@@ -42,7 +39,7 @@ export async function finalizeLifecycle<Phase extends string>({
 
   const primaryError = errors[0];
   if (primaryError) {
-    failLifecycle(lifecycle, primaryError);
+    lifecycle.fail(primaryError);
     return;
   }
 

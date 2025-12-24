@@ -25,10 +25,8 @@ import {
   runAgentFlow,
   type AgentRunFlowOptions,
 } from '@agent/implementations/flows/common/AgentRunFlowRunner';
-import type {
-  AgentRunShared,
-  AgentLifecycleState,
-} from '@agent/implementations/flows/common/types';
+import type { AgentRunShared } from '@agent/implementations/flows/common/types';
+import type { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -223,7 +221,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     Shared extends AgentRunShared<
       BaseAgent<any>,
       any,
-      AgentLifecycleState<string>,
+      AgentLifecycle<string>,
       AgentRunHooks
     >,
   >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
