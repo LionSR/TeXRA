@@ -110,7 +110,11 @@ export interface CycleParams<TServices extends BaseCycleServices> {
 }
 
 /** Params type for response cycle nodes. */
-export type ResponseCycleParams<C = unknown> = CycleParams<ResponseCycleServices<C>>;
+export type ResponseCycleParams<C = unknown> = CycleParams<
+  ResponseCycleServices<C>
+>;
 
 /** Params type for tool-use cycle nodes. */
-export type ToolUseCycleParams<C = unknown> = CycleParams<ToolUseCycleServices<C>>;
+export type ToolUseCycleParams<C = unknown> = CycleParams<
+  ToolUseCycleServices<C>
+>;
