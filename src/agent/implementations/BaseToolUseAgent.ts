@@ -24,7 +24,7 @@ import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
-import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
+import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -158,7 +158,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public async run(): Promise<void> {
-    const lifecycle = createLifecycleState<ToolUseRunPhase>('idle');
+    const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
     try {
       await this.executeAgentRunFlow<ToolUseRunShared<C>>({

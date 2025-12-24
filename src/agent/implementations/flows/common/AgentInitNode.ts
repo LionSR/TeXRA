@@ -3,14 +3,14 @@ import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local file imports
-import { beginLifecyclePhase, failLifecycle } from './lifecycle';
-import { runNodeEffect, type NodeExecVoidResult } from './nodeExecution';
+import { type NodeExecVoidResult } from './nodeExecution';
 
 // Type imports
-import type { AgentRunHooks, AgentLifecycleState } from './types';
+import type { AgentRunHooks } from './types';
+import type { AgentLifecycle } from './AgentLifecycle';
 
 export interface AgentInitShared<
-  Lifecycle extends AgentLifecycleState<string>,
+  Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
 > {
   lifecycle: Lifecycle;
@@ -30,6 +30,15 @@ export interface AgentInitNodeConfig<Shared extends AgentInitShared<any, any>> {
 
 type AgentInitExecResult = NodeExecVoidResult;
 
+/**
+ * Prep result for AgentInitNode - extracted from shared.
+ */
+interface AgentInitPrepResult<Shared extends AgentInitShared<any, any>> {
+  hooks: Shared['hooks'];
+  shared: Shared; // Needed for beforeInitialize callback
+  lifecycle: Shared['lifecycle'];
+}
+
 export class AgentInitNode<
   Shared extends AgentInitShared<any, any>,
 > extends BaseNode<Shared> {
@@ -37,44 +46,37 @@ export class AgentInitNode<
     super();
   }
 
-  async prep(shared: Shared): Promise<Shared> {
-    beginLifecyclePhase(shared.lifecycle, this.config.phase);
-    return shared;
+  async prep(shared: Shared): Promise<AgentInitPrepResult<Shared>> {
+    // Pure extraction - no side effects
+    return { hooks: shared.hooks, shared, lifecycle: shared.lifecycle };
   }
 
-  async exec(shared: Shared): Promise<AgentInitExecResult> {
-    return runNodeEffect(async () => {
-      const runStage = await shared.hooks.start();
-      await shared.hooks.init(runStage);
+  async exec(
+    prepRes: AgentInitPrepResult<Shared>,
+  ): Promise<AgentInitExecResult> {
+    // Signal phase entry before work begins (status tracking, not flow state)
+    prepRes.lifecycle.begin(this.config.phase);
+
+    try {
+      const runStage = await prepRes.hooks.start();
+      await prepRes.hooks.init(runStage);
       if (this.config.beforeInitialize) {
-        try {
-          await this.config.beforeInitialize(shared);
-        } catch (hookError) {
-          const contextualError =
-            hookError instanceof Error
-              ? new Error(
-                  `Agent initialization failed in beforeInitialize: ${hookError.message}`,
-                  { cause: hookError },
-                )
-              : new Error(
-                  `Agent initialization failed in beforeInitialize: ${String(
-                    hookError,
-                  )}`,
-                );
-          throw contextualError;
-        }
+        await this.config.beforeInitialize(prepRes.shared);
       }
-      await shared.hooks.initializeClient();
-    });
+      await prepRes.hooks.initializeClient();
+      return {};
+    } catch (error) {
+      return { error };
+    }
   }
 
   async post(
     shared: Shared,
-    _prepRes: Shared,
+    _prepRes: AgentInitPrepResult<Shared>,
     execRes: AgentInitExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
-      failLifecycle(shared.lifecycle, execRes.error);
+      shared.lifecycle.fail(execRes.error);
       if (this.config.onFailure) {
         return this.config.onFailure(shared, execRes.error);
       }
