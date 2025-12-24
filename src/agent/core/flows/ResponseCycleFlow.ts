@@ -217,12 +217,14 @@ interface InvocationPrepResult {
 /**
  * Result type for model invocation.
  * - Success: Contains response from model
- * - Failed: When all retries (auto + manual) exhausted or non-retryable error
+ * - Failed: When all retries exhausted or non-retryable error (records lastError)
+ * - Cancelled: When user cancelled manual retry (does NOT record lastError)
  * - Skipped: When shouldStop is true
  */
 type InvocationExecResult =
   | { kind: 'success'; response: unknown; responseTime?: number }
   | { kind: 'failed'; message: string }
+  | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
 /**
@@ -244,9 +246,19 @@ class ResponseModelInvocationNode<C> extends Node<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
+  /** Tracks if user cancelled manual retry (to distinguish from actual failures) */
+  private _userCancelled = false;
+
   constructor() {
     const config = getNodeRetryConfig();
     super(config.maxRetries, config.wait);
+  }
+
+  /** Reset user-cancelled flag on clone to prevent stale state */
+  clone(): this {
+    const cloned = super.clone();
+    cloned._userCancelled = false;
+    return cloned;
   }
 
   /**
@@ -328,12 +340,13 @@ class ResponseModelInvocationNode<C> extends Node<
       return true; // Restart auto-retry loop
     }
 
-    // User cancelled or timeout
+    // User cancelled or timeout - mark as cancelled (not a failure)
+    this._userCancelled = true;
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
     bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
-    return false; // Proceed to execFallback
+    return false; // Proceed to execFallback (which will return 'cancelled')
   };
 
   async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
@@ -389,6 +402,12 @@ class ResponseModelInvocationNode<C> extends Node<
     _prepRes: InvocationPrepResult,
     error: Error,
   ): Promise<InvocationExecResult> {
+    // User cancelled manual retry - return 'cancelled' (not 'failed')
+    // This ensures lastError is NOT recorded, distinguishing cancellation from failure
+    if (this._userCancelled) {
+      return { kind: 'cancelled' };
+    }
+
     const formatted = formatProviderHttpError(error);
     // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
     if (!formatted.retryable) {
@@ -418,6 +437,15 @@ class ResponseModelInvocationNode<C> extends Node<
       options.logger.debug(
         'Model invocation skipped: shouldStop was already true',
       );
+      return FlowTransition.COMPLETE;
+    }
+
+    // Handle user cancellation (do NOT record error - distinguishes from failure)
+    if (execRes.kind === 'cancelled') {
+      // Clear any previous error to ensure userCancelled detection works
+      clearRetryError(retryState);
+      state.shouldStop = true;
+      state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
