@@ -89,7 +89,7 @@ export async function runResponseCycle<C = unknown>(
   await flow.run(shared);
 
   // Determine if the cycle failed due to an error (not user cancellation).
-  // User cancellation clears lastError in BaseRetryWaitNode, so:
+  // User cancellation in retryPrompt does not record an error, so:
   // - Error failure: shouldStop=true, lastError exists → failedWithError=true
   // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
   // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither

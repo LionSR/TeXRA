@@ -554,7 +554,7 @@ const errorContextMap = new WeakMap<object, ErrorLogContext>();
 /**
  * Enriches an error with operation context without logging.
  * The context is stored in a WeakMap and can be extracted later when the error
- * is finally logged at the boundary (e.g., in RetryState.applyFallbackResult).
+ * is finally logged at the boundary (e.g., in Node's retryPrompt or execFallback).
  *
  * This follows the "log at the boundary" principle:
  * - Middle layers enrich errors with context
@@ -577,19 +577,6 @@ export function enrichError<T>(error: T, context: ErrorLogContext): T {
     });
   }
   return error;
-}
-
-/**
- * Extracts enriched context from an error, if any was attached via enrichError().
- * Returns undefined if no context was attached.
- */
-export function extractErrorContext(
-  error: unknown,
-): ErrorLogContext | undefined {
-  if (error && typeof error === 'object') {
-    return errorContextMap.get(error);
-  }
-  return undefined;
 }
 
 /**

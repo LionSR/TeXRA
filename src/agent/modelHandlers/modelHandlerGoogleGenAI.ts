@@ -637,9 +637,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
       return result;
     } catch (error) {
-      // Error logging follows "log at the boundary" principle - the fallback handler
-      // (RetryState.applyFallbackResult) will log the error once. We only add debug
-      // diagnostics here for specific error types that need additional context.
+      // Error logging follows "log at the boundary" principle - Node's retryPrompt
+      // or execFallback will log the error once. We only add debug diagnostics here
+      // for specific error types that need additional context.
       if (
         error instanceof Error &&
         error.message?.includes('request.contents[0].parts')
