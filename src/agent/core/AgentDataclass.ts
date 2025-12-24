@@ -85,15 +85,8 @@ export const AgentSettingBaseSchema = z.strictObject({
     )
     .prefault([]),
 
-  // Use custom validator that validates via schema but preserves ToolDefinition type
-  // This bridges the gap between schema validation and TypeScript typing
-  tools: z
-    .array(
-      z.custom<ToolDefinition>(
-        (val) => ToolDefinitionSchema.safeParse(val).success,
-      ),
-    )
-    .prefault([]),
+  // ToolDefinition extends SerializableToolDefinition (schema output)
+  tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
 /** Workflow agents: only CoT/Direct types, adds workflow-specific fields. */
@@ -118,13 +111,37 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 });
 
 /**
- * Union schema - tries workflow first, then tool-use.
- * Note: z.union (not discriminatedUnion) because input may lack agentCategory.
+ * Normalize input to ensure agentCategory discriminator is present.
+ * Derives category from agentType when missing.
  */
-export const AgentSettingSchema = z.union([
-  AgentWorkflowSettingSchema,
-  AgentToolUseSettingSchema,
-]);
+const normalizeAgentSettingInput = (input: unknown): unknown => {
+  if (typeof input !== 'object' || input === null) {
+    return input;
+  }
+  const obj = input as Record<string, unknown>;
+  if (obj.agentCategory === undefined) {
+    return {
+      ...obj,
+      agentCategory:
+        obj.agentType === AgentType.ToolUse
+          ? AgentCategory.ToolUse
+          : AgentCategory.Workflow,
+    };
+  }
+  return input;
+};
+
+/**
+ * Union schema with preprocessing to normalize discriminator.
+ * Uses discriminatedUnion for O(1) lookup and better error messages.
+ */
+export const AgentSettingSchema = z.preprocess(
+  normalizeAgentSettingInput,
+  z.discriminatedUnion('agentCategory', [
+    AgentWorkflowSettingSchema,
+    AgentToolUseSettingSchema,
+  ]),
+);
 
 /** Canonical union type - derive subtypes via Extract for type safety. */
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;

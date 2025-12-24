@@ -175,7 +175,8 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
-    const sessionKindHint = this.state.getSessionKindHint(stream);
+    const { sessionCategory: sessionKindHint } =
+      this.state.getStreamHints(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
     const runId =
       runIdHint === undefined
@@ -378,7 +379,9 @@ export class ProgressEventHandler {
       this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
     }
 
-    this.state.setSessionKindHint(stream, AgentCategory.Workflow);
+    this.state.updateStreamHints(stream, {
+      sessionCategory: AgentCategory.Workflow,
+    });
 
     const currentFilter = this.state.agentTypeFilter;
     if (currentFilter !== 'all' && currentFilter !== AgentCategory.Workflow) {
