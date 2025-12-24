@@ -321,21 +321,17 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Use shared handler for common result cases
-    const handlerResult = handleInvocationResult(execRes, state, retryState, {
+    // Handle non-success cases (returns null) or get narrowed success result
+    const successRes = handleInvocationResult(execRes, state, retryState, {
       logger: options.logger,
       operationName: this.getOperationName(),
     });
 
-    if (handlerResult.action === 'complete') {
+    if (!successRes) {
       return FlowTransition.COMPLETE;
     }
 
-    // At this point we know execRes.kind === 'success' with valid response
-    // (handleInvocationResult returns 'continue' only for success with response)
-    const successRes = execRes as InvocationSuccessData & { kind: 'success' };
-
-    // Success case - apply response-specific side effects
+    // Apply success-specific side effects
     state.responseObject = successRes.response;
     state.responseTime = successRes.responseTime;
 
@@ -348,7 +344,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       });
     }
 
-    return undefined; // Continue to process node
+    return undefined;
   }
 }
 
