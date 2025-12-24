@@ -5,19 +5,25 @@
  * - Usage analytics and statistics
  * - Future rate limiting support
  * - Cost tracking per user/model
+ *
+ * Schema organization:
+ * - UsageLogMetadataSchema: Request context (agent, model, session)
+ * - UsageLogStatsSchema: Token counts and cost metrics
+ * - UsageLogEntrySchema: Full entry (metadata + stats + timestamps)
  */
 import { z } from 'zod';
 
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
-/**
- * Single usage log entry sent to the backend.
- * Contains all relevant metadata for analytics and rate limiting.
- */
-export const UsageLogEntrySchema = z.object({
-  /** Timestamp when the API call completed (ISO 8601) */
-  timestamp: z.string().datetime(),
+// =============================================================================
+// Metadata Schema - Request context
+// =============================================================================
 
+/**
+ * Metadata about the API request context.
+ * Describes what agent/model made the request and how.
+ */
+export const UsageLogMetadataSchema = z.object({
   /** Model identifier (e.g., 'claude-sonnet-4-20250514', 'gpt-4o') */
   model: z.string(),
 
@@ -33,6 +39,24 @@ export const UsageLogEntrySchema = z.object({
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput: z.boolean().optional(),
 
+  /** Whether the request used server-side API keys (relay) */
+  usedRelay: z.boolean().optional(),
+
+  /** Stream/session identifier for grouping related requests */
+  streamId: z.string().optional(),
+});
+
+export type UsageLogMetadata = z.infer<typeof UsageLogMetadataSchema>;
+
+// =============================================================================
+// Stats Schema - Usage metrics
+// =============================================================================
+
+/**
+ * Usage statistics for an API request.
+ * Contains token counts, cost, and timing metrics.
+ */
+export const UsageLogStatsSchema = z.object({
   /** Number of input tokens consumed */
   inputTokens: z.number().int().nonnegative(),
 
@@ -50,18 +74,33 @@ export const UsageLogEntrySchema = z.object({
 
   /** Tokens used for reasoning (o1, DeepSeek-R1, etc.) */
   reasoningTokens: z.number().int().nonnegative().optional(),
+});
 
-  /** Whether the request used server-side API keys (relay) */
-  usedRelay: z.boolean().optional(),
+export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
 
-  /** Stream/session identifier for grouping related requests */
-  streamId: z.string().optional(),
+// =============================================================================
+// Entry Schema - Full log entry (composed)
+// =============================================================================
+
+/**
+ * Single usage log entry sent to the backend.
+ * Composed from metadata + stats + timestamp/version fields.
+ */
+export const UsageLogEntrySchema = UsageLogMetadataSchema.merge(
+  UsageLogStatsSchema,
+).extend({
+  /** Timestamp when the API call completed (ISO 8601) */
+  timestamp: z.string().datetime(),
 
   /** Extension version for debugging */
   extensionVersion: z.string().optional(),
 });
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+
+// =============================================================================
+// Batch Schema - Transport payload
+// =============================================================================
 
 /**
  * Batch payload sent to the log-usage edge function.
@@ -76,9 +115,12 @@ export const UsageLogBatchSchema = z.object({
 
 export type UsageLogBatch = z.infer<typeof UsageLogBatchSchema>;
 
+// =============================================================================
+// Response Schema - Server response
+// =============================================================================
+
 /**
  * Response from the log-usage edge function.
- * Includes quota information for future rate limiting.
  */
 export const UsageLogResponseSchema = z.object({
   /** Whether the batch was successfully logged */
@@ -89,32 +131,6 @@ export const UsageLogResponseSchema = z.object({
 
   /** Error message if any entries failed */
   error: z.string().optional(),
-
-  /** Quota information for rate limiting (future use) */
-  quota: z
-    .object({
-      /** Daily cost limit in USD */
-      dailyLimit: z.number().optional(),
-
-      /** Cost used today in USD */
-      dailyUsed: z.number().optional(),
-
-      /** Remaining daily allowance */
-      dailyRemaining: z.number().optional(),
-
-      /** Monthly cost limit in USD */
-      monthlyLimit: z.number().optional(),
-
-      /** Cost used this month in USD */
-      monthlyUsed: z.number().optional(),
-
-      /** Whether the user is rate limited */
-      isLimited: z.boolean().optional(),
-
-      /** When rate limit resets (ISO 8601) */
-      resetsAt: z.string().datetime().optional(),
-    })
-    .optional(),
 });
 
 export type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
