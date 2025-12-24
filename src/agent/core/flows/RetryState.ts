@@ -207,7 +207,10 @@ type NodeParams = Partial<Record<string, unknown>> & {
  * }
  * ```
  */
-export abstract class RetryableInvocationNode<S, P extends NodeParams = NodeParams> extends Node<S, P> {
+export abstract class RetryableInvocationNode<
+  S,
+  P extends NodeParams = NodeParams,
+> extends Node<S, P> {
   /**
    * Tracks if user cancelled manual retry (to distinguish from actual failures).
    *
@@ -367,7 +370,9 @@ export abstract class RetryableInvocationNode<S, P extends NodeParams = NodePara
    *
    * Subclasses should call this from their execFallback implementation.
    */
-  protected getFallbackResult(error: Error): { kind: 'cancelled' } | { kind: 'failed'; message: string } {
+  protected getFallbackResult(
+    error: Error,
+  ): { kind: 'cancelled' } | { kind: 'failed'; message: string } {
     // User cancelled manual retry - return 'cancelled' (not 'failed')
     // This ensures lastError is NOT recorded, distinguishing cancellation from failure
     if (this._userCancelled) {
