@@ -519,28 +519,28 @@ The two flows use fundamentally different iteration strategies:
 
 ### 7.1 Immediate Fixes (Low Effort, High Impact)
 
-| Issue | Fix | Files |
-|-------|-----|-------|
-| FlowLink duplication | Extract to types.ts | buildRunFlow.ts, createAgentRunFlow.ts |
-| Generic constraint repetition | Create type alias | AgentRunFlowRunner.ts |
-| FinalizeNodeContext verbosity | Create type alias | createFinalizeNode.ts |
-| Inline anonymous class | Extract to named class | createFinalizeNode.ts |
+| Issue                         | Fix                    | Files                                  |
+| ----------------------------- | ---------------------- | -------------------------------------- |
+| FlowLink duplication          | Extract to types.ts    | buildRunFlow.ts, createAgentRunFlow.ts |
+| Generic constraint repetition | Create type alias      | AgentRunFlowRunner.ts                  |
+| FinalizeNodeContext verbosity | Create type alias      | createFinalizeNode.ts                  |
+| Inline anonymous class        | Extract to named class | createFinalizeNode.ts                  |
 
 ### 7.2 Structural Refactoring (Medium Effort)
 
-| Issue | Recommendation |
-|-------|----------------|
-| Iteration strategy mismatch | Refactor ToolUseCycleNode to use flow-level looping like Reflection |
-| Result type inconsistency | Standardize on NodeExecResult everywhere |
-| Error handling fragmentation | Create unified error handling utility |
-| Hook interface asymmetry | Extract flow-control hooks from ToolUseRunHooks |
+| Issue                        | Recommendation                                                      |
+| ---------------------------- | ------------------------------------------------------------------- |
+| Iteration strategy mismatch  | Refactor ToolUseCycleNode to use flow-level looping like Reflection |
+| Result type inconsistency    | Standardize on NodeExecResult everywhere                            |
+| Error handling fragmentation | Create unified error handling utility                               |
+| Hook interface asymmetry     | Extract flow-control hooks from ToolUseRunHooks                     |
 
 ### 7.3 Architectural Improvements (High Effort)
 
-| Issue | Recommendation |
-|-------|----------------|
-| Phase transition chaos | Centralize phase transitions in node boundaries |
-| State ownership confusion | Document and enforce single ownership model |
+| Issue                       | Recommendation                                    |
+| --------------------------- | ------------------------------------------------- |
+| Phase transition chaos      | Centralize phase transitions in node boundaries   |
+| State ownership confusion   | Document and enforce single ownership model       |
 | ToolUseCycleNode complexity | Decompose into multiple nodes with explicit state |
 
 ---
@@ -576,15 +576,15 @@ EFFORT                       │                       EFFORT
 
 ## Appendix: File-by-File Issue Index
 
-| File | Issues Found | Severity |
-|------|--------------|----------|
-| `AgentRunFlowRunner.ts` | Generic constraint repeated 6x | High |
-| `buildRunFlow.ts` | FlowLink duplication | High |
-| `createAgentRunFlow.ts` | FlowLink duplication | High |
-| `createFinalizeNode.ts` | Inline class, verbose types, dual factory | Medium-High |
-| `AgentInitNode.ts` | Side effects in exec() | Medium |
-| `finalizeLifecycle.ts` | Error side-channel pattern | Medium |
-| `types.ts` | Over-generic constraints | Medium |
-| `ToolUseRunFlow.ts` | Complex while loop, 4-variant union, scattered phases | High |
-| `ReflectionRunFlow.ts` | Doesn't use NodeExecResult | Medium |
-| `runStateSchemas.ts` | cycleOptions: z.unknown() | Medium |
+| File                    | Issues Found                                          | Severity    |
+| ----------------------- | ----------------------------------------------------- | ----------- |
+| `AgentRunFlowRunner.ts` | Generic constraint repeated 6x                        | High        |
+| `buildRunFlow.ts`       | FlowLink duplication                                  | High        |
+| `createAgentRunFlow.ts` | FlowLink duplication                                  | High        |
+| `createFinalizeNode.ts` | Inline class, verbose types, dual factory             | Medium-High |
+| `AgentInitNode.ts`      | Side effects in exec()                                | Medium      |
+| `finalizeLifecycle.ts`  | Error side-channel pattern                            | Medium      |
+| `types.ts`              | Over-generic constraints                              | Medium      |
+| `ToolUseRunFlow.ts`     | Complex while loop, 4-variant union, scattered phases | High        |
+| `ReflectionRunFlow.ts`  | Doesn't use NodeExecResult                            | Medium      |
+| `runStateSchemas.ts`    | cycleOptions: z.unknown()                             | Medium      |

@@ -11,6 +11,7 @@
 The agent flow refactoring has achieved significant architectural improvements by embracing PocketFlow's native patterns and eliminating over-engineered abstractions. The codebase has been transformed from a complex, factory-heavy architecture with scattered responsibilities to a clean, composable node-based system.
 
 **Key Metrics**:
+
 - **Hook methods reduced**: ToolUseRunHooks from 12+ to 5 methods (58% reduction)
 - **Files eliminated**: 6 factory/wrapper files removed
 - **Code reduction**: ~370 lines of abstraction eliminated
@@ -162,9 +163,7 @@ All node exec methods now use a consistent discriminated union pattern:
 
 ```typescript
 // Common pattern across all nodes
-type InitExecResult =
-  | { kind: 'success' }
-  | { kind: 'error'; error: unknown };
+type InitExecResult = { kind: 'success' } | { kind: 'error'; error: unknown };
 
 type NodeExecResult<T> =
   | { kind: 'success'; result: T }
@@ -179,9 +178,12 @@ type CycleExecResult =
 
 // Type-safe pattern matching in post()
 switch (execRes.kind) {
-  case 'success': return undefined; // next()
-  case 'failed': return FlowTransition.FINALIZE;
-  case 'cancelled': return FlowTransition.FINALIZE;
+  case 'success':
+    return undefined; // next()
+  case 'failed':
+    return FlowTransition.FINALIZE;
+  case 'cancelled':
+    return FlowTransition.FINALIZE;
 }
 ```
 
@@ -193,14 +195,14 @@ switch (execRes.kind) {
 
 ### 2.1 Eliminated Files
 
-| File Removed | Reason | Lines Saved |
-|-------------|---------|-------------|
-| `buildRunFlow.ts` | Inlined into flow constructors | 40 |
-| `createAgentRunFlow.ts` | Replaced with direct instantiation | 120 |
-| `AgentInitNode.ts` | Inlined into each flow | 80 |
-| `finalizeLifecycle.ts` | Merged into StandardFinalizeNode | 50 |
-| `nodeExecution.ts` | Moved to `types.ts` (23 lines) | 20 |
-| `runStateSchemas.ts` | Moved to flow files (co-located) | 60 |
+| File Removed            | Reason                             | Lines Saved |
+| ----------------------- | ---------------------------------- | ----------- |
+| `buildRunFlow.ts`       | Inlined into flow constructors     | 40          |
+| `createAgentRunFlow.ts` | Replaced with direct instantiation | 120         |
+| `AgentInitNode.ts`      | Inlined into each flow             | 80          |
+| `finalizeLifecycle.ts`  | Merged into StandardFinalizeNode   | 50          |
+| `nodeExecution.ts`      | Moved to `types.ts` (23 lines)     | 20          |
+| `runStateSchemas.ts`    | Moved to flow files (co-located)   | 60          |
 
 **Total**: ~370 lines of intermediate abstraction eliminated.
 
@@ -395,16 +397,16 @@ Both flows follow the same clean pattern:
 
 ### 4.2 File Count and Complexity
 
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| **Total Flow Files** | 13 | 7 | -46% |
-| **Common Infrastructure** | 11 files | 5 files | -55% |
-| **ToolUseRunFlow Lines** | 371 | 540 | +169 (self-contained) |
-| **ReflectionRunFlow Lines** | 206 | 288 | +82 (self-contained) |
-| **Factory Files** | 4 | 0 | -100% |
-| **Generic Constraint Copies** | 6 | 1 | -83% |
-| **FlowLink Definitions** | 2 | 0 (removed) | N/A |
-| **Result Type Patterns** | 3 | 1 | -67% |
+| Metric                        | Before   | After       | Change                |
+| ----------------------------- | -------- | ----------- | --------------------- |
+| **Total Flow Files**          | 13       | 7           | -46%                  |
+| **Common Infrastructure**     | 11 files | 5 files     | -55%                  |
+| **ToolUseRunFlow Lines**      | 371      | 540         | +169 (self-contained) |
+| **ReflectionRunFlow Lines**   | 206      | 288         | +82 (self-contained)  |
+| **Factory Files**             | 4        | 0           | -100%                 |
+| **Generic Constraint Copies** | 6        | 1           | -83%                  |
+| **FlowLink Definitions**      | 2        | 0 (removed) | N/A                   |
+| **Result Type Patterns**      | 3        | 1           | -67%                  |
 
 **Analysis**: Line count increased in flow files because they're now self-contained (include init nodes, schemas, finalize nodes). Overall project complexity decreased due to elimination of intermediate abstractions.
 
@@ -499,6 +501,7 @@ AFTER: Single PocketFlow native pattern
 **Location**: `/home/user/TeXRA/src/agent/implementations/BaseToolUseAgent.ts:61, 176, 196, 313`
 
 **Issue**: BaseToolUseAgent maintains a dual-reference pattern where state is both:
+
 1. Owned by the flow (in `ToolUseRunShared.state`)
 2. Referenced by the agent (in `this.activeState`)
 
@@ -542,6 +545,7 @@ private getActiveState(): ToolUseRunState<C> {
 ```
 
 **Why This Exists**:
+
 - `prepareInitialState()` needs to access and mutate the state
 - The state is created by the flow runner, not by the agent
 - Hook methods don't receive `shared` as a parameter (they're called from within nodes)
@@ -571,11 +575,13 @@ private getActiveState(): ToolUseRunState<C> {
 ```
 
 **Analysis**: This is an **acceptable pattern** given the architectural constraints. The dual reference exists because:
+
 1. The flow owns the state (it's in `shared.state`)
 2. Hook methods need access to state but don't receive `shared` as parameter
 3. The pattern is safely encapsulated (private field, guarded getter, try/finally cleanup)
 
 **Alternative Approaches**:
+
 1. **Pass shared to hooks**: Change hook signature to receive shared
    - Pro: Eliminates dual reference
    - Con: Breaks hook interface contract, requires updating all hooks
@@ -638,16 +644,19 @@ async post(shared, _prepRes, execRes) {
 ```
 
 **Problem**: State is updated in two places:
+
 1. Inside `prepareInitialState()` hook (via `this.getActiveState()`)
 2. In `PrepareNode.post()` (via `shared.state`)
 
 **Why This Happens**:
+
 - `prepareInitialState()` was originally designed to be pure (return values)
 - But it also needs to initialize `sessionLifecycle.setStore(store)`
 - The hook can't access `shared`, so it uses `this.activeState` instead
 - PrepareNode doesn't know the hook already mutated state, so it sets state from return values
 
 **Impact**:
+
 - **Correctness**: Not broken (both updates set the same values)
 - **Maintainability**: Confusing - unclear who owns state updates
 - **Efficiency**: Minor - unnecessary array spread operations
@@ -726,6 +735,7 @@ async post(shared, _prepRes, execRes) {
 ```
 
 **Analysis**: These different patterns are **correct for their respective use cases**:
+
 - **ToolUse**: Interactive session with follow-ups → needs persistent store across cycles
 - **Reflection**: Batch rounds → fresh store per round for isolation
 
@@ -762,6 +772,7 @@ shared.lifecycle.begin('cycle');
 ### 5.5 Unused Exports in common/index.ts
 
 **Current exports**:
+
 ```typescript
 export * from './AgentLifecycle';
 export * from './AgentRunFlowRunner';
@@ -772,6 +783,7 @@ export * from './types';
 **Issue**: The barrel export might re-export types that aren't used outside flows.
 
 **Investigation needed**:
+
 1. Check what's actually imported from `@agent/implementations/flows/common`
 2. Consider whether `types.ts` should be internal-only
 
@@ -788,11 +800,13 @@ export * from './types';
 **Goal**: Eliminate dual state update pattern
 
 **Changes**:
+
 1. Make `prepareInitialState()` return values without mutating `activeState`
 2. Move all state mutations to `PrepareNode.post()`
 3. Create `agent.initializeSession(store)` method for agent-specific setup
 
 **Diff**:
+
 ```typescript
 // BaseToolUseAgent.ts
 public async prepareInitialState(): Promise<PrepareResult> {
@@ -862,6 +876,7 @@ shared.lifecycle.begin('cycle');
 **Goal**: Add comprehensive documentation to `BaseToolUseAgent.activeState`
 
 **Changes**:
+
 ```typescript
 /**
  * Reference to the current run state during flow execution.
@@ -891,6 +906,7 @@ private activeState: ToolUseRunState<C> | null = null;
 **Goal**: Ensure barrel exports only include truly shared infrastructure
 
 **Changes**:
+
 1. Grep for imports from `@agent/implementations/flows/common`
 2. Identify which types/functions are only used within flows
 3. Consider making internal types/functions non-exported
@@ -908,6 +924,7 @@ private activeState: ToolUseRunState<C> | null = null;
 **Condition**: Only if a third agent type (beyond ToolUse/Reflection) needs similar state access
 
 **Approach**:
+
 ```typescript
 abstract class BaseStatefulAgent<State> extends BaseAgent {
   private activeState: State | null = null;
@@ -942,12 +959,14 @@ class BaseToolUseAgent extends BaseStatefulAgent<ToolUseRunState> {
 **Goal**: Explore whether ToolUse and Reflection could share more hook patterns
 
 **Current state**:
+
 - Reflection: 1 hook (resetPromptBuilder)
 - ToolUse: 5 hooks (prepareState, buildCycleOptions, runCycle, persistCheckpoint, logFinalizeWarning?)
 
 **Question**: Could these be unified under a common interface?
 
 **Analysis needed**:
+
 1. What are the commonalities?
 2. What are the essential differences?
 3. Would a common interface add value or just add complexity?
@@ -969,6 +988,7 @@ The agent flow refactoring has successfully transformed the codebase from factor
 5. **Improved testability** - Each node is focused and independently testable
 
 **Remaining work** is minimal and well-understood:
+
 - **High priority**: Refactor `prepareInitialState()` to be pure (1-2 hours)
 - **Medium priority**: Documentation improvements (2 hours)
 - **Low priority**: Optional enhancements for future extensibility
@@ -995,4 +1015,3 @@ cec6550 refactor(flows): use PocketFlow's native Node + execFallback pattern
 ```
 
 **Pattern**: Incremental refactoring with focused, single-purpose commits. Each commit maintained test coverage and backward compatibility.
-
