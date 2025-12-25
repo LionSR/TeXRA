@@ -267,7 +267,7 @@ export async function sendFollowUp(
 export async function resumeFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   followUp?: string,
-): Promise<{ success: boolean; lostFollowUps?: number }> {
+): Promise<import('./ToolUseSessionPersistence').ResumeAgentResult> {
   const { ToolUseSessionPersistence } =
     await import('./ToolUseSessionPersistence');
   return ToolUseSessionPersistence.resumeFromSnapshot(snapshot, followUp);
