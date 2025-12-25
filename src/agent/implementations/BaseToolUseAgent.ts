@@ -16,11 +16,10 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import {
   createToolUseRunFlow,
   type ToolUseRunShared,
-  type ToolUseRunState,
   type ToolUseRunPhase,
+  type ToolUseRunHooks,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 // Type imports
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -58,7 +57,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
-  private activeState: ToolUseRunState<C> | null = null;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -87,6 +85,26 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   protected override unregisterRunningAgent(streamTabId: StreamTabId): void {
     unregisterToolUseAgent(streamTabId);
+  }
+
+  // =========================================================================
+  // Lifecycle Overrides for Tool-Use Sessions
+  // Tool-use agents have custom lifecycle: reuse stages, custom init, cleanup
+  // =========================================================================
+
+  /**
+   * Tool-use agents reuse existing stages and don't create new ones during init.
+   */
+  public override async startAndInitRun(): Promise<void> {
+    await this.init(undefined, { createStage: false });
+  }
+
+  /**
+   * Tool-use cleanup also disposes the session lifecycle.
+   */
+  public override cleanupRun(): void {
+    super.cleanupRun();
+    this.sessionLifecycle.dispose();
   }
 
   private getTools(): ToolDefinition[] {
@@ -142,12 +160,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]> {
     this.logger.userMessage(followUp);
-    const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
+    // Pure: compute and return, let flow update state
+    return await this.modelHandler.createUserFollowUpMessages(
       messages,
       followUp,
     );
-    this.getActiveState().conversation = [...updatedMessages];
-    return this.getActiveState().conversation;
   }
 
   public override interrupt(): void {
@@ -160,65 +177,43 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
-    try {
-      await this.executeAgentRunFlow<ToolUseRunShared<C>>({
-        lifecycle,
-        hookOverrides: {
-          start: async () => undefined,
-        },
-        createState: () => {
-          const state: ToolUseRunState<C> = {
-            conversation: [],
-            cycleOptions: null,
-            shouldSkipCycle: false,
-            store: null,
-            runState: new AgentRunState(),
-          };
-          this.activeState = state;
-          return state;
-        },
-        createFlow: () => createToolUseRunFlow<C>(),
-        extendHooks: (baseHooks: AgentRunHooks) => ({
-          ...baseHooks,
-          init: (runStage) => this.init(runStage, { createStage: false }),
-          prepareState: () => this.prepareInitialState(),
-          buildCycleOptions: (store) => this.createCycleOptions(store),
-          runCycle: (options, messages, store) =>
-            runToolUseCycle({ options, messages, store }),
-          checkInterruption: () => this.checkInterruption(),
-          hasQueuedFollowUp: () => this.hasQueuedFollowUp(),
-          enterWaitingState: () => this.enterWaitingState(),
-          clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-          waitForFollowUp: () => this.waitForFollowUp(),
-          markRunning: () => this.markRunning(),
-          applyFollowUp: (followUp, messages) =>
-            this.applyFollowUpMessage(followUp, messages),
-          persistCheckpoint: (messages, store) =>
-            this.persistCheckpoint(messages, store),
-          logFinalizeWarning: (message, error) =>
-            this.logger.warn(message, { data: error }),
-          cleanup: async () => {
-            await baseHooks.cleanup();
-            this.sessionLifecycle.dispose();
-          },
-        }),
-      });
-    } finally {
-      this.activeState = null;
-    }
+    // Flow-specific hooks only - lifecycle is on the agent (IFlowAgent)
+    const hooks: ToolUseRunHooks<C> = {
+      prepareState: () => this.prepareInitialState(),
+      buildCycleOptions: (store) => this.createCycleOptions(store),
+      runCycle: (options, messages, store) =>
+        runToolUseCycle({ options, messages, store }),
+      persistCheckpoint: (messages, store) =>
+        this.persistCheckpoint(messages, store),
+    };
+
+    await this.executeAgentRunFlow<ToolUseRunShared<C>>({
+      lifecycle,
+      hooks,
+      createState: () => ({
+        conversation: [],
+        cycleOptions: null,
+        shouldSkipCycle: false,
+        store: null,
+        runState: new AgentRunState(),
+      }),
+      createFlow: () => createToolUseRunFlow<C>(),
+    });
   }
 
   /**
    * Prepares the initial state for the tool-use session.
    * Handles both new sessions and resumed sessions from snapshots.
-   * Parallel to beginRound() + prepare methods in BaseReflectionAgent.
+   *
+   * Pure method: Returns data for the flow to update state.
+   * Only side effect: Sets sessionLifecycle store (necessary for persistence).
    */
   public async prepareInitialState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
+    runState: AgentRunState;
   }> {
-    const state = this.getActiveState();
     if (this.resumeSnapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
       const snapshot = this.resumeSnapshot;
@@ -230,15 +225,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         onRoundFinalized: this.getUsageRecorder('tool-use'),
       });
 
-      state.conversation = [...messages];
-      state.store = store;
-      state.runState = store.run;
-      state.shouldSkipCycle = true;
-
+      // Side effect: sessionLifecycle needs store for persistence
       this.sessionLifecycle.setStore(store);
 
-      return { messages, store, shouldSkipCycle: true };
+      return {
+        messages,
+        store,
+        shouldSkipCycle: true,
+        runState: store.run, // Resumed runState from snapshot
+      };
     }
+
+    // Create a fresh run state for new sessions
+    const currentRunState = new AgentRunState();
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
@@ -257,20 +256,22 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     );
 
     const store = createSharedStore({
-      roundIndex: state.runState.totalRounds,
-      runState: state.runState,
+      roundIndex: currentRunState.totalRounds,
+      runState: currentRunState,
       workspaceState: AgentWorkspaceState.create(),
       userChannels: this.getUserVarChannels(),
       onRoundFinalized: this.getUsageRecorder('tool-use'),
     });
 
-    state.conversation = [...messages];
-    state.store = store;
-    state.shouldSkipCycle = false;
-
+    // Side effect: sessionLifecycle needs store for persistence
     this.sessionLifecycle.setStore(store);
 
-    return { messages, store, shouldSkipCycle: false };
+    return {
+      messages,
+      store,
+      shouldSkipCycle: false,
+      runState: currentRunState, // Same runState, store shares it
+    };
   }
 
   /**
@@ -299,10 +300,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async enterWaitingState(): Promise<void> {
-    await this.sessionLifecycle.enterWaitingState(
-      this.getActiveState().conversation,
-    );
+  public async enterWaitingState(
+    conversation: ProviderMessage[],
+  ): Promise<void> {
+    await this.sessionLifecycle.enterWaitingState(conversation);
   }
 
   public async markRunning(): Promise<void> {
@@ -318,12 +319,5 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     _store: AgentSharedStore,
   ): Promise<void> {
     await this.sessionLifecycle.persistCheckpoint(messages);
-  }
-
-  private getActiveState(): ToolUseRunState<C> {
-    if (!this.activeState) {
-      throw new Error('Tool-use run state is not initialized.');
-    }
-    return this.activeState;
   }
 }

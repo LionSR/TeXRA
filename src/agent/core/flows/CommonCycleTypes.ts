@@ -62,11 +62,11 @@ export interface CycleDebugFileOptions {
 
 /**
  * Result type for nodes that can be skipped based on flow state.
- * Use this when a node might not execute due to prior failures or conditions.
+ * Uses 'kind' discriminant for consistency with InvocationResult.
  */
 export type SkippableNodeResult<T> =
-  | { skipped: true }
-  | { skipped: false; value: T };
+  | { kind: 'skipped' }
+  | { kind: 'success'; value: T };
 
 /**
  * Generic reset function for cycle states.
@@ -139,4 +139,35 @@ export interface BaseInvocationSuccessData {
   response: unknown;
   /** Time taken for the response in seconds */
   responseTime?: number;
+}
+
+// ============================================================================
+// Debug Context Factory
+// ============================================================================
+
+/**
+ * Creates a debug context for cycle operations.
+ *
+ * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
+ * to avoid circular dependency issues.
+ */
+export function createDebugContext(
+  options: CycleDebugContext,
+): CycleDebugContext {
+  return { ...options };
+}
+
+/**
+ * Creates debug file options for a cycle.
+ */
+export function createDebugFileOptions(
+  roundIndex: number,
+  baseName: string,
+  outputFile?: string,
+): CycleDebugFileOptions {
+  return {
+    continuationCount: roundIndex,
+    baseName,
+    outputFile,
+  };
 }

@@ -2,9 +2,9 @@
 import * as path from 'path';
 
 // Local imports - core flow primitives
+import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 // Internal imports
-import { isRemoteAgent } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
@@ -15,6 +15,8 @@ import {
   CycleDebugContext,
   CycleDebugFileOptions,
   SkippableNodeResult,
+  createDebugContext,
+  createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -50,12 +52,14 @@ import type {
   ResponseCycleServices,
 } from './CycleServices';
 
-export interface ResponseCycleInputState {
+/** Input state for response cycles. */
+interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation: AgentFileLocation;
 }
 
-export interface ResponseCycleRuntimeState extends BaseCycleState {
+/** Runtime state for response cycles. */
+interface ResponseCycleRuntimeState extends BaseCycleState {
   /**
    * Whether the last cycle ended normally (model said end_turn).
    *
@@ -100,8 +104,7 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export type ResponseCycleShared<_C = unknown> =
-  BaseCycleShared<ResponseCycleState>;
+export type ResponseCycleShared = BaseCycleShared<ResponseCycleState>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -115,10 +118,10 @@ export type ResponseCycleShared<_C = unknown> =
  * Services accessed via `_params.services`: options, store
  */
 class ResponsePrepNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<{
+  async prep(shared: ResponseCycleShared): Promise<{
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
@@ -138,20 +141,20 @@ class ResponsePrepNode<C> extends BaseNode<
 
     const debugContext: CycleDebugContext | undefined = interrupted
       ? undefined
-      : {
+      : createDebugContext({
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
           isRemote: isRemoteAgent(agentConfig.agent),
-        };
+        });
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
       ? undefined
-      : {
-          continuationCount: store.round.continuationCount,
-          // outputLocation is always AgentFileLocation (workspace or runStorage, never external)
-          outputFile: state.outputLocation.relativePath,
-        };
+      : createDebugFileOptions(
+          store.round.continuationCount,
+          'response',
+          state.outputLocation.relativePath,
+        );
 
     return {
       interrupted,
@@ -164,7 +167,7 @@ class ResponsePrepNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -212,15 +215,9 @@ interface InvocationPrepResult extends BaseInvocationPrepResult {
 }
 
 /**
- * Success data for model invocation.
- * Uses base type directly (no additional fields needed).
- */
-type InvocationSuccessData = BaseInvocationSuccessData;
-
-/**
  * Result type for model invocation (uses shared InvocationResult).
  */
-type InvocationExecResult = InvocationResult<InvocationSuccessData>;
+type InvocationExecResult = InvocationResult<BaseInvocationSuccessData>;
 
 /**
  * Handles model invocation with PocketFlow's built-in retry.
@@ -238,7 +235,7 @@ type InvocationExecResult = InvocationResult<InvocationSuccessData>;
  * Services accessed via `_params.services`: options
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
   protected getOperationName(): string {
@@ -253,7 +250,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ResponseCycleShared<C>): Promise<InvocationPrepResult> {
+  async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -294,9 +291,9 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
             : undefined,
         });
 
-        const elapsed = (Date.now() - start) / 1000;
+        const elapsedMs = Date.now() - start;
 
-        return { response: modelResponse, responseTime: elapsed };
+        return { response: modelResponse, responseTime: elapsedMs };
       });
 
       return { kind: 'success', response, responseTime };
@@ -319,7 +316,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
@@ -396,7 +393,8 @@ type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
  * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ContinuationPrepResult {
-  shouldStop: boolean;
+  shouldSkip: boolean;
+  interrupted: boolean;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
   messages: ProviderMessage[];
@@ -420,10 +418,10 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * Services accessed via `_params.services`: options, store
  */
 class ResponseProcessNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ProcessPrepResult> {
+  async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { store } = this._params.services;
     const { state } = shared;
     return {
@@ -443,7 +441,7 @@ class ResponseProcessNode<C> extends BaseNode<
     const { options, store } = this._params.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
-      return { skipped: true };
+      return { kind: 'skipped' };
     }
 
     const stage = await options.logger.stage('Process response', {
@@ -546,7 +544,7 @@ class ResponseProcessNode<C> extends BaseNode<
       }
 
       return {
-        skipped: false,
+        kind: 'success',
         value: {
           stopReason,
           newResponse,
@@ -567,14 +565,14 @@ class ResponseProcessNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       state.endTurn = false;
       if (!state.roundFinalized) {
         state.roundFinalized = true;
@@ -710,81 +708,89 @@ class ResponseProcessNode<C> extends BaseNode<
  * Services accessed via `_params.services`: options, store
  */
 class ResponseContinuationNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ContinuationPrepResult> {
+  /**
+   * Extract data and check interruption.
+   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
+   */
+  async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
+    const { options } = this._params.services;
     const { state } = shared;
+
+    // Check skip conditions in prep
+    const shouldSkip =
+      state.shouldStop || !state.stopReason || !state.processedResponse;
+
+    // Check interruption only if not already skipping (avoid unnecessary I/O)
+    const interrupted =
+      !shouldSkip && Boolean(await options.checkInterruption());
+
     return {
-      shouldStop: state.shouldStop,
+      shouldSkip,
+      interrupted,
       stopReason: state.stopReason,
       processedResponse: state.processedResponse,
       messages: state.messages,
     };
   }
 
+  /**
+   * Evaluate continuation conditions.
+   * PocketFlow compliance: Pure computation, no side effects.
+   */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
     const { options, store } = this._params.services;
 
-    if (
-      prepRes.shouldStop ||
-      !prepRes.stopReason ||
-      !prepRes.processedResponse
-    ) {
-      return { skipped: true };
+    if (prepRes.shouldSkip) {
+      return { kind: 'skipped' };
     }
 
-    const stopReason = prepRes.stopReason;
-    const processedResponse = prepRes.processedResponse;
+    if (prepRes.interrupted) {
+      return {
+        kind: 'success',
+        value: {
+          shouldEndTurn: false,
+          shouldStop: true,
+          shouldContinue: false,
+        },
+      };
+    }
 
-    const stage = await options.logger.stage('Continuation decision', {
-      skip: true,
-    });
+    const stopReason = prepRes.stopReason!;
+    const processedResponse = prepRes.processedResponse!;
 
-    return stage.run(async () => {
-      const interrupted = Boolean(await options.checkInterruption());
-      if (interrupted) {
-        return {
-          skipped: false,
-          value: {
-            shouldEndTurn: false,
-            shouldStop: true,
-            shouldContinue: false,
-          },
-        };
-      }
-
-      const { endTurn: shouldEndTurn, shouldStop } =
-        options.modelHandler.checkStopConditions(
-          stopReason,
-          processedResponse,
-          store.round,
-          store.run,
-          options.agentSetting,
-        );
-
-      const shouldContinue = options.modelHandler.shouldContinue(
+    const { endTurn: shouldEndTurn, shouldStop } =
+      options.modelHandler.checkStopConditions(
         stopReason,
         processedResponse,
+        store.round,
+        store.run,
         options.agentSetting,
       );
 
-      return {
-        skipped: false,
-        value: { shouldEndTurn, shouldStop, shouldContinue },
-      };
-    });
+    const shouldContinue = options.modelHandler.shouldContinue(
+      stopReason,
+      processedResponse,
+      options.agentSetting,
+    );
+
+    return {
+      kind: 'success',
+      value: { shouldEndTurn, shouldStop, shouldContinue },
+    };
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
       if (!state.roundFinalized) {
@@ -872,7 +878,7 @@ class ResponseContinuationNode<C> extends BaseNode<
  * ```
  */
 export function createResponseCycleFlow<C>(): Flow<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
@@ -890,5 +896,5 @@ export function createResponseCycleFlow<C>(): Flow<
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared<C>, ResponseCycleParams<C>>(prepNode);
+  return new Flow<ResponseCycleShared, ResponseCycleParams<C>>(prepNode);
 }

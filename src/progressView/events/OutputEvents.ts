@@ -3,9 +3,9 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
+import { toDisposables, type ProgressEventBusLike } from './types';
 import type { ErrorBoundaryFn } from './errorHandling';
 import type { BaseEventShared, StatefulEventModule } from './types';
-import { toDisposables, type ProgressEventBusLike } from './types';
 
 /**
  * OutputEvents module interface.
