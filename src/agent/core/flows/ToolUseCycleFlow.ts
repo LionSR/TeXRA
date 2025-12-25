@@ -231,12 +231,6 @@ class ToolUsePrepNode<C> extends BaseNode<
 }
 
 /**
- * Data extracted by prep() for tool-use call.
- * Uses base type directly (no additional fields needed).
- */
-type ToolUseCallPrepResult = BaseInvocationPrepResult;
-
-/**
  * Success data for tool-use call.
  * Extends base with debug context for message saving.
  */
@@ -281,7 +275,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCallPrepResult> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<BaseInvocationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -289,7 +283,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const { options, store } = this._params.services;
 
     if (prepRes.shouldStop) {
@@ -344,7 +338,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Uses base class getFallbackResult() for shared logic.
    */
   async execFallback(
-    _prepRes: ToolUseCallPrepResult,
+    _prepRes: BaseInvocationPrepResult,
     error: Error,
   ): Promise<ToolUseCallResult> {
     return this.getFallbackResult(error);
@@ -352,7 +346,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
   async post(
     shared: ToolUseCycleShared<C>,
-    _prepRes: ToolUseCallPrepResult,
+    _prepRes: BaseInvocationPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
