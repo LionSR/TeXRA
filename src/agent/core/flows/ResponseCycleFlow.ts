@@ -214,15 +214,9 @@ interface InvocationPrepResult extends BaseInvocationPrepResult {
 }
 
 /**
- * Success data for model invocation.
- * Uses base type directly (no additional fields needed).
- */
-type InvocationSuccessData = BaseInvocationSuccessData;
-
-/**
  * Result type for model invocation (uses shared InvocationResult).
  */
-type InvocationExecResult = InvocationResult<InvocationSuccessData>;
+type InvocationExecResult = InvocationResult<BaseInvocationSuccessData>;
 
 /**
  * Handles model invocation with PocketFlow's built-in retry.
