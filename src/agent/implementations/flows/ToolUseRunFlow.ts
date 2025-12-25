@@ -1,12 +1,7 @@
-import { z } from 'zod';
-
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  AgentSharedStore,
-  AgentSharedStoreSnapshotSchema,
-} from '@agent/core/AgentSharedStore';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
@@ -17,30 +12,19 @@ import {
   StandardFinalizeNode,
   StandardInitNode,
   AgentLifecycle,
-  BaseRunStateSchema,
   type AgentRunShared,
   type FinalizeContext,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
-// Serialization Schema
+// Phase Definitions
 // ============================================================================
-
-/** Tool-use agent run state schema for serialization. */
-export const ToolUseRunStateSchema = BaseRunStateSchema.extend({
-  // Runtime-only field, not serializable (contains functions)
-  cycleOptions: z.unknown().nullable(),
-  shouldSkipCycle: z.boolean(),
-  store: AgentSharedStoreSnapshotSchema.nullable(),
-});
-
-export type ToolUseRunStateSnapshot = z.infer<typeof ToolUseRunStateSchema>;
 
 /**
  * Tool use run phase - single source of truth for tool-use agent flow phases.
  */
-export const TOOL_USE_RUN_PHASE = {
+const TOOL_USE_RUN_PHASE = {
   IDLE: 'idle',
   INIT: 'init',
   PREPARE: 'prepare',
@@ -48,15 +32,8 @@ export const TOOL_USE_RUN_PHASE = {
   FINALIZE: 'finalize',
 } as const;
 
-export const ToolUseRunPhaseSchema = z.enum([
-  TOOL_USE_RUN_PHASE.IDLE,
-  TOOL_USE_RUN_PHASE.INIT,
-  TOOL_USE_RUN_PHASE.PREPARE,
-  TOOL_USE_RUN_PHASE.CYCLE,
-  TOOL_USE_RUN_PHASE.FINALIZE,
-]);
-
-export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
+export type ToolUseRunPhase =
+  (typeof TOOL_USE_RUN_PHASE)[keyof typeof TOOL_USE_RUN_PHASE];
 
 export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
@@ -94,10 +71,6 @@ export interface ToolUseRunHooks<C = unknown> {
 
 /**
  * Runtime state for tool-use agent runs.
- *
- * Schema alignment: This interface corresponds to {@link ToolUseRunStateSchema}
- * for serialization. The runtime uses class instances (AgentRunState, AgentSharedStore)
- * while the schema uses snapshot representations for JSON compatibility.
  */
 export interface ToolUseRunState<C = unknown> {
   conversation: ProviderMessage[];
