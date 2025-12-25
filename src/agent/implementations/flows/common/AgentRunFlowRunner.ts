@@ -17,8 +17,7 @@ import { z } from 'zod';
 
 // Type imports
 import type { Flow } from '@agent/node';
-import type { AgentRunHooks } from '@agent/core/IAgent';
-import type { BaseAgent } from '@agent/implementations/BaseAgent';
+import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentLifecycle } from './AgentLifecycle';
@@ -76,9 +75,12 @@ export const BaseRunStateSchema = z.object({
  * - state: Flow-specific mutable runtime state
  * - lifecycle: Phase and status tracking
  * - hooks: Callbacks for lifecycle events
+ *
+ * The agent type constraint uses IFlowAgent to enable proper decoupling
+ * from concrete agent implementations.
  */
 export interface AgentRunShared<
-  A extends BaseAgent<any>,
+  A extends IFlowAgent,
   State,
   Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
@@ -94,7 +96,7 @@ export interface AgentRunShared<
  * Internal only - not exported from common/index.ts.
  */
 type BaseFlowShared = AgentRunShared<
-  BaseAgent<any>,
+  IFlowAgent,
   any,
   AgentLifecycle<string>,
   AgentRunHooks
