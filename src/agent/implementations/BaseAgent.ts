@@ -262,11 +262,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   // that flows depend on. They have identical implementations across all agents.
   // =========================================================================
 
-  public async startRun(): Promise<AgentLogStage | undefined> {
-    return this.startRunStage();
-  }
-
-  public async initRun(runStage: AgentLogStage | undefined): Promise<void> {
+  public async startAndInitRun(): Promise<void> {
+    const runStage = await this.startRunStage();
     await this.init(runStage);
   }
 
