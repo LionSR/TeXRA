@@ -261,14 +261,3 @@ export async function sendFollowUp(
   );
 }
 
-/**
- * Resume an agent from a persisted snapshot.
- */
-export async function resumeFromSnapshot(
-  snapshot: ToolUseSessionSnapshot,
-  followUp?: string,
-): Promise<import('./ToolUseSessionPersistence').ResumeAgentResult> {
-  const { ToolUseSessionPersistence } =
-    await import('./ToolUseSessionPersistence');
-  return ToolUseSessionPersistence.resumeFromSnapshot(snapshot, followUp);
-}
