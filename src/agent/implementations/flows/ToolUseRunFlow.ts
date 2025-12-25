@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { BaseNode, Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   AgentSharedStore,
@@ -231,15 +231,22 @@ function assertPreparedState<C>(
 // Node Implementations
 // ============================================================================
 
+/** Result type for init/prepare nodes. */
+type InitExecResult = { kind: 'success' } | { kind: 'error'; error: unknown };
+
 /**
  * Initializes the tool-use agent run.
  *
- * Follows PocketFlow pattern:
- * - prep(): Extract hooks
- * - exec(): Run initialization sequence (start → init → initializeClient)
- * - post(): Set phase, return undefined for happy path or FINALIZE on error
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Convert errors to result type for post()
+ * - Node with maxRetries=1: No retry, just fallback on error
  */
-class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
+class ToolUseInitNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(shared: ToolUseRunShared<C>) {
     return { hooks: shared.hooks, lifecycle: shared.lifecycle };
   }
@@ -247,23 +254,26 @@ class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async exec(prepRes: {
     hooks: ToolUseRunHooks<C>;
     lifecycle: ToolUseRunLifecycle;
-  }): Promise<{ kind: 'success' } | { kind: 'error'; error: unknown }> {
+  }): Promise<{ kind: 'success' }> {
     prepRes.lifecycle.begin('init');
+    // Let errors throw - Node._exec catches them and calls execFallback
+    const runStage = await prepRes.hooks.start();
+    await prepRes.hooks.init(runStage);
+    await prepRes.hooks.initializeClient();
+    return { kind: 'success' };
+  }
 
-    try {
-      const runStage = await prepRes.hooks.start();
-      await prepRes.hooks.init(runStage);
-      await prepRes.hooks.initializeClient();
-      return { kind: 'success' };
-    } catch (error) {
-      return { kind: 'error', error };
-    }
+  async execFallback(
+    _prepRes: unknown,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    return { kind: 'error', error };
   }
 
   async post(
     shared: ToolUseRunShared<C>,
     _prepRes: unknown,
-    execRes: { kind: 'success' } | { kind: 'error'; error: unknown },
+    execRes: InitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
@@ -274,7 +284,18 @@ class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 }
 
-class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
+/**
+ * Prepares state for tool-use cycle.
+ *
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Convert errors to result type for post()
+ */
+class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(
     shared: ToolUseRunShared<C>,
   ): Promise<ToolUsePrepareNodePrepResult<C>> {
@@ -284,20 +305,24 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async exec(
     prepRes: ToolUsePrepareNodePrepResult<C>,
-  ): Promise<ToolUsePrepareExecResult<C>> {
-    try {
-      const prepared = await prepRes.hooks.prepareState();
-      const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
-      return {
-        kind: 'success',
-        result: {
-          ...prepared,
-          cycleOptions,
-        } satisfies ToolUsePrepareResult<C>,
-      };
-    } catch (error) {
-      return { kind: 'error', error };
-    }
+  ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
+    // Let errors throw - Node._exec catches them and calls execFallback
+    const prepared = await prepRes.hooks.prepareState();
+    const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
+    return {
+      kind: 'success',
+      result: {
+        ...prepared,
+        cycleOptions,
+      } satisfies ToolUsePrepareResult<C>,
+    };
+  }
+
+  async execFallback(
+    _prepRes: unknown,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    return { kind: 'error', error };
   }
 
   async post(
@@ -305,8 +330,6 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     _prepRes: ToolUsePrepareNodePrepResult<C>,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
-    // Note: 'prepare' phase already set by init.onSuccess before entering this node
-
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
       return FlowTransition.FINALIZE;
