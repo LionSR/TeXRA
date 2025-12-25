@@ -11,6 +11,7 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -28,7 +29,6 @@ import { getConfig } from '@utils/config';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE } from '@utils/config';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import {
   resolveBaseUrl,
   shouldUseOpenRouter,

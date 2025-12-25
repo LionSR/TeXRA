@@ -19,9 +19,9 @@ import { z } from 'zod';
 import type { Flow } from '@agent/node';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
-import type { AgentLifecycle } from './AgentLifecycle';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import type { AgentLifecycle } from './AgentLifecycle';
 
 // ============================================================================
 // Result Types - Shared discriminated unions for node exec methods

@@ -286,7 +286,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async enterWaitingState(conversation: ProviderMessage[]): Promise<void> {
+  public async enterWaitingState(
+    conversation: ProviderMessage[],
+  ): Promise<void> {
     await this.sessionLifecycle.enterWaitingState(conversation);
   }
 

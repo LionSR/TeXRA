@@ -127,7 +127,9 @@ const initNode = new StandardInitNode<ToolUseRunShared>('prepare');
 
 // Reflection: extend with beforeStart override
 class ReflectionInitNode extends StandardInitNode<ReflectionRunShared> {
-  constructor() { super('rounds'); }
+  constructor() {
+    super('rounds');
+  }
   protected override beforeStart(prepRes) {
     prepRes.hooks.resetPromptBuilder();
   }
@@ -551,10 +553,12 @@ AFTER: Single PocketFlow native pattern
 ### 5.1 The activeState Pattern in BaseToolUseAgent ✅ RESOLVED
 
 **Status**: **RESOLVED** - The dual-reference pattern has been eliminated by:
+
 1. Passing state explicitly to methods that need it (e.g., `enterWaitingState(conversation)`)
 2. Creating state internally where needed (e.g., `prepareInitialState()` creates fresh `AgentRunState`)
 
 **Original Issue**: BaseToolUseAgent maintained a dual-reference pattern where state was both:
+
 1. Owned by the flow (in `ToolUseRunShared.state`)
 2. Referenced by the agent (in `this.activeState`)
 
@@ -603,6 +607,7 @@ await agent.enterWaitingState(shared.state.conversation);  // ← Passed explici
 ```
 
 **Changes Made**:
+
 1. Removed `activeState` field and `getActiveState()` method
 2. Changed `enterWaitingState()` to accept `conversation` parameter
 3. Changed `prepareInitialState()` to create fresh `AgentRunState()` internally
