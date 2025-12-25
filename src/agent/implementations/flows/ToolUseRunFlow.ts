@@ -164,6 +164,7 @@ interface CycleNodePrepResult<C> {
   conversation: ProviderMessage[];
   store: AgentSharedStore;
   hooks: ToolUseRunHooks<C>;
+  lifecycle: ToolUseRunLifecycle;
 }
 
 /**
@@ -278,11 +279,11 @@ class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
  * Runs a single tool-use cycle.
  *
  * Phase ownership:
- * - prep(): Sets 'cycle' phase (owns this transition)
+ * - exec(): Sets 'cycle' phase at start of work (consistent with StandardInitNode)
  *
  * PocketFlow compliance:
  * - prep(): Extract immutable data from shared state
- * - exec(): Pure computation (call runCycle, no side effects)
+ * - exec(): Set phase + call runCycle (I/O acceptable for lifecycle tracking)
  * - execFallback(): Convert thrown errors to result type
  * - post(): Side effects (persist checkpoint) + routing decision
  */
@@ -292,10 +293,6 @@ class ToolUseCycleNode<C> extends Node<ToolUseRunShared<C>> {
   }
 
   async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
-    // Own our phase - CycleNode is responsible for 'cycle' lifecycle phase
-    // (minor bookkeeping side effect, acceptable in prep)
-    shared.lifecycle.begin('cycle');
-
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
@@ -305,16 +302,20 @@ class ToolUseCycleNode<C> extends Node<ToolUseRunShared<C>> {
       conversation: shared.state.conversation,
       store: shared.state.store,
       hooks: shared.hooks,
+      lifecycle: shared.lifecycle,
     };
   }
 
   async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
+    // Set phase at start of work (consistent with StandardInitNode pattern)
+    prepRes.lifecycle.begin('cycle');
+
     // Handle skip (resume case) - pure decision, no side effects
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
     }
 
-    // Pure: call the cycle, return result
+    // Call the cycle, return result
     const result = await prepRes.hooks.runCycle(
       prepRes.cycleOptions,
       prepRes.conversation,
