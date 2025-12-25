@@ -13,7 +13,7 @@ This document tracks the resolution of architectural issues identified in the ag
 |----------|-------|-------|---------------------|-----------|
 | Critical | 5 | 2 | 0 | 3 (deferred) |
 | High | 5 | 1 | 4 | 0 |
-| Medium | 7 | 0 | 0 | 7 |
+| Medium | 7 | 2 | 0 | 5 |
 | Low | 3 | 0 | 0 | 3 |
 
 ---
@@ -221,11 +221,29 @@ Both patterns are valid and coexist appropriately.
 
 ### 11. Identical Hook Implementations Should Be Internalized
 
-**Status**: 🔲 Not Started
+**Status**: ✅ FIXED
 
-**File**: `src/agent/implementations/BaseAgent.ts:357-374`
+**Files Modified**:
+- `src/agent/core/IAgent.ts` - Added lifecycle methods to `IFlowAgent`, removed `AgentRunHooks`
+- `src/agent/implementations/BaseAgent.ts` - Added lifecycle method implementations, removed `getRunHooks()`
+- `src/agent/implementations/BaseToolUseAgent.ts` - Added lifecycle overrides, simplified `run()`
+- `src/agent/implementations/BaseReflectionAgent.ts` - Added lifecycle overrides, simplified `run()`
+- `src/agent/implementations/flows/common/StandardInitNode.ts` - Calls agent lifecycle directly
+- `src/agent/implementations/flows/common/StandardFinalizeNode.ts` - Calls agent lifecycle directly
+- `src/agent/implementations/flows/common/AgentRunFlowRunner.ts` - Simplified to accept hooks directly
 
-**Problem**: All 5 base hooks have identical implementations across agents.
+**Problem**: All 5 base hooks (start, init, initializeClient, end, cleanup) had identical implementations
+spread across BaseToolUseAgent and BaseReflectionAgent.
+
+**Fix Applied**:
+1. Moved lifecycle methods to `IFlowAgent` interface (startRun, initRun, endRun, cleanupRun)
+2. Implemented lifecycle methods in `BaseAgent` with standard behavior
+3. Agent subclasses override only when they need different behavior:
+   - `BaseToolUseAgent`: Reuses stages, custom cleanup with session dispose
+   - `BaseReflectionAgent`: Requires run stage, sets up storageKey
+4. Flow-specific hooks (e.g., `resetPromptBuilder`, `prepareState`) remain as separate interfaces
+5. Eliminated the `extendHooks` pattern - callers now provide hooks directly
+6. Removed unused `AgentRunHooks` interface and `getRunHooks()` method
 
 ### 12. Inconsistent State Naming (conversation vs messages)
 
@@ -241,11 +259,14 @@ Both patterns are valid and coexist appropriately.
 
 ### 14. Confusing Hook Override Pattern
 
-**Status**: 🔲 Not Started
+**Status**: ✅ FIXED (part of Issue #11)
 
 **File**: `src/agent/implementations/BaseToolUseAgent.ts:160-187`
 
 **Problem**: Uses both `hookOverrides` and `extendHooks` in same call.
+
+**Fix Applied**: Eliminated the `extendHooks`/`hookOverrides` pattern entirely.
+Now callers provide flow-specific hooks directly and lifecycle methods are on the agent.
 
 ### 15. RetryableInvocationNode Requires Agent Context
 
@@ -301,6 +322,7 @@ Both patterns are valid and coexist appropriately.
 |------|--------|--------------|
 | 2025-12-25 | 5169dd4 | #1 Response time units, #5 ReflectionRoundNode mutation |
 | 2025-12-25 | aec2efc | #6 Flow agent interface decoupling |
+| 2025-12-25 | 7953c64 | #11 Internalized lifecycle, #14 Eliminated extendHooks pattern |
 
 ---
 
