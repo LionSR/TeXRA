@@ -116,6 +116,10 @@ type RoundExecResult =
 /**
  * Initializes the reflection agent run.
  *
+ * Phase ownership:
+ * - exec(): Sets 'init' phase
+ * - post(): Transitions to 'rounds' phase on success
+ *
  * Uses PocketFlow's native error handling:
  * - exec(): Let errors throw naturally (no try/catch)
  * - execFallback(): Convert errors to result type for post()
@@ -167,6 +171,9 @@ class ReflectionInitNode<C> extends Node<ReflectionRunShared<C>> {
 /**
  * Executes a single reflection round.
  *
+ * Phase ownership: None (stays in 'rounds' phase set by InitNode.post())
+ * Note: StandardFinalizeNode sets 'finalize' phase.
+ *
  * Uses PocketFlow's native error handling:
  * - exec(): Let errors throw naturally (no try/catch)
  * - execFallback(): Wrap error with round context for post()
@@ -194,7 +201,9 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
 
   async exec(
     prepRes: RoundNodePrepResult<C>,
-  ): Promise<{ kind: 'finalize' } | { kind: 'success'; result: ReflectionRoundResult }> {
+  ): Promise<
+    { kind: 'finalize' } | { kind: 'success'; result: ReflectionRoundResult }
+  > {
     // Early exit if should finalize
     if (prepRes.shouldFinalize) {
       return { kind: 'finalize' };

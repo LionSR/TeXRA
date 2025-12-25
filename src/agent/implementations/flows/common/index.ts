@@ -3,11 +3,13 @@
  *
  * Exports:
  * - AgentLifecycle: Phase/status state machine
- * - AgentRunFlowRunner: Flow execution with hooks, AgentRunShared, BaseFlowShared
+ * - AgentRunShared: Generic shared state container for all flows
+ * - AgentRunFlowOptions: Options for runAgentFlow
+ * - runAgentFlow: Flow execution with hooks
  * - StandardFinalizeNode: Standard finalize node class
  * - InitExecResult, NodeExecResult: Shared result types for nodes
  *
- * Note: Schemas moved to respective run flow files (ToolUseRunFlow, ReflectionRunFlow)
+ * Note: Schemas are defined in respective run flow files.
  * Note: Init nodes are inlined in each flow - no factory needed.
  */
 

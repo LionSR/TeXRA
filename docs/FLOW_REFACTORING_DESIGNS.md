@@ -1,6 +1,6 @@
 # Flow Refactoring: Design Twice
 
-Following John Ousterhout's "Design it Twice" principle from *A Philosophy of Software Design*.
+Following John Ousterhout's "Design it Twice" principle from _A Philosophy of Software Design_.
 
 ---
 
@@ -36,16 +36,18 @@ Current State:
 
 ## Design 1: Unified Flow Abstraction
 
-**Philosophy**: Create ONE iteration abstraction that both flows use. The variation is in *strategy*, not *structure*.
+**Philosophy**: Create ONE iteration abstraction that both flows use. The variation is in _strategy_, not _structure_.
 
 ### Core Insight
 
 Both flows do the same thing:
+
 ```
 INIT → ITERATE(work units) → FINALIZE
 ```
 
 The difference is:
+
 - **Reflection**: Work units are "rounds" (bounded, no waiting)
 - **ToolUse**: Work units are "cycles" (unbounded, wait between)
 
@@ -101,7 +103,10 @@ interface IterationStrategy<Shared, IterState, Result> {
   processResult(shared: Shared, state: IterState, result: Result): void;
 
   // Optional inter-iteration (where ToolUse complexity lives)
-  onIterationComplete?(shared: Shared, state: IterState): Promise<'continue' | 'stop'>;
+  onIterationComplete?(
+    shared: Shared,
+    state: IterState,
+  ): Promise<'continue' | 'stop'>;
 }
 ```
 
@@ -125,23 +130,24 @@ src/agent/implementations/flows/
 
 ### Metrics
 
-| Before | After |
-|--------|-------|
-| FlowLink: 2 definitions | 1 definition |
-| Generic constraint: 6 copies | 1 type alias |
-| Iteration patterns: 2 | 1 (with strategies) |
-| ToolUseCycleNode exits: 5 | 1 (via FlowResult) |
-| ToolUseRunHooks: 12 methods | 7 methods |
+| Before                       | After               |
+| ---------------------------- | ------------------- |
+| FlowLink: 2 definitions      | 1 definition        |
+| Generic constraint: 6 copies | 1 type alias        |
+| Iteration patterns: 2        | 1 (with strategies) |
+| ToolUseCycleNode exits: 5    | 1 (via FlowResult)  |
+| ToolUseRunHooks: 12 methods  | 7 methods           |
 
 ---
 
 ## Design 2: Layered Responsibility Separation
 
-**Philosophy**: Separate concerns into distinct *layers*, each a "deep module" with a simple interface.
+**Philosophy**: Separate concerns into distinct _layers_, each a "deep module" with a simple interface.
 
 ### Core Insight
 
 The current code mixes four concerns:
+
 1. **State** (lifecycle, phase, data)
 2. **Errors** (result types, accumulation)
 3. **Iteration** (loops, waits, continuation)
@@ -222,9 +228,7 @@ interface RunState<Phase, Data> {
 }
 
 // Layer 2: Error
-type NodeResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: NodeError };
+type NodeResult<T> = { ok: true; value: T } | { ok: false; error: NodeError };
 
 // Layer 3: Iteration
 interface IterationController {
@@ -272,30 +276,30 @@ src/agent/implementations/flows/
 
 ### Metrics
 
-| Before | After |
-|--------|-------|
-| Lifecycle + RunState: separate | Merged RunState |
-| Error patterns: 3 | 1 (NodeResult) |
-| Phase transitions: scattered | Declarative in FlowBuilder |
-| ToolUseCycleNode: 5 exits, CC=12 | 1 exit, CC=4 |
-| ToolUseRunHooks: 12 methods | 5 methods (7 → InteractiveIterator) |
+| Before                           | After                               |
+| -------------------------------- | ----------------------------------- |
+| Lifecycle + RunState: separate   | Merged RunState                     |
+| Error patterns: 3                | 1 (NodeResult)                      |
+| Phase transitions: scattered     | Declarative in FlowBuilder          |
+| ToolUseCycleNode: 5 exits, CC=12 | 1 exit, CC=4                        |
+| ToolUseRunHooks: 12 methods      | 5 methods (7 → InteractiveIterator) |
 
 ---
 
 ## Comparison Matrix
 
-| Criterion | Design 1: Unified | Design 2: Layered |
-|-----------|-------------------|-------------------|
-| **Core Abstraction** | IterationStrategy (behavior) | 4 Layers (responsibility) |
-| **Type Consolidation** | ✓ FlowTypes.ts | ✓ layers/*/index.ts |
-| **Error Handling** | FlowResult (union) | NodeResult + ErrorCollector |
-| **Iteration** | Strategy pattern | Controller pattern |
-| **Phase Transitions** | Still in nodes | Centralized in FlowBuilder |
-| **Hook Reduction** | 12 → 7 | 12 → 5 |
-| **New Files** | ~5 | ~12 |
-| **Migration Risk** | Medium | Medium-High |
-| **Testing** | Test strategies | Test each layer |
-| **Extensibility** | Add new strategy | Add to any layer |
+| Criterion              | Design 1: Unified            | Design 2: Layered           |
+| ---------------------- | ---------------------------- | --------------------------- |
+| **Core Abstraction**   | IterationStrategy (behavior) | 4 Layers (responsibility)   |
+| **Type Consolidation** | ✓ FlowTypes.ts               | ✓ layers/\*/index.ts        |
+| **Error Handling**     | FlowResult (union)           | NodeResult + ErrorCollector |
+| **Iteration**          | Strategy pattern             | Controller pattern          |
+| **Phase Transitions**  | Still in nodes               | Centralized in FlowBuilder  |
+| **Hook Reduction**     | 12 → 7                       | 12 → 5                      |
+| **New Files**          | ~5                           | ~12                         |
+| **Migration Risk**     | Medium                       | Medium-High                 |
+| **Testing**            | Test strategies              | Test each layer             |
+| **Extensibility**      | Add new strategy             | Add to any layer            |
 
 ---
 
@@ -304,12 +308,14 @@ src/agent/implementations/flows/
 ### Design 1: Unified Flow Abstraction
 
 **Strengths**:
+
 - **Simpler mental model**: "Flows use strategies"
 - **Fewer files**: Core abstraction in ~5 files
 - **Direct mapping**: Strategy = flow type
 - **Easier migration**: Less structural change
 
 **Weaknesses**:
+
 - **Strategy coupling**: `onIterationComplete` conflates waiting with iteration
 - **Phase transitions still scattered**: Not addressed
 - **State management unchanged**: AgentLifecycle stays as-is
@@ -321,12 +327,14 @@ src/agent/implementations/flows/
 ### Design 2: Layered Responsibility Separation
 
 **Strengths**:
+
 - **True separation of concerns**: Each layer independently testable
 - **Phase transitions centralized**: FlowBuilder handles all
 - **State unified**: RunState merges lifecycle + data
 - **Maximum hook reduction**: 12 → 5
 
 **Weaknesses**:
+
 - **More files**: ~12 new files
 - **Higher learning curve**: 4 layers to understand
 - **Bigger migration**: More refactoring needed
@@ -353,7 +361,8 @@ Phase 2: If needed, add layers (Design 2)
 ```
 
 **Rationale**:
-1. Design 1 solves the *immediate* pain (iteration mismatch, type duplication)
+
+1. Design 1 solves the _immediate_ pain (iteration mismatch, type duplication)
 2. Design 2 is available if complexity warrants it
 3. Incremental refactoring reduces risk
 4. "You Ain't Gonna Need It" for 4 layers if 2 flow types work fine
@@ -362,13 +371,13 @@ Phase 2: If needed, add layers (Design 2)
 
 ## Ousterhout Principles Applied
 
-| Principle | Design 1 | Design 2 |
-|-----------|----------|----------|
-| **Deep modules** | IterativeFlowNode hides loop | Each layer is deep |
-| **Information hiding** | Strategy hides flow-specific logic | Layers hide concerns |
-| **Define errors out of existence** | FlowResult has explicit variants | NodeResult + RunState.hasFailed |
-| **Pull complexity downward** | Strategy absorbs hooks | InteractiveIterator absorbs hooks |
-| **Design it twice** | ✓ This document | ✓ This document |
+| Principle                          | Design 1                           | Design 2                          |
+| ---------------------------------- | ---------------------------------- | --------------------------------- |
+| **Deep modules**                   | IterativeFlowNode hides loop       | Each layer is deep                |
+| **Information hiding**             | Strategy hides flow-specific logic | Layers hide concerns              |
+| **Define errors out of existence** | FlowResult has explicit variants   | NodeResult + RunState.hasFailed   |
+| **Pull complexity downward**       | Strategy absorbs hooks             | InteractiveIterator absorbs hooks |
+| **Design it twice**                | ✓ This document                    | ✓ This document                   |
 
 ---
 

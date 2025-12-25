@@ -3,6 +3,7 @@
 ## The Core Problem
 
 **ReflectionFlow uses PocketFlow correctly:**
+
 ```
 RoundNode.exec()  → runs ONE round
 RoundNode.post()  → decides: CONTINUE or FINALIZE
@@ -10,6 +11,7 @@ Graph:            → roundNode.on(CONTINUE, roundNode)
 ```
 
 **ToolUseFlow fights PocketFlow:**
+
 ```
 CycleNode.exec()  → while(true) { run cycle; wait for follow-up; mutate state }
                     ↑ 60 lines of spaghetti
@@ -325,8 +327,14 @@ export type NodeResult<T> =
   | { kind: 'error'; error: unknown };
 
 // Constructors
-export const success = <T>(value: T): NodeResult<T> => ({ kind: 'success', value });
-export const error = (e: unknown): NodeResult<never> => ({ kind: 'error', error: e });
+export const success = <T>(value: T): NodeResult<T> => ({
+  kind: 'success',
+  value,
+});
+export const error = (e: unknown): NodeResult<never> => ({
+  kind: 'error',
+  error: e,
+});
 ```
 
 ---
@@ -335,16 +343,16 @@ export const error = (e: unknown): NodeResult<never> => ({ kind: 'error', error:
 
 The flow-control hooks can stay, but they're now called in the RIGHT places:
 
-| Hook | Before (wrong) | After (correct) |
-|------|----------------|-----------------|
-| `checkInterruption()` | exec() | WaitNode.prep() |
-| `hasQueuedFollowUp()` | exec() | WaitNode.prep() |
-| `enterWaitingState()` | exec() | WaitNode.prep() |
-| `waitForFollowUp()` | exec() | WaitNode.prep() |
-| `markRunning()` | exec() | WaitNode.post() |
-| `clearPersistedSnapshot()` | exec() | WaitNode.prep/post() |
-| `applyFollowUp()` | exec() | WaitNode.post() |
-| `persistCheckpoint()` | exec() | CycleNode.post() |
+| Hook                       | Before (wrong) | After (correct)      |
+| -------------------------- | -------------- | -------------------- |
+| `checkInterruption()`      | exec()         | WaitNode.prep()      |
+| `hasQueuedFollowUp()`      | exec()         | WaitNode.prep()      |
+| `enterWaitingState()`      | exec()         | WaitNode.prep()      |
+| `waitForFollowUp()`        | exec()         | WaitNode.prep()      |
+| `markRunning()`            | exec()         | WaitNode.post()      |
+| `clearPersistedSnapshot()` | exec()         | WaitNode.prep/post() |
+| `applyFollowUp()`          | exec()         | WaitNode.post()      |
+| `persistCheckpoint()`      | exec()         | CycleNode.post()     |
 
 No need to reduce hook count - just use them correctly.
 
@@ -352,27 +360,27 @@ No need to reduce hook count - just use them correctly.
 
 ## Summary of Changes
 
-| Current | Fixed | Change |
-|---------|-------|--------|
-| `while(true)` in exec() | Graph-based CONTINUE | Use PocketFlow looping |
-| 5 exit paths | 1 switch statement | Clean control flow |
-| Side effects in exec() | Side effects in post() | PocketFlow compliance |
-| 4-variant union type | Simple `kind` discriminant | Cleaner types |
-| FlowLink in 2 files | FlowLink in 1 file | DRY |
-| Generic constraint 6x | Type alias | DRY |
+| Current                 | Fixed                      | Change                 |
+| ----------------------- | -------------------------- | ---------------------- |
+| `while(true)` in exec() | Graph-based CONTINUE       | Use PocketFlow looping |
+| 5 exit paths            | 1 switch statement         | Clean control flow     |
+| Side effects in exec()  | Side effects in post()     | PocketFlow compliance  |
+| 4-variant union type    | Simple `kind` discriminant | Cleaner types          |
+| FlowLink in 2 files     | FlowLink in 1 file         | DRY                    |
+| Generic constraint 6x   | Type alias                 | DRY                    |
 
 ---
 
 ## File Changes
 
-| File | Action |
-|------|--------|
-| `ToolUseRunFlow.ts` | Rewrite: Split CycleNode into CycleNode + WaitNode |
-| `common/types.ts` | Add: FlowLink, BaseFlowShared |
-| `common/buildRunFlow.ts` | Update: Import FlowLink from types |
-| `common/createAgentRunFlow.ts` | Update: Import FlowLink from types |
-| `common/AgentRunFlowRunner.ts` | Update: Use BaseFlowShared alias |
-| `common/nodeExecution.ts` | Simplify: Use `kind` discriminant |
+| File                           | Action                                             |
+| ------------------------------ | -------------------------------------------------- |
+| `ToolUseRunFlow.ts`            | Rewrite: Split CycleNode into CycleNode + WaitNode |
+| `common/types.ts`              | Add: FlowLink, BaseFlowShared                      |
+| `common/buildRunFlow.ts`       | Update: Import FlowLink from types                 |
+| `common/createAgentRunFlow.ts` | Update: Import FlowLink from types                 |
+| `common/AgentRunFlowRunner.ts` | Update: Use BaseFlowShared alias                   |
+| `common/nodeExecution.ts`      | Simplify: Use `kind` discriminant                  |
 
 **Total: ~6 files modified, ~200 lines changed**
 
