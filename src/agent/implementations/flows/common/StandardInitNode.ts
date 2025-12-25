@@ -1,20 +1,21 @@
 /**
  * Init node - standard initialization node for agent flows.
  *
- * Handles the initialization pattern:
- * 1. Set 'init' lifecycle phase
- * 2. Run optional beforeStart() hook (override in subclass)
- * 3. Call agent.startRun() to create log stage
- * 4. Call agent.initRun() for agent initialization
- * 5. Call agent.initializeClient() for API client
- * 6. Transition to next phase on success, finalize on error
+ * Execution order:
+ * 1. exec(): Set 'init' lifecycle phase
+ * 2. exec(): Call agent.startRun() to create log stage
+ * 3. exec(): Call agent.initRun() for agent initialization
+ * 4. exec(): Call agent.initializeClient() for API client
+ * 5. post(): Call beforeStart() hook (override in subclass for custom behavior)
+ * 6. post(): Transition to next phase on success, finalize on error
  *
  * Lifecycle methods are called directly on the agent (IFlowAgent interface)
  * rather than through hooks, since they have identical implementations
  * across all agent types.
  *
  * Extension point (override in subclass):
- * - beforeStart(): Run operations before agent.startRun()
+ * - beforeStart(): Called after initialization completes but before phase transition.
+ *   Runs in post() to have access to shared.hooks for flow-specific operations.
  */
 
 import { Node } from '@agent/node';
