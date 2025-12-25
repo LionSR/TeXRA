@@ -138,10 +138,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Configures the agent to resume from a persisted snapshot
-   * @param snapshot - The snapshot to resume from
+   * Sets the snapshot to restore state from during initialization.
+   * Actual hydration happens in prepareInitialState().
    */
-  public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
+  public setResumeSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.resumeSnapshot = snapshot;
   }
 

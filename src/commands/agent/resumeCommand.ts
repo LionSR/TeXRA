@@ -2,8 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { resumeFromSnapshot } from '@agent/toolUse/ToolUseFollowUp';
-import type { ResumeAgentResult } from '@agent/toolUse/ToolUseSessionPersistence';
+import {
+  ToolUseSessionPersistence,
+  type ResumeAgentResult,
+} from '@agent/toolUse/ToolUseSessionPersistence';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 
@@ -25,7 +27,7 @@ export function registerResumeAgentCommand(
         return { success: false };
       }
 
-      return resumeFromSnapshot(snapshot, payload?.followUp);
+      return ToolUseSessionPersistence.resumeFromSnapshot(snapshot, payload?.followUp);
     },
   );
 }
