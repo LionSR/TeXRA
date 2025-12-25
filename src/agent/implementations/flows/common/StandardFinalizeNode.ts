@@ -73,7 +73,7 @@ type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
  * 4. execFallback would only catch thrown errors, but we need guaranteed cleanup
  *
  * Extension point (override in subclass):
- * - beforeEnd(): Run operations before hooks.end()
+ * - beforeEnd(): Run operations before agent.endRun()
  *
  * @example
  * ```typescript
@@ -107,7 +107,7 @@ export class StandardFinalizeNode<
 
   /**
    * Override for pre-end operations (e.g., clear snapshots).
-   * Called before hooks.end().
+   * Called before agent.endRun().
    */
   protected async beforeEnd(_context: ContextOf<Shared>): Promise<void> {
     // Default: no-op
