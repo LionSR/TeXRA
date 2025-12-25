@@ -6,11 +6,11 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 // Local imports
 import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { BaseEventShared, StatefulEventModule } from './types';
 import {
   createStatefulEventDisposable,
   type ProgressEventBusLike,
 } from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * Shared context for LogEvents module.

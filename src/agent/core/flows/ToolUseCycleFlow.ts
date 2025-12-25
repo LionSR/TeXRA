@@ -1,8 +1,8 @@
 // Third-party imports (none needed)
 
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
 import { isRemoteAgent } from '@agent/index';
+import { BaseNode, Flow } from '@agent/node';
 import {
   BaseCycleState,
   BaseCycleShared,
@@ -12,6 +12,8 @@ import {
   CycleDebugContext,
   CycleDebugFileOptions,
   SkippableNodeResult,
+  createDebugContext,
+  createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -165,8 +167,7 @@ function resetToolUseState(state: ToolUseCycleState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ToolUseCycleServices)
  */
-export type ToolUseCycleShared<_C = unknown> =
-  BaseCycleShared<ToolUseCycleState>;
+export type ToolUseCycleShared = BaseCycleShared<ToolUseCycleState>;
 
 /**
  * Prepares a tool-use cycle by checking interruptions and setting up debug context.
@@ -174,31 +175,31 @@ export type ToolUseCycleShared<_C = unknown> =
  * Services accessed via `_params.services`: options, store
  */
 class ToolUsePrepNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
-  async prep(_shared: ToolUseCycleShared<C>): Promise<{
+  async prep(_shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
     const { options, store } = this._params.services;
     const interrupted = Boolean(await options.checkInterruption());
-    const debugContext: CycleDebugContext = {
+    const debugContext = createDebugContext({
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
       isRemote: isRemoteAgent(options.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: store.round.roundIndex,
-      baseName: 'tooluse',
-    };
+    });
+    const debugFileOptions = createDebugFileOptions(
+      store.round.roundIndex,
+      'tooluse',
+    );
     return { interrupted, debugContext, debugFileOptions };
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     prepRes: {
       interrupted: boolean;
       debugContext: CycleDebugContext;
@@ -227,12 +228,6 @@ class ToolUsePrepNode<C> extends BaseNode<
     return undefined;
   }
 }
-
-/**
- * Data extracted by prep() for tool-use call.
- * Uses base type directly (no additional fields needed).
- */
-type ToolUseCallPrepResult = BaseInvocationPrepResult;
 
 /**
  * Success data for tool-use call.
@@ -264,7 +259,7 @@ type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   protected getOperationName(): string {
@@ -279,7 +274,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCallPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -287,23 +282,23 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     };
   }
 
-  async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const { options, store } = this._params.services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
 
-    const debugContext: CycleDebugContext = {
+    const debugContext = createDebugContext({
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
       isRemote: isRemoteAgent(options.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: store.round.roundIndex,
-      baseName: 'tooluse_response',
-    };
+    });
+    const debugFileOptions = createDebugFileOptions(
+      store.round.roundIndex,
+      'tooluse_response',
+    );
 
     const abortController = new AbortController();
     // Set signal on Node so retry loop can detect user cancellation
@@ -321,7 +316,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
-      const responseTime = (Date.now() - start) / 1000;
+      const responseTime = Date.now() - start;
 
       return {
         kind: 'success',
@@ -342,15 +337,15 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Uses base class getFallbackResult() for shared logic.
    */
   async execFallback(
-    _prepRes: ToolUseCallPrepResult,
+    _prepRes: BaseInvocationPrepResult,
     error: Error,
   ): Promise<ToolUseCallResult> {
     return this.getFallbackResult(error);
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
-    _prepRes: ToolUseCallPrepResult,
+    shared: ToolUseCycleShared,
+    _prepRes: BaseInvocationPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
@@ -395,22 +390,24 @@ interface ToolUseProcessPrepResult {
  * Result of exec() containing extracted data and all values needed for post() side effects.
  * PocketFlow compliance: exec() returns computation results, post() applies side effects.
  */
-interface ToolUseProcessExecResult {
-  skipped: boolean;
-  // Core results
-  toolCalls?: SdkToolCall[];
-  stopReason?: ProviderStopReason;
-  text?: string;
-  endTurn: boolean;
-  // Data for side effects in post()
-  serverToolContentBlocks?: ServerToolContentBlock[];
-  lastAssistantContent?: unknown[];
-  normalizedUsage?: NormalizedUsage;
-  responseTime?: number;
-  // Message to create if endTurn
-  createAssistantMessage?: boolean;
-  lastResponseUpdate?: string;
-}
+type ToolUseProcessExecResult =
+  | { kind: 'skipped'; endTurn: false }
+  | {
+      kind: 'success';
+      // Core results
+      toolCalls?: SdkToolCall[];
+      stopReason?: ProviderStopReason;
+      text?: string;
+      endTurn: boolean;
+      // Data for side effects in post()
+      serverToolContentBlocks?: ServerToolContentBlock[];
+      lastAssistantContent?: unknown[];
+      normalizedUsage?: NormalizedUsage;
+      responseTime?: number;
+      // Message to create if endTurn
+      createAssistantMessage?: boolean;
+      lastResponseUpdate?: string;
+    };
 
 /**
  * Processes the model response to extract tool calls and usage data.
@@ -423,14 +420,14 @@ interface ToolUseProcessExecResult {
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseProcessNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   /**
    * Extract data from shared for exec().
    * PocketFlow compliance: Only extract what exec() needs.
    */
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseProcessPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -448,7 +445,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
-      return { skipped: true, endTurn: false };
+      return { kind: 'skipped', endTurn: false };
     }
 
     const { options, store } = this._params.services;
@@ -526,7 +523,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       return {
-        skipped: false,
+        kind: 'success',
         stopReason,
         text: text ?? undefined,
         endTurn: true,
@@ -540,7 +537,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     return {
-      skipped: false,
+      kind: 'success',
       toolCalls,
       stopReason,
       text: text ?? undefined,
@@ -557,14 +554,14 @@ class ToolUseProcessNode<C> extends BaseNode<
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
@@ -644,7 +641,8 @@ interface ToolExecutionResult {
  * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ToolUseDispatchPrepResult {
-  shouldStop: boolean;
+  shouldSkip: boolean;
+  interrupted: boolean;
   toolCalls: SdkToolCall[];
   text?: string;
 }
@@ -654,8 +652,8 @@ interface ToolUseDispatchPrepResult {
  * PocketFlow compliance: exec() returns computation results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
-  | { skipped: true; interrupted: boolean }
-  | { skipped: false; calls: SdkToolCall[] };
+  | { kind: 'skipped'; interrupted: boolean }
+  | { kind: 'success'; calls: SdkToolCall[] };
 
 /**
  * Dispatches tool calls and processes their results.
@@ -672,20 +670,27 @@ type ToolUseDispatchExecResult =
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseDispatchNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: Only extract what exec() needs.
+   * Extract data from shared and check interruption.
+   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseDispatchPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
+    const { options } = this._params.services;
     const { state } = shared;
+    const toolCalls = state.toolCalls ?? [];
+
+    // Check skip conditions (including interruption) in prep
+    const shouldSkip = state.shouldStop || toolCalls.length === 0;
+    const interrupted =
+      !shouldSkip && Boolean(await options.checkInterruption());
+
     return {
-      shouldStop: state.shouldStop,
-      toolCalls: state.toolCalls ?? [],
+      shouldSkip,
+      interrupted,
+      toolCalls,
       text: state.text,
     };
   }
@@ -697,19 +702,16 @@ class ToolUseDispatchNode<C> extends BaseNode<
   async exec(
     prepRes: ToolUseDispatchPrepResult,
   ): Promise<ToolUseDispatchExecResult> {
-    const { options } = this._params.services;
-
-    if (prepRes.shouldStop || prepRes.toolCalls.length === 0) {
-      return { skipped: true, interrupted: false };
+    if (prepRes.shouldSkip) {
+      return { kind: 'skipped', interrupted: false };
     }
 
-    if (await options.checkInterruption()) {
-      // Return interrupted flag - post() will apply the side effect
-      return { skipped: true, interrupted: true };
+    if (prepRes.interrupted) {
+      return { kind: 'skipped', interrupted: true };
     }
 
     return {
-      skipped: false,
+      kind: 'success',
       calls: prepRes.toolCalls,
     };
   }
@@ -849,7 +851,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
@@ -857,7 +859,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { state } = shared;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       // Apply interrupted side effect if needed
       if (execRes.interrupted) {
         state.shouldStop = true;
@@ -959,7 +961,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
  * ```
  */
 export function createToolUseCycleFlow<C>(): Flow<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   const prepNode = new ToolUsePrepNode<C>();
@@ -977,5 +979,5 @@ export function createToolUseCycleFlow<C>(): Flow<
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleShared<C>, ToolUseCycleParams<C>>(prepNode);
+  return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }

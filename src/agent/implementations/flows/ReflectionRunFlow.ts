@@ -1,45 +1,36 @@
-import { z } from 'zod';
-
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type {
-  BaseReflectionAgent,
-  ReflectionRoundResult,
-} from '@agent/implementations/BaseReflectionAgent';
+import type { ReflectionRoundResult } from '@agent/implementations/BaseReflectionAgent';
+// Type imports
+import type { IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createAgentRunFlow,
-  createStandardFinalizeNode,
+  StandardFinalizeNode,
+  StandardInitNode,
   AgentLifecycle,
-  type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
 
-// Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
-export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
+// ============================================================================
+// Phase Definitions
+// ============================================================================
 
 /**
  * Reflection run phase - single source of truth for reflection agent flow phases.
  */
-export const REFLECTION_RUN_PHASE = {
+const REFLECTION_RUN_PHASE = {
   IDLE: 'idle',
   INIT: 'init',
   ROUNDS: 'rounds',
   FINALIZE: 'finalize',
 } as const;
 
-export const ReflectionRunPhaseSchema = z.enum([
-  REFLECTION_RUN_PHASE.IDLE,
-  REFLECTION_RUN_PHASE.INIT,
-  REFLECTION_RUN_PHASE.ROUNDS,
-  REFLECTION_RUN_PHASE.FINALIZE,
-]);
-
-export type ReflectionRunPhase = z.infer<typeof ReflectionRunPhaseSchema>;
+export type ReflectionRunPhase =
+  (typeof REFLECTION_RUN_PHASE)[keyof typeof REFLECTION_RUN_PHASE];
 
 export type ReflectionRunLifecycle = AgentLifecycle<ReflectionRunPhase>;
 
@@ -54,36 +45,116 @@ export interface ReflectionRunState {
   continueRounds: boolean;
 }
 
-export interface ReflectionRunHooks extends AgentRunHooks {
+/**
+ * Flow-specific hooks for reflection agent runs.
+ *
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on IFlowAgent.
+ * Round execution methods are on IReflectionFlowAgent.
+ *
+ * This interface contains only flow-specific hooks that vary by implementation.
+ */
+export interface ReflectionRunHooks {
   resetPromptBuilder(): void;
 }
 
-export type ReflectionRunShared<C = unknown> = AgentRunShared<
-  BaseReflectionAgent<C>,
+/**
+ * Interface for agents used by ReflectionRunFlow.
+ *
+ * This interface captures the minimal contract that reflection flows depend on,
+ * decoupling flow implementation from concrete agent classes.
+ */
+export interface IReflectionFlowAgent extends IFlowAgent {
+  /** Initialize context for a new round. */
+  beginRound(
+    roundIndex: number,
+    runState: AgentRunState,
+    conversation: ProviderMessage[],
+  ): void;
+
+  /** Execute the current round and return results. */
+  executeCurrentRound(): Promise<ReflectionRoundResult>;
+
+  /** Record the result of a completed round. */
+  recordRoundResult(result: ReflectionRoundResult): void;
+}
+
+export type ReflectionRunShared = AgentRunShared<
+  IReflectionFlowAgent,
   ReflectionRunState,
   ReflectionRunLifecycle,
   ReflectionRunHooks
 >;
 
-interface ReflectionRoundPrep<C> {
-  agent: BaseReflectionAgent<C>;
+// ============================================================================
+// Result Types - Clean discriminated unions following PocketFlow patterns
+// ============================================================================
+
+/**
+ * Prep result for ReflectionRoundNode.
+ */
+interface RoundNodePrepResult {
+  agent: IReflectionFlowAgent;
   state: ReflectionRunState;
   shouldFinalize: boolean;
   roundIndex: number;
 }
 
-interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
-  result?: ReflectionRoundResult;
-  error?: unknown;
+/**
+ * Result of a single round execution.
+ * Uses 'kind' discriminant for clarity (matches ToolUseRunFlow pattern).
+ */
+type RoundExecResult =
+  | { kind: 'finalize' }
+  | { kind: 'success'; result: ReflectionRoundResult }
+  | { kind: 'error'; error: unknown };
+
+// ============================================================================
+// Node Implementations
+// ============================================================================
+
+/**
+ * Initializes the reflection agent run.
+ *
+ * Extends StandardInitNode to call resetPromptBuilder() before start.
+ */
+class ReflectionInitNode extends StandardInitNode<ReflectionRunShared> {
+  constructor() {
+    super('rounds');
+  }
+
+  protected override beforeStart(shared: ReflectionRunShared): void {
+    shared.hooks.resetPromptBuilder();
+  }
 }
 
-class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
-  async prep(shared: ReflectionRunShared<C>): Promise<ReflectionRoundPrep<C>> {
+/**
+ * Executes a single reflection round.
+ *
+ * Phase ownership: None (stays in 'rounds' phase set by InitNode.post())
+ * Note: StandardFinalizeNode sets 'finalize' phase.
+ *
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Wrap error with round context for post()
+ * - Node with maxRetries=1: No retry, just fallback on error
+ */
+class ReflectionRoundNode extends Node<ReflectionRunShared> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
+  async prep(shared: ReflectionRunShared): Promise<RoundNodePrepResult> {
     const { agent, state } = shared;
     const shouldFinalize =
       state.currentRound >= state.totalRounds ||
       (state.currentRound > 0 && !state.continueRounds) ||
       agent.isInterruptionRequested();
+
+    // Initialize round context in prep() where state setup belongs (PocketFlow compliance)
+    // This must happen before exec() since executeCurrentRound() depends on the context
+    if (!shouldFinalize) {
+      agent.beginRound(state.currentRound, state.runState, state.conversation);
+    }
 
     return {
       agent,
@@ -94,113 +165,89 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
   }
 
   async exec(
-    prepRes: ReflectionRoundPrep<C>,
-  ): Promise<ReflectionRoundPrep<C> | ReflectionRoundExec<C>> {
+    prepRes: RoundNodePrepResult,
+  ): Promise<
+    { kind: 'finalize' } | { kind: 'success'; result: ReflectionRoundResult }
+  > {
+    // Early exit if should finalize
     if (prepRes.shouldFinalize) {
-      return prepRes;
+      return { kind: 'finalize' };
     }
 
-    try {
-      // Initialize agent's round context
-      prepRes.agent.beginRound(
-        prepRes.roundIndex,
-        prepRes.state.runState,
-        prepRes.state.conversation,
-      );
+    // Let errors throw - Node._exec catches them and calls execFallback
+    // Round context was initialized in prep()
+    const result = await prepRes.agent.executeCurrentRound();
 
-      // Execute the round using agent's internal context
-      const result = await prepRes.agent.executeCurrentRound();
+    return { kind: 'success', result };
+  }
 
-      return {
-        ...prepRes,
-        result,
-      };
-    } catch (error) {
-      const contextualError =
-        error instanceof Error
-          ? new Error(`Round ${prepRes.roundIndex} failed: ${error.message}`, {
-              cause: error,
-            })
-          : new Error(`Round ${prepRes.roundIndex} failed: ${String(error)}`);
-      return {
-        ...prepRes,
-        error: contextualError,
-      };
-    }
+  async execFallback(
+    prepRes: RoundNodePrepResult,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    // Wrap error with round context
+    const contextualError = new Error(
+      `Round ${prepRes.roundIndex} failed: ${error.message}`,
+      { cause: error },
+    );
+    return { kind: 'error', error: contextualError };
   }
 
   async post(
-    shared: ReflectionRunShared<C>,
-    prepRes: ReflectionRoundPrep<C>,
-    execRes: ReflectionRoundPrep<C> | ReflectionRoundExec<C>,
+    shared: ReflectionRunShared,
+    _prepRes: RoundNodePrepResult,
+    execRes: RoundExecResult,
   ): Promise<string | undefined> {
-    if (prepRes.shouldFinalize) {
-      return FlowTransition.FINALIZE;
+    switch (execRes.kind) {
+      case 'finalize':
+        return FlowTransition.FINALIZE;
+
+      case 'error':
+        shared.lifecycle.fail(execRes.error);
+        return FlowTransition.FINALIZE;
+
+      case 'success': {
+        const { result } = execRes;
+
+        // Record round result through agent API
+        shared.agent.recordRoundResult(result);
+
+        // Update flow state
+        shared.state.runState = result.runState;
+        shared.state.conversation = result.messages;
+        shared.state.continueRounds = result.shouldContinue;
+        shared.state.currentRound += 1;
+        shared.state.runState.incrementRounds();
+
+        // Check termination conditions
+        if (
+          shared.agent.isInterruptionRequested() ||
+          shared.state.currentRound >= shared.state.totalRounds ||
+          !shared.state.continueRounds
+        ) {
+          return FlowTransition.FINALIZE;
+        }
+
+        return FlowTransition.CONTINUE;
+      }
     }
-
-    const execResult = execRes as ReflectionRoundExec<C>;
-
-    if (execResult.error) {
-      shared.lifecycle.fail(execResult.error);
-      return FlowTransition.FINALIZE;
-    }
-
-    const { result } = execResult;
-    if (!result) {
-      const missingResultError = new Error('Round result is missing.');
-      shared.lifecycle.fail(missingResultError);
-      return FlowTransition.FINALIZE;
-    }
-
-    // Record round result through agent API instead of direct mutation
-    shared.agent.recordRoundResult(result);
-
-    // Update flow state
-    shared.state.runState = result.runState;
-    // Direct reference - messages aren't mutated by subsequent operations
-    shared.state.conversation = result.messages;
-    shared.state.continueRounds = result.shouldContinue;
-    shared.state.currentRound += 1;
-    shared.state.runState.incrementRounds();
-
-    if (shared.agent.isInterruptionRequested()) {
-      return FlowTransition.FINALIZE;
-    }
-
-    if (shared.state.currentRound >= shared.state.totalRounds) {
-      return FlowTransition.FINALIZE;
-    }
-
-    if (!shared.state.continueRounds) {
-      return FlowTransition.FINALIZE;
-    }
-
-    return FlowTransition.CONTINUE;
   }
 }
 
-export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
-  const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = createStandardFinalizeNode<ReflectionRunShared<C>>({
-    finalizePhase: 'finalize',
-  });
+export function createReflectionRunFlow(): Flow<ReflectionRunShared> {
+  // Create all nodes
+  const initNode = new ReflectionInitNode();
+  const roundNode = new ReflectionRoundNode();
+  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared>('finalize');
 
-  return createAgentRunFlow<ReflectionRunShared<C>>({
-    init: {
-      phase: 'init',
-      beforeInitialize: (shared) => {
-        shared.hooks.resetPromptBuilder();
-      },
-      onSuccess: (shared) => {
-        shared.lifecycle.begin('rounds');
-        return FlowTransition.ROUND;
-      },
-    },
-    finalize: finalizeNode,
-    links: ({ init }) => [
-      { from: init, on: FlowTransition.ROUND, to: roundNode },
-      { from: roundNode, on: FlowTransition.CONTINUE, to: roundNode },
-      { from: roundNode, on: FlowTransition.FINALIZE },
-    ],
-  });
+  // Wire using native PocketFlow API
+  // Linear flow (happy path): init → round
+  initNode.next(roundNode);
+
+  // Branches: loop → roundNode, error/end → finalize
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
+  roundNode.on(FlowTransition.CONTINUE, roundNode);
+  roundNode.on(FlowTransition.FINALIZE, finalizeNode);
+
+  return new Flow<ReflectionRunShared>(initNode);
 }
