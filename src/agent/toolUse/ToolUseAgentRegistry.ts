@@ -21,10 +21,6 @@ export function getToolUseAgent(
   return registry.get(streamTabId);
 }
 
-export function clearToolUseAgents(): void {
-  registry.clear();
-}
-
 /**
  * Remove registry entries for streams that no longer have an active tool-use session.
  */
