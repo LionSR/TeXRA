@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent core
 import { AgentType } from '@agent/core/AgentDataclass';
@@ -107,10 +108,14 @@ async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
   return { agent, context };
 }
 
-export interface ResumeAgentResult {
-  success: boolean;
-  lostFollowUps?: number;
-}
+/** Schema for agent resume operation result. */
+export const ResumeAgentResultSchema = z.object({
+  success: z.boolean(),
+  lostFollowUps: z.number().nonnegative().optional(),
+});
+
+/** Result of resuming a tool-use agent from a snapshot. */
+export type ResumeAgentResult = z.infer<typeof ResumeAgentResultSchema>;
 
 export const ToolUseSessionPersistence = {
   isEnabled(): boolean {
@@ -270,5 +275,3 @@ function formatLostFollowUpSuffix(count: number): string {
   const label = count === 1 ? 'follow-up was' : 'follow-ups were';
   return ` ${count} queued ${label} lost.`;
 }
-
-export type { ToolUseSessionSnapshot } from './ToolUseSessionManager';
