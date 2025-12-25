@@ -4,7 +4,6 @@ import * as path from 'path';
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 // Internal imports
-import { isRemoteAgent } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
@@ -15,6 +14,8 @@ import {
   CycleDebugContext,
   CycleDebugFileOptions,
   SkippableNodeResult,
+  createDebugContext,
+  createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -138,20 +139,20 @@ class ResponsePrepNode<C> extends BaseNode<
 
     const debugContext: CycleDebugContext | undefined = interrupted
       ? undefined
-      : {
+      : createDebugContext({
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
-          isRemote: isRemoteAgent(agentConfig.agent),
-        };
+          agentName: agentConfig.agent,
+        });
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
       ? undefined
-      : {
-          continuationCount: store.round.continuationCount,
-          // outputLocation is always AgentFileLocation (workspace or runStorage, never external)
-          outputFile: state.outputLocation.relativePath,
-        };
+      : createDebugFileOptions(
+          store.round.continuationCount,
+          'response',
+          state.outputLocation.relativePath,
+        );
 
     return {
       interrupted,
