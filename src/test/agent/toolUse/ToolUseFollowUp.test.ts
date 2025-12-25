@@ -56,8 +56,10 @@ describe('ToolUseFollowUp', () => {
   it('sends follow-ups to active agents', async () => {
     const calls: string[] = [];
     (AgentRegistry as any).getToolUseAgent = () => ({
-      appendFollowUp: (text: string) => {
-        calls.push(text);
+      session: {
+        appendFollowUp: (text: string) => {
+          calls.push(text);
+        },
       },
     });
 

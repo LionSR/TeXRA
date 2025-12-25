@@ -16,7 +16,34 @@ import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 // Internal imports
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 
-export class ToolUseSessionLifecycle<C = unknown> {
+/**
+ * Interface for tool-use session lifecycle operations.
+ * Exposes session-related methods that flows and external callers need.
+ */
+export interface IToolUseSession {
+  /** Append a follow-up message to the session queue. */
+  appendFollowUp(text: string): void;
+
+  /** Check if there's a queued follow-up message. */
+  hasQueuedFollowUp(): boolean;
+
+  /** Wait for the next follow-up message. Returns null if interrupted. */
+  waitForFollowUp(checkInterruption: () => boolean): Promise<string | null>;
+
+  /** Clear any persisted snapshot state. */
+  clearPersistedSnapshot(): Promise<void>;
+
+  /** Enter waiting state for follow-up messages. */
+  enterWaitingState(messages: ProviderMessage[]): Promise<void>;
+
+  /** Mark the session as running (resume from waiting). */
+  markRunning(): Promise<void>;
+
+  /** Persist a checkpoint of the current session state. */
+  persistCheckpoint(messages: ProviderMessage[]): Promise<void>;
+}
+
+export class ToolUseSessionLifecycle<C = unknown> implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private store: AgentSharedStore | null = null;
 
