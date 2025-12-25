@@ -71,16 +71,12 @@ export interface IFlowAgent {
   // =========================================================================
 
   /**
-   * Begin an agent run and create a logging stage.
-   * @returns The stage for subsequent lifecycle calls, or undefined to reuse existing.
+   * Begin and initialize an agent run.
+   * Creates a logging stage (if needed) and performs agent initialization.
+   * Combines the previously separate startRun() and initRun() since they
+   * are always called together sequentially.
    */
-  startRun(): Promise<AgentLogStage | undefined>;
-
-  /**
-   * Initialize the agent for a run.
-   * @param runStage - The stage from startRun(), if any.
-   */
-  initRun(runStage: AgentLogStage | undefined): Promise<void>;
+  startAndInitRun(): Promise<void>;
 
   /** Initialize the model client for this run. */
   initializeClient(): Promise<void>;
