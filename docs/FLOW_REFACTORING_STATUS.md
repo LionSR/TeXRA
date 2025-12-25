@@ -88,7 +88,56 @@ class ToolUseFinalizeNode extends StandardFinalizeNode<ToolUseRunShared> {
 
 **Impact**: 50 lines eliminated, better IDE support, clearer inheritance hierarchy.
 
-### 1.3 Adopted PocketFlow's Native Node + execFallback Pattern
+### 1.3 Extracted StandardInitNode Base Class
+
+Both flows had nearly identical init node implementations (~90% duplicate code).
+Extracted to a shared base class with extension point:
+
+```typescript
+// BEFORE: Duplicate init nodes in each flow (45 lines each)
+class ToolUseInitNode extends Node<ToolUseRunShared> {
+  // ... 45 lines of initialization logic
+}
+class ReflectionInitNode extends Node<ReflectionRunShared> {
+  // ... 45 lines of nearly identical logic
+}
+
+// AFTER: Shared base with extension point
+class StandardInitNode<Shared> extends Node<Shared> {
+  constructor(protected readonly nextPhase: Shared['lifecycle']['phase']) {
+    super(1, 0);
+  }
+
+  protected beforeStart(_prepRes): void {
+    // Override in subclass for pre-start operations
+  }
+
+  async exec(prepRes) {
+    prepRes.lifecycle.begin('init');
+    this.beforeStart(prepRes);
+    const runStage = await prepRes.hooks.start();
+    await prepRes.hooks.init(runStage);
+    await prepRes.hooks.initializeClient();
+    return { kind: 'success' };
+  }
+}
+
+// Tool-use: just instantiate directly
+const initNode = new StandardInitNode<ToolUseRunShared>('prepare');
+
+// Reflection: extend with beforeStart override
+class ReflectionInitNode extends StandardInitNode<ReflectionRunShared> {
+  constructor() { super('rounds'); }
+  protected override beforeStart(prepRes) {
+    prepRes.hooks.resetPromptBuilder();
+  }
+}
+```
+
+**Impact**: ~90 lines of duplicate code eliminated. Single source of truth for
+initialization logic. Extension point for flow-specific pre-start operations.
+
+### 1.4 Adopted PocketFlow's Native Node + execFallback Pattern
 
 All nodes now use PocketFlow's built-in error handling instead of manual try/catch:
 
@@ -210,19 +259,22 @@ switch (execRes.kind) {
 
 ```
 src/agent/implementations/flows/
-├── ToolUseRunFlow.ts          (540 lines) - Complete tool-use flow
-├── ReflectionRunFlow.ts       (288 lines) - Complete reflection flow
+├── ToolUseRunFlow.ts          (500 lines) - Complete tool-use flow
+├── ReflectionRunFlow.ts       (250 lines) - Complete reflection flow
 └── common/                    (5 files)   - True shared infrastructure
     ├── AgentLifecycle.ts      - Phase/status state machine
-    ├── AgentRunFlowRunner.ts  - Flow execution engine
+    ├── AgentRunFlowRunner.ts  - Flow execution engine + result types
     ├── createFinalizeNode.ts  - StandardFinalizeNode base class
-    ├── types.ts               - Shared result types
+    ├── createInitNode.ts      - StandardInitNode base class
     └── index.ts               - Barrel exports
 ```
 
 **Before**: 13 files
 **After**: 7 files
 **Reduction**: 46%
+
+**Note**: Both flows now use StandardInitNode from common/, eliminating
+~90 lines of duplicated initialization logic.
 
 ---
 
@@ -594,11 +646,15 @@ private getActiveState(): ToolUseRunState<C> {
 
 **Verdict**: **Keep as-is with documentation**. The pattern is safe and well-encapsulated.
 
-### 5.2 The prepareInitialState() Dual State Update Issue
+### 5.2 The prepareInitialState() Dual State Update Issue ✅ RESOLVED
 
 **Location**: `/home/user/TeXRA/src/agent/implementations/BaseToolUseAgent.ts:205-263`
 
-**Issue**: `prepareInitialState()` updates state in TWO places:
+**Status**: **RESOLVED** - `prepareInitialState()` is now pure. It only returns
+values and has one documented side effect (`sessionLifecycle.setStore(store)`).
+State mutations happen only in `PrepareNode.post()`.
+
+**Original Issue**: `prepareInitialState()` updated state in TWO places:
 
 ```typescript
 public async prepareInitialState(): Promise<{
@@ -795,17 +851,16 @@ export * from './types';
 
 ### 6.1 Immediate Actions (High Priority)
 
-#### **6.1.1 Refactor prepareInitialState() to be Pure**
+#### **6.1.1 Refactor prepareInitialState() to be Pure** ✅ COMPLETED
 
-**Goal**: Eliminate dual state update pattern
+**Status**: **DONE** - `prepareInitialState()` is already pure in the current
+codebase. It returns values without mutating `activeState`, and the only side
+effect is `sessionLifecycle.setStore(store)` which is documented and necessary
+for persistence.
 
-**Changes**:
+**Original Goal**: Eliminate dual state update pattern
 
-1. Make `prepareInitialState()` return values without mutating `activeState`
-2. Move all state mutations to `PrepareNode.post()`
-3. Create `agent.initializeSession(store)` method for agent-specific setup
-
-**Diff**:
+**Original Changes**:
 
 ```typescript
 // BaseToolUseAgent.ts

@@ -16,11 +16,11 @@ import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
+  StandardInitNode,
   AgentLifecycle,
   BaseRunStateSchema,
   type AgentRunShared,
   type FinalizeContext,
-  type InitExecResult,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
 
@@ -207,59 +207,6 @@ function assertPreparedState<C>(
 // Node Implementations
 // ============================================================================
 
-/**
- * Initializes the tool-use agent run.
- *
- * Phase ownership:
- * - exec(): Sets 'init' phase
- * - post(): Transitions to 'prepare' phase on success
- *
- * Uses PocketFlow's native error handling:
- * - exec(): Let errors throw naturally (no try/catch)
- * - execFallback(): Convert errors to result type for post()
- * - Node with maxRetries=1: No retry, just fallback on error
- */
-class ToolUseInitNode<C> extends Node<ToolUseRunShared<C>> {
-  constructor() {
-    super(1, 0); // maxRetries=1 (no retry), wait=0
-  }
-
-  async prep(shared: ToolUseRunShared<C>) {
-    return { hooks: shared.hooks, lifecycle: shared.lifecycle };
-  }
-
-  async exec(prepRes: {
-    hooks: ToolUseRunHooks<C>;
-    lifecycle: ToolUseRunLifecycle;
-  }): Promise<{ kind: 'success' }> {
-    prepRes.lifecycle.begin('init');
-    // Let errors throw - Node._exec catches them and calls execFallback
-    const runStage = await prepRes.hooks.start();
-    await prepRes.hooks.init(runStage);
-    await prepRes.hooks.initializeClient();
-    return { kind: 'success' };
-  }
-
-  async execFallback(
-    _prepRes: unknown,
-    error: Error,
-  ): Promise<{ kind: 'error'; error: unknown }> {
-    return { kind: 'error', error };
-  }
-
-  async post(
-    shared: ToolUseRunShared<C>,
-    _prepRes: unknown,
-    execRes: InitExecResult,
-  ): Promise<string | undefined> {
-    if (execRes.kind === 'error') {
-      shared.lifecycle.fail(execRes.error);
-      return FlowTransition.FINALIZE;
-    }
-    shared.lifecycle.begin('prepare');
-    return undefined; // Follow next() → PrepareNode
-  }
-}
 
 /**
  * Prepares state for tool-use cycle.
@@ -522,7 +469,7 @@ class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
 
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   // Create all nodes
-  const initNode = new ToolUseInitNode<C>();
+  const initNode = new StandardInitNode<ToolUseRunShared<C>>('prepare');
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
   const waitNode = new ToolUseWaitNode<C>();
