@@ -3,11 +3,10 @@
  *
  * Execution order:
  * 1. exec(): Set 'init' lifecycle phase
- * 2. exec(): Call agent.startRun() to create log stage
- * 3. exec(): Call agent.initRun() for agent initialization
- * 4. exec(): Call agent.initializeClient() for API client
- * 5. post(): Call beforeStart() hook (override in subclass for custom behavior)
- * 6. post(): Transition to next phase on success, finalize on error
+ * 2. exec(): Call agent.startAndInitRun() for stage creation and agent initialization
+ * 3. exec(): Call agent.initializeClient() for API client
+ * 4. post(): Call beforeStart() hook (override in subclass for custom behavior)
+ * 5. post(): Transition to next phase on success, finalize on error
  *
  * Lifecycle methods are called directly on the agent (IFlowAgent interface)
  * rather than through hooks, since they have identical implementations
@@ -107,8 +106,7 @@ export class StandardInitNode<
 
     // Let errors throw - Node._exec catches them and calls execFallback
     // Lifecycle methods called directly on agent (IFlowAgent interface)
-    const runStage = await prepRes.agent.startRun();
-    await prepRes.agent.initRun(runStage);
+    await prepRes.agent.startAndInitRun();
     await prepRes.agent.initializeClient();
 
     return { kind: 'success' };
