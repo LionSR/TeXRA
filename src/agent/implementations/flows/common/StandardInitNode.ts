@@ -4,20 +4,24 @@
  * Handles the initialization pattern:
  * 1. Set 'init' lifecycle phase
  * 2. Run optional beforeStart() hook (override in subclass)
- * 3. Call hooks.start() to create log stage
- * 4. Call hooks.init() for agent initialization
- * 5. Call hooks.initializeClient() for API client
+ * 3. Call agent.startRun() to create log stage
+ * 4. Call agent.initRun() for agent initialization
+ * 5. Call agent.initializeClient() for API client
  * 6. Transition to next phase on success, finalize on error
  *
+ * Lifecycle methods are called directly on the agent (IFlowAgent interface)
+ * rather than through hooks, since they have identical implementations
+ * across all agent types.
+ *
  * Extension point (override in subclass):
- * - beforeStart(): Run operations before hooks.start()
+ * - beforeStart(): Run operations before agent.startRun()
  */
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Type imports
-import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { IFlowAgent } from '@agent/core/IAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
 import type { AgentRunShared, InitExecResult } from './AgentRunFlowRunner';
 
@@ -27,19 +31,19 @@ import type { AgentRunShared, InitExecResult } from './AgentRunFlowRunner';
 
 /**
  * Prep result for StandardInitNode.
- * Contains hooks and lifecycle needed for initialization.
+ * Contains agent and lifecycle needed for initialization.
  */
 interface InitNodePrepResult<
+  Agent extends IFlowAgent,
   Lifecycle extends AgentLifecycle<string>,
-  Hooks extends AgentRunHooks,
 > {
-  hooks: Hooks;
+  agent: Agent;
   lifecycle: Lifecycle;
 }
 
 /** Helper type to extract prep result from AgentRunShared */
 type PrepResultOf<Shared extends AgentRunShared<any, any, any, any>> =
-  InitNodePrepResult<Shared['lifecycle'], Shared['hooks']>;
+  InitNodePrepResult<Shared['agent'], Shared['lifecycle']>;
 
 // ============================================================================
 // StandardInitNode
@@ -49,13 +53,16 @@ type PrepResultOf<Shared extends AgentRunShared<any, any, any, any>> =
  * Standard init node with error handling and phase transitions.
  *
  * PocketFlow pattern:
- * - prep(): Extract hooks and lifecycle from shared
+ * - prep(): Extract agent and lifecycle from shared
  * - exec(): Run initialization sequence (errors throw naturally)
  * - execFallback(): Convert errors to result type
  * - post(): Transition phase on success, finalize on error
  *
+ * Lifecycle methods are called directly on the agent (IFlowAgent interface),
+ * not through hooks. This eliminates the redundant hook spreading pattern.
+ *
  * Extension point (override in subclass):
- * - beforeStart(): Run operations before hooks.start()
+ * - beforeStart(): Run operations before agent.startRun()
  *
  * @example
  * ```typescript
@@ -66,8 +73,8 @@ type PrepResultOf<Shared extends AgentRunShared<any, any, any, any>> =
  * class MyInitNode extends StandardInitNode<MyShared> {
  *   constructor() { super('rounds'); }
  *
- *   protected beforeStart(prepRes: PrepResultOf<MyShared>): void {
- *     prepRes.hooks.resetPromptBuilder();
+ *   protected beforeStart(shared: MyShared): void {
+ *     shared.hooks.resetPromptBuilder();
  *   }
  * }
  * ```
@@ -83,27 +90,25 @@ export class StandardInitNode<
   }
 
   async prep(shared: Shared): Promise<PrepResultOf<Shared>> {
-    return { hooks: shared.hooks, lifecycle: shared.lifecycle };
+    return { agent: shared.agent, lifecycle: shared.lifecycle };
   }
 
   /**
    * Override for pre-start operations (e.g., reset prompt builder).
-   * Called before hooks.start().
+   * Called before agent.startRun(). Has access to full shared state.
    */
-  protected beforeStart(_prepRes: PrepResultOf<Shared>): void {
+  protected beforeStart(_shared: Shared): void {
     // Default: no-op
   }
 
   async exec(prepRes: PrepResultOf<Shared>): Promise<{ kind: 'success' }> {
     prepRes.lifecycle.begin('init');
 
-    // Run optional pre-start hook
-    this.beforeStart(prepRes);
-
     // Let errors throw - Node._exec catches them and calls execFallback
-    const runStage = await prepRes.hooks.start();
-    await prepRes.hooks.init(runStage);
-    await prepRes.hooks.initializeClient();
+    // Lifecycle methods called directly on agent (IFlowAgent interface)
+    const runStage = await prepRes.agent.startRun();
+    await prepRes.agent.initRun(runStage);
+    await prepRes.agent.initializeClient();
 
     return { kind: 'success' };
   }
@@ -120,6 +125,12 @@ export class StandardInitNode<
     _prepRes: unknown,
     execRes: InitExecResult,
   ): Promise<string | undefined> {
+    // Call beforeStart here in post() since it may need to access hooks
+    // which are flow-specific and available on shared
+    if (execRes.kind === 'success') {
+      this.beforeStart(shared);
+    }
+
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
       return FlowTransition.FINALIZE;
