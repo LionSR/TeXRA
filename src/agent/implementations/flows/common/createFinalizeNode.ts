@@ -21,26 +21,15 @@ import { END_GROUP_STATUS } from '@logger/messageTypes';
 // Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
+import type { AgentRunShared } from './AgentRunFlowRunner';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /**
- * Shared state constraint for finalize nodes.
- */
-export interface FinalizeShared<
-  Lifecycle extends AgentLifecycle<string>,
-  Hooks extends AgentRunHooks,
-  Agent extends object,
-> {
-  lifecycle: Lifecycle;
-  hooks: Hooks;
-  agent: Agent;
-}
-
-/**
  * Context extracted in prep() and passed to exec() and hooks.
+ * Contains only the fields needed for finalization.
  */
 export interface FinalizeContext<
   Lifecycle extends AgentLifecycle<string>,
@@ -52,12 +41,9 @@ export interface FinalizeContext<
   agent: Agent;
 }
 
-/** Helper type to extract context from shared */
-type ContextOf<Shared extends FinalizeShared<any, any, any>> = FinalizeContext<
-  Shared['lifecycle'],
-  Shared['hooks'],
-  Shared['agent']
->;
+/** Helper type to extract context from AgentRunShared */
+type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
+  FinalizeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>;
 
 // ============================================================================
 // StandardFinalizeNode
@@ -84,13 +70,13 @@ type ContextOf<Shared extends FinalizeShared<any, any, any>> = FinalizeContext<
  *   constructor() { super('finalize'); }
  *
  *   protected async beforeEnd(ctx: ContextOf<MyShared>): Promise<void> {
- *     await ctx.hooks.clearPersistedSnapshot();
+ *     await ctx.agent.clearPersistedSnapshot();
  *   }
  * }
  * ```
  */
 export class StandardFinalizeNode<
-  Shared extends FinalizeShared<any, any, any>,
+  Shared extends AgentRunShared<any, any, any, any>,
 > extends BaseNode<Shared> {
   constructor(protected readonly phase: Shared['lifecycle']['phase']) {
     super();
