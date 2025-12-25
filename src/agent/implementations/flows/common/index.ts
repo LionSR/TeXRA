@@ -9,11 +9,12 @@
  * - InitExecResult, NodeExecResult: Shared result types for nodes
  * - BaseRunStateSchema: Common schema fields for flow state serialization
  * - StandardFinalizeNode, FinalizeContext: Finalize node class and context type
+ * - StandardInitNode: Standard initialization node with extension point
  *
  * Note: Flow-specific schemas extend BaseRunStateSchema in their respective files.
- * Note: Init nodes are inlined in each flow - no factory needed.
  */
 
 export * from './AgentLifecycle';
 export * from './AgentRunFlowRunner';
 export * from './createFinalizeNode';
+export * from './createInitNode';
