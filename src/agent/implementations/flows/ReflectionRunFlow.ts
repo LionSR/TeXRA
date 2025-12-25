@@ -78,7 +78,7 @@ export interface IReflectionFlowAgent extends IFlowAgent {
   recordRoundResult(result: ReflectionRoundResult): void;
 }
 
-export type ReflectionRunShared<C = unknown> = AgentRunShared<
+export type ReflectionRunShared = AgentRunShared<
   IReflectionFlowAgent,
   ReflectionRunState,
   ReflectionRunLifecycle,
@@ -117,12 +117,12 @@ type RoundExecResult =
  *
  * Extends StandardInitNode to call resetPromptBuilder() before start.
  */
-class ReflectionInitNode<C> extends StandardInitNode<ReflectionRunShared<C>> {
+class ReflectionInitNode extends StandardInitNode<ReflectionRunShared> {
   constructor() {
     super('rounds');
   }
 
-  protected override beforeStart(shared: ReflectionRunShared<C>): void {
+  protected override beforeStart(shared: ReflectionRunShared): void {
     shared.hooks.resetPromptBuilder();
   }
 }
@@ -138,12 +138,12 @@ class ReflectionInitNode<C> extends StandardInitNode<ReflectionRunShared<C>> {
  * - execFallback(): Wrap error with round context for post()
  * - Node with maxRetries=1: No retry, just fallback on error
  */
-class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
+class ReflectionRoundNode extends Node<ReflectionRunShared> {
   constructor() {
     super(1, 0); // maxRetries=1 (no retry), wait=0
   }
 
-  async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult> {
+  async prep(shared: ReflectionRunShared): Promise<RoundNodePrepResult> {
     const { agent, state } = shared;
     const shouldFinalize =
       state.currentRound >= state.totalRounds ||
@@ -194,7 +194,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
   }
 
   async post(
-    shared: ReflectionRunShared<C>,
+    shared: ReflectionRunShared,
     _prepRes: RoundNodePrepResult,
     execRes: RoundExecResult,
   ): Promise<string | undefined> {
@@ -234,13 +234,11 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
   }
 }
 
-export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
+export function createReflectionRunFlow(): Flow<ReflectionRunShared> {
   // Create all nodes
-  const initNode = new ReflectionInitNode<C>();
-  const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared<C>>(
-    'finalize',
-  );
+  const initNode = new ReflectionInitNode();
+  const roundNode = new ReflectionRoundNode();
+  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared>('finalize');
 
   // Wire using native PocketFlow API
   // Linear flow (happy path): init → round
@@ -251,5 +249,5 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   roundNode.on(FlowTransition.CONTINUE, roundNode);
   roundNode.on(FlowTransition.FINALIZE, finalizeNode);
 
-  return new Flow<ReflectionRunShared<C>>(initNode);
+  return new Flow<ReflectionRunShared>(initNode);
 }
