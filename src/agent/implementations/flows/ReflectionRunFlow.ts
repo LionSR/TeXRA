@@ -4,8 +4,14 @@ import { z } from 'zod';
 import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
-import type { AgentRunState } from '@agent/core/AgentState';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  type AgentRunState,
+  AgentRunStateSnapshotSchema,
+} from '@agent/core/AgentState';
+import {
+  type ProviderMessage,
+  ProviderMessageSchema,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import type {
   BaseReflectionAgent,
   ReflectionRoundResult,
@@ -20,8 +26,22 @@ import {
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
 
-// Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
-export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
+// ============================================================================
+// Serialization Schema (formerly in common/runStateSchemas.ts)
+// ============================================================================
+
+/** Reflection agent run state schema for serialization. */
+export const ReflectionRunStateSchema = z.object({
+  runState: AgentRunStateSnapshotSchema,
+  conversation: z.array(ProviderMessageSchema),
+  totalRounds: z.number().int().nonnegative(),
+  currentRound: z.number().int().nonnegative(),
+  continueRounds: z.boolean(),
+});
+
+export type ReflectionRunStateSnapshot = z.infer<
+  typeof ReflectionRunStateSchema
+>;
 
 /**
  * Reflection run phase - single source of truth for reflection agent flow phases.
