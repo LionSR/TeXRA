@@ -3,12 +3,21 @@ import { z } from 'zod';
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentRunState } from '@agent/core/AgentState';
+import {
+  AgentSharedStore,
+  AgentSharedStoreSnapshotSchema,
+} from '@agent/core/AgentSharedStore';
+import {
+  AgentRunState,
+  AgentRunStateSnapshotSchema,
+} from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  type ProviderMessage,
+  ProviderMessageSchema,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
@@ -16,11 +25,35 @@ import {
   createStandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
-  type NodeExecResult,
 } from '@agent/implementations/flows/common';
 
-// Schema export for serialization reference (runtime uses class instances)
-export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
+// ============================================================================
+// Local Types (formerly in common/types.ts - only used here)
+// ============================================================================
+
+/**
+ * Result type for node exec methods that return a value.
+ * Uses 'kind' discriminant for consistency with InvocationResult.
+ */
+type NodeExecResult<T> =
+  | { kind: 'success'; result: T }
+  | { kind: 'error'; error: unknown };
+
+// ============================================================================
+// Serialization Schema (formerly in common/runStateSchemas.ts)
+// ============================================================================
+
+/** Tool-use agent run state schema for serialization. */
+export const ToolUseRunStateSchema = z.object({
+  runState: AgentRunStateSnapshotSchema,
+  conversation: z.array(ProviderMessageSchema),
+  // Runtime-only field, not serializable (contains functions)
+  cycleOptions: z.unknown().nullable(),
+  shouldSkipCycle: z.boolean(),
+  store: AgentSharedStoreSnapshotSchema.nullable(),
+});
+
+export type ToolUseRunStateSnapshot = z.infer<typeof ToolUseRunStateSchema>;
 
 /**
  * Tool use run phase - single source of truth for tool-use agent flow phases.
