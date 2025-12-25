@@ -63,7 +63,7 @@ export async function runResponseCycle<C = unknown>(
 ): Promise<ResponseCycleResult> {
   // Shared state contains only mutable data that flows through nodes.
   // Services (options, store) are injected via setParams().
-  const shared: ResponseCycleShared<C> = {
+  const shared: ResponseCycleShared = {
     state: {
       messages: input.messages,
       outputLocation: input.outputLocation,
