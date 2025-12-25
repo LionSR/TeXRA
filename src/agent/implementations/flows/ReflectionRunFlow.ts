@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { BaseNode, Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import {
@@ -112,15 +112,22 @@ type RoundExecResult =
 // Node Implementations
 // ============================================================================
 
+/** Result type for init nodes. */
+type InitExecResult = { kind: 'success' } | { kind: 'error'; error: unknown };
+
 /**
  * Initializes the reflection agent run.
  *
- * Follows PocketFlow pattern:
- * - prep(): Extract hooks and lifecycle
- * - exec(): Reset prompt builder, run init sequence
- * - post(): Set phase, return undefined for happy path or FINALIZE on error
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Convert errors to result type for post()
+ * - Node with maxRetries=1: No retry, just fallback on error
  */
-class ReflectionInitNode<C> extends BaseNode<ReflectionRunShared<C>> {
+class ReflectionInitNode<C> extends Node<ReflectionRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(shared: ReflectionRunShared<C>) {
     return { hooks: shared.hooks, lifecycle: shared.lifecycle };
   }
@@ -128,24 +135,27 @@ class ReflectionInitNode<C> extends BaseNode<ReflectionRunShared<C>> {
   async exec(prepRes: {
     hooks: ReflectionRunHooks;
     lifecycle: ReflectionRunLifecycle;
-  }): Promise<{ kind: 'success' } | { kind: 'error'; error: unknown }> {
+  }): Promise<{ kind: 'success' }> {
     prepRes.lifecycle.begin('init');
+    // Let errors throw - Node._exec catches them and calls execFallback
+    prepRes.hooks.resetPromptBuilder();
+    const runStage = await prepRes.hooks.start();
+    await prepRes.hooks.init(runStage);
+    await prepRes.hooks.initializeClient();
+    return { kind: 'success' };
+  }
 
-    try {
-      prepRes.hooks.resetPromptBuilder();
-      const runStage = await prepRes.hooks.start();
-      await prepRes.hooks.init(runStage);
-      await prepRes.hooks.initializeClient();
-      return { kind: 'success' };
-    } catch (error) {
-      return { kind: 'error', error };
-    }
+  async execFallback(
+    _prepRes: unknown,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    return { kind: 'error', error };
   }
 
   async post(
     shared: ReflectionRunShared<C>,
     _prepRes: unknown,
-    execRes: { kind: 'success' } | { kind: 'error'; error: unknown },
+    execRes: InitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
