@@ -9,7 +9,6 @@ import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-// Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
@@ -164,6 +163,39 @@ interface WaitNodePrepResult {
 }
 
 // ============================================================================
+// State Guards
+// ============================================================================
+
+/**
+ * Asserts that state has been prepared (cycleOptions and store are non-null).
+ * Called by CycleNode to ensure PrepareNode has run before entering cycle.
+ *
+ * This provides:
+ * - Type narrowing (removes `| null` from types)
+ * - Fail-fast with descriptive error if flow invariant is violated
+ * - Documentation of the PrepareNode → CycleNode contract
+ */
+function assertPreparedState<C>(
+  state: ToolUseRunState<C>,
+): asserts state is ToolUseRunState<C> & {
+  cycleOptions: ToolUseCycleOptions<C>;
+  store: AgentSharedStore;
+} {
+  if (!state.cycleOptions) {
+    throw new Error(
+      'CycleNode invariant violated: cycleOptions is null. ' +
+        'PrepareNode must run before CycleNode.',
+    );
+  }
+  if (!state.store) {
+    throw new Error(
+      'CycleNode invariant violated: store is null. ' +
+        'PrepareNode must run before CycleNode.',
+    );
+  }
+}
+
+// ============================================================================
 // Node Implementations
 // ============================================================================
 
@@ -198,8 +230,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     _prepRes: ToolUsePrepareNodePrepResult<C>,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
-    // Lifecycle transition at start of post
-    shared.lifecycle.begin('prepare');
+    // Note: 'prepare' phase already set by init.onSuccess before entering this node
 
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
@@ -212,8 +243,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.cycleOptions = cycleOptions;
     shared.state.store = store;
 
-    shared.lifecycle.begin('cycle');
-
+    // Note: CycleNode owns 'cycle' phase transition
     return FlowTransition.EXECUTE;
   }
 }
@@ -228,11 +258,18 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
  */
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
+    // Own our phase - CycleNode is responsible for 'cycle' lifecycle phase
+    // (minor bookkeeping side effect, acceptable in prep)
+    shared.lifecycle.begin('cycle');
+
+    // Validate invariant: PrepareNode must have run before us
+    assertPreparedState(shared.state);
+
     return {
       shouldSkip: shared.state.shouldSkipCycle,
-      cycleOptions: shared.state.cycleOptions!,
+      cycleOptions: shared.state.cycleOptions,
       conversation: shared.state.conversation,
-      store: shared.state.store!,
+      store: shared.state.store,
       hooks: shared.hooks,
     };
   }
@@ -272,9 +309,10 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     switch (execRes.kind) {
       case 'success':
         // Persist checkpoint (side effect belongs in post)
+        // Use prepRes.store which was validated in prep()
         await shared.hooks.persistCheckpoint(
           shared.state.conversation,
-          shared.state.store!,
+          prepRes.store,
         );
         return FlowTransition.EXECUTE; // → WaitNode
 
