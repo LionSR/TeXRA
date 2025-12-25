@@ -10,12 +10,13 @@ import type {
   BaseReflectionAgent,
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
+// Type imports
+import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
   createAgentRunFlow,
   createStandardFinalizeNode,
   AgentLifecycle,
-  type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
 

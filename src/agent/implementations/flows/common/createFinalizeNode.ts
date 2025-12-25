@@ -1,25 +1,115 @@
-// Local imports - core flow primitives
+/**
+ * Finalize node factory - creates nodes for agent flow finalization.
+ *
+ * This module consolidates:
+ * - Finalize lifecycle error handling (formerly finalizeLifecycle.ts)
+ * - Finalize node creation factories
+ * - Context types for finalization
+ */
+
+// Core imports
 import { BaseNode } from '@agent/node';
 
-// Local imports - constants
+// Constants
 import { END_GROUP_STATUS } from '@logger/messageTypes';
 
-// Internal imports
-import { finalizeLifecycle } from './finalizeLifecycle';
-
 // Type imports
-import type { AgentRunShared } from './types';
-import type { FinalizeNodeContext } from './nodeExecution';
+import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { AgentLifecycle } from './AgentLifecycle';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 /**
- * Helper type to extract finalize context from shared state.
- * Reduces verbose repetition of FinalizeNodeContext<Shared['lifecycle'], ...>.
+ * Context passed to finalize node callbacks.
  */
-type FinalizeContext<Shared extends AgentRunShared<any, any, any, any>> =
+export interface FinalizeNodeContext<
+  Lifecycle extends AgentLifecycle<string>,
+  Hooks extends AgentRunHooks,
+  Agent extends object = object,
+> {
+  lifecycle: Lifecycle;
+  hooks: Hooks;
+  agent: Agent;
+}
+
+/**
+ * Shared state constraint for finalize nodes.
+ */
+interface FinalizeShared<
+  Lifecycle extends AgentLifecycle<string>,
+  Hooks extends AgentRunHooks,
+  Agent extends object,
+> {
+  lifecycle: Lifecycle;
+  hooks: Hooks;
+  agent: Agent;
+}
+
+/** Helper type to extract context from shared */
+type FinalizeContext<Shared extends FinalizeShared<any, any, any>> =
   FinalizeNodeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>;
 
+// ============================================================================
+// Finalize Lifecycle (internal - formerly separate file)
+// ============================================================================
+
+interface FinalizeLifecycleOptions<Phase extends string> {
+  lifecycle: AgentLifecycle<Phase>;
+  runFinalize: () => Promise<void>;
+  runCleanup: () => Promise<void>;
+  onSuccess: () => void;
+  onSecondaryError?: (error: unknown) => void;
+}
+
+/**
+ * Runs finalization with proper error aggregation.
+ * Primary error is preserved; secondary errors reported via callback.
+ */
+async function finalizeLifecycle<Phase extends string>({
+  lifecycle,
+  runFinalize,
+  runCleanup,
+  onSuccess,
+  onSecondaryError,
+}: FinalizeLifecycleOptions<Phase>): Promise<void> {
+  const errors: unknown[] = [];
+  if (lifecycle.error) {
+    errors.push(lifecycle.error);
+  }
+
+  try {
+    await runFinalize();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  try {
+    await runCleanup();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  if (errors.length > 1 && onSecondaryError) {
+    errors.slice(1).forEach((error) => onSecondaryError(error));
+  }
+
+  const primaryError = errors[0];
+  if (primaryError) {
+    lifecycle.fail(primaryError);
+    return;
+  }
+
+  onSuccess();
+}
+
+// ============================================================================
+// Finalize Node Factories
+// ============================================================================
+
 export interface AgentFinalizeNodeOptions<
-  Shared extends AgentRunShared<any, any, any, any>,
+  Shared extends FinalizeShared<any, any, any>,
   Status extends string = string,
 > {
   finalizePhase: Shared['lifecycle']['phase'];
@@ -30,11 +120,14 @@ export interface AgentFinalizeNodeOptions<
   onSecondaryError?(context: FinalizeContext<Shared>, error: unknown): void;
 }
 
+/**
+ * Creates a fully customizable finalize node.
+ */
 export function createAgentFinalizeNode<
-  Shared extends AgentRunShared<any, any, any, any>,
+  Shared extends FinalizeShared<any, any, any>,
   Status extends string = string,
 >(options: AgentFinalizeNodeOptions<Shared, Status>): BaseNode<Shared> {
-  return new (class AgentFinalizeNode extends BaseNode<Shared> {
+  return new (class extends BaseNode<Shared> {
     async prep(shared: Shared): Promise<FinalizeContext<Shared>> {
       shared.lifecycle.setPhase(options.finalizePhase);
       return {
@@ -62,41 +155,27 @@ export function createAgentFinalizeNode<
 }
 
 /**
- * Options for creating a standard finalize node with common defaults.
- * Uses 'error' | 'stopped' status pattern that most agent flows follow.
+ * Options for the standard finalize node pattern.
  */
 export interface StandardFinalizeNodeOptions<
-  Shared extends AgentRunShared<any, any, any, any>,
+  Shared extends FinalizeShared<any, any, any>,
 > {
-  /** Phase name for finalize (typically 'finalize') */
   finalizePhase: Shared['lifecycle']['phase'];
-  /** Optional work before calling hooks.end() */
   beforeEnd?(context: FinalizeContext<Shared>): Promise<void>;
-  /** Optional callback for secondary errors during finalization */
   onSecondaryError?(context: FinalizeContext<Shared>, error: unknown): void;
 }
 
 /**
  * Creates a standard finalize node with common patterns pre-configured.
  *
- * This factory encapsulates the common finalization pattern used across agent flows:
- * - Computes status as 'error' if lifecycle has error, otherwise 'stopped'
- * - Calls optional beforeEnd, then hooks.end(status)
- * - Calls hooks.cleanup()
- * - Sets lifecycle status to 'completed' on success
- *
- * @example
- * ```typescript
- * const finalizeNode = createStandardFinalizeNode<MyShared>({
- *   finalizePhase: 'finalize',
- *   beforeEnd: async ({ hooks }) => {
- *     await hooks.clearPersistedSnapshot();
- *   },
- * });
- * ```
+ * Pattern:
+ * - Status: 'error' if lifecycle has error, otherwise 'stopped'
+ * - Finalize: optional beforeEnd → hooks.end(status)
+ * - Cleanup: hooks.cleanup()
+ * - Success: lifecycle.complete()
  */
 export function createStandardFinalizeNode<
-  Shared extends AgentRunShared<any, any, any, any>,
+  Shared extends FinalizeShared<any, any, any>,
 >(options: StandardFinalizeNodeOptions<Shared>): BaseNode<Shared> {
   return createAgentFinalizeNode<Shared, 'error' | 'stopped'>({
     finalizePhase: options.finalizePhase,

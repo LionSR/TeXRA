@@ -9,12 +9,13 @@ import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Type imports
+import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
   createAgentRunFlow,
   createStandardFinalizeNode,
   AgentLifecycle,
-  type AgentRunHooks,
   type AgentRunShared,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';

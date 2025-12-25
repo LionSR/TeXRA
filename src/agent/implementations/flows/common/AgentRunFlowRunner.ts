@@ -1,6 +1,7 @@
 // Type imports
 import type { Flow } from '@agent/node';
-import type { AgentRunHooks, AgentRunShared, BaseFlowShared } from './types';
+import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { AgentRunShared, BaseFlowShared } from './types';
 
 export type AgentRunHookOverrides = Partial<AgentRunHooks>;
 
