@@ -8,7 +8,7 @@ import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersiste
 import {
   ToolUseFollowUpQueue,
   type FollowUpQueue,
-} from '@agent/toolUse/ToolUseFollowUpQueue';
+} from '@agent/toolUse/ToolUseFollowUp';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
