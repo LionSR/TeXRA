@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUpCoordinator';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 
 export function registerFollowUpCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
