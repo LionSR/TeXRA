@@ -27,7 +27,7 @@ import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecyc
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
+import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import {
   registerToolUseAgent,
   unregisterToolUseAgent,
