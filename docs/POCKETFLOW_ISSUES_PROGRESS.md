@@ -12,7 +12,7 @@ This document tracks the resolution of architectural issues identified in the ag
 | Priority | Total | Fixed | Remaining |
 |----------|-------|-------|-----------|
 | Critical | 5 | 2 | 3 |
-| High | 5 | 0 | 5 |
+| High | 5 | 1 | 4 |
 | Medium | 7 | 0 | 7 |
 | Low | 3 | 0 | 3 |
 
@@ -106,15 +106,23 @@ if (!shouldFinalize) {
 
 ### 6. Flows Typed to Concrete Agent Implementations
 
-**Status**: 🔲 Not Started
+**Status**: ✅ FIXED
 
 **Files**:
-- `src/agent/implementations/flows/ToolUseRunFlow.ts:110-115`
-- `src/agent/implementations/flows/ReflectionRunFlow.ts`
+- `src/agent/core/IAgent.ts` - Added `IFlowAgent` base interface
+- `src/agent/implementations/flows/ToolUseRunFlow.ts` - Added `IToolUseFlowAgent`
+- `src/agent/implementations/flows/ReflectionRunFlow.ts` - Added `IReflectionFlowAgent`
+- `src/agent/implementations/flows/common/AgentRunFlowRunner.ts` - Updated constraint
+- `src/agent/implementations/BaseAgent.ts` - Updated `executeAgentRunFlow` constraint
 
-**Problem**: `ToolUseRunShared` is typed to `BaseToolUseAgent<C>` instead of an interface.
+**Problem**: `ToolUseRunShared` was typed to `BaseToolUseAgent<C>` instead of an interface.
 
-**Recommendation**: Create `IToolUseAgent` interface that flows depend on.
+**Fix Applied**:
+1. Created `IFlowAgent` base interface with `isInterruptionRequested()` and `getRunHooks()`
+2. Created `IToolUseFlowAgent extends IFlowAgent` with session lifecycle methods
+3. Created `IReflectionFlowAgent extends IFlowAgent` with round execution methods
+4. Updated `AgentRunShared` constraint from `BaseAgent<any>` to `IFlowAgent`
+5. Updated flow type aliases to use the new interfaces
 
 ---
 
@@ -262,6 +270,7 @@ if (!shouldFinalize) {
 | Date | Commit | Issues Fixed |
 |------|--------|--------------|
 | 2025-12-25 | 5169dd4 | #1 Response time units, #5 ReflectionRoundNode mutation |
+| 2025-12-25 | aec2efc | #6 Flow agent interface decoupling |
 
 ---
 

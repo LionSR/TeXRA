@@ -6,12 +6,9 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type {
-  BaseReflectionAgent,
-  ReflectionRoundResult,
-} from '@agent/implementations/BaseReflectionAgent';
+import type { ReflectionRoundResult } from '@agent/implementations/BaseReflectionAgent';
 // Type imports
-import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
@@ -72,8 +69,29 @@ export interface ReflectionRunHooks extends AgentRunHooks {
   resetPromptBuilder(): void;
 }
 
+/**
+ * Interface for agents used by ReflectionRunFlow.
+ *
+ * This interface captures the minimal contract that reflection flows depend on,
+ * decoupling flow implementation from concrete agent classes.
+ */
+export interface IReflectionFlowAgent extends IFlowAgent {
+  /** Initialize context for a new round. */
+  beginRound(
+    roundIndex: number,
+    runState: AgentRunState,
+    conversation: ProviderMessage[],
+  ): void;
+
+  /** Execute the current round and return results. */
+  executeCurrentRound(): Promise<ReflectionRoundResult>;
+
+  /** Record the result of a completed round. */
+  recordRoundResult(result: ReflectionRoundResult): void;
+}
+
 export type ReflectionRunShared<C = unknown> = AgentRunShared<
-  BaseReflectionAgent<C>,
+  IReflectionFlowAgent,
   ReflectionRunState,
   ReflectionRunLifecycle,
   ReflectionRunHooks
@@ -86,8 +104,8 @@ export type ReflectionRunShared<C = unknown> = AgentRunShared<
 /**
  * Prep result for ReflectionRoundNode.
  */
-interface RoundNodePrepResult<C> {
-  agent: BaseReflectionAgent<C>;
+interface RoundNodePrepResult {
+  agent: IReflectionFlowAgent;
   state: ReflectionRunState;
   shouldFinalize: boolean;
   roundIndex: number;
@@ -140,7 +158,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
     super(1, 0); // maxRetries=1 (no retry), wait=0
   }
 
-  async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult<C>> {
+  async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult> {
     const { agent, state } = shared;
     const shouldFinalize =
       state.currentRound >= state.totalRounds ||
@@ -162,7 +180,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
   }
 
   async exec(
-    prepRes: RoundNodePrepResult<C>,
+    prepRes: RoundNodePrepResult,
   ): Promise<
     { kind: 'finalize' } | { kind: 'success'; result: ReflectionRoundResult }
   > {
@@ -179,7 +197,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
   }
 
   async execFallback(
-    prepRes: RoundNodePrepResult<C>,
+    prepRes: RoundNodePrepResult,
     error: Error,
   ): Promise<{ kind: 'error'; error: unknown }> {
     // Wrap error with round context
@@ -192,7 +210,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
 
   async post(
     shared: ReflectionRunShared<C>,
-    _prepRes: RoundNodePrepResult<C>,
+    _prepRes: RoundNodePrepResult,
     execRes: RoundExecResult,
   ): Promise<string | undefined> {
     switch (execRes.kind) {

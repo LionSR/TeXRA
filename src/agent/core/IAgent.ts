@@ -57,6 +57,25 @@ export interface IAgent {
 }
 
 /**
+ * Minimal interface for agents used by flow nodes.
+ *
+ * This interface defines the minimal contract that flow implementations
+ * depend on, enabling proper decoupling from concrete agent classes.
+ * Specific flow types extend this with their required methods.
+ */
+export interface IFlowAgent {
+  /** Check if an interruption has been requested for this agent. */
+  isInterruptionRequested(): boolean;
+
+  /**
+   * Retrieve the hooks used to orchestrate an agent run.
+   *
+   * @param overrides - Optional overrides for default hook implementations.
+   */
+  getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
+}
+
+/**
  * Core hook contract used to orchestrate agent runs.
  */
 export interface AgentRunHooks {

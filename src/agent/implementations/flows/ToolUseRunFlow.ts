@@ -10,9 +10,8 @@ import {
 import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
@@ -107,8 +106,41 @@ export interface ToolUseRunState<C = unknown> {
   runState: AgentRunState;
 }
 
+/**
+ * Interface for agents used by ToolUseRunFlow.
+ *
+ * This interface captures the minimal contract that tool-use flows depend on,
+ * decoupling flow implementation from concrete agent classes.
+ *
+ * Session lifecycle methods are called directly on the agent (not via hooks)
+ * following PocketFlow's pattern where nodes interact with the domain object
+ * directly for stateful operations.
+ */
+export interface IToolUseFlowAgent extends IFlowAgent {
+  /** Wait for the next user follow-up message. Returns null if interrupted. */
+  waitForFollowUp(): Promise<string | null>;
+
+  /** Check if there's a queued follow-up message from a previous session. */
+  hasQueuedFollowUp(): boolean;
+
+  /** Apply a follow-up message to the conversation. */
+  applyFollowUpMessage(
+    message: string,
+    conversation: ProviderMessage[],
+  ): Promise<ProviderMessage[]>;
+
+  /** Clear any persisted snapshot state. */
+  clearPersistedSnapshot(): Promise<void>;
+
+  /** Enter the waiting state for follow-up messages. */
+  enterWaitingState(conversation: ProviderMessage[]): Promise<void>;
+
+  /** Mark the agent as running (resume from waiting). */
+  markRunning(): Promise<void>;
+}
+
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
-  BaseToolUseAgent<C>,
+  IToolUseFlowAgent,
   ToolUseRunState<C>,
   ToolUseRunLifecycle,
   ToolUseRunHooks<C>
@@ -447,7 +479,7 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
 type ToolUseFinalizeContext<C> = FinalizeContext<
   ToolUseRunLifecycle,
   ToolUseRunHooks<C>,
-  BaseToolUseAgent<C>
+  IToolUseFlowAgent
 >;
 
 /**
