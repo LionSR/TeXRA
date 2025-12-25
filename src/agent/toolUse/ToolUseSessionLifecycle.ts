@@ -3,6 +3,7 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import {
   ToolUseFollowUpQueue,
   type FollowUpQueue,
@@ -132,5 +133,7 @@ export class ToolUseSessionLifecycle<C = unknown> implements IToolUseSession {
   dispose(): void {
     this.setStore(null);
     ToolUseFollowUpQueue.release(this.agent.getStreamTabId());
+    // Clear any cached snapshot to prevent memory leaks
+    ToolUseSessionManager.clearByStream(this.agent.getStreamTabId());
   }
 }
