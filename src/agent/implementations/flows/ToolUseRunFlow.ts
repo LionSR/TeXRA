@@ -7,22 +7,17 @@ import {
   AgentSharedStore,
   AgentSharedStoreSnapshotSchema,
 } from '@agent/core/AgentSharedStore';
-import {
-  AgentRunState,
-  AgentRunStateSnapshotSchema,
-} from '@agent/core/AgentState';
+import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import {
-  type ProviderMessage,
-  ProviderMessageSchema,
-} from '@agent/modelHandlers/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
   AgentLifecycle,
+  BaseRunStateSchema,
   type AgentRunShared,
   type FinalizeContext,
   type InitExecResult,
@@ -30,13 +25,11 @@ import {
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
-// Serialization Schema (formerly in common/runStateSchemas.ts)
+// Serialization Schema
 // ============================================================================
 
 /** Tool-use agent run state schema for serialization. */
-export const ToolUseRunStateSchema = z.object({
-  runState: AgentRunStateSnapshotSchema,
-  conversation: z.array(ProviderMessageSchema),
+export const ToolUseRunStateSchema = BaseRunStateSchema.extend({
   // Runtime-only field, not serializable (contains functions)
   cycleOptions: z.unknown().nullable(),
   shouldSkipCycle: z.boolean(),
