@@ -13,7 +13,6 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { ExecutionId, StorageKey } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -189,6 +188,41 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logger,
       this.fileService,
     );
+  }
+
+  // =========================================================================
+  // Lifecycle Overrides for Reflection Runs
+  // Reflection agents have custom lifecycle: require run stage, set storageKey
+  // =========================================================================
+
+  /**
+   * Reflection agents require a run stage for tracking.
+   * After creating the stage, sets up storageKey for the run.
+   */
+  public override async startRun(): Promise<AgentLogStage> {
+    const runStage = await super.startRun();
+    if (!runStage || !runStage.id) {
+      throw new Error('Run group identifier is required for reflection runs.');
+    }
+
+    // Check if storageKey was already set by hydrateOutputState (resume case)
+    // If still initial, this is a new run - set to task group ID
+    if (this.context.hasInitialStorageKey()) {
+      const storageKey = normalizeRunId(runStage.id);
+      this.context.updateStorageKey(storageKey);
+      this.outputHandler.setActiveRun(storageKey);
+    }
+    // For resumed runs, context.storageKey and outputHandler.activeRun
+    // were already set by hydrateOutputState() - preserve them
+
+    return runStage;
+  }
+
+  /**
+   * Reflection agents create their own init stage.
+   */
+  public override async initRun(runStage: AgentLogStage | undefined): Promise<void> {
+    await this.init(runStage, { createStage: true });
   }
 
   public async hydrateOutputState(params: {
@@ -869,9 +903,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     const totalRounds = this.getTotalRounds();
 
+    // Flow-specific hooks only - lifecycle methods are on the agent (IFlowAgent)
+    const hooks: ReflectionRunHooks = {
+      resetPromptBuilder: () => this.resetPromptBuilder(),
+    };
+
     try {
       await this.executeAgentRunFlow<ReflectionRunShared<C>>({
         lifecycle,
+        hooks,
         createState: () =>
           ({
             totalRounds,
@@ -881,36 +921,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             runState: new AgentRunState(),
           }) satisfies ReflectionRunState,
         createFlow: () => createReflectionRunFlow<C>(),
-        extendHooks: (baseHooks: AgentRunHooks) => {
-          const baseStart = baseHooks.start;
-          return {
-            ...baseHooks,
-            init: async (runStage) => {
-              await this.init(runStage, { createStage: true });
-            },
-            start: async () => {
-              const runStage = await baseStart();
-              if (!runStage || !runStage.id) {
-                throw new Error(
-                  'Run group identifier is required for reflection runs.',
-                );
-              }
-
-              // Check if storageKey was already set by hydrateOutputState (resume case)
-              // If still initial, this is a new run - set to task group ID
-              if (this.context.hasInitialStorageKey()) {
-                const storageKey = normalizeRunId(runStage.id);
-                this.context.updateStorageKey(storageKey);
-                this.outputHandler.setActiveRun(storageKey);
-              }
-              // For resumed runs, context.storageKey and outputHandler.activeRun
-              // were already set by hydrateOutputState() - preserve them
-
-              return runStage;
-            },
-            resetPromptBuilder: () => this.resetPromptBuilder(),
-          } satisfies ReflectionRunHooks;
-        },
       });
     } finally {
       const currentOutputs = this.roundOutputs.filter(Boolean).length;

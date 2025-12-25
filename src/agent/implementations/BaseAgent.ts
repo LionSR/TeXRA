@@ -10,7 +10,7 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
-import { IAgent, type AgentRunHooks, type IFlowAgent } from '@agent/core/IAgent';
+import type { IAgent, IFlowAgent } from '@agent/core/IAgent';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { buildUserVars } from '@agent/utils/userVars';
 // Type imports
@@ -218,16 +218,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   protected async executeAgentRunFlow<
-    Shared extends AgentRunShared<
-      IFlowAgent,
-      any,
-      AgentLifecycle<string>,
-      AgentRunHooks
-    >,
+    Shared extends AgentRunShared<IFlowAgent, any, AgentLifecycle<string>, unknown>,
   >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
     const flowOptions = {
       ...options,
-      agent: this as Shared['agent'],
+      agent: this as unknown as Shared['agent'],
     } as AgentRunFlowOptions<Shared>;
 
     return runAgentFlow<Shared>(flowOptions);
@@ -259,6 +254,30 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   public isInterruptionRequested(): boolean {
     return this.isInterrupted;
+  }
+
+  // =========================================================================
+  // IFlowAgent Lifecycle Methods
+  // These delegate to internal methods and provide the unified interface
+  // that flows depend on. They have identical implementations across all agents.
+  // =========================================================================
+
+  public async startRun(): Promise<AgentLogStage | undefined> {
+    return this.startRunStage();
+  }
+
+  public async initRun(runStage: AgentLogStage | undefined): Promise<void> {
+    await this.init(runStage);
+  }
+
+  // initializeClient() already exists and matches the interface
+
+  public endRun(status: EndGroupStatus): void {
+    this.endRunStage(status);
+  }
+
+  public cleanupRun(): void {
+    this.cleanup();
   }
 
   public getExecutionId(): ExecutionId {
@@ -352,25 +371,6 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
     this.unregisterRunningAgent(streamTabId);
-  }
-
-  public getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks {
-    const baseHooks: AgentRunHooks = {
-      start: () => this.startRunStage(),
-      init: (runStage) => this.init(runStage),
-      initializeClient: () => this.initializeClient(),
-      end: (status) => this.endRunStage(status),
-      cleanup: () => this.cleanup(),
-    };
-
-    return {
-      start: overrides?.start ?? baseHooks.start,
-      init: overrides?.init ?? baseHooks.init,
-      initializeClient:
-        overrides?.initializeClient ?? baseHooks.initializeClient,
-      end: overrides?.end ?? baseHooks.end,
-      cleanup: overrides?.cleanup ?? baseHooks.cleanup,
-    };
   }
 
   protected registerRunningAgent(streamTabId: StreamTabId): void {

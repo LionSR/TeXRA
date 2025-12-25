@@ -4,11 +4,15 @@
  * Handles the finalization pattern:
  * 1. Collect any existing error from lifecycle
  * 2. Run beforeEnd() hook (optional, override in subclass)
- * 3. Call hooks.end(status)
- * 4. Call hooks.cleanup()
+ * 3. Call agent.endRun(status)
+ * 4. Call agent.cleanupRun()
  * 5. Fail with primary error or complete
  *
- * Error aggregation: Both end() and cleanup() run even if one fails.
+ * Lifecycle methods are called directly on the agent (IFlowAgent interface)
+ * rather than through hooks, since they have identical implementations
+ * across all agent types.
+ *
+ * Error aggregation: Both endRun() and cleanupRun() run even if one fails.
  * This ensures cleanup always happens.
  */
 
@@ -16,7 +20,7 @@
 import { BaseNode } from '@agent/node';
 
 // Constants
-import type { AgentRunHooks } from '@agent/core/IAgent';
+import type { IFlowAgent } from '@agent/core/IAgent';
 import { END_GROUP_STATUS } from '@logger/messageTypes';
 
 // Type imports
@@ -29,12 +33,12 @@ import type { AgentRunShared } from './AgentRunFlowRunner';
 
 /**
  * Context extracted in prep() and passed to exec() and hooks.
- * Contains only the fields needed for finalization.
+ * Contains agent, lifecycle, and flow-specific hooks.
  */
 export interface FinalizeContext<
   Lifecycle extends AgentLifecycle<string>,
-  Hooks extends AgentRunHooks,
-  Agent extends object,
+  Hooks,
+  Agent extends IFlowAgent,
 > {
   lifecycle: Lifecycle;
   hooks: Hooks;
@@ -122,11 +126,12 @@ export class StandardFinalizeNode<
         ? END_GROUP_STATUS.ERROR
         : END_GROUP_STATUS.STOPPED;
 
-    // Run finalize: beforeEnd → end (collect error if fails)
+    // Run finalize: beforeEnd → endRun (collect error if fails)
+    // Lifecycle methods called directly on agent (IFlowAgent interface)
     let finalizeError: unknown;
     try {
       await this.beforeEnd(context);
-      await context.hooks.end(status);
+      await context.agent.endRun(status);
     } catch (error) {
       finalizeError = error;
     }
@@ -134,7 +139,7 @@ export class StandardFinalizeNode<
     // Run cleanup (always, even if finalize failed)
     // Cleanup errors are logged but don't override primary/finalize error
     try {
-      await context.hooks.cleanup();
+      await context.agent.cleanupRun();
     } catch {
       // Cleanup failed - primary error takes precedence
     }
