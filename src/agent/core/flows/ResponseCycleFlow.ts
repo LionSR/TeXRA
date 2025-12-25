@@ -391,7 +391,8 @@ type ProcessNodeResult = SkippableNodeResult<ProcessResult>;
  * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ContinuationPrepResult {
-  shouldStop: boolean;
+  shouldSkip: boolean;
+  interrupted: boolean;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
   messages: ProviderMessage[];
@@ -708,67 +709,74 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
   ResponseCycleParams<C>
 > {
+  /**
+   * Extract data and check interruption.
+   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
+   */
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
+    const { options } = this._params.services;
     const { state } = shared;
+
+    // Check skip conditions in prep
+    const shouldSkip =
+      state.shouldStop || !state.stopReason || !state.processedResponse;
+
+    // Check interruption only if not already skipping (avoid unnecessary I/O)
+    const interrupted = !shouldSkip && Boolean(await options.checkInterruption());
+
     return {
-      shouldStop: state.shouldStop,
+      shouldSkip,
+      interrupted,
       stopReason: state.stopReason,
       processedResponse: state.processedResponse,
       messages: state.messages,
     };
   }
 
+  /**
+   * Evaluate continuation conditions.
+   * PocketFlow compliance: Pure computation, no side effects.
+   */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
     const { options, store } = this._params.services;
 
-    if (
-      prepRes.shouldStop ||
-      !prepRes.stopReason ||
-      !prepRes.processedResponse
-    ) {
+    if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
     }
 
-    const stopReason = prepRes.stopReason;
-    const processedResponse = prepRes.processedResponse;
+    if (prepRes.interrupted) {
+      return {
+        kind: 'success',
+        value: {
+          shouldEndTurn: false,
+          shouldStop: true,
+          shouldContinue: false,
+        },
+      };
+    }
 
-    const stage = await options.logger.stage('Continuation decision', {
-      skip: true,
-    });
+    const stopReason = prepRes.stopReason!;
+    const processedResponse = prepRes.processedResponse!;
 
-    return stage.run(async () => {
-      const interrupted = Boolean(await options.checkInterruption());
-      if (interrupted) {
-        return {
-          kind: 'success',
-          value: {
-            shouldEndTurn: false,
-            shouldStop: true,
-            shouldContinue: false,
-          },
-        };
-      }
-
-      const { endTurn: shouldEndTurn, shouldStop } =
-        options.modelHandler.checkStopConditions(
-          stopReason,
-          processedResponse,
-          store.round,
-          store.run,
-          options.agentSetting,
-        );
-
-      const shouldContinue = options.modelHandler.shouldContinue(
+    const { endTurn: shouldEndTurn, shouldStop } =
+      options.modelHandler.checkStopConditions(
         stopReason,
         processedResponse,
+        store.round,
+        store.run,
         options.agentSetting,
       );
 
-      return {
-        kind: 'success',
-        value: { shouldEndTurn, shouldStop, shouldContinue },
-      };
-    });
+    const shouldContinue = options.modelHandler.shouldContinue(
+      stopReason,
+      processedResponse,
+      options.agentSetting,
+    );
+
+    return {
+      kind: 'success',
+      value: { shouldEndTurn, shouldStop, shouldContinue },
+    };
   }
 
   async post(
