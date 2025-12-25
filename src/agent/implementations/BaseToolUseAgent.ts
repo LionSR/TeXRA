@@ -32,7 +32,10 @@ import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
+import {
+  ToolUseSessionLifecycle,
+  type IToolUseSession,
+} from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Type imports
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -129,12 +132,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return tools;
   }
 
+  // =========================================================================
+  // Session Lifecycle Access
+  // =========================================================================
+
   /**
-   * Appends a follow-up message to the queue or resolves a waiting promise
-   * @param text - The follow-up message text
+   * Exposes session lifecycle operations for flows and external callers.
+   * Follows composition over delegation pattern.
    */
-  public appendFollowUp(text: string): void {
-    this.sessionLifecycle.appendFollowUp(text);
+  public get session(): IToolUseSession {
+    return this.sessionLifecycle;
   }
 
   /**
@@ -143,16 +150,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    */
   public setResumeSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.resumeSnapshot = snapshot;
-  }
-
-  public async waitForFollowUp(): Promise<string | null> {
-    return this.sessionLifecycle.waitForFollowUp(() =>
-      this.checkInterruption(),
-    );
-  }
-
-  public hasQueuedFollowUp(): boolean {
-    return this.sessionLifecycle.hasQueuedFollowUp();
   }
 
   public async applyFollowUpMessage(
@@ -183,8 +180,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       buildCycleOptions: (store) => this.createCycleOptions(store),
       runCycle: (options, messages, store) =>
         runToolUseCycle({ options, messages, store }),
-      persistCheckpoint: (messages, store) =>
-        this.persistCheckpoint(messages, store),
+      persistCheckpoint: (messages, _store) =>
+        this.session.persistCheckpoint(messages),
     };
 
     await this.executeAgentRunFlow<ToolUseRunShared<C>>({
@@ -298,26 +295,5 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       modelName: this.agentConfig.model,
       agentName: this.agentConfig.agent,
     };
-  }
-
-  public async enterWaitingState(
-    conversation: ProviderMessage[],
-  ): Promise<void> {
-    await this.sessionLifecycle.enterWaitingState(conversation);
-  }
-
-  public async markRunning(): Promise<void> {
-    await this.sessionLifecycle.markRunning();
-  }
-
-  public async clearPersistedSnapshot(): Promise<void> {
-    await this.sessionLifecycle.clearPersistedSnapshot();
-  }
-
-  public async persistCheckpoint(
-    messages: ProviderMessage[],
-    _store: AgentSharedStore,
-  ): Promise<void> {
-    await this.sessionLifecycle.persistCheckpoint(messages);
   }
 }
