@@ -153,7 +153,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   if (!(modelName in MODEL_CONFIGS)) {
     await showInstructionWithSuppress(
       'modelNotRecognized',
-      `Model "${modelName}" is not recognized.`,
+      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
       [{ title: 'Model Documentation', callback: () => vscode.commands.executeCommand('texra.openDoc', 'models') }],
       false,
     );
@@ -233,6 +233,11 @@ export async function runPreparedAgent<T extends IAgent>(
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     if (!isResume) {
+      logger.info(`Starting task execution for ${streamTabId}`);
+      logger.info(`Input file: ${config.inputFile}`);
+      logger.debug(`Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`);
+      logger.debug(`Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`);
+
       if (!runStorage.isViewVisible()) {
         await vscode.commands.executeCommand('texra.showProgressView');
       }
@@ -250,6 +255,7 @@ export async function runPreparedAgent<T extends IAgent>(
     await logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
       await agent.run();
+      logger.debug(`Task completed successfully`);
       StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
     }, { skip: isResume });
 
@@ -266,7 +272,8 @@ function showAgentNotification(config: AgentConfig): void {
     : config.outputFiles?.[0] ? `to ${path.basename(config.outputFiles[0])}` : '';
 
   vscode.window.showInformationMessage(
-    `TeXRA Agent Started: "${config.agent}" processing ${inputName} with ${config.model} ${outputInfo}`,
+    `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+    { modal: false, detail: 'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.' },
     'Show ProgressBoard',
   ).then((sel: string | undefined) => {
     if (sel) vscode.commands.executeCommand('texra.showProgressView');
@@ -286,10 +293,10 @@ async function handleError(
   if (rawMsg.includes('Missing API key') || rawMsg.includes('API key not found')) {
     await showInstructionWithSuppress(
       'missingApiKey',
-      'API key not found. Set your API key and run again.',
+      'API key not found. Set your API key in the extension settings and run again.',
       [
         { title: 'Set API Key', callback: () => vscode.commands.executeCommand('texra.setApiKey') },
-        { title: 'Open Settings', callback: () => vscode.commands.executeCommand('texra.openDoc', 'configuration') },
+        { title: 'Open Settings Guide', callback: () => vscode.commands.executeCommand('texra.openDoc', 'configuration') },
       ],
       false,
     );
@@ -297,10 +304,21 @@ async function handleError(
     vscode.window.showErrorMessage(errorMsg);
   }
 
+  // Use context logger if available, fall back to stream-specific logger
   const errorLogger = context?.logger ?? new AgentLogger(streamId, true);
-  await errorLogger.withScope(`Error: ${agentName}`, async () => {
-    errorLogger.logError(errorMsg, err, { operation: `execute ${agentName}` });
-  }, { errorStatus: 'error' });
+  const errorContext = { operation: `execute ${agentName}` };
+
+  // Try to log within existing group if agent has one
+  const groupId = agent?.getLastRunGroupId();
+  if (groupId && context?.logger) {
+    await errorLogger.withExistingGroup(groupId, async () => {
+      errorLogger.logError(errorMsg, err, errorContext);
+    }, { label: `Error: ${agentName}` });
+  } else {
+    await errorLogger.withScope(`Error: ${agentName}`, async () => {
+      errorLogger.logError(errorMsg, err, errorContext);
+    }, { errorStatus: 'error' });
+  }
 
   throw new Error(errorMsg);
 }
@@ -322,9 +340,6 @@ export async function executeAgent(
   }
 
   const isResume = options?.resume ?? false;
-  const agentName = agentConfig.useMultipleOutputs
-    ? getMultipleName(agentConfig.agent)
-    : agentConfig.agent;
 
   const { agent, context } = await prepareAgentInstance({
     agentName: agentConfig.agent,
@@ -332,28 +347,30 @@ export async function executeAgent(
     executionId,
   });
 
+  const streamTabId = agent.getStreamTabId();
+
   // Handle resume hydration for reflection agents
   if (isResume && agent instanceof BaseReflectionAgent && executionId) {
-    StreamStatusService.set(agent.getStreamTabId(), STREAM_STATUS.RESUMING);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
     const runStorage = getRunStorageService();
-    const activeRunId = runStorage.getActiveRunId(agent.getStreamTabId());
+    const activeRunId = runStorage.getActiveRunId(streamTabId);
     const storageKey = normalizeRunId(activeRunId ?? executionId);
-    const runOutputs = runStorage.getRunOutputFiles(agent.getStreamTabId(), { storageKey });
+    const runOutputs = runStorage.getRunOutputFiles(streamTabId, { storageKey });
     if (runOutputs) {
       await agent.hydrateOutputState({ executionId, storageKey, rounds: runOutputs });
     }
   }
 
   // Check if already running
-  const currentStatus = StreamStatusService.get(agent.getStreamTabId());
+  const currentStatus = StreamStatusService.get(streamTabId);
   if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
-    throw new Error(`Task "${agent.getStreamTabId()}" is already running.`);
+    throw new Error(`Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`);
   }
 
   // Log multi-output warning
   const { outputFiles, useMultipleOutputs } = agent.config;
   if (Array.isArray(outputFiles) && outputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(`Multiple output files provided but useMultipleOutputs flag is disabled.`);
+    logger.warn(`Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`);
   }
 
   await runPreparedAgent(agent, context, { isResume, executionId });
