@@ -1,38 +1,23 @@
 /**
- * @file Common types for agent flow execution.
+ * Core types for agent flow execution.
  *
- * This module provides shared type infrastructure used by both workflow
- * (reflection) and tool-use agent flows. These types enable a consistent
- * execution pattern across different agent categories while allowing
- * category-specific customization.
- *
- * ## Architecture
- *
- * The flow type system is built around these key abstractions:
- *
- * 1. **AgentLifecycle<Phase>** - State machine for lifecycle management
- * 2. **AgentRunShared<A, State, Lifecycle, Hooks>** - Coordinates flow execution
- * 3. **AgentRunHooks** - Core lifecycle callbacks (start, init, end, cleanup)
- *
- * Category-specific flows (workflow, tool-use) extend these types:
- * - ReflectionRunState, ReflectionRunHooks, ReflectionRunShared
- * - ToolUseRunState, ToolUseRunHooks, ToolUseRunShared
- *
- * @see ReflectionRunFlow.ts for workflow-specific types
- * @see ToolUseRunFlow.ts for tool-use-specific types
+ * Provides the shared state container used by all agent run flows.
  */
 
 // Type imports
-import type { BaseNode } from '@agent/node';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
 
-// ============================================================================
-// Core Flow Types
-// ============================================================================
-
-/** Generic shared state for agent flow execution. */
+/**
+ * Generic shared state for agent flow execution.
+ *
+ * This is the core container that flows use to coordinate:
+ * - agent: The agent instance being run
+ * - state: Flow-specific mutable runtime state
+ * - lifecycle: Phase and status tracking
+ * - hooks: Callbacks for lifecycle events
+ */
 export interface AgentRunShared<
   A extends BaseAgent<any>,
   State,
@@ -46,22 +31,8 @@ export interface AgentRunShared<
 }
 
 /**
- * Link between flow nodes. Single source of truth.
- *
- * Used by buildRunFlow and createAgentRunFlow to define the flow graph.
- * When `to` is undefined, the link targets the finalize node.
- */
-export interface FlowLink<Shared> {
-  from: BaseNode<Shared>;
-  on: string;
-  to?: BaseNode<Shared>;
-}
-
-/**
  * Base type alias for flow shared state constraints.
- *
  * Use this instead of repeating the full generic constraint.
- * Reduces duplication in AgentRunFlowRunner.ts and similar files.
  */
 export type BaseFlowShared = AgentRunShared<
   BaseAgent<any>,
@@ -70,4 +41,16 @@ export type BaseFlowShared = AgentRunShared<
   AgentRunHooks
 >;
 
-export type { AgentRunHooks };
+// ============================================================================
+// Node Result Types
+// ============================================================================
+
+/**
+ * Result type for node exec methods that return a value.
+ * Use inline try/catch in exec() and return { result } on success or { error } on failure.
+ *
+ * Note: For invocation nodes with retry support, use InvocationResult from RetryState.ts instead.
+ */
+export type NodeExecResult<T> =
+  | { result: T; error?: undefined }
+  | { error: unknown; result?: undefined };
