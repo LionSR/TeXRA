@@ -62,11 +62,11 @@ export interface CycleDebugFileOptions {
 
 /**
  * Result type for nodes that can be skipped based on flow state.
- * Use this when a node might not execute due to prior failures or conditions.
+ * Uses 'kind' discriminant for consistency with InvocationResult.
  */
 export type SkippableNodeResult<T> =
-  | { skipped: true }
-  | { skipped: false; value: T };
+  | { kind: 'skipped' }
+  | { kind: 'success'; value: T };
 
 /**
  * Generic reset function for cycle states.
@@ -152,23 +152,25 @@ export interface CreateDebugContextOptions {
   logger: AgentLogger;
   modelName?: string;
   executionId?: ExecutionId;
-  agentName?: string;
+  /** Whether this is a remote agent (caller should compute via isRemoteAgent) */
+  isRemote?: boolean;
 }
 
 /**
  * Creates a debug context for cycle operations.
  * Single source of truth - eliminates duplicate context creation.
+ *
+ * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
+ * to avoid circular dependency issues.
  */
 export function createDebugContext(
   options: CreateDebugContextOptions,
 ): CycleDebugContext {
-  // Import dynamically to avoid circular dependency at module load time
-  const { isRemoteAgent } = require('@agent/index');
   return {
     logger: options.logger,
     modelName: options.modelName,
     executionId: options.executionId,
-    isRemote: isRemoteAgent(options.agentName),
+    isRemote: options.isRemote,
   };
 }
 
