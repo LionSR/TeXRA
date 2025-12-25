@@ -208,7 +208,6 @@ function assertPreparedState<C>(
 // Node Implementations
 // ============================================================================
 
-
 /**
  * Prepares state for tool-use cycle.
  *
