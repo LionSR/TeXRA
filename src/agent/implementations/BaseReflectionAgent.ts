@@ -904,7 +904,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
 
     try {
-      await this.executeAgentRunFlow<ReflectionRunShared<C>>({
+      await this.executeAgentRunFlow<ReflectionRunShared>({
         lifecycle,
         hooks,
         createState: () =>

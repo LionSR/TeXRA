@@ -1,5 +1,5 @@
 // Local imports - core flow primitives
-import { BaseNode, Node, Flow } from '@agent/node';
+import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
@@ -175,10 +175,12 @@ interface CycleNodePrepResult<C> {
 
 /**
  * Prep result for ToolUseWaitNode.
+ * Contains only the data needed to execute the wait operation.
  */
 interface WaitNodePrepResult {
-  interrupted: boolean;
-  followUp?: string;
+  agent: IToolUseFlowAgent;
+  conversation: ProviderMessage[];
+  hasQueuedFollowUp: boolean;
 }
 
 // ============================================================================
@@ -383,53 +385,77 @@ class ToolUseCycleNode<C> extends Node<ToolUseRunShared<C>> {
  * Phase ownership: None (stays in 'cycle' phase during wait)
  *
  * PocketFlow compliance:
- * - prep(): I/O operations (waiting is I/O, OK in prep)
- * - exec(): Pure transformation of prep result
+ * - prep(): Pure data extraction from shared state
+ * - exec(): I/O operations (entering wait state, waiting for follow-up)
+ * - execFallback(): Convert errors to result type for post()
  * - post(): Side effects (apply follow-up) + routing decision
  *
  * Flow-control methods called directly on agent (like ReflectionRoundNode pattern).
  * Uses CONTINUE transition to loop back to CycleNode.
  */
-class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
-    const { agent } = shared;
+class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
 
-    // Check interruption first (direct agent call)
-    if (agent.isInterruptionRequested()) {
-      return { interrupted: true };
+  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult | null> {
+    // Pure extraction - no side effects
+    // Wrap in try/catch since prep() errors aren't caught by execFallback()
+    try {
+      return {
+        agent: shared.agent,
+        conversation: shared.state.conversation,
+        hasQueuedFollowUp: shared.agent.hasQueuedFollowUp(),
+      };
+    } catch (error) {
+      console.error('ToolUseWaitNode prep error:', error);
+      return null;
+    }
+  }
+
+  async exec(prepRes: WaitNodePrepResult | null): Promise<WaitExecResult> {
+    // Handle prep failure
+    if (!prepRes) {
+      return { kind: 'stop', reason: 'interrupted' };
     }
 
-    // Handle waiting state (I/O - OK in prep)
-    if (agent.hasQueuedFollowUp()) {
+    const { agent, conversation, hasQueuedFollowUp } = prepRes;
+
+    // Check interruption first
+    if (agent.isInterruptionRequested()) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+
+    // Handle waiting state (I/O in exec where errors are caught)
+    if (hasQueuedFollowUp) {
       await agent.clearPersistedSnapshot();
     } else {
-      await agent.enterWaitingState(shared.state.conversation);
+      await agent.enterWaitingState(conversation);
     }
 
-    // Wait for follow-up (blocking I/O - OK in prep, direct agent call)
+    // Wait for follow-up (blocking I/O)
     const followUp = await agent.waitForFollowUp();
 
     if (!followUp || agent.isInterruptionRequested()) {
-      return { interrupted: true };
-    }
-
-    return { interrupted: false, followUp };
-  }
-
-  async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    // Pure: just transform prep result to exec result
-    if (prepRes.interrupted) {
       return { kind: 'stop', reason: 'interrupted' };
     }
-    if (!prepRes.followUp) {
-      return { kind: 'stop', reason: 'no-followup' };
-    }
-    return { kind: 'continue', followUp: prepRes.followUp };
+
+    return { kind: 'continue', followUp };
+  }
+
+  async execFallback(
+    _prepRes: WaitNodePrepResult | null,
+    error: Error,
+  ): Promise<WaitExecResult> {
+    // Convert error to stop result - post() will handle finalization
+    // Log the error for debugging but don't propagate it
+    console.error('ToolUseWaitNode error during wait:', error.message);
+    return { kind: 'stop', reason: 'interrupted' };
   }
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: WaitNodePrepResult,
+    _prepRes: WaitNodePrepResult | null,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'stop') {
