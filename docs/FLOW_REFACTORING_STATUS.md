@@ -18,7 +18,7 @@ The agent flow refactoring has achieved significant architectural improvements b
 - **Flow files**: 7 total (down from 13, -46%)
 - **Type duplication**: Eliminated (FlowLink, result types unified)
 
-The refactoring successfully addressed the original problems identified in `FLOW_ARCHITECTURE_ANALYSIS.md` while maintaining backward compatibility and test coverage.
+The refactoring successfully addressed the original architectural problems (iteration strategy mismatch, type duplication, hook interface asymmetry) while maintaining backward compatibility and test coverage.
 
 ---
 
