@@ -147,6 +147,12 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
       (state.currentRound > 0 && !state.continueRounds) ||
       agent.isInterruptionRequested();
 
+    // Initialize round context in prep() where state setup belongs (PocketFlow compliance)
+    // This must happen before exec() since executeCurrentRound() depends on the context
+    if (!shouldFinalize) {
+      agent.beginRound(state.currentRound, state.runState, state.conversation);
+    }
+
     return {
       agent,
       state,
@@ -166,14 +172,7 @@ class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
     }
 
     // Let errors throw - Node._exec catches them and calls execFallback
-    // Initialize agent's round context
-    prepRes.agent.beginRound(
-      prepRes.roundIndex,
-      prepRes.state.runState,
-      prepRes.state.conversation,
-    );
-
-    // Execute the round using agent's internal context
+    // Round context was initialized in prep()
     const result = await prepRes.agent.executeCurrentRound();
 
     return { kind: 'success', result };
