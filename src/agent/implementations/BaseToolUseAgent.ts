@@ -20,7 +20,7 @@ import {
   type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 // Type imports
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
