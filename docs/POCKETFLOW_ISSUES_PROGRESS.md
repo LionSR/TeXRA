@@ -9,12 +9,12 @@ This document tracks the resolution of architectural issues identified in the ag
 
 ## Summary
 
-| Priority | Total | Fixed | Remaining |
-|----------|-------|-------|-----------|
-| Critical | 5 | 2 | 3 |
-| High | 5 | 1 | 4 |
-| Medium | 7 | 0 | 7 |
-| Low | 3 | 0 | 3 |
+| Priority | Total | Fixed | Analyzed/Documented | Remaining |
+|----------|-------|-------|---------------------|-----------|
+| Critical | 5 | 2 | 0 | 3 (deferred) |
+| High | 5 | 1 | 4 | 0 |
+| Medium | 7 | 0 | 0 | 7 |
+| Low | 3 | 0 | 0 | 3 |
 
 ---
 
@@ -128,7 +128,7 @@ if (!shouldFinalize) {
 
 ### 7. Incomplete Hook Interfaces - Direct Agent Calls
 
-**Status**: 🔲 Not Started
+**Status**: 📝 DOCUMENTED AS INTENTIONAL
 
 **File**: `src/agent/implementations/flows/ToolUseRunFlow.ts:67-70`
 
@@ -141,13 +141,22 @@ if (!shouldFinalize) {
 - `markRunning()`
 - `enterWaitingState()`
 
-**Recommendation**: Either add these to hooks or document as intentional direct coupling.
+**Analysis**: The code comment at lines 67-70 documents this as intentional:
+> "Session lifecycle methods are called directly on the agent, not via hooks.
+> This follows PocketFlow's pattern where nodes interact with the domain object
+> (agent) directly for stateful operations."
+
+The `IToolUseFlowAgent` interface (added in Issue #6 fix) now formally documents this contract.
+
+**Consideration for future**: Interruption checks (`isInterruptionRequested()`) happen in multiple
+places across flows. Could potentially be centralized at a higher abstraction layer, but this
+would require significant architectural changes to the PocketFlow node execution model.
 
 ---
 
 ### 8. Unhandled I/O Errors in post() Methods
 
-**Status**: 🔲 Not Started
+**Status**: 📝 ANALYZED - Documented as Intentional
 
 **Files**:
 - `ResponseCycleFlow.ts` - ResponseProcessNode.post() file writes
@@ -157,25 +166,38 @@ if (!shouldFinalize) {
 
 **Problem**: I/O operations not wrapped in try/catch.
 
-**Recommendation**: Add error handling or document that errors are fatal.
+**Analysis**: These I/O operations (checkpoint persistence, round finalization, file writes) are
+critical to agent state consistency. Making them silently fail could lead to:
+- Lost user progress
+- Inconsistent conversation state
+- Orphaned resources
+
+**Decision**: Errors are intentionally fatal. If critical I/O fails, the run should abort with
+a clear error rather than continue in a corrupted state. Non-critical operations (debug files)
+already have appropriate handling.
 
 ---
 
 ### 9. AgentCycleBaseOptions Too Wide
 
-**Status**: 🔲 Not Started
+**Status**: 📝 ANALYZED - Low Priority
 
 **File**: `src/agent/core/AgentCycleOptions.ts`
 
 **Problem**: Exposes `userVarChannels` internal architecture to cycles.
 
-**Recommendation**: Create minimal interface for what cycles actually need.
+**Analysis**: Checked usage - `userVarChannels` in the options is never accessed directly
+by cycle code (verified via grep). Only `userVars` (which is `userVarChannels.transient`)
+is actually used. The field is passed through but unused.
+
+**Recommendation**: Future cleanup - mark as deprecated or remove in next major version.
+Not urgent as it doesn't affect functionality.
 
 ---
 
 ### 10. Extension Points Bypass Hook System
 
-**Status**: 🔲 Not Started
+**Status**: 📝 ANALYZED - Intentional Pattern
 
 **Files**:
 - `src/agent/implementations/flows/common/StandardInitNode.ts` - beforeStart()
@@ -183,7 +205,15 @@ if (!shouldFinalize) {
 
 **Problem**: These extension points bypass the hook abstraction.
 
-**Recommendation**: Convert to proper hooks or document as intentional pattern.
+**Analysis**: `beforeStart()` and `beforeEnd()` are protected template methods designed for
+subclass extension, not for external hook injection. This is the Template Method pattern,
+which is different from the Hook pattern used by `AgentRunHooks`.
+
+The two patterns serve different purposes:
+- Template Methods: Allow subclasses to customize specific steps
+- Hooks: Allow external callers to inject behavior
+
+Both patterns are valid and coexist appropriately.
 
 ---
 
