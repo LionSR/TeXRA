@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 // Local imports - core flow primitives
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -14,43 +12,25 @@ import {
   StandardFinalizeNode,
   StandardInitNode,
   AgentLifecycle,
-  BaseRunStateSchema,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
-// Serialization Schema
+// Phase Definitions
 // ============================================================================
-
-/** Reflection agent run state schema for serialization. */
-export const ReflectionRunStateSchema = BaseRunStateSchema.extend({
-  totalRounds: z.number().int().nonnegative(),
-  currentRound: z.number().int().nonnegative(),
-  continueRounds: z.boolean(),
-});
-
-export type ReflectionRunStateSnapshot = z.infer<
-  typeof ReflectionRunStateSchema
->;
 
 /**
  * Reflection run phase - single source of truth for reflection agent flow phases.
  */
-export const REFLECTION_RUN_PHASE = {
+const REFLECTION_RUN_PHASE = {
   IDLE: 'idle',
   INIT: 'init',
   ROUNDS: 'rounds',
   FINALIZE: 'finalize',
 } as const;
 
-export const ReflectionRunPhaseSchema = z.enum([
-  REFLECTION_RUN_PHASE.IDLE,
-  REFLECTION_RUN_PHASE.INIT,
-  REFLECTION_RUN_PHASE.ROUNDS,
-  REFLECTION_RUN_PHASE.FINALIZE,
-]);
-
-export type ReflectionRunPhase = z.infer<typeof ReflectionRunPhaseSchema>;
+export type ReflectionRunPhase =
+  (typeof REFLECTION_RUN_PHASE)[keyof typeof REFLECTION_RUN_PHASE];
 
 export type ReflectionRunLifecycle = AgentLifecycle<ReflectionRunPhase>;
 
