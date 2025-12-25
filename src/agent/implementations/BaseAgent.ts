@@ -10,7 +10,7 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
-import { IAgent, type AgentRunHooks } from '@agent/core/IAgent';
+import { IAgent, type AgentRunHooks, type IFlowAgent } from '@agent/core/IAgent';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { buildUserVars } from '@agent/utils/userVars';
 // Type imports
@@ -219,7 +219,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected async executeAgentRunFlow<
     Shared extends AgentRunShared<
-      BaseAgent<any>,
+      IFlowAgent,
       any,
       AgentLifecycle<string>,
       AgentRunHooks
