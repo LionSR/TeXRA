@@ -15,6 +15,3 @@ import { LineChangesSchema } from '@tools/result';
 export const DiffStatsSchema = LineChangesSchema.partial();
 
 export type DiffStats = z.infer<typeof DiffStatsSchema>;
-
-// Re-export LineChanges for consumers that need the required version
-export { LineChangesSchema, type LineChanges } from '@tools/result';

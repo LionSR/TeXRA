@@ -26,9 +26,6 @@ import {
   type RemoteAgentLoadOptions,
 } from './types';
 
-// Re-export types for backward compatibility
-export type { RemoteAgentMetadata, RemoteAgentConfig } from './types';
-
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
 

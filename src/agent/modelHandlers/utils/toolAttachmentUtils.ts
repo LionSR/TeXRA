@@ -15,15 +15,6 @@ import {
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-// Re-export schemas from result.ts for backwards compatibility
-export {
-  ToolFileAttachmentSchema,
-  FileReferenceSchema,
-  LineChangesSchema,
-  EditRecordSchema,
-  type FileReference,
-} from '@tools/result';
-
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
 // ============================================================================
