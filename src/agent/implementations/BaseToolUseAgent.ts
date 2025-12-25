@@ -185,12 +185,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           buildCycleOptions: (store) => this.createCycleOptions(store),
           runCycle: (options, messages, store) =>
             runToolUseCycle({ options, messages, store }),
-          checkInterruption: () => this.checkInterruption(),
-          hasQueuedFollowUp: () => this.hasQueuedFollowUp(),
-          enterWaitingState: () => this.enterWaitingState(),
           clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
           waitForFollowUp: () => this.waitForFollowUp(),
-          markRunning: () => this.markRunning(),
           applyFollowUp: (followUp, messages) =>
             this.applyFollowUpMessage(followUp, messages),
           persistCheckpoint: (messages, store) =>
