@@ -277,7 +277,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.store = store;
 
     // Note: CycleNode owns 'cycle' phase transition
-    return FlowTransition.EXECUTE;
+    return undefined; // Follow next() → CycleNode
   }
 }
 
@@ -347,10 +347,10 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
           shared.state.conversation,
           prepRes.store,
         );
-        return FlowTransition.EXECUTE; // → WaitNode
+        return undefined; // Follow next() → WaitNode
 
       case 'skipped':
-        return FlowTransition.EXECUTE; // → WaitNode
+        return undefined; // Follow next() → WaitNode
 
       case 'failed':
         shared.lifecycle.fail(new Error(execRes.message));
@@ -448,27 +448,25 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
       ),
   });
 
+  // Wire nodes using native PocketFlow API
+  // Linear flow (happy path): prepare → cycle → wait
+  prepareNode.next(cycleNode);
+  cycleNode.next(waitNode);
+
+  // Branches: error paths → finalize, loop → cycle
+  prepareNode.on(FlowTransition.FINALIZE, finalizeNode);
+  cycleNode.on(FlowTransition.FINALIZE, finalizeNode);
+  waitNode.on(FlowTransition.CONTINUE, cycleNode);
+  waitNode.on(FlowTransition.FINALIZE, finalizeNode);
+
   return createAgentRunFlow<ToolUseRunShared<C>>({
     init: {
       phase: 'init',
       onSuccess: (shared) => {
         shared.lifecycle.begin('prepare');
-        return FlowTransition.EXECUTE;
       },
     },
+    start: prepareNode,
     finalize: finalizeNode,
-    links: ({ init }) => [
-      // Init → Prepare
-      { from: init, on: FlowTransition.EXECUTE, to: prepareNode },
-      // Prepare → Cycle (or Finalize on error)
-      { from: prepareNode, on: FlowTransition.EXECUTE, to: cycleNode },
-      { from: prepareNode, on: FlowTransition.FINALIZE },
-      // Cycle → Wait (or Finalize on error/cancel)
-      { from: cycleNode, on: FlowTransition.EXECUTE, to: waitNode },
-      { from: cycleNode, on: FlowTransition.FINALIZE },
-      // Wait → Cycle (loop via CONTINUE) or Finalize (stop)
-      { from: waitNode, on: FlowTransition.CONTINUE, to: cycleNode },
-      { from: waitNode, on: FlowTransition.FINALIZE },
-    ],
   });
 }
