@@ -85,7 +85,6 @@ interface PrepareAgentInstanceParams {
   configPayload: Partial<AgentConfig>;
   executionId?: ExecutionId;
   agentClassOverride?: AgentConstructor;
-  contextFactory?: (init: AgentExecutionContextInit) => AgentExecutionContext;
 }
 
 export interface ExecuteAgentOptions {
@@ -131,13 +130,7 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
-  const {
-    agentName,
-    configPayload,
-    executionId,
-    agentClassOverride,
-    contextFactory,
-  } = params;
+  const { agentName, configPayload, executionId, agentClassOverride } = params;
 
   const fullConfig = parseAgentConfig({ agent: agentName, ...configPayload });
   const resolution = await getAgentPath(fullConfig.agent, {
@@ -196,17 +189,11 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     },
   );
 
-  const context = contextFactory
-    ? contextFactory({
-        streamId,
-        executionId,
-        agentCategory: sessionDescriptor.agentCategory,
-      })
-    : new AgentExecutionContext({
-        streamId,
-        executionId,
-        agentCategory: sessionDescriptor.agentCategory,
-      });
+  const context = new AgentExecutionContext({
+    streamId,
+    executionId,
+    agentCategory: sessionDescriptor.agentCategory,
+  });
 
   const AgentClass = (agentClassOverride ??
     getAgentClass(agentSetting)) as AgentConstructor;
@@ -295,7 +282,7 @@ export async function runPreparedAgent<T extends IAgent>(
     );
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleError(err, agentName, streamTabId, agent, context);
+    await handleError(err, agentName, streamTabId, agent, context); // always throws
   }
 }
 
@@ -412,6 +399,17 @@ export async function executeAgent(
 
   const streamTabId = agent.getStreamTabId();
 
+  // Check if already running before any state modifications
+  const currentStatus = StreamStatusService.get(streamTabId);
+  if (currentStatus === STREAM_STATUS.RUNNING) {
+    throw new Error(
+      `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
+    );
+  }
+  if (isResume && currentStatus === STREAM_STATUS.RESUMING) {
+    throw new Error(`Task "${streamTabId}" is already being resumed.`);
+  }
+
   // Handle resume hydration for reflection agents
   if (isResume && agent instanceof BaseReflectionAgent && executionId) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
@@ -428,14 +426,6 @@ export async function executeAgent(
         rounds: runOutputs,
       });
     }
-  }
-
-  // Check if already running
-  const currentStatus = StreamStatusService.get(streamTabId);
-  if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
-    throw new Error(
-      `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
-    );
   }
 
   // Log multi-output warning
