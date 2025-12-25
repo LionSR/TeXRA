@@ -238,7 +238,9 @@ export function createReflectionRunFlow(): Flow<ReflectionRunShared> {
   // Create all nodes
   const initNode = new ReflectionInitNode();
   const roundNode = new ReflectionRoundNode();
-  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared>('finalize');
+  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared>(
+    'finalize',
+  );
 
   // Wire using native PocketFlow API
   // Linear flow (happy path): init → round

@@ -108,10 +108,7 @@ function clearRetryError(state: RetryState): void {
 /**
  * Records an error in retry state. Used internally by handleInvocationResult.
  */
-function recordRetryError(
-  state: RetryState,
-  error: RetryErrorInfo,
-): void {
+function recordRetryError(state: RetryState, error: RetryErrorInfo): void {
   state.lastError = error;
 }
 

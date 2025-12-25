@@ -9,12 +9,12 @@ This document tracks the resolution of architectural issues identified in the ag
 
 ## Summary
 
-| Priority | Total | Fixed | Analyzed/Documented | Remaining |
-|----------|-------|-------|---------------------|-----------|
-| Critical | 5 | 2 | 0 | 3 (deferred) |
-| High | 5 | 1 | 4 | 0 |
-| Medium | 7 | 2 | 0 | 5 |
-| Low | 3 | 0 | 0 | 3 |
+| Priority | Total | Fixed | Analyzed/Documented | Remaining    |
+| -------- | ----- | ----- | ------------------- | ------------ |
+| Critical | 5     | 2     | 0                   | 3 (deferred) |
+| High     | 5     | 1     | 4                   | 0            |
+| Medium   | 7     | 2     | 0                   | 5            |
+| Low      | 3     | 0     | 0                   | 3            |
 
 ---
 
@@ -25,18 +25,20 @@ This document tracks the resolution of architectural issues identified in the ag
 **Status**: ✅ FIXED
 
 **Files**:
+
 - `src/agent/core/flows/ToolUseCycleFlow.ts:319`
 - `src/agent/core/flows/ResponseCycleFlow.ts:292`
 
 **Problem**: Response time calculated in seconds but consumers expect milliseconds.
 
 **Fix Applied**: Removed `/ 1000` division to keep time in milliseconds:
+
 ```typescript
 // BEFORE (wrong):
-const responseTime = (Date.now() - start) / 1000;  // seconds
+const responseTime = (Date.now() - start) / 1000; // seconds
 
 // AFTER (fixed):
-const responseTime = Date.now() - start;  // milliseconds
+const responseTime = Date.now() - start; // milliseconds
 ```
 
 ---
@@ -50,6 +52,7 @@ const responseTime = Date.now() - start;  // milliseconds
 **Problem**: exec() accesses `store.workspace` instead of extracting in prep().
 
 **Reason for Deferral**: `processThinkingBlock()` mutates workspace state. Fixing this requires:
+
 1. Changing model handler interface to return thinking data without mutation
 2. Moving workspace mutation to post()
 
@@ -90,6 +93,7 @@ This is a larger refactoring that affects all model handlers.
 **Problem**: exec() called `agent.beginRound()` which mutates agent state.
 
 **Fix Applied**: Moved `beginRound()` call to prep() where state initialization belongs:
+
 ```typescript
 // BEFORE (in exec):
 prepRes.agent.beginRound(prepRes.roundIndex, ...);
@@ -109,6 +113,7 @@ if (!shouldFinalize) {
 **Status**: ✅ FIXED
 
 **Files**:
+
 - `src/agent/core/IAgent.ts` - Added `IFlowAgent` base interface
 - `src/agent/implementations/flows/ToolUseRunFlow.ts` - Added `IToolUseFlowAgent`
 - `src/agent/implementations/flows/ReflectionRunFlow.ts` - Added `IReflectionFlowAgent`
@@ -118,6 +123,7 @@ if (!shouldFinalize) {
 **Problem**: `ToolUseRunShared` was typed to `BaseToolUseAgent<C>` instead of an interface.
 
 **Fix Applied**:
+
 1. Created `IFlowAgent` base interface with `isInterruptionRequested()` and `getRunHooks()`
 2. Created `IToolUseFlowAgent extends IFlowAgent` with session lifecycle methods
 3. Created `IReflectionFlowAgent extends IFlowAgent` with round execution methods
@@ -133,6 +139,7 @@ if (!shouldFinalize) {
 **File**: `src/agent/implementations/flows/ToolUseRunFlow.ts:67-70`
 
 **Problem**: ~7 session lifecycle methods called directly on agent instead of via hooks:
+
 - `waitForFollowUp()`
 - `applyFollowUp()`
 - `clearPersistedSnapshot()`
@@ -142,6 +149,7 @@ if (!shouldFinalize) {
 - `enterWaitingState()`
 
 **Analysis**: The code comment at lines 67-70 documents this as intentional:
+
 > "Session lifecycle methods are called directly on the agent, not via hooks.
 > This follows PocketFlow's pattern where nodes interact with the domain object
 > (agent) directly for stateful operations."
@@ -159,6 +167,7 @@ would require significant architectural changes to the PocketFlow node execution
 **Status**: 📝 ANALYZED - Documented as Intentional
 
 **Files**:
+
 - `ResponseCycleFlow.ts` - ResponseProcessNode.post() file writes
 - `ToolUseCycleFlow.ts` - ToolUseDispatchNode.post() message processing
 - `ToolUseRunFlow.ts` - ToolUseCycleNode.post() checkpoint persistence
@@ -168,6 +177,7 @@ would require significant architectural changes to the PocketFlow node execution
 
 **Analysis**: These I/O operations (checkpoint persistence, round finalization, file writes) are
 critical to agent state consistency. Making them silently fail could lead to:
+
 - Lost user progress
 - Inconsistent conversation state
 - Orphaned resources
@@ -200,6 +210,7 @@ Not urgent as it doesn't affect functionality.
 **Status**: 📝 ANALYZED - Intentional Pattern
 
 **Files**:
+
 - `src/agent/implementations/flows/common/StandardInitNode.ts` - beforeStart()
 - `src/agent/implementations/flows/common/StandardFinalizeNode.ts` - beforeEnd()
 
@@ -210,6 +221,7 @@ subclass extension, not for external hook injection. This is the Template Method
 which is different from the Hook pattern used by `AgentRunHooks`.
 
 The two patterns serve different purposes:
+
 - Template Methods: Allow subclasses to customize specific steps
 - Hooks: Allow external callers to inject behavior
 
@@ -224,6 +236,7 @@ Both patterns are valid and coexist appropriately.
 **Status**: ✅ FIXED
 
 **Files Modified**:
+
 - `src/agent/core/IAgent.ts` - Added lifecycle methods to `IFlowAgent`, removed `AgentRunHooks`
 - `src/agent/implementations/BaseAgent.ts` - Added lifecycle method implementations, removed `getRunHooks()`
 - `src/agent/implementations/BaseToolUseAgent.ts` - Added lifecycle overrides, simplified `run()`
@@ -236,6 +249,7 @@ Both patterns are valid and coexist appropriately.
 spread across BaseToolUseAgent and BaseReflectionAgent.
 
 **Fix Applied**:
+
 1. Moved lifecycle methods to `IFlowAgent` interface (startRun, initRun, endRun, cleanupRun)
 2. Implemented lifecycle methods in `BaseAgent` with standard behavior
 3. Agent subclasses override only when they need different behavior:
@@ -318,10 +332,10 @@ Now callers provide flow-specific hooks directly and lifecycle methods are on th
 
 ## Change Log
 
-| Date | Commit | Issues Fixed |
-|------|--------|--------------|
-| 2025-12-25 | 5169dd4 | #1 Response time units, #5 ReflectionRoundNode mutation |
-| 2025-12-25 | aec2efc | #6 Flow agent interface decoupling |
+| Date       | Commit  | Issues Fixed                                                   |
+| ---------- | ------- | -------------------------------------------------------------- |
+| 2025-12-25 | 5169dd4 | #1 Response time units, #5 ReflectionRoundNode mutation        |
+| 2025-12-25 | aec2efc | #6 Flow agent interface decoupling                             |
 | 2025-12-25 | 7953c64 | #11 Internalized lifecycle, #14 Eliminated extendHooks pattern |
 
 ---
@@ -332,11 +346,13 @@ Now callers provide flow-specific hooks directly and lifecycle methods are on th
 
 The `startRun()` and `initRun()` methods were combined into a single `startAndInitRun()` method
 since they were always called together sequentially. This simplifies:
+
 - The `IFlowAgent` interface (4 methods instead of 5)
 - Call sites in `StandardInitNode` (one call instead of two)
 - Eliminates the pass-through of runStage from start to init
 
 Each agent type retains its custom behavior:
+
 - `BaseAgent`: Creates stage and initializes
 - `BaseToolUseAgent`: Reuses stages, no new stage during init
 - `BaseReflectionAgent`: Requires stage, sets storageKey before init
@@ -347,11 +363,13 @@ These issues share a common root cause: `processThinkingBlock()` and `checkStopC
 access and mutate shared state from within exec().
 
 **Proper fix requires**:
+
 1. Change `processThinkingBlock(response, workspace)` to return thinking data without mutation
 2. Change `checkStopConditions(...)` to take snapshots instead of mutable state references
 3. Move all workspace/state mutations to post()
 
 This is a cross-cutting change affecting:
+
 - All model handlers (Anthropic, OpenAI, Google, DeepSeek, etc.)
 - IModelHandler interface
 - All cycle flow nodes that call these methods

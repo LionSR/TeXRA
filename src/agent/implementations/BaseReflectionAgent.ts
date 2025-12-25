@@ -915,7 +915,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             conversation: [],
             runState: new AgentRunState(),
           }) satisfies ReflectionRunState,
-        createFlow: () => createReflectionRunFlow<C>(),
+        createFlow: () => createReflectionRunFlow(),
       });
     } finally {
       const currentOutputs = this.roundOutputs.filter(Boolean).length;

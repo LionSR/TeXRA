@@ -218,7 +218,12 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   protected async executeAgentRunFlow<
-    Shared extends AgentRunShared<IFlowAgent, any, AgentLifecycle<string>, unknown>,
+    Shared extends AgentRunShared<
+      IFlowAgent,
+      any,
+      AgentLifecycle<string>,
+      unknown
+    >,
   >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
     const flowOptions = {
       ...options,
