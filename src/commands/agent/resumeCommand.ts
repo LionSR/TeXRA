@@ -2,12 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import {
-  resumeFromSnapshot,
-  type ResumeAgentResult,
-} from '@agent/toolUse/ToolUseFollowUpCoordinator';
+import { resumeFromSnapshot } from '@agent/toolUse/ToolUseFollowUp';
+import type { ResumeAgentResult } from '@agent/toolUse/ToolUseSessionPersistence';
 // Type imports
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 
 interface ResumeAgentCommandPayload {
   snapshot: ToolUseSessionSnapshot;
