@@ -53,9 +53,13 @@ type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
  * Standard finalize node with error aggregation.
  *
  * PocketFlow pattern:
- * - prep(): Set phase, extract context
- * - exec(): Run finalize + cleanup with error collection
+ * - prep(): Extract context from shared
+ * - exec(): Set phase + run finalize + cleanup with error collection
  * - post(): No routing (terminal node)
+ *
+ * Note on phase setting:
+ * Phase is set at start of exec() (consistent with StandardInitNode pattern).
+ * This indicates "we're now in finalization phase" during cleanup work.
  *
  * Note on error handling:
  * This node uses manual try/catch instead of execFallback because:
@@ -90,7 +94,6 @@ export class StandardFinalizeNode<
   }
 
   async prep(shared: Shared): Promise<ContextOf<Shared>> {
-    shared.lifecycle.setPhase(this.phase);
     return {
       lifecycle: shared.lifecycle,
       hooks: shared.hooks,
@@ -107,6 +110,9 @@ export class StandardFinalizeNode<
   }
 
   async exec(context: ContextOf<Shared>): Promise<void> {
+    // Set phase at start of work (consistent with StandardInitNode pattern)
+    context.lifecycle.setPhase(this.phase);
+
     // Primary error is the one that caused us to finalize
     const primaryError = context.lifecycle.error;
 
