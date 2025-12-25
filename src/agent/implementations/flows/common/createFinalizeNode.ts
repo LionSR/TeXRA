@@ -1,10 +1,16 @@
 /**
- * Finalize node factory - creates nodes for agent flow finalization.
+ * Finalize node - standard cleanup node for agent flows.
  *
- * This module consolidates:
- * - Finalize lifecycle error handling (formerly finalizeLifecycle.ts)
- * - Finalize node creation factories
- * - Context types for finalization
+ * Handles the finalization pattern:
+ * 1. Collect any existing error from lifecycle
+ * 2. Run beforeEnd() hook (optional, override in subclass)
+ * 3. Call hooks.end(status)
+ * 4. Call hooks.cleanup()
+ * 5. Report secondary errors, fail with primary or complete
+ *
+ * Error aggregation: Both end() and cleanup() run even if one fails.
+ * This ensures cleanup always happens. Secondary errors are reported
+ * via onSecondaryError() hook.
  */
 
 // Core imports
@@ -22,12 +28,12 @@ import type { AgentLifecycle } from './AgentLifecycle';
 // ============================================================================
 
 /**
- * Context passed to finalize node callbacks.
+ * Shared state constraint for finalize nodes.
  */
-export interface FinalizeNodeContext<
+export interface FinalizeShared<
   Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
-  Agent extends object = object,
+  Agent extends object,
 > {
   lifecycle: Lifecycle;
   hooks: Hooks;
@@ -35,9 +41,9 @@ export interface FinalizeNodeContext<
 }
 
 /**
- * Shared state constraint for finalize nodes.
+ * Context extracted in prep() and passed to exec() and hooks.
  */
-interface FinalizeShared<
+export interface FinalizeContext<
   Lifecycle extends AgentLifecycle<string>,
   Hooks extends AgentRunHooks,
   Agent extends object,
@@ -48,153 +54,169 @@ interface FinalizeShared<
 }
 
 /** Helper type to extract context from shared */
-type FinalizeContext<Shared extends FinalizeShared<any, any, any>> =
-  FinalizeNodeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>;
+type ContextOf<Shared extends FinalizeShared<any, any, any>> = FinalizeContext<
+  Shared['lifecycle'],
+  Shared['hooks'],
+  Shared['agent']
+>;
 
 // ============================================================================
-// Finalize Lifecycle (internal - formerly separate file)
+// StandardFinalizeNode
 // ============================================================================
-
-interface FinalizeLifecycleOptions<Phase extends string> {
-  lifecycle: AgentLifecycle<Phase>;
-  runFinalize: () => Promise<void>;
-  runCleanup: () => Promise<void>;
-  onSuccess: () => void;
-  onSecondaryError?: (error: unknown) => void;
-}
 
 /**
- * Runs finalization with proper error aggregation.
- * Primary error is preserved; secondary errors reported via callback.
+ * Standard finalize node with error aggregation.
+ *
+ * PocketFlow pattern:
+ * - prep(): Set phase, extract context
+ * - exec(): Run finalize + cleanup with error collection
+ * - post(): No routing (terminal node)
+ *
+ * Extension points (override in subclass):
+ * - beforeEnd(): Run operations before hooks.end()
+ * - onSecondaryError(): Handle errors after the primary error
+ *
+ * @example
+ * ```typescript
+ * // Simple usage - just specify phase
+ * const finalizeNode = new StandardFinalizeNode<MyShared>('finalize');
+ *
+ * // With customization - extend the class
+ * class MyFinalizeNode extends StandardFinalizeNode<MyShared> {
+ *   constructor() { super('finalize'); }
+ *
+ *   protected async beforeEnd(ctx: ContextOf<MyShared>): Promise<void> {
+ *     await ctx.hooks.clearPersistedSnapshot();
+ *   }
+ *
+ *   protected onSecondaryError(ctx: ContextOf<MyShared>, error: unknown): void {
+ *     ctx.hooks.logWarning?.('Additional error', error);
+ *   }
+ * }
+ * ```
  */
-async function finalizeLifecycle<Phase extends string>({
-  lifecycle,
-  runFinalize,
-  runCleanup,
-  onSuccess,
-  onSecondaryError,
-}: FinalizeLifecycleOptions<Phase>): Promise<void> {
-  const errors: unknown[] = [];
-  if (lifecycle.error) {
-    errors.push(lifecycle.error);
-  }
-
-  try {
-    await runFinalize();
-  } catch (error) {
-    errors.push(error);
-  }
-
-  try {
-    await runCleanup();
-  } catch (error) {
-    errors.push(error);
-  }
-
-  if (errors.length > 1 && onSecondaryError) {
-    errors.slice(1).forEach((error) => onSecondaryError(error));
-  }
-
-  const primaryError = errors[0];
-  if (primaryError) {
-    lifecycle.fail(primaryError);
-    return;
-  }
-
-  onSuccess();
-}
-
-// ============================================================================
-// Finalize Node Factories
-// ============================================================================
-
-export interface AgentFinalizeNodeOptions<
+export class StandardFinalizeNode<
   Shared extends FinalizeShared<any, any, any>,
-  Status extends string = string,
-> {
-  finalizePhase: Shared['lifecycle']['phase'];
-  computeStatus(context: FinalizeContext<Shared>): Status;
-  runFinalize(context: FinalizeContext<Shared>, status: Status): Promise<void>;
-  runCleanup(context: FinalizeContext<Shared>): Promise<void>;
-  onSuccess?(context: FinalizeContext<Shared>): void | Promise<void>;
-  onSecondaryError?(context: FinalizeContext<Shared>, error: unknown): void;
-}
+> extends BaseNode<Shared> {
+  constructor(protected readonly phase: Shared['lifecycle']['phase']) {
+    super();
+  }
 
-/**
- * Creates a fully customizable finalize node.
- */
-export function createAgentFinalizeNode<
-  Shared extends FinalizeShared<any, any, any>,
-  Status extends string = string,
->(options: AgentFinalizeNodeOptions<Shared, Status>): BaseNode<Shared> {
-  return new (class extends BaseNode<Shared> {
-    async prep(shared: Shared): Promise<FinalizeContext<Shared>> {
-      shared.lifecycle.setPhase(options.finalizePhase);
-      return {
-        lifecycle: shared.lifecycle,
-        hooks: shared.hooks,
-        agent: shared.agent,
-      };
+  async prep(shared: Shared): Promise<ContextOf<Shared>> {
+    shared.lifecycle.setPhase(this.phase);
+    return {
+      lifecycle: shared.lifecycle,
+      hooks: shared.hooks,
+      agent: shared.agent,
+    };
+  }
+
+  /**
+   * Override for pre-end operations (e.g., clear snapshots).
+   * Called before hooks.end().
+   */
+  protected async beforeEnd(_context: ContextOf<Shared>): Promise<void> {
+    // Default: no-op
+  }
+
+  /**
+   * Override to handle secondary errors (errors after the primary).
+   * Called for each error beyond the first.
+   */
+  protected onSecondaryError(
+    _context: ContextOf<Shared>,
+    _error: unknown,
+  ): void {
+    // Default: no-op
+  }
+
+  async exec(context: ContextOf<Shared>): Promise<void> {
+    const errors: unknown[] = [];
+
+    // Collect existing error from lifecycle (from previous node failures)
+    if (context.lifecycle.error) {
+      errors.push(context.lifecycle.error);
     }
 
-    async exec(context: FinalizeContext<Shared>): Promise<void> {
-      const status = options.computeStatus(context);
-      await finalizeLifecycle({
-        lifecycle: context.lifecycle,
-        runFinalize: () => options.runFinalize(context, status),
-        runCleanup: () => options.runCleanup(context),
-        onSuccess: options.onSuccess
-          ? () => options.onSuccess?.(context)
-          : () => {},
-        onSecondaryError: options.onSecondaryError
-          ? (error) => options.onSecondaryError?.(context, error)
-          : undefined,
-      });
+    // Compute status based on error state
+    const status =
+      context.lifecycle.error || context.lifecycle.status === 'error'
+        ? END_GROUP_STATUS.ERROR
+        : END_GROUP_STATUS.STOPPED;
+
+    // Run finalize: beforeEnd → end
+    try {
+      await this.beforeEnd(context);
+      await context.hooks.end(status);
+    } catch (error) {
+      errors.push(error);
     }
-  })();
+
+    // Run cleanup (always, even if finalize failed)
+    try {
+      await context.hooks.cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+
+    // Report secondary errors
+    if (errors.length > 1) {
+      errors.slice(1).forEach((error) => this.onSecondaryError(context, error));
+    }
+
+    // Set final lifecycle status
+    const primaryError = errors[0];
+    if (primaryError) {
+      context.lifecycle.fail(primaryError);
+    } else {
+      context.lifecycle.complete();
+    }
+  }
 }
 
+// ============================================================================
+// Backward compatibility (deprecated)
+// ============================================================================
+
 /**
- * Options for the standard finalize node pattern.
+ * @deprecated Use `new StandardFinalizeNode(phase)` or extend the class instead.
+ * This factory is kept for backward compatibility during migration.
  */
 export interface StandardFinalizeNodeOptions<
   Shared extends FinalizeShared<any, any, any>,
 > {
   finalizePhase: Shared['lifecycle']['phase'];
-  beforeEnd?(context: FinalizeContext<Shared>): Promise<void>;
-  onSecondaryError?(context: FinalizeContext<Shared>, error: unknown): void;
+  beforeEnd?(context: ContextOf<Shared>): Promise<void>;
+  onSecondaryError?(context: ContextOf<Shared>, error: unknown): void;
 }
 
 /**
- * Creates a standard finalize node with common patterns pre-configured.
- *
- * Pattern:
- * - Status: 'error' if lifecycle has error, otherwise 'stopped'
- * - Finalize: optional beforeEnd → hooks.end(status)
- * - Cleanup: hooks.cleanup()
- * - Success: lifecycle.complete()
+ * @deprecated Use `new StandardFinalizeNode(phase)` or extend the class instead.
  */
 export function createStandardFinalizeNode<
   Shared extends FinalizeShared<any, any, any>,
 >(options: StandardFinalizeNodeOptions<Shared>): BaseNode<Shared> {
-  return createAgentFinalizeNode<Shared, 'error' | 'stopped'>({
-    finalizePhase: options.finalizePhase,
-    computeStatus: ({ lifecycle }) =>
-      lifecycle.error || lifecycle.status === 'error'
-        ? END_GROUP_STATUS.ERROR
-        : END_GROUP_STATUS.STOPPED,
-    runFinalize: async (context, status) => {
-      if (options.beforeEnd) {
-        await options.beforeEnd(context);
-      }
-      await context.hooks.end(status);
-    },
-    runCleanup: async ({ hooks }) => {
-      await hooks.cleanup();
-    },
-    onSuccess: ({ lifecycle }) => {
-      lifecycle.complete();
-    },
-    onSecondaryError: options.onSecondaryError,
-  });
+  // Create an instance with overridden methods
+  const node = new StandardFinalizeNode<Shared>(options.finalizePhase);
+
+  if (options.beforeEnd) {
+    const originalBeforeEnd = options.beforeEnd;
+    (node as any).beforeEnd = async function (
+      context: ContextOf<Shared>,
+    ): Promise<void> {
+      await originalBeforeEnd(context);
+    };
+  }
+
+  if (options.onSecondaryError) {
+    const originalOnSecondaryError = options.onSecondaryError;
+    (node as any).onSecondaryError = function (
+      context: ContextOf<Shared>,
+      error: unknown,
+    ): void {
+      originalOnSecondaryError(context, error);
+    };
+  }
+
+  return node;
 }
