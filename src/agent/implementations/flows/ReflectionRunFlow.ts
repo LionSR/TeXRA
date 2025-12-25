@@ -205,6 +205,11 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
     finalizePhase: 'finalize',
   });
 
+  // Wire nodes using native PocketFlow API
+  // Branches: loop → roundNode, end → finalize
+  roundNode.on(FlowTransition.CONTINUE, roundNode);
+  roundNode.on(FlowTransition.FINALIZE, finalizeNode);
+
   return createAgentRunFlow<ReflectionRunShared<C>>({
     init: {
       phase: 'init',
@@ -213,14 +218,9 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
       },
       onSuccess: (shared) => {
         shared.lifecycle.begin('rounds');
-        return FlowTransition.ROUND;
       },
     },
+    start: roundNode,
     finalize: finalizeNode,
-    links: ({ init }) => [
-      { from: init, on: FlowTransition.ROUND, to: roundNode },
-      { from: roundNode, on: FlowTransition.CONTINUE, to: roundNode },
-      { from: roundNode, on: FlowTransition.FINALIZE },
-    ],
   });
 }
