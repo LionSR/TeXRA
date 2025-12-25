@@ -289,9 +289,9 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
             : undefined,
         });
 
-        const elapsed = (Date.now() - start) / 1000;
+        const elapsedMs = Date.now() - start;
 
-        return { response: modelResponse, responseTime: elapsed };
+        return { response: modelResponse, responseTime: elapsedMs };
       });
 
       return { kind: 'success', response, responseTime };

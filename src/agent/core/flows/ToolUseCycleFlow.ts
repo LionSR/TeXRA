@@ -316,7 +316,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
-      const responseTime = (Date.now() - start) / 1000;
+      const responseTime = Date.now() - start;
 
       return {
         kind: 'success',
