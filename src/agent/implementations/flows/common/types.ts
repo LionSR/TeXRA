@@ -47,10 +47,10 @@ export type BaseFlowShared = AgentRunShared<
 
 /**
  * Result type for node exec methods that return a value.
- * Use inline try/catch in exec() and return { result } on success or { error } on failure.
+ * Uses 'kind' discriminant for consistency with InvocationResult and SkippableNodeResult.
  *
  * Note: For invocation nodes with retry support, use InvocationResult from RetryState.ts instead.
  */
 export type NodeExecResult<T> =
-  | { result: T; error?: undefined }
-  | { error: unknown; result?: undefined };
+  | { kind: 'success'; result: T }
+  | { kind: 'error'; error: unknown };

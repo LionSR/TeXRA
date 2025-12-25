@@ -58,8 +58,10 @@ export interface FlowLink<Shared> {
 // Init Node (internal implementation)
 // ============================================================================
 
-/** Result type for init node exec - success ({}) or failure ({error}) */
-type InitExecResult = { error?: unknown };
+/** Result type for init node exec - uses 'kind' discriminant for consistency. */
+type InitExecResult =
+  | { kind: 'success' }
+  | { kind: 'error'; error: unknown };
 
 class AgentInitNode<
   Shared extends AgentInitShared<any, any>,
@@ -86,9 +88,9 @@ class AgentInitNode<
         await this.config.beforeInitialize(prepRes.shared);
       }
       await prepRes.hooks.initializeClient();
-      return {};
+      return { kind: 'success' };
     } catch (error) {
-      return { error };
+      return { kind: 'error', error };
     }
   }
 
@@ -97,7 +99,7 @@ class AgentInitNode<
     _prepRes: unknown,
     execRes: InitExecResult,
   ): Promise<string | undefined> {
-    if (execRes.error) {
+    if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
       if (this.config.onFailure) {
         return this.config.onFailure(shared, execRes.error);
