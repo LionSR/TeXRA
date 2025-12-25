@@ -25,19 +25,9 @@ import {
   AgentLifecycle,
   type AgentRunShared,
   type FinalizeContext,
+  type InitExecResult,
+  type NodeExecResult,
 } from '@agent/implementations/flows/common';
-
-// ============================================================================
-// Local Types (formerly in common/types.ts - only used here)
-// ============================================================================
-
-/**
- * Result type for node exec methods that return a value.
- * Uses 'kind' discriminant for consistency with InvocationResult.
- */
-type NodeExecResult<T> =
-  | { kind: 'success'; result: T }
-  | { kind: 'error'; error: unknown };
 
 // ============================================================================
 // Serialization Schema (formerly in common/runStateSchemas.ts)
@@ -81,9 +71,10 @@ export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 /**
  * Hooks interface for tool-use agent runs.
  *
- * Note: Flow-control methods (checkInterruption, hasQueuedFollowUp, markRunning,
- * enterWaitingState) are called directly on the agent, not via hooks.
- * This follows the pattern used by ReflectionRoundNode.
+ * Note: Session lifecycle methods (waitForFollowUp, applyFollowUp, clearPersistedSnapshot,
+ * checkInterruption, hasQueuedFollowUp, markRunning, enterWaitingState) are called
+ * directly on the agent, not via hooks. This follows PocketFlow's pattern where
+ * nodes interact with the domain object (agent) directly for stateful operations.
  */
 export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   prepareState(): Promise<{
@@ -101,12 +92,6 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     errorMessage?: string;
     userCancelled: boolean;
   }>;
-  clearPersistedSnapshot(): Promise<void>;
-  waitForFollowUp(): Promise<string | null>;
-  applyFollowUp(
-    followUp: string,
-    messages: ProviderMessage[],
-  ): Promise<ProviderMessage[]>;
   persistCheckpoint(
     messages: ProviderMessage[],
     store: AgentSharedStore,
@@ -198,6 +183,22 @@ interface WaitNodePrepResult {
 // State Guards
 // ============================================================================
 
+/** Prepared state type with non-null cycleOptions and store. */
+type PreparedState<C> = ToolUseRunState<C> & {
+  cycleOptions: ToolUseCycleOptions<C>;
+  store: AgentSharedStore;
+};
+
+/**
+ * Type predicate to check if state has been prepared.
+ * Use when you want to handle unprepared state gracefully.
+ */
+function isPreparedState<C>(
+  state: ToolUseRunState<C>,
+): state is PreparedState<C> {
+  return state.cycleOptions !== null && state.store !== null;
+}
+
 /**
  * Asserts that state has been prepared (cycleOptions and store are non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
@@ -206,22 +207,19 @@ interface WaitNodePrepResult {
  * - Type narrowing (removes `| null` from types)
  * - Fail-fast with descriptive error if flow invariant is violated
  * - Documentation of the PrepareNode → CycleNode contract
+ *
+ * For cases where you want to handle unprepared state gracefully,
+ * use {@link isPreparedState} instead.
  */
 function assertPreparedState<C>(
   state: ToolUseRunState<C>,
-): asserts state is ToolUseRunState<C> & {
-  cycleOptions: ToolUseCycleOptions<C>;
-  store: AgentSharedStore;
-} {
-  if (!state.cycleOptions) {
+): asserts state is PreparedState<C> {
+  if (!isPreparedState(state)) {
+    const missing = [];
+    if (!state.cycleOptions) missing.push('cycleOptions');
+    if (!state.store) missing.push('store');
     throw new Error(
-      'CycleNode invariant violated: cycleOptions is null. ' +
-        'PrepareNode must run before CycleNode.',
-    );
-  }
-  if (!state.store) {
-    throw new Error(
-      'CycleNode invariant violated: store is null. ' +
+      `CycleNode invariant violated: ${missing.join(', ')} is null. ` +
         'PrepareNode must run before CycleNode.',
     );
   }
@@ -230,9 +228,6 @@ function assertPreparedState<C>(
 // ============================================================================
 // Node Implementations
 // ============================================================================
-
-/** Result type for init/prepare nodes. */
-type InitExecResult = { kind: 'success' } | { kind: 'error'; error: unknown };
 
 /**
  * Initializes the tool-use agent run.
@@ -441,22 +436,22 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
  */
 class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
-    const { agent, hooks } = shared;
+    const { agent } = shared;
 
-    // Check interruption first (direct agent call, like ReflectionRoundNode)
+    // Check interruption first (direct agent call)
     if (agent.isInterruptionRequested()) {
       return { interrupted: true };
     }
 
     // Handle waiting state (I/O - OK in prep)
     if (agent.hasQueuedFollowUp()) {
-      await hooks.clearPersistedSnapshot();
+      await agent.clearPersistedSnapshot();
     } else {
       await agent.enterWaitingState();
     }
 
-    // Wait for follow-up (blocking I/O - OK in prep)
-    const followUp = await hooks.waitForFollowUp();
+    // Wait for follow-up (blocking I/O - OK in prep, direct agent call)
+    const followUp = await agent.waitForFollowUp();
 
     if (!followUp || agent.isInterruptionRequested()) {
       return { interrupted: true };
@@ -485,10 +480,10 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    // Apply follow-up (side effects belong in post)
+    // Apply follow-up (side effects belong in post, direct agent call)
     await shared.agent.markRunning();
-    await shared.hooks.clearPersistedSnapshot();
-    shared.state.conversation = await shared.hooks.applyFollowUp(
+    await shared.agent.clearPersistedSnapshot();
+    shared.state.conversation = await shared.agent.applyFollowUpMessage(
       execRes.followUp,
       shared.state.conversation,
     );
@@ -515,7 +510,8 @@ class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
   }
 
   protected async beforeEnd(context: ToolUseFinalizeContext<C>): Promise<void> {
-    await context.hooks.clearPersistedSnapshot();
+    // Direct agent call (like WaitNode pattern)
+    await context.agent.clearPersistedSnapshot();
   }
 }
 

@@ -142,12 +142,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]> {
     this.logger.userMessage(followUp);
-    const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
+    // Pure: compute and return, let flow update state
+    return await this.modelHandler.createUserFollowUpMessages(
       messages,
       followUp,
     );
-    this.getActiveState().conversation = [...updatedMessages];
-    return this.getActiveState().conversation;
   }
 
   public override interrupt(): void {
@@ -185,10 +184,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           buildCycleOptions: (store) => this.createCycleOptions(store),
           runCycle: (options, messages, store) =>
             runToolUseCycle({ options, messages, store }),
-          clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-          waitForFollowUp: () => this.waitForFollowUp(),
-          applyFollowUp: (followUp, messages) =>
-            this.applyFollowUpMessage(followUp, messages),
           persistCheckpoint: (messages, store) =>
             this.persistCheckpoint(messages, store),
           cleanup: async () => {
