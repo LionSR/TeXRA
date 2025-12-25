@@ -93,16 +93,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   // =========================================================================
 
   /**
-   * Tool-use agents reuse existing stages rather than creating new ones.
+   * Tool-use agents reuse existing stages and don't create new ones during init.
    */
-  public override async startRun(): Promise<undefined> {
-    return undefined;
-  }
-
-  /**
-   * Tool-use agents don't create a new stage during init.
-   */
-  public override async initRun(): Promise<void> {
+  public override async startAndInitRun(): Promise<void> {
     await this.init(undefined, { createStage: false });
   }
 

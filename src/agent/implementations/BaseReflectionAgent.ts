@@ -197,10 +197,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Reflection agents require a run stage for tracking.
-   * After creating the stage, sets up storageKey for the run.
+   * Creates the stage, sets up storageKey, then initializes.
    */
-  public override async startRun(): Promise<AgentLogStage> {
-    const runStage = await super.startRun();
+  public override async startAndInitRun(): Promise<void> {
+    // Start the run stage
+    const runStage = await this.startRunStage();
     if (!runStage || !runStage.id) {
       throw new Error('Run group identifier is required for reflection runs.');
     }
@@ -215,13 +216,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // For resumed runs, context.storageKey and outputHandler.activeRun
     // were already set by hydrateOutputState() - preserve them
 
-    return runStage;
-  }
-
-  /**
-   * Reflection agents create their own init stage.
-   */
-  public override async initRun(runStage: AgentLogStage | undefined): Promise<void> {
+    // Initialize with the run stage
     await this.init(runStage, { createStage: true });
   }
 

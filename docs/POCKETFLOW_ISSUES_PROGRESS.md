@@ -328,6 +328,19 @@ Now callers provide flow-specific hooks directly and lifecycle methods are on th
 
 ## Notes
 
+### Lifecycle Method Consolidation
+
+The `startRun()` and `initRun()` methods were combined into a single `startAndInitRun()` method
+since they were always called together sequentially. This simplifies:
+- The `IFlowAgent` interface (4 methods instead of 5)
+- Call sites in `StandardInitNode` (one call instead of two)
+- Eliminates the pass-through of runStage from start to init
+
+Each agent type retains its custom behavior:
+- `BaseAgent`: Creates stage and initializes
+- `BaseToolUseAgent`: Reuses stages, no new stage during init
+- `BaseReflectionAgent`: Requires stage, sets storageKey before init
+
 ### Issues #2, #3, #4: Model Handler Interface Refactoring
 
 These issues share a common root cause: `processThinkingBlock()` and `checkStopConditions()`
