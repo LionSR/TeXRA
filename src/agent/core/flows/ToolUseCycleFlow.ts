@@ -167,8 +167,7 @@ function resetToolUseState(state: ToolUseCycleState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ToolUseCycleServices)
  */
-export type ToolUseCycleShared<_C = unknown> =
-  BaseCycleShared<ToolUseCycleState>;
+export type ToolUseCycleShared = BaseCycleShared<ToolUseCycleState>;
 
 /**
  * Prepares a tool-use cycle by checking interruptions and setting up debug context.
@@ -176,10 +175,10 @@ export type ToolUseCycleShared<_C = unknown> =
  * Services accessed via `_params.services`: options, store
  */
 class ToolUsePrepNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
-  async prep(_shared: ToolUseCycleShared<C>): Promise<{
+  async prep(_shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
@@ -200,7 +199,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     prepRes: {
       interrupted: boolean;
       debugContext: CycleDebugContext;
@@ -260,7 +259,7 @@ type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   protected getOperationName(): string {
@@ -275,7 +274,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ToolUseCycleShared<C>): Promise<BaseInvocationPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -345,7 +344,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     _prepRes: BaseInvocationPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
@@ -421,14 +420,14 @@ type ToolUseProcessExecResult =
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseProcessNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   /**
    * Extract data from shared for exec().
    * PocketFlow compliance: Only extract what exec() needs.
    */
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseProcessPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -555,7 +554,7 @@ class ToolUseProcessNode<C> extends BaseNode<
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
@@ -670,7 +669,7 @@ type ToolUseDispatchExecResult =
  * Services accessed via `_params.services`: options, store
  */
 class ToolUseDispatchNode<C> extends BaseNode<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   /**
@@ -678,7 +677,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
    * PocketFlow compliance: Only extract what exec() needs.
    */
   async prep(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
   ): Promise<ToolUseDispatchPrepResult> {
     const { state } = shared;
     return {
@@ -847,7 +846,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared,
     prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
@@ -957,7 +956,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
  * ```
  */
 export function createToolUseCycleFlow<C>(): Flow<
-  ToolUseCycleShared<C>,
+  ToolUseCycleShared,
   ToolUseCycleParams<C>
 > {
   const prepNode = new ToolUsePrepNode<C>();
@@ -975,5 +974,5 @@ export function createToolUseCycleFlow<C>(): Flow<
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleShared<C>, ToolUseCycleParams<C>>(prepNode);
+  return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }

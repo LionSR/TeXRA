@@ -57,6 +57,13 @@ type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
  * - exec(): Run finalize + cleanup with error collection
  * - post(): No routing (terminal node)
  *
+ * Note on error handling:
+ * This node uses manual try/catch instead of execFallback because:
+ * 1. It's a terminal node - must complete regardless of errors
+ * 2. Cleanup must always run, even if beforeEnd/end fails
+ * 3. Primary error (from earlier nodes) takes precedence over finalize errors
+ * 4. execFallback would only catch thrown errors, but we need guaranteed cleanup
+ *
  * Extension point (override in subclass):
  * - beforeEnd(): Run operations before hooks.end()
  *

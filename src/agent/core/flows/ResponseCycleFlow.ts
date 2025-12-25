@@ -102,8 +102,7 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export type ResponseCycleShared<_C = unknown> =
-  BaseCycleShared<ResponseCycleState>;
+export type ResponseCycleShared = BaseCycleShared<ResponseCycleState>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -117,10 +116,10 @@ export type ResponseCycleShared<_C = unknown> =
  * Services accessed via `_params.services`: options, store
  */
 class ResponsePrepNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<{
+  async prep(shared: ResponseCycleShared): Promise<{
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
@@ -166,7 +165,7 @@ class ResponsePrepNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -234,7 +233,7 @@ type InvocationExecResult = InvocationResult<BaseInvocationSuccessData>;
  * Services accessed via `_params.services`: options
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
   protected getOperationName(): string {
@@ -249,7 +248,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ResponseCycleShared<C>): Promise<InvocationPrepResult> {
+  async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -315,7 +314,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
@@ -416,10 +415,10 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * Services accessed via `_params.services`: options, store
  */
 class ResponseProcessNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ProcessPrepResult> {
+  async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { store } = this._params.services;
     const { state } = shared;
     return {
@@ -563,7 +562,7 @@ class ResponseProcessNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
@@ -706,10 +705,10 @@ class ResponseProcessNode<C> extends BaseNode<
  * Services accessed via `_params.services`: options, store
  */
 class ResponseContinuationNode<C> extends BaseNode<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ContinuationPrepResult> {
+  async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -773,7 +772,7 @@ class ResponseContinuationNode<C> extends BaseNode<
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    shared: ResponseCycleShared,
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
@@ -868,7 +867,7 @@ class ResponseContinuationNode<C> extends BaseNode<
  * ```
  */
 export function createResponseCycleFlow<C>(): Flow<
-  ResponseCycleShared<C>,
+  ResponseCycleShared,
   ResponseCycleParams<C>
 > {
   const prepNode = new ResponsePrepNode<C>();
@@ -886,5 +885,5 @@ export function createResponseCycleFlow<C>(): Flow<
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleShared<C>, ResponseCycleParams<C>>(prepNode);
+  return new Flow<ResponseCycleShared, ResponseCycleParams<C>>(prepNode);
 }
