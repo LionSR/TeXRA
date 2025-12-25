@@ -91,9 +91,7 @@ async function persistSnapshot({
   return true;
 }
 
-async function buildToolUseAgent(
-  snapshot: ToolUseSessionSnapshot,
-): Promise<{
+async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
   agent: BaseToolUseAgent;
   agentType: AgentType;
   context: AgentExecutionContext;
