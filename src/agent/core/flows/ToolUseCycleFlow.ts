@@ -2,7 +2,6 @@
 
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-import { isRemoteAgent } from '@agent/index';
 import {
   BaseCycleState,
   BaseCycleShared,
@@ -12,6 +11,8 @@ import {
   CycleDebugContext,
   CycleDebugFileOptions,
   SkippableNodeResult,
+  createDebugContext,
+  createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -184,16 +185,16 @@ class ToolUsePrepNode<C> extends BaseNode<
   }> {
     const { options, store } = this._params.services;
     const interrupted = Boolean(await options.checkInterruption());
-    const debugContext: CycleDebugContext = {
+    const debugContext = createDebugContext({
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: store.round.roundIndex,
-      baseName: 'tooluse',
-    };
+      agentName: options.agentName,
+    });
+    const debugFileOptions = createDebugFileOptions(
+      store.round.roundIndex,
+      'tooluse',
+    );
     return { interrupted, debugContext, debugFileOptions };
   }
 
@@ -294,16 +295,16 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    const debugContext: CycleDebugContext = {
+    const debugContext = createDebugContext({
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: store.round.roundIndex,
-      baseName: 'tooluse_response',
-    };
+      agentName: options.agentName,
+    });
+    const debugFileOptions = createDebugFileOptions(
+      store.round.roundIndex,
+      'tooluse_response',
+    );
 
     const abortController = new AbortController();
     // Set signal on Node so retry loop can detect user cancellation
