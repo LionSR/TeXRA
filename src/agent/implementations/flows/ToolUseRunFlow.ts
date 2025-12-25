@@ -192,16 +192,6 @@ type PreparedState<C> = ToolUseRunState<C> & {
 };
 
 /**
- * Type predicate to check if state has been prepared.
- * Use when you want to handle unprepared state gracefully.
- */
-function isPreparedState<C>(
-  state: ToolUseRunState<C>,
-): state is PreparedState<C> {
-  return state.cycleOptions !== null && state.store !== null;
-}
-
-/**
  * Asserts that state has been prepared (cycleOptions and store are non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  *
@@ -209,20 +199,13 @@ function isPreparedState<C>(
  * - Type narrowing (removes `| null` from types)
  * - Fail-fast with descriptive error if flow invariant is violated
  * - Documentation of the PrepareNode → CycleNode contract
- *
- * For cases where you want to handle unprepared state gracefully,
- * use {@link isPreparedState} instead.
  */
 function assertPreparedState<C>(
   state: ToolUseRunState<C>,
 ): asserts state is PreparedState<C> {
-  if (!isPreparedState(state)) {
-    const missing = [];
-    if (!state.cycleOptions) missing.push('cycleOptions');
-    if (!state.store) missing.push('store');
+  if (state.cycleOptions === null || state.store === null) {
     throw new Error(
-      `CycleNode invariant violated: ${missing.join(', ')} is null. ` +
-        'PrepareNode must run before CycleNode.',
+      'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
   }
 }
@@ -288,8 +271,8 @@ class ToolUseInitNode<C> extends Node<ToolUseRunShared<C>> {
 /**
  * Prepares state for tool-use cycle.
  *
- * Phase ownership: None (inherits 'prepare' from InitNode.post())
- * Note: CycleNode owns the 'cycle' phase transition.
+ * Phase ownership: Inherits 'prepare' phase from InitNode.post().
+ * Does not transition phases - stays in 'prepare' throughout.
  *
  * Uses PocketFlow's native error handling:
  * - exec(): Let errors throw naturally (no try/catch)
@@ -347,7 +330,6 @@ class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
     shared.state.store = store;
     shared.state.runState = runState;
 
-    // Note: CycleNode owns 'cycle' phase transition
     return undefined; // Follow next() → CycleNode
   }
 }
