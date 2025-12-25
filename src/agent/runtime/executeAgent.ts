@@ -22,11 +22,7 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import {
-  resolveAgent,
-  getMultipleName,
-  isRemoteAgent,
-} from '@agent/index';
+import { resolveAgent, getMultipleName, isRemoteAgent } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -135,7 +131,13 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
-  const { agentName, configPayload, executionId, agentClassOverride, contextFactory } = params;
+  const {
+    agentName,
+    configPayload,
+    executionId,
+    agentClassOverride,
+    contextFactory,
+  } = params;
 
   const fullConfig = parseAgentConfig({ agent: agentName, ...configPayload });
   const resolution = await getAgentPath(fullConfig.agent, {
@@ -146,7 +148,10 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const agentSetting = ensureAgentTypeForSource(loadedSettings, resolution.entry.source);
+  const agentSetting = ensureAgentTypeForSource(
+    loadedSettings,
+    resolution.entry.source,
+  );
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
   const modelName = fullConfig.model;
 
@@ -154,7 +159,13 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     await showInstructionWithSuppress(
       'modelNotRecognized',
       `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-      [{ title: 'Model Documentation', callback: () => vscode.commands.executeCommand('texra.openDoc', 'models') }],
+      [
+        {
+          title: 'Model Documentation',
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'models'),
+        },
+      ],
       false,
     );
     throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
@@ -174,17 +185,31 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   };
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
-  const streamId = getStreamTabId(agentConfig.agent, modelName, agentConfig.inputFile, {
-    agentType: agentSetting.agentType,
-    executionId,
-    useMultipleOutputs: agentConfig.useMultipleOutputs,
-  });
+  const streamId = getStreamTabId(
+    agentConfig.agent,
+    modelName,
+    agentConfig.inputFile,
+    {
+      agentType: agentSetting.agentType,
+      executionId,
+      useMultipleOutputs: agentConfig.useMultipleOutputs,
+    },
+  );
 
   const context = contextFactory
-    ? contextFactory({ streamId, executionId, agentCategory: sessionDescriptor.agentCategory })
-    : new AgentExecutionContext({ streamId, executionId, agentCategory: sessionDescriptor.agentCategory });
+    ? contextFactory({
+        streamId,
+        executionId,
+        agentCategory: sessionDescriptor.agentCategory,
+      })
+    : new AgentExecutionContext({
+        streamId,
+        executionId,
+        agentCategory: sessionDescriptor.agentCategory,
+      });
 
-  const AgentClass = (agentClassOverride ?? getAgentClass(agentSetting)) as AgentConstructor;
+  const AgentClass = (agentClassOverride ??
+    getAgentClass(agentSetting)) as AgentConstructor;
   const agent = new AgentClass(
     modelHandler,
     agentConfig,
@@ -215,8 +240,10 @@ export async function runPreparedAgent<T extends IAgent>(
   const streamTabId = agent.getStreamTabId();
   const agentName = config.agent;
 
-  if (!config.session) throw new Error('Agent configuration is missing session metadata.');
-  if (!streamTabId) throw new Error('Failed to resolve stream tab ID for agent execution');
+  if (!config.session)
+    throw new Error('Agent configuration is missing session metadata.');
+  if (!streamTabId)
+    throw new Error('Failed to resolve stream tab ID for agent execution');
 
   try {
     if (executionId) await ensureRunDir(executionId);
@@ -235,8 +262,12 @@ export async function runPreparedAgent<T extends IAgent>(
     if (!isResume) {
       logger.info(`Starting task execution for ${streamTabId}`);
       logger.info(`Input file: ${config.inputFile}`);
-      logger.debug(`Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`);
-      logger.debug(`Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`);
+      logger.debug(
+        `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
+      );
+      logger.debug(
+        `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+      );
 
       if (!runStorage.isViewVisible()) {
         await vscode.commands.executeCommand('texra.showProgressView');
@@ -252,13 +283,16 @@ export async function runPreparedAgent<T extends IAgent>(
     }
 
     // Run agent
-    await logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
-      logger.info(`Executing ${agentName} with model ${config.model}`);
-      await agent.run();
-      logger.debug(`Task completed successfully`);
-      StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
-    }, { skip: isResume });
-
+    await logger.withScope(
+      `Task: ${agentName}@${config.model}`,
+      async () => {
+        logger.info(`Executing ${agentName} with model ${config.model}`);
+        await agent.run();
+        logger.debug(`Task completed successfully`);
+        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+      },
+      { skip: isResume },
+    );
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleError(err, agentName, streamTabId, agent, context);
@@ -266,18 +300,29 @@ export async function runPreparedAgent<T extends IAgent>(
 }
 
 function showAgentNotification(config: AgentConfig): void {
-  const inputName = config.inputFile ? path.basename(config.inputFile) : 'selected input';
-  const outputInfo = config.useMultipleOutputs && (config.outputFiles?.length ?? 0) > 1
-    ? `to ${config.outputFiles!.length} files`
-    : config.outputFiles?.[0] ? `to ${path.basename(config.outputFiles[0])}` : '';
+  const inputName = config.inputFile
+    ? path.basename(config.inputFile)
+    : 'selected input';
+  const outputInfo =
+    config.useMultipleOutputs && (config.outputFiles?.length ?? 0) > 1
+      ? `to ${config.outputFiles!.length} files`
+      : config.outputFiles?.[0]
+        ? `to ${path.basename(config.outputFiles[0])}`
+        : '';
 
-  vscode.window.showInformationMessage(
-    `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-    { modal: false, detail: 'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.' },
-    'Show ProgressBoard',
-  ).then((sel: string | undefined) => {
-    if (sel) vscode.commands.executeCommand('texra.showProgressView');
-  });
+  vscode.window
+    .showInformationMessage(
+      `TeXRA Agent Started: "${config.agent}" is processing ${inputName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+      {
+        modal: false,
+        detail:
+          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+      },
+      'Show ProgressBoard',
+    )
+    .then((sel: string | undefined) => {
+      if (sel) vscode.commands.executeCommand('texra.showProgressView');
+    });
 }
 
 async function handleError(
@@ -290,13 +335,23 @@ async function handleError(
   const rawMsg = toErrorMessage(err);
   const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
-  if (rawMsg.includes('Missing API key') || rawMsg.includes('API key not found')) {
+  if (
+    rawMsg.includes('Missing API key') ||
+    rawMsg.includes('API key not found')
+  ) {
     await showInstructionWithSuppress(
       'missingApiKey',
       'API key not found. Set your API key in the extension settings and run again.',
       [
-        { title: 'Set API Key', callback: () => vscode.commands.executeCommand('texra.setApiKey') },
-        { title: 'Open Settings Guide', callback: () => vscode.commands.executeCommand('texra.openDoc', 'configuration') },
+        {
+          title: 'Set API Key',
+          callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+        },
+        {
+          title: 'Open Settings Guide',
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'configuration'),
+        },
       ],
       false,
     );
@@ -311,13 +366,21 @@ async function handleError(
   // Try to log within existing group if agent has one
   const groupId = agent?.getLastRunGroupId();
   if (groupId && context?.logger) {
-    await errorLogger.withExistingGroup(groupId, async () => {
-      errorLogger.logError(errorMsg, err, errorContext);
-    }, { label: `Error: ${agentName}` });
+    await errorLogger.withExistingGroup(
+      groupId,
+      async () => {
+        errorLogger.logError(errorMsg, err, errorContext);
+      },
+      { label: `Error: ${agentName}` },
+    );
   } else {
-    await errorLogger.withScope(`Error: ${agentName}`, async () => {
-      errorLogger.logError(errorMsg, err, errorContext);
-    }, { errorStatus: 'error' });
+    await errorLogger.withScope(
+      `Error: ${agentName}`,
+      async () => {
+        errorLogger.logError(errorMsg, err, errorContext);
+      },
+      { errorStatus: 'error' },
+    );
   }
 
   throw new Error(errorMsg);
@@ -355,22 +418,36 @@ export async function executeAgent(
     const runStorage = getRunStorageService();
     const activeRunId = runStorage.getActiveRunId(streamTabId);
     const storageKey = normalizeRunId(activeRunId ?? executionId);
-    const runOutputs = runStorage.getRunOutputFiles(streamTabId, { storageKey });
+    const runOutputs = runStorage.getRunOutputFiles(streamTabId, {
+      storageKey,
+    });
     if (runOutputs) {
-      await agent.hydrateOutputState({ executionId, storageKey, rounds: runOutputs });
+      await agent.hydrateOutputState({
+        executionId,
+        storageKey,
+        rounds: runOutputs,
+      });
     }
   }
 
   // Check if already running
   const currentStatus = StreamStatusService.get(streamTabId);
   if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
-    throw new Error(`Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`);
+    throw new Error(
+      `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
+    );
   }
 
   // Log multi-output warning
   const { outputFiles, useMultipleOutputs } = agent.config;
-  if (Array.isArray(outputFiles) && outputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(`Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`);
+  if (
+    Array.isArray(outputFiles) &&
+    outputFiles.length > 1 &&
+    !useMultipleOutputs
+  ) {
+    logger.warn(
+      `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+    );
   }
 
   await runPreparedAgent(agent, context, { isResume, executionId });
