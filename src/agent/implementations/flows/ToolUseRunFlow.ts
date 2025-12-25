@@ -80,6 +80,10 @@ export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 /**
  * Hooks interface for tool-use agent runs.
+ *
+ * Note: Flow-control methods (checkInterruption, hasQueuedFollowUp, markRunning,
+ * enterWaitingState) are called directly on the agent, not via hooks.
+ * This follows the pattern used by ReflectionRoundNode.
  */
 export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   prepareState(): Promise<{
@@ -97,12 +101,8 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     errorMessage?: string;
     userCancelled: boolean;
   }>;
-  checkInterruption(): boolean;
-  hasQueuedFollowUp(): boolean;
-  enterWaitingState(): Promise<void>;
   clearPersistedSnapshot(): Promise<void>;
   waitForFollowUp(): Promise<string | null>;
-  markRunning(): Promise<void>;
   applyFollowUp(
     followUp: string,
     messages: ProviderMessage[],
@@ -436,28 +436,29 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
  * - exec(): Pure transformation of prep result
  * - post(): Side effects (apply follow-up) + routing decision
  *
- * Uses CONTINUE transition to loop back to CycleNode (like ReflectionRoundNode).
+ * Flow-control methods called directly on agent (like ReflectionRoundNode pattern).
+ * Uses CONTINUE transition to loop back to CycleNode.
  */
 class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
-    const { hooks } = shared;
+    const { agent, hooks } = shared;
 
-    // Check interruption first
-    if (hooks.checkInterruption()) {
+    // Check interruption first (direct agent call, like ReflectionRoundNode)
+    if (agent.isInterruptionRequested()) {
       return { interrupted: true };
     }
 
     // Handle waiting state (I/O - OK in prep)
-    if (hooks.hasQueuedFollowUp()) {
+    if (agent.hasQueuedFollowUp()) {
       await hooks.clearPersistedSnapshot();
     } else {
-      await hooks.enterWaitingState();
+      await agent.enterWaitingState();
     }
 
     // Wait for follow-up (blocking I/O - OK in prep)
     const followUp = await hooks.waitForFollowUp();
 
-    if (!followUp || hooks.checkInterruption()) {
+    if (!followUp || agent.isInterruptionRequested()) {
       return { interrupted: true };
     }
 
@@ -485,7 +486,7 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
     }
 
     // Apply follow-up (side effects belong in post)
-    await shared.hooks.markRunning();
+    await shared.agent.markRunning();
     await shared.hooks.clearPersistedSnapshot();
     shared.state.conversation = await shared.hooks.applyFollowUp(
       execRes.followUp,
