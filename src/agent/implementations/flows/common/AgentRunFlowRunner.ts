@@ -1,23 +1,23 @@
 /**
- * Agent flow runner - executes agent flows with hooks and lifecycle management.
+ * Agent flow runner - executes agent flows with lifecycle management.
  *
  * Exports:
  * - AgentRunShared: Generic shared state container for all flows
  * - AgentRunFlowOptions: Options for running agent flows
- * - runAgentFlow: Flow execution with hook assembly
+ * - runAgentFlow: Flow execution
  * - InitExecResult, NodeExecResult: Shared result types for nodes
  * - BaseRunStateSchema: Common state schema fields for extension
  *
- * Internal only:
- * - BaseFlowShared: Type constraint alias (used internally)
- * - AgentRunHookOverrides: Hook override partial type (used internally)
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are called directly
+ * on the agent via IFlowAgent interface. Flow-specific hooks (e.g., prepareState,
+ * buildCycleOptions) are provided directly by the caller.
  */
 
 import { z } from 'zod';
 
 // Type imports
 import type { Flow } from '@agent/node';
-import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
+import type { IFlowAgent } from '@agent/core/IAgent';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentLifecycle } from './AgentLifecycle';
@@ -71,19 +71,19 @@ export const BaseRunStateSchema = z.object({
  * Generic shared state for agent flow execution.
  *
  * This is the core container that flows use to coordinate:
- * - agent: The agent instance being run
+ * - agent: The agent instance being run (IFlowAgent for lifecycle methods)
  * - state: Flow-specific mutable runtime state
  * - lifecycle: Phase and status tracking
- * - hooks: Callbacks for lifecycle events
+ * - hooks: Flow-specific callbacks (not lifecycle - those are on agent)
  *
- * The agent type constraint uses IFlowAgent to enable proper decoupling
- * from concrete agent implementations.
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on the agent.
+ * Hooks are flow-specific only (e.g., prepareState, buildCycleOptions).
  */
 export interface AgentRunShared<
   A extends IFlowAgent,
   State,
   Lifecycle extends AgentLifecycle<string>,
-  Hooks extends AgentRunHooks,
+  Hooks,
 > {
   agent: A;
   state: State;
@@ -95,85 +95,43 @@ export interface AgentRunShared<
  * Base type alias for flow shared state constraints.
  * Internal only - not exported from common/index.ts.
  */
-type BaseFlowShared = AgentRunShared<
-  IFlowAgent,
-  any,
-  AgentLifecycle<string>,
-  AgentRunHooks
->;
+type BaseFlowShared = AgentRunShared<IFlowAgent, any, AgentLifecycle<string>, unknown>;
 
 // ============================================================================
 // Flow Runner
 // ============================================================================
 
-/** Internal type for hook override options. */
-type AgentRunHookOverrides = Partial<AgentRunHooks>;
-
 /**
- * Base options for running an agent flow.
+ * Options for running an agent flow.
+ *
+ * Simplified interface - caller provides hooks directly (no assembly pattern).
+ * Lifecycle methods are called on agent directly by flow nodes.
  */
-type AgentRunFlowOptionsBase<Shared extends BaseFlowShared> = {
+export interface AgentRunFlowOptions<Shared extends BaseFlowShared> {
   agent: Shared['agent'];
   lifecycle: Shared['lifecycle'];
+  hooks: Shared['hooks'];
   createState(): Shared['state'];
   createFlow(): Flow<Shared>;
-  hookOverrides?: AgentRunHookOverrides;
   prepareShared?(shared: Shared): void;
-};
-
-/**
- * Options when hooks need to be extended with flow-specific methods.
- */
-type AgentRunFlowOptionsWithExtend<Shared extends BaseFlowShared> =
-  AgentRunFlowOptionsBase<Shared> & {
-    extendHooks: (baseHooks: AgentRunHooks) => Shared['hooks'];
-  };
-
-/**
- * Options when base hooks are sufficient (no extension needed).
- */
-type AgentRunFlowOptionsWithoutExtend<Shared extends BaseFlowShared> =
-  Shared extends AgentRunShared<any, any, any, AgentRunHooks>
-    ? AgentRunFlowOptionsBase<Shared> & { extendHooks?: undefined }
-    : never;
-
-/**
- * Union of all valid options for running an agent flow.
- */
-export type AgentRunFlowOptions<Shared extends BaseFlowShared> =
-  | AgentRunFlowOptionsWithExtend<Shared>
-  | AgentRunFlowOptionsWithoutExtend<Shared>;
-
-function hasExtendHooks<Shared extends BaseFlowShared>(
-  options: AgentRunFlowOptions<Shared>,
-): options is AgentRunFlowOptionsWithExtend<Shared> {
-  return (
-    typeof (options as AgentRunFlowOptionsWithExtend<Shared>).extendHooks ===
-    'function'
-  );
 }
 
 /**
  * Execute an agent flow with the given options.
  *
- * Creates shared state, assembles hooks, runs the flow, and handles errors.
+ * Creates shared state, runs the flow, and handles errors.
+ * Lifecycle methods are called directly on agent by flow nodes.
  */
 export async function runAgentFlow<Shared extends BaseFlowShared>(
   options: AgentRunFlowOptions<Shared>,
 ): Promise<Shared> {
   const state = options.createState();
 
-  // Get hooks - either extend base hooks or use them directly
-  const baseHooks = options.agent.getRunHooks(options.hookOverrides);
-  const hooks = hasExtendHooks(options)
-    ? options.extendHooks(baseHooks)
-    : baseHooks;
-
   const shared = {
     agent: options.agent,
     state,
     lifecycle: options.lifecycle,
-    hooks,
+    hooks: options.hooks,
   } as Shared;
 
   options.prepareShared?.(shared);

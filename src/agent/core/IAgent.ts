@@ -47,13 +47,6 @@ export interface IAgent {
 
   /** Retrieve the shared execution context for this agent. */
   getExecutionContext(): AgentExecutionContext;
-
-  /**
-   * Retrieve the hooks used to orchestrate an agent run.
-   *
-   * @param overrides - Optional overrides for default hook implementations.
-   */
-  getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
 }
 
 /**
@@ -62,33 +55,42 @@ export interface IAgent {
  * This interface defines the minimal contract that flow implementations
  * depend on, enabling proper decoupling from concrete agent classes.
  * Specific flow types extend this with their required methods.
+ *
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are internalized
+ * here rather than exposed as hooks, since they have identical implementations
+ * across all agent types. Flow-specific hooks are defined separately by each
+ * flow type (e.g., ToolUseRunHooks, ReflectionRunHooks).
  */
 export interface IFlowAgent {
   /** Check if an interruption has been requested for this agent. */
   isInterruptionRequested(): boolean;
 
-  /**
-   * Retrieve the hooks used to orchestrate an agent run.
-   *
-   * @param overrides - Optional overrides for default hook implementations.
-   */
-  getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
-}
+  // =========================================================================
+  // Lifecycle Methods - Internalized (not hooks)
+  // These have identical implementations across all agents.
+  // =========================================================================
 
-/**
- * Core hook contract used to orchestrate agent runs.
- */
-export interface AgentRunHooks {
   /**
-   * Begin an agent run and optionally create a logging group.
-   *
-   * @returns The identifier for the run group used by subsequent lifecycle hooks.
-   *          Return `undefined` to indicate that the lifecycle should reuse an
-   *          existing log group (for example, interactive tool-use sessions).
+   * Begin an agent run and create a logging stage.
+   * @returns The stage for subsequent lifecycle calls, or undefined to reuse existing.
    */
-  start(): Promise<AgentLogStage | undefined>;
-  init(runStage: AgentLogStage | undefined): Promise<void>;
+  startRun(): Promise<AgentLogStage | undefined>;
+
+  /**
+   * Initialize the agent for a run.
+   * @param runStage - The stage from startRun(), if any.
+   */
+  initRun(runStage: AgentLogStage | undefined): Promise<void>;
+
+  /** Initialize the model client for this run. */
   initializeClient(): Promise<void>;
-  end(status: EndGroupStatus): void | Promise<void>;
-  cleanup(): void | Promise<void>;
+
+  /**
+   * End the agent run with the given status.
+   * @param status - The completion status.
+   */
+  endRun(status: EndGroupStatus): void | Promise<void>;
+
+  /** Clean up resources after the run completes. */
+  cleanupRun(): void | Promise<void>;
 }

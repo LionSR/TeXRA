@@ -8,7 +8,7 @@ import type { AgentRunState } from '@agent/core/AgentState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ReflectionRoundResult } from '@agent/implementations/BaseReflectionAgent';
 // Type imports
-import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
+import type { IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
@@ -65,7 +65,15 @@ export interface ReflectionRunState {
   continueRounds: boolean;
 }
 
-export interface ReflectionRunHooks extends AgentRunHooks {
+/**
+ * Flow-specific hooks for reflection agent runs.
+ *
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on IFlowAgent.
+ * Round execution methods are on IReflectionFlowAgent.
+ *
+ * This interface contains only flow-specific hooks that vary by implementation.
+ */
+export interface ReflectionRunHooks {
   resetPromptBuilder(): void;
 }
 
@@ -134,11 +142,8 @@ class ReflectionInitNode<C> extends StandardInitNode<ReflectionRunShared<C>> {
     super('rounds');
   }
 
-  protected override beforeStart(prepRes: {
-    hooks: ReflectionRunHooks;
-    lifecycle: ReflectionRunLifecycle;
-  }): void {
-    prepRes.hooks.resetPromptBuilder();
+  protected override beforeStart(shared: ReflectionRunShared<C>): void {
+    shared.hooks.resetPromptBuilder();
   }
 }
 
