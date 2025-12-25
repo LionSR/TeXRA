@@ -4,14 +4,8 @@ import { z } from 'zod';
 import { BaseNode, Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
-import {
-  type AgentRunState,
-  AgentRunStateSnapshotSchema,
-} from '@agent/core/AgentState';
-import {
-  type ProviderMessage,
-  ProviderMessageSchema,
-} from '@agent/modelHandlers/types/ProviderMessage';
+import type { AgentRunState } from '@agent/core/AgentState';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type {
   BaseReflectionAgent,
   ReflectionRoundResult,
@@ -22,18 +16,17 @@ import type { AgentRunHooks } from '@agent/core/IAgent';
 import {
   StandardFinalizeNode,
   AgentLifecycle,
+  BaseRunStateSchema,
   type AgentRunShared,
   type InitExecResult,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
-// Serialization Schema (formerly in common/runStateSchemas.ts)
+// Serialization Schema
 // ============================================================================
 
 /** Reflection agent run state schema for serialization. */
-export const ReflectionRunStateSchema = z.object({
-  runState: AgentRunStateSnapshotSchema,
-  conversation: z.array(ProviderMessageSchema),
+export const ReflectionRunStateSchema = BaseRunStateSchema.extend({
   totalRounds: z.number().int().nonnegative(),
   currentRound: z.number().int().nonnegative(),
   continueRounds: z.boolean(),
