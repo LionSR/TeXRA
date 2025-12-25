@@ -85,7 +85,7 @@ type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
  *   constructor() { super('finalize'); }
  *
  *   protected async beforeEnd(ctx: ContextOf<MyShared>): Promise<void> {
- *     await ctx.agent.clearPersistedSnapshot();
+ *     await ctx.agent.session.clearPersistedSnapshot();
  *   }
  * }
  * ```
