@@ -174,9 +174,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
+    // Capture and clear snapshot at start of run for explicit data flow
+    const snapshot = this.resumeSnapshot;
+    this.resumeSnapshot = null;
+
     // Flow-specific hooks only - lifecycle is on the agent (IFlowAgent)
     const hooks: ToolUseRunHooks<C> = {
-      prepareState: () => this.prepareInitialState(),
+      prepareState: () => this.prepareInitialState(snapshot),
       buildCycleOptions: (store) => this.createCycleOptions(store),
       runCycle: (options, messages, store) =>
         runToolUseCycle({ options, messages, store }),
@@ -202,19 +206,21 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    * Prepares the initial state for the tool-use session.
    * Handles both new sessions and resumed sessions from snapshots.
    *
+   * @param snapshot - Optional snapshot to resume from (passed explicitly for clear data flow)
+   *
    * Pure method: Returns data for the flow to update state.
    * Only side effect: Sets sessionLifecycle store (necessary for persistence).
    */
-  public async prepareInitialState(): Promise<{
+  public async prepareInitialState(
+    snapshot: ToolUseSessionSnapshot | null,
+  ): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
     runState: AgentRunState;
   }> {
-    if (this.resumeSnapshot) {
+    if (snapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
-      const snapshot = this.resumeSnapshot;
-      this.resumeSnapshot = null;
 
       const messages = snapshot.messages;
       const store = createSharedStore({
