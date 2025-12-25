@@ -22,7 +22,7 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import { resolveAgent, getMultipleName, isRemoteAgent } from '@agent/index';
+import { resolveAgent, isRemoteAgent } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -266,6 +266,8 @@ export async function runPreparedAgent<T extends IAgent>(
         `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
       );
 
+      // Try to show progress view; if still not visible (e.g., user has it hidden),
+      // fall back to showing a notification so user knows the task started
       if (!runStorage.isViewVisible()) {
         await vscode.commands.executeCommand('texra.showProgressView');
       }
