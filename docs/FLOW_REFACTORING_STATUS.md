@@ -548,103 +548,70 @@ AFTER: Single PocketFlow native pattern
 
 ## 5. Remaining Issues
 
-### 5.1 The activeState Pattern in BaseToolUseAgent
+### 5.1 The activeState Pattern in BaseToolUseAgent ✅ RESOLVED
 
-**Location**: `/home/user/TeXRA/src/agent/implementations/BaseToolUseAgent.ts:61, 176, 196, 313`
+**Status**: **RESOLVED** - The dual-reference pattern has been eliminated by:
+1. Passing state explicitly to methods that need it (e.g., `enterWaitingState(conversation)`)
+2. Creating state internally where needed (e.g., `prepareInitialState()` creates fresh `AgentRunState`)
 
-**Issue**: BaseToolUseAgent maintains a dual-reference pattern where state is both:
-
+**Original Issue**: BaseToolUseAgent maintained a dual-reference pattern where state was both:
 1. Owned by the flow (in `ToolUseRunShared.state`)
 2. Referenced by the agent (in `this.activeState`)
 
-```typescript
-// BaseToolUseAgent.ts:159-198
-public async run(): Promise<void> {
-  const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
+**Solution Applied**:
 
-  try {
-    await this.executeAgentRunFlow<ToolUseRunShared<C>>({
-      lifecycle,
+```typescript
+// BEFORE: Dual reference pattern
+class BaseToolUseAgent {
+  private activeState: ToolUseRunState<C> | null = null;
+
+  public async run() {
+    await this.executeAgentRunFlow({
       createState: () => {
-        const state: ToolUseRunState<C> = {
-          conversation: [],
-          cycleOptions: null,
-          shouldSkipCycle: false,
-          store: null,
-          runState: new AgentRunState(),
-        };
-        this.activeState = state;  // ← DUAL REFERENCE CREATED
+        const state = { ... };
+        this.activeState = state;  // ← DUAL REFERENCE
         return state;
       },
-      createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks) => ({
-        ...baseHooks,
-        prepareState: () => this.prepareInitialState(),  // ← USES activeState
-        // ...
-      }),
     });
-  } finally {
-    this.activeState = null;  // ← CLEANUP
+  }
+
+  public async enterWaitingState(): Promise<void> {
+    await this.sessionLifecycle.enterWaitingState(
+      this.getActiveState().conversation,  // ← ACCESSED VIA DUAL REF
+    );
   }
 }
 
-private getActiveState(): ToolUseRunState<C> {
-  if (!this.activeState) {
-    throw new Error('Tool-use run state is not initialized.');
+// AFTER: Explicit parameter passing
+class BaseToolUseAgent {
+  // NO activeState field
+
+  public async run() {
+    await this.executeAgentRunFlow({
+      createState: () => ({ ... }),  // ← No dual reference
+    });
   }
-  return this.activeState;  // ← ACCESSED BY HOOKS
+
+  // State passed explicitly from flow node
+  public async enterWaitingState(conversation: ProviderMessage[]): Promise<void> {
+    await this.sessionLifecycle.enterWaitingState(conversation);
+  }
 }
+
+// In ToolUseWaitNode.prep():
+await agent.enterWaitingState(shared.state.conversation);  // ← Passed explicitly
 ```
 
-**Why This Exists**:
+**Changes Made**:
+1. Removed `activeState` field and `getActiveState()` method
+2. Changed `enterWaitingState()` to accept `conversation` parameter
+3. Changed `prepareInitialState()` to create fresh `AgentRunState()` internally
+4. Updated `ToolUseWaitNode` to pass `conversation` to `enterWaitingState()`
+5. Removed try/finally cleanup (no longer needed)
 
-- `prepareInitialState()` needs to access and mutate the state
-- The state is created by the flow runner, not by the agent
-- Hook methods don't receive `shared` as a parameter (they're called from within nodes)
-
-**Asymmetry with Reflection**:
-
-```
-┌─────────────────────────────┬────────────────────────────────────────┐
-│  ToolUse activeState        │  Reflection roundContext               │
-├─────────────────────────────┼────────────────────────────────────────┤
-│ Ownership: Shared between   │ Ownership: Clear agent ownership       │
-│            flow and agent   │                                        │
-├─────────────────────────────┼────────────────────────────────────────┤
-│ Lifecycle: Set in           │ Lifecycle: Set in beginRound(),        │
-│            createState,     │            cleared in                  │
-│            cleared in       │            recordRoundResult()         │
-│            finally          │                                        │
-├─────────────────────────────┼────────────────────────────────────────┤
-│ Mutability: State mutated   │ Mutability: State only read by agent,  │
-│             by both flow    │             updates returned to flow   │
-│             nodes and agent │                                        │
-├─────────────────────────────┼────────────────────────────────────────┤
-│ Thread Safety: Relies on    │ Thread Safety: Explicit isRoundActive  │
-│                single-      │                guard                   │
-│                threaded     │                                        │
-└─────────────────────────────┴────────────────────────────────────────┘
-```
-
-**Analysis**: This is an **acceptable pattern** given the architectural constraints. The dual reference exists because:
-
-1. The flow owns the state (it's in `shared.state`)
-2. Hook methods need access to state but don't receive `shared` as parameter
-3. The pattern is safely encapsulated (private field, guarded getter, try/finally cleanup)
-
-**Alternative Approaches**:
-
-1. **Pass shared to hooks**: Change hook signature to receive shared
-   - Pro: Eliminates dual reference
-   - Con: Breaks hook interface contract, requires updating all hooks
-2. **Move state creation to agent**: Let agent own state, flow accesses via agent
-   - Pro: Clear ownership
-   - Con: Flow can't initialize shared.state in runner, requires different pattern
-3. **Keep as-is**: Document the pattern, add invariant checks
-   - Pro: Minimal change, works correctly
-   - Con: Slight conceptual complexity
-
-**Verdict**: **Keep as-is with documentation**. The pattern is safe and well-encapsulated.
+**Impact**: The flow now has single ownership of state, and the agent receives
+state explicitly when needed. This matches PocketFlow's principle of explicit
+data flow through prep/exec/post.
 
 ### 5.2 The prepareInitialState() Dual State Update Issue ✅ RESOLVED
 
@@ -926,35 +893,10 @@ shared.lifecycle.begin('cycle');
 
 ### 6.2 Medium-Priority Improvements
 
-#### **6.2.1 Document activeState Pattern**
+#### **6.2.1 Document activeState Pattern** ✅ N/A (Pattern Removed)
 
-**Goal**: Add comprehensive documentation to `BaseToolUseAgent.activeState`
-
-**Changes**:
-
-```typescript
-/**
- * Reference to the current run state during flow execution.
- *
- * This dual-reference pattern exists because:
- * - The flow owns the state (in ToolUseRunShared.state)
- * - Hook methods need access but don't receive 'shared' parameter
- * - The pattern is safe due to single-threaded execution and try/finally cleanup
- *
- * Lifecycle:
- * 1. Set in run() createState callback
- * 2. Accessed via getActiveState() during flow execution
- * 3. Cleared in run() finally block
- *
- * Thread safety: Relies on single-threaded JavaScript event loop.
- * The guard in getActiveState() prevents incorrect usage, not race conditions.
- */
-private activeState: ToolUseRunState<C> | null = null;
-```
-
-**Effort**: Low (30 minutes)
-**Risk**: None (documentation only)
-**Benefit**: Prevents future confusion
+**Status**: No longer applicable - the activeState pattern was removed entirely.
+See Section 5.1 for details on the refactoring that eliminated the dual-reference pattern.
 
 #### **6.2.2 Audit common/index.ts Exports**
 
@@ -972,42 +914,12 @@ private activeState: ToolUseRunState<C> | null = null;
 
 ### 6.3 Low-Priority / Future Work
 
-#### **6.3.1 Extract activeState to Base Class**
+#### **6.3.1 Extract activeState to Base Class** ✅ N/A (Pattern Removed)
 
-**Goal**: If more agent types need this pattern, extract to base class
-
-**Condition**: Only if a third agent type (beyond ToolUse/Reflection) needs similar state access
-
-**Approach**:
-
-```typescript
-abstract class BaseStatefulAgent<State> extends BaseAgent {
-  private activeState: State | null = null;
-
-  protected getActiveState(): State {
-    if (!this.activeState) {
-      throw new Error('State not initialized');
-    }
-    return this.activeState;
-  }
-
-  protected setActiveState(state: State): void {
-    this.activeState = state;
-  }
-
-  protected clearActiveState(): void {
-    this.activeState = null;
-  }
-}
-
-class BaseToolUseAgent extends BaseStatefulAgent<ToolUseRunState> {
-  // activeState management inherited
-}
-```
-
-**Effort**: Medium (4-6 hours with tests)
-**Risk**: Medium (requires refactoring both agent types)
-**Benefit**: Reusable pattern if needed by future agents
+**Status**: No longer applicable - the activeState pattern was removed entirely
+by passing state explicitly to methods that need it. Future agents should follow
+the same pattern: receive state through method parameters rather than maintaining
+dual references.
 
 #### **6.3.2 Investigate Hook Interface Symmetry**
 
@@ -1041,12 +953,20 @@ The agent flow refactoring has successfully transformed the codebase from factor
 3. **Unified patterns** - Single error handling, result types, phase management
 4. **Eliminated factories** - Direct node instantiation, no more indirection
 5. **Improved testability** - Each node is focused and independently testable
+6. **Eliminated dual references** - State is now passed explicitly, not via agent fields
 
-**Remaining work** is minimal and well-understood:
+**All major architectural issues have been resolved**:
 
-- **High priority**: Refactor `prepareInitialState()` to be pure (1-2 hours)
-- **Medium priority**: Documentation improvements (2 hours)
-- **Low priority**: Optional enhancements for future extensibility
+- ✅ `prepareInitialState()` is pure (returns values, no state mutations)
+- ✅ `activeState` dual-reference pattern eliminated (state passed explicitly)
+- ✅ Lifecycle phase setting is consistent (in exec(), not prep())
+- ✅ checkInterruption calls are in prep() (PocketFlow compliant)
+- ✅ Unused FlowTransition constants removed
+
+**Remaining work** is minimal documentation improvements:
+
+- Add phase ownership comments to nodes
+- Audit common/index.ts exports
 
 The architecture is now in a solid state for production use and future evolution.
 
