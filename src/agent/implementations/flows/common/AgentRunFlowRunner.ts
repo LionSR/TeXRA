@@ -69,7 +69,12 @@ export interface AgentRunShared<
  * Base type alias for flow shared state constraints.
  * Internal only - not exported from common/index.ts.
  */
-type BaseFlowShared = AgentRunShared<IFlowAgent, any, AgentLifecycle<string>, unknown>;
+type BaseFlowShared = AgentRunShared<
+  IFlowAgent,
+  any,
+  AgentLifecycle<string>,
+  unknown
+>;
 
 // ============================================================================
 // Flow Runner
