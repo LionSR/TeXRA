@@ -23,6 +23,7 @@ import {
   StandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
+  type InitExecResult,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
@@ -111,9 +112,6 @@ type RoundExecResult =
 // ============================================================================
 // Node Implementations
 // ============================================================================
-
-/** Result type for init nodes. */
-type InitExecResult = { kind: 'success' } | { kind: 'error'; error: unknown };
 
 /**
  * Initializes the reflection agent run.
