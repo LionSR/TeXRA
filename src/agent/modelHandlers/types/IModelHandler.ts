@@ -24,9 +24,6 @@ import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
 
-// Re-export for backwards compatibility
-export type { ProviderUsage };
-
 /**
  * Options for creating a model response.
  * @template M - Provider-specific message type
