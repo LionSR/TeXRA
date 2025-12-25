@@ -9,13 +9,10 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Internal imports
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
-  executeAgentWithLogging,
   prepareAgentInstance,
+  runPreparedAgent,
 } from '@agent/runtime/executeAgent';
-import {
-  AgentExecutionContext,
-  type AgentExecutionContextInit,
-} from '@agent/runtime/AgentExecutionContext';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -96,7 +93,6 @@ async function persistSnapshot({
 
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
-  contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
 ): Promise<{
   agent: BaseToolUseAgent;
   agentType: AgentType;
@@ -109,7 +105,6 @@ async function buildToolUseAgent(
       agentName: config.agent,
       configPayload: config,
       executionId: snapshot.executionId as ExecutionId,
-      contextFactory,
     });
 
   if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
@@ -220,29 +215,28 @@ export const ToolUseSessionPersistence = {
 
     let queuedFollowUps: string[] = [];
     try {
-      await executeAgentWithLogging(
-        snapshot.agentConfig.agent,
-        async (contextFactory) => {
-          const { agent, agentType, context } = await buildToolUseAgent(
-            snapshot,
-            contextFactory,
-          );
+      // Build and configure the agent
+      const { agent, context } = await buildToolUseAgent(snapshot);
 
-          agent.resumeFromSnapshot(snapshot);
-          if (followUp !== undefined) {
-            agent.appendFollowUp(followUp);
-          }
+      // Restore agent state from snapshot
+      agent.resumeFromSnapshot(snapshot);
 
-          queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
-          for (const queuedFollowUp of queuedFollowUps) {
-            agent.appendFollowUp(queuedFollowUp);
-          }
+      // Append any follow-up messages
+      if (followUp !== undefined) {
+        agent.appendFollowUp(followUp);
+      }
 
-          return { agent, agentType, context };
-        },
-        snapshot.executionId as ExecutionId,
-        { resume: true },
-      );
+      // Drain and append any queued follow-ups
+      queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
+      for (const queuedFollowUp of queuedFollowUps) {
+        agent.appendFollowUp(queuedFollowUp);
+      }
+
+      // Run the prepared agent
+      await runPreparedAgent(agent, context, {
+        isResume: true,
+        executionId: snapshot.executionId as ExecutionId,
+      });
 
       ToolUseSessionManager.clearByStream(streamId);
 
