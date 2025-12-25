@@ -79,7 +79,7 @@ export async function runToolUseCycle<C = unknown>(
 
   // Shared state contains only mutable data that flows through nodes.
   // Services (options, store) are injected via setParams().
-  const shared: ToolUseCycleShared<C> = {
+  const shared: ToolUseCycleShared = {
     state: {
       messages: input.messages,
       shouldStop: false,
