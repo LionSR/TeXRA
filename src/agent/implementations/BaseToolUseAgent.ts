@@ -16,7 +16,6 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import {
   createToolUseRunFlow,
   type ToolUseRunShared,
-  type ToolUseRunState,
   type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 // Type imports
@@ -58,20 +57,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
-
-  /**
-   * Reference to the flow's shared state during run().
-   *
-   * This pattern allows agent methods (e.g., enterWaitingState) to access
-   * flow state without being passed it explicitly. The reference is:
-   * - Set in createState() callback when flow starts
-   * - Cleared in finally block when flow ends
-   * - Same object as shared.state in the flow (not a copy)
-   *
-   * Methods that need state access call getActiveState() which throws if
-   * called outside of an active run.
-   */
-  private activeState: ToolUseRunState<C> | null = null;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -172,42 +157,34 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
-    try {
-      await this.executeAgentRunFlow<ToolUseRunShared<C>>({
-        lifecycle,
-        hookOverrides: {
-          start: async () => undefined,
+    await this.executeAgentRunFlow<ToolUseRunShared<C>>({
+      lifecycle,
+      hookOverrides: {
+        start: async () => undefined,
+      },
+      createState: () => ({
+        conversation: [],
+        cycleOptions: null,
+        shouldSkipCycle: false,
+        store: null,
+        runState: new AgentRunState(),
+      }),
+      createFlow: () => createToolUseRunFlow<C>(),
+      extendHooks: (baseHooks: AgentRunHooks) => ({
+        ...baseHooks,
+        init: (runStage) => this.init(runStage, { createStage: false }),
+        prepareState: () => this.prepareInitialState(),
+        buildCycleOptions: (store) => this.createCycleOptions(store),
+        runCycle: (options, messages, store) =>
+          runToolUseCycle({ options, messages, store }),
+        persistCheckpoint: (messages, store) =>
+          this.persistCheckpoint(messages, store),
+        cleanup: async () => {
+          await baseHooks.cleanup();
+          this.sessionLifecycle.dispose();
         },
-        createState: () => {
-          const state: ToolUseRunState<C> = {
-            conversation: [],
-            cycleOptions: null,
-            shouldSkipCycle: false,
-            store: null,
-            runState: new AgentRunState(),
-          };
-          this.activeState = state;
-          return state;
-        },
-        createFlow: () => createToolUseRunFlow<C>(),
-        extendHooks: (baseHooks: AgentRunHooks) => ({
-          ...baseHooks,
-          init: (runStage) => this.init(runStage, { createStage: false }),
-          prepareState: () => this.prepareInitialState(),
-          buildCycleOptions: (store) => this.createCycleOptions(store),
-          runCycle: (options, messages, store) =>
-            runToolUseCycle({ options, messages, store }),
-          persistCheckpoint: (messages, store) =>
-            this.persistCheckpoint(messages, store),
-          cleanup: async () => {
-            await baseHooks.cleanup();
-            this.sessionLifecycle.dispose();
-          },
-        }),
-      });
-    } finally {
-      this.activeState = null;
-    }
+      }),
+    });
   }
 
   /**
@@ -245,7 +222,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       };
     }
 
-    const currentRunState = this.getActiveState().runState;
+    // Create a fresh run state for new sessions
+    const currentRunState = new AgentRunState();
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
@@ -308,10 +286,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async enterWaitingState(): Promise<void> {
-    await this.sessionLifecycle.enterWaitingState(
-      this.getActiveState().conversation,
-    );
+  public async enterWaitingState(conversation: ProviderMessage[]): Promise<void> {
+    await this.sessionLifecycle.enterWaitingState(conversation);
   }
 
   public async markRunning(): Promise<void> {
@@ -327,16 +303,5 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     _store: AgentSharedStore,
   ): Promise<void> {
     await this.sessionLifecycle.persistCheckpoint(messages);
-  }
-
-  /**
-   * Gets the active flow state. Throws if called outside of run().
-   * @see activeState field for pattern documentation
-   */
-  private getActiveState(): ToolUseRunState<C> {
-    if (!this.activeState) {
-      throw new Error('Tool-use run state is not initialized.');
-    }
-    return this.activeState;
   }
 }
