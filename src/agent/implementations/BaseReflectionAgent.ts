@@ -13,7 +13,7 @@ import { getOutputFileName } from '@agent/utils/outputFileUtils';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { ExecutionId, StorageKey } from '@agent/types/IdentifierTypes';
 
 // Internal imports
