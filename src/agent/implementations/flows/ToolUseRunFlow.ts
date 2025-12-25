@@ -182,13 +182,14 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       const prepared = await prepRes.hooks.prepareState();
       const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
       return {
+        kind: 'success',
         result: {
           ...prepared,
           cycleOptions,
         } satisfies ToolUsePrepareResult<C>,
       };
     } catch (error) {
-      return { error };
+      return { kind: 'error', error };
     }
   }
 
@@ -200,11 +201,8 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     // Lifecycle transition at start of post
     shared.lifecycle.begin('prepare');
 
-    if (execRes.error || !execRes.result) {
-      const error =
-        execRes.error ??
-        new Error('Failed to prepare tool-use run: no result from prepare');
-      shared.lifecycle.fail(error);
+    if (execRes.kind === 'error') {
+      shared.lifecycle.fail(execRes.error);
       return FlowTransition.FINALIZE;
     }
 

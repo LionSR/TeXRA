@@ -1,6 +1,7 @@
 // Third-party imports (none needed)
 
 // Local imports - core flow primitives
+import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import {
   BaseCycleState,
@@ -189,7 +190,7 @@ class ToolUsePrepNode<C> extends BaseNode<
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
-      agentName: options.agentName,
+      isRemote: isRemoteAgent(options.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
       store.round.roundIndex,
@@ -299,7 +300,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
-      agentName: options.agentName,
+      isRemote: isRemoteAgent(options.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
       store.round.roundIndex,
@@ -396,22 +397,24 @@ interface ToolUseProcessPrepResult {
  * Result of exec() containing extracted data and all values needed for post() side effects.
  * PocketFlow compliance: exec() returns computation results, post() applies side effects.
  */
-interface ToolUseProcessExecResult {
-  skipped: boolean;
-  // Core results
-  toolCalls?: SdkToolCall[];
-  stopReason?: ProviderStopReason;
-  text?: string;
-  endTurn: boolean;
-  // Data for side effects in post()
-  serverToolContentBlocks?: ServerToolContentBlock[];
-  lastAssistantContent?: unknown[];
-  normalizedUsage?: NormalizedUsage;
-  responseTime?: number;
-  // Message to create if endTurn
-  createAssistantMessage?: boolean;
-  lastResponseUpdate?: string;
-}
+type ToolUseProcessExecResult =
+  | { kind: 'skipped'; endTurn: false }
+  | {
+      kind: 'success';
+      // Core results
+      toolCalls?: SdkToolCall[];
+      stopReason?: ProviderStopReason;
+      text?: string;
+      endTurn: boolean;
+      // Data for side effects in post()
+      serverToolContentBlocks?: ServerToolContentBlock[];
+      lastAssistantContent?: unknown[];
+      normalizedUsage?: NormalizedUsage;
+      responseTime?: number;
+      // Message to create if endTurn
+      createAssistantMessage?: boolean;
+      lastResponseUpdate?: string;
+    };
 
 /**
  * Processes the model response to extract tool calls and usage data.
@@ -449,7 +452,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
-      return { skipped: true, endTurn: false };
+      return { kind: 'skipped', endTurn: false };
     }
 
     const { options, store } = this._params.services;
@@ -527,7 +530,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       return {
-        skipped: false,
+        kind: 'success',
         stopReason,
         text: text ?? undefined,
         endTurn: true,
@@ -541,7 +544,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     return {
-      skipped: false,
+      kind: 'success',
       toolCalls,
       stopReason,
       text: text ?? undefined,
@@ -565,7 +568,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
@@ -655,8 +658,8 @@ interface ToolUseDispatchPrepResult {
  * PocketFlow compliance: exec() returns computation results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
-  | { skipped: true; interrupted: boolean }
-  | { skipped: false; calls: SdkToolCall[] };
+  | { kind: 'skipped'; interrupted: boolean }
+  | { kind: 'success'; calls: SdkToolCall[] };
 
 /**
  * Dispatches tool calls and processes their results.
@@ -701,16 +704,16 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { options } = this._params.services;
 
     if (prepRes.shouldStop || prepRes.toolCalls.length === 0) {
-      return { skipped: true, interrupted: false };
+      return { kind: 'skipped', interrupted: false };
     }
 
     if (await options.checkInterruption()) {
       // Return interrupted flag - post() will apply the side effect
-      return { skipped: true, interrupted: true };
+      return { kind: 'skipped', interrupted: true };
     }
 
     return {
-      skipped: false,
+      kind: 'success',
       calls: prepRes.toolCalls,
     };
   }
@@ -858,7 +861,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { state } = shared;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       // Apply interrupted side effect if needed
       if (execRes.interrupted) {
         state.shouldStop = true;

@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - core flow primitives
+import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 // Internal imports
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -143,7 +144,7 @@ class ResponsePrepNode<C> extends BaseNode<
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
-          agentName: agentConfig.agent,
+          isRemote: isRemoteAgent(agentConfig.agent),
         });
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
@@ -444,7 +445,7 @@ class ResponseProcessNode<C> extends BaseNode<
     const { options, store } = this._params.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
-      return { skipped: true };
+      return { kind: 'skipped' };
     }
 
     const stage = await options.logger.stage('Process response', {
@@ -547,7 +548,7 @@ class ResponseProcessNode<C> extends BaseNode<
       }
 
       return {
-        skipped: false,
+        kind: 'success',
         value: {
           stopReason,
           newResponse,
@@ -575,7 +576,7 @@ class ResponseProcessNode<C> extends BaseNode<
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       state.endTurn = false;
       if (!state.roundFinalized) {
         state.roundFinalized = true;
@@ -732,7 +733,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       !prepRes.stopReason ||
       !prepRes.processedResponse
     ) {
-      return { skipped: true };
+      return { kind: 'skipped' };
     }
 
     const stopReason = prepRes.stopReason;
@@ -746,7 +747,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       const interrupted = Boolean(await options.checkInterruption());
       if (interrupted) {
         return {
-          skipped: false,
+          kind: 'success',
           value: {
             shouldEndTurn: false,
             shouldStop: true,
@@ -771,7 +772,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       );
 
       return {
-        skipped: false,
+        kind: 'success',
         value: { shouldEndTurn, shouldStop, shouldContinue },
       };
     });
@@ -785,7 +786,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     const { options, store } = this._params.services;
     const { state } = shared;
 
-    if (execRes.skipped) {
+    if (execRes.kind === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
       if (!state.roundFinalized) {
