@@ -1,12 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - Anthropic Tool
-import {
-  TextEditorTool,
-  ToolCallInput,
-  type EditorCommand,
-} from '@agent/toolUse';
+// Local imports - Tool implementations
+import { TextEditorTool, type EditorCommand } from '@tools/TextEditorTool';
+import { ToolCallInput } from '@tools/types';
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
