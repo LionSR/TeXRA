@@ -1,10 +1,10 @@
 /**
  * Agent run flow factory - creates the standard init → work → finalize flow structure.
  *
- * This module consolidates:
- * - Flow graph wiring (formerly buildRunFlow.ts)
- * - Init node implementation (formerly AgentInitNode.ts)
- * - Flow factory (createAgentRunFlow)
+ * Uses PocketFlow's native wiring pattern:
+ * - next() for linear (happy path) flow
+ * - on() only for branches (errors → finalize)
+ * - Nodes return undefined for happy path, explicit action for branches
  */
 
 // Core imports
@@ -34,24 +34,12 @@ export interface AgentInitShared<
  * Configuration for the init node.
  */
 export interface AgentInitNodeConfig<Shared extends AgentInitShared<any, any>> {
+  /** Phase to set when init begins */
   phase: Shared['lifecycle']['phase'];
+  /** Called before client initialization (for lifecycle setup) */
   beforeInitialize?(shared: Shared): void | Promise<void>;
-  onSuccess(shared: Shared): string | Promise<string | undefined>;
-  onFailure?(
-    shared: Shared,
-    error: unknown,
-  ): string | Promise<string | undefined>;
-  failureTransition?: string;
-}
-
-/**
- * Link between flow nodes.
- * When `to` is undefined, the link targets the finalize node.
- */
-export interface FlowLink<Shared> {
-  from: BaseNode<Shared>;
-  on: string;
-  to?: BaseNode<Shared>;
+  /** Called on success (for lifecycle transitions). Return value ignored - follows next() */
+  onSuccess?(shared: Shared): void | Promise<void>;
 }
 
 // ============================================================================
@@ -101,12 +89,13 @@ class AgentInitNode<
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
-      if (this.config.onFailure) {
-        return this.config.onFailure(shared, execRes.error);
-      }
-      return this.config.failureTransition ?? FlowTransition.FINALIZE;
+      return FlowTransition.FINALIZE;
     }
-    return this.config.onSuccess(shared);
+    // Success: call callback then follow next()
+    if (this.config.onSuccess) {
+      await this.config.onSuccess(shared);
+    }
+    return undefined; // Follow next() chain
   }
 }
 
@@ -115,46 +104,49 @@ class AgentInitNode<
 // ============================================================================
 
 interface CreateAgentRunFlowOptions<Shared extends AgentInitShared<any, any>> {
+  /** Configuration for the init node */
   init: AgentInitNodeConfig<Shared>;
+  /** First node after init (init.next() points here) */
+  start: BaseNode<Shared>;
+  /** Finalize node (init error → finalize) */
   finalize: BaseNode<Shared>;
-  links(nodes: {
-    init: AgentInitNode<Shared>;
-    finalize: BaseNode<Shared>;
-  }): FlowLink<Shared>[];
 }
 
 /**
  * Creates an agent run flow with standard init → work → finalize structure.
  *
- * The flow automatically wires:
- * - Init node with FINALIZE transition to finalize node
- * - All provided links (undefined `to` targets finalize)
+ * Uses PocketFlow's native wiring:
+ * - init.next(start) for happy path
+ * - init.on(FINALIZE, finalize) for error path
+ *
+ * Callers wire their own nodes using next()/on() before calling this.
  *
  * @example
  * ```typescript
+ * // Wire nodes using native PocketFlow API
+ * prepNode.next(cycleNode);
+ * cycleNode.next(waitNode);
+ * waitNode.on(FlowTransition.CONTINUE, cycleNode);
+ * waitNode.on(FlowTransition.FINALIZE, finalizeNode);
+ *
+ * // Create flow
  * const flow = createAgentRunFlow<MyShared>({
- *   init: { phase: 'init', onSuccess: () => 'execute' },
+ *   init: { phase: 'init', onSuccess: (s) => s.lifecycle.begin('work') },
+ *   start: prepNode,
  *   finalize: finalizeNode,
- *   links: ({ init }) => [
- *     { from: init, on: 'execute', to: workNode },
- *     { from: workNode, on: 'finalize' }, // undefined to = finalize
- *   ],
  * });
  * ```
  */
 export function createAgentRunFlow<Shared extends AgentInitShared<any, any>>({
   init,
+  start,
   finalize,
-  links,
 }: CreateAgentRunFlowOptions<Shared>): Flow<Shared> {
   const initNode = new AgentInitNode<Shared>(init);
-  const linkDefinitions = links({ init: initNode, finalize });
 
-  // Wire the flow graph (formerly buildRunFlow)
-  initNode.on(FlowTransition.FINALIZE, finalize);
-  for (const link of linkDefinitions) {
-    link.from.on(link.on, link.to ?? finalize);
-  }
+  // Wire using native PocketFlow API
+  initNode.next(start); // Happy path: init → start
+  initNode.on(FlowTransition.FINALIZE, finalize); // Error path: init → finalize
 
   return new Flow<Shared>(initNode);
 }
