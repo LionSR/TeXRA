@@ -17,9 +17,9 @@ import {
   createToolUseRunFlow,
   type ToolUseRunShared,
   type ToolUseRunPhase,
+  type ToolUseRunHooks,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 // Type imports
-import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
@@ -85,6 +85,33 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   protected override unregisterRunningAgent(streamTabId: StreamTabId): void {
     unregisterToolUseAgent(streamTabId);
+  }
+
+  // =========================================================================
+  // Lifecycle Overrides for Tool-Use Sessions
+  // Tool-use agents have custom lifecycle: reuse stages, custom init, cleanup
+  // =========================================================================
+
+  /**
+   * Tool-use agents reuse existing stages rather than creating new ones.
+   */
+  public override async startRun(): Promise<undefined> {
+    return undefined;
+  }
+
+  /**
+   * Tool-use agents don't create a new stage during init.
+   */
+  public override async initRun(): Promise<void> {
+    await this.init(undefined, { createStage: false });
+  }
+
+  /**
+   * Tool-use cleanup also disposes the session lifecycle.
+   */
+  public override cleanupRun(): void {
+    super.cleanupRun();
+    this.sessionLifecycle.dispose();
   }
 
   private getTools(): ToolDefinition[] {
@@ -157,11 +184,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
+    // Flow-specific hooks only - lifecycle is on the agent (IFlowAgent)
+    const hooks: ToolUseRunHooks<C> = {
+      prepareState: () => this.prepareInitialState(),
+      buildCycleOptions: (store) => this.createCycleOptions(store),
+      runCycle: (options, messages, store) =>
+        runToolUseCycle({ options, messages, store }),
+      persistCheckpoint: (messages, store) =>
+        this.persistCheckpoint(messages, store),
+    };
+
     await this.executeAgentRunFlow<ToolUseRunShared<C>>({
       lifecycle,
-      hookOverrides: {
-        start: async () => undefined,
-      },
+      hooks,
       createState: () => ({
         conversation: [],
         cycleOptions: null,
@@ -170,20 +205,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         runState: new AgentRunState(),
       }),
       createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => ({
-        ...baseHooks,
-        init: (runStage) => this.init(runStage, { createStage: false }),
-        prepareState: () => this.prepareInitialState(),
-        buildCycleOptions: (store) => this.createCycleOptions(store),
-        runCycle: (options, messages, store) =>
-          runToolUseCycle({ options, messages, store }),
-        persistCheckpoint: (messages, store) =>
-          this.persistCheckpoint(messages, store),
-        cleanup: async () => {
-          await baseHooks.cleanup();
-          this.sessionLifecycle.dispose();
-        },
-      }),
     });
   }
 

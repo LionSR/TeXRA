@@ -11,7 +11,7 @@ import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { AgentRunHooks, IFlowAgent } from '@agent/core/IAgent';
+import type { IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
@@ -61,14 +61,15 @@ export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
 export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 /**
- * Hooks interface for tool-use agent runs.
+ * Flow-specific hooks for tool-use agent runs.
  *
- * Note: Session lifecycle methods (waitForFollowUp, applyFollowUp, clearPersistedSnapshot,
- * checkInterruption, hasQueuedFollowUp, markRunning, enterWaitingState) are called
- * directly on the agent, not via hooks. This follows PocketFlow's pattern where
- * nodes interact with the domain object (agent) directly for stateful operations.
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on IFlowAgent.
+ * Session lifecycle methods (waitForFollowUp, clearPersistedSnapshot, etc.)
+ * are on IToolUseFlowAgent.
+ *
+ * This interface contains only flow-specific hooks that vary by implementation.
  */
-export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
+export interface ToolUseRunHooks<C = unknown> {
   prepareState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
