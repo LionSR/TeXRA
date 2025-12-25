@@ -112,8 +112,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     });
   }
 
-  /** Initialize the API client. */
-  protected async initializeClient(): Promise<void> {
+  /** Initialize the API client. Called by flow init nodes. */
+  public async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
     await sleep(SHORT_SLEEP_MS);
   }
