@@ -343,9 +343,14 @@ class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
  * PocketFlow compliance:
  * - prep(): Extract immutable data from shared state
  * - exec(): Pure computation (call runCycle, no side effects)
+ * - execFallback(): Convert thrown errors to result type
  * - post(): Side effects (persist checkpoint) + routing decision
  */
-class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
+class ToolUseCycleNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
     // Own our phase - CycleNode is responsible for 'cycle' lifecycle phase
     // (minor bookkeeping side effect, acceptable in prep)
@@ -383,6 +388,13 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
       return { kind: 'cancelled' };
     }
     return { kind: 'success' };
+  }
+
+  async execFallback(
+    _prepRes: CycleNodePrepResult<C>,
+    error: Error,
+  ): Promise<CycleExecResult> {
+    return { kind: 'failed', message: error.message };
   }
 
   async post(
