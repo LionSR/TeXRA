@@ -93,7 +93,6 @@ async function persistSnapshot({
 
 async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
   agent: BaseToolUseAgent;
-  agentType: AgentType;
   context: AgentExecutionContext;
 }> {
   const config: AgentConfig = snapshot.agentConfig;
@@ -109,7 +108,7 @@ async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
     throw new Error('Attempted to resume a non tool-use agent.');
   }
 
-  return { agent, agentType, context };
+  return { agent, context };
 }
 
 export interface ResumeAgentResult {
