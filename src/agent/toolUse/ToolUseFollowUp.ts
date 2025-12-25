@@ -222,7 +222,7 @@ export async function sendFollowUp(
   const agent = getToolUseAgent(streamId);
   if (agent) {
     try {
-      agent.appendFollowUp(text);
+      agent.session.appendFollowUp(text);
     } catch (error) {
       logger.error('Failed to send follow-up to active agent.', {
         data: error,
