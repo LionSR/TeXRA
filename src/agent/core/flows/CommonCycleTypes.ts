@@ -140,3 +140,49 @@ export interface BaseInvocationSuccessData {
   /** Time taken for the response in seconds */
   responseTime?: number;
 }
+
+// ============================================================================
+// Debug Context Factory
+// ============================================================================
+
+/**
+ * Options for creating a debug context.
+ */
+export interface CreateDebugContextOptions {
+  logger: AgentLogger;
+  modelName?: string;
+  executionId?: ExecutionId;
+  agentName?: string;
+}
+
+/**
+ * Creates a debug context for cycle operations.
+ * Single source of truth - eliminates duplicate context creation.
+ */
+export function createDebugContext(
+  options: CreateDebugContextOptions,
+): CycleDebugContext {
+  // Import dynamically to avoid circular dependency at module load time
+  const { isRemoteAgent } = require('@agent/index');
+  return {
+    logger: options.logger,
+    modelName: options.modelName,
+    executionId: options.executionId,
+    isRemote: isRemoteAgent(options.agentName),
+  };
+}
+
+/**
+ * Creates debug file options for a cycle.
+ */
+export function createDebugFileOptions(
+  roundIndex: number,
+  baseName: string,
+  outputFile?: string,
+): CycleDebugFileOptions {
+  return {
+    continuationCount: roundIndex,
+    baseName,
+    outputFile,
+  };
+}
