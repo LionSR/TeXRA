@@ -217,7 +217,7 @@ export const ToolUseSessionPersistence = {
       const { agent, context } = await buildToolUseAgent(snapshot);
 
       // Restore agent state from snapshot
-      agent.resumeFromSnapshot(snapshot);
+      agent.setResumeSnapshot(snapshot);
 
       // Append any follow-up messages
       if (followUp !== undefined) {
