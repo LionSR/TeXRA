@@ -111,7 +111,6 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     messages: ProviderMessage[],
     store: AgentSharedStore,
   ): Promise<void>;
-  logFinalizeWarning?(message: string, error: unknown): void;
 }
 
 /**
@@ -507,10 +506,7 @@ type ToolUseFinalizeContext<C> = FinalizeContext<
 
 /**
  * Finalize node for tool-use runs.
- *
- * Extends StandardFinalizeNode with:
- * - beforeEnd: Clear persisted snapshot
- * - onSecondaryError: Log warning via hooks
+ * Clears persisted snapshot before ending.
  */
 class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
   constructor() {
@@ -519,16 +515,6 @@ class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
 
   protected async beforeEnd(context: ToolUseFinalizeContext<C>): Promise<void> {
     await context.hooks.clearPersistedSnapshot();
-  }
-
-  protected onSecondaryError(
-    context: ToolUseFinalizeContext<C>,
-    error: unknown,
-  ): void {
-    context.hooks.logFinalizeWarning?.(
-      'Additional finalize error encountered.',
-      error,
-    );
   }
 }
 
