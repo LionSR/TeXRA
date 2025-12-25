@@ -52,12 +52,14 @@ import type {
   ResponseCycleServices,
 } from './CycleServices';
 
-export interface ResponseCycleInputState {
+/** Input state for response cycles. */
+interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation: AgentFileLocation;
 }
 
-export interface ResponseCycleRuntimeState extends BaseCycleState {
+/** Runtime state for response cycles. */
+interface ResponseCycleRuntimeState extends BaseCycleState {
   /**
    * Whether the last cycle ended normally (model said end_turn).
    *

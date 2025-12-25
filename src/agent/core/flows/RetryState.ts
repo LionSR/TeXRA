@@ -27,7 +27,7 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
-export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
 // Types
@@ -56,9 +56,9 @@ export interface RetryState {
 
 /**
  * Configuration for PocketFlow Node retry behavior.
- * Use these values when constructing invocation nodes.
+ * Used internally by RetryableInvocationNode.
  */
-export interface NodeRetryConfig {
+interface NodeRetryConfig {
   /**
    * Total number of attempts, NOT the number of retries.
    * For example, maxRetries=3 means: 1 initial attempt + 2 retries.
@@ -71,19 +71,9 @@ export interface NodeRetryConfig {
 
 /**
  * Gets PocketFlow Node retry configuration from user settings.
- * Returns values suitable for passing to Node constructor.
- *
- * @example
- * ```typescript
- * class MyInvocationNode extends Node<S, P> {
- *   constructor() {
- *     const config = getNodeRetryConfig();
- *     super(config.maxRetries, config.wait);
- *   }
- * }
- * ```
+ * Used internally by RetryableInvocationNode constructor.
  */
-export function getNodeRetryConfig(): NodeRetryConfig {
+function getNodeRetryConfig(): NodeRetryConfig {
   const maxAutoAttempts = getModelRetryMaxAttempts() ?? 0;
   const backoffMs = getModelRetryBackoffMs() ?? 1000;
 
@@ -109,19 +99,16 @@ export function createRetryState(): RetryState {
 }
 
 /**
- * Clears error state. Used for:
- * - After successful invocation (to reset for next operation)
- * - After manual retry triggered (to start fresh)
- * - After user cancellation (to distinguish from error failure)
+ * Clears error state. Used internally by handleInvocationResult.
  */
-export function clearRetryError(state: RetryState): void {
+function clearRetryError(state: RetryState): void {
   state.lastError = undefined;
 }
 
 /**
- * Records an error in retry state.
+ * Records an error in retry state. Used internally by handleInvocationResult.
  */
-export function recordRetryError(
+function recordRetryError(
   state: RetryState,
   error: RetryErrorInfo,
 ): void {
@@ -163,10 +150,10 @@ export type InvocationResult<TSuccess> =
 // ============================================================================
 
 /**
- * Services interface required by RetryableInvocationNode.
- * Subclasses must ensure their params.services has this shape.
+ * Services interface for RetryableInvocationNode.
+ * Subclasses return their own service types that conform to this shape.
  */
-export interface RetryableNodeServices {
+interface RetryableNodeServices {
   options: {
     context: { streamId: string };
     logger: AgentLogger;
@@ -404,13 +391,13 @@ export abstract class RetryableInvocationNode<
  * Error message for empty response failure.
  * Used when model returns null/undefined response (network issue, server error, etc.)
  */
-export const EMPTY_RESPONSE_ERROR_MESSAGE =
+const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
 /**
  * Options for handling invocation result in post().
  */
-export interface InvocationResultHandlerOptions {
+interface InvocationResultHandlerOptions {
   /** Logger for debug/warning messages */
   logger: AgentLogger;
   /** Operation name for log messages */
