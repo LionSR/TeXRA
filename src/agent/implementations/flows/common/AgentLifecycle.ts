@@ -1,52 +1,25 @@
-import { z } from 'zod';
-
 /**
  * Agent lifecycle status - single source of truth for agent run state.
  */
-export const AGENT_LIFECYCLE_STATUS = {
+const AGENT_LIFECYCLE_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
   ERROR: 'error',
   COMPLETED: 'completed',
 } as const;
 
-export const AgentLifecycleStatusSchema = z.enum([
-  AGENT_LIFECYCLE_STATUS.PENDING,
-  AGENT_LIFECYCLE_STATUS.RUNNING,
-  AGENT_LIFECYCLE_STATUS.ERROR,
-  AGENT_LIFECYCLE_STATUS.COMPLETED,
-]);
-
-export type AgentLifecycleStatus = z.infer<typeof AgentLifecycleStatusSchema>;
-
-/**
- * Schema for lifecycle snapshot - single source of truth.
- * Phase is a generic string to allow different phase enums per agent type.
- */
-export const AgentLifecycleSnapshotSchema = z.object({
-  phase: z.string(),
-  status: AgentLifecycleStatusSchema,
-  error: z.unknown().optional(),
-});
-
-/**
- * Snapshot for serialization - derived from schema.
- */
-export type AgentLifecycleSnapshot<Phase extends string = string> = Omit<
-  z.infer<typeof AgentLifecycleSnapshotSchema>,
-  'phase'
-> & { phase: Phase };
+type AgentLifecycleStatus =
+  (typeof AGENT_LIFECYCLE_STATUS)[keyof typeof AGENT_LIFECYCLE_STATUS];
 
 /**
  * State machine for agent lifecycle management.
  *
- * Replaces the 5 standalone lifecycle functions with a single class:
- * - createLifecycleState() → new AgentLifecycle(phase)
- * - beginLifecyclePhase() → lifecycle.begin(phase)
- * - setLifecyclePhase() → lifecycle.setPhase(phase)
- * - setLifecycleStatus() → lifecycle.setStatus(status)
- * - failLifecycle() → lifecycle.fail(error)
- * - completeLifecycle() → lifecycle.complete()
+ * Core API:
+ * - new AgentLifecycle(phase) - Create with initial phase
+ * - lifecycle.begin(phase) - Begin phase with 'running' status
+ * - lifecycle.setPhase(phase) - Set phase without changing status
+ * - lifecycle.fail(error) - Set 'error' status with error
+ * - lifecycle.complete() - Set 'completed' status
  *
  * @example
  * ```typescript
@@ -99,17 +72,6 @@ export class AgentLifecycle<Phase extends string> {
   }
 
   /**
-   * Set status directly.
-   * Clears error if status is not 'error'.
-   */
-  setStatus(status: AgentLifecycleStatus): void {
-    this._status = status;
-    if (status !== AGENT_LIFECYCLE_STATUS.ERROR) {
-      this._error = undefined;
-    }
-  }
-
-  /**
    * Fail the lifecycle with an error.
    * Sets status to 'error' and stores the error.
    */
@@ -125,31 +87,5 @@ export class AgentLifecycle<Phase extends string> {
   complete(): void {
     this._status = AGENT_LIFECYCLE_STATUS.COMPLETED;
     this._error = undefined;
-  }
-
-  /**
-   * Serialize to plain object for persistence.
-   */
-  toSnapshot(): AgentLifecycleSnapshot<Phase> {
-    return {
-      phase: this._phase,
-      status: this._status,
-      error: this._error,
-    };
-  }
-
-  /**
-   * Create from serialized snapshot with validation.
-   * @throws {z.ZodError} if the snapshot data is invalid
-   */
-  static fromSnapshot<P extends string>(
-    data: AgentLifecycleSnapshot<P>,
-  ): AgentLifecycle<P> {
-    // Validate the snapshot data
-    const validated = AgentLifecycleSnapshotSchema.parse(data);
-    const lifecycle = new AgentLifecycle(validated.phase as P);
-    lifecycle._status = validated.status;
-    lifecycle._error = validated.error;
-    return lifecycle;
   }
 }

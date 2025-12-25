@@ -9,12 +9,6 @@ export const FlowTransition = {
   CONTINUE: 'continue',
   /** Exit the flow entirely after running any finalisation hooks. */
   FINALIZE: 'finalize',
-  /** Begin a new round iteration (used by reflection flows). */
-  ROUND: 'round',
-  /** Skip the current node's work but remain in the flow. */
-  SKIP: 'skip',
-  /** Execute the next actionable node immediately. */
-  EXECUTE: 'execute',
 } as const;
 
 export type FlowTransition =
