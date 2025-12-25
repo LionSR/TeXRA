@@ -21,9 +21,10 @@ import {
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createStandardFinalizeNode,
+  StandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
+  type FinalizeContext,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
@@ -497,23 +498,47 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 }
 
+/** Context type for ToolUseFinalizeNode hooks */
+type ToolUseFinalizeContext<C> = FinalizeContext<
+  ToolUseRunLifecycle,
+  ToolUseRunHooks<C>,
+  BaseToolUseAgent<C>
+>;
+
+/**
+ * Finalize node for tool-use runs.
+ *
+ * Extends StandardFinalizeNode with:
+ * - beforeEnd: Clear persisted snapshot
+ * - onSecondaryError: Log warning via hooks
+ */
+class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
+  constructor() {
+    super('finalize');
+  }
+
+  protected async beforeEnd(context: ToolUseFinalizeContext<C>): Promise<void> {
+    await context.hooks.clearPersistedSnapshot();
+  }
+
+  protected onSecondaryError(
+    context: ToolUseFinalizeContext<C>,
+    error: unknown,
+  ): void {
+    context.hooks.logFinalizeWarning?.(
+      'Additional finalize error encountered.',
+      error,
+    );
+  }
+}
+
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   // Create all nodes
   const initNode = new ToolUseInitNode<C>();
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
   const waitNode = new ToolUseWaitNode<C>();
-  const finalizeNode = createStandardFinalizeNode<ToolUseRunShared<C>>({
-    finalizePhase: 'finalize',
-    beforeEnd: async ({ hooks }) => {
-      await hooks.clearPersistedSnapshot();
-    },
-    onSecondaryError: ({ hooks }, error) =>
-      hooks.logFinalizeWarning?.(
-        'Additional finalize error encountered.',
-        error,
-      ),
-  });
+  const finalizeNode = new ToolUseFinalizeNode<C>();
 
   // Wire using native PocketFlow API
   // Linear flow (happy path): init → prepare → cycle → wait

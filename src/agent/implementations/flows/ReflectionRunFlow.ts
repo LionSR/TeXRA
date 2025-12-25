@@ -20,7 +20,7 @@ import type {
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createStandardFinalizeNode,
+  StandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
@@ -273,9 +273,9 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   // Create all nodes
   const initNode = new ReflectionInitNode<C>();
   const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = createStandardFinalizeNode<ReflectionRunShared<C>>({
-    finalizePhase: 'finalize',
-  });
+  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared<C>>(
+    'finalize',
+  );
 
   // Wire using native PocketFlow API
   // Linear flow (happy path): init → round
