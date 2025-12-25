@@ -1,7 +1,57 @@
+/**
+ * Agent flow runner - executes agent flows with hooks and lifecycle management.
+ *
+ * This module is the single source of truth for:
+ * - AgentRunShared: Generic shared state container for all flows
+ * - BaseFlowShared: Type constraint alias for flow options
+ * - runAgentFlow: Flow execution with hook assembly
+ */
+
 // Type imports
 import type { Flow } from '@agent/node';
 import type { AgentRunHooks } from '@agent/core/IAgent';
-import type { AgentRunShared, BaseFlowShared } from './types';
+import type { BaseAgent } from '@agent/implementations/BaseAgent';
+import type { AgentLifecycle } from './AgentLifecycle';
+
+// ============================================================================
+// Core Types (formerly in types.ts)
+// ============================================================================
+
+/**
+ * Generic shared state for agent flow execution.
+ *
+ * This is the core container that flows use to coordinate:
+ * - agent: The agent instance being run
+ * - state: Flow-specific mutable runtime state
+ * - lifecycle: Phase and status tracking
+ * - hooks: Callbacks for lifecycle events
+ */
+export interface AgentRunShared<
+  A extends BaseAgent<any>,
+  State,
+  Lifecycle extends AgentLifecycle<string>,
+  Hooks extends AgentRunHooks,
+> {
+  agent: A;
+  state: State;
+  lifecycle: Lifecycle;
+  hooks: Hooks;
+}
+
+/**
+ * Base type alias for flow shared state constraints.
+ * Use this instead of repeating the full generic constraint.
+ */
+export type BaseFlowShared = AgentRunShared<
+  BaseAgent<any>,
+  any,
+  AgentLifecycle<string>,
+  AgentRunHooks
+>;
+
+// ============================================================================
+// Flow Runner
+// ============================================================================
 
 export type AgentRunHookOverrides = Partial<AgentRunHooks>;
 
