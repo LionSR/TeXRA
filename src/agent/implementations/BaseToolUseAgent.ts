@@ -58,6 +58,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
+
+  /**
+   * Reference to the flow's shared state during run().
+   *
+   * This pattern allows agent methods (e.g., enterWaitingState) to access
+   * flow state without being passed it explicitly. The reference is:
+   * - Set in createState() callback when flow starts
+   * - Cleared in finally block when flow ends
+   * - Same object as shared.state in the flow (not a copy)
+   *
+   * Methods that need state access call getActiveState() which throws if
+   * called outside of an active run.
+   */
   private activeState: ToolUseRunState<C> | null = null;
 
   constructor(
@@ -200,14 +213,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Prepares the initial state for the tool-use session.
    * Handles both new sessions and resumed sessions from snapshots.
-   * Parallel to beginRound() + prepare methods in BaseReflectionAgent.
+   *
+   * Pure method: Returns data for the flow to update state.
+   * Only side effect: Sets sessionLifecycle store (necessary for persistence).
    */
   public async prepareInitialState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
+    runState: AgentRunState;
   }> {
-    const state = this.getActiveState();
     if (this.resumeSnapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
       const snapshot = this.resumeSnapshot;
@@ -219,15 +234,18 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         onRoundFinalized: this.getUsageRecorder('tool-use'),
       });
 
-      state.conversation = [...messages];
-      state.store = store;
-      state.runState = store.run;
-      state.shouldSkipCycle = true;
-
+      // Side effect: sessionLifecycle needs store for persistence
       this.sessionLifecycle.setStore(store);
 
-      return { messages, store, shouldSkipCycle: true };
+      return {
+        messages,
+        store,
+        shouldSkipCycle: true,
+        runState: store.run, // Resumed runState from snapshot
+      };
     }
+
+    const currentRunState = this.getActiveState().runState;
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
@@ -246,20 +264,22 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     );
 
     const store = createSharedStore({
-      roundIndex: state.runState.totalRounds,
-      runState: state.runState,
+      roundIndex: currentRunState.totalRounds,
+      runState: currentRunState,
       workspaceState: AgentWorkspaceState.create(),
       userChannels: this.getUserVarChannels(),
       onRoundFinalized: this.getUsageRecorder('tool-use'),
     });
 
-    state.conversation = [...messages];
-    state.store = store;
-    state.shouldSkipCycle = false;
-
+    // Side effect: sessionLifecycle needs store for persistence
     this.sessionLifecycle.setStore(store);
 
-    return { messages, store, shouldSkipCycle: false };
+    return {
+      messages,
+      store,
+      shouldSkipCycle: false,
+      runState: currentRunState, // Same runState, store shares it
+    };
   }
 
   /**
@@ -309,6 +329,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     await this.sessionLifecycle.persistCheckpoint(messages);
   }
 
+  /**
+   * Gets the active flow state. Throws if called outside of run().
+   * @see activeState field for pattern documentation
+   */
   private getActiveState(): ToolUseRunState<C> {
     if (!this.activeState) {
       throw new Error('Tool-use run state is not initialized.');
