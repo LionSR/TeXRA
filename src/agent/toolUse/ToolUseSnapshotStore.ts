@@ -20,7 +20,7 @@ import {
   ToolUseSessionSnapshotSchema,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
-} from './ToolUseSnapshotTypes';
+} from './ToolUseSessionManager';
 
 /**
  * Persists tool-use session snapshots to disk. Runtime queue state lives in
