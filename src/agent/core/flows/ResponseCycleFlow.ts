@@ -722,7 +722,8 @@ class ResponseContinuationNode<C> extends BaseNode<
       state.shouldStop || !state.stopReason || !state.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
-    const interrupted = !shouldSkip && Boolean(await options.checkInterruption());
+    const interrupted =
+      !shouldSkip && Boolean(await options.checkInterruption());
 
     return {
       shouldSkip,
