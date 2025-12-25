@@ -641,7 +641,8 @@ interface ToolExecutionResult {
  * PocketFlow compliance: exec() should only use prepRes, not shared.
  */
 interface ToolUseDispatchPrepResult {
-  shouldStop: boolean;
+  shouldSkip: boolean;
+  interrupted: boolean;
   toolCalls: SdkToolCall[];
   text?: string;
 }
@@ -673,16 +674,24 @@ class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseCycleParams<C>
 > {
   /**
-   * Extract data from shared for exec().
-   * PocketFlow compliance: Only extract what exec() needs.
+   * Extract data from shared and check interruption.
+   * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
   async prep(
     shared: ToolUseCycleShared,
   ): Promise<ToolUseDispatchPrepResult> {
+    const { options } = this._params.services;
     const { state } = shared;
+    const toolCalls = state.toolCalls ?? [];
+
+    // Check skip conditions (including interruption) in prep
+    const shouldSkip = state.shouldStop || toolCalls.length === 0;
+    const interrupted = !shouldSkip && Boolean(await options.checkInterruption());
+
     return {
-      shouldStop: state.shouldStop,
-      toolCalls: state.toolCalls ?? [],
+      shouldSkip,
+      interrupted,
+      toolCalls,
       text: state.text,
     };
   }
@@ -694,14 +703,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
   async exec(
     prepRes: ToolUseDispatchPrepResult,
   ): Promise<ToolUseDispatchExecResult> {
-    const { options } = this._params.services;
-
-    if (prepRes.shouldStop || prepRes.toolCalls.length === 0) {
+    if (prepRes.shouldSkip) {
       return { kind: 'skipped', interrupted: false };
     }
 
-    if (await options.checkInterruption()) {
-      // Return interrupted flag - post() will apply the side effect
+    if (prepRes.interrupted) {
       return { kind: 'skipped', interrupted: true };
     }
 
