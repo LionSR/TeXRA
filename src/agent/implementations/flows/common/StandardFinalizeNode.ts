@@ -16,10 +16,10 @@
 import { BaseNode } from '@agent/node';
 
 // Constants
+import type { AgentRunHooks } from '@agent/core/IAgent';
 import { END_GROUP_STATUS } from '@logger/messageTypes';
 
 // Type imports
-import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
 import type { AgentRunShared } from './AgentRunFlowRunner';
 
