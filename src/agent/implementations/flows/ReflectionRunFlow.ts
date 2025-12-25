@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Local imports - core flow primitives
-import { BaseNode, Node, Flow } from '@agent/node';
+import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
@@ -15,10 +15,10 @@ import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
   StandardFinalizeNode,
+  StandardInitNode,
   AgentLifecycle,
   BaseRunStateSchema,
   type AgentRunShared,
-  type InitExecResult,
 } from '@agent/implementations/flows/common';
 
 // ============================================================================
@@ -109,55 +109,18 @@ type RoundExecResult =
 /**
  * Initializes the reflection agent run.
  *
- * Phase ownership:
- * - exec(): Sets 'init' phase
- * - post(): Transitions to 'rounds' phase on success
- *
- * Uses PocketFlow's native error handling:
- * - exec(): Let errors throw naturally (no try/catch)
- * - execFallback(): Convert errors to result type for post()
- * - Node with maxRetries=1: No retry, just fallback on error
+ * Extends StandardInitNode to call resetPromptBuilder() before start.
  */
-class ReflectionInitNode<C> extends Node<ReflectionRunShared<C>> {
+class ReflectionInitNode<C> extends StandardInitNode<ReflectionRunShared<C>> {
   constructor() {
-    super(1, 0); // maxRetries=1 (no retry), wait=0
+    super('rounds');
   }
 
-  async prep(shared: ReflectionRunShared<C>) {
-    return { hooks: shared.hooks, lifecycle: shared.lifecycle };
-  }
-
-  async exec(prepRes: {
+  protected override beforeStart(prepRes: {
     hooks: ReflectionRunHooks;
     lifecycle: ReflectionRunLifecycle;
-  }): Promise<{ kind: 'success' }> {
-    prepRes.lifecycle.begin('init');
-    // Let errors throw - Node._exec catches them and calls execFallback
+  }): void {
     prepRes.hooks.resetPromptBuilder();
-    const runStage = await prepRes.hooks.start();
-    await prepRes.hooks.init(runStage);
-    await prepRes.hooks.initializeClient();
-    return { kind: 'success' };
-  }
-
-  async execFallback(
-    _prepRes: unknown,
-    error: Error,
-  ): Promise<{ kind: 'error'; error: unknown }> {
-    return { kind: 'error', error };
-  }
-
-  async post(
-    shared: ReflectionRunShared<C>,
-    _prepRes: unknown,
-    execRes: InitExecResult,
-  ): Promise<string | undefined> {
-    if (execRes.kind === 'error') {
-      shared.lifecycle.fail(execRes.error);
-      return FlowTransition.FINALIZE;
-    }
-    shared.lifecycle.begin('rounds');
-    return undefined; // Follow next() → RoundNode
   }
 }
 
