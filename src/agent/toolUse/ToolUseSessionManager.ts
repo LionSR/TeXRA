@@ -81,15 +81,11 @@ const logger = new AgentLogger(CHANNEL);
  * Provides:
  * - Dual-indexed storage (by stream ID and execution ID)
  * - Lazy registration from persisted snapshots on startup
- * - Consume-on-read pattern for single-use resume operations
+ * - Explicit cleanup via clearByStream/clearByExecution
  */
 export class ToolUseSessionManager {
   private static readonly index =
     new StreamExecutionIndex<ToolUseSessionSnapshot>();
-
-  static hasSnapshot(streamId: StreamTabId): boolean {
-    return this.index.getByStream(streamId) !== undefined;
-  }
 
   static registerSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
     if (snapshots.length === 0) {
@@ -114,19 +110,6 @@ export class ToolUseSessionManager {
     logger.debug(
       `Cached pending snapshot for stream ${snapshot.streamId} after persistence.`,
     );
-  }
-
-  static consumeByStream(
-    streamId: StreamTabId,
-  ): ToolUseSessionSnapshot | undefined {
-    const entry = this.index.deleteByStream(streamId);
-    if (!entry) {
-      return undefined;
-    }
-    logger.debug(
-      `Consuming pending snapshot for stream ${streamId} to resume.`,
-    );
-    return entry.value;
   }
 
   static getByStream(
