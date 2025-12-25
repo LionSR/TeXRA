@@ -146,19 +146,13 @@ export interface BaseInvocationSuccessData {
 // ============================================================================
 
 /**
- * Options for creating a debug context (same as CycleDebugContext).
- * Kept as alias for API clarity at call sites.
- */
-export type CreateDebugContextOptions = CycleDebugContext;
-
-/**
  * Creates a debug context for cycle operations.
  *
  * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
  * to avoid circular dependency issues.
  */
 export function createDebugContext(
-  options: CreateDebugContextOptions,
+  options: CycleDebugContext,
 ): CycleDebugContext {
   return { ...options };
 }
