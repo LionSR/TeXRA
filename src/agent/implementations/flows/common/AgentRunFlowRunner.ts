@@ -6,20 +6,15 @@
  * - AgentRunFlowOptions: Options for running agent flows
  * - runAgentFlow: Flow execution
  * - InitExecResult, NodeExecResult: Shared result types for nodes
- * - BaseRunStateSchema: Common state schema fields for extension
  *
  * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are called directly
  * on the agent via IFlowAgent interface. Flow-specific hooks (e.g., prepareState,
  * buildCycleOptions) are provided directly by the caller.
  */
 
-import { z } from 'zod';
-
 // Type imports
 import type { Flow } from '@agent/node';
 import type { IFlowAgent } from '@agent/core/IAgent';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentLifecycle } from './AgentLifecycle';
 
 // ============================================================================
@@ -41,27 +36,6 @@ export type InitExecResult =
 export type NodeExecResult<T> =
   | { kind: 'success'; result: T }
   | { kind: 'error'; error: unknown };
-
-// ============================================================================
-// Schema Types - Common state schema for flow state serialization
-// ============================================================================
-
-/**
- * Base schema for agent run state, shared by all flows.
- * Use .extend() to add flow-specific fields.
- *
- * @example
- * ```typescript
- * const ToolUseRunStateSchema = BaseRunStateSchema.extend({
- *   cycleOptions: z.unknown().nullable(),
- *   store: AgentSharedStoreSnapshotSchema.nullable(),
- * });
- * ```
- */
-export const BaseRunStateSchema = z.object({
-  runState: AgentRunStateSnapshotSchema,
-  conversation: z.array(ProviderMessageSchema),
-});
 
 // ============================================================================
 // Core Types
