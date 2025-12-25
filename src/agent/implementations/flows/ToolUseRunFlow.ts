@@ -21,7 +21,6 @@ import {
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createAgentRunFlow,
   createStandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
@@ -232,6 +231,49 @@ function assertPreparedState<C>(
 // Node Implementations
 // ============================================================================
 
+/**
+ * Initializes the tool-use agent run.
+ *
+ * Follows PocketFlow pattern:
+ * - prep(): Extract hooks
+ * - exec(): Run initialization sequence (start → init → initializeClient)
+ * - post(): Set phase, return undefined for happy path or FINALIZE on error
+ */
+class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
+  async prep(shared: ToolUseRunShared<C>) {
+    return { hooks: shared.hooks, lifecycle: shared.lifecycle };
+  }
+
+  async exec(prepRes: {
+    hooks: ToolUseRunHooks<C>;
+    lifecycle: ToolUseRunLifecycle;
+  }): Promise<{ kind: 'success' } | { kind: 'error'; error: unknown }> {
+    prepRes.lifecycle.begin('init');
+
+    try {
+      const runStage = await prepRes.hooks.start();
+      await prepRes.hooks.init(runStage);
+      await prepRes.hooks.initializeClient();
+      return { kind: 'success' };
+    } catch (error) {
+      return { kind: 'error', error };
+    }
+  }
+
+  async post(
+    shared: ToolUseRunShared<C>,
+    _prepRes: unknown,
+    execRes: { kind: 'success' } | { kind: 'error'; error: unknown },
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'error') {
+      shared.lifecycle.fail(execRes.error);
+      return FlowTransition.FINALIZE;
+    }
+    shared.lifecycle.begin('prepare');
+    return undefined; // Follow next() → PrepareNode
+  }
+}
+
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(
     shared: ToolUseRunShared<C>,
@@ -433,6 +475,8 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
 }
 
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
+  // Create all nodes
+  const initNode = new ToolUseInitNode<C>();
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
   const waitNode = new ToolUseWaitNode<C>();
@@ -448,25 +492,18 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
       ),
   });
 
-  // Wire nodes using native PocketFlow API
-  // Linear flow (happy path): prepare → cycle → wait
+  // Wire using native PocketFlow API
+  // Linear flow (happy path): init → prepare → cycle → wait
+  initNode.next(prepareNode);
   prepareNode.next(cycleNode);
   cycleNode.next(waitNode);
 
   // Branches: error paths → finalize, loop → cycle
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
   prepareNode.on(FlowTransition.FINALIZE, finalizeNode);
   cycleNode.on(FlowTransition.FINALIZE, finalizeNode);
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
   waitNode.on(FlowTransition.FINALIZE, finalizeNode);
 
-  return createAgentRunFlow<ToolUseRunShared<C>>({
-    init: {
-      phase: 'init',
-      onSuccess: (shared) => {
-        shared.lifecycle.begin('prepare');
-      },
-    },
-    start: prepareNode,
-    finalize: finalizeNode,
-  });
+  return new Flow<ToolUseRunShared<C>>(initNode);
 }

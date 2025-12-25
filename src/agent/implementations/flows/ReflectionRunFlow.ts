@@ -20,7 +20,6 @@ import type {
 import type { AgentRunHooks } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createAgentRunFlow,
   createStandardFinalizeNode,
   AgentLifecycle,
   type AgentRunShared,
@@ -110,8 +109,52 @@ type RoundExecResult =
   | { kind: 'error'; error: unknown };
 
 // ============================================================================
-// Node Implementation
+// Node Implementations
 // ============================================================================
+
+/**
+ * Initializes the reflection agent run.
+ *
+ * Follows PocketFlow pattern:
+ * - prep(): Extract hooks and lifecycle
+ * - exec(): Reset prompt builder, run init sequence
+ * - post(): Set phase, return undefined for happy path or FINALIZE on error
+ */
+class ReflectionInitNode<C> extends BaseNode<ReflectionRunShared<C>> {
+  async prep(shared: ReflectionRunShared<C>) {
+    return { hooks: shared.hooks, lifecycle: shared.lifecycle };
+  }
+
+  async exec(prepRes: {
+    hooks: ReflectionRunHooks;
+    lifecycle: ReflectionRunLifecycle;
+  }): Promise<{ kind: 'success' } | { kind: 'error'; error: unknown }> {
+    prepRes.lifecycle.begin('init');
+
+    try {
+      prepRes.hooks.resetPromptBuilder();
+      const runStage = await prepRes.hooks.start();
+      await prepRes.hooks.init(runStage);
+      await prepRes.hooks.initializeClient();
+      return { kind: 'success' };
+    } catch (error) {
+      return { kind: 'error', error };
+    }
+  }
+
+  async post(
+    shared: ReflectionRunShared<C>,
+    _prepRes: unknown,
+    execRes: { kind: 'success' } | { kind: 'error'; error: unknown },
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'error') {
+      shared.lifecycle.fail(execRes.error);
+      return FlowTransition.FINALIZE;
+    }
+    shared.lifecycle.begin('rounds');
+    return undefined; // Follow next() → RoundNode
+  }
+}
 
 class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
   async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult<C>> {
@@ -200,27 +243,21 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 }
 
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
+  // Create all nodes
+  const initNode = new ReflectionInitNode<C>();
   const roundNode = new ReflectionRoundNode<C>();
   const finalizeNode = createStandardFinalizeNode<ReflectionRunShared<C>>({
     finalizePhase: 'finalize',
   });
 
-  // Wire nodes using native PocketFlow API
-  // Branches: loop → roundNode, end → finalize
+  // Wire using native PocketFlow API
+  // Linear flow (happy path): init → round
+  initNode.next(roundNode);
+
+  // Branches: loop → roundNode, error/end → finalize
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
   roundNode.on(FlowTransition.CONTINUE, roundNode);
   roundNode.on(FlowTransition.FINALIZE, finalizeNode);
 
-  return createAgentRunFlow<ReflectionRunShared<C>>({
-    init: {
-      phase: 'init',
-      beforeInitialize: (shared) => {
-        shared.hooks.resetPromptBuilder();
-      },
-      onSuccess: (shared) => {
-        shared.lifecycle.begin('rounds');
-      },
-    },
-    start: roundNode,
-    finalize: finalizeNode,
-  });
+  return new Flow<ReflectionRunShared<C>>(initNode);
 }
