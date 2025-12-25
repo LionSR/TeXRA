@@ -1,20 +1,20 @@
 /**
- * Anthropic Tool Module for VS Code
+ * Tool-Use Agent Module
  *
- * This module provides implementations of Anthropic-defined tools for VS Code,
- * such as the text editor tool.
+ * This module provides tool-use agent implementations and session management.
+ * For tool implementations themselves, import from @tools/* directly.
  */
 
-// Local imports - agents
+// Agent implementation
 export { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-export * from './ToolUseAgentRegistry';
 
-// Export individual classes
-export * from '@tools/TextEditorTool';
-export * from '@tools/DiagnosticsTool';
-export * from '@tools/types';
-export * from '@tools/result';
-export * from '@tools/bash';
-export * from '@tools/fileOp';
-export * from '@tools/core/base';
-export * from '@tools/registry';
+// Tool-use agent registry and coordination
+export * from './ToolUseAgentRegistry';
+export * from './ToolUseSessionPersistence';
+export * from './ToolUseSessionLifecycle';
+export * from './ToolUseFollowUpCoordinator';
+export * from './ToolUseFollowUpQueue';
+export * from './ToolUseSnapshotCache';
+export * from './ToolUseSnapshotStore';
+export * from './ToolUseSnapshotTypes';
+export * from './ToolFileInteractionContext';
