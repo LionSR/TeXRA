@@ -535,73 +535,58 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       onRoundFinalized: this.getUsageRecorder('workflow'),
     });
 
-    if (!endTurn) {
-      const cycleResult = await runResponseCycle({
-        options: this.createResponseCycleOptions(),
-        messages: updatedMessages,
-        outputLocation: outputLocation,
-        store,
-      });
+    // Helper to build consistent result object
+    const buildResult = (
+      endTurnFlag: boolean,
+      output: RoundOutput | null,
+      shouldContinue: boolean = this.shouldRunAnotherRound(endTurnFlag),
+    ): ReflectionRoundResult => ({
+      roundState: store.round,
+      runState: store.run,
+      messages: updatedMessages,
+      shouldContinue,
+      workspaceState: store.workspace,
+      output,
+    });
 
-      // If the response cycle failed with an error, throw to stop round progression
-      if (cycleResult.failedWithError) {
-        throw new Error(
-          cycleResult.errorMessage ?? 'Response cycle failed with an error',
-        );
-      }
-
-      // If the user cancelled, stop gracefully without throwing
-      if (cycleResult.userCancelled) {
-        return {
-          roundState: store.round,
-          runState: store.run,
-          messages: updatedMessages,
-          shouldContinue: false,
-          workspaceState: store.workspace,
-          output: null,
-        };
-      }
-
+    // Early completion - model produced output directly via prefill
+    if (endTurn) {
+      await store.finalizeRound();
       const artifacts = await this.handleRoundCompletion(
         roundIndex,
         store.round,
         store.run,
-        {
-          outputFile: outputLocation,
-          endTurn: cycleResult.endTurn,
-        },
+        { outputFile: outputLocation, endTurn },
       );
-
-      return {
-        roundState: store.round,
-        runState: store.run,
-        messages: updatedMessages,
-        shouldContinue: this.shouldRunAnotherRound(cycleResult.endTurn),
-        workspaceState: store.workspace,
-        output: artifacts,
-      };
+      return buildResult(endTurn, artifacts);
     }
 
-    await store.finalizeRound();
+    // Normal flow - run response cycle
+    const cycleResult = await runResponseCycle({
+      options: this.createResponseCycleOptions(),
+      messages: updatedMessages,
+      outputLocation: outputLocation,
+      store,
+    });
+
+    if (cycleResult.failedWithError) {
+      throw new Error(
+        cycleResult.errorMessage ?? 'Response cycle failed with an error',
+      );
+    }
+
+    if (cycleResult.userCancelled) {
+      return buildResult(cycleResult.endTurn, null, false);
+    }
 
     const artifacts = await this.handleRoundCompletion(
       roundIndex,
       store.round,
       store.run,
-      {
-        outputFile: outputLocation,
-        endTurn,
-      },
+      { outputFile: outputLocation, endTurn: cycleResult.endTurn },
     );
 
-    return {
-      roundState: store.round,
-      runState: store.run,
-      messages: updatedMessages,
-      shouldContinue: this.shouldRunAnotherRound(endTurn),
-      workspaceState: store.workspace,
-      output: artifacts,
-    };
+    return buildResult(cycleResult.endTurn, artifacts);
   }
 
   private shouldRunAnotherRound(endTurn: boolean): boolean {
@@ -640,83 +625,119 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     const currRound = this.currentRoundIndex;
-    const messages = this.currentMessages;
-    const workspaceState = this.currentWorkspaceState;
     const stateRound = new ConversationRoundState(currRound);
+
+    return currRound === 0
+      ? this.prepareFirstRoundContext(stateRound)
+      : this.prepareSubsequentRoundContext(stateRound);
+  }
+
+  private async prepareFirstRoundContext(
+    stateRound: ConversationRoundState,
+  ): Promise<{
+    stateRound: ConversationRoundState;
+    preparedMessages: any[];
+    prefill?: string;
+    skip: boolean;
+  }> {
+    const workspaceState = this.currentWorkspaceState!;
     const promptBuilder = this.getPromptBuilder();
 
-    if (currRound === 0) {
-      const { systemPrompt, userRequest, userPrefix } =
-        await promptBuilder.buildInitialPrompts();
+    const { systemPrompt, userRequest, userPrefix } =
+      await promptBuilder.buildInitialPrompts();
 
-      let prefixWithStats = userPrefix;
-      if (workspaceState.document.texcountStats) {
-        prefixWithStats = `${workspaceState.document.texcountStats}${userPrefix}`;
-      }
+    const prefixWithStats = this.prependTexcountStats(
+      userPrefix,
+      workspaceState,
+    );
 
-      const shouldSaveInputPrompt = getConfig<boolean>(
-        'debug.saveInputPrompt',
-        false,
-      );
-      if (shouldSaveInputPrompt) {
-        const promptPath = await writePromptToXml(
-          systemPrompt,
-          prefixWithStats,
-          userRequest,
-          this.agentConfig.inputFile,
-          this.agentConfig.agent,
-          this.executionId,
-        );
-        this.logger.info(`Saved input prompt to ${promptPath}`);
-      }
+    await this.maybeSaveInputPrompt(systemPrompt, prefixWithStats, userRequest);
 
-      const initialMessages = await this.modelHandler.initializeMessages(
-        prefixWithStats,
-        userRequest,
-        workspaceState.media.files,
-        systemPrompt,
-      );
+    const preparedMessages = await this.modelHandler.initializeMessages(
+      prefixWithStats,
+      userRequest,
+      workspaceState.media.files,
+      systemPrompt,
+    );
 
-      const prefill = await promptBuilder.buildPrefill(currRound);
-      workspaceState.assembly.updateAccumulatedOutput(prefill);
+    return this.finalizeRoundContext(stateRound, preparedMessages);
+  }
 
-      return {
-        stateRound,
-        preparedMessages: initialMessages,
-        prefill,
-        skip: false,
-      };
-    }
+  private async prepareSubsequentRoundContext(
+    stateRound: ConversationRoundState,
+  ): Promise<{
+    stateRound: ConversationRoundState;
+    preparedMessages: any[];
+    prefill?: string;
+    skip: boolean;
+  }> {
+    const workspaceState = this.currentWorkspaceState!;
+    const messages = this.currentMessages;
+    const promptBuilder = this.getPromptBuilder();
 
-    const userRequest = await promptBuilder.buildUserRequest(currRound);
-    let userMessage = userRequest ? `${userRequest}\n` : '';
-    if (workspaceState.document.texcountStats) {
-      userMessage = `${workspaceState.document.texcountStats}${userMessage}`;
-    }
+    const userRequest = await promptBuilder.buildUserRequest(
+      this.currentRoundIndex,
+    );
+    const userMessage = this.prependTexcountStats(
+      userRequest ? `${userRequest}\n` : '',
+      workspaceState,
+    );
 
     if (!userMessage.trim()) {
-      return {
-        stateRound,
-        preparedMessages: messages,
-        skip: true,
-      };
+      return { stateRound, preparedMessages: messages, skip: true };
     }
 
-    const roundMessages = await this.modelHandler.createRoundMessages(
+    const preparedMessages = await this.modelHandler.createRoundMessages(
       messages,
       userMessage,
       workspaceState.media.files,
     );
 
-    const prefill = await promptBuilder.buildPrefill(currRound);
+    return this.finalizeRoundContext(stateRound, preparedMessages);
+  }
+
+  private prependTexcountStats(
+    content: string,
+    workspaceState: AgentWorkspaceState,
+  ): string {
+    const stats = workspaceState.document.texcountStats;
+    return stats ? `${stats}${content}` : content;
+  }
+
+  private async maybeSaveInputPrompt(
+    systemPrompt: string,
+    userPrefix: string,
+    userRequest: string,
+  ): Promise<void> {
+    if (!getConfig<boolean>('debug.saveInputPrompt', false)) return;
+
+    const promptPath = await writePromptToXml(
+      systemPrompt,
+      userPrefix,
+      userRequest,
+      this.agentConfig.inputFile,
+      this.agentConfig.agent,
+      this.executionId,
+    );
+    this.logger.info(`Saved input prompt to ${promptPath}`);
+  }
+
+  private async finalizeRoundContext(
+    stateRound: ConversationRoundState,
+    preparedMessages: any[],
+  ): Promise<{
+    stateRound: ConversationRoundState;
+    preparedMessages: any[];
+    prefill?: string;
+    skip: boolean;
+  }> {
+    const workspaceState = this.currentWorkspaceState!;
+    const promptBuilder = this.getPromptBuilder();
+
+    const prefill = await promptBuilder.buildPrefill(this.currentRoundIndex);
     workspaceState.assembly.updateAccumulatedOutput(prefill);
 
-    return {
-      stateRound,
-      preparedMessages: roundMessages,
-      prefill,
-      skip: false,
-    };
+    return { stateRound, preparedMessages, prefill, skip: false };
   }
 
   /**

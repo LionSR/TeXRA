@@ -127,11 +127,39 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
   return mapping[settings.agentType] || DirectAgent;
 }
 
+async function validateAndGetModelConfig(modelName: string): Promise<void> {
+  if (modelName in MODEL_CONFIGS) return;
+
+  await showInstructionWithSuppress(
+    'modelNotRecognized',
+    `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+    [
+      {
+        title: 'Model Documentation',
+        callback: () =>
+          vscode.commands.executeCommand('texra.openDoc', 'models'),
+      },
+    ],
+    false,
+  );
+  throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+}
+
+function createModelHandler(
+  modelName: string,
+  toolConfig: AgentConfig['toolConfig'],
+) {
+  const baseConfig = MODEL_CONFIGS[modelName];
+  const modelConfig = { ...baseConfig, toolConfig };
+  return ModelFactory.createHandler(modelConfig);
+}
+
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
   const { agentName, configPayload, executionId, agentClassOverride } = params;
 
+  // 1. Resolve agent definition
   const fullConfig = parseAgentConfig({ agent: agentName, ...configPayload });
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
@@ -146,41 +174,23 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     resolution.entry.source,
   );
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
-  const modelName = fullConfig.model;
 
-  if (!(modelName in MODEL_CONFIGS)) {
-    await showInstructionWithSuppress(
-      'modelNotRecognized',
-      `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-      [
-        {
-          title: 'Model Documentation',
-          callback: () =>
-            vscode.commands.executeCommand('texra.openDoc', 'models'),
-        },
-      ],
-      false,
-    );
-    throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-  }
-
+  // 2. Validate and create model handler
+  await validateAndGetModelConfig(fullConfig.model);
   const agentConfig: AgentConfig = {
     ...fullConfig,
-    agent: fullConfig.agent,
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
+  const modelHandler = createModelHandler(
+    fullConfig.model,
+    agentConfig.toolConfig,
+  );
 
-  const baseModelConfig = MODEL_CONFIGS[modelName];
-  const modelConfig = {
-    ...baseModelConfig,
-    toolConfig: agentConfig.toolConfig,
-  };
-  const modelHandler = ModelFactory.createHandler(modelConfig);
-
+  // 3. Create execution context
   const streamId = getStreamTabId(
     agentConfig.agent,
-    modelName,
+    fullConfig.model,
     agentConfig.inputFile,
     {
       agentType: agentSetting.agentType,
@@ -188,13 +198,13 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
       useMultipleOutputs: agentConfig.useMultipleOutputs,
     },
   );
-
   const context = new AgentExecutionContext({
     streamId,
     executionId,
     agentCategory: sessionDescriptor.agentCategory,
   });
 
+  // 4. Instantiate agent
   const AgentClass = (agentClassOverride ??
     getAgentClass(agentSetting)) as AgentConstructor;
   const agent = new AgentClass(
@@ -312,6 +322,59 @@ function showAgentNotification(config: AgentConfig): void {
     });
 }
 
+function isApiKeyError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes('Missing API key') ||
+    errorMessage.includes('API key not found')
+  );
+}
+
+async function showApiKeyErrorNotification(): Promise<void> {
+  await showInstructionWithSuppress(
+    'missingApiKey',
+    'API key not found. Set your API key in the extension settings and run again.',
+    [
+      {
+        title: 'Set API Key',
+        callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+      },
+      {
+        title: 'Open Settings Guide',
+        callback: () =>
+          vscode.commands.executeCommand('texra.openDoc', 'configuration'),
+      },
+    ],
+    false,
+  );
+}
+
+async function logAgentError(
+  errorMsg: string,
+  err: unknown,
+  agentName: string,
+  streamId: StreamTabId,
+  agent?: IAgent,
+  context?: AgentExecutionContext,
+): Promise<void> {
+  const errorLogger = context?.logger ?? new AgentLogger(streamId, true);
+  const errorContext = { operation: `execute ${agentName}` };
+  const groupId = agent?.getLastRunGroupId();
+
+  if (groupId && context?.logger) {
+    await errorLogger.withExistingGroup(
+      groupId,
+      async () => errorLogger.logError(errorMsg, err, errorContext),
+      { label: `Error: ${agentName}` },
+    );
+  } else {
+    await errorLogger.withScope(
+      `Error: ${agentName}`,
+      async () => errorLogger.logError(errorMsg, err, errorContext),
+      { errorStatus: 'error' },
+    );
+  }
+}
+
 async function handleError(
   err: unknown,
   agentName: string,
@@ -322,53 +385,15 @@ async function handleError(
   const rawMsg = toErrorMessage(err);
   const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
-  if (
-    rawMsg.includes('Missing API key') ||
-    rawMsg.includes('API key not found')
-  ) {
-    await showInstructionWithSuppress(
-      'missingApiKey',
-      'API key not found. Set your API key in the extension settings and run again.',
-      [
-        {
-          title: 'Set API Key',
-          callback: () => vscode.commands.executeCommand('texra.setApiKey'),
-        },
-        {
-          title: 'Open Settings Guide',
-          callback: () =>
-            vscode.commands.executeCommand('texra.openDoc', 'configuration'),
-        },
-      ],
-      false,
-    );
+  // Show appropriate notification
+  if (isApiKeyError(rawMsg)) {
+    await showApiKeyErrorNotification();
   } else {
     vscode.window.showErrorMessage(errorMsg);
   }
 
-  // Use context logger if available, fall back to stream-specific logger
-  const errorLogger = context?.logger ?? new AgentLogger(streamId, true);
-  const errorContext = { operation: `execute ${agentName}` };
-
-  // Try to log within existing group if agent has one
-  const groupId = agent?.getLastRunGroupId();
-  if (groupId && context?.logger) {
-    await errorLogger.withExistingGroup(
-      groupId,
-      async () => {
-        errorLogger.logError(errorMsg, err, errorContext);
-      },
-      { label: `Error: ${agentName}` },
-    );
-  } else {
-    await errorLogger.withScope(
-      `Error: ${agentName}`,
-      async () => {
-        errorLogger.logError(errorMsg, err, errorContext);
-      },
-      { errorStatus: 'error' },
-    );
-  }
+  // Log with proper grouping
+  await logAgentError(errorMsg, err, agentName, streamId, agent, context);
 
   throw new Error(errorMsg);
 }
