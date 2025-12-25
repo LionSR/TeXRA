@@ -221,13 +221,13 @@ export const ToolUseSessionPersistence = {
 
       // Append any follow-up messages
       if (followUp !== undefined) {
-        agent.appendFollowUp(followUp);
+        agent.session.appendFollowUp(followUp);
       }
 
       // Drain and append any queued follow-ups
       queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
       for (const queuedFollowUp of queuedFollowUps) {
-        agent.appendFollowUp(queuedFollowUp);
+        agent.session.appendFollowUp(queuedFollowUp);
       }
 
       // Run the prepared agent

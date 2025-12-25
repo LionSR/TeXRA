@@ -7,6 +7,7 @@ import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IFlowAgent } from '@agent/core/IAgent';
+import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 // Internal imports
 import {
   StandardFinalizeNode,
@@ -86,31 +87,18 @@ export interface ToolUseRunState<C = unknown> {
  * This interface captures the minimal contract that tool-use flows depend on,
  * decoupling flow implementation from concrete agent classes.
  *
- * Session lifecycle methods are called directly on the agent (not via hooks)
- * following PocketFlow's pattern where nodes interact with the domain object
- * directly for stateful operations.
+ * Session lifecycle operations are exposed via the `session` property,
+ * following composition over delegation pattern.
  */
 export interface IToolUseFlowAgent extends IFlowAgent {
-  /** Wait for the next user follow-up message. Returns null if interrupted. */
-  waitForFollowUp(): Promise<string | null>;
-
-  /** Check if there's a queued follow-up message from a previous session. */
-  hasQueuedFollowUp(): boolean;
+  /** Session lifecycle operations (follow-ups, persistence, status). */
+  readonly session: IToolUseSession;
 
   /** Apply a follow-up message to the conversation. */
   applyFollowUpMessage(
     message: string,
     conversation: ProviderMessage[],
   ): Promise<ProviderMessage[]>;
-
-  /** Clear any persisted snapshot state. */
-  clearPersistedSnapshot(): Promise<void>;
-
-  /** Enter the waiting state for follow-up messages. */
-  enterWaitingState(conversation: ProviderMessage[]): Promise<void>;
-
-  /** Mark the agent as running (resume from waiting). */
-  markRunning(): Promise<void>;
 }
 
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
@@ -181,6 +169,7 @@ interface WaitNodePrepResult {
   agent: IToolUseFlowAgent;
   conversation: ProviderMessage[];
   hasQueuedFollowUp: boolean;
+  session: IToolUseSession;
 }
 
 // ============================================================================
@@ -405,7 +394,8 @@ class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
       return {
         agent: shared.agent,
         conversation: shared.state.conversation,
-        hasQueuedFollowUp: shared.agent.hasQueuedFollowUp(),
+        hasQueuedFollowUp: shared.agent.session.hasQueuedFollowUp(),
+        session: shared.agent.session,
       };
     } catch (error) {
       console.error('ToolUseWaitNode prep error:', error);
@@ -419,7 +409,7 @@ class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    const { agent, conversation, hasQueuedFollowUp } = prepRes;
+    const { agent, conversation, hasQueuedFollowUp, session } = prepRes;
 
     // Check interruption first
     if (agent.isInterruptionRequested()) {
@@ -428,13 +418,15 @@ class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
 
     // Handle waiting state (I/O in exec where errors are caught)
     if (hasQueuedFollowUp) {
-      await agent.clearPersistedSnapshot();
+      await session.clearPersistedSnapshot();
     } else {
-      await agent.enterWaitingState(conversation);
+      await session.enterWaitingState(conversation);
     }
 
     // Wait for follow-up (blocking I/O)
-    const followUp = await agent.waitForFollowUp();
+    const followUp = await session.waitForFollowUp(() =>
+      agent.isInterruptionRequested(),
+    );
 
     if (!followUp || agent.isInterruptionRequested()) {
       return { kind: 'stop', reason: 'interrupted' };
@@ -463,8 +455,8 @@ class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
     }
 
     // Apply follow-up (side effects belong in post, direct agent call)
-    await shared.agent.markRunning();
-    await shared.agent.clearPersistedSnapshot();
+    await shared.agent.session.markRunning();
+    await shared.agent.session.clearPersistedSnapshot();
     shared.state.conversation = await shared.agent.applyFollowUpMessage(
       execRes.followUp,
       shared.state.conversation,
@@ -494,8 +486,8 @@ class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
   }
 
   protected async beforeEnd(context: ToolUseFinalizeContext<C>): Promise<void> {
-    // Direct agent call (like WaitNode pattern)
-    await context.agent.clearPersistedSnapshot();
+    // Direct session call
+    await context.agent.session.clearPersistedSnapshot();
   }
 }
 
