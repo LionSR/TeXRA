@@ -27,17 +27,13 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 // Local imports - persistence helpers
 
 // Local file imports
+import { ToolUseFollowUpQueue, type FollowUpQueue } from './ToolUseFollowUp';
 import {
-  ToolUseFollowUpQueue,
-  type FollowUpQueue,
-} from './ToolUseFollowUpQueue';
-import { ToolUseSessionManager } from './ToolUseSnapshotCache';
-import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
-// Type imports
-import {
+  ToolUseSessionManager,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
-} from './ToolUseSnapshotTypes';
+} from './ToolUseSessionManager';
+import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);
@@ -275,4 +271,4 @@ function formatLostFollowUpSuffix(count: number): string {
   return ` ${count} queued ${label} lost.`;
 }
 
-export type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
+export type { ToolUseSessionSnapshot } from './ToolUseSessionManager';

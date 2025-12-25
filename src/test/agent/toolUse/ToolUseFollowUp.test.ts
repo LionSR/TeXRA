@@ -12,15 +12,15 @@ import {
 import {
   resumeFromSnapshot,
   sendFollowUp,
-} from '@agent/toolUse/ToolUseFollowUpCoordinator';
+} from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
-describe('ToolUseFollowUpCoordinator', () => {
+describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
   const workspace = AgentWorkspaceState.create();
   const store = createSharedStore({
