@@ -1,31 +1,30 @@
-import { z } from 'zod';
-
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { IFlowAgent } from '@agent/core/IAgent';
 // Internal imports
 import {
-  createAgentRunFlow,
-  createStandardFinalizeNode,
+  StandardFinalizeNode,
+  StandardInitNode,
   AgentLifecycle,
-  type AgentRunHooks,
   type AgentRunShared,
+  type FinalizeContext,
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
 
-// Schema export for serialization reference (runtime uses class instances)
-export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
+// ============================================================================
+// Phase Definitions
+// ============================================================================
 
 /**
  * Tool use run phase - single source of truth for tool-use agent flow phases.
  */
-export const TOOL_USE_RUN_PHASE = {
+const TOOL_USE_RUN_PHASE = {
   IDLE: 'idle',
   INIT: 'init',
   PREPARE: 'prepare',
@@ -33,26 +32,26 @@ export const TOOL_USE_RUN_PHASE = {
   FINALIZE: 'finalize',
 } as const;
 
-export const ToolUseRunPhaseSchema = z.enum([
-  TOOL_USE_RUN_PHASE.IDLE,
-  TOOL_USE_RUN_PHASE.INIT,
-  TOOL_USE_RUN_PHASE.PREPARE,
-  TOOL_USE_RUN_PHASE.CYCLE,
-  TOOL_USE_RUN_PHASE.FINALIZE,
-]);
-
-export type ToolUseRunPhase = z.infer<typeof ToolUseRunPhaseSchema>;
+export type ToolUseRunPhase =
+  (typeof TOOL_USE_RUN_PHASE)[keyof typeof TOOL_USE_RUN_PHASE];
 
 export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 /**
- * Hooks interface for tool-use agent runs.
+ * Flow-specific hooks for tool-use agent runs.
+ *
+ * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on IFlowAgent.
+ * Session lifecycle methods (waitForFollowUp, clearPersistedSnapshot, etc.)
+ * are on IToolUseFlowAgent.
+ *
+ * This interface contains only flow-specific hooks that vary by implementation.
  */
-export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
+export interface ToolUseRunHooks<C = unknown> {
   prepareState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
+    runState: AgentRunState;
   }>;
   buildCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C>;
   runCycle(
@@ -64,29 +63,14 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     errorMessage?: string;
     userCancelled: boolean;
   }>;
-  checkInterruption(): boolean;
-  hasQueuedFollowUp(): boolean;
-  enterWaitingState(): Promise<void>;
-  clearPersistedSnapshot(): Promise<void>;
-  waitForFollowUp(): Promise<string | null>;
-  markRunning(): Promise<void>;
-  applyFollowUp(
-    followUp: string,
-    messages: ProviderMessage[],
-  ): Promise<ProviderMessage[]>;
   persistCheckpoint(
     messages: ProviderMessage[],
     store: AgentSharedStore,
   ): Promise<void>;
-  logFinalizeWarning?(message: string, error: unknown): void;
 }
 
 /**
  * Runtime state for tool-use agent runs.
- *
- * Schema alignment: This interface corresponds to {@link ToolUseRunStateSchema}
- * for serialization. The runtime uses class instances (AgentRunState, AgentSharedStore)
- * while the schema uses snapshot representations for JSON compatibility.
  */
 export interface ToolUseRunState<C = unknown> {
   conversation: ProviderMessage[];
@@ -96,83 +80,157 @@ export interface ToolUseRunState<C = unknown> {
   runState: AgentRunState;
 }
 
+/**
+ * Interface for agents used by ToolUseRunFlow.
+ *
+ * This interface captures the minimal contract that tool-use flows depend on,
+ * decoupling flow implementation from concrete agent classes.
+ *
+ * Session lifecycle methods are called directly on the agent (not via hooks)
+ * following PocketFlow's pattern where nodes interact with the domain object
+ * directly for stateful operations.
+ */
+export interface IToolUseFlowAgent extends IFlowAgent {
+  /** Wait for the next user follow-up message. Returns null if interrupted. */
+  waitForFollowUp(): Promise<string | null>;
+
+  /** Check if there's a queued follow-up message from a previous session. */
+  hasQueuedFollowUp(): boolean;
+
+  /** Apply a follow-up message to the conversation. */
+  applyFollowUpMessage(
+    message: string,
+    conversation: ProviderMessage[],
+  ): Promise<ProviderMessage[]>;
+
+  /** Clear any persisted snapshot state. */
+  clearPersistedSnapshot(): Promise<void>;
+
+  /** Enter the waiting state for follow-up messages. */
+  enterWaitingState(conversation: ProviderMessage[]): Promise<void>;
+
+  /** Mark the agent as running (resume from waiting). */
+  markRunning(): Promise<void>;
+}
+
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
-  BaseToolUseAgent<C>,
+  IToolUseFlowAgent,
   ToolUseRunState<C>,
   ToolUseRunLifecycle,
   ToolUseRunHooks<C>
 >;
 
 // ============================================================================
-// Prep Result Types - for node prep/exec results
+// Result Types - Clean discriminated unions following PocketFlow patterns
 // ============================================================================
 
 /**
- * Result of prepare execution - passed from exec to post.
+ * Result of prepare execution.
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
   store: AgentSharedStore;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
+  runState: AgentRunState;
 }
 
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
 
 /**
- * Result of cycle execution - includes failure status for proper lifecycle handling.
- * - error: Exception thrown during execution
- * - failedWithError: Cycle failed after exhausting retries (not user cancellation)
- * - userCancelled: User cancelled the retry prompt
+ * Result of a single cycle execution.
+ * Uses 'kind' discriminant for clarity (matches PocketFlow's InvocationResult).
  */
-type ToolUseCycleExecResult =
-  | {
-      result: void;
-      error?: undefined;
-      failedWithError?: false;
-      userCancelled?: false;
-    }
-  | {
-      error: unknown;
-      result?: undefined;
-      failedWithError?: undefined;
-      userCancelled?: undefined;
-    }
-  | {
-      result?: undefined;
-      error?: undefined;
-      failedWithError: true;
-      errorMessage?: string;
-      userCancelled?: false;
-    }
-  | {
-      result?: undefined;
-      error?: undefined;
-      failedWithError?: false;
-      userCancelled: true;
-    };
+type CycleExecResult =
+  | { kind: 'success' }
+  | { kind: 'skipped' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'cancelled' };
 
 /**
- * Prep result for ToolUsePrepareNode - extracted from shared.
+ * Result of waiting for follow-up.
+ */
+type WaitExecResult =
+  | { kind: 'continue'; followUp: string }
+  | { kind: 'stop'; reason: 'interrupted' | 'no-followup' };
+
+/**
+ * Prep result for ToolUsePrepareNode.
  */
 interface ToolUsePrepareNodePrepResult<C> {
   hooks: ToolUseRunHooks<C>;
 }
 
 /**
- * Prep result for ToolUseCycleNode - extracted from shared.
+ * Prep result for ToolUseCycleNode.
  */
-interface ToolUseCycleNodePrepResult<C> {
-  hooks: ToolUseRunHooks<C>;
-  state: ToolUseRunState<C>;
+interface CycleNodePrepResult<C> {
+  shouldSkip: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
+  conversation: ProviderMessage[];
+  store: AgentSharedStore;
+  hooks: ToolUseRunHooks<C>;
+  lifecycle: ToolUseRunLifecycle;
+}
+
+/**
+ * Prep result for ToolUseWaitNode.
+ * Contains only the data needed to execute the wait operation.
+ */
+interface WaitNodePrepResult {
+  agent: IToolUseFlowAgent;
+  conversation: ProviderMessage[];
+  hasQueuedFollowUp: boolean;
+}
+
+// ============================================================================
+// State Guards
+// ============================================================================
+
+/** Prepared state type with non-null cycleOptions and store. */
+type PreparedState<C> = ToolUseRunState<C> & {
+  cycleOptions: ToolUseCycleOptions<C>;
+  store: AgentSharedStore;
+};
+
+/**
+ * Asserts that state has been prepared (cycleOptions and store are non-null).
+ * Called by CycleNode to ensure PrepareNode has run before entering cycle.
+ *
+ * This provides:
+ * - Type narrowing (removes `| null` from types)
+ * - Fail-fast with descriptive error if flow invariant is violated
+ * - Documentation of the PrepareNode → CycleNode contract
+ */
+function assertPreparedState<C>(
+  state: ToolUseRunState<C>,
+): asserts state is PreparedState<C> {
+  if (state.cycleOptions === null || state.store === null) {
+    throw new Error(
+      'CycleNode invariant violated: PrepareNode must run before CycleNode.',
+    );
+  }
 }
 
 // ============================================================================
 // Node Implementations
 // ============================================================================
 
-class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
+/**
+ * Prepares state for tool-use cycle.
+ *
+ * Phase ownership: Inherits 'prepare' phase from InitNode.post().
+ * Does not transition phases - stays in 'prepare' throughout.
+ *
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Convert errors to result type for post()
+ */
+class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(
     shared: ToolUseRunShared<C>,
   ): Promise<ToolUsePrepareNodePrepResult<C>> {
@@ -182,19 +240,24 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async exec(
     prepRes: ToolUsePrepareNodePrepResult<C>,
-  ): Promise<ToolUsePrepareExecResult<C>> {
-    try {
-      const prepared = await prepRes.hooks.prepareState();
-      const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
-      return {
-        result: {
-          ...prepared,
-          cycleOptions,
-        } satisfies ToolUsePrepareResult<C>,
-      };
-    } catch (error) {
-      return { error };
-    }
+  ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
+    // Let errors throw - Node._exec catches them and calls execFallback
+    const prepared = await prepRes.hooks.prepareState();
+    const cycleOptions = prepRes.hooks.buildCycleOptions(prepared.store);
+    return {
+      kind: 'success',
+      result: {
+        ...prepared,
+        cycleOptions,
+      } satisfies ToolUsePrepareResult<C>,
+    };
+  }
+
+  async execFallback(
+    _prepRes: unknown,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    return { kind: 'error', error };
   }
 
   async post(
@@ -202,170 +265,260 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     _prepRes: ToolUsePrepareNodePrepResult<C>,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
-    // Lifecycle transition at start of post
-    shared.lifecycle.begin('prepare');
-
-    if (execRes.error || !execRes.result) {
-      const error =
-        execRes.error ??
-        new Error('Failed to prepare tool-use run: no result from prepare');
-      shared.lifecycle.fail(error);
-      return FlowTransition.FINALIZE;
-    }
-
-    const { messages, store, shouldSkipCycle, cycleOptions } = execRes.result;
-    shared.state.conversation = [...messages];
-    shared.state.shouldSkipCycle = shouldSkipCycle;
-    shared.state.cycleOptions = cycleOptions;
-    shared.state.store = store;
-
-    shared.lifecycle.begin('cycle');
-
-    return FlowTransition.EXECUTE;
-  }
-}
-
-class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(
-    shared: ToolUseRunShared<C>,
-  ): Promise<ToolUseCycleNodePrepResult<C>> {
-    // Pure extraction - no side effects
-    // Note: lifecycle.begin('cycle') is already called in ToolUsePrepareNode.post()
-    return {
-      hooks: shared.hooks,
-      state: shared.state,
-      cycleOptions: shared.state.cycleOptions!,
-    };
-  }
-
-  async exec(
-    prepRes: ToolUseCycleNodePrepResult<C>,
-  ): Promise<ToolUseCycleExecResult> {
-    const { hooks, state, cycleOptions } = prepRes;
-
-    try {
-      while (true) {
-        if (!state.shouldSkipCycle) {
-          if (!state.store) {
-            throw new Error('Tool-use store is not initialized.');
-          }
-          const cycleResult = await hooks.runCycle(
-            cycleOptions,
-            state.conversation,
-            state.store,
-          );
-
-          // Only persist successful cycles to avoid checkpointing failed state.
-          // User cancellation and errors should not be checkpointed.
-          if (!cycleResult.failedWithError && !cycleResult.userCancelled) {
-            await hooks.persistCheckpoint(state.conversation, state.store);
-          }
-
-          // Exit the loop if cycle failed or was cancelled, propagating status
-          if (cycleResult.failedWithError) {
-            return {
-              failedWithError: true,
-              errorMessage: cycleResult.errorMessage,
-            };
-          }
-          if (cycleResult.userCancelled) {
-            return { userCancelled: true };
-          }
-        } else {
-          state.shouldSkipCycle = false;
-        }
-
-        if (hooks.checkInterruption()) {
-          return { result: undefined };
-        }
-
-        if (hooks.hasQueuedFollowUp()) {
-          await hooks.clearPersistedSnapshot();
-        } else {
-          await hooks.enterWaitingState();
-        }
-
-        const followUp = await hooks.waitForFollowUp();
-        if (!followUp || hooks.checkInterruption()) {
-          return { result: undefined };
-        }
-
-        await hooks.markRunning();
-        await hooks.clearPersistedSnapshot();
-        const updatedMessages = await hooks.applyFollowUp(
-          followUp,
-          state.conversation,
-        );
-        state.conversation = [...updatedMessages];
-      }
-    } catch (error) {
-      return { error };
-    }
-  }
-
-  async post(
-    shared: ToolUseRunShared<C>,
-    _prepRes: ToolUseCycleNodePrepResult<C>,
-    execRes: ToolUseCycleExecResult,
-  ): Promise<string | undefined> {
-    // Handle exception thrown during execution
-    if (execRes.error) {
+    if (execRes.kind === 'error') {
       shared.lifecycle.fail(execRes.error);
       return FlowTransition.FINALIZE;
     }
 
-    // Handle cycle failure (retries exhausted or non-retryable error)
-    if (execRes.failedWithError) {
-      const error = new Error(
-        execRes.errorMessage ?? 'Tool-use cycle failed with an error',
-      );
-      shared.lifecycle.fail(error);
+    const { messages, store, shouldSkipCycle, cycleOptions, runState } =
+      execRes.result;
+    shared.state.conversation = [...messages];
+    shared.state.shouldSkipCycle = shouldSkipCycle;
+    shared.state.cycleOptions = cycleOptions;
+    shared.state.store = store;
+    shared.state.runState = runState;
+
+    return undefined; // Follow next() → CycleNode
+  }
+}
+
+/**
+ * Runs a single tool-use cycle.
+ *
+ * Phase ownership:
+ * - exec(): Sets 'cycle' phase at start of work (consistent with StandardInitNode)
+ *
+ * PocketFlow compliance:
+ * - prep(): Extract immutable data from shared state
+ * - exec(): Set phase + call runCycle (I/O acceptable for lifecycle tracking)
+ * - execFallback(): Convert thrown errors to result type
+ * - post(): Side effects (persist checkpoint) + routing decision
+ */
+class ToolUseCycleNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
+  async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
+    // Validate invariant: PrepareNode must have run before us
+    assertPreparedState(shared.state);
+
+    return {
+      shouldSkip: shared.state.shouldSkipCycle,
+      cycleOptions: shared.state.cycleOptions,
+      conversation: shared.state.conversation,
+      store: shared.state.store,
+      hooks: shared.hooks,
+      lifecycle: shared.lifecycle,
+    };
+  }
+
+  async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
+    // Set phase at start of work (consistent with StandardInitNode pattern)
+    prepRes.lifecycle.begin('cycle');
+
+    // Handle skip (resume case) - pure decision, no side effects
+    if (prepRes.shouldSkip) {
+      return { kind: 'skipped' };
+    }
+
+    // Call the cycle, return result
+    const result = await prepRes.hooks.runCycle(
+      prepRes.cycleOptions,
+      prepRes.conversation,
+      prepRes.store,
+    );
+
+    if (result.failedWithError) {
+      return { kind: 'failed', message: result.errorMessage ?? 'Cycle failed' };
+    }
+    if (result.userCancelled) {
+      return { kind: 'cancelled' };
+    }
+    return { kind: 'success' };
+  }
+
+  async execFallback(
+    _prepRes: CycleNodePrepResult<C>,
+    error: Error,
+  ): Promise<CycleExecResult> {
+    return { kind: 'failed', message: error.message };
+  }
+
+  async post(
+    shared: ToolUseRunShared<C>,
+    prepRes: CycleNodePrepResult<C>,
+    execRes: CycleExecResult,
+  ): Promise<string | undefined> {
+    // Clear skip flag for next iteration (side effect in post)
+    if (prepRes.shouldSkip) {
+      shared.state.shouldSkipCycle = false;
+    }
+
+    switch (execRes.kind) {
+      case 'success':
+        // Persist checkpoint (side effect belongs in post)
+        // Use prepRes.store which was validated in prep()
+        await shared.hooks.persistCheckpoint(
+          shared.state.conversation,
+          prepRes.store,
+        );
+        return undefined; // Follow next() → WaitNode
+
+      case 'skipped':
+        return undefined; // Follow next() → WaitNode
+
+      case 'failed':
+        shared.lifecycle.fail(new Error(execRes.message));
+        return FlowTransition.FINALIZE;
+
+      case 'cancelled':
+        // User cancelled - not an error, just finalize
+        return FlowTransition.FINALIZE;
+    }
+  }
+}
+
+/**
+ * Waits for user follow-up message between cycles.
+ *
+ * Phase ownership: None (stays in 'cycle' phase during wait)
+ *
+ * PocketFlow compliance:
+ * - prep(): Pure data extraction from shared state
+ * - exec(): I/O operations (entering wait state, waiting for follow-up)
+ * - execFallback(): Convert errors to result type for post()
+ * - post(): Side effects (apply follow-up) + routing decision
+ *
+ * Flow-control methods called directly on agent (like ReflectionRoundNode pattern).
+ * Uses CONTINUE transition to loop back to CycleNode.
+ */
+class ToolUseWaitNode<C> extends Node<ToolUseRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
+  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult | null> {
+    // Pure extraction - no side effects
+    // Wrap in try/catch since prep() errors aren't caught by execFallback()
+    try {
+      return {
+        agent: shared.agent,
+        conversation: shared.state.conversation,
+        hasQueuedFollowUp: shared.agent.hasQueuedFollowUp(),
+      };
+    } catch (error) {
+      console.error('ToolUseWaitNode prep error:', error);
+      return null;
+    }
+  }
+
+  async exec(prepRes: WaitNodePrepResult | null): Promise<WaitExecResult> {
+    // Handle prep failure
+    if (!prepRes) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+
+    const { agent, conversation, hasQueuedFollowUp } = prepRes;
+
+    // Check interruption first
+    if (agent.isInterruptionRequested()) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+
+    // Handle waiting state (I/O in exec where errors are caught)
+    if (hasQueuedFollowUp) {
+      await agent.clearPersistedSnapshot();
+    } else {
+      await agent.enterWaitingState(conversation);
+    }
+
+    // Wait for follow-up (blocking I/O)
+    const followUp = await agent.waitForFollowUp();
+
+    if (!followUp || agent.isInterruptionRequested()) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+
+    return { kind: 'continue', followUp };
+  }
+
+  async execFallback(
+    _prepRes: WaitNodePrepResult | null,
+    error: Error,
+  ): Promise<WaitExecResult> {
+    // Convert error to stop result - post() will handle finalization
+    // Log the error for debugging but don't propagate it
+    console.error('ToolUseWaitNode error during wait:', error.message);
+    return { kind: 'stop', reason: 'interrupted' };
+  }
+
+  async post(
+    shared: ToolUseRunShared<C>,
+    _prepRes: WaitNodePrepResult | null,
+    execRes: WaitExecResult,
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'stop') {
       return FlowTransition.FINALIZE;
     }
 
-    // Handle user cancellation - don't set status to 'running', just finalize
-    // The finalize node will mark as 'completed' or 'stopped' based on lifecycle state
-    if (execRes.userCancelled) {
-      // Status remains as-is (likely 'running' from cycle start)
-      // Finalize will complete normally without error
-      return FlowTransition.FINALIZE;
-    }
+    // Apply follow-up (side effects belong in post, direct agent call)
+    await shared.agent.markRunning();
+    await shared.agent.clearPersistedSnapshot();
+    shared.state.conversation = await shared.agent.applyFollowUpMessage(
+      execRes.followUp,
+      shared.state.conversation,
+    );
 
-    // Normal completion - keep running status for follow-up cycles
-    shared.lifecycle.setStatus('running');
-    return FlowTransition.FINALIZE;
+    // Loop back to CycleNode (like ReflectionRoundNode uses CONTINUE)
+    return FlowTransition.CONTINUE;
+  }
+}
+
+/** Context type for ToolUseFinalizeNode hooks */
+type ToolUseFinalizeContext<C> = FinalizeContext<
+  ToolUseRunLifecycle,
+  ToolUseRunHooks<C>,
+  IToolUseFlowAgent
+>;
+
+/**
+ * Finalize node for tool-use runs.
+ * Clears persisted snapshot before ending.
+ *
+ * Phase ownership: StandardFinalizeNode.prep() sets 'finalize' phase.
+ */
+class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
+  constructor() {
+    super('finalize');
+  }
+
+  protected async beforeEnd(context: ToolUseFinalizeContext<C>): Promise<void> {
+    // Direct agent call (like WaitNode pattern)
+    await context.agent.clearPersistedSnapshot();
   }
 }
 
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
+  // Create all nodes
+  const initNode = new StandardInitNode<ToolUseRunShared<C>>('prepare');
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
-  const finalizeNode = createStandardFinalizeNode<ToolUseRunShared<C>>({
-    finalizePhase: 'finalize',
-    beforeEnd: async ({ hooks }) => {
-      await hooks.clearPersistedSnapshot();
-    },
-    onSecondaryError: ({ hooks }, error) =>
-      hooks.logFinalizeWarning?.(
-        'Additional finalize error encountered.',
-        error,
-      ),
-  });
+  const waitNode = new ToolUseWaitNode<C>();
+  const finalizeNode = new ToolUseFinalizeNode<C>();
 
-  return createAgentRunFlow<ToolUseRunShared<C>>({
-    init: {
-      phase: 'init',
-      onSuccess: (shared) => {
-        shared.lifecycle.begin('prepare');
-        return FlowTransition.EXECUTE;
-      },
-    },
-    finalize: finalizeNode,
-    links: ({ init }) => [
-      { from: init, on: FlowTransition.EXECUTE, to: prepareNode },
-      { from: prepareNode, on: FlowTransition.EXECUTE, to: cycleNode },
-      { from: prepareNode, on: FlowTransition.FINALIZE },
-      { from: cycleNode, on: FlowTransition.FINALIZE },
-    ],
-  });
+  // Wire using native PocketFlow API
+  // Linear flow (happy path): init → prepare → cycle → wait
+  initNode.next(prepareNode);
+  prepareNode.next(cycleNode);
+  cycleNode.next(waitNode);
+
+  // Branches: error paths → finalize, loop → cycle
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
+  prepareNode.on(FlowTransition.FINALIZE, finalizeNode);
+  cycleNode.on(FlowTransition.FINALIZE, finalizeNode);
+  waitNode.on(FlowTransition.CONTINUE, cycleNode);
+  waitNode.on(FlowTransition.FINALIZE, finalizeNode);
+
+  return new Flow<ToolUseRunShared<C>>(initNode);
 }
