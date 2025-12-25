@@ -81,6 +81,7 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
+    runState: AgentRunState;
   }>;
   buildCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C>;
   runCycle(
@@ -132,6 +133,7 @@ interface ToolUsePrepareResult<C> {
   store: AgentSharedStore;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
+  runState: AgentRunState;
 }
 
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
@@ -232,6 +234,10 @@ function assertPreparedState<C>(
 /**
  * Initializes the tool-use agent run.
  *
+ * Phase ownership:
+ * - exec(): Sets 'init' phase
+ * - post(): Transitions to 'prepare' phase on success
+ *
  * Uses PocketFlow's native error handling:
  * - exec(): Let errors throw naturally (no try/catch)
  * - execFallback(): Convert errors to result type for post()
@@ -282,6 +288,9 @@ class ToolUseInitNode<C> extends Node<ToolUseRunShared<C>> {
 /**
  * Prepares state for tool-use cycle.
  *
+ * Phase ownership: None (inherits 'prepare' from InitNode.post())
+ * Note: CycleNode owns the 'cycle' phase transition.
+ *
  * Uses PocketFlow's native error handling:
  * - exec(): Let errors throw naturally (no try/catch)
  * - execFallback(): Convert errors to result type for post()
@@ -330,11 +339,13 @@ class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    const { messages, store, shouldSkipCycle, cycleOptions } = execRes.result;
+    const { messages, store, shouldSkipCycle, cycleOptions, runState } =
+      execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
     shared.state.store = store;
+    shared.state.runState = runState;
 
     // Note: CycleNode owns 'cycle' phase transition
     return undefined; // Follow next() → CycleNode
@@ -343,6 +354,9 @@ class ToolUsePrepareNode<C> extends Node<ToolUseRunShared<C>> {
 
 /**
  * Runs a single tool-use cycle.
+ *
+ * Phase ownership:
+ * - prep(): Sets 'cycle' phase (owns this transition)
  *
  * PocketFlow compliance:
  * - prep(): Extract immutable data from shared state
@@ -426,6 +440,8 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 /**
  * Waits for user follow-up message between cycles.
  *
+ * Phase ownership: None (stays in 'cycle' phase during wait)
+ *
  * PocketFlow compliance:
  * - prep(): I/O operations (waiting is I/O, OK in prep)
  * - exec(): Pure transformation of prep result
@@ -503,6 +519,8 @@ type ToolUseFinalizeContext<C> = FinalizeContext<
 /**
  * Finalize node for tool-use runs.
  * Clears persisted snapshot before ending.
+ *
+ * Phase ownership: StandardFinalizeNode.prep() sets 'finalize' phase.
  */
 class ToolUseFinalizeNode<C> extends StandardFinalizeNode<ToolUseRunShared<C>> {
   constructor() {
