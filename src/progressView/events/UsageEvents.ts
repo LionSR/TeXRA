@@ -4,11 +4,11 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import type { BaseEventShared, StatefulEventModule } from './types';
 import {
   createStatefulEventDisposable,
   type ProgressEventBusLike,
 } from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * UsageEvents module interface.

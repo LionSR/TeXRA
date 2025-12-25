@@ -677,16 +677,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
    * Extract data from shared and check interruption.
    * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
-  async prep(
-    shared: ToolUseCycleShared,
-  ): Promise<ToolUseDispatchPrepResult> {
+  async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
     const { options } = this._params.services;
     const { state } = shared;
     const toolCalls = state.toolCalls ?? [];
 
     // Check skip conditions (including interruption) in prep
     const shouldSkip = state.shouldStop || toolCalls.length === 0;
-    const interrupted = !shouldSkip && Boolean(await options.checkInterruption());
+    const interrupted =
+      !shouldSkip && Boolean(await options.checkInterruption());
 
     return {
       shouldSkip,
