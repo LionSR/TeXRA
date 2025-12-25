@@ -195,8 +195,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
             this.applyFollowUpMessage(followUp, messages),
           persistCheckpoint: (messages, store) =>
             this.persistCheckpoint(messages, store),
-          logFinalizeWarning: (message, error) =>
-            this.logger.warn(message, { data: error }),
           cleanup: async () => {
             await baseHooks.cleanup();
             this.sessionLifecycle.dispose();
