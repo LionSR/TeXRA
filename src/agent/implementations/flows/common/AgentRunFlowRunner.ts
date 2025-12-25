@@ -5,6 +5,7 @@
  * - AgentRunShared: Generic shared state container for all flows
  * - AgentRunFlowOptions: Options for running agent flows
  * - runAgentFlow: Flow execution with hook assembly
+ * - InitExecResult, NodeExecResult: Shared result types for nodes
  *
  * Internal only:
  * - BaseFlowShared: Type constraint alias (used internally)
@@ -18,7 +19,27 @@ import type { BaseAgent } from '@agent/implementations/BaseAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
 
 // ============================================================================
-// Core Types (formerly in types.ts)
+// Result Types - Shared discriminated unions for node exec methods
+// ============================================================================
+
+/**
+ * Result type for init node exec methods.
+ * Uses 'kind' discriminant for clarity.
+ */
+export type InitExecResult =
+  | { kind: 'success' }
+  | { kind: 'error'; error: unknown };
+
+/**
+ * Generic result type for exec methods that return a value.
+ * Uses 'kind' discriminant for consistency with InitExecResult.
+ */
+export type NodeExecResult<T> =
+  | { kind: 'success'; result: T }
+  | { kind: 'error'; error: unknown };
+
+// ============================================================================
+// Core Types
 // ============================================================================
 
 /**
