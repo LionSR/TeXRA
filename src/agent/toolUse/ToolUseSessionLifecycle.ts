@@ -1,5 +1,3 @@
-// Local imports - agent core
-import { AgentSharedStoreRegistry } from '@agent/core/AgentSharedStoreRegistry';
 // Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -52,11 +50,7 @@ export class ToolUseSessionLifecycle<C = unknown> implements IToolUseSession {
   }
 
   setStore(store: AgentSharedStore | null): void {
-    const streamId = this.agent.getStreamTabId();
-    const executionId = this.agent.getExecutionId();
-
     this.store = store;
-    AgentSharedStoreRegistry.set(streamId, executionId, store);
   }
 
   getStore(): AgentSharedStore | null {
