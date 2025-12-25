@@ -398,7 +398,7 @@ class ToolUseWaitNode<C> extends BaseNode<ToolUseRunShared<C>> {
     if (agent.hasQueuedFollowUp()) {
       await agent.clearPersistedSnapshot();
     } else {
-      await agent.enterWaitingState();
+      await agent.enterWaitingState(shared.state.conversation);
     }
 
     // Wait for follow-up (blocking I/O - OK in prep, direct agent call)
