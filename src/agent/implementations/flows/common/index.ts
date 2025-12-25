@@ -7,9 +7,10 @@
  * - AgentRunFlowOptions: Options for runAgentFlow
  * - runAgentFlow: Flow execution with hooks
  * - InitExecResult, NodeExecResult: Shared result types for nodes
+ * - BaseRunStateSchema: Common schema fields for flow state serialization
  * - StandardFinalizeNode, FinalizeContext: Finalize node class and context type
  *
- * Note: Schemas are defined in respective run flow files.
+ * Note: Flow-specific schemas extend BaseRunStateSchema in their respective files.
  * Note: Init nodes are inlined in each flow - no factory needed.
  */
 
