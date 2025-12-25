@@ -166,7 +166,19 @@ class ReflectionInitNode<C> extends Node<ReflectionRunShared<C>> {
   }
 }
 
-class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
+/**
+ * Executes a single reflection round.
+ *
+ * Uses PocketFlow's native error handling:
+ * - exec(): Let errors throw naturally (no try/catch)
+ * - execFallback(): Wrap error with round context for post()
+ * - Node with maxRetries=1: No retry, just fallback on error
+ */
+class ReflectionRoundNode<C> extends Node<ReflectionRunShared<C>> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
+
   async prep(shared: ReflectionRunShared<C>): Promise<RoundNodePrepResult<C>> {
     const { agent, state } = shared;
     const shouldFinalize =
@@ -182,33 +194,38 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     };
   }
 
-  async exec(prepRes: RoundNodePrepResult<C>): Promise<RoundExecResult> {
+  async exec(
+    prepRes: RoundNodePrepResult<C>,
+  ): Promise<{ kind: 'finalize' } | { kind: 'success'; result: ReflectionRoundResult }> {
     // Early exit if should finalize
     if (prepRes.shouldFinalize) {
       return { kind: 'finalize' };
     }
 
-    try {
-      // Initialize agent's round context
-      prepRes.agent.beginRound(
-        prepRes.roundIndex,
-        prepRes.state.runState,
-        prepRes.state.conversation,
-      );
+    // Let errors throw - Node._exec catches them and calls execFallback
+    // Initialize agent's round context
+    prepRes.agent.beginRound(
+      prepRes.roundIndex,
+      prepRes.state.runState,
+      prepRes.state.conversation,
+    );
 
-      // Execute the round using agent's internal context
-      const result = await prepRes.agent.executeCurrentRound();
+    // Execute the round using agent's internal context
+    const result = await prepRes.agent.executeCurrentRound();
 
-      return { kind: 'success', result };
-    } catch (error) {
-      const contextualError =
-        error instanceof Error
-          ? new Error(`Round ${prepRes.roundIndex} failed: ${error.message}`, {
-              cause: error,
-            })
-          : new Error(`Round ${prepRes.roundIndex} failed: ${String(error)}`);
-      return { kind: 'error', error: contextualError };
-    }
+    return { kind: 'success', result };
+  }
+
+  async execFallback(
+    prepRes: RoundNodePrepResult<C>,
+    error: Error,
+  ): Promise<{ kind: 'error'; error: unknown }> {
+    // Wrap error with round context
+    const contextualError = new Error(
+      `Round ${prepRes.roundIndex} failed: ${error.message}`,
+      { cause: error },
+    );
+    return { kind: 'error', error: contextualError };
   }
 
   async post(
