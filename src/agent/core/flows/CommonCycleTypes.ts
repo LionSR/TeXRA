@@ -146,19 +146,13 @@ export interface BaseInvocationSuccessData {
 // ============================================================================
 
 /**
- * Options for creating a debug context.
+ * Options for creating a debug context (same as CycleDebugContext).
+ * Kept as alias for API clarity at call sites.
  */
-export interface CreateDebugContextOptions {
-  logger: AgentLogger;
-  modelName?: string;
-  executionId?: ExecutionId;
-  /** Whether this is a remote agent (caller should compute via isRemoteAgent) */
-  isRemote?: boolean;
-}
+export type CreateDebugContextOptions = CycleDebugContext;
 
 /**
  * Creates a debug context for cycle operations.
- * Single source of truth - eliminates duplicate context creation.
  *
  * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
  * to avoid circular dependency issues.
@@ -166,12 +160,7 @@ export interface CreateDebugContextOptions {
 export function createDebugContext(
   options: CreateDebugContextOptions,
 ): CycleDebugContext {
-  return {
-    logger: options.logger,
-    modelName: options.modelName,
-    executionId: options.executionId,
-    isRemote: options.isRemote,
-  };
+  return { ...options };
 }
 
 /**
