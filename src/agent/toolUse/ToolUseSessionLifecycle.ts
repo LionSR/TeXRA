@@ -50,46 +50,47 @@ export class ToolUseSessionLifecycle<C = unknown> {
     return this.followUps.waitForNext(checkInterruption);
   }
 
-  async enterWaitingState(messages: ProviderMessage[]): Promise<void> {
-    if (!this.followUps.isEmpty()) {
-      return;
-    }
-
+  /**
+   * Builds persistence args if store and executionId are available.
+   * Returns null if state is invalid for persistence.
+   */
+  private buildPersistenceArgs(messages: ProviderMessage[]) {
     const store = this.store;
     const executionId = this.agent.getExecutionId();
     if (!store || !executionId) {
-      return;
+      return null;
     }
-
-    // Attempt to persist idle snapshot (best effort, non-blocking)
-    await ToolUseSessionPersistence.maybePersistIdleSnapshot({
+    return {
       executionId,
       streamId: this.agent.getStreamTabId(),
       agentConfig: this.agent.config,
       messages,
       store,
       queue: this.followUps,
-    });
+    };
+  }
+
+  async enterWaitingState(messages: ProviderMessage[]): Promise<void> {
+    if (!this.followUps.isEmpty()) {
+      return;
+    }
+
+    const args = this.buildPersistenceArgs(messages);
+    if (args) {
+      // Attempt to persist idle snapshot (best effort, non-blocking)
+      await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
+    }
 
     // Always set waiting status regardless of persistence result
     StreamStatusService.set(this.agent.getStreamTabId(), STREAM_STATUS.WAITING);
   }
 
   async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
-    const store = this.store;
-    const executionId = this.agent.getExecutionId();
-    if (!store || !executionId) {
+    const args = this.buildPersistenceArgs(messages);
+    if (!args) {
       return;
     }
-
-    await ToolUseSessionPersistence.persistCheckpointSnapshot({
-      executionId,
-      streamId: this.agent.getStreamTabId(),
-      agentConfig: this.agent.config,
-      messages,
-      store,
-      queue: this.followUps,
-    });
+    await ToolUseSessionPersistence.persistCheckpointSnapshot(args);
   }
 
   async markRunning(): Promise<void> {
