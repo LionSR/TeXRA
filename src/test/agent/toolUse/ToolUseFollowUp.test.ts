@@ -9,10 +9,7 @@ import {
   createSharedStore,
   type AgentSharedStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
-import {
-  resumeFromSnapshot,
-  sendFollowUp,
-} from '@agent/toolUse/ToolUseFollowUp';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -69,14 +66,17 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(calls, ['hello']);
   });
 
-  it('resumes from snapshot through the session coordinator', async () => {
+  it('resumes from snapshot through session persistence', async () => {
     ToolUseSessionPersistence.resumeFromSnapshot = async (snap, followUp) => {
       assert.equal(snap, snapshot);
       assert.equal(followUp, 'next');
       return { success: true };
     };
 
-    const result = await resumeFromSnapshot(snapshot, 'next');
+    const result = await ToolUseSessionPersistence.resumeFromSnapshot(
+      snapshot,
+      'next',
+    );
 
     assert.deepEqual(result, { success: true });
   });
