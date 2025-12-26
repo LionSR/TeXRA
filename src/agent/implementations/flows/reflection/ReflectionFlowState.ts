@@ -15,8 +15,8 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IFlowAgent } from '@agent/core/IAgent';
 import type { RetryState } from '@agent/core/flows/RetryState';
-import type { AgentFileLocation } from '@utils/files';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import type { AgentFileLocation } from '@utils/files';
 
 // ============================================================================
 // Agent Interface

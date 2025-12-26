@@ -1385,4 +1385,81 @@ export class ModelHandlerOpenAI<
     // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
     return countTokens(textToCount); // Assuming cl100k_base default
   }
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   * Finds the last user message and prepends text to its text content.
+   */
+  prependTextToUserMessage(
+    messages: ChatCompletionMessageParam[],
+    text: string,
+  ): void {
+    if (!text.trim()) return;
+
+    // Find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'user') {
+        if (typeof msg.content === 'string') {
+          // Simple string content - prepend directly
+          msg.content = text + msg.content;
+        } else if (Array.isArray(msg.content)) {
+          // Array of content parts - find first text part and prepend
+          const firstTextIdx = msg.content.findIndex(
+            (part) => part.type === 'text',
+          );
+          if (firstTextIdx >= 0) {
+            const textPart = msg.content[firstTextIdx] as { type: 'text'; text: string };
+            textPart.text = text + textPart.text;
+          } else {
+            // No text part found - add one at the beginning
+            msg.content.unshift({ type: 'text', text: text });
+          }
+        }
+        return;
+      }
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   * Inserts media content parts at the beginning of the user message.
+   */
+  async addMediaToUserMessage(
+    messages: ChatCompletionMessageParam[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    // Find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'user') {
+        try {
+          const formattedMedia = await this.createMediaMessage(mediaFiles);
+          if (typeof msg.content === 'string') {
+            // Convert string to array and add media at beginning
+            msg.content = [
+              ...formattedMedia,
+              { type: 'text', text: msg.content } as ChatCompletionContentPart,
+            ];
+          } else if (Array.isArray(msg.content)) {
+            // Insert media at the beginning
+            msg.content.unshift(...formattedMedia);
+          }
+        } catch (err) {
+          this.logger.logError(
+            `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+            err,
+            { operation: 'add media to user message' },
+          );
+        }
+        return;
+      }
+    }
+  }
 }
