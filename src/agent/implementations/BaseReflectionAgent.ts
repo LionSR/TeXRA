@@ -37,10 +37,10 @@ import {
 } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 
 // Internal imports
-import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { createRetryState } from '@agent/core/flows/RetryState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { normalizeRunId } from '@common/constants/runIds';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { PromptBuilder } from '@utils/prompt';
 import {
   WorkspaceFS,
@@ -365,10 +365,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Main execution method that processes inputs and generates outputs.
    *
-   * Uses the pure PocketFlow ReflectionFlow architecture:
+   * Architecture:
    * - Agent = Service Provider (provides services via getter)
    * - Flow = Execution Engine (all logic lives in flow nodes)
-   * - Services injected via flow.setParams()
+   * - Agent owns lifecycle (init before flow, finalize in finally)
+   *
+   * Lifecycle pattern:
+   * - Init: startAndInitRun(), initializeClient(), resetPromptBuilder()
+   * - Flow: Pure execution logic, throws on error
+   * - Finalize: endRun(status), cleanupRun() in finally block
    */
   public async run(): Promise<void> {
     await this.awaitPendingHydration();
@@ -385,43 +390,48 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       sourceLocation: null,
     };
 
-    const totalRounds = this.getTotalRounds();
-    const lifecycle = new AgentLifecycle<ReflectionPhase>('idle');
+    // === INIT (agent-owns-lifecycle) ===
+    await this.startAndInitRun();
+    await this.initializeClient();
+    this.resetPromptBuilder();
 
-    // Create shared state for the flow
-    // Agent implements IReflectionFlowAgent (provides resetPromptBuilder())
+    const totalRounds = this.getTotalRounds();
+
+    // Create shared state for the flow (no lifecycle - errors thrown directly)
     const shared: ReflectionFlowShared = {
       agent: this,
       state: createInitialReflectionState(
         totalRounds,
         AgentWorkspaceState.create(),
       ),
-      lifecycle,
       retryState: createRetryState(),
     };
 
+    let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
     try {
       // Create flow and inject services (native service pattern)
       const flow = createReflectionFlow<C>();
       flow.setServices(this.services);
 
-      // Run the flow
+      // Run the flow - errors throw directly
       await flow.run(shared);
-
-      // Check for errors
-      if (lifecycle.error) {
-        throw lifecycle.error;
-      }
 
       // Sync state from flow to agent
       this.roundOutputs = shared.state.roundOutputs;
       this.roundStates = shared.state.roundStates;
+    } catch (error) {
+      status = END_GROUP_STATUS.ERROR;
+      throw error;
     } finally {
+      // === FINALIZE (agent-owns-lifecycle) ===
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
         currentOutputs,
       );
+
+      this.endRun(status);
+      this.cleanupRun();
     }
 
     this.runtimeXmlExports = this.computeRuntimeXmlExports();

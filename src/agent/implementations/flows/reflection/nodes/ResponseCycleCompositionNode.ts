@@ -23,7 +23,6 @@
 import { Node, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -210,6 +209,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
   /**
    * Update shared state with cycle results.
+   *
+   * Errors are thrown directly - agent.run() catches and handles cleanup.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -220,20 +221,19 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lifecycle.fail(execRes.error);
-      return FlowTransition.FINALIZE;
+      throw execRes.error;
     }
 
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
       shared.state.continueRounds = false;
-      return FlowTransition.FINALIZE;
+      // User cancellation is not an error - just stop gracefully
+      return undefined;
     }
 
     if (execRes.failedWithError) {
       logger.error(`Response cycle failed: ${execRes.errorMessage}`);
-      shared.lifecycle.fail(new Error(execRes.errorMessage ?? 'Unknown error'));
-      return FlowTransition.FINALIZE;
+      throw new Error(execRes.errorMessage ?? 'Unknown error');
     }
 
     // Update state from store
