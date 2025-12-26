@@ -18,7 +18,7 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
-import type { TaskRunFileService } from '@utils/files';
+import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
 
 /**
@@ -70,6 +70,27 @@ export interface ReflectionServices<C = unknown> {
 
   /** Get the API client instance */
   readonly getClient: () => C;
+
+  // =========================================================================
+  // Agent method delegates
+  // These delegate to agent methods to preserve polymorphism (subclass overrides)
+  // =========================================================================
+
+  /**
+   * Get output file location for a round.
+   * Delegates to agent.getOutputFileLocation() to respect subclass overrides.
+   * Handles scratchpad mode, editedFile, and custom naming logic.
+   */
+  readonly getOutputFileLocation: (round: number) => AgentFileLocation;
+
+  /**
+   * Check if XML structure should be ensured before processing.
+   * Delegates to agent.shouldEnsureXmlStructure() for polymorphic behavior.
+   * - DirectAgent: returns useScratchpad
+   * - CoTAgent: returns true
+   * - Default: returns false
+   */
+  readonly shouldEnsureXmlStructure: () => boolean;
 }
 
 /**
