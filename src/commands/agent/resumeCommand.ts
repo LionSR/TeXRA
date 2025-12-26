@@ -27,7 +27,10 @@ export function registerResumeAgentCommand(
         return { success: false };
       }
 
-      return ToolUseSessionPersistence.resumeFromSnapshot(snapshot, payload?.followUp);
+      return ToolUseSessionPersistence.resumeFromSnapshot(
+        snapshot,
+        payload?.followUp,
+      );
     },
   );
 }

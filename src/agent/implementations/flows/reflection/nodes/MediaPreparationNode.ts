@@ -24,7 +24,10 @@ import type { FileLocation } from '@utils/files';
 import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -63,7 +66,12 @@ export class MediaPreparationNode<C = unknown> extends Node<
     const { currentRound, roundOutputs, workspaceState } = shared.state;
 
     // Use shared helper for file determination (DRY)
-    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
+    const files = getFilesForRound(
+      currentRound,
+      roundOutputs,
+      config,
+      fileService,
+    );
 
     // Collect extra media files for first round
     const extraMediaFiles: FileLocation[] = [];

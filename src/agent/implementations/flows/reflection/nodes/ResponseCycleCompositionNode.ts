@@ -29,12 +29,24 @@ import {
   type ResponseCycleShared,
   type ResponseCycleState,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { createRetryState, type RetryState } from '@agent/core/flows/RetryState';
-import type { ResponseCycleOptions, ResponseCycleParams } from '@agent/core/flows/CycleServices';
+import {
+  createRetryState,
+  type RetryState,
+} from '@agent/core/flows/RetryState';
+import type {
+  ResponseCycleOptions,
+  ResponseCycleParams,
+} from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
-import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowShared,
+  RoundContext,
+} from '../ReflectionFlowState';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -78,11 +90,19 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
    * Build shared store and determine output location.
    */
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
-    const { fileService, config, setting, userVarChannels, getOutputFileLocation } = this.services;
+    const {
+      fileService,
+      config,
+      setting,
+      userVarChannels,
+      getOutputFileLocation,
+    } = this.services;
     const { currentRound, context, workspaceState, runState } = shared.state;
 
     if (!context) {
-      throw new Error('Context not prepared - PrepareContextNode must run first');
+      throw new Error(
+        'Context not prepared - PrepareContextNode must run first',
+      );
     }
 
     // Create shared store for cycle
