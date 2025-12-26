@@ -1,15 +1,11 @@
 /**
- * TeXCountNode - Initializes workspace and computes TeXCount statistics.
+ * TeXCountNode - Computes TeXCount statistics.
  *
- * This is the first node in each round's processing pipeline.
- * It creates a fresh workspace state and optionally computes TeXCount stats.
- *
- * Responsibilities:
- * - Create fresh AgentWorkspaceState for the round
- * - Compute TeXCount statistics (can fail gracefully)
+ * Single responsibility: Run TeXCount and store stats.
+ * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Create workspace state, determine files to count
+ * - prep(): Determine files to count using shared helper
  * - exec(): Run TeXCount (can fail gracefully)
  * - post(): Store stats in workspaceState
  *
@@ -18,9 +14,10 @@
  */
 
 import { Node } from '@agent/node';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
+
+import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionFlowParams } from '../ReflectionServices';
@@ -51,36 +48,14 @@ export class TeXCountNode<C = unknown> extends Node<
   }
 
   /**
-   * Initialize workspace state and determine which files to count.
+   * Determine which files to count using shared helper.
    */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
-    const { config, fileService, logger } = this._params.services;
+    const { config, fileService } = this._params.services;
     const { currentRound, roundOutputs } = shared.state;
 
-    // Create fresh workspace state for this round
-    shared.state.workspaceState = AgentWorkspaceState.create();
-    logger.debug(`Workspace state initialized for round ${currentRound}`);
-
-    // Determine files to process based on round
-    let files: FileLocation[];
-
-    if (currentRound === 0) {
-      // First round: count input files
-      files = [
-        fileService.createLocation(config.inputFile),
-        ...config.inputFiles.map((f) => fileService.createLocation(f)),
-      ];
-    } else {
-      // Subsequent rounds: count previous round's outputs
-      const prevOutput = roundOutputs[currentRound - 1];
-      if (prevOutput && prevOutput.outputs.length > 0) {
-        files = prevOutput.outputs.map((o) => o.location);
-      } else if (config.outputFiles.length > 0) {
-        files = config.outputFiles.map((f) => fileService.createLocation(f));
-      } else {
-        files = [];
-      }
-    }
+    // Use shared helper for file determination (DRY)
+    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
 
     return {
       files,

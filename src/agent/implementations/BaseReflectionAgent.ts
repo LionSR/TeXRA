@@ -34,6 +34,7 @@ import {
   type ReflectionFlowShared,
   type ReflectionServices,
 } from '@agent/implementations/flows/reflection';
+import { prependTexCountStats } from '@agent/implementations/flows/reflection/helpers';
 import {
   createInitialReflectionState,
   type ReflectionPhase,
@@ -739,8 +740,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     content: string,
     workspaceState: AgentWorkspaceState,
   ): string {
-    const stats = workspaceState.document.texcountStats;
-    return stats ? `${stats}${content}` : content;
+    return prependTexCountStats(content, workspaceState.document.texcountStats);
   }
 
   private async maybeSaveInputPrompt(
