@@ -13,6 +13,7 @@
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
+import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
@@ -49,6 +50,9 @@ export interface RunCycleResult {
  * execute logic. Nodes do the work using these services.
  */
 export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
+  /** Narrow setting to tool-use specific type */
+  readonly setting: AgentToolUseSetting;
+
   /** Registry of available tools */
   readonly toolRegistry: IToolRegistry;
 
