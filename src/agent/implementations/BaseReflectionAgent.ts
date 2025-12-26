@@ -394,6 +394,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     const totalRounds = this.getTotalRounds();
 
+    // Ensure we have a run stage for round grouping
+    if (!this.runStage) {
+      throw new Error('Run stage required for reflection agent.');
+    }
+
+    // Create initial round stage (r0) for UI grouping
+    const r0Stage = await this.logger.stage('r0', { parent: this.runStage });
+
     // Create shared state for the flow (no lifecycle - errors thrown directly)
     const shared: ReflectionFlowShared = {
       agent: this,
@@ -402,7 +410,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         AgentWorkspaceState.create(),
       ),
       retryState: createRetryState(),
+      runStage: this.runStage,
     };
+
+    // Set initial round stage
+    shared.state.roundStage = r0Stage;
 
     let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
     try {
@@ -421,6 +433,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       throw error;
     } finally {
       // === FINALIZE (agent-owns-lifecycle) ===
+      // End current round stage before closing run
+      shared.state.roundStage?.end(status);
+
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
