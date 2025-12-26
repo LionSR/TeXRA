@@ -110,6 +110,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
 
   /**
    * Update state and route appropriately.
+   * Manages round stage transitions for UI grouping.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -117,14 +118,26 @@ export class RoundCompleteNode<C = unknown> extends Node<
     execRes: RoundCompleteExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'finalize') {
-      return FlowTransition.FINALIZE;
+      // Don't end round stage here - agent.run() finally block handles it
+      // This ensures proper status (ERROR vs STOPPED) is applied
+      return undefined; // Flow ends gracefully
     }
 
+    // === ROUND TRANSITION ===
+    // End current round stage (defaults to 'stopped' which indicates completion)
+    shared.state.roundStage?.end();
+
     // Increment round for next iteration
-    shared.state.currentRound += 1;
+    const nextRound = shared.state.currentRound + 1;
+    shared.state.currentRound = nextRound;
+
+    // Create new round stage (r1, r2, etc.) as sibling to r0
+    const newRoundStage = await this.services.logger.stage(`r${nextRound}`, {
+      parent: shared.runStage,
+    });
+    shared.state.roundStage = newRoundStage;
 
     // Create fresh workspace state for new round
-    // (round 0's workspace state was created in run() via createInitialReflectionState)
     shared.state.workspaceState = AgentWorkspaceState.create();
 
     // Loop back to TeXCountNode (start of round pipeline)

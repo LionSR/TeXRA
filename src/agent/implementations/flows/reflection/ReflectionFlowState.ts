@@ -16,6 +16,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { IFlowAgent } from '@agent/core/IAgent';
 import type { RetryState } from '@agent/core/flows/RetryState';
 import type { AgentFileLocation } from '@utils/files';
+import type { AgentLogStage } from '@logger/AgentLogger';
 
 // ============================================================================
 // Agent Interface
@@ -87,6 +88,9 @@ export interface ReflectionFlowState {
   // Control flags
   continueRounds: boolean;
   endTurn: boolean;
+
+  // UI logging - round stage for collapsible groups (r0, r1, r2...)
+  roundStage: AgentLogStage | null;
 }
 
 /**
@@ -96,6 +100,7 @@ export interface ReflectionFlowState {
  * - agent: Reference for flow-specific operations
  * - state: Mutable runtime state
  * - retryState: Retry tracking for error handling
+ * - runStage: Parent stage for creating round stages (r0, r1, r2...)
  *
  * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
  * Work nodes use services from this.services, throw errors on failure.
@@ -106,6 +111,8 @@ export interface ReflectionFlowShared {
   agent: IReflectionFlowAgent;
   state: ReflectionFlowState;
   retryState: RetryState;
+  /** Parent stage for round stages (used to create r0, r1, r2... as siblings) */
+  runStage: AgentLogStage;
 }
 
 /**
@@ -127,6 +134,7 @@ export function createInitialReflectionState(
     roundOutputs: [],
     continueRounds: true,
     endTurn: false,
+    roundStage: null, // Set by agent.run() before flow starts
   };
 }
 
