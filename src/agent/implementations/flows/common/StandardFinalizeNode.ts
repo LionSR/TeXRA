@@ -154,8 +154,15 @@ export class StandardFinalizeNode<
     // Cleanup errors are logged but don't override primary/finalize error
     try {
       await context.agent.cleanupRun();
-    } catch {
-      // Cleanup failed - primary error takes precedence
+    } catch (cleanupError) {
+      // Log cleanup error if logger is available via services
+      const logger = (
+        this.services as { logger?: { error: (...args: unknown[]) => void } }
+      )?.logger;
+      if (logger?.error) {
+        logger.error(`Cleanup failed (primary error preserved): ${cleanupError}`);
+      }
+      // Primary error takes precedence - cleanup error is logged but not propagated
     }
 
     // Set final lifecycle status (first error wins)
