@@ -73,9 +73,9 @@ export class OutputNode<C = unknown> extends Node<
         ? config.outputFiles.map((f) => fileService.createLocation(f))
         : [fileService.createLocation(config.inputFile)];
 
-    // Determine if we should ensure XML structure
-    // This depends on agent type - for now, check if documentTag is set
-    const ensureXmlStructure = !!setting.documentTag;
+    // Determine if we should ensure XML structure (delegates to agent for polymorphism)
+    // DirectAgent: returns useScratchpad, CoTAgent: returns true, Default: false
+    const ensureXmlStructure = this._params.services.shouldEnsureXmlStructure();
 
     return {
       currentRound,
