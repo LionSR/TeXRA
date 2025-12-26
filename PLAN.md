@@ -1286,3 +1286,89 @@ Each agent explicitly lists all services. Repetitive but clear.
 **Option B (Services Factory)** is best balance of DRY and clarity.
 
 **Priority**: Low - current pattern works and is readable. The repetition is minimal (~3 lines per agent type).
+
+---
+
+## Phase 8: Hydration Refactoring (Completed)
+
+**Date**: 2025-12-26
+**Status**: ✅ Complete
+
+### Problem Statement
+
+The hydration system had several issues identified in Phase 6:
+1. **Temporal Coupling** - `hydrateOutputState()` called in executeAgent.ts, `awaitPendingHydration()` called at start of agent.run()
+2. **Dual Sources of Truth** - OutputHandler.rounds Map AND agent.roundOutputs[] stored same data
+3. **Promise Race Condition** - Reference equality check in cleanup could race
+4. **Confusing Naming** - "hydrate" terminology was unintuitive
+
+### Solution: Combined Option A + B
+
+Implemented a combined approach:
+
+**Option A: Consolidate Resume into Agent Lifecycle**
+- Replaced async `hydrateOutputState()` + `awaitPendingHydration()` with sync `prepareResume()`
+- Actual hydration happens in `startAndInitRun()` when `resumeParams` is set
+- Eliminates temporal coupling - all resume logic in one place
+
+**Option B (Partial): Stateless Hydration Path**
+- New `hydrateFromResume()` creates RoundOutput objects directly
+- No longer goes through `OutputHandler.hydrateFromArtifacts()` → `getRoundArtifacts()`
+- Eliminates dual source of truth for resume path
+- Normal execution path still uses OutputHandler's internal storage (unchanged)
+
+### Implementation Details
+
+**New Methods in BaseReflectionAgent:**
+```typescript
+// Stores resume params synchronously
+public prepareResume(params: ResumeParams): void;
+
+// Check if resuming
+public isResuming(): boolean;
+
+// Creates RoundOutput directly (no OutputHandler)
+private async hydrateFromResume(params: ResumeParams): Promise<void>;
+```
+
+**Changed Methods:**
+```typescript
+// Now handles resume at start
+public override async startAndInitRun(): Promise<void> {
+  if (this.resumeParams) {
+    await this.hydrateFromResume(this.resumeParams);
+    this.resumeParams = null;
+  }
+  // ... rest of initialization
+}
+```
+
+**Removed:**
+- `hydrateOutputState()` - replaced by `prepareResume()` + `hydrateFromResume()`
+- `awaitPendingHydration()` - no longer needed
+- `hydrationPromise` field - eliminated
+- `OutputHandler.hydrateFromArtifacts()` - no longer used
+- `IOutputHandler.hydrateFromArtifacts()` - removed from interface
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `BaseReflectionAgent.ts` | Added `ResumeParams` interface, `prepareResume()`, `isResuming()`, `hydrateFromResume()`. Removed `hydrateOutputState()`, `awaitPendingHydration()`, `hydrationPromise`. Updated `startAndInitRun()` and `run()`. |
+| `executeAgent.ts` | Changed `await agent.hydrateOutputState({...})` to `agent.prepareResume({...})` |
+| `IOutputHandler.ts` | Removed `hydrateFromArtifacts()` method |
+| `OutputHandler.ts` | Removed `hydrateFromArtifacts()` implementation |
+
+### Benefits
+
+1. **No Temporal Coupling** - Resume setup is sync, hydration in lifecycle
+2. **Cleaner Flow** - Single entry point for resume logic
+3. **Fewer Sources of Truth** - Resume path creates RoundOutput directly
+4. **No Promise Race Condition** - No async promise tracking needed
+5. **Better Naming** - "prepareResume" is more intuitive than "hydrate"
+
+### Trade-offs
+
+- **Partial Option B** - Kept `getRoundArtifacts()` for normal execution path
+- Normal execution still uses OutputHandler.rounds Map as working storage
+- Full stateless OutputHandler would require deeper refactoring of OutputNode

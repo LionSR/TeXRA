@@ -48,6 +48,19 @@ import {
 import { LatexMediaManager } from '@latex';
 
 /**
+ * Parameters for resuming a reflection agent from saved state.
+ * Used by prepareResume() to store resume configuration before run().
+ */
+export interface ResumeParams {
+  /** The execution ID to resume */
+  executionId: ExecutionId;
+  /** Storage key for accessing saved artifacts */
+  storageKey?: StorageKey | null;
+  /** Map of round number to saved output file info */
+  rounds: Map<number, OutputFileInfo[]>;
+}
+
+/**
  * Abstract base class for agents that support multi-turn reflection.
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
@@ -75,7 +88,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     sourceLocation: null,
   };
   protected readonly fileService: TaskRunFileService;
-  private hydrationPromise: Promise<void> | null = null;
+  /** Pending resume parameters, set by prepareResume() and consumed by startAndInitRun() */
+  private resumeParams: ResumeParams | null = null;
   private hydratedRoundCount = 0;
 
   constructor(
@@ -192,93 +206,98 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   // =========================================================================
 
   /**
+   * Prepare agent for resuming from saved state.
+   *
+   * This is a synchronous setup method that stores resume parameters.
+   * The actual hydration happens in startAndInitRun(), eliminating
+   * temporal coupling between separate async operations.
+   *
+   * @param params Resume parameters containing executionId, storageKey, and saved rounds
+   */
+  public prepareResume(params: ResumeParams): void {
+    this.resumeParams = params;
+  }
+
+  /**
+   * Check if this agent is configured for resume.
+   */
+  public isResuming(): boolean {
+    return this.resumeParams !== null;
+  }
+
+  /**
    * Reflection agents require a run stage for tracking.
-   * Creates the stage, sets up storageKey, then initializes.
+   * Creates the stage, sets up storageKey, handles resume hydration, then initializes.
+   *
+   * Resume hydration now happens here (Option A pattern), eliminating the need for
+   * separate awaitPendingHydration() calls and temporal coupling between methods.
    */
   public override async startAndInitRun(): Promise<void> {
+    // Handle resume hydration first (Option A: consolidate into lifecycle)
+    if (this.resumeParams) {
+      await this.hydrateFromResume(this.resumeParams);
+      this.resumeParams = null;
+    }
+
     // Start the run stage
     const runStage = await this.startRunStage();
     if (!runStage || !runStage.id) {
       throw new Error('Run group identifier is required for reflection runs.');
     }
 
-    // Check if storageKey was already set by hydrateOutputState (resume case)
-    // If still initial, this is a new run - set to task group ID
+    // For new runs (not resume), set storageKey to task group ID
+    // For resumed runs, storageKey was already set by hydrateFromResume()
     if (this.context.hasInitialStorageKey()) {
       const storageKey = normalizeRunId(runStage.id);
       this.context.updateStorageKey(storageKey);
       this.outputHandler.setActiveRun(storageKey);
     }
-    // For resumed runs, context.storageKey and outputHandler.activeRun
-    // were already set by hydrateOutputState() - preserve them
 
     // Initialize with the run stage
     await this.init(runStage, { createStage: true });
   }
 
-  public async hydrateOutputState(params: {
-    executionId: ExecutionId;
-    storageKey?: StorageKey | null;
-    rounds: Map<number, OutputFileInfo[]>;
-  }): Promise<void> {
-    const hydration = (async () => {
-      this.roundOutputs = [];
-      this.fileService.updateRunContext(params.executionId);
+  /**
+   * Hydrate agent state from saved resume parameters.
+   *
+   * Option B (stateless): Creates RoundOutput objects directly in agent
+   * without going through OutputHandler.hydrateFromArtifacts/getRoundArtifacts.
+   * This eliminates the dual source of truth between OutputHandler.rounds Map
+   * and agent.roundOutputs[].
+   */
+  private async hydrateFromResume(params: ResumeParams): Promise<void> {
+    this.roundOutputs = [];
+    this.fileService.updateRunContext(params.executionId);
 
-      // Set the resumed storageKey on context and outputHandler BEFORE hydrating
-      // This ensures subsequent events use the correct key
-      if (params.storageKey) {
-        this.context.updateStorageKey(params.storageKey);
-        this.outputHandler.setActiveRun(params.storageKey);
-      }
-
-      this.outputHandler.hydrateFromArtifacts(
-        params.storageKey ?? null,
-        params.rounds,
-      );
-
-      const sortedRounds = Array.from(params.rounds.keys()).sort(
-        (a, b) => a - b,
-      );
-
-      let hydratedCount = 0;
-
-      try {
-        for (const round of sortedRounds) {
-          const output = await this.outputHandler.getRoundArtifacts(round);
-          this.roundOutputs[round] = output;
-        }
-
-        hydratedCount = sortedRounds.length;
-      } finally {
-        this.hydratedRoundCount = hydratedCount;
-      }
-    })();
-
-    this.hydrationPromise = hydration;
-
-    try {
-      await hydration;
-    } finally {
-      if (this.hydrationPromise === hydration) {
-        this.hydrationPromise = null;
-      }
-    }
-  }
-
-  private async awaitPendingHydration(): Promise<void> {
-    const pending = this.hydrationPromise;
-    if (!pending) {
-      return;
+    // Set the resumed storageKey on context and outputHandler
+    if (params.storageKey) {
+      this.context.updateStorageKey(params.storageKey);
+      this.outputHandler.setActiveRun(params.storageKey);
     }
 
-    try {
-      await pending;
-    } finally {
-      if (this.hydrationPromise === pending) {
-        this.hydrationPromise = null;
-      }
+    // Sort rounds for consistent ordering
+    const sortedRounds = Array.from(params.rounds.keys()).sort(
+      (a, b) => a - b,
+    );
+
+    // Create RoundOutput objects directly (Option B: stateless approach)
+    // No need to go through OutputHandler.hydrateFromArtifacts/getRoundArtifacts
+    for (const round of sortedRounds) {
+      const savedOutputs = params.rounds.get(round) ?? [];
+      this.roundOutputs[round] = {
+        round,
+        rawOutput: null, // Not available from saved state
+        outputs: savedOutputs,
+        xmlSummary: {
+          tagContents: {},
+          documents: [],
+          singleOutputFile: null,
+          sourceLocation: null,
+        },
+      };
     }
+
+    this.hydratedRoundCount = sortedRounds.length;
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -368,13 +387,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * - Agent owns lifecycle (init before flow, finalize in finally)
    *
    * Lifecycle pattern:
-   * - Init: startAndInitRun(), initializeClient(), resetPromptBuilder()
+   * - Init: startAndInitRun() (handles resume hydration), initializeClient(), resetPromptBuilder()
    * - Flow: Pure execution logic, throws on error
    * - Finalize: endRun(status), cleanupRun() in finally block
+   *
+   * Resume handling:
+   * - prepareResume() called before run() stores resume params
+   * - startAndInitRun() checks for resume params and hydrates state
+   * - No temporal coupling - all resume logic in lifecycle methods
    */
   public async run(): Promise<void> {
-    await this.awaitPendingHydration();
-
+    // Note: Resume hydration now happens in startAndInitRun() when resumeParams is set
+    // This eliminates the temporal coupling of the old awaitPendingHydration() pattern
     const previousHydratedRounds = this.hydratedRoundCount;
     const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {

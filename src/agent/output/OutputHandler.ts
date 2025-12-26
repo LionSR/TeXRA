@@ -292,38 +292,6 @@ export class OutputHandler implements IOutputHandler {
     return this.lineageCalculator.calculateMapping(currentOutputs, prevOutputs);
   }
 
-  public hydrateFromArtifacts(
-    storageKey: StorageKey | null,
-    rounds: Map<number, OutputFileInfo[]>,
-  ): void {
-    const currentKey = this.getStorageKey();
-    const targetKey = storageKey ?? currentKey;
-
-    this.logger.debug(
-      `Hydrate outputs: storageKey=${storageKey ?? 'null'} current=${currentKey} target=${targetKey}`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
-
-    if (targetKey !== currentKey) {
-      this.setActiveRun(targetKey);
-    }
-
-    for (const [round, infos] of rounds.entries()) {
-      if (infos.length > 0) {
-        this.rounds.set(round, {
-          outputs: infos,
-          rawOutput: null,
-          xmlSummary: {
-            tagContents: {},
-            documents: [],
-            singleOutputFile: null,
-            sourceLocation: null,
-          },
-        });
-      }
-    }
-  }
-
   public async validateExpectedOutputs(
     outputLocation: FileLocation,
     currRound: number,

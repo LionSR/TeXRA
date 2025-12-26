@@ -437,7 +437,7 @@ export async function executeAgent(
     throw new Error(`Task "${streamTabId}" is already being resumed.`);
   }
 
-  // Handle resume hydration for reflection agents
+  // Prepare resume for reflection agents (hydration happens in startAndInitRun)
   if (isResume && agent instanceof BaseReflectionAgent && executionId) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
     const runStorage = getRunStorageService();
@@ -447,7 +447,8 @@ export async function executeAgent(
       storageKey,
     });
     if (runOutputs) {
-      await agent.hydrateOutputState({
+      // Synchronous setup - actual hydration happens in agent.startAndInitRun()
+      agent.prepareResume({
         executionId,
         storageKey,
         rounds: runOutputs,
