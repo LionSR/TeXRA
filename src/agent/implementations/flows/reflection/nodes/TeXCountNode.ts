@@ -14,8 +14,8 @@
  */
 
 import { Node } from '@agent/node';
-import { getTeXCountStats } from '@latex';
 import type { FileLocation } from '@utils/files';
+import { getTeXCountStats } from '@latex';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionFlowParams } from '../ReflectionServices';
