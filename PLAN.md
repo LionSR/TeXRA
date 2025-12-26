@@ -1372,3 +1372,55 @@ public override async startAndInitRun(): Promise<void> {
 - **Partial Option B** - Kept `getRoundArtifacts()` for normal execution path
 - Normal execution still uses OutputHandler.rounds Map as working storage
 - Full stateless OutputHandler would require deeper refactoring of OutputNode
+
+---
+
+## Phase 9: Dead Code Cleanup (Completed)
+
+**Date**: 2025-12-26
+**Status**: ✅ Partial Complete (high-impact items cleaned, low-impact documented)
+
+### Cleaned Dead Code
+
+**1. ReflectionFlowState.ts** - Removed unused phase tracking:
+- `REFLECTION_PHASE` constant (lines 39-48) - never used
+- `ReflectionPhase` type (lines 50-51) - never imported
+
+**2. agent/output/displayUtils.ts** - Removed unused functions:
+- `getDisplayPath()` - duplicated in @utils/files
+- `getAbsolutePath()` - never called
+- `getWorkspacePath()` - never called
+- `getExecutionId()` - never called
+
+**3. agent/output/index.ts** - Removed unused re-exports:
+- `getFileBasename`, `getFileDirectory`, `getDisplayLabel`, `getDisplayDir`, `getDisplayPath`
+- These are internal to the output module; external code uses @utils/files
+
+### Documented But Not Removed (Lower Priority)
+
+**1. Unused Barrel Files** (never imported from):
+- `/src/agent/types/index.ts` - all imports use direct paths
+- `/src/agent/remote/index.ts` - all imports use direct paths
+- `/src/agent/utils/text/index.ts` - all imports use direct paths
+
+**2. Write-Only Fields in BaseReflectionAgent**:
+- `outputFile: AgentFileLocation[]` - written in constructor, never read
+- `outputFiles: { [key: number]: AgentFileLocation[] }` - initialized, never populated/read
+- `logId: number` - always 0, never incremented
+
+**3. Unused Model Handler Property**:
+- `isOpenaiCompatible: boolean` - defined in interface and base class, never read
+
+### Why Not Remove Low-Priority Items
+
+1. **Barrel files**: May be intentional API surface; need wider codebase analysis
+2. **Write-only fields**: MergeAgent uses `outputFile`; requires careful refactoring
+3. **isOpenaiCompatible**: Interface change affects all handler implementations
+
+### Verification
+
+Build and lint passed after cleanup:
+```bash
+npm run build  # ✅ compiled with 1 warning (nunjucks, unrelated)
+npm run lint   # ✅ passed
+```
