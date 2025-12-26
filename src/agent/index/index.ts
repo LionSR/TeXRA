@@ -17,13 +17,11 @@ export {
   getToolUseAgents,
   getAgentsBySource,
   isLoaded,
-  waitForLoad,
   refresh,
   // HTML options
   buildAgentOptions,
   computeAgentOptions,
   computeAgentOptionsSync,
-  refreshAgentOptions,
   DEFAULT_WORKFLOW_AGENT,
   DEFAULT_TOOL_USE_AGENT,
   // Key helpers

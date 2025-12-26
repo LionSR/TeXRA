@@ -68,14 +68,7 @@ export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
 }
 
 /**
- * Params type for reflection flow nodes.
- *
- * With native services support, params is now separate from services:
- * - services: Immutable dependencies (set via flow.setServices())
- * - params: Per-execution parameters (can vary per batch item)
- *
- * For reflection flow, params is currently empty but reserved for future use.
+ * Flow params type for reflection flows.
+ * Alias for base FlowParams - reserved for future use.
  */
-export interface ReflectionFlowParams {
-  [key: string]: unknown;
-}
+export type { FlowParams as ReflectionFlowParams } from '../common';
