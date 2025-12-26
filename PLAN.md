@@ -1063,3 +1063,226 @@ The new methods serve a unique purpose: **post-build message enrichment** - modi
 | **Option 3: Message enrichment methods** ✅ | True separation, nodes self-contained | Required 4 new handler implementations |
 
 Option 3 was chosen because it properly separates concerns - each node is fully responsible for its contribution to the final messages.
+
+### Future Consolidation: Shared Message Initialization
+
+Both Reflection and Tool-Use flows call `modelHandler.initializeMessages()` similarly:
+
+```typescript
+// Reflection (PrepareContextNode)
+const messages = await modelHandler.initializeMessages(userPrefix, userRequest, undefined, systemPrompt);
+
+// Tool-use (BaseToolUseAgent.prepareInitialState)
+const messages = await modelHandler.initializeMessages(userPrefix, userRequest, undefined,
+  systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix);
+```
+
+The only difference is tool-use appends `TOOL_USE_INSTRUCTIONS` to the system prompt.
+
+**Decision**: Deferred - duplication is only ~3 lines. Benefit is marginal.
+
+---
+
+## Phase 6: Hydration System Analysis
+
+**Date**: 2025-12-26
+**Status**: Analysis Complete - Identified as Technical Debt
+
+### Problem Statement
+
+The hydration system is confusing with multiple interrelated methods:
+- `hydrateOutputState()` - Entry point in BaseReflectionAgent
+- `hydrateFromArtifacts()` - Worker in OutputHandler
+- `awaitPendingHydration()` - Synchronization primitive
+
+### What Hydration Does
+
+When resuming a reflection agent run, hydration:
+1. Restores output files from previous rounds
+2. Switches storage context (keys, paths)
+3. Makes round state available for continued execution
+
+### Call Flow Diagram
+
+```
+executeAgent.ts (resume path, line ~450)
+    │
+    ▼
+BaseReflectionAgent.hydrateOutputState()
+    ├── fileService.updateRunContext(executionId)
+    ├── context.updateStorageKey(storageKey)
+    ├── outputHandler.hydrateFromArtifacts(storageKey, rounds)
+    │   └── setActiveRun(targetKey)
+    │       └── fileService.prepareRunWorkspace()
+    └── For each round:
+        └── outputHandler.getRoundArtifacts(round)
+            └── this.roundOutputs[round] = output
+    │
+    ▼
+BaseReflectionAgent.run() (line 376)
+    └── awaitPendingHydration()  ← Blocks until hydration complete
+        └── await this.hydrationPromise
+```
+
+### Identified Issues
+
+#### Issue 1: Dual Sources of Truth ⚠️ MODERATE
+```typescript
+// OutputHandler stores:
+private rounds: Map<number, RoundData>;
+
+// BaseReflectionAgent also stores:
+public roundOutputs: RoundOutput[] = [];
+```
+Two separate caches of the same data. `getRoundArtifacts()` copies from one to the other.
+
+#### Issue 2: Promise Race Condition ⚠️ LOW PROBABILITY
+```typescript
+// In hydrateOutputState():
+this.hydrationPromise = hydration;
+try {
+  await hydration;
+} finally {
+  if (this.hydrationPromise === hydration) {  // Reference equality check
+    this.hydrationPromise = null;
+  }
+}
+```
+If two resume operations happen simultaneously, cleanup could race. Unlikely in practice.
+
+#### Issue 3: Temporal Coupling ⚠️ ANTI-PATTERN
+- `hydrateOutputState()` called in executeAgent.ts
+- `awaitPendingHydration()` called at start of agent.run()
+- Correctness depends on two methods in different files called in specific order
+- If `awaitPendingHydration()` is removed, system breaks silently
+
+#### Issue 4: Confusing Naming
+| Current Name | Problem | Better Name |
+|--------------|---------|-------------|
+| `hydrateOutputState` | Too generic | `resumeFromSavedRounds` |
+| `hydrateFromArtifacts` | Exposes internal detail | Make private, or `restoreRoundsCache` |
+| `awaitPendingHydration` | Sounds like a condition | `waitForResumeComplete` |
+
+### Complexity Metrics
+
+| Metric | Value | Assessment |
+|--------|-------|------------|
+| Methods involved | 3 primary + 5 secondary | High |
+| Call depth | 5-6 levels | High |
+| State mutations | 6 locations | High |
+| Sources of truth | 2 (OutputHandler.rounds + roundOutputs[]) | Anti-pattern |
+| Temporal coupling | Yes (executeAgent → run → awaitPending) | Anti-pattern |
+
+**Overall Complexity Score: 6.5/10** - Not spaghetti, but unnecessarily indirect.
+
+### Root Cause
+
+The system was designed for **runtime state persistence** (tracking rounds during a single execution), not **resumption** (restore from previously saved state). Hydration was retrofitted onto existing architecture without redesigning the data flow.
+
+### Recommendations
+
+**High Priority:**
+1. Fix promise race condition (add version counter or make non-reentrant)
+2. Add hydration validation (verify data matches current stream)
+
+**Medium Priority:**
+3. Consolidate into single `resumeFromSavedState()` method
+4. Make OutputHandler more stateless (return directly instead of store-then-retrieve)
+5. Remove temporal coupling by having hydration set a flag checked in run()
+
+**Low Priority:**
+6. Rename methods to use "Resume" terminology instead of "Hydrate"
+7. Consider explicit hydration phase in agent lifecycle
+
+---
+
+## Phase 7: Service Passing Pattern Analysis
+
+**Date**: 2025-12-26
+**Status**: Analysis Complete
+
+### Problem Statement
+
+`modelHandler: this.modelHandler` is passed in multiple places:
+- `BaseAgent.buildCycleOptions()`
+- `BaseReflectionAgent.services` getter
+- `BaseToolUseAgent.services` getter
+
+### Current Pattern
+
+Each agent defines a `services` getter that includes modelHandler and other dependencies:
+
+```typescript
+// BaseReflectionAgent.services
+return {
+  modelHandler: this.modelHandler,
+  outputHandler: this.outputHandler,
+  latexMediaManager: this.latexMediaManager,
+  promptBuilder: this.getPromptBuilder(),
+  fileService: this.fileService,
+  logger: this.logger,
+  config: this.agentConfig,
+  setting: this.agentSetting,
+  // ... more
+};
+
+// BaseToolUseAgent.services
+return {
+  modelHandler: this.modelHandler,
+  logger: this.logger,
+  context: this.context,
+  // ... more
+};
+```
+
+### Why This Pattern Exists
+
+1. **Service Injection** - Flows need access to agent's services without tight coupling
+2. **Immutability** - Fresh services object created each access (no stale references)
+3. **Testability** - Can mock services without mocking entire agent
+
+### Potential Simplifications
+
+#### Option A: Base Services Interface
+```typescript
+interface BaseFlowServices<C> {
+  modelHandler: IModelHandler<any, any, any, any, C>;
+  logger: AgentLogger;
+  context: AgentExecutionContext;
+}
+
+interface ReflectionServices<C> extends BaseFlowServices<C> {
+  outputHandler: IOutputHandler;
+  // ... reflection-specific
+}
+```
+
+#### Option B: Services Factory in BaseAgent
+```typescript
+// BaseAgent
+protected get baseServices() {
+  return {
+    modelHandler: this.modelHandler,
+    logger: this.logger,
+    context: this.context,
+  };
+}
+
+// BaseReflectionAgent
+public get services(): ReflectionServices<C> {
+  return {
+    ...this.baseServices,  // Spread common services
+    outputHandler: this.outputHandler,
+    // ... reflection-specific
+  };
+}
+```
+
+#### Option C: Keep Current (Explicit)
+Each agent explicitly lists all services. Repetitive but clear.
+
+### Recommendation
+
+**Option B (Services Factory)** is best balance of DRY and clarity.
+
+**Priority**: Low - current pattern works and is readable. The repetition is minimal (~3 lines per agent type).
