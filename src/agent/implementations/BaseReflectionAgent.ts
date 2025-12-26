@@ -223,6 +223,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.abortController = ctrl;
       },
       getClient: () => this.getClientInstance(),
+      // Delegate to agent methods to preserve polymorphism
+      getOutputFileLocation: (round) => this.getOutputFileLocation(round),
+      shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure(),
     };
   }
 
