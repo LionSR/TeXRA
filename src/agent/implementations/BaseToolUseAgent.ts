@@ -32,10 +32,6 @@ import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import {
-  END_GROUP_STATUS,
-  type EndGroupStatus,
-} from '@logger/messageTypes';
-import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -46,6 +42,10 @@ import {
 
 // Type imports
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import {
+  END_GROUP_STATUS,
+  type EndGroupStatus,
+} from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 
 // Internal imports - use IToolRegistry from core (single source of truth)

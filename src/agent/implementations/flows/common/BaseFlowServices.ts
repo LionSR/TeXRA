@@ -61,3 +61,14 @@ export interface BaseFlowServices<C = unknown> {
   /** Get the API client instance */
   readonly getClient: () => C;
 }
+
+/**
+ * Base flow params type.
+ *
+ * Params are runtime values passed to flows via setParams().
+ * Currently empty but reserved for future use (e.g., per-run configuration).
+ * Flow-specific interfaces can extend or alias this type.
+ */
+export interface FlowParams {
+  [key: string]: unknown;
+}
