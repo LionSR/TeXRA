@@ -1916,4 +1916,81 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     return [callMsg, resultMsg];
   }
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   * Finds the last user message and prepends text to its text content.
+   */
+  prependTextToUserMessage(messages: MessageParam[], text: string): void {
+    if (!text.trim()) return;
+
+    // Find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'user') {
+        if (typeof msg.content === 'string') {
+          // Simple string content - prepend directly
+          msg.content = text + msg.content;
+        } else if (Array.isArray(msg.content)) {
+          // Array of content blocks - find first text block and prepend
+          const firstTextIdx = msg.content.findIndex(
+            (block): block is TextBlockParam => block.type === 'text',
+          );
+          if (firstTextIdx >= 0) {
+            const textBlock = msg.content[firstTextIdx] as TextBlockParam;
+            textBlock.text = text + textBlock.text;
+          } else {
+            // No text block found - add one at the beginning
+            msg.content.unshift({
+              type: 'text',
+              text: text,
+            } as ContentBlockParam);
+          }
+        }
+        return;
+      }
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   * Inserts media content blocks at the beginning of the user message.
+   */
+  async addMediaToUserMessage(
+    messages: MessageParam[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    // Find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'user') {
+        try {
+          const formattedMedia = await this.createMediaMessage(mediaFiles);
+          if (typeof msg.content === 'string') {
+            // Convert string to array and add media at beginning
+            msg.content = [
+              ...formattedMedia,
+              { type: 'text', text: msg.content } as ContentBlockParam,
+            ];
+          } else if (Array.isArray(msg.content)) {
+            // Insert media at the beginning
+            msg.content.unshift(...formattedMedia);
+          }
+        } catch (err) {
+          this.logger.logError(
+            `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+            err,
+            { operation: 'add media to user message' },
+          );
+        }
+        return;
+      }
+    }
+  }
 }
