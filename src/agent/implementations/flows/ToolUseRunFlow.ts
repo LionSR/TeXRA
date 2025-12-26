@@ -27,39 +27,13 @@ import type { IFlowAgent } from '@agent/core/IAgent';
 import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Internal imports
-import {
-  StandardFinalizeNode,
-  StandardInitNode,
-  AgentLifecycle,
-  type FinalizeContext,
-  type NodeExecResult,
-} from '@agent/implementations/flows/common';
+import { type NodeExecResult } from '@agent/implementations/flows/common';
 
 // Service types
 import type {
   ToolUseServices,
   ToolUseFlowParams,
 } from './tooluse';
-
-// ============================================================================
-// Phase Definitions
-// ============================================================================
-
-/**
- * Tool use run phase - single source of truth for tool-use agent flow phases.
- */
-export const TOOL_USE_RUN_PHASE = {
-  IDLE: 'idle',
-  INIT: 'init',
-  PREPARE: 'prepare',
-  CYCLE: 'cycle',
-  FINALIZE: 'finalize',
-} as const;
-
-export type ToolUseRunPhase =
-  (typeof TOOL_USE_RUN_PHASE)[keyof typeof TOOL_USE_RUN_PHASE];
-
-export type ToolUseRunLifecycle = AgentLifecycle<ToolUseRunPhase>;
 
 // ============================================================================
 // Agent Interface
@@ -111,18 +85,16 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
  * Shared context passed through the flow.
  *
  * Contains:
- * - agent: Reference for lifecycle methods and session access
+ * - agent: Reference for session access and interruption checking
  * - state: Mutable runtime state
- * - lifecycle: Phase/status state machine
  *
- * Note: Work nodes use services from this.services, not shared.
- * The agent reference is for lifecycle management and session operations.
+ * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
+ * Work nodes use services from this.services, throw errors on failure.
  */
 export interface ToolUseRunShared<C = unknown> {
-  /** Agent reference for lifecycle and session methods */
+  /** Agent reference for session methods */
   agent: IToolUseFlowAgent;
   state: ToolUseRunState<C>;
-  lifecycle: ToolUseRunLifecycle;
 }
 
 // ============================================================================
@@ -167,7 +139,6 @@ interface CycleNodePrepResult<C> {
   cycleOptions: ToolUseCycleOptions<C>;
   conversation: ProviderMessage[];
   store: AgentSharedStore;
-  lifecycle: ToolUseRunLifecycle;
 }
 
 /**
@@ -257,8 +228,10 @@ class ToolUsePrepareNode<C> extends Node<
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
-      shared.lifecycle.fail(execRes.error);
-      return FlowTransition.FINALIZE;
+      // Throw error - agent.run() catches and handles cleanup
+      throw execRes.error instanceof Error
+        ? execRes.error
+        : new Error(String(execRes.error));
     }
 
     const { messages, store, shouldSkipCycle, cycleOptions, runState } =
@@ -298,14 +271,10 @@ class ToolUseCycleNode<C> extends Node<
       cycleOptions: shared.state.cycleOptions,
       conversation: shared.state.conversation,
       store: shared.state.store,
-      lifecycle: shared.lifecycle,
     };
   }
 
   async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
-    // Set phase at start of work (consistent with StandardInitNode pattern)
-    prepRes.lifecycle.begin('cycle');
-
     // Handle skip (resume case) - pure decision, no side effects
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -357,12 +326,12 @@ class ToolUseCycleNode<C> extends Node<
         return undefined; // Follow next() → WaitNode
 
       case 'failed':
-        shared.lifecycle.fail(new Error(execRes.message));
-        return FlowTransition.FINALIZE;
+        // Throw error - agent.run() catches and handles cleanup
+        throw new Error(execRes.message);
 
       case 'cancelled':
-        // User cancelled - not an error, just finalize
-        return FlowTransition.FINALIZE;
+        // User cancelled - not an error, flow ends gracefully
+        return undefined;
     }
   }
 }
@@ -446,7 +415,8 @@ class ToolUseWaitNode<C> extends Node<
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'stop') {
-      return FlowTransition.FINALIZE;
+      // No follow-up or interrupted - flow ends gracefully
+      return undefined;
     }
 
     // Apply follow-up via services
@@ -463,38 +433,17 @@ class ToolUseWaitNode<C> extends Node<
   }
 }
 
-/** Context type for ToolUseFinalizeNode */
-type ToolUseFinalizeContext = FinalizeContext<
-  ToolUseRunLifecycle,
-  unknown, // No hooks needed
-  IToolUseFlowAgent
->;
-
-/**
- * Finalize node for tool-use runs.
- * Clears persisted snapshot before ending.
- */
-class ToolUseFinalizeNode<C> extends StandardFinalizeNode<
-  ToolUseRunShared<C>,
-  ToolUseFlowParams,
-  ToolUseServices<C>
-> {
-  constructor() {
-    super('finalize');
-  }
-
-  protected async beforeEnd(context: ToolUseFinalizeContext): Promise<void> {
-    // Clear snapshot via services
-    await this.services.session.clearPersistedSnapshot();
-  }
-}
-
 // ============================================================================
 // Flow Factory
 // ============================================================================
 
 /**
  * Creates a tool-use flow with native services support.
+ *
+ * Architecture:
+ * - Agent owns lifecycle (init before flow, finalize in finally)
+ * - Flow is pure execution (prepare → cycle → wait loop)
+ * - Errors throw directly; agent.run() catches and handles cleanup
  *
  * Usage:
  * ```typescript
@@ -508,35 +457,22 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  // Create all nodes
-  const initNode = new StandardInitNode<
-    ToolUseRunShared<C>,
-    ToolUseFlowParams,
-    ToolUseServices<C>
-  >('prepare');
+  // Create work nodes (no init/finalize - agent owns lifecycle)
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
   const waitNode = new ToolUseWaitNode<C>();
-  const finalizeNode = new ToolUseFinalizeNode<C>();
 
   // Wire using native PocketFlow API
-  // Linear flow (happy path): init → prepare → cycle → wait
-  initNode.next(prepareNode);
+  // Linear flow: prepare → cycle → wait (loop back via CONTINUE)
   prepareNode.next(cycleNode);
   cycleNode.next(waitNode);
-
-  // Branches: error paths → finalize, loop → cycle
-  initNode.on(FlowTransition.FINALIZE, finalizeNode);
-  prepareNode.on(FlowTransition.FINALIZE, finalizeNode);
-  cycleNode.on(FlowTransition.FINALIZE, finalizeNode);
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
-  waitNode.on(FlowTransition.FINALIZE, finalizeNode);
 
   return new Flow<
     ToolUseRunShared<C>,
     ToolUseFlowParams,
     ToolUseServices<C>
-  >(initNode);
+  >(prepareNode);
 }
 
 // Re-export types for convenience
