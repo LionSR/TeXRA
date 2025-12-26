@@ -11,15 +11,14 @@
  * - New: Nodes use services directly, ResponseCycleFlow composed as sub-flow
  *
  * Flow structure:
- *   InitNode → PrepareWorkspaceNode → TeXCountNode → MediaPreparationNode
- *        ↓                                                    ↓
- *        ↓           PrepareContextNode ← ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
- *        ↓                   ↓
- *        ↓           ResponseCycleNode → OutputNode → RoundCompleteNode
- *        ↓                                                    ↓
- *        └─→ FinalizeNode ←───────────────────────────────────┘
- *                    ↑                    (CONTINUE loops back
- *                    └──── errors ─────    to PrepareWorkspaceNode)
+ *   InitNode → TeXCountNode → MediaPreparationNode → PrepareContextNode
+ *      ↓                                                    ↓
+ *      ↓                                            ResponseCycleNode
+ *      ↓                                                    ↓
+ *      ↓                                    OutputNode → RoundCompleteNode
+ *      ↓                                                    ↓
+ *      └─→ FinalizeNode ←───────────────────────────────────┘
+ *                                           (CONTINUE loops back to TeXCountNode)
  */
 
 import { Flow } from '@agent/node';
@@ -30,7 +29,6 @@ import {
 } from '@agent/implementations/flows/common';
 
 import {
-  PrepareWorkspaceNode,
   TeXCountNode,
   MediaPreparationNode,
   PrepareContextNode,
@@ -49,7 +47,7 @@ import type { ReflectionFlowParams } from './ReflectionServices';
  * Initializes the reflection flow.
  *
  * Extends StandardInitNode to call resetPromptBuilder() before starting rounds.
- * Transitions to 'prepare_workspace' phase after initialization.
+ * Transitions to 'prepare_workspace' phase (TeXCountNode now handles workspace init).
  */
 class ReflectionInitNode extends StandardInitNode<ReflectionFlowShared> {
   constructor() {
@@ -83,7 +81,6 @@ export function createReflectionFlow<C = unknown>(): Flow<
 > {
   // Create all nodes
   const initNode = new ReflectionInitNode();
-  const prepWorkspaceNode = new PrepareWorkspaceNode<C>();
   const texCountNode = new TeXCountNode<C>();
   const mediaNode = new MediaPreparationNode<C>();
   const prepContextNode = new PrepareContextNode<C>();
@@ -93,11 +90,10 @@ export function createReflectionFlow<C = unknown>(): Flow<
   const finalizeNode = new StandardFinalizeNode<ReflectionFlowShared>('finalize');
 
   // Wire linear flow (happy path)
-  // Workspace preparation pipeline
-  initNode.next(prepWorkspaceNode);
-  prepWorkspaceNode.next(texCountNode);       // TeXCount is standalone
-  texCountNode.next(mediaNode);               // Media extraction is standalone
-  mediaNode.next(prepContextNode);            // Then build context
+  // TeXCountNode creates workspace state and computes texcount
+  initNode.next(texCountNode);
+  texCountNode.next(mediaNode);             // Media extraction
+  mediaNode.next(prepContextNode);          // Build context
 
   // Response cycle pipeline
   prepContextNode.next(responseCycleNode);
@@ -106,10 +102,10 @@ export function createReflectionFlow<C = unknown>(): Flow<
 
   // Wire branches
   initNode.on(FlowTransition.FINALIZE, finalizeNode);
-  prepContextNode.on(FlowTransition.CONTINUE, prepWorkspaceNode); // Skip round
-  responseCycleNode.on(FlowTransition.FINALIZE, finalizeNode);    // Cycle failed
-  roundCompleteNode.on(FlowTransition.CONTINUE, prepWorkspaceNode); // Next round
-  roundCompleteNode.on(FlowTransition.FINALIZE, finalizeNode);      // Done
+  prepContextNode.on(FlowTransition.CONTINUE, texCountNode);    // Skip round
+  responseCycleNode.on(FlowTransition.FINALIZE, finalizeNode);  // Cycle failed
+  roundCompleteNode.on(FlowTransition.CONTINUE, texCountNode);  // Next round
+  roundCompleteNode.on(FlowTransition.FINALIZE, finalizeNode);  // Done
 
   return new Flow<ReflectionFlowShared, ReflectionFlowParams<C>>(initNode);
 }
