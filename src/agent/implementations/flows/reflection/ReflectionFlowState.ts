@@ -18,6 +18,21 @@ import type { AgentLifecycle } from '@agent/implementations/flows/common';
 import type { RetryState } from '@agent/core/flows/RetryState';
 import type { AgentFileLocation } from '@utils/files';
 
+// ============================================================================
+// Agent Interface
+// ============================================================================
+
+/**
+ * Interface for agents used by ReflectionFlow.
+ *
+ * Extends IFlowAgent with reflection-specific methods.
+ * This mirrors the pattern used by ToolUseFlow (IToolUseFlowAgent).
+ */
+export interface IReflectionFlowAgent extends IFlowAgent {
+  /** Reset prompt builder before starting rounds. */
+  resetPromptBuilder(): void;
+}
+
 /**
  * Phase definitions for reflection flow lifecycle.
  */
@@ -78,32 +93,23 @@ export interface ReflectionFlowState {
 }
 
 /**
- * Hooks for flow-specific operations.
- */
-export interface ReflectionFlowHooks {
-  /** Reset prompt builder before starting rounds */
-  resetPromptBuilder(): void;
-}
-
-/**
  * Shared context passed through the flow.
  *
  * Contains:
- * - agent: Reference for lifecycle methods (startRun, endRun, etc.)
+ * - agent: Reference for lifecycle methods and flow-specific operations
  * - state: Mutable runtime state
  * - lifecycle: Phase/status state machine
- * - hooks: Flow-specific operations
  * - retryState: Retry tracking for error handling
  *
- * Note: Work nodes use services from _params, not agent methods.
- * The agent reference is only for lifecycle management.
+ * Note: Work nodes use services from this.services, not agent methods.
+ * The agent reference is for lifecycle management and flow-specific operations
+ * (like resetPromptBuilder) that are called during initialization.
  */
 export interface ReflectionFlowShared {
-  /** Agent reference for lifecycle methods only */
-  agent: IFlowAgent;
+  /** Agent reference for lifecycle and flow-specific methods */
+  agent: IReflectionFlowAgent;
   state: ReflectionFlowState;
   lifecycle: ReflectionLifecycle;
-  hooks: ReflectionFlowHooks;
   retryState: RetryState;
 }
 

@@ -84,6 +84,52 @@
 - Tool-use does NOT need: latexdiff, XML processing, round artifacts, media extraction
 - Common need: Both use PocketFlow with prep/exec/post pattern
 
+### Phase 3: Consolidation & Consistency (Planned)
+
+**Analysis of `shared.agent` Pattern:**
+- ✅ Work nodes do NOT access `shared.agent` (pure)
+- Only lifecycle nodes (StandardInitNode/StandardFinalizeNode) use it
+- Type system allows misuse, but runtime is pure
+- **Recommendation**: Keep pattern, improve documentation
+
+**Analysis of `shared.hooks` Pattern:**
+- Only 1 hook exists: `resetPromptBuilder()`
+- Only used once at flow initialization
+- Could be simplified to direct agent call
+- **Recommendation**: Inline to `shared.agent.resetPromptBuilder()` or add to IFlowAgent
+
+**Shallow Modules Identified:**
+- `prependTexCountStats()` helper is trivial (1-line ternary)
+- Can be inlined at 2 call sites in PrepareContextNode
+- `getFilesForRound()` is well-designed (NOT shallow)
+
+**ToolUseRunFlow Inconsistencies:**
+- Uses hooks pattern instead of native services pattern
+- Nodes typed as `Node<ToolUseRunShared<C>>` (no services type)
+- Access via `shared.agent`, `shared.hooks` instead of `this.services`
+- **Needs same refactoring as ReflectionFlow** (4 nodes + 1 finalize node)
+
+**Proposed Consolidation:**
+
+1. **Inline shallow helper**
+   ```typescript
+   // Remove prependTexCountStats(), inline at call sites
+   const prefixWithStats = texcountStats
+     ? `${texcountStats}${userPrefix}`
+     : userPrefix;
+   ```
+
+2. **Simplify hooks to direct agent calls**
+   ```typescript
+   // In ReflectionInitNode.beforeStart():
+   shared.agent.resetPromptBuilder();  // Instead of shared.hooks.resetPromptBuilder()
+   ```
+
+3. **Apply services pattern to ToolUseRunFlow**
+   - Define `ToolUseServices<C>` interface
+   - Convert nodes to 3-parameter type: `Node<Shared, Params, Services>`
+   - Use `flow.setServices()` pattern
+
 ### Code Review Findings (Addressed)
 
 - ✅ **Output location calculation** - Fixed via service delegate
