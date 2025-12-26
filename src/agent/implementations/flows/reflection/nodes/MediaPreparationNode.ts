@@ -1,17 +1,16 @@
 /**
- * MediaPreparationNode - Extracts media files (figures, TikZ, PDFs).
+ * MediaPreparationNode - Extracts media files (figures, TikZ, PDFs) and adds to messages.
  *
- * Single responsibility: Extract media and store in workspaceState.
+ * Single responsibility: Extract media and add to user message.
  * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine files using shared helper, get workspaceState reference
+ * - prep(): Determine files using shared helper, get context
  * - exec(): Extract media (mutates workspaceState via latexMediaManager)
- * - post(): Log warnings if degraded
+ * - post(): Add media to messages via modelHandler, log warnings if degraded
  *
- * Note: latexMediaManager mutates workspaceState in place, so we pass
- * the reference through prep. This is a slight bend of pure PocketFlow
- * but necessary for the current API.
+ * Note: latexMediaManager mutates workspaceState in place for media extraction,
+ * then we add the extracted files to messages via modelHandler.
  *
  * Services accessed via native `this.services`:
  * - latexMediaManager, config, fileService, modelHandler, logger
@@ -23,7 +22,7 @@ import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
-import type { ReflectionFlowShared } from '../ReflectionFlowState';
+import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -39,11 +38,12 @@ interface MediaPrepInput {
   supportsVision: boolean;
   extraMediaFiles: FileLocation[];
   workspaceState: AgentWorkspaceState;
+  context: RoundContext | null;
 }
 
 type MediaExecResult =
-  | { kind: 'success' }
-  | { kind: 'degraded'; warning: string };
+  | { kind: 'success'; mediaFiles: FileLocation[] }
+  | { kind: 'degraded'; mediaFiles: FileLocation[]; warning: string };
 
 // ============================================================================
 // Node Implementation
@@ -63,7 +63,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, workspaceState } = shared.state;
+    const { currentRound, roundOutputs, workspaceState, context } = shared.state;
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -90,12 +90,13 @@ export class MediaPreparationNode<C = unknown> extends Node<
       supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,
       workspaceState,
+      context,
     };
   }
 
   /**
    * Extract media from files.
-   * Mutates workspaceState via latexMediaManager.
+   * Mutates workspaceState via latexMediaManager to collect media files.
    * This can fail gracefully - media extraction failures shouldn't stop the flow.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
@@ -104,7 +105,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
     // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       logger.debug('Media extraction skipped: no vision support or no files');
-      return { kind: 'success' };
+      return { kind: 'success', mediaFiles: [] };
     }
 
     try {
@@ -126,12 +127,15 @@ export class MediaPreparationNode<C = unknown> extends Node<
         );
       }
 
-      logger.debug(`Media extracted from ${prepRes.files.length} files`);
-      return { kind: 'success' };
+      // Collect media files from workspaceState
+      const mediaFiles = prepRes.workspaceState.media.files;
+      logger.debug(`Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`);
+      return { kind: 'success', mediaFiles };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return {
         kind: 'degraded',
+        mediaFiles: [],
         warning: `Media extraction failed: ${message}`,
       };
     }
@@ -146,23 +150,33 @@ export class MediaPreparationNode<C = unknown> extends Node<
   ): Promise<MediaExecResult> {
     return {
       kind: 'degraded',
+      mediaFiles: [],
       warning: `Media extraction failed: ${error.message}`,
     };
   }
 
   /**
-   * Log warning if degraded and continue.
+   * Add media to messages via modelHandler and continue.
    */
   async post(
     shared: ReflectionFlowShared,
     _prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this.services;
+    const { modelHandler, logger } = this.services;
 
     // Log warning if degraded
     if (execRes.kind === 'degraded') {
       logger.warn(execRes.warning);
+    }
+
+    // Add media to messages if we have files and context
+    if (execRes.mediaFiles.length > 0 && shared.state.context) {
+      await modelHandler.addMediaToUserMessage(
+        shared.state.context.messages,
+        execRes.mediaFiles,
+      );
+      logger.debug(`${execRes.mediaFiles.length} media files added to user message`);
     }
 
     // Continue to next node
