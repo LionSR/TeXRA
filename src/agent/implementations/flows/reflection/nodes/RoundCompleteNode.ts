@@ -17,6 +17,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionFlowParams } from '../ReflectionServices';
@@ -114,7 +115,11 @@ export class RoundCompleteNode<C = unknown> extends Node<
     // Increment round for next iteration
     shared.state.currentRound += 1;
 
-    // Loop back to PrepareWorkspaceNode
+    // Create fresh workspace state for new round
+    // (round 0's workspace state was created in run() via createInitialReflectionState)
+    shared.state.workspaceState = AgentWorkspaceState.create();
+
+    // Loop back to TeXCountNode (start of round pipeline)
     return FlowTransition.CONTINUE;
   }
 }
