@@ -27,7 +27,10 @@ import type {
   ReflectionFlowShared,
   RoundContext,
 } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -98,7 +101,9 @@ export class PrepareContextNode<C = unknown> extends Node<
         systemPrompt,
       );
 
-      logger.debug(`Prepared first round context with ${messages.length} messages`);
+      logger.debug(
+        `Prepared first round context with ${messages.length} messages`,
+      );
 
       return {
         kind: 'ready',
@@ -130,7 +135,9 @@ export class PrepareContextNode<C = unknown> extends Node<
         workspaceState.media.files,
       );
 
-      logger.debug(`Prepared round ${currentRound} context with ${messages.length} messages`);
+      logger.debug(
+        `Prepared round ${currentRound} context with ${messages.length} messages`,
+      );
 
       return {
         kind: 'ready',

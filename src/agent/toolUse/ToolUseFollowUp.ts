@@ -260,4 +260,3 @@ export async function sendFollowUp(
     'No active tool-use session found for this follow-up.',
   );
 }
-

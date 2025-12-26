@@ -25,7 +25,10 @@ import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -64,7 +67,9 @@ export class OutputNode<C = unknown> extends Node<
     const { currentRound, outputLocation, endTurn } = shared.state;
 
     if (!outputLocation) {
-      throw new Error('Output location not set - ResponseCycleCompositionNode must run first');
+      throw new Error(
+        'Output location not set - ResponseCycleCompositionNode must run first',
+      );
     }
 
     // Base files for latexdiff come from outputFiles config
@@ -92,7 +97,13 @@ export class OutputNode<C = unknown> extends Node<
    */
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputHandler, setting, logger } = this.services;
-    const { currentRound, outputLocation, endTurn, baseFiles, ensureXmlStructure } = prepRes;
+    const {
+      currentRound,
+      outputLocation,
+      endTurn,
+      baseFiles,
+      ensureXmlStructure,
+    } = prepRes;
     const warnings: string[] = [];
 
     // Only process if turn ended (model completed response)
@@ -107,7 +118,8 @@ export class OutputNode<C = unknown> extends Node<
             setting.documentTag ?? 'document',
           );
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
+          const message =
+            error instanceof Error ? error.message : 'Unknown error';
           warnings.push(`XML structure failed: ${message}`);
           logger.debug(`XML structure failed: ${message}`);
         }
@@ -117,7 +129,8 @@ export class OutputNode<C = unknown> extends Node<
       try {
         await outputHandler.processOutputFiles(outputLocation, currentRound);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         warnings.push(`Output processing failed: ${message}`);
         logger.debug(`Output processing failed: ${message}`);
       }
@@ -127,7 +140,8 @@ export class OutputNode<C = unknown> extends Node<
         try {
           await this.handleLatexdiff(currentRound, baseFiles);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
+          const message =
+            error instanceof Error ? error.message : 'Unknown error';
           warnings.push(`Latexdiff failed: ${message}`);
           logger.debug(`Latexdiff failed: ${message}`);
         }

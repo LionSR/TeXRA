@@ -11,7 +11,7 @@
  * - exec(): Determine next action (pure logic)
  * - post(): Update state and route
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - logger, checkInterruption
  */
 
@@ -20,7 +20,10 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -65,7 +68,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
   /**
    * Determine whether to continue or finalize.
    */
-  async exec(prepRes: RoundCompletePrepInput): Promise<RoundCompleteExecResult> {
+  async exec(
+    prepRes: RoundCompletePrepInput,
+  ): Promise<RoundCompleteExecResult> {
     const { checkInterruption, logger } = this.services;
     const { currentRound, totalRounds, continueRounds, endTurn } = prepRes;
 
@@ -97,7 +102,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
     }
 
     // Continue to next round
-    logger.debug(`Round ${currentRound + 1} complete, continuing to round ${nextRound + 1}`);
+    logger.debug(
+      `Round ${currentRound + 1} complete, continuing to round ${nextRound + 1}`,
+    );
     return { kind: 'continue' };
   }
 
