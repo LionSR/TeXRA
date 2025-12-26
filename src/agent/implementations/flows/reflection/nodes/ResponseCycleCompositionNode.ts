@@ -16,7 +16,7 @@
  * - exec(): Run the composed sub-flow
  * - post(): Update shared state with results
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - modelHandler, logger, setting, prompt, config, context, etc.
  */
 
@@ -34,7 +34,7 @@ import type { ResponseCycleOptions, ResponseCycleParams } from '@agent/core/flow
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -64,7 +64,8 @@ type CycleExecResult =
 
 export class ResponseCycleCompositionNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   private cycleFlow: Flow<ResponseCycleShared, ResponseCycleParams<C>>;
 
@@ -77,7 +78,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
    * Build shared store and determine output location.
    */
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
-    const { fileService, config, setting } = this._params.services;
+    const { fileService, config, setting, userVarChannels, getOutputFileLocation } = this.services;
     const { currentRound, context, workspaceState, runState } = shared.state;
 
     if (!context) {
@@ -89,11 +90,11 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       round: context.stateRound,
       run: runState,
       workspace: workspaceState,
-      user: this._params.services.userVarChannels,
+      user: userVarChannels,
     });
 
     // Determine output location for this round (delegates to agent for polymorphism)
-    const outputLocation = this._params.services.getOutputFileLocation(currentRound);
+    const outputLocation = getOutputFileLocation(currentRound);
 
     return {
       context,
@@ -107,7 +108,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
    * Run ResponseCycleFlow as a sub-flow.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
-    const services = this._params.services;
+    const services = this.services;
 
     // Build ResponseCycleOptions from our services
     const cycleOptions: ResponseCycleOptions<C> = {
@@ -195,7 +196,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     prepRes: CyclePrepInput,
     execRes: CycleExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this._params.services;
+    const { logger } = this.services;
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
@@ -231,7 +232,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
    * Get user variables for prompt rendering.
    */
   private getUserVars(): Record<string, any> {
-    const channels = this._params.services.userVarChannels;
+    const channels = this.services.userVarChannels;
     return {
       ...channels.input,
       ...channels.transient,
