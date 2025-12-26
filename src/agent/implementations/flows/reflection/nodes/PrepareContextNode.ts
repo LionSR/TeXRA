@@ -3,12 +3,14 @@
  *
  * Responsibilities:
  * - Build prompts via promptBuilder
- * - Prepend TeXCount stats to user content
- * - Initialize messages via modelHandler
+ * - Initialize base messages via modelHandler (without texcount/media)
+ *
+ * Note: TeXCount stats and media are added by subsequent nodes
+ * (TeXCountNode and MediaPreparationNode) using message enrichment methods.
  *
  * PocketFlow pattern:
  * - prep(): Extract data needed for context preparation
- * - exec(): Build prompts and messages
+ * - exec(): Build prompts and base messages
  * - post(): Store context in shared, handle skip
  *
  * Services accessed via native `this.services`:
@@ -18,7 +20,6 @@
 import { Node } from '@agent/node';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 import type {
@@ -36,7 +37,6 @@ import type {
 
 interface ContextPrepInput {
   currentRound: number;
-  workspaceState: AgentWorkspaceState;
   conversation: ProviderMessage[];
 }
 
@@ -63,17 +63,17 @@ export class PrepareContextNode<C = unknown> extends Node<
   async prep(shared: ReflectionFlowShared): Promise<ContextPrepInput> {
     return {
       currentRound: shared.state.currentRound,
-      workspaceState: shared.state.workspaceState,
       conversation: shared.state.conversation,
     };
   }
 
   /**
-   * Build prompts and messages for the round.
+   * Build prompts and base messages for the round.
+   * Does NOT include texcount stats or media - those are added by subsequent nodes.
    */
   async exec(prepRes: ContextPrepInput): Promise<ContextExecResult> {
     const { promptBuilder, modelHandler, logger } = this.services;
-    const { currentRound, workspaceState, conversation } = prepRes;
+    const { currentRound, conversation } = prepRes;
 
     const stateRound = new ConversationRoundState(currentRound);
 
@@ -82,25 +82,19 @@ export class PrepareContextNode<C = unknown> extends Node<
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
 
-      // Prepend TeXCount stats (inline for simplicity)
-      const texcountStats = workspaceState.document.texcountStats;
-      const prefixWithStats = texcountStats
-        ? `${texcountStats}${userPrefix}`
-        : userPrefix;
-
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
 
-      // Initialize messages via model handler
+      // Initialize base messages (no media - will be added by MediaPreparationNode)
       const messages = await modelHandler.initializeMessages(
-        prefixWithStats,
+        userPrefix,
         userRequest,
-        workspaceState.media.files,
+        undefined, // media added later by MediaPreparationNode
         systemPrompt,
       );
 
       logger.debug(
-        `Prepared first round context with ${messages.length} messages`,
+        `Prepared first round base context with ${messages.length} messages`,
       );
 
       return {
@@ -111,14 +105,8 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Subsequent rounds: build user request only
       const userRequest = await promptBuilder.buildUserRequest(currentRound);
 
-      // Prepend TeXCount stats (inline for simplicity)
-      const texcountStats = workspaceState.document.texcountStats;
-      const userMessage = texcountStats
-        ? `${texcountStats}${userRequest ?? ''}`
-        : (userRequest ?? '');
-
       // Check for skip (no content)
-      if (!userMessage.trim()) {
+      if (!userRequest?.trim()) {
         logger.debug(`Skipping round ${currentRound} - no user content`);
         return { kind: 'skip' };
       }
@@ -126,15 +114,15 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
 
-      // Create round messages via model handler
+      // Create round messages (no media - will be added by MediaPreparationNode)
       const messages = await modelHandler.createRoundMessages(
         conversation,
-        userMessage,
-        workspaceState.media.files,
+        userRequest,
+        undefined, // media added later by MediaPreparationNode
       );
 
       logger.debug(
-        `Prepared round ${currentRound} context with ${messages.length} messages`,
+        `Prepared round ${currentRound} base context with ${messages.length} messages`,
       );
 
       return {
@@ -153,15 +141,15 @@ export class PrepareContextNode<C = unknown> extends Node<
     execRes: ContextExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'skip') {
-      // Increment round and loop back to PrepareWorkspaceNode
+      // Increment round and loop back to start of flow
       shared.state.currentRound += 1;
       return FlowTransition.CONTINUE;
     }
 
-    // Store context for ResponseCycleNode
+    // Store context for subsequent nodes to enrich
     shared.state.context = execRes.context;
 
-    // Continue to ResponseCycleNode
+    // Continue to TeXCountNode
     return undefined;
   }
 }
