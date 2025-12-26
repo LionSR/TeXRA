@@ -1596,7 +1596,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^16.5.0",
-    "jsdom": "^27.3.0",
+    "jsdom": "^27.4.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
     "path-browserify": "^1.0.1",
