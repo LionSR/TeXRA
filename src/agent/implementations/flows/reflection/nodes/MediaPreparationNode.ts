@@ -13,7 +13,7 @@
  * the reference through prep. This is a slight bend of pure PocketFlow
  * but necessary for the current API.
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - latexMediaManager, config, fileService, modelHandler, logger
  */
 
@@ -24,7 +24,7 @@ import type { FileLocation } from '@utils/files';
 import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -48,7 +48,8 @@ type MediaExecResult =
 
 export class MediaPreparationNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   constructor() {
     super(1, 0); // maxRetries=1, wait=0
@@ -58,7 +59,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
    * Determine files using shared helper and collect extra media.
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
-    const { config, fileService, modelHandler } = this._params.services;
+    const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, workspaceState } = shared.state;
 
     // Use shared helper for file determination (DRY)
@@ -90,7 +91,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
    * This can fail gracefully - media extraction failures shouldn't stop the flow.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
-    const { latexMediaManager, config, logger } = this._params.services;
+    const { latexMediaManager, config, logger } = this.services;
 
     // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
@@ -149,7 +150,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
     _prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this._params.services;
+    const { logger } = this.services;
 
     // Log warning if degraded
     if (execRes.kind === 'degraded') {

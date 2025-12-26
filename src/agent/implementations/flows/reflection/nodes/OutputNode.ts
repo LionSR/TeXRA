@@ -15,7 +15,7 @@
  * - exec(): Process output files and latexdiff
  * - post(): Store round output in shared
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - outputHandler, logger, setting, fileService
  */
 
@@ -25,7 +25,7 @@ import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -49,7 +49,8 @@ type OutputExecResult =
 
 export class OutputNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   constructor() {
     super(1, 0); // maxRetries=1, wait=0
@@ -59,7 +60,7 @@ export class OutputNode<C = unknown> extends Node<
    * Extract data needed for output processing.
    */
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
-    const { config, fileService, setting } = this._params.services;
+    const { config, fileService, setting } = this.services;
     const { currentRound, outputLocation, endTurn } = shared.state;
 
     if (!outputLocation) {
@@ -75,7 +76,7 @@ export class OutputNode<C = unknown> extends Node<
 
     // Determine if we should ensure XML structure (delegates to agent for polymorphism)
     // DirectAgent: returns useScratchpad, CoTAgent: returns true, Default: false
-    const ensureXmlStructure = this._params.services.shouldEnsureXmlStructure();
+    const ensureXmlStructure = this.services.shouldEnsureXmlStructure();
 
     return {
       currentRound,
@@ -90,7 +91,7 @@ export class OutputNode<C = unknown> extends Node<
    * Process output files and handle latexdiff.
    */
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
-    const { outputHandler, setting, logger } = this._params.services;
+    const { outputHandler, setting, logger } = this.services;
     const { currentRound, outputLocation, endTurn, baseFiles, ensureXmlStructure } = prepRes;
     const warnings: string[] = [];
 
@@ -208,7 +209,7 @@ export class OutputNode<C = unknown> extends Node<
     _prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this._params.services;
+    const { logger } = this.services;
 
     // Log warning if degraded
     if (execRes.kind === 'degraded') {
@@ -229,7 +230,7 @@ export class OutputNode<C = unknown> extends Node<
     currentRound: number,
     baseFiles: FileLocation[],
   ): Promise<void> {
-    const { outputHandler, logger } = this._params.services;
+    const { outputHandler, logger } = this.services;
 
     // Check if any base files exist
     const existingBase = await Promise.all(

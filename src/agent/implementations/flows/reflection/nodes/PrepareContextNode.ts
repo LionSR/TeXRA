@@ -11,7 +11,7 @@
  * - exec(): Build prompts and messages
  * - post(): Store context in shared, handle skip
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - promptBuilder, modelHandler, logger
  */
 
@@ -27,7 +27,7 @@ import type {
   ReflectionFlowShared,
   RoundContext,
 } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -49,7 +49,8 @@ type ContextExecResult =
 
 export class PrepareContextNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   constructor() {
     super(1, 0); // maxRetries=1, wait=0
@@ -70,7 +71,7 @@ export class PrepareContextNode<C = unknown> extends Node<
    * Build prompts and messages for the round.
    */
   async exec(prepRes: ContextPrepInput): Promise<ContextExecResult> {
-    const { promptBuilder, modelHandler, logger } = this._params.services;
+    const { promptBuilder, modelHandler, logger } = this.services;
     const { currentRound, workspaceState, conversation } = prepRes;
 
     const stateRound = new ConversationRoundState(currentRound);
