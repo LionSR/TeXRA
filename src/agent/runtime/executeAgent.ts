@@ -23,6 +23,7 @@ import {
   BaseReflectionAgent,
 } from '@agent/implementations';
 import { resolveAgent, isRemoteAgent } from '@agent/index';
+import type { ResolvedAgent } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -37,7 +38,6 @@ import {
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { ResolvedAgent } from '@agent/index';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';

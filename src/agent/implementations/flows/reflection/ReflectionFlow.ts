@@ -29,8 +29,6 @@ import {
   StandardInitNode,
 } from '@agent/implementations/flows/common';
 
-import type { ReflectionFlowShared } from './ReflectionFlowState';
-import type { ReflectionFlowParams } from './ReflectionServices';
 import {
   PrepareWorkspaceNode,
   TeXCountNode,
@@ -40,6 +38,8 @@ import {
   OutputNode,
   RoundCompleteNode,
 } from './nodes';
+import type { ReflectionFlowShared } from './ReflectionFlowState';
+import type { ReflectionFlowParams } from './ReflectionServices';
 
 // ============================================================================
 // Custom Init Node
