@@ -1,37 +1,38 @@
 /**
  * Service interfaces for reflection flow.
  *
- * Following the pattern from CycleServices.ts:
- * - Services are injected via PocketFlow's `_params` mechanism
- * - `_params.services` contains immutable dependencies
- * - `shared` contains mutable runtime state only
+ * Following the PocketFlow pattern:
+ * - Services are injected via flow.setServices()
+ * - Nodes access services via this.services
+ * - shared contains mutable runtime state only
+ *
+ * ReflectionServices extends BaseFlowServices with reflection-specific
+ * dependencies (output handler, prompt builder, LaTeX media, etc.)
  */
 
-import type { IModelHandler } from '@agent/modelHandlers';
 import type { IOutputHandler } from '@agent/output';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
 import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { BaseFlowServices } from '@agent/implementations/flows/common';
 
 /**
  * Services provided by BaseReflectionAgent for flow nodes.
  *
- * These are immutable dependencies that nodes use to perform their work.
+ * Extends BaseFlowServices with reflection-specific dependencies:
+ * - outputHandler: File processing and artifacts
+ * - latexMediaManager: Figure/TikZ/PDF extraction
+ * - promptBuilder: Message construction
+ * - fileService: Location resolution
+ * - Agent method delegates for polymorphism
+ *
  * The agent becomes a "service provider" - it holds these but doesn't
  * execute logic. Nodes do the work using these services.
  */
-export interface ReflectionServices<C = unknown> {
-  /** Model handler for API calls and message formatting */
-  readonly modelHandler: IModelHandler<any, any, any, any, C>;
-
+export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
+  /** Narrow setting to workflow-specific type */
+  readonly setting: AgentWorkflowSetting;
   /** Output handler for file processing and artifacts */
   readonly outputHandler: IOutputHandler;
 
@@ -43,33 +44,6 @@ export interface ReflectionServices<C = unknown> {
 
   /** File service for location resolution */
   readonly fileService: TaskRunFileService;
-
-  /** Logger for debugging and progress */
-  readonly logger: AgentLogger;
-
-  /** Agent configuration (input files, model, etc.) */
-  readonly config: AgentConfig;
-
-  /** Agent workflow settings (rounds, temperature, etc.) */
-  readonly setting: AgentWorkflowSetting;
-
-  /** Agent prompt templates */
-  readonly prompt: AgentPrompt;
-
-  /** Execution context (IDs, storage key, etc.) */
-  readonly context: AgentExecutionContext;
-
-  /** User variable channels for template rendering */
-  readonly userVarChannels: UserVariableChannels;
-
-  /** Check if user requested interruption */
-  readonly checkInterruption: () => Promise<boolean> | boolean;
-
-  /** Set abort controller for cancellation */
-  readonly setAbortController: (ctrl: AbortController | null) => void;
-
-  /** Get the API client instance */
-  readonly getClient: () => C;
 
   // =========================================================================
   // Agent method delegates
