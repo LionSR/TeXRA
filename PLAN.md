@@ -23,6 +23,12 @@
    - `prependTexCountStats()` - Unified texcount stats prepending
 7. ✅ **Agent Method Delegates** - `getOutputFileLocation()` and `shouldEnsureXmlStructure()` exposed via services
 8. ✅ **Shallow Module Eliminated** - `PrepareWorkspaceNode` merged into other nodes
+9. ✅ **Native Services in PocketFlow** - First-class services support in BaseNode:
+   - Added `_services` property and `services` getter to BaseNode
+   - Added `Svc` type parameter to all node/flow classes
+   - Flow propagates services to nodes via `setServices()`
+   - Nodes access via `this.services` instead of `this._params.services`
+   - Proper separation: `shared` (mutable state), `params` (per-batch), `services` (immutable)
 
 ### Code Review Findings (Addressed)
 
