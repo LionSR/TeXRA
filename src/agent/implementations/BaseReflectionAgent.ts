@@ -978,9 +978,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
 
     try {
-      // Create flow and inject services
+      // Create flow and inject services (native service pattern)
       const flow = createReflectionFlow<C>();
-      flow.setParams({ services: this.services });
+      flow.setServices(this.services);
 
       // Run the flow
       await flow.run(shared);

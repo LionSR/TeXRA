@@ -4,7 +4,12 @@
  * Architecture:
  * - Agent = Service Provider (provides services via getter)
  * - Flow = Execution Engine (all logic lives here)
- * - Nodes = Discrete Operations (use services from _params)
+ * - Nodes = Discrete Operations (use this.services natively)
+ *
+ * Service injection:
+ * - Services are set via flow.setServices() (not params)
+ * - Flow propagates services to all nodes automatically
+ * - Nodes access via this.services getter
  *
  * Key difference from old ReflectionRunFlow:
  * - Old: Nodes called agent methods like executeCurrentRound()
@@ -37,7 +42,7 @@ import {
   RoundCompleteNode,
 } from './nodes';
 import type { ReflectionFlowShared } from './ReflectionFlowState';
-import type { ReflectionFlowParams } from './ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
 // Custom Init Node
@@ -64,12 +69,12 @@ class ReflectionInitNode extends StandardInitNode<ReflectionFlowShared> {
 // ============================================================================
 
 /**
- * Creates a reflection flow with services injected via params.
+ * Creates a reflection flow with native services support.
  *
  * Usage:
  * ```typescript
- * const flow = createReflectionFlow();
- * flow.setParams({ services: agent.services });
+ * const flow = createReflectionFlow<C>();
+ * flow.setServices(agent.services);
  * await flow.run(shared);
  * ```
  *
@@ -77,7 +82,8 @@ class ReflectionInitNode extends StandardInitNode<ReflectionFlowShared> {
  */
 export function createReflectionFlow<C = unknown>(): Flow<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   // Create all nodes
   const initNode = new ReflectionInitNode();
@@ -107,7 +113,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
   roundCompleteNode.on(FlowTransition.CONTINUE, texCountNode);  // Next round
   roundCompleteNode.on(FlowTransition.FINALIZE, finalizeNode);  // Done
 
-  return new Flow<ReflectionFlowShared, ReflectionFlowParams<C>>(initNode);
+  return new Flow<ReflectionFlowShared, ReflectionFlowParams, ReflectionServices<C>>(initNode);
 }
 
 // Re-export types for convenience
