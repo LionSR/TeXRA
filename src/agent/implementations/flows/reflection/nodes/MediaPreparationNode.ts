@@ -1,11 +1,11 @@
 /**
  * MediaPreparationNode - Extracts media files (figures, TikZ, PDFs).
  *
- * Standalone node that focuses ONLY on media extraction.
- * Separated from TeXCount to follow single responsibility principle.
+ * Single responsibility: Extract media and store in workspaceState.
+ * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine which files to process, get workspaceState reference
+ * - prep(): Determine files using shared helper, get workspaceState reference
  * - exec(): Extract media (mutates workspaceState via latexMediaManager)
  * - post(): Log warnings if degraded
  *
@@ -20,6 +20,8 @@
 import { Node } from '@agent/node';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
+
+import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionFlowParams } from '../ReflectionServices';
@@ -53,33 +55,14 @@ export class MediaPreparationNode<C = unknown> extends Node<
   }
 
   /**
-   * Determine which files to process for media.
-   * Also passes workspaceState reference for latexMediaManager.
+   * Determine files using shared helper and collect extra media.
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this._params.services;
     const { currentRound, roundOutputs, workspaceState } = shared.state;
 
-    // Determine files to process based on round
-    let files: FileLocation[];
-
-    if (currentRound === 0) {
-      // First round: process input files
-      files = [
-        fileService.createLocation(config.inputFile),
-        ...config.inputFiles.map((f) => fileService.createLocation(f)),
-      ];
-    } else {
-      // Subsequent rounds: process previous round's output files
-      const prevOutput = roundOutputs[currentRound - 1];
-      if (prevOutput && prevOutput.outputs.length > 0) {
-        files = prevOutput.outputs.map((o) => o.location);
-      } else if (config.outputFiles.length > 0) {
-        files = config.outputFiles.map((f) => fileService.createLocation(f));
-      } else {
-        files = [];
-      }
-    }
+    // Use shared helper for file determination (DRY)
+    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
 
     // Collect extra media files for first round
     const extraMediaFiles: FileLocation[] = [];
