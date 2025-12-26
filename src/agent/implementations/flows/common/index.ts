@@ -9,9 +9,11 @@
  * - InitExecResult, NodeExecResult: Shared result types for nodes
  * - StandardFinalizeNode, FinalizeContext: Finalize node class and context type
  * - StandardInitNode: Standard initialization node with extension point
+ * - BaseFlowServices: Base service interface for all flows
  */
 
 export * from './AgentLifecycle';
 export * from './AgentRunFlowRunner';
 export * from './StandardFinalizeNode';
 export * from './StandardInitNode';
+export * from './BaseFlowServices';

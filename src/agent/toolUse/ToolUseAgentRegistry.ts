@@ -2,11 +2,12 @@
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
-const registry = new Map<StreamTabId, BaseToolUseAgent>();
+// Use `any` for client type to accept any BaseToolUseAgent<C>
+const registry = new Map<StreamTabId, BaseToolUseAgent<any>>();
 
 export function registerToolUseAgent(
   streamTabId: StreamTabId,
-  agent: BaseToolUseAgent,
+  agent: BaseToolUseAgent<any>,
 ): void {
   registry.set(streamTabId, agent);
 }
@@ -17,7 +18,7 @@ export function unregisterToolUseAgent(streamTabId: StreamTabId): void {
 
 export function getToolUseAgent(
   streamTabId: StreamTabId,
-): BaseToolUseAgent | undefined {
+): BaseToolUseAgent<any> | undefined {
   return registry.get(streamTabId);
 }
 

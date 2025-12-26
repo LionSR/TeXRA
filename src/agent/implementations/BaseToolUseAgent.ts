@@ -17,8 +17,8 @@ import {
   createToolUseRunFlow,
   type ToolUseRunShared,
   type ToolUseRunPhase,
-  type ToolUseRunHooks,
 } from '@agent/implementations/flows/ToolUseRunFlow';
+import type { ToolUseServices } from '@agent/implementations/flows/tooluse';
 // Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -171,6 +171,52 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     this.sessionLifecycle.setStore(null);
   }
 
+  // =========================================================================
+  // Services Pattern
+  // Agent = Service Provider, Flow = Execution Engine
+  // =========================================================================
+
+  /**
+   * Services provided to flow nodes.
+   *
+   * Following the same pattern as BaseReflectionAgent.services,
+   * this getter provides all immutable dependencies that nodes need.
+   */
+  public get services(): ToolUseServices<C> {
+    // Capture snapshot at time of access for closure
+    const snapshot = this.resumeSnapshot;
+
+    return {
+      // Base services (from BaseFlowServices)
+      modelHandler: this.modelHandler,
+      logger: this.logger,
+      config: this.agentConfig,
+      setting: this.agentSetting,
+      prompt: this.agentPrompt,
+      context: this.context,
+      userVarChannels: this.userVarChannels,
+      checkInterruption: () => this.isInterruptionRequested(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+      getClient: () => this.getClientInstance(),
+
+      // Tool-use specific services
+      toolRegistry: this.toolRegistry,
+      session: this.sessionLifecycle,
+
+      // Cycle operations (bound to agent methods)
+      prepareState: () => this.prepareInitialState(snapshot),
+      buildCycleOptions: (store) => this.createCycleOptions(store),
+      runCycle: (options, messages, store) =>
+        runToolUseCycle({ options, messages, store }),
+      persistCheckpoint: (messages, _store) =>
+        this.session.persistCheckpoint(messages),
+      applyFollowUpMessage: (message, conversation) =>
+        this.applyFollowUpMessage(message, conversation),
+    };
+  }
+
   public async run(): Promise<void> {
     const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
 
@@ -178,28 +224,38 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const snapshot = this.resumeSnapshot;
     this.resumeSnapshot = null;
 
-    // Flow-specific hooks only - lifecycle is on the agent (IFlowAgent)
-    const hooks: ToolUseRunHooks<C> = {
-      prepareState: () => this.prepareInitialState(snapshot),
-      buildCycleOptions: (store) => this.createCycleOptions(store),
-      runCycle: (options, messages, store) =>
-        runToolUseCycle({ options, messages, store }),
-      persistCheckpoint: (messages, _store) =>
-        this.session.persistCheckpoint(messages),
-    };
-
-    await this.executeAgentRunFlow<ToolUseRunShared<C>>({
-      lifecycle,
-      hooks,
-      createState: () => ({
+    // Create shared state (mutable runtime state only - no hooks!)
+    const shared: ToolUseRunShared<C> = {
+      agent: this,
+      state: {
         conversation: [],
         cycleOptions: null,
         shouldSkipCycle: false,
         store: null,
         runState: new AgentRunState(),
-      }),
-      createFlow: () => createToolUseRunFlow<C>(),
-    });
+      },
+      lifecycle,
+    };
+
+    // Temporarily store snapshot for services getter
+    this.resumeSnapshot = snapshot;
+
+    try {
+      // Create flow and inject services (native service pattern)
+      const flow = createToolUseRunFlow<C>();
+      flow.setServices(this.services);
+
+      // Run the flow
+      await flow.run(shared);
+
+      // Check for errors
+      if (lifecycle.error) {
+        throw lifecycle.error;
+      }
+    } finally {
+      // Clear snapshot after run
+      this.resumeSnapshot = null;
+    }
   }
 
   /**
