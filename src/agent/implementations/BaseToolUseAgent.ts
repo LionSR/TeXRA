@@ -32,6 +32,10 @@ import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import {
+  END_GROUP_STATUS,
+  type EndGroupStatus,
+} from '@logger/messageTypes';
+import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -242,6 +246,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       state: createInitialToolUseState<C>(),
     };
 
+    let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
     try {
       // Create flow and inject services with explicit snapshot
       const flow = createToolUseRunFlow<C>();
@@ -249,9 +254,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
       // Run the flow - errors throw directly
       await flow.run(shared);
+    } catch (error) {
+      status = END_GROUP_STATUS.ERROR;
+      throw error;
     } finally {
       // === FINALIZE (agent-owns-lifecycle) ===
-      // Clear persisted snapshot before ending
+      this.endRun(status);
+      // Clear persisted snapshot before cleanup
       await this.sessionLifecycle.clearPersistedSnapshot();
       this.cleanupRun();
     }
