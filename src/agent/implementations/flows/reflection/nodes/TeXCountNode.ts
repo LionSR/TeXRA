@@ -9,7 +9,7 @@
  * - exec(): Run TeXCount (can fail gracefully)
  * - post(): Store stats in workspaceState
  *
- * Services accessed via `_params.services`:
+ * Services accessed via native `this.services`:
  * - config, fileService, logger
  */
 
@@ -20,7 +20,7 @@ import { getTeXCountStats } from '@latex';
 import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -41,7 +41,8 @@ type TeXCountExecResult =
 
 export class TeXCountNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   constructor() {
     super(1, 0); // maxRetries=1, wait=0
@@ -51,7 +52,7 @@ export class TeXCountNode<C = unknown> extends Node<
    * Determine which files to count using shared helper.
    */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
-    const { config, fileService } = this._params.services;
+    const { config, fileService } = this.services;
     const { currentRound, roundOutputs } = shared.state;
 
     // Use shared helper for file determination (DRY)
@@ -68,7 +69,7 @@ export class TeXCountNode<C = unknown> extends Node<
    * This can fail gracefully - missing texcount shouldn't stop the flow.
    */
   async exec(prepRes: TeXCountPrepInput): Promise<TeXCountExecResult> {
-    const { logger } = this._params.services;
+    const { logger } = this.services;
 
     // Skip if not enabled or no files
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
@@ -114,7 +115,7 @@ export class TeXCountNode<C = unknown> extends Node<
     _prepRes: TeXCountPrepInput,
     execRes: TeXCountExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this._params.services;
+    const { logger } = this.services;
 
     // Store stats in workspace state
     if (execRes.stats) {

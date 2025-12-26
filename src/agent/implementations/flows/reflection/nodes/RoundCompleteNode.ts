@@ -20,7 +20,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams } from '../ReflectionServices';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -43,7 +43,8 @@ type RoundCompleteExecResult =
 
 export class RoundCompleteNode<C = unknown> extends Node<
   ReflectionFlowShared,
-  ReflectionFlowParams<C>
+  ReflectionFlowParams,
+  ReflectionServices<C>
 > {
   constructor() {
     super(1, 0); // maxRetries=1, wait=0
@@ -65,7 +66,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
    * Determine whether to continue or finalize.
    */
   async exec(prepRes: RoundCompletePrepInput): Promise<RoundCompleteExecResult> {
-    const { checkInterruption, logger } = this._params.services;
+    const { checkInterruption, logger } = this.services;
     const { currentRound, totalRounds, continueRounds, endTurn } = prepRes;
 
     const nextRound = currentRound + 1;
