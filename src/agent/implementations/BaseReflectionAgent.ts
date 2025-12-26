@@ -31,10 +31,7 @@ import {
   type ReflectionFlowShared,
   type ReflectionServices,
 } from '@agent/implementations/flows/reflection';
-import {
-  createInitialReflectionState,
-  type ReflectionPhase,
-} from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import { createInitialReflectionState } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 
 // Internal imports
 import { createRetryState } from '@agent/core/flows/RetryState';

@@ -17,8 +17,6 @@ export {
 
 // State types
 export {
-  REFLECTION_PHASE,
-  type ReflectionPhase,
   type RoundContext,
   createInitialReflectionState,
   AgentRunState,
