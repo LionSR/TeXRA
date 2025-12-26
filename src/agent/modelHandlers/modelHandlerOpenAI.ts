@@ -766,7 +766,6 @@ export class ModelHandlerOpenAI<
       newResponse = choice.message.content.trim();
     } else if (
       stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
-      stopReason === OPENAI_CHAT_FINISH.TOOL_USE ||
       stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
       Array.isArray(choice.message.tool_calls) ||
       choice.message.function_call
