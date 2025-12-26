@@ -1,11 +1,11 @@
 # BaseReflectionAgent → Pure PocketFlow Refactoring Plan (v3)
 
-## Implementation Status ✅ COMPLETE
+## Implementation Status ✅ PHASE 1 COMPLETE
 
 **Date**: 2025-12-26
 **Branch**: `claude/refactor-agent-flow-logic-YxmGB`
 
-### Completed Steps
+### Phase 1: Pure PocketFlow Migration ✅
 
 1. ✅ **Services Interface** - `ReflectionServices` interface defined with all dependencies
 2. ✅ **Services Getter** - `BaseReflectionAgent.services` getter implemented
@@ -29,6 +29,60 @@
    - Flow propagates services to nodes via `setServices()`
    - Nodes access via `this.services` instead of `this._params.services`
    - Proper separation: `shared` (mutable state), `params` (per-batch), `services` (immutable)
+10. ✅ **Legacy Code Removed** - ~500 lines of dead code removed from BaseReflectionAgent:
+    - Removed dead fields: `isRoundActive`, `currentRoundIndex`, `currentMessages`, etc.
+    - Removed dead methods: `beginRound()`, `executeCurrentRound()`, `runRoundPipeline()`, etc.
+    - Deleted orphaned `ReflectionRunFlow.ts`
+
+### Phase 2: Round Completion Native PocketFlow (Planned)
+
+**Analysis Summary** (from deep dive):
+
+**Current Architecture Issues:**
+1. **OutputHandler is stateful** - Maintains `rounds: Map<number, RoundData>` separately from flow state
+2. **Two sources of truth** - `OutputHandler.rounds` and `shared.state.roundOutputs`
+3. **Events not consolidated** - Separate `addOutputFiles` and `updateMissingOutputs` events
+4. **XML extraction post-flow** - `computeRuntimeXmlExports()` runs after flow, not as node
+
+**Proposed Improvements:**
+
+1. **Make OutputHandler more stateless**
+   ```typescript
+   // Current (stateful)
+   outputHandler.processOutputFiles(location, round);
+   const output = outputHandler.getRoundArtifacts(round);
+
+   // Proposed (stateless, return directly)
+   const output = outputHandler.processAndGetArtifacts(location, round);
+   ```
+
+2. **Consolidate events to single 'roundCompleted'**
+   ```typescript
+   bus.emit('roundCompleted', {
+     stream, storageKey, round,
+     output: RoundOutput,      // Full output including xmlSummary
+     missingFiles?: string[]
+   })
+   ```
+
+3. **Add XmlExtractionNode before FinalizeNode**
+   ```
+   RoundCompleteNode → XmlExtractionNode → FinalizeNode
+   ```
+   - Pure node for XML summary computation
+   - Stored in `shared.state.xmlExports`
+   - Eliminates post-flow processing
+
+4. **Latexdiff as explicit node** (optional)
+   ```
+   OutputNode → LatexdiffNode → RoundCompleteNode
+   ```
+
+**Tool-Use vs Reflection (Key Differences):**
+- Tool-use: Session-based with implicit turns, checkpoint persistence
+- Reflection: Workflow-based with explicit rounds, artifact collection
+- Tool-use does NOT need: latexdiff, XML processing, round artifacts, media extraction
+- Common need: Both use PocketFlow with prep/exec/post pattern
 
 ### Code Review Findings (Addressed)
 
