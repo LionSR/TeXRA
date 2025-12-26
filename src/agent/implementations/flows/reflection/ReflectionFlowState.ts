@@ -9,17 +9,17 @@
  * but work nodes use services from _params, not agent methods.
  */
 
+import type { RoundOutput } from '@agent/output';
 import {
   AgentRunState,
   ConversationRoundState,
 } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { RoundOutput } from '@agent/output';
-import type { AgentFileLocation } from '@utils/files';
 import type { IFlowAgent } from '@agent/core/IAgent';
 import type { AgentLifecycle } from '@agent/implementations/flows/common';
 import type { RetryState } from '@agent/core/flows/RetryState';
+import type { AgentFileLocation } from '@utils/files';
 
 /**
  * Phase definitions for reflection flow lifecycle.
