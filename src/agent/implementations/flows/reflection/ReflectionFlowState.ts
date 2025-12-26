@@ -10,10 +10,7 @@
  */
 
 import type { RoundOutput } from '@agent/output';
-import {
-  AgentRunState,
-  ConversationRoundState,
-} from '@agent/core/AgentState';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IFlowAgent } from '@agent/core/IAgent';

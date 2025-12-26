@@ -42,7 +42,10 @@ import {
   RoundCompleteNode,
 } from './nodes';
 import type { ReflectionFlowShared } from './ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from './ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from './ReflectionServices';
 
 // ============================================================================
 // Custom Init Node
@@ -93,13 +96,15 @@ export function createReflectionFlow<C = unknown>(): Flow<
   const responseCycleNode = new ResponseCycleCompositionNode<C>();
   const outputNode = new OutputNode<C>();
   const roundCompleteNode = new RoundCompleteNode<C>();
-  const finalizeNode = new StandardFinalizeNode<ReflectionFlowShared>('finalize');
+  const finalizeNode = new StandardFinalizeNode<ReflectionFlowShared>(
+    'finalize',
+  );
 
   // Wire linear flow (happy path)
   // TeXCountNode creates workspace state and computes texcount
   initNode.next(texCountNode);
-  texCountNode.next(mediaNode);             // Media extraction
-  mediaNode.next(prepContextNode);          // Build context
+  texCountNode.next(mediaNode); // Media extraction
+  mediaNode.next(prepContextNode); // Build context
 
   // Response cycle pipeline
   prepContextNode.next(responseCycleNode);
@@ -108,14 +113,24 @@ export function createReflectionFlow<C = unknown>(): Flow<
 
   // Wire branches
   initNode.on(FlowTransition.FINALIZE, finalizeNode);
-  prepContextNode.on(FlowTransition.CONTINUE, texCountNode);    // Skip round
-  responseCycleNode.on(FlowTransition.FINALIZE, finalizeNode);  // Cycle failed
-  roundCompleteNode.on(FlowTransition.CONTINUE, texCountNode);  // Next round
-  roundCompleteNode.on(FlowTransition.FINALIZE, finalizeNode);  // Done
+  prepContextNode.on(FlowTransition.CONTINUE, texCountNode); // Skip round
+  responseCycleNode.on(FlowTransition.FINALIZE, finalizeNode); // Cycle failed
+  roundCompleteNode.on(FlowTransition.CONTINUE, texCountNode); // Next round
+  roundCompleteNode.on(FlowTransition.FINALIZE, finalizeNode); // Done
 
-  return new Flow<ReflectionFlowShared, ReflectionFlowParams, ReflectionServices<C>>(initNode);
+  return new Flow<
+    ReflectionFlowShared,
+    ReflectionFlowParams,
+    ReflectionServices<C>
+  >(initNode);
 }
 
 // Re-export types for convenience
-export type { ReflectionFlowShared, ReflectionFlowState } from './ReflectionFlowState';
-export type { ReflectionServices, ReflectionFlowParams } from './ReflectionServices';
+export type {
+  ReflectionFlowShared,
+  ReflectionFlowState,
+} from './ReflectionFlowState';
+export type {
+  ReflectionServices,
+  ReflectionFlowParams,
+} from './ReflectionServices';

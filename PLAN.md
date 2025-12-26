@@ -68,6 +68,7 @@ This is **hybrid architecture** - nodes calling agent methods that internally ru
 ### The ResponseCycleFlow Pattern
 
 ResponseCycleFlow already does this correctly:
+
 - Services injected via `_params.services`
 - Nodes access `modelHandler`, `logger`, `store` from services
 - No agent methods called - nodes do the work directly
@@ -136,6 +137,7 @@ ReflectionFlow:
 ### Recommendation: Option B (Compose Sub-Flows)
 
 PocketFlow supports flow composition. The key change is:
+
 - Don't call `runResponseCycle()` function
 - Compose `ResponseCycleFlow` directly into `ReflectionFlow`
 
@@ -210,10 +212,13 @@ class PrepareWorkspaceNode extends BaseNode<
     const { currentRound } = shared.state;
 
     // Pure data extraction
-    const files = currentRound === 0
-      ? [fileService.createLocation(config.inputFile),
-         ...config.inputFiles.map(f => fileService.createLocation(f))]
-      : this.getPreviousOutputFiles(shared);
+    const files =
+      currentRound === 0
+        ? [
+            fileService.createLocation(config.inputFile),
+            ...config.inputFiles.map((f) => fileService.createLocation(f)),
+          ]
+        : this.getPreviousOutputFiles(shared);
 
     return { files, currentRound };
   }
@@ -277,9 +282,10 @@ class PrepareContextNode extends BaseNode<
     const { promptBuilder, modelHandler } = this._params.services;
 
     // Build prompts
-    const prompts = prepRes.currentRound === 0
-      ? await promptBuilder.buildInitialPrompts()
-      : await promptBuilder.buildUserRequest(prepRes.currentRound);
+    const prompts =
+      prepRes.currentRound === 0
+        ? await promptBuilder.buildInitialPrompts()
+        : await promptBuilder.buildUserRequest(prepRes.currentRound);
 
     if (!prompts.userRequest?.trim()) {
       return { kind: 'skip' };
@@ -379,7 +385,7 @@ class ResponseCycleCompositionNode extends BaseNode<
 
     // Inject services and run sub-flow
     this.cycleFlow.setParams({
-      services: { options: cycleOptions, store: prepRes.store }
+      services: { options: cycleOptions, store: prepRes.store },
     });
     await this.cycleFlow.run(cycleShared);
 
@@ -411,10 +417,7 @@ class ResponseCycleCompositionNode extends BaseNode<
 Uses `outputHandler` from services:
 
 ```typescript
-class OutputNode extends BaseNode<
-  ReflectionFlowShared,
-  ReflectionFlowParams
-> {
+class OutputNode extends BaseNode<ReflectionFlowShared, ReflectionFlowParams> {
   async exec(prepRes: OutputPrepInput) {
     const { outputHandler } = this._params.services;
 
@@ -536,22 +539,24 @@ class BaseReflectionAgent {
 
 ## Comparison: Before vs After
 
-| Aspect | Before (Hybrid) | After (Pure Flow) |
-|--------|-----------------|-------------------|
-| Execution logic | In agent methods | In nodes |
-| ResponseCycleFlow | Called via function wrapper | Composed as sub-flow |
-| Services access | `this.modelHandler` | `_params.services.modelHandler` |
-| State management | Agent fields + flow state | Flow state only |
-| Testability | Mock entire agent | Mock services only |
-| Composability | Agents can't connect | Flows can compose |
+| Aspect            | Before (Hybrid)             | After (Pure Flow)               |
+| ----------------- | --------------------------- | ------------------------------- |
+| Execution logic   | In agent methods            | In nodes                        |
+| ResponseCycleFlow | Called via function wrapper | Composed as sub-flow            |
+| Services access   | `this.modelHandler`         | `_params.services.modelHandler` |
+| State management  | Agent fields + flow state   | Flow state only                 |
+| Testability       | Mock entire agent           | Mock services only              |
+| Composability     | Agents can't connect        | Flows can compose               |
 
 ## Implementation Steps
 
 ### Step 1: Define Services Interface
+
 1. Extract `ReflectionServices` interface from BaseReflectionAgent
 2. Add `services` getter to agent
 
 ### Step 2: Create New Nodes
+
 1. `PrepareWorkspaceNode` - uses latexMediaManager service
 2. `PrepareContextNode` - uses promptBuilder service
 3. `ResponseCycleCompositionNode` - composes ResponseCycleFlow
@@ -559,15 +564,18 @@ class BaseReflectionAgent {
 5. `RoundCompleteNode` - tracks round completion
 
 ### Step 3: Wire New Flow
+
 1. Create `createReflectionFlow()` function
 2. Wire nodes with transitions
 
 ### Step 4: Update Agent
+
 1. Add `services` getter
 2. Update `run()` to create and run flow
 3. Remove execution methods (keep only state/config)
 
 ### Step 5: Cleanup
+
 1. Remove `executeCurrentRound()`
 2. Remove `runRoundPipeline()`
 3. Remove `prepareWorkspaceState()`
