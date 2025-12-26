@@ -19,7 +19,6 @@ export {
 export {
   REFLECTION_PHASE,
   type ReflectionPhase,
-  type ReflectionLifecycle,
   type RoundContext,
   createInitialReflectionState,
   AgentRunState,
