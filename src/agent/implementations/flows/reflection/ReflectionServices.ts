@@ -11,11 +11,11 @@
  */
 
 import type { IOutputHandler } from '@agent/output';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { BaseFlowServices } from '@agent/implementations/flows/common';
 import type { PromptBuilder } from '@utils/prompt';
 import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { BaseFlowServices } from '@agent/implementations/flows/common';
 
 /**
  * Services provided by BaseReflectionAgent for flow nodes.

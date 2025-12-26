@@ -14,7 +14,6 @@ import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IFlowAgent } from '@agent/core/IAgent';
-import type { AgentLifecycle } from '@agent/implementations/flows/common';
 import type { RetryState } from '@agent/core/flows/RetryState';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -49,8 +48,6 @@ export const REFLECTION_PHASE = {
 
 export type ReflectionPhase =
   (typeof REFLECTION_PHASE)[keyof typeof REFLECTION_PHASE];
-
-export type ReflectionLifecycle = AgentLifecycle<ReflectionPhase>;
 
 /**
  * Context prepared for a round (messages + prefill).
@@ -96,20 +93,18 @@ export interface ReflectionFlowState {
  * Shared context passed through the flow.
  *
  * Contains:
- * - agent: Reference for lifecycle methods and flow-specific operations
+ * - agent: Reference for flow-specific operations
  * - state: Mutable runtime state
- * - lifecycle: Phase/status state machine
  * - retryState: Retry tracking for error handling
  *
- * Note: Work nodes use services from this.services, not agent methods.
- * The agent reference is for lifecycle management and flow-specific operations
- * (like resetPromptBuilder) that are called during initialization.
+ * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
+ * Work nodes use services from this.services, throw errors on failure.
+ * The agent reference is for flow-specific operations only.
  */
 export interface ReflectionFlowShared {
-  /** Agent reference for lifecycle and flow-specific methods */
+  /** Agent reference for flow-specific methods */
   agent: IReflectionFlowAgent;
   state: ReflectionFlowState;
-  lifecycle: ReflectionLifecycle;
   retryState: RetryState;
 }
 

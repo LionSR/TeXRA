@@ -21,14 +21,12 @@ import {
   createToolUseRunFlow,
   createInitialToolUseState,
   type ToolUseRunShared,
-  type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse';
 // Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
-import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -221,30 +219,41 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
+  /**
+   * Main execution method for tool-use agents.
+   *
+   * Architecture:
+   * - Agent owns lifecycle (init before flow, finalize in finally)
+   * - Flow is pure execution (prepare → cycle → wait loop)
+   * - Errors throw directly from flow; caught here for cleanup
+   */
   public async run(): Promise<void> {
-    const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
-
     // Capture and clear snapshot at start of run for explicit data flow
     const snapshot = this.resumeSnapshot;
     this.resumeSnapshot = null;
 
-    // Create shared state (mutable runtime state only - no hooks!)
+    // === INIT (agent-owns-lifecycle) ===
+    await this.startAndInitRun();
+    await this.initializeClient();
+
+    // Create shared state (mutable runtime state only - no lifecycle!)
     const shared: ToolUseRunShared<C> = {
       agent: this,
       state: createInitialToolUseState<C>(),
-      lifecycle,
     };
 
-    // Create flow and inject services with explicit snapshot
-    const flow = createToolUseRunFlow<C>();
-    flow.setServices(this.getServices(snapshot));
+    try {
+      // Create flow and inject services with explicit snapshot
+      const flow = createToolUseRunFlow<C>();
+      flow.setServices(this.getServices(snapshot));
 
-    // Run the flow
-    await flow.run(shared);
-
-    // Check for errors
-    if (lifecycle.error) {
-      throw lifecycle.error;
+      // Run the flow - errors throw directly
+      await flow.run(shared);
+    } finally {
+      // === FINALIZE (agent-owns-lifecycle) ===
+      // Clear persisted snapshot before ending
+      await this.sessionLifecycle.clearPersistedSnapshot();
+      this.cleanupRun();
     }
   }
 
