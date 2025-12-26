@@ -56,6 +56,9 @@ import type {
  *
  * Extends StandardInitNode to call resetPromptBuilder() before starting rounds.
  * Transitions to 'prepare_workspace' phase (TeXCountNode now handles workspace init).
+ *
+ * Uses IReflectionFlowAgent (via shared.agent) for flow-specific methods,
+ * following the same pattern as ToolUseFlow with IToolUseFlowAgent.
  */
 class ReflectionInitNode extends StandardInitNode<ReflectionFlowShared> {
   constructor() {
@@ -63,7 +66,8 @@ class ReflectionInitNode extends StandardInitNode<ReflectionFlowShared> {
   }
 
   protected override beforeStart(shared: ReflectionFlowShared): void {
-    shared.hooks.resetPromptBuilder();
+    // Call directly on agent (IReflectionFlowAgent interface)
+    shared.agent.resetPromptBuilder();
   }
 }
 
@@ -127,6 +131,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
 
 // Re-export types for convenience
 export type {
+  IReflectionFlowAgent,
   ReflectionFlowShared,
   ReflectionFlowState,
 } from './ReflectionFlowState';

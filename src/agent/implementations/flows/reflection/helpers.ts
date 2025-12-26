@@ -49,17 +49,3 @@ export function getFilesForRound(
 
   return [];
 }
-
-/**
- * Prepend TeXCount statistics to content.
- *
- * @param content - The content to prepend stats to
- * @param texcountStats - The stats string (may be undefined/null)
- * @returns Content with stats prepended, or original content if no stats
- */
-export function prependTexCountStats(
-  content: string,
-  texcountStats: string | undefined | null,
-): string {
-  return texcountStats ? `${texcountStats}${content}` : content;
-}
