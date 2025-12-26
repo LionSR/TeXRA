@@ -8,13 +8,18 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 // Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSetting,
+  type AgentToolUseSetting,
+} from '@agent/core/AgentDataclass';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
 import {
   createToolUseRunFlow,
+  createInitialToolUseState,
   type ToolUseRunShared,
   type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
@@ -177,21 +182,20 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   // =========================================================================
 
   /**
-   * Services provided to flow nodes.
+   * Build services for flow nodes with explicit snapshot parameter.
    *
-   * Following the same pattern as BaseReflectionAgent.services,
-   * this getter provides all immutable dependencies that nodes need.
+   * @param snapshot - Optional snapshot to resume from (passed explicitly for clear data flow)
+   * @returns Services object for flow injection
    */
-  public get services(): ToolUseServices<C> {
-    // Capture snapshot at time of access for closure
-    const snapshot = this.resumeSnapshot;
-
+  public getServices(
+    snapshot: ToolUseSessionSnapshot | null,
+  ): ToolUseServices<C> {
     return {
       // Base services (from BaseFlowServices)
       modelHandler: this.modelHandler,
       logger: this.logger,
       config: this.agentConfig,
-      setting: this.agentSetting,
+      setting: this.agentSetting as AgentToolUseSetting,
       prompt: this.agentPrompt,
       context: this.context,
       userVarChannels: this.userVarChannels,
@@ -227,34 +231,20 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     // Create shared state (mutable runtime state only - no hooks!)
     const shared: ToolUseRunShared<C> = {
       agent: this,
-      state: {
-        conversation: [],
-        cycleOptions: null,
-        shouldSkipCycle: false,
-        store: null,
-        runState: new AgentRunState(),
-      },
+      state: createInitialToolUseState<C>(),
       lifecycle,
     };
 
-    // Temporarily store snapshot for services getter
-    this.resumeSnapshot = snapshot;
+    // Create flow and inject services with explicit snapshot
+    const flow = createToolUseRunFlow<C>();
+    flow.setServices(this.getServices(snapshot));
 
-    try {
-      // Create flow and inject services (native service pattern)
-      const flow = createToolUseRunFlow<C>();
-      flow.setServices(this.services);
+    // Run the flow
+    await flow.run(shared);
 
-      // Run the flow
-      await flow.run(shared);
-
-      // Check for errors
-      if (lifecycle.error) {
-        throw lifecycle.error;
-      }
-    } finally {
-      // Clear snapshot after run
-      this.resumeSnapshot = null;
+    // Check for errors
+    if (lifecycle.error) {
+      throw lifecycle.error;
     }
   }
 

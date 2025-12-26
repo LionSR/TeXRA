@@ -48,7 +48,7 @@ import type {
 /**
  * Tool use run phase - single source of truth for tool-use agent flow phases.
  */
-const TOOL_USE_RUN_PHASE = {
+export const TOOL_USE_RUN_PHASE = {
   IDLE: 'idle',
   INIT: 'init',
   PREPARE: 'prepare',
@@ -89,6 +89,22 @@ export interface ToolUseRunState<C = unknown> {
   shouldSkipCycle: boolean;
   store: AgentSharedStore | null;
   runState: AgentRunState;
+}
+
+/**
+ * Create initial state for a tool-use flow run.
+ *
+ * Factory function for consistency with ReflectionFlow pattern
+ * (which uses createInitialReflectionState).
+ */
+export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
+  return {
+    conversation: [],
+    cycleOptions: null,
+    shouldSkipCycle: false,
+    store: null,
+    runState: new AgentRunState(),
+  };
 }
 
 /**
@@ -378,7 +394,7 @@ class ToolUseWaitNode<C> extends Node<
         session,
       };
     } catch (error) {
-      console.error('ToolUseWaitNode prep error:', error);
+      this.services.logger.error(`ToolUseWaitNode prep error: ${error}`);
       return null;
     }
   }
@@ -420,7 +436,7 @@ class ToolUseWaitNode<C> extends Node<
     error: Error,
   ): Promise<WaitExecResult> {
     // Convert error to stop result - post() will handle finalization
-    console.error('ToolUseWaitNode error during wait:', error.message);
+    this.services.logger.error(`ToolUseWaitNode error during wait: ${error.message}`);
     return { kind: 'stop', reason: 'interrupted' };
   }
 
