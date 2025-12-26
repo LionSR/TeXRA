@@ -1,11 +1,15 @@
 /**
- * TeXCountNode - Computes TeXCount statistics.
+ * TeXCountNode - Initializes workspace and computes TeXCount statistics.
  *
- * Standalone node that focuses ONLY on TeXCount computation.
- * Separated from media extraction to follow single responsibility principle.
+ * This is the first node in each round's processing pipeline.
+ * It creates a fresh workspace state and optionally computes TeXCount stats.
+ *
+ * Responsibilities:
+ * - Create fresh AgentWorkspaceState for the round
+ * - Compute TeXCount statistics (can fail gracefully)
  *
  * PocketFlow pattern:
- * - prep(): Determine which files to count
+ * - prep(): Create workspace state, determine files to count
  * - exec(): Run TeXCount (can fail gracefully)
  * - post(): Store stats in workspaceState
  *
@@ -14,6 +18,7 @@
  */
 
 import { Node } from '@agent/node';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
@@ -46,12 +51,15 @@ export class TeXCountNode<C = unknown> extends Node<
   }
 
   /**
-   * Determine which files to count.
-   * Pure data extraction - no I/O.
+   * Initialize workspace state and determine which files to count.
    */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
-    const { config, fileService } = this._params.services;
+    const { config, fileService, logger } = this._params.services;
     const { currentRound, roundOutputs } = shared.state;
+
+    // Create fresh workspace state for this round
+    shared.state.workspaceState = AgentWorkspaceState.create();
+    logger.debug(`Workspace state initialized for round ${currentRound}`);
 
     // Determine files to process based on round
     let files: FileLocation[];

@@ -7,11 +7,12 @@
  * - ResponseCycleFlow is composed as a sub-flow
  *
  * Node flow:
- * PrepareWorkspaceNode → TeXCountNode → MediaPreparationNode → PrepareContextNode
+ * TeXCountNode → MediaPreparationNode → PrepareContextNode
  *   → ResponseCycleCompositionNode → OutputNode → RoundCompleteNode
+ *
+ * TeXCountNode is the first node in each round - it creates workspace state.
  */
 
-export { PrepareWorkspaceNode } from './PrepareWorkspaceNode';
 export { TeXCountNode } from './TeXCountNode';
 export { MediaPreparationNode } from './MediaPreparationNode';
 export { PrepareContextNode } from './PrepareContextNode';
