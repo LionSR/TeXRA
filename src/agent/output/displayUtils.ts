@@ -53,37 +53,5 @@ export function getDisplayDir(info: OutputFileInfo): string {
   return '';
 }
 
-/**
- * Get the workspace-relative path for display/comparison.
- * Returns the most user-friendly relative path.
- */
-export function getDisplayPath(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return location.relativePath;
-  }
-  return location.absolutePath;
-}
-
-/**
- * Get the absolute path from a location.
- * This is the canonical path for all file operations.
- */
-export function getAbsolutePath(location: FileLocation): string {
-  return location.absolutePath;
-}
-
-/**
- * Get the workspace absolute path if the file is in workspace.
- * Returns undefined if file is not in workspace.
- */
-export function getWorkspacePath(location: FileLocation): string | undefined {
-  return location.kind === 'workspace' ? location.absolutePath : undefined;
-}
-
-/**
- * Extract execution ID from a file location.
- * Returns undefined if the file is not in run storage.
- */
-export function getExecutionId(location: FileLocation): string | undefined {
-  return location.kind === 'runStorage' ? location.executionId : undefined;
-}
+// Note: getDisplayPath, getAbsolutePath, getWorkspacePath, and getExecutionId
+// were removed as dead code. Use @utils/files/getDisplayPath for display paths.
