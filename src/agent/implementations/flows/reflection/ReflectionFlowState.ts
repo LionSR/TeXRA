@@ -34,23 +34,6 @@ export interface IReflectionFlowAgent extends IFlowAgent {
 }
 
 /**
- * Phase definitions for reflection flow lifecycle.
- */
-export const REFLECTION_PHASE = {
-  IDLE: 'idle',
-  INIT: 'init',
-  PREPARE_WORKSPACE: 'prepare_workspace',
-  PREPARE_CONTEXT: 'prepare_context',
-  RESPONSE_CYCLE: 'response_cycle',
-  OUTPUT: 'output',
-  ROUND_COMPLETE: 'round_complete',
-  FINALIZE: 'finalize',
-} as const;
-
-export type ReflectionPhase =
-  (typeof REFLECTION_PHASE)[keyof typeof REFLECTION_PHASE];
-
-/**
  * Context prepared for a round (messages + prefill).
  */
 export interface RoundContext {
