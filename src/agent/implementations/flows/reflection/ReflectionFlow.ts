@@ -17,8 +17,8 @@
  * - agent.run() catches errors and handles cleanup in finally block
  * - FlowTransition.FINALIZE ends the flow gracefully (no error)
  *
- * Flow structure:
- *   TeXCountNode → MediaPreparationNode → PrepareContextNode
+ * Flow structure (Option 3: PrepareContext first):
+ *   PrepareContextNode → TeXCountNode → MediaPreparationNode
  *        ↑                                        ↓
  *        │                                ResponseCycleNode
  *        │                                        ↓
@@ -26,6 +26,11 @@
  *        │                                        ↓
  *        └─────────────────────────── CONTINUE (next round)
  *                                     FINALIZE (done, flow ends)
+ *
+ * Each node enriches the context:
+ * - PrepareContext: builds base messages
+ * - TeXCount: prepends stats to user message
+ * - Media: adds media files to user message
  */
 
 import { Flow } from '@agent/node';
@@ -70,32 +75,32 @@ export function createReflectionFlow<C = unknown>(): Flow<
   ReflectionServices<C>
 > {
   // Create work nodes only (no init/finalize - agent owns lifecycle)
+  const prepContextNode = new PrepareContextNode<C>();
   const texCountNode = new TeXCountNode<C>();
   const mediaNode = new MediaPreparationNode<C>();
-  const prepContextNode = new PrepareContextNode<C>();
   const responseCycleNode = new ResponseCycleCompositionNode<C>();
   const outputNode = new OutputNode<C>();
   const roundCompleteNode = new RoundCompleteNode<C>();
 
-  // Wire linear flow (happy path)
-  texCountNode.next(mediaNode); // Media extraction
-  mediaNode.next(prepContextNode); // Build context
+  // Wire linear flow (happy path) - PrepareContext first!
+  prepContextNode.next(texCountNode); // Enrich with TeXCount stats
+  texCountNode.next(mediaNode); // Enrich with media files
+  mediaNode.next(responseCycleNode); // Run response cycle
 
   // Response cycle pipeline
-  prepContextNode.next(responseCycleNode);
   responseCycleNode.next(outputNode);
   outputNode.next(roundCompleteNode);
 
   // Wire branches
-  prepContextNode.on(FlowTransition.CONTINUE, texCountNode); // Skip round
-  roundCompleteNode.on(FlowTransition.CONTINUE, texCountNode); // Next round
+  prepContextNode.on(FlowTransition.CONTINUE, prepContextNode); // Skip round (loops back)
+  roundCompleteNode.on(FlowTransition.CONTINUE, prepContextNode); // Next round
   // FlowTransition.FINALIZE has no target - flow ends gracefully
 
   return new Flow<
     ReflectionFlowShared,
     ReflectionFlowParams,
     ReflectionServices<C>
-  >(texCountNode); // Start at first work node
+  >(prepContextNode); // Start at PrepareContextNode
 }
 
 // Re-export types for convenience

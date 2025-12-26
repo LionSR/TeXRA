@@ -1,16 +1,16 @@
 /**
- * TeXCountNode - Computes TeXCount statistics.
+ * TeXCountNode - Computes TeXCount statistics and adds to messages.
  *
- * Single responsibility: Run TeXCount and store stats.
+ * Single responsibility: Run TeXCount and prepend stats to user message.
  * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine files to count using shared helper
+ * - prep(): Determine files to count, get context
  * - exec(): Run TeXCount (can fail gracefully)
- * - post(): Store stats in workspaceState
+ * - post(): Prepend stats to messages via modelHandler
  *
  * Services accessed via native `this.services`:
- * - config, fileService, logger
+ * - config, fileService, modelHandler, logger
  */
 
 import { Node } from '@agent/node';
@@ -19,7 +19,7 @@ import { getTeXCountStats } from '@latex';
 
 import { getFilesForRound } from '../helpers';
 
-import type { ReflectionFlowShared } from '../ReflectionFlowState';
+import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -32,6 +32,7 @@ import type {
 interface TeXCountPrepInput {
   files: FileLocation[];
   attachTeXCount: boolean;
+  context: RoundContext | null;
 }
 
 type TeXCountExecResult =
@@ -56,7 +57,7 @@ export class TeXCountNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
     const { config, fileService } = this.services;
-    const { currentRound, roundOutputs } = shared.state;
+    const { currentRound, roundOutputs, context } = shared.state;
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -69,6 +70,7 @@ export class TeXCountNode<C = unknown> extends Node<
     return {
       files,
       attachTeXCount: config.toolConfig.attachTeXCount,
+      context,
     };
   }
 
@@ -116,23 +118,27 @@ export class TeXCountNode<C = unknown> extends Node<
   }
 
   /**
-   * Store stats in workspaceState and continue.
+   * Prepend stats to messages via modelHandler and continue.
    */
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: TeXCountPrepInput,
+    prepRes: TeXCountPrepInput,
     execRes: TeXCountExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this.services;
-
-    // Store stats in workspace state
-    if (execRes.stats) {
-      shared.state.workspaceState.document.texcountStats = execRes.stats;
-    }
+    const { modelHandler, logger } = this.services;
 
     // Log warning if degraded
     if (execRes.kind === 'degraded') {
       logger.warn(execRes.warning);
+    }
+
+    // Prepend stats to messages if we have stats and context
+    if (execRes.stats && shared.state.context) {
+      modelHandler.prependTextToUserMessage(
+        shared.state.context.messages,
+        execRes.stats,
+      );
+      logger.debug('TeXCount stats prepended to user message');
     }
 
     // Continue to next node
