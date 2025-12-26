@@ -273,11 +273,6 @@ export function isLoaded(): boolean {
   return initialized;
 }
 
-/** Wait for loading to complete. */
-export async function waitForLoad(): Promise<void> {
-  if (initPromise) await initPromise;
-}
-
 /** Refresh the cache. */
 export async function refresh(): Promise<void> {
   initialized = false;
@@ -741,13 +736,5 @@ export function computeAgentOptionsSync(): AgentOptionsPayload {
       ),
     };
   }
-  return buildAgentOptions();
-}
-
-/**
- * Refresh and rebuild options.
- */
-export async function refreshAgentOptions(): Promise<AgentOptionsPayload> {
-  await refresh();
   return buildAgentOptions();
 }
