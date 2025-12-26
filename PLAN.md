@@ -145,6 +145,238 @@
 
 ---
 
+## Phase 4: Lifecycle Consolidation & Round Groups (Analysis)
+
+**Date**: 2025-12-26
+**Status**: Analysis Complete, Implementation Pending
+
+### Interconnected Issues Discovered
+
+These issues are interconnected and should be addressed together:
+
+#### Issue 1: Phase Tracking is Dead Code
+
+`lifecycle.phase` is **written** in 4 places but **never read**:
+
+```typescript
+// Written (but never consumed):
+lifecycle.begin('init');           // StandardInitNode
+lifecycle.begin(nextPhase);        // StandardInitNode
+lifecycle.begin('cycle');          // ToolUseCycleNode
+lifecycle.setPhase('finalize');    // StandardFinalizeNode
+
+// The getter exists but is never called:
+lifecycle.phase  // ← NEVER READ
+```
+
+**Conclusion**: Phase tracking can be eliminated entirely.
+
+#### Issue 2: Round Groups Were Removed
+
+Old code (commit before `4c90f35`):
+```typescript
+return await this.withRoundStage(`r${roundIndex}`, async () => {
+  // All round work happened inside this stage
+});
+```
+
+This created collapsible `r0`, `r1`, `r2`... groups in Progress View. The PocketFlow refactor removed this - now all operations run under a single "Run" stage.
+
+**`withRoundStage()` in BaseAgent:309-317 is now DEAD CODE** - never called.
+
+#### Issue 3: StandardInitNode/StandardFinalizeNode are Redundant
+
+These nodes are pure delegation wrappers:
+
+```typescript
+// StandardInitNode.exec() - just calls agent methods
+async exec(prepRes) {
+  prepRes.lifecycle.begin('init');       // ← Sets phase (never read)
+  await prepRes.agent.startAndInitRun(); // ← Delegation
+  await prepRes.agent.initializeClient(); // ← Delegation
+  return { kind: 'success' };
+}
+
+// StandardFinalizeNode.exec() - just calls agent methods
+async exec(context) {
+  context.lifecycle.setPhase('finalize'); // ← Sets phase (never read)
+  await context.agent.endRun(status);     // ← Delegation
+  await context.agent.cleanupRun();       // ← Delegation
+  context.lifecycle.complete();           // ← Sets status
+}
+```
+
+The agent already owns these methods. The nodes add indirection without value.
+
+#### Issue 4: lifecycle.fail() Duplicates try/catch
+
+Current dual error patterns:
+```typescript
+// Pattern A: lifecycle.fail() + FINALIZE routing
+lifecycle.fail(error);
+return FlowTransition.FINALIZE;
+// ... later in agent.run() ...
+if (lifecycle.error) throw lifecycle.error;
+
+// Pattern B: Native throw
+throw error;  // Caught by execFallback
+```
+
+This is redundant. Native `throw` + `catch` already handles error propagation.
+
+### Proposed Solution: Agent-owns-Lifecycle + RoundFlow
+
+#### Part 1: Agent-owns-Lifecycle
+
+Move lifecycle management to `Agent.run()`:
+
+```typescript
+// BaseAgent.run() - single pattern for all agents
+async run(): Promise<void> {
+  // === INIT (was StandardInitNode) ===
+  await this.startAndInitRun();
+  await this.initializeClient();
+
+  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  try {
+    await this.beforeFlowStart?.();  // Hook: resetPromptBuilder() etc.
+
+    const flow = createFlow();
+    flow.setServices(this.services);
+    await flow.run(shared);
+
+  } catch (error) {
+    status = END_GROUP_STATUS.ERROR;
+    throw error;
+  } finally {
+    // === FINALIZE (was StandardFinalizeNode) ===
+    await this.beforeFlowEnd?.();  // Hook: clearPersistedSnapshot() etc.
+    this.endRunStage(status);      // UI status goes here
+    this.cleanup();
+  }
+}
+```
+
+**Benefits**:
+- Eliminates `AgentLifecycle` class (91 lines)
+- Eliminates `StandardInitNode` (153 lines)
+- Eliminates `StandardFinalizeNode` (177 lines)
+- Native try/catch IS the lifecycle
+- `endRun(status)` still sends correct status to UI
+
+#### Part 2: RoundFlow Sub-flow (Restores Round Groups)
+
+Create a `RoundFlow` sub-flow that wraps each round in a log stage:
+
+```
+Current ReflectionFlow:
+InitNode → TeXCount → Media → PrepContext → ResponseCycle → Output → RoundComplete
+               ↑                                                          ↓
+               └────────────────── loops back ────────────────────────────┘
+
+Proposed ReflectionFlow:
+Agent.run() → RoundCompositionNode (runs RoundFlow) → Agent.finally()
+                      ↓
+              ┌───────────────────────────────────────────────────┐
+              │ RoundFlow (creates r0, r1, r2... stages):         │
+              │   logger.stage(`r${round}`) wraps:                │
+              │     TeXCount → Media → PrepContext → ...→ Output  │
+              │                                           ↓       │
+              │                                   check continue  │
+              │                                           ↓       │
+              │                                    loop or exit   │
+              └───────────────────────────────────────────────────┘
+```
+
+**Implementation**:
+```typescript
+class RoundCompositionNode<C> extends Node<...> {
+  private roundFlow = createRoundFlow<C>();
+
+  async exec(prepRes): Promise<RoundResult> {
+    let round = 0;
+    while (true) {
+      // Create round stage (restores r0, r1, r2... in UI)
+      const stage = await this.services.logger.stage(`r${round}`);
+
+      await stage.run(async () => {
+        this.roundFlow.setServices(this.services);
+        await this.roundFlow.run(roundShared);
+      });
+
+      if (!shouldContinue) break;
+      round++;
+    }
+    return result;
+  }
+}
+```
+
+### Files to Delete (Consolidation)
+
+| File | Lines | Reason |
+|------|-------|--------|
+| `AgentLifecycle.ts` | 91 | Replace with try/catch |
+| `StandardInitNode.ts` | 153 | Inline in agent.run() |
+| `StandardFinalizeNode.ts` | 177 | Inline in agent.run() finally |
+| `withRoundStage()` | 9 | Dead code |
+
+**Total reduction: ~430 lines, 3 files deleted**
+
+### Files to Create (RoundFlow)
+
+| File | Purpose |
+|------|---------|
+| `RoundFlow.ts` | Round execution sub-flow |
+| `RoundCompositionNode.ts` | Composes RoundFlow, creates round stages |
+
+### Migration Path
+
+**Step 1**: Inline lifecycle in agent.run()
+- Move init from StandardInitNode to agent.run() before flow
+- Move finalize from StandardFinalizeNode to agent.run() finally
+- Keep nodes as pass-through initially for compatibility
+
+**Step 2**: Create RoundFlow
+- Extract round nodes into RoundFlow
+- Create RoundCompositionNode
+- Wire round stage creation
+
+**Step 3**: Remove standard nodes
+- Update ReflectionFlow to start at RoundCompositionNode
+- Update ToolUseRunFlow similarly
+- Delete StandardInitNode and StandardFinalizeNode
+
+**Step 4**: Simplify error handling
+- Change nodes to throw errors instead of lifecycle.fail()
+- Remove lifecycle.fail(), lifecycle.status, lifecycle.error
+- Delete AgentLifecycle class
+
+**Step 5**: Cleanup
+- Remove withRoundStage() from BaseAgent
+- Simplify IFlowAgent interface
+- Update documentation
+
+### UI Status Flow (Unchanged)
+
+The key insight is that UI status flows through `agent.endRun(status)`:
+
+```
+agent.endRun(status)
+    ↓
+runStage.end(status)
+    ↓
+logger.endGroup(groupId, status)
+    ↓
+VSCodeTransport.emitGroupFinished({status})
+    ↓
+Progress View receives status
+```
+
+This path remains identical whether status is computed in StandardFinalizeNode or in agent.run() catch block.
+
+---
+
 ## Core Problem
 
 We're mixing two abstraction levels:
