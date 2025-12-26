@@ -1,6 +1,6 @@
 import { sleep } from '@utils/helpers';
 
-type NonIterableObject = Partial<Record<string, unknown>> & {
+export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
 type Action = string;
