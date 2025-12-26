@@ -389,6 +389,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const lifecycle = new AgentLifecycle<ReflectionPhase>('idle');
 
     // Create shared state for the flow
+    // Agent implements IReflectionFlowAgent (provides resetPromptBuilder())
     const shared: ReflectionFlowShared = {
       agent: this,
       state: createInitialReflectionState(
@@ -396,9 +397,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         AgentWorkspaceState.create(),
       ),
       lifecycle,
-      hooks: {
-        resetPromptBuilder: () => this.resetPromptBuilder(),
-      },
       retryState: createRetryState(),
     };
 

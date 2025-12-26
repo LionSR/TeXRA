@@ -101,12 +101,20 @@ export interface IToolUseFlowAgent extends IFlowAgent {
   ): Promise<ProviderMessage[]>;
 }
 
+/**
+ * Shared state for tool-use runs.
+ *
+ * Extends AgentRunShared with required hooks (not optional).
+ * ToolUseRunFlow requires hooks for prepareState, buildCycleOptions, etc.
+ */
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
   IToolUseFlowAgent,
   ToolUseRunState<C>,
   ToolUseRunLifecycle,
   ToolUseRunHooks<C>
->;
+> & {
+  hooks: ToolUseRunHooks<C>; // Override to required
+};
 
 // ============================================================================
 // Result Types - Clean discriminated unions following PocketFlow patterns
