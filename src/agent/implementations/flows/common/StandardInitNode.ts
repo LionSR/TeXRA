@@ -17,17 +17,26 @@
  *   Runs in post() to have access to shared.hooks for flow-specific operations.
  */
 
-import { Node } from '@agent/node';
+import { Node, type NonIterableObject } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Type imports
 import type { IFlowAgent } from '@agent/core/IAgent';
 import type { AgentLifecycle } from './AgentLifecycle';
-import type { AgentRunShared, InitExecResult } from './AgentRunFlowRunner';
+import type { InitExecResult } from './AgentRunFlowRunner';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * Minimal shared state interface for StandardInitNode.
+ * Looser than AgentRunShared to support flows without hooks.
+ */
+interface MinimalShared {
+  agent: IFlowAgent;
+  lifecycle: AgentLifecycle<string>;
+}
 
 /**
  * Prep result for StandardInitNode.
@@ -41,9 +50,11 @@ interface InitNodePrepResult<
   lifecycle: Lifecycle;
 }
 
-/** Helper type to extract prep result from AgentRunShared */
-type PrepResultOf<Shared extends AgentRunShared<any, any, any, any>> =
-  InitNodePrepResult<Shared['agent'], Shared['lifecycle']>;
+/** Helper type to extract prep result from shared */
+type PrepResultOf<Shared extends MinimalShared> = InitNodePrepResult<
+  Shared['agent'],
+  Shared['lifecycle']
+>;
 
 // ============================================================================
 // StandardInitNode
@@ -80,8 +91,10 @@ type PrepResultOf<Shared extends AgentRunShared<any, any, any, any>> =
  * ```
  */
 export class StandardInitNode<
-  Shared extends AgentRunShared<any, any, any, any>,
-> extends Node<Shared> {
+  Shared extends MinimalShared,
+  Params extends NonIterableObject = NonIterableObject,
+  Svc = unknown,
+> extends Node<Shared, Params, Svc> {
   /**
    * @param nextPhase Phase to transition to on successful initialization
    */

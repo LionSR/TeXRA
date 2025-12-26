@@ -17,7 +17,7 @@
  */
 
 // Core imports
-import { BaseNode } from '@agent/node';
+import { BaseNode, type NonIterableObject } from '@agent/node';
 
 // Constants
 import type { IFlowAgent } from '@agent/core/IAgent';
@@ -25,11 +25,20 @@ import { END_GROUP_STATUS } from '@logger/messageTypes';
 
 // Type imports
 import type { AgentLifecycle } from './AgentLifecycle';
-import type { AgentRunShared } from './AgentRunFlowRunner';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/**
+ * Minimal shared state interface for StandardFinalizeNode.
+ * Looser than AgentRunShared to support flows without hooks.
+ */
+interface MinimalShared {
+  agent: IFlowAgent;
+  lifecycle: AgentLifecycle<string>;
+  hooks?: unknown;
+}
 
 /**
  * Context extracted in prep() and passed to exec() and hooks.
@@ -45,9 +54,12 @@ export interface FinalizeContext<
   agent: Agent;
 }
 
-/** Helper type to extract context from AgentRunShared */
-type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
-  FinalizeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>;
+/** Helper type to extract context from shared */
+type ContextOf<Shared extends MinimalShared> = FinalizeContext<
+  Shared['lifecycle'],
+  Shared['hooks'],
+  Shared['agent']
+>;
 
 // ============================================================================
 // StandardFinalizeNode
@@ -91,8 +103,10 @@ type ContextOf<Shared extends AgentRunShared<any, any, any, any>> =
  * ```
  */
 export class StandardFinalizeNode<
-  Shared extends AgentRunShared<any, any, any, any>,
-> extends BaseNode<Shared> {
+  Shared extends MinimalShared,
+  Params extends NonIterableObject = NonIterableObject,
+  Svc = unknown,
+> extends BaseNode<Shared, Params, Svc> {
   constructor(protected readonly phase: Shared['lifecycle']['phase']) {
     super();
   }
