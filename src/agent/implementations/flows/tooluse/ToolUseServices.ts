@@ -73,7 +73,9 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   /**
    * Build cycle options for tool-use execution.
    */
-  readonly buildCycleOptions: (store: AgentSharedStore) => ToolUseCycleOptions<C>;
+  readonly buildCycleOptions: (
+    store: AgentSharedStore,
+  ) => ToolUseCycleOptions<C>;
 
   /**
    * Run a single tool-use cycle.
