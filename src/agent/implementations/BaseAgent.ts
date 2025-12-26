@@ -21,12 +21,6 @@ import type {
 } from '@agent/core/AgentCycleOptions';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 // Internal imports
-import {
-  runAgentFlow,
-  type AgentRunFlowOptions,
-  type AgentRunShared,
-} from '@agent/implementations/flows/common/AgentRunFlowRunner';
-import type { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -217,22 +211,6 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     await runInit();
   }
 
-  protected async executeAgentRunFlow<
-    Shared extends AgentRunShared<
-      IFlowAgent,
-      any,
-      AgentLifecycle<string>,
-      unknown
-    >,
-  >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
-    const flowOptions = {
-      ...options,
-      agent: this as unknown as Shared['agent'],
-    } as AgentRunFlowOptions<Shared>;
-
-    return runAgentFlow<Shared>(flowOptions);
-  }
-
   /** Interrupt the agent's execution. */
   public interrupt(): void {
     this.isInterrupted = true;
@@ -299,21 +277,6 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return async ({ run }) => {
       await this.trackRoundUsage(run, { runKind });
     };
-  }
-
-  /**
-   * Run a callback within a nested log group tied to the current run.
-   * @param groupLabel Label to use for the new log group
-   * @param callback Callback to execute with the created group ID
-   */
-  public async withRoundStage<T>(
-    groupLabel: string,
-    callback: (stage: AgentLogStage) => Promise<T>,
-  ): Promise<T> {
-    const stage = await this.logger.stage(groupLabel, {
-      parent: this.runStage,
-    });
-    return stage.run(async () => callback(stage));
   }
 
   /**
