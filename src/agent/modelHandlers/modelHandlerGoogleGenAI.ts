@@ -193,11 +193,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
-      // SDK only exports LOW/HIGH; Gemini 3 Flash supports MEDIUM via API but SDK lacks enum
-      this.logger.warn(
-        "SDK ThinkingLevel enum doesn't include 'MEDIUM'. Falling back to 'HIGH'.",
-      );
-      return ThinkingLevel.HIGH;
+      return ThinkingLevel.MEDIUM;
     }
 
     if (requestedLevel === ReasoningEffort.LOW) {
