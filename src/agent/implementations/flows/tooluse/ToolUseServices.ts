@@ -102,14 +102,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
 }
 
 /**
- * Params type for tool-use flow nodes.
- *
- * With native services support, params is now separate from services:
- * - services: Immutable dependencies (set via flow.setServices())
- * - params: Per-execution parameters (can vary per batch item)
- *
- * For tool-use flow, params is currently empty but reserved for future use.
+ * Flow params type for tool-use flows.
+ * Alias for base FlowParams - reserved for future use.
  */
-export interface ToolUseFlowParams {
-  [key: string]: unknown;
-}
+export type { FlowParams as ToolUseFlowParams } from '../common';
