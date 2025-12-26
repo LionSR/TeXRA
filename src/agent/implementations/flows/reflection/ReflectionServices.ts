@@ -7,6 +7,8 @@
  * - `shared` contains mutable runtime state only
  */
 
+import type { IModelHandler } from '@agent/modelHandlers';
+import type { IOutputHandler } from '@agent/output';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type {
   AgentPrompt,
@@ -14,12 +16,10 @@ import type {
 } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { IModelHandler } from '@agent/modelHandlers';
-import type { IOutputHandler } from '@agent/output';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { LatexMediaManager } from '@latex';
 import type { PromptBuilder } from '@utils/prompt';
 import type { TaskRunFileService } from '@utils/files';
+import type { LatexMediaManager } from '@latex';
 
 /**
  * Services provided by BaseReflectionAgent for flow nodes.
