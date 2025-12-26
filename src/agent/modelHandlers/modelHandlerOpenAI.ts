@@ -1413,7 +1413,10 @@ export class ModelHandlerOpenAI<
             (part) => part.type === 'text',
           );
           if (firstTextIdx >= 0) {
-            const textPart = msg.content[firstTextIdx] as { type: 'text'; text: string };
+            const textPart = msg.content[firstTextIdx] as {
+              type: 'text';
+              text: string;
+            };
             textPart.text = text + textPart.text;
           } else {
             // No text part found - add one at the beginning

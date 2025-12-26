@@ -22,7 +22,10 @@ import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
-import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
+import type {
+  ReflectionFlowShared,
+  RoundContext,
+} from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -63,7 +66,8 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, workspaceState, context } = shared.state;
+    const { currentRound, roundOutputs, workspaceState, context } =
+      shared.state;
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -129,7 +133,9 @@ export class MediaPreparationNode<C = unknown> extends Node<
 
       // Collect media files from workspaceState
       const mediaFiles = prepRes.workspaceState.media.files;
-      logger.debug(`Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`);
+      logger.debug(
+        `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
+      );
       return { kind: 'success', mediaFiles };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -176,7 +182,9 @@ export class MediaPreparationNode<C = unknown> extends Node<
         shared.state.context.messages,
         execRes.mediaFiles,
       );
-      logger.debug(`${execRes.mediaFiles.length} media files added to user message`);
+      logger.debug(
+        `${execRes.mediaFiles.length} media files added to user message`,
+      );
     }
 
     // Continue to next node

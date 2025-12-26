@@ -396,5 +396,8 @@ export interface IModelHandler<
    * @param messages - Existing messages array (mutated in place)
    * @param mediaFiles - Media files to add
    */
-  addMediaToUserMessage(messages: M[], mediaFiles: FileLocation[]): Promise<void>;
+  addMediaToUserMessage(
+    messages: M[],
+    mediaFiles: FileLocation[],
+  ): Promise<void>;
 }
