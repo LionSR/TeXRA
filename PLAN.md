@@ -1,351 +1,516 @@
-# BaseReflectionAgent → PocketFlow Nodes Refactoring Plan
+# BaseReflectionAgent → PocketFlow Nodes Refactoring Plan (v2)
 
 ## Goal
 
-Refactor BaseReflectionAgent's monolithic `executeCurrentRound()` into discrete PocketFlow nodes that:
-1. Follow PocketFlow patterns (prep/exec/post)
-2. Are DRY and reusable across flows
-3. Handle failures gracefully (operations like PDF compilation can fail without retry)
-4. Enable flow composition (connect reflection + tool-use flows)
+Refactor BaseReflectionAgent to be truly PocketFlow-native:
+1. Follow prep/exec/post separation strictly
+2. Consolidate TeXCount and media logic in ONE place (not two)
+3. Handle failures gracefully (PDF compilation can fail without retry)
+4. Use balanced 5-node architecture (not over-engineered)
 
-## Current Architecture Problem
+## Current Problems
 
-`ReflectionRoundNode.exec()` calls `agent.executeCurrentRound()` as a black box, which bundles ~15 operations:
+### Problem 1: Logic Lives in Two Places
+
+**TeXCount:**
+1. `LatexMediaManager.attachTeXCount()` (line 89-99) - **computes** stats
+2. `BaseReflectionAgent.prependTexcountStats()` (line 699-705) - **prepends** to messages
+
+**Media Preparation:**
+1. `LatexMediaManager.processInputFiles/processOutputFiles()` - **extracts** media
+2. `BaseReflectionAgent.prepareWorkspaceState()` (line 747-811) - **orchestrates** which files
+
+### Problem 2: Monolithic executeCurrentRound()
 
 ```
-executeCurrentRound()
+executeCurrentRound() bundles ~15 operations:
   └── withRoundStage()
       ├── prepareWorkspaceState()     // media, TikZ, texcount
-      ├── prepareRoundContext()        // prompt building
-      └── runRoundPipeline()           // model call + output handling
-          ├── initializeOutputAndPrefill()
-          ├── runResponseCycle()
-          └── handleRoundCompletion()
-              ├── handleOutput()       // XML structure, latexdiff
-              └── finalizeRound()      // artifacts, file opening
+      ├── prepareRoundContext()       // prompt building + texcount prepending
+      └── runRoundPipeline()          // model call + output handling
 ```
 
-## Proposed Node Architecture
+### Problem 3: PocketFlow Violations
 
-### Phase 1: Reusable Nodes (src/agent/implementations/flows/nodes/)
+- prep() does heavy I/O (should be pure data extraction)
+- State mutations scattered across methods
+- Error handling is all-or-nothing (entire round fails if PDF compilation fails)
 
-These nodes can be shared between ReflectionRunFlow and ToolUseRunFlow:
+## Proposed Architecture: 5-Node Flow
 
-#### 1. MediaPreparationNode
+```
+InitNode → PrepareWorkspaceNode → PrepareContextNode → RoundNode → FinalizeNode
+                                                         ↓↑ CONTINUE
+```
 
-**Purpose**: Process input/output files for media extraction (figures, TikZ, PDFs)
+### Why 5 Nodes (Not More)
 
-**Why reusable**: Tool-use agents also need media context for vision models.
+Following ToolUseRunFlow pattern (Init → Prepare → Cycle → Wait → Finalize):
+- One node per **major phase with distinct error handling**
+- Not one node per operation (over-engineering)
+- Each node is independently testable
+
+## Node Specifications
+
+### Node 1: InitNode (existing StandardInitNode)
+
+No changes needed. Already PocketFlow-native.
+
+### Node 2: PrepareWorkspaceNode
+
+**Responsibility:** ALL workspace preparation (media + texcount consolidated here)
+
+**Key Design Decision:** TeXCount computation AND attachment happens here, not split across two places.
 
 ```typescript
-interface MediaPrepNodeInput {
-  files: FileLocation[];
+interface WorkspacePrepResult {
+  kind: 'success' | 'degraded';
   workspaceState: AgentWorkspaceState;
-  toolConfig: ToolConfig;
-  supportsVision: boolean;
-  extraMediaFiles?: FileLocation[];
-  mode: 'input' | 'output';  // Determines which operations to run
+  warning?: string;
 }
 
-class MediaPreparationNode<Shared> extends Node<Shared> {
-  async exec(prepRes: MediaPrepNodeInput): Promise<{ kind: 'success' } | { kind: 'failed'; warning: string }> {
-    // Calls latexMediaManager.processInputFiles or processOutputFiles
-    // PDF compilation can fail - we catch and log, not retry
+class PrepareWorkspaceNode extends Node<ReflectionRunShared> {
+  async prep(shared: ReflectionRunShared): Promise<WorkspacePrepInput> {
+    // Pure data extraction - NO I/O
+    const roundIndex = shared.state.currentRound;
+    const agent = shared.agent;
+
+    // Determine which files to process based on round
+    const files = roundIndex === 0
+      ? agent.getInputFiles()      // First round: input files
+      : agent.getPreviousOutputFiles(roundIndex - 1);  // Subsequent: previous outputs
+
+    return {
+      files,
+      roundIndex,
+      toolConfig: agent.toolConfig,
+      supportsVision: agent.modelHandler.capabilities.supportsVision,
+      extraMediaFiles: roundIndex === 0 ? agent.getConfiguredMediaFiles() : [],
+    };
   }
 
-  async execFallback(prepRes: MediaPrepNodeInput, error: Error): Promise<{ kind: 'failed'; warning: string }> {
-    // Convert error to warning - media prep failure is non-fatal
-    return { kind: 'failed', warning: `Media preparation failed: ${error.message}` };
+  async exec(prepRes: WorkspacePrepInput): Promise<WorkspacePrepResult> {
+    const workspaceState = AgentWorkspaceState.create();
+
+    // 1. TeXCount (can fail gracefully)
+    if (prepRes.toolConfig.attachTeXCount && prepRes.files.length > 0) {
+      try {
+        const stats = await getTeXCountStats(prepRes.files);
+        workspaceState.document.texcountStats = stats;
+      } catch (error) {
+        // Non-fatal - continue without stats
+        return {
+          kind: 'degraded',
+          workspaceState,
+          warning: `TeXCount failed: ${error.message}`
+        };
+      }
+    }
+
+    // 2. Media extraction (can fail gracefully)
+    if (prepRes.supportsVision) {
+      try {
+        await latexMediaManager.processFiles(
+          prepRes.files,
+          workspaceState,
+          prepRes.toolConfig,
+          prepRes.supportsVision,
+          { extraMediaFiles: prepRes.extraMediaFiles }
+        );
+      } catch (error) {
+        return {
+          kind: 'degraded',
+          workspaceState,
+          warning: `Media extraction failed: ${error.message}`
+        };
+      }
+    }
+
+    return { kind: 'success', workspaceState };
   }
 
-  async post(shared, prepRes, execRes): Promise<string | undefined> {
-    // Log warning if failed, but continue flow
-    if (execRes.kind === 'failed') {
+  async execFallback(
+    prepRes: WorkspacePrepInput,
+    error: Error
+  ): Promise<WorkspacePrepResult> {
+    // Total failure - return empty workspace with warning
+    return {
+      kind: 'degraded',
+      workspaceState: AgentWorkspaceState.create(),
+      warning: `Workspace preparation failed: ${error.message}`,
+    };
+  }
+
+  async post(
+    shared: ReflectionRunShared,
+    _prepRes: WorkspacePrepInput,
+    execRes: WorkspacePrepResult,
+  ): Promise<string | undefined> {
+    // Store result in shared state (single mutation point)
+    shared.state.workspaceState = execRes.workspaceState;
+
+    if (execRes.warning) {
       shared.agent.logger.warn(execRes.warning);
     }
-    return undefined; // Continue to next node
+
+    return undefined; // Continue to PrepareContextNode
   }
 }
 ```
 
-**Key Design**: `execFallback` returns a warning instead of failing the flow. PDF compilation errors are logged but don't stop the round.
+### Node 3: PrepareContextNode
 
-#### 2. TeXCountNode
+**Responsibility:** Build prompts and messages (INCLUDING texcount prepending)
 
-**Purpose**: Attach TeXCount statistics to workspace state
-
-**Why reusable**: Both reflection and tool-use agents benefit from word count context.
+**Key Design Decision:** Reads texcount from workspaceState (computed by PrepareWorkspaceNode), prepends to messages.
 
 ```typescript
-interface TeXCountNodeInput {
-  files: FileLocation[];
-  workspaceState: AgentWorkspaceState;
-  enabled: boolean;
-}
+interface ContextPrepResult =
+  | { kind: 'ready'; context: RoundContext }
+  | { kind: 'skip' };  // No content for this round
 
-class TeXCountNode<Shared> extends Node<Shared> {
-  async exec(prepRes: TeXCountNodeInput): Promise<{ kind: 'success'; stats: string | null }> {
-    if (!prepRes.enabled || prepRes.files.length === 0) {
-      return { kind: 'success', stats: null };
-    }
-    const stats = await getTeXCountStats(prepRes.files.map(f => f.absolutePath));
-    return { kind: 'success', stats };
-  }
-
-  async execFallback(): Promise<{ kind: 'success'; stats: null }> {
-    // TeXCount failure is non-fatal
-    return { kind: 'success', stats: null };
-  }
-
-  async post(shared, prepRes, execRes): Promise<string | undefined> {
-    if (execRes.stats) {
-      shared.state.workspaceState.document.texcountStats = execRes.stats;
-    }
-    return undefined;
-  }
-}
-```
-
-#### 3. AppendMediaMessageNode (for tool-use)
-
-**Purpose**: Append media files to conversation messages
-
-**Why reusable**: Used by tool-use agents when preparing follow-up messages.
-
-```typescript
-class AppendMediaMessageNode<Shared> extends Node<Shared> {
-  async prep(shared: Shared) {
+class PrepareContextNode extends Node<ReflectionRunShared> {
+  async prep(shared: ReflectionRunShared): Promise<ContextPrepInput> {
+    // Pure data extraction
     return {
-      messages: shared.state.conversation,
-      mediaFiles: shared.state.workspaceState.media.files,
-      modelHandler: shared.agent.modelHandler,
-    };
-  }
-
-  async exec(prepRes): Promise<{ messages: ProviderMessage[] }> {
-    // Model handler appends media to messages
-    return { messages: await prepRes.modelHandler.appendMediaToMessages(...) };
-  }
-
-  async post(shared, prepRes, execRes): Promise<string | undefined> {
-    shared.state.conversation = execRes.messages;
-    return undefined;
-  }
-}
-```
-
-### Phase 2: Refactored ReflectionRunFlow
-
-New node structure for ReflectionRunFlow:
-
-```
-InitNode → PrepareWorkspaceNode → PrepareContextNode → CycleNode → OutputNode → FinalizeNode
-              ↑                                                          │
-              └──────────────────── CONTINUE ────────────────────────────┘
-```
-
-#### 4. PrepareWorkspaceNode (reflection-specific)
-
-Composes TeXCountNode + MediaPreparationNode:
-
-```typescript
-class ReflectionPrepareWorkspaceNode extends Node<ReflectionRunShared> {
-  async prep(shared: ReflectionRunShared) {
-    const roundIndex = shared.state.currentRound;
-    const workspaceState = AgentWorkspaceState.create();
-    return { agent: shared.agent, roundIndex, workspaceState };
-  }
-
-  async exec(prepRes): Promise<{ workspaceState: AgentWorkspaceState }> {
-    // Delegates to shared operations (extracted from prepareWorkspaceState)
-    await this.processFiles(prepRes);
-    return { workspaceState: prepRes.workspaceState };
-  }
-
-  private async processFiles(prepRes): Promise<void> {
-    // First round: process input files
-    // Subsequent rounds: process previous round's output files
-    // Both paths use LatexMediaManager internally
-  }
-
-  async execFallback(prepRes, error): Promise<{ workspaceState: AgentWorkspaceState; warning: string }> {
-    // Return empty workspace with warning - non-fatal
-    return {
-      workspaceState: prepRes.workspaceState,
-      warning: `Workspace preparation failed: ${error.message}`
-    };
-  }
-}
-```
-
-#### 5. PrepareContextNode (reflection-specific)
-
-Builds prompts and messages:
-
-```typescript
-class ReflectionPrepareContextNode extends Node<ReflectionRunShared> {
-  async prep(shared: ReflectionRunShared) {
-    return {
-      agent: shared.agent,
       roundIndex: shared.state.currentRound,
-      workspaceState: shared.state.workspaceState,
+      workspaceState: shared.state.workspaceState,  // From PrepareWorkspaceNode
       messages: shared.state.conversation,
+      agent: shared.agent,
     };
   }
 
-  async exec(prepRes): Promise<{
-    kind: 'ready' | 'skip';
-    stateRound?: ConversationRoundState;
-    preparedMessages?: any[];
-    prefill?: string;
-  }> {
-    // Calls promptBuilder.buildInitialPrompts or buildUserRequest
-    // Prepends texcount stats
-    // Returns skip=true if no content for subsequent rounds
-  }
-}
-```
+  async exec(prepRes: ContextPrepInput): Promise<ContextPrepResult> {
+    const { roundIndex, workspaceState, agent } = prepRes;
 
-#### 6. ReflectionCycleNode
+    // Build prompts via agent method
+    const promptData = roundIndex === 0
+      ? await agent.buildFirstRoundPrompts()
+      : await agent.buildSubsequentRoundPrompts(roundIndex);
 
-Runs the response cycle:
+    if (promptData.skip) {
+      return { kind: 'skip' };
+    }
 
-```typescript
-class ReflectionCycleNode extends Node<ReflectionRunShared> {
-  async exec(prepRes): Promise<CycleExecResult> {
-    const result = await runResponseCycle({
-      options: prepRes.cycleOptions,
-      messages: prepRes.messages,
-      outputLocation: prepRes.outputLocation,
-      store: prepRes.store,
-    });
-    // ... convert to result type
-  }
-}
-```
+    // Prepend texcount stats (SINGLE PLACE - not in agent anymore)
+    const texcountStats = workspaceState.document.texcountStats;
+    const userContent = texcountStats
+      ? `${texcountStats}${promptData.userContent}`
+      : promptData.userContent;
 
-#### 7. ReflectionOutputNode
+    // Build messages via model handler
+    const preparedMessages = await agent.modelHandler.initializeMessages(
+      userContent,
+      promptData.userRequest,
+      workspaceState.media.files,
+      promptData.systemPrompt,
+    );
 
-Handles output processing (can fail gracefully):
-
-```typescript
-class ReflectionOutputNode extends Node<ReflectionRunShared> {
-  async exec(prepRes): Promise<OutputExecResult> {
-    // handleOutput: XML structure, latexdiff
-    // handleRoundCompletion: artifacts, file opening
-  }
-
-  async execFallback(prepRes, error): Promise<OutputExecResult> {
-    // Log error but return partial success if possible
-    // Latexdiff failure shouldn't fail the round
-    return { kind: 'partial', warning: error.message };
-  }
-}
-```
-
-### Phase 3: Flow Composition
-
-Enable connecting flows:
-
-```typescript
-// New interface for composable flows
-interface ComposableFlow<Input, Output, Shared> {
-  createShared(input: Input): Shared;
-  run(shared: Shared): Promise<Output>;
-}
-
-// Reflection flow can output to tool-use flow
-interface ReflectionOutput {
-  conversation: ProviderMessage[];
-  workspaceState: AgentWorkspaceState;
-  runState: AgentRunState;
-}
-
-// Tool-use flow can consume reflection output
-class ToolUseRunFlow implements ComposableFlow<ReflectionOutput, ToolUseOutput, ToolUseRunShared> {
-  createShared(input: ReflectionOutput): ToolUseRunShared {
     return {
-      state: {
-        conversation: input.conversation,
-        store: createSharedStore({ workspaceState: input.workspaceState, ... }),
-        ...
+      kind: 'ready',
+      context: {
+        stateRound: new ConversationRoundState(roundIndex),
+        preparedMessages,
+        prefill: promptData.prefill,
       },
-      ...
     };
+  }
+
+  async post(
+    shared: ReflectionRunShared,
+    _prepRes: ContextPrepInput,
+    execRes: ContextPrepResult,
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'skip') {
+      // Skip this round, continue to next
+      shared.state.currentRound += 1;
+      return FlowTransition.CONTINUE;
+    }
+
+    shared.state.context = execRes.context;
+    return undefined; // Continue to RoundNode
   }
 }
 ```
 
-## Implementation Steps
+### Node 4: RoundNode (combines Cycle + Output)
 
-### Step 1: Extract Reusable Operations
-1. Create `src/agent/implementations/flows/nodes/` directory
-2. Extract `TeXCountNode` from `LatexMediaManager.attachTeXCount`
-3. Extract `MediaPreparationNode` from `LatexMediaManager.processFiles`
-4. Create `AppendMediaMessageNode` for tool-use flows
+**Responsibility:** Execute model cycle AND handle output
 
-### Step 2: Create Shared Types
-1. Define `WorkspacePreparationInput` interface
-2. Define `MediaNodeResult` with graceful failure handling
-3. Create shared prep result types
+**Key Design Decision:** Keep cycle and output together because:
+- Output processing depends on cycle result
+- Matches ToolUseCycleFlow pattern
+- One retry scope for the core operation
 
-### Step 3: Refactor ReflectionRunFlow
-1. Create `ReflectionPrepareWorkspaceNode`
-2. Create `ReflectionPrepareContextNode`
-3. Create `ReflectionCycleNode`
-4. Create `ReflectionOutputNode`
-5. Wire nodes in new flow structure
+```typescript
+type RoundExecResult =
+  | { kind: 'success'; result: ReflectionRoundResult }
+  | { kind: 'cancelled' }
+  | { kind: 'error'; error: Error };
 
-### Step 4: Update BaseReflectionAgent
-1. Remove `executeCurrentRound()` method
-2. Keep `beginRound()` and `recordRoundResult()` for state management
-3. Expose operations as discrete methods for nodes to call
+class RoundNode extends Node<ReflectionRunShared> {
+  constructor() {
+    super(1, 0); // maxRetries=1 (no retry), wait=0
+  }
 
-### Step 5: Enable Flow Composition
-1. Define `ComposableFlow` interface
-2. Add `getFlowOutput()` method to flows
-3. Wire reflection → tool-use connection
+  async prep(shared: ReflectionRunShared): Promise<RoundPrepInput> {
+    const { currentRound, workspaceState, context, conversation } = shared.state;
+
+    // Check termination conditions
+    const shouldFinalize =
+      currentRound >= shared.state.totalRounds ||
+      shared.agent.isInterruptionRequested();
+
+    if (!shouldFinalize) {
+      // Initialize round context in agent (state management)
+      shared.agent.beginRound(currentRound, shared.state.runState, conversation);
+    }
+
+    return {
+      shouldFinalize,
+      roundIndex: currentRound,
+      context: context!,
+      workspaceState,
+      agent: shared.agent,
+    };
+  }
+
+  async exec(prepRes: RoundPrepInput): Promise<RoundExecResult> {
+    if (prepRes.shouldFinalize) {
+      return { kind: 'finalize' };
+    }
+
+    // Run response cycle via agent
+    const cycleResult = await prepRes.agent.runResponseCycle(
+      prepRes.context,
+      prepRes.workspaceState,
+    );
+
+    if (cycleResult.userCancelled) {
+      return { kind: 'cancelled' };
+    }
+
+    // Handle output (can fail gracefully)
+    try {
+      const output = await prepRes.agent.handleRoundOutput(
+        prepRes.roundIndex,
+        cycleResult,
+      );
+      return { kind: 'success', result: { ...cycleResult, output } };
+    } catch (error) {
+      // Output handling failed but cycle succeeded - return partial
+      prepRes.agent.logger.warn(`Output handling failed: ${error.message}`);
+      return { kind: 'success', result: { ...cycleResult, output: null } };
+    }
+  }
+
+  async execFallback(prepRes: RoundPrepInput, error: Error): Promise<RoundExecResult> {
+    return { kind: 'error', error };
+  }
+
+  async post(
+    shared: ReflectionRunShared,
+    prepRes: RoundPrepInput,
+    execRes: RoundExecResult,
+  ): Promise<string | undefined> {
+    switch (execRes.kind) {
+      case 'finalize':
+        return FlowTransition.FINALIZE;
+
+      case 'cancelled':
+        shared.lifecycle.fail(new Error('User cancelled'));
+        return FlowTransition.FINALIZE;
+
+      case 'error':
+        shared.lifecycle.fail(execRes.error);
+        return FlowTransition.FINALIZE;
+
+      case 'success':
+        // Record round result
+        shared.agent.recordRoundResult(execRes.result);
+
+        // Update flow state
+        shared.state.runState = execRes.result.runState;
+        shared.state.conversation = execRes.result.messages;
+        shared.state.currentRound += 1;
+
+        // Check if should continue
+        if (
+          shared.agent.isInterruptionRequested() ||
+          shared.state.currentRound >= shared.state.totalRounds ||
+          !execRes.result.shouldContinue
+        ) {
+          return FlowTransition.FINALIZE;
+        }
+
+        return FlowTransition.CONTINUE;
+    }
+  }
+}
+```
+
+### Node 5: FinalizeNode (existing StandardFinalizeNode)
+
+No changes needed. Already PocketFlow-native.
+
+## Flow Wiring
+
+```typescript
+export function createReflectionRunFlow(): Flow<ReflectionRunShared> {
+  const initNode = new ReflectionInitNode();
+  const prepWorkspaceNode = new PrepareWorkspaceNode();
+  const prepContextNode = new PrepareContextNode();
+  const roundNode = new RoundNode();
+  const finalizeNode = new StandardFinalizeNode<ReflectionRunShared>('finalize');
+
+  // Wire linear flow
+  initNode.next(prepWorkspaceNode);
+  prepWorkspaceNode.next(prepContextNode);
+  prepContextNode.next(roundNode);
+
+  // Wire branches
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
+  prepContextNode.on(FlowTransition.CONTINUE, prepWorkspaceNode);  // Skip round
+  roundNode.on(FlowTransition.CONTINUE, prepWorkspaceNode);        // Next round
+  roundNode.on(FlowTransition.FINALIZE, finalizeNode);
+
+  return new Flow<ReflectionRunShared>(initNode);
+}
+```
+
+## Consolidation: Where Logic Lives NOW vs AFTER
+
+### TeXCount
+
+| Aspect | BEFORE (2 places) | AFTER (1 place) |
+|--------|-------------------|-----------------|
+| Compute stats | `LatexMediaManager.attachTeXCount()` | `PrepareWorkspaceNode.exec()` |
+| Store in state | `LatexMediaManager` | `PrepareWorkspaceNode.post()` |
+| Prepend to message | `BaseReflectionAgent.prependTexcountStats()` | `PrepareContextNode.exec()` |
+
+**Result:** TeXCount still flows through two nodes, but the LOGIC is clear:
+- PrepareWorkspaceNode: Compute + Store
+- PrepareContextNode: Read + Apply
+
+### Media
+
+| Aspect | BEFORE (2 places) | AFTER (1 place) |
+|--------|-------------------|-----------------|
+| Decide which files | `BaseReflectionAgent.prepareWorkspaceState()` | `PrepareWorkspaceNode.prep()` |
+| Extract/compile | `LatexMediaManager.processInputFiles()` | `PrepareWorkspaceNode.exec()` |
+| Store in state | `LatexMediaManager` via workspaceState | `PrepareWorkspaceNode.post()` |
+
+**Result:** All media logic consolidated in PrepareWorkspaceNode.
+
+## Changes to BaseReflectionAgent
+
+### Methods to KEEP (called by nodes)
+
+```typescript
+// State management
+beginRound(roundIndex, runState, messages): void
+recordRoundResult(result): void
+
+// Prompt building (simplified - no texcount prepending)
+buildFirstRoundPrompts(): Promise<PromptData>
+buildSubsequentRoundPrompts(roundIndex): Promise<PromptData>
+
+// Cycle execution (simplified - workspaceState passed in)
+runResponseCycle(context, workspaceState): Promise<CycleResult>
+handleRoundOutput(roundIndex, cycleResult): Promise<RoundOutput>
+
+// File accessors
+getInputFiles(): FileLocation[]
+getPreviousOutputFiles(roundIndex): FileLocation[]
+getConfiguredMediaFiles(): FileLocation[]
+```
+
+### Methods to REMOVE
+
+```typescript
+// Removed - logic moved to PrepareWorkspaceNode
+prepareWorkspaceState(): Promise<void>
+
+// Removed - logic moved to PrepareContextNode
+prependTexcountStats(content, workspaceState): string
+
+// Removed - split into buildXxxPrompts + PrepareContextNode
+prepareRoundContext(): Promise<{...}>
+prepareFirstRoundContext(): Promise<{...}>
+prepareSubsequentRoundContext(): Promise<{...}>
+
+// Removed - orchestrated by flow
+executeCurrentRound(): Promise<ReflectionRoundResult>
+```
 
 ## Error Handling Strategy
 
-| Operation | Failure Mode | execFallback Behavior |
-|-----------|--------------|----------------------|
-| PDF compilation | File not compilable | Log warning, continue |
-| TikZ extraction | Invalid TikZ | Log warning, continue |
-| TeXCount | Tool unavailable | Return null, continue |
-| Figure extraction | Files missing | Log debug, continue |
-| XML structure | Malformed output | Fail the round |
-| Response cycle | API error | Retry via cycle node |
-| Latexdiff | No base file | Log warning, continue |
+| Node | Operation | Failure Mode | Behavior |
+|------|-----------|--------------|----------|
+| PrepareWorkspaceNode | TeXCount | Tool unavailable | `kind: 'degraded'`, continue |
+| PrepareWorkspaceNode | PDF compile | File not compilable | `kind: 'degraded'`, continue |
+| PrepareWorkspaceNode | TikZ extract | Invalid TikZ | `kind: 'degraded'`, continue |
+| PrepareWorkspaceNode | Figure extract | Files missing | `kind: 'degraded'`, continue |
+| PrepareContextNode | Prompt build | Invalid config | Fail round |
+| RoundNode | Response cycle | API error | Fail round |
+| RoundNode | Output handling | Latexdiff fails | Log warning, return partial |
 
-## Files to Create/Modify
+## Implementation Steps
+
+### Step 1: Create Node Files
+1. `src/agent/implementations/flows/nodes/PrepareWorkspaceNode.ts`
+2. `src/agent/implementations/flows/nodes/PrepareContextNode.ts`
+3. `src/agent/implementations/flows/nodes/RoundNode.ts`
+4. `src/agent/implementations/flows/nodes/index.ts`
+
+### Step 2: Add Agent Accessor Methods
+1. `getInputFiles()` - extract from prepareWorkspaceState
+2. `getPreviousOutputFiles(roundIndex)` - extract from prepareWorkspaceState
+3. `getConfiguredMediaFiles()` - extract from prepareWorkspaceState
+4. `buildFirstRoundPrompts()` - extract from prepareFirstRoundContext
+5. `buildSubsequentRoundPrompts()` - extract from prepareSubsequentRoundContext
+
+### Step 3: Update ReflectionRunFlow
+1. Replace ReflectionRoundNode with new 3-node structure
+2. Update flow wiring
+3. Update ReflectionRunState type
+
+### Step 4: Remove Old Methods
+1. Remove `executeCurrentRound()`
+2. Remove `prepareWorkspaceState()`
+3. Remove `prependTexcountStats()`
+4. Remove `prepareRoundContext()` and variants
+
+### Step 5: Update LatexMediaManager
+1. Remove `attachTeXCount()` from `processFiles()` internal call
+2. Expose `getTeXCountStats()` as standalone (already exists in texcount.ts)
+3. Keep `processInputFiles/processOutputFiles` for media extraction only
+
+## Files Changed
 
 ### New Files
+- `src/agent/implementations/flows/nodes/PrepareWorkspaceNode.ts`
+- `src/agent/implementations/flows/nodes/PrepareContextNode.ts`
+- `src/agent/implementations/flows/nodes/RoundNode.ts`
 - `src/agent/implementations/flows/nodes/index.ts`
-- `src/agent/implementations/flows/nodes/MediaPreparationNode.ts`
-- `src/agent/implementations/flows/nodes/TeXCountNode.ts`
-- `src/agent/implementations/flows/nodes/AppendMediaMessageNode.ts`
 
 ### Modified Files
-- `src/agent/implementations/flows/ReflectionRunFlow.ts` - New node structure
-- `src/agent/implementations/BaseReflectionAgent.ts` - Remove bundled method
-- `src/latex/LatexMediaManager.ts` - Expose granular operations
-
-## DRY Analysis
-
-### Current Duplication
-1. Media message handling in both reflection and tool-use flows
-2. TeXCount attachment logic duplicated
-3. Workspace preparation patterns similar across agents
-
-### After Refactoring
-1. `MediaPreparationNode` shared by both flows
-2. `TeXCountNode` reusable with config toggle
-3. Common prep result types and patterns
+- `src/agent/implementations/flows/ReflectionRunFlow.ts` - new 5-node structure
+- `src/agent/implementations/BaseReflectionAgent.ts` - add accessors, remove bundled methods
+- `src/latex/LatexMediaManager.ts` - remove texcount from processFiles (optional)
 
 ## Testing Strategy
 
-1. Unit test each node in isolation
-2. Test graceful failure scenarios (PDF compilation fails)
-3. Integration test full flow with mock agent
-4. Test flow composition (reflection output → tool-use input)
+1. **Unit tests per node:**
+   - PrepareWorkspaceNode: Test degraded mode on failures
+   - PrepareContextNode: Test skip detection
+   - RoundNode: Test all result kinds
+
+2. **Integration tests:**
+   - Full flow with mock agent
+   - Graceful degradation (PDF fails, flow continues)
+   - Round skipping behavior
+
+3. **Regression tests:**
+   - Existing reflection agent behavior preserved
+   - Output artifacts identical
