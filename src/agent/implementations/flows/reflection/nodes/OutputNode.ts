@@ -20,8 +20,8 @@
  */
 
 import { Node } from '@agent/node';
-import type { AgentFileLocation, FileLocation } from '@utils/files';
 import type { RoundOutput } from '@agent/output';
+import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';

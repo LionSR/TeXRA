@@ -30,15 +30,18 @@ import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
-  createReflectionRunFlow,
-  type ReflectionRunHooks,
-  type ReflectionRunShared,
-  type ReflectionRunState,
-  type ReflectionRunPhase,
-} from '@agent/implementations/flows/ReflectionRunFlow';
+  createReflectionFlow,
+  type ReflectionFlowShared,
+  type ReflectionServices,
+} from '@agent/implementations/flows/reflection';
+import {
+  createInitialReflectionState,
+  type ReflectionPhase,
+} from '@agent/implementations/flows/reflection/ReflectionFlowState';
 
 // Internal imports
 import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
+import { createRetryState } from '@agent/core/flows/RetryState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -188,6 +191,39 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logger,
       this.fileService,
     );
+  }
+
+  // =========================================================================
+  // Service Provider Pattern
+  // Agent provides services; flow nodes do the work using these services
+  // =========================================================================
+
+  /**
+   * Get services for injection into flow nodes.
+   *
+   * Following the "Agent = Service Provider" pattern:
+   * - Agent holds services but doesn't execute logic
+   * - Flow nodes use these services via _params.services
+   */
+  public get services(): ReflectionServices<C> {
+    return {
+      modelHandler: this.modelHandler,
+      outputHandler: this.outputHandler,
+      latexMediaManager: this.latexMediaManager,
+      promptBuilder: this.getPromptBuilder(),
+      fileService: this.fileService,
+      logger: this.logger,
+      config: this.agentConfig,
+      setting: this.agentSetting,
+      prompt: this.agentPrompt,
+      context: this.context,
+      userVarChannels: this.userVarChannels,
+      checkInterruption: () => this.isInterruptionRequested(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+      getClient: () => this.getClientInstance(),
+    };
   }
 
   // =========================================================================
@@ -900,6 +936,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Main execution method that processes inputs and generates outputs.
+   *
+   * Uses the pure PocketFlow ReflectionFlow architecture:
+   * - Agent = Service Provider (provides services via getter)
+   * - Flow = Execution Engine (all logic lives in flow nodes)
+   * - Services injected via flow.setParams()
    */
   public async run(): Promise<void> {
     await this.awaitPendingHydration();
@@ -915,29 +956,40 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
       sourceLocation: null,
     };
-    const lifecycle = new AgentLifecycle<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();
+    const lifecycle = new AgentLifecycle<ReflectionPhase>('idle');
 
-    // Flow-specific hooks only - lifecycle methods are on the agent (IFlowAgent)
-    const hooks: ReflectionRunHooks = {
-      resetPromptBuilder: () => this.resetPromptBuilder(),
+    // Create shared state for the flow
+    const shared: ReflectionFlowShared = {
+      agent: this,
+      state: createInitialReflectionState(
+        totalRounds,
+        AgentWorkspaceState.create(),
+      ),
+      lifecycle,
+      hooks: {
+        resetPromptBuilder: () => this.resetPromptBuilder(),
+      },
+      retryState: createRetryState(),
     };
 
     try {
-      await this.executeAgentRunFlow<ReflectionRunShared>({
-        lifecycle,
-        hooks,
-        createState: () =>
-          ({
-            totalRounds,
-            currentRound: 0,
-            continueRounds: true,
-            conversation: [],
-            runState: new AgentRunState(),
-          }) satisfies ReflectionRunState,
-        createFlow: () => createReflectionRunFlow(),
-      });
+      // Create flow and inject services
+      const flow = createReflectionFlow<C>();
+      flow.setParams({ services: this.services });
+
+      // Run the flow
+      await flow.run(shared);
+
+      // Check for errors
+      if (lifecycle.error) {
+        throw lifecycle.error;
+      }
+
+      // Sync state from flow to agent
+      this.roundOutputs = shared.state.roundOutputs;
+      this.roundStates = shared.state.roundStates;
     } finally {
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
