@@ -20,7 +20,10 @@ import { getTeXCountStats } from '@latex';
 import { getFilesForRound } from '../helpers';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
-import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
+import type {
+  ReflectionFlowParams,
+  ReflectionServices,
+} from '../ReflectionServices';
 
 // ============================================================================
 // Types
@@ -56,7 +59,12 @@ export class TeXCountNode<C = unknown> extends Node<
     const { currentRound, roundOutputs } = shared.state;
 
     // Use shared helper for file determination (DRY)
-    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
+    const files = getFilesForRound(
+      currentRound,
+      roundOutputs,
+      config,
+      fileService,
+    );
 
     return {
       files,
