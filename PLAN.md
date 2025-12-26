@@ -39,6 +39,7 @@
 **Analysis Summary** (from deep dive):
 
 **Current Architecture Issues:**
+
 1. **OutputHandler is stateful** - Maintains `rounds: Map<number, RoundData>` separately from flow state
 2. **Two sources of truth** - `OutputHandler.rounds` and `shared.state.roundOutputs`
 3. **Events not consolidated** - Separate `addOutputFiles` and `updateMissingOutputs` events
@@ -47,6 +48,7 @@
 **Proposed Improvements:**
 
 1. **Make OutputHandler more stateless**
+
    ```typescript
    // Current (stateful)
    outputHandler.processOutputFiles(location, round);
@@ -57,6 +59,7 @@
    ```
 
 2. **Consolidate events to single 'roundCompleted'**
+
    ```typescript
    bus.emit('roundCompleted', {
      stream, storageKey, round,
@@ -66,9 +69,11 @@
    ```
 
 3. **Add XmlExtractionNode before FinalizeNode**
+
    ```
    RoundCompleteNode → XmlExtractionNode → FinalizeNode
    ```
+
    - Pure node for XML summary computation
    - Stored in `shared.state.xmlExports`
    - Eliminates post-flow processing
@@ -79,6 +84,7 @@
    ```
 
 **Tool-Use vs Reflection (Key Differences):**
+
 - Tool-use: Session-based with implicit turns, checkpoint persistence
 - Reflection: Workflow-based with explicit rounds, artifact collection
 - Tool-use does NOT need: latexdiff, XML processing, round artifacts, media extraction
@@ -87,23 +93,27 @@
 ### Phase 3: Consolidation & Consistency (Planned)
 
 **Analysis of `shared.agent` Pattern:**
+
 - ✅ Work nodes do NOT access `shared.agent` (pure)
 - Only lifecycle nodes (StandardInitNode/StandardFinalizeNode) use it
 - Type system allows misuse, but runtime is pure
 - **Recommendation**: Keep pattern, improve documentation
 
 **Analysis of `shared.hooks` Pattern:**
+
 - Only 1 hook exists: `resetPromptBuilder()`
 - Only used once at flow initialization
 - Could be simplified to direct agent call
 - **Recommendation**: Inline to `shared.agent.resetPromptBuilder()` or add to IFlowAgent
 
 **Shallow Modules Identified:**
+
 - `prependTexCountStats()` helper is trivial (1-line ternary)
 - Can be inlined at 2 call sites in PrepareContextNode
 - `getFilesForRound()` is well-designed (NOT shallow)
 
 **ToolUseRunFlow Inconsistencies:**
+
 - Uses hooks pattern instead of native services pattern
 - Nodes typed as `Node<ToolUseRunShared<C>>` (no services type)
 - Access via `shared.agent`, `shared.hooks` instead of `this.services`
@@ -112,6 +122,7 @@
 **Proposed Consolidation:**
 
 1. **Inline shallow helper**
+
    ```typescript
    // Remove prependTexCountStats(), inline at call sites
    const prefixWithStats = texcountStats
@@ -120,9 +131,10 @@
    ```
 
 2. **Simplify hooks to direct agent calls**
+
    ```typescript
    // In ReflectionInitNode.beforeStart():
-   shared.agent.resetPromptBuilder();  // Instead of shared.hooks.resetPromptBuilder()
+   shared.agent.resetPromptBuilder(); // Instead of shared.hooks.resetPromptBuilder()
    ```
 
 3. **Apply services pattern to ToolUseRunFlow**
@@ -160,13 +172,13 @@ These issues are interconnected and should be addressed together:
 
 ```typescript
 // Written (but never consumed):
-lifecycle.begin('init');           // StandardInitNode
-lifecycle.begin(nextPhase);        // StandardInitNode
-lifecycle.begin('cycle');          // ToolUseCycleNode
-lifecycle.setPhase('finalize');    // StandardFinalizeNode
+lifecycle.begin('init'); // StandardInitNode
+lifecycle.begin(nextPhase); // StandardInitNode
+lifecycle.begin('cycle'); // ToolUseCycleNode
+lifecycle.setPhase('finalize'); // StandardFinalizeNode
 
 // The getter exists but is never called:
-lifecycle.phase  // ← NEVER READ
+lifecycle.phase; // ← NEVER READ
 ```
 
 **Conclusion**: Phase tracking can be eliminated entirely.
@@ -174,6 +186,7 @@ lifecycle.phase  // ← NEVER READ
 #### Issue 2: Round Groups Were Removed
 
 Old code (commit before `4c90f35`):
+
 ```typescript
 return await this.withRoundStage(`r${roundIndex}`, async () => {
   // All round work happened inside this stage
@@ -211,6 +224,7 @@ The agent already owns these methods. The nodes add indirection without value.
 #### Issue 4: lifecycle.fail() Duplicates try/catch
 
 Current dual error patterns:
+
 ```typescript
 // Pattern A: lifecycle.fail() + FINALIZE routing
 lifecycle.fail(error);
@@ -219,7 +233,7 @@ return FlowTransition.FINALIZE;
 if (lifecycle.error) throw lifecycle.error;
 
 // Pattern B: Native throw
-throw error;  // Caught by execFallback
+throw error; // Caught by execFallback
 ```
 
 This is redundant. Native `throw` + `catch` already handles error propagation.
@@ -258,6 +272,7 @@ async run(): Promise<void> {
 ```
 
 **Benefits**:
+
 - Eliminates `AgentLifecycle` class (91 lines)
 - Eliminates `StandardInitNode` (153 lines)
 - Eliminates `StandardFinalizeNode` (177 lines)
@@ -289,6 +304,7 @@ Agent.run() → RoundCompositionNode (runs RoundFlow) → Agent.finally()
 ```
 
 **Implementation**:
+
 ```typescript
 class RoundCompositionNode<C> extends Node<...> {
   private roundFlow = createRoundFlow<C>();
@@ -314,45 +330,50 @@ class RoundCompositionNode<C> extends Node<...> {
 
 ### Files to Delete (Consolidation)
 
-| File | Lines | Reason |
-|------|-------|--------|
-| `AgentLifecycle.ts` | 91 | Replace with try/catch |
-| `StandardInitNode.ts` | 153 | Inline in agent.run() |
-| `StandardFinalizeNode.ts` | 177 | Inline in agent.run() finally |
-| `withRoundStage()` | 9 | Dead code |
+| File                      | Lines | Reason                        |
+| ------------------------- | ----- | ----------------------------- |
+| `AgentLifecycle.ts`       | 91    | Replace with try/catch        |
+| `StandardInitNode.ts`     | 153   | Inline in agent.run()         |
+| `StandardFinalizeNode.ts` | 177   | Inline in agent.run() finally |
+| `withRoundStage()`        | 9     | Dead code                     |
 
 **Total reduction: ~430 lines, 3 files deleted**
 
 ### Files to Create (RoundFlow)
 
-| File | Purpose |
-|------|---------|
-| `RoundFlow.ts` | Round execution sub-flow |
+| File                      | Purpose                                  |
+| ------------------------- | ---------------------------------------- |
+| `RoundFlow.ts`            | Round execution sub-flow                 |
 | `RoundCompositionNode.ts` | Composes RoundFlow, creates round stages |
 
 ### Migration Path
 
 **Step 1**: Inline lifecycle in agent.run()
+
 - Move init from StandardInitNode to agent.run() before flow
 - Move finalize from StandardFinalizeNode to agent.run() finally
 - Keep nodes as pass-through initially for compatibility
 
 **Step 2**: Create RoundFlow
+
 - Extract round nodes into RoundFlow
 - Create RoundCompositionNode
 - Wire round stage creation
 
 **Step 3**: Remove standard nodes
+
 - Update ReflectionFlow to start at RoundCompositionNode
 - Update ToolUseRunFlow similarly
 - Delete StandardInitNode and StandardFinalizeNode
 
 **Step 4**: Simplify error handling
+
 - Change nodes to throw errors instead of lifecycle.fail()
 - Remove lifecycle.fail(), lifecycle.status, lifecycle.error
 - Delete AgentLifecycle class
 
 **Step 5**: Cleanup
+
 - Remove withRoundStage() from BaseAgent
 - Simplify IFlowAgent interface
 - Update documentation
@@ -922,3 +943,123 @@ class BaseReflectionAgent {
 4. **Consistent**: Same pattern as ResponseCycleFlow
 5. **Reusable**: ResponseCycleFlow stays independent
 6. **Observable**: All execution in nodes with clear phases
+
+---
+
+## Phase 5: Option 3 Refactoring - PrepareContext First (Completed)
+
+**Date**: 2025-12-26
+**Status**: ✅ Complete
+
+### Problem Statement
+
+The original flow order was:
+```
+TeXCountNode → MediaPreparationNode → PrepareContextNode → ResponseCycle → ...
+```
+
+Issues:
+1. **TeXCount as entry point** - Not all workflows use TeXCount, yet it's always first
+2. **Scattered responsibility** - TeXCount and Media store data in `workspaceState`, PrepareContext reads it
+3. **Tight coupling** - PrepareContext must know about workspaceState.document.texcountStats and workspaceState.media.files
+
+### Solution: Option 3 Architecture
+
+New flow order:
+```
+PrepareContextNode → TeXCountNode → MediaPreparationNode → ResponseCycle → ...
+```
+
+Each node handles its own contribution:
+- **PrepareContext**: Builds base messages (no texcount stats, no media)
+- **TeXCount**: Enriches messages by prepending stats to user content
+- **Media**: Enriches messages by adding media files to user message
+
+### Implementation Challenges
+
+This was **significantly harder than expected** due to provider-specific message structures:
+
+#### Challenge 1: Provider-Specific Message Formats
+
+Each provider has different message structures:
+
+| Provider | User Message Format |
+|----------|---------------------|
+| **Anthropic** | `{ role: 'user', content: ContentBlockParam[] }` where content is array of text/image blocks |
+| **OpenAI** | `{ role: 'user', content: string \| ChatCompletionContentPart[] }` with polymorphic content |
+| **Google** | `{ role: 'user', parts: Part[] }` with `parts` not `content` |
+| **OpenAI Response** | `{ role: 'user', content: ResponseInputMessageContentList }` with `input_text` types |
+
+#### Challenge 2: Required New ModelHandler Methods
+
+Had to add 2 new abstract methods to `IModelHandler` and implement in all 4 handlers:
+
+```typescript
+// IModelHandler additions
+prependTextToUserMessage(messages: M[], text: string): void;
+addMediaToUserMessage(messages: M[], mediaFiles: FileLocation[]): Promise<void>;
+```
+
+Each implementation had to:
+1. Search backwards for last user message
+2. Handle content polymorphism (string vs array)
+3. Use provider-specific type guards
+4. Handle null/undefined safety for optional fields (e.g., Google's `msg.parts`)
+
+#### Challenge 3: Type Safety Issues
+
+TypeScript errors encountered:
+- `TS18048: 'msg.parts' is possibly 'undefined'` (Google handler)
+- `TS2339: Property 'createFormattedMediaParts' does not exist` (wrong method name)
+- `TS2552: Cannot find name 'ChatCompletionContentPartText'` (type doesn't exist in OpenAI SDK)
+
+Fixes required:
+- Add null checks: `if (msg.role === 'user' && msg.parts)`
+- Use correct method names: `createMediaMessage()` not `createFormattedMediaParts()`
+- Use inline type assertions instead of nonexistent types
+
+#### Challenge 4: No Similar Existing Methods
+
+Investigated whether similar methods already existed. Found related but distinct methods:
+- `createUserFollowUpMessages()` - **adds new messages**, doesn't modify existing
+- `createRoundMessages()` - **creates new messages** for a round
+- `addContinueMessageWithPrefill()` - for truncated response continuation
+
+The new methods serve a unique purpose: **post-build message enrichment** - modifying already-constructed messages in place.
+
+### Files Modified
+
+**Model Handler Interface & Base:**
+- `src/agent/modelHandlers/types/IModelHandler.ts` - Added 2 new methods
+- `src/agent/modelHandlers/ModelHandler.ts` - Added abstract methods
+
+**Handler Implementations:**
+- `src/agent/modelHandlers/modelHandlerAnthropic.ts` - ~70 lines added
+- `src/agent/modelHandlers/modelHandlerOpenAI.ts` - ~70 lines added
+- `src/agent/modelHandlers/modelHandlerGoogleGenAI.ts` - ~45 lines added
+- `src/agent/modelHandlers/modelHandlerOpenAIResponse.ts` - ~60 lines added
+
+**Flow Nodes:**
+- `src/agent/implementations/flows/reflection/nodes/PrepareContextNode.ts` - Removed texcount/media handling
+- `src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts` - Now calls prependTextToUserMessage
+- `src/agent/implementations/flows/reflection/nodes/MediaPreparationNode.ts` - Now calls addMediaToUserMessage
+
+**Flow Wiring:**
+- `src/agent/implementations/flows/reflection/ReflectionFlow.ts` - Reordered node connections
+
+### Lessons Learned
+
+1. **Provider abstraction is leaky** - Message format differences force per-provider implementations
+2. **Type systems can fight you** - OpenAI's types don't export `ChatCompletionContentPartText`, requiring inline type assertions
+3. **Mutation vs creation** - Modifying existing messages is harder than creating new ones
+4. **Investigation prevents duplication** - Subagent search confirmed no existing similar methods
+
+### Alternatives Considered
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Option 1: ContentContributions pattern** | Clean separation | Adds new types to state |
+| **Option 2: Swap Media and TeXCount order** | Minimal change | Doesn't achieve "PrepareContext first" |
+| **Option 3: Message enrichment methods** ✅ | True separation, nodes self-contained | Required 4 new handler implementations |
+
+Option 3 was chosen because it properly separates concerns - each node is fully responsible for its contribution to the final messages.

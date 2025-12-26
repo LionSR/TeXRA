@@ -30,10 +30,7 @@ import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 import { type NodeExecResult } from '@agent/implementations/flows/common';
 
 // Service types
-import type {
-  ToolUseServices,
-  ToolUseFlowParams,
-} from './tooluse';
+import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 
 // ============================================================================
 // Agent Interface
@@ -405,7 +402,9 @@ class ToolUseWaitNode<C> extends Node<
     error: Error,
   ): Promise<WaitExecResult> {
     // Convert error to stop result - post() will handle finalization
-    this.services.logger.error(`ToolUseWaitNode error during wait: ${error.message}`);
+    this.services.logger.error(
+      `ToolUseWaitNode error during wait: ${error.message}`,
+    );
     return { kind: 'stop', reason: 'interrupted' };
   }
 
@@ -468,11 +467,9 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
   cycleNode.next(waitNode);
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
 
-  return new Flow<
-    ToolUseRunShared<C>,
-    ToolUseFlowParams,
-    ToolUseServices<C>
-  >(prepareNode);
+  return new Flow<ToolUseRunShared<C>, ToolUseFlowParams, ToolUseServices<C>>(
+    prepareNode,
+  );
 }
 
 // Re-export types for convenience
