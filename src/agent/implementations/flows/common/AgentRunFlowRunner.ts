@@ -48,21 +48,26 @@ export type NodeExecResult<T> =
  * - agent: The agent instance being run (IFlowAgent for lifecycle methods)
  * - state: Flow-specific mutable runtime state
  * - lifecycle: Phase and status tracking
- * - hooks: Flow-specific callbacks (not lifecycle - those are on agent)
+ * - hooks: Optional flow-specific callbacks (not lifecycle - those are on agent)
  *
  * Lifecycle methods (startRun, initRun, endRun, cleanupRun) are on the agent.
- * Hooks are flow-specific only (e.g., prepareState, buildCycleOptions).
+ *
+ * Note on hooks:
+ * - Hooks are optional for flows that use extended agent interfaces
+ *   (e.g., ReflectionFlow uses IReflectionFlowAgent which has resetPromptBuilder())
+ * - Hooks are used by flows that need callbacks separate from the agent interface
+ *   (e.g., ToolUseRunFlow uses hooks for prepareState, buildCycleOptions, etc.)
  */
 export interface AgentRunShared<
   A extends IFlowAgent,
   State,
   Lifecycle extends AgentLifecycle<string>,
-  Hooks,
+  Hooks = unknown,
 > {
   agent: A;
   state: State;
   lifecycle: Lifecycle;
-  hooks: Hooks;
+  hooks?: Hooks;
 }
 
 /**
@@ -89,7 +94,7 @@ type BaseFlowShared = AgentRunShared<
 export interface AgentRunFlowOptions<Shared extends BaseFlowShared> {
   agent: Shared['agent'];
   lifecycle: Shared['lifecycle'];
-  hooks: Shared['hooks'];
+  hooks?: Shared['hooks'];
   createState(): Shared['state'];
   createFlow(): Flow<Shared>;
   prepareShared?(shared: Shared): void;

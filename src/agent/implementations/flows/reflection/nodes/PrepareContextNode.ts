@@ -21,8 +21,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-import { prependTexCountStats } from '../helpers';
-
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -84,11 +82,11 @@ export class PrepareContextNode<C = unknown> extends Node<
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
 
-      // Prepend TeXCount stats using shared helper (DRY)
-      const prefixWithStats = prependTexCountStats(
-        userPrefix,
-        workspaceState.document.texcountStats,
-      );
+      // Prepend TeXCount stats (inline for simplicity)
+      const texcountStats = workspaceState.document.texcountStats;
+      const prefixWithStats = texcountStats
+        ? `${texcountStats}${userPrefix}`
+        : userPrefix;
 
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
@@ -113,11 +111,11 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Subsequent rounds: build user request only
       const userRequest = await promptBuilder.buildUserRequest(currentRound);
 
-      // Prepend TeXCount stats using shared helper (DRY)
-      const userMessage = prependTexCountStats(
-        userRequest ?? '',
-        workspaceState.document.texcountStats,
-      );
+      // Prepend TeXCount stats (inline for simplicity)
+      const texcountStats = workspaceState.document.texcountStats;
+      const userMessage = texcountStats
+        ? `${texcountStats}${userRequest ?? ''}`
+        : (userRequest ?? '');
 
       // Check for skip (no content)
       if (!userMessage.trim()) {

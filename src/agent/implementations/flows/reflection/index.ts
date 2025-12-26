@@ -8,6 +8,7 @@
 // Flow factory and types
 export {
   createReflectionFlow,
+  type IReflectionFlowAgent,
   type ReflectionFlowShared,
   type ReflectionFlowState,
   type ReflectionServices,
@@ -20,7 +21,6 @@ export {
   type ReflectionPhase,
   type ReflectionLifecycle,
   type RoundContext,
-  type ReflectionFlowHooks,
   createInitialReflectionState,
   AgentRunState,
 } from './ReflectionFlowState';
