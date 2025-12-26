@@ -20,8 +20,6 @@
  * - modelHandler, logger, setting, prompt, config, context, etc.
  */
 
-import * as path from 'path';
-
 import { Node, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
@@ -94,8 +92,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       user: this._params.services.userVarChannels,
     });
 
-    // Determine output location for this round
-    const outputLocation = this.getOutputLocation(currentRound);
+    // Determine output location for this round (delegates to agent for polymorphism)
+    const outputLocation = this._params.services.getOutputFileLocation(currentRound);
 
     return {
       context,
@@ -227,26 +225,6 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     // Continue to OutputNode
     return undefined;
-  }
-
-  /**
-   * Get output file location for a round.
-   * Mirrors logic from BaseReflectionAgent.getOutputFileLocation.
-   */
-  private getOutputLocation(roundIndex: number): AgentFileLocation {
-    const { fileService, config, setting, modelHandler } = this._params.services;
-
-    const baseOutputFile = config.inputFile;
-    // Note: useScratchpad depends on agent type - for now use outputExt from setting
-    const fileExtension = setting.outputExt;
-
-    // Build output path
-    const parsedPath = path.parse(baseOutputFile);
-    const roundedFileName = `${parsedPath.name}_r${roundIndex + 1}${parsedPath.ext}`;
-    const outputPath = path.join(parsedPath.dir, roundedFileName);
-
-    // Cast is safe: we're creating from a relative path within workspace
-    return fileService.createLocation(outputPath) as AgentFileLocation;
   }
 
   /**
