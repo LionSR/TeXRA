@@ -42,10 +42,7 @@ import {
 
 // Type imports
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import {
-  END_GROUP_STATUS,
-  type EndGroupStatus,
-} from '@logger/messageTypes';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 
 // Internal imports - use IToolRegistry from core (single source of truth)
