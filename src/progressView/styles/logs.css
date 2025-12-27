@@ -223,29 +223,29 @@
   opacity: var(--opacity-full);
 }
 
-.status-indicator.ready {
+.status-indicator.is-ready {
   background-color: var(--vscode-descriptionForeground, #888888);
   box-shadow: none;
   opacity: var(--opacity-disabled);
 }
 
-.status-indicator.running {
+.status-indicator.is-running {
   background-color: var(--color-success);
   box-shadow: 0 0 4px var(--color-success);
   animation: pulse-scale 2s infinite;
 }
 
-.status-indicator.error {
+.status-indicator.is-error {
   background-color: var(--color-error);
   box-shadow: 0 0 4px var(--color-error);
 }
 
-.status-indicator.stopped {
+.status-indicator.is-stopped {
   background-color: var(--color-warning);
   box-shadow: 0 0 4px var(--color-warning);
 }
 
-.status-indicator.waiting {
+.status-indicator.is-waiting {
   background-color: var(--vscode-textLink-foreground, #3794ff);
   box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
   animation: pulse-scale 3s infinite;
