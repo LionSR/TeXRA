@@ -17,6 +17,7 @@ import {
   polishTextWithAI,
   FileContext,
 } from '@utils/text/textEnhancementUtils';
+import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
 import type {
@@ -27,10 +28,11 @@ import type {
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
 
-export class InstructionManager {
-  private webview: vscode.WebviewView | undefined;
+export class InstructionManager extends BaseWebviewManager {
+  protected readonly channel = CHANNEL;
 
   constructor(_context: vscode.ExtensionContext) {
+    super();
     setTimeout(async () => {
       try {
         await StorageFS.ensureDir(PASTED_DIR);
@@ -42,19 +44,6 @@ export class InstructionManager {
         );
       }
     }, 100);
-  }
-
-  attachWebview(webviewView: vscode.WebviewView): void {
-    this.webview = webviewView;
-  }
-
-  private getWebview(): vscode.WebviewView | undefined {
-    if (!this.webview) {
-      logger.warn(CHANNEL, 'Webview not attached for InstructionManager');
-      return undefined;
-    }
-
-    return this.webview;
   }
 
   /**
