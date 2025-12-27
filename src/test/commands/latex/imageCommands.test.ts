@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import * as dialogUtils from '@utils/dialogs';
+import * as dialogUtils from '@frontend/ui/dialogs';
 import { WorkspaceFS } from '@utils/files';
 
 describe('dialogs.selectFileFromWorkspace', () => {

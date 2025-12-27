@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
-import { setPendingState } from '@utils/pendingStateManager';
+import { setPendingState } from '@common/state';
 // Type imports
 
 const CHANNEL = 'stateRestoreCommand';

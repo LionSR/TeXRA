@@ -9,7 +9,7 @@ import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
