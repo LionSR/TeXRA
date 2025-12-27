@@ -55,7 +55,7 @@ async function isPandocAvailable(): Promise<boolean> {
   return pandocCheckPromise;
 }
 
-export enum outputFormat {
+enum outputFormat {
   HTML = 'html',
   LaTeX = 'latex',
   MARKDOWN = 'markdown',
@@ -359,20 +359,6 @@ export function extractMultipleTextFromTag(
 }
 
 /**
- * Remove specified XML tags and their content from input string
- */
-export function filterTagsFromText(
-  content: string,
-  tags: string | string[],
-): string {
-  const tagArray = typeof tags === 'string' ? [tags] : tags;
-  return tagArray.reduce((result, tag) => {
-    const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
-    return result.replace(pattern, '');
-  }, content);
-}
-
-/**
  * Extract content from XML document element for single document case
  * We should have a fall back to regex if this fails
  */
@@ -587,7 +573,6 @@ export const xmlUtils = {
   extractLatexFromMarkdown,
   extractLatexBetweenDocumentClass,
   extractMultipleTextFromTag,
-  filterTagsFromText,
   extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
   formatContent,
