@@ -344,3 +344,76 @@ export function scrollToBottom(element) {
     element.scrollTop = element.scrollHeight;
   }
 }
+
+// --- Element Visibility Utilities ---
+
+/**
+ * Clear an element's content by setting innerHTML to empty string.
+ * @param {HTMLElement} element - The element to clear
+ */
+export function clearElement(element) {
+  if (element) {
+    element.innerHTML = '';
+  }
+}
+
+/**
+ * Show an element by removing display: none.
+ * @param {HTMLElement} element - The element to show
+ */
+export function showElement(element) {
+  if (element) {
+    element.style.display = '';
+  }
+}
+
+/**
+ * Hide an element by setting display: none.
+ * @param {HTMLElement} element - The element to hide
+ */
+export function hideElement(element) {
+  if (element) {
+    element.style.display = 'none';
+  }
+}
+
+/**
+ * Set element visibility using a specific display value.
+ * @param {HTMLElement} element - The element to modify
+ * @param {boolean} shouldShow - Whether to show the element
+ * @param {string} [displayValue='block'] - The display value when visible
+ */
+export function setDisplayVisible(element, shouldShow, displayValue = 'block') {
+  if (element) {
+    element.style.display = shouldShow ? displayValue : 'none';
+  }
+}
+
+/**
+ * Set combined visibility state using both CSS class and hidden attribute.
+ * This is the recommended pattern for consistent visibility toggling.
+ * @param {HTMLElement} element - The element to modify
+ * @param {boolean} shouldShow - Whether the element should be visible
+ */
+export function setVisibilityState(element, shouldShow) {
+  if (!element) return;
+  element.classList.toggle('is-visible', shouldShow);
+  element.toggleAttribute('hidden', !shouldShow);
+}
+
+// --- Dataset Utilities ---
+
+/**
+ * Set multiple dataset attributes on an element at once.
+ * Skips undefined/null values.
+ * @param {HTMLElement} element - The element to modify
+ * @param {Object.<string, string|number|boolean|undefined|null>} dataMap - Key-value pairs for dataset
+ */
+export function setDatasetBatch(element, dataMap) {
+  if (!element || !dataMap) return;
+  Object.entries(dataMap).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      element.dataset[key] = String(value);
+    }
+  });
+}
