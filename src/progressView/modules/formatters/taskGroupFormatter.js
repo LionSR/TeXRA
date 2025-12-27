@@ -73,7 +73,7 @@ export class TaskGroupHeaderFormatter {
   }
 
   _getHeaderClass(group, level) {
-    const classes = ['log-group-header', group.status];
+    const classes = ['log-group-header', `is-${group.status}`];
     if (level.cssClass) {
       classes.push(level.cssClass);
     }

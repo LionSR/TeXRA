@@ -62,7 +62,7 @@ export class StreamTabs {
       // Apply agent decorators from shared config
       this._applyAgentDecorators(tabEl, info);
       if (info.name === activeStream) {
-        tabEl.classList.add('active');
+        tabEl.classList.add('is-active');
         activeInfo = info;
       }
       tabsContainer.appendChild(tabEl);
