@@ -105,6 +105,7 @@ const RELAY_MODELS: RelayModel[] = [
   // Anthropic - Haiku 4.5 and Sonnet 4.5
   { shortName: 'haiku45', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
   { shortName: 'haiku45T', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
+  { shortName: 'sonnet45', apiPatterns: ['claude-sonnet-4-5'], minTier: 'Max' }, // $3.00/$15.00
   {
     shortName: 'sonnet45T',
     apiPatterns: ['claude-sonnet-4-5'],
