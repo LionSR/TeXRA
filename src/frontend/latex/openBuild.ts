@@ -2,6 +2,9 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import {
@@ -53,13 +56,13 @@ export async function openAndBuildIfTex(
       try {
         await vscode.commands.executeCommand('latex-workshop.build', uri);
       } catch (err) {
-        logger.warn(CHANNEL, `LaTeX Workshop build failed: ${err}`);
+        logger.warn(CHANNEL, `LaTeX Workshop build failed: ${toErrorMessage(err)}`);
       }
     } else {
       await vscode.commands.executeCommand('vscode.open', uri);
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error opening file: ${err}`);
+    logger.error(CHANNEL, `Error opening file: ${toErrorMessage(err)}`);
   }
 }
 
@@ -87,7 +90,7 @@ export async function openBuildDisplayIfTex(
         );
       }, LATEX_VIEWER_OPEN_DELAY_MS);
     } catch (err) {
-      logger.warn(CHANNEL, `Viewer display failed: ${err}`);
+      logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
     }
   }
 }
