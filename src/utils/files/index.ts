@@ -4,7 +4,7 @@ export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
 export { ensureDirCommon } from './ensureDirCommon';
 export * from './pastedImageUtils';
-export * from './baseFileUtils';
+export { getEffectiveBaseFile } from '@common/modules/files/baseFileUtils.js';
 export * from './fileMappingUtils';
 export * from './pathUtils';
 export { isTexFile } from '@common/files/fileTypeUtils';
