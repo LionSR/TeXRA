@@ -162,14 +162,6 @@ export function getExtraDirs(): string[] {
   return cachedExtraDirs;
 }
 
-/**
- * Clear the cached directories. Useful for testing or when system configuration changes.
- */
-export function clearExtraDirsCache(): void {
-  cachedExtraDirs = null;
-  cachedExtendedPaths.clear();
-}
-
 // Cache for extended PATH strings
 const cachedExtendedPaths = new Map<string, string>();
 
