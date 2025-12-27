@@ -85,7 +85,7 @@ export async function openBuildDisplayIfTex(
       setTimeout(async () => {
         await vscode.commands.executeCommand('latex-workshop.view');
         setTimeout(
-          () => vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
+          () => void vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
           LATEX_VIEWER_REFRESH_DELAY_MS,
         );
       }, LATEX_VIEWER_OPEN_DELAY_MS);
