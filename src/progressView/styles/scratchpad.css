@@ -53,7 +53,7 @@
     --vscode-inputValidation-errorBackground,
     rgba(255, 0, 0, 0.1)
   );
-  border-radius: var(--radius-small, 4px);
+  border-radius: var(--border-radius-small);
 }
 
 /* Pre-wrapped text content */

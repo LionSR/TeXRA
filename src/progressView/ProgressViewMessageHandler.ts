@@ -3,7 +3,6 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports - common
 
@@ -30,8 +29,12 @@ import {
 import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
-  ProgressViewApprovalActions,
 } from '@tools/approval/toolEditApproval';
+import {
+  PolishFollowUpMessageSchema,
+  InfoMessageSchema,
+  ApprovalActionMessageSchema,
+} from '@webview/types/messages';
 import { pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
@@ -55,23 +58,6 @@ interface BaseFileCommandMessage extends FileCommandMessage {
 interface CompareMessage extends BaseFileCommandMessage {
   prev?: string;
 }
-
-// --- Message Schemas ---
-
-const TrimmedString = z
-  .string()
-  .transform((s) => s.trim())
-  .pipe(z.string().min(1));
-const PolishFollowUp = z.object({
-  stream: z.string().min(1),
-  text: TrimmedString,
-});
-const InfoMessage = z.object({ text: TrimmedString });
-const ApprovalAction = z.object({
-  requestId: z.string().min(1),
-  action: z.enum(ProgressViewApprovalActions),
-  note: z.string().optional(),
-});
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -336,7 +322,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handlePolishFollowUp(message: unknown): Promise<void> {
     await this.withValidatedMessage(
-      PolishFollowUp,
+      PolishFollowUpMessageSchema,
       message,
       'polishFollowUp',
       async ({ stream, text }) => {
@@ -393,7 +379,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleShowInformationMessage(message: unknown): Promise<void> {
     await this.withValidatedMessage(
-      InfoMessage,
+      InfoMessageSchema,
       message,
       'infoMessage',
       async (data) => {
@@ -404,7 +390,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleToolEditApprovalAction(message: unknown): Promise<void> {
     await this.withValidatedMessage(
-      ApprovalAction,
+      ApprovalActionMessageSchema,
       message,
       'approvalAction',
       handleProgressViewToolEditApprovalAction,
