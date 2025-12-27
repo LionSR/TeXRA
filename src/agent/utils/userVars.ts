@@ -10,7 +10,7 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { setVarFromFile } from '@frontend/files/vars';
+import { setVarFromFile } from '@utils/files/varsUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@logger/messageTypes';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
