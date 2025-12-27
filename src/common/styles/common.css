@@ -44,15 +44,13 @@ body {
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
 
-  /* Typography */
+  /* Typography - 3 levels: lg (1.2x), sm (0.9x), xs (0.8x) */
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
   --font-size-lg: calc(var(--font-size) * 1.2);
   --font-size-sm: calc(var(--font-size) * 0.9);
-  --font-size-xs: calc(var(--font-size) * 0.85);
-  --font-size-2xs: calc(var(--font-size) * 0.8);
-  --font-size-3xs: calc(var(--font-size) * 0.75);
+  --font-size-xs: calc(var(--font-size) * 0.8);
 
   /* Spacing */
   --spacing-tiny: 2px;
@@ -108,7 +106,7 @@ body {
 vscode-toolbar-container {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-small);
   flex-wrap: nowrap;
 }
 
