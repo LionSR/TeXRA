@@ -18,6 +18,7 @@ import { fileLister } from '@frontend/files';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
 import type {
@@ -44,22 +45,11 @@ type FileUpdateOptions = {
   additionalPayload?: Record<string, unknown>;
 };
 
-export class FileManager {
-  private webview: vscode.WebviewView | undefined;
+export class FileManager extends BaseWebviewManager {
+  protected readonly channel = CHANNEL;
 
-  constructor(_context: vscode.ExtensionContext) {}
-
-  attachWebview(webviewView: vscode.WebviewView): void {
-    this.webview = webviewView;
-  }
-
-  private getWebview(): vscode.WebviewView | undefined {
-    if (!this.webview) {
-      logger.warn(CHANNEL, 'Webview not attached for FileManager operation');
-      return undefined;
-    }
-
-    return this.webview;
+  constructor(_context: vscode.ExtensionContext) {
+    super();
   }
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
