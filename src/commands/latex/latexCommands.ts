@@ -5,11 +5,11 @@ import * as vscode from 'vscode';
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
-} from '@utils/editor/activeFileGuards';
+} from '@frontend/editor/activeFileGuards';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import { runIndentTeX } from '@housekeeping';

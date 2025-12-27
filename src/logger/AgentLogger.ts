@@ -9,7 +9,7 @@ import {
   buildErrorLogData,
   type ErrorLogContext,
 } from '@common/errors/sdkErrorUtils';
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 

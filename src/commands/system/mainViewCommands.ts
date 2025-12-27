@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { computeModelOptions } from '@model/computeModelOptions';
-import { safeExecuteCommand } from '@utils/system';
+import { safeExecuteCommand } from '@frontend/system';
 
 export const mainViewCommands = {
   reset: 'texra.mainView.reset',

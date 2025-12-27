@@ -1,7 +1,7 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
-import { normalizeUrl } from '@utils/urlUtils';
+import { normalizeUrl } from '@utils/core';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
