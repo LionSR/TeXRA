@@ -22,6 +22,7 @@ export class MainViewProvider
   extends BaseWebviewProvider
   implements vscode.WebviewViewProvider
 {
+  public static readonly viewType = 'texra.mainView';
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
