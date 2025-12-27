@@ -184,3 +184,62 @@ export const UpdateFilesMessageSchema = BaseMessageSchema.extend(
 );
 
 export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
+
+// --- Common Utilities ---
+
+/** Trims whitespace and requires non-empty result */
+export const TrimmedStringSchema = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(z.string().min(1));
+
+// --- Progress View Schemas ---
+
+/** Polish follow-up message from progress view */
+export const PolishFollowUpMessageSchema = z.object({
+  stream: z.string().min(1),
+  text: TrimmedStringSchema,
+});
+
+export type PolishFollowUpMessage = z.infer<typeof PolishFollowUpMessageSchema>;
+
+/** Info message with text content */
+export const InfoMessageSchema = z.object({ text: TrimmedStringSchema });
+
+export type InfoMessage = z.infer<typeof InfoMessageSchema>;
+
+/** Approval action message from progress view */
+export const ApprovalActionMessageSchema = z.object({
+  requestId: z.string().min(1),
+  action: z.enum(['approve', 'reject', 'openDiff', 'approveAll', 'resumeApprovals']),
+  note: z.string().optional(),
+});
+
+export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
+
+// --- History View Schemas ---
+
+/** History ID message for history operations */
+export const HistoryIdMessageSchema = z.object({
+  historyId: z.string().min(1),
+});
+
+export type HistoryIdMessage = z.infer<typeof HistoryIdMessageSchema>;
+
+// --- Profile View Schemas ---
+
+/** Agent selection message */
+export const SelectAgentMessageSchema = z.object({
+  agentName: z.string().min(1),
+});
+
+export type SelectAgentMessage = z.infer<typeof SelectAgentMessageSchema>;
+
+/** API access mode message */
+export const SetApiAccessModeMessageSchema = z.object({
+  mode: z.enum(['included', 'personal']),
+});
+
+export type SetApiAccessModeMessage = z.infer<
+  typeof SetApiAccessModeMessageSchema
+>;
