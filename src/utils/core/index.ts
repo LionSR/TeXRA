@@ -8,7 +8,6 @@ export {
   normalizeLatexPath,
   getExtensionLowercase,
   hasExtension,
-  getFilenameWithoutExtension,
 } from './pathCore';
 export {
   isNonEmptyString,

@@ -67,22 +67,3 @@ export function getExtensionLowercase(filePath: string): string {
 export function hasExtension(filePath: string, extension: string): boolean {
   return getExtensionLowercase(filePath) === extension.toLowerCase();
 }
-
-/**
- * Get the filename without its extension.
- * Consolidates the `path.basename(file, path.extname(file))` pattern.
- *
- * @example
- * getFilenameWithoutExtension('/path/to/document.tex') // returns 'document'
- * getFilenameWithoutExtension('file.name.txt') // returns 'file.name'
- */
-export function getFilenameWithoutExtension(filePath: string): string {
-  if (!filePath) return '';
-  // Get the basename (last segment)
-  const segments = filePath.replace(/\\/g, '/').split('/');
-  const basename = segments[segments.length - 1] || '';
-  // Remove extension
-  const lastDot = basename.lastIndexOf('.');
-  if (lastDot <= 0) return basename; // No extension or hidden file
-  return basename.slice(0, lastDot);
-}
