@@ -33,26 +33,6 @@ export class WorkspaceFS extends RelativeFS {
   public static async readFileBytes(target: string): Promise<Buffer> {
     return AbsoluteFS.readBytes(this.fullPath(target));
   }
-
-  public static readFileBytesSync(target: string): Buffer {
-    return AbsoluteFS.readBytesSync(this.fullPath(target));
-  }
-
-  public static async filterExistingFiles<T extends { path: string }>(
-    items: T[],
-  ): Promise<T[]> {
-    if (items.length === 0) {
-      return [];
-    }
-
-    const checks = await Promise.all(
-      items.map(async (item) => ({
-        item,
-        exists: await this.exists(item.path),
-      })),
-    );
-    return checks.filter((entry) => entry.exists).map((entry) => entry.item);
-  }
 }
 
 export default WorkspaceFS;

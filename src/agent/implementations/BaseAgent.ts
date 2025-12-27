@@ -36,7 +36,7 @@ import {
   type EndGroupStatus,
 } from '@logger/messageTypes';
 import { SHORT_SLEEP_MS } from '@utils/config';
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.

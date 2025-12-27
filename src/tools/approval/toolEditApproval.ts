@@ -18,7 +18,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { toolResult, type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports

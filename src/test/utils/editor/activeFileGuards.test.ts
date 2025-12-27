@@ -9,7 +9,7 @@ import * as messageUtils from '@frontend/ui/messageUtils';
 import {
   getActiveEditorWithGuards,
   type ActiveFileGuardResult,
-} from '@utils/editor/activeFileGuards';
+} from '@frontend/editor/activeFileGuards';
 
 // Mock messageUtils before importing it
 let warningMessages: string[] = [];

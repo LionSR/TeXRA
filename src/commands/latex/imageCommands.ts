@@ -10,7 +10,7 @@ import {
   singlePagePdf2Png,
 } from '@frontend/media/img';
 import * as logger from '@logger/logUtils';
-import * as dialogUtils from '@utils/dialogs';
+import * as dialogUtils from '@frontend/ui/dialogs';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

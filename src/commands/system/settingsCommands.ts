@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import { SETTINGS_QUERY } from '@utils/settingsQueries';
+import { SETTINGS_QUERY } from '@utils/config';
 
 export const settingsCommands = {
   openSettings: 'texra.openSettings',
