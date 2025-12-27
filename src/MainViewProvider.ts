@@ -10,7 +10,7 @@ import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
-import { consumePendingState } from '@utils/pendingStateManager';
+import { consumePendingState } from '@common/state';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 import { getServerSideKeyService } from '@/auth/serverKeys';
 
