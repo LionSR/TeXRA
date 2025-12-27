@@ -11,7 +11,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { updateConfig } from '@utils/config';
+import { getConfig, updateConfig } from '@utils/config';
 
 /**
  * Version number for the default model list.
@@ -138,9 +138,7 @@ export async function refreshModelListIfNeeded(): Promise<void> {
     // Check if user has explicitly customized their model list
     if (isConfigExplicitlySet('texra.models')) {
       // User has customized - merge new defaults into their list
-      const currentModels =
-        vscode.workspace.getConfiguration('texra').get<string[]>('models') ??
-        [];
+      const currentModels = getConfig<string[]>('models', []);
 
       const modelsToAdd = DEFAULT_MODELS.filter(
         (model) => !currentModels.includes(model),
