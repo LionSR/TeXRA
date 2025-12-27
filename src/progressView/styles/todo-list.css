@@ -25,7 +25,7 @@
 }
 
 .todo-list__header .codicon {
-  font-size: 16px;
+  font-size: var(--font-size-icon);
   line-height: 1;
 }
 
@@ -46,9 +46,9 @@
 
 .todo-item__icon {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: var(--font-size-icon-sm);
   line-height: 1.4;
-  margin-top: 1px;
+  margin-top: var(--border-thin);
 }
 
 .todo-item__content {

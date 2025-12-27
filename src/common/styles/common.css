@@ -44,13 +44,15 @@ body {
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
 
-  /* Typography - 3 levels: lg (1.2x), sm (0.9x), xs (0.8x) */
+  /* Typography - text: lg (1.2x), sm (0.9x), xs (0.8x); icons reuse lg and base */
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
   --font-size-lg: calc(var(--font-size) * 1.2);
   --font-size-sm: calc(var(--font-size) * 0.9);
   --font-size-xs: calc(var(--font-size) * 0.8);
+  --font-size-icon: var(--font-size-lg);
+  --font-size-icon-sm: var(--font-size);
 
   /* Spacing */
   --spacing-tiny: 2px;

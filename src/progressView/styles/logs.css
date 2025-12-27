@@ -146,7 +146,7 @@
 }
 
 .run-selector-title .codicon {
-  font-size: 16px;
+  font-size: var(--font-size-icon);
   line-height: 1;
 }
 
@@ -172,7 +172,7 @@
 }
 
 .run-summary .codicon {
-  font-size: 14px;
+  font-size: var(--font-size-icon-sm);
   opacity: 0.75;
 }
 
