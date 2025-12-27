@@ -2,10 +2,12 @@
  * Agent index module - exports from the simplified agent registry.
  */
 
+// AgentSource is defined in @agent/core/AgentDataclass (value + type with same name)
+export { AgentSource } from '@agent/core/AgentDataclass';
+
 export {
   // Types
   type AgentEntry,
-  type AgentSource,
   type ResolvedAgent,
   type RemoteVisibility,
   type AgentOptionsPayload,
