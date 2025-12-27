@@ -40,6 +40,8 @@ interface RelayModel {
   shortName: string; // UI identifier (e.g., "gpt41-")
   apiPatterns: string[]; // API name prefixes for validation
   minTier: MinTier; // Minimum tier required
+  /** If true, auto-generates a thinking variant (shortName + 'T') with same API patterns */
+  hasThinkingVariant?: boolean;
 }
 
 // =============================================================================
@@ -52,6 +54,10 @@ interface RelayModel {
  * - apiPatterns: Array of full API model name prefixes for server-side validation
  *                (supports multiple patterns for aliases like gemini-flash-latest)
  * - minTier: Minimum tier required to access this model
+ * - hasThinkingVariant: If true, auto-generates thinking variant (shortName + 'T')
+ *                       with same API patterns. Use for models where thinking/non-thinking
+ *                       share the same API name (e.g., Claude). For models with different
+ *                       API names (e.g., DeepSeek), define separate entries instead.
  *
  * IMPORTANT: When adding/removing models, update ONLY this array.
  * All derived arrays and TIER_CONFIG are auto-generated from this.
@@ -102,15 +108,9 @@ const RELAY_MODELS: RelayModel[] = [
   // Requires Max subscription, includes all free tier models
   // ===========================================================================
 
-  // Anthropic - Haiku 4.5 and Sonnet 4.5
-  { shortName: 'haiku45', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
-  { shortName: 'haiku45T', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max' }, // $1.00/$5.00
-  { shortName: 'sonnet45', apiPatterns: ['claude-sonnet-4-5'], minTier: 'Max' }, // $3.00/$15.00
-  {
-    shortName: 'sonnet45T',
-    apiPatterns: ['claude-sonnet-4-5'],
-    minTier: 'Max',
-  }, // $3.00/$15.00
+  // Anthropic - Haiku 4.5 and Sonnet 4.5 (hasThinkingVariant auto-generates T variants)
+  { shortName: 'haiku45', apiPatterns: ['claude-haiku-4-5'], minTier: 'Max', hasThinkingVariant: true }, // $1.00/$5.00
+  { shortName: 'sonnet45', apiPatterns: ['claude-sonnet-4-5'], minTier: 'Max', hasThinkingVariant: true }, // $3.00/$15.00
 
   // Google - Gemini Pro models
   { shortName: 'gemini3p', apiPatterns: ['gemini-3-pro'], minTier: 'Max' }, // $2.00/$12.00
@@ -150,11 +150,21 @@ function getModelsForTier(tier: MinTier): RelayModel[] {
   return RELAY_MODELS.filter((m) => m.minTier === 'free');
 }
 
+/**
+ * Expand short names to include thinking variants.
+ * Models with hasThinkingVariant get both base and T suffix versions.
+ */
+function expandShortNames(models: RelayModel[]): string[] {
+  return models.flatMap((m) =>
+    m.hasThinkingVariant ? [m.shortName, `${m.shortName}T`] : [m.shortName],
+  );
+}
+
 const FREE_TIER_MODELS = getModelsForTier('free');
 const MAX_TIER_MODELS = getModelsForTier('Max');
 
-const FREE_TIER_SHORT_NAMES = FREE_TIER_MODELS.map((m) => m.shortName);
-const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
+const FREE_TIER_SHORT_NAMES = expandShortNames(FREE_TIER_MODELS);
+const MAX_TIER_SHORT_NAMES = expandShortNames(MAX_TIER_MODELS);
 
 const FREE_TIER_API_PATTERNS = FREE_TIER_MODELS.flatMap((m) =>
   m.apiPatterns.map((p) => p.toLowerCase()),
