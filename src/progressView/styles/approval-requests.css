@@ -34,12 +34,12 @@
 }
 
 .approval-request__diff-added {
-  color: var(--vscode-charts-green, #4caf50);
+  color: var(--color-added);
   font-size: var(--font-size-xs);
 }
 
 .approval-request__diff-removed {
-  color: var(--vscode-charts-red, #f44336);
+  color: var(--color-removed);
   font-size: var(--font-size-xs);
 }
 
