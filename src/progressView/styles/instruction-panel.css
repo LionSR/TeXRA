@@ -30,7 +30,7 @@
 }
 
 .instruction-panel__title .codicon {
-  font-size: 16px;
+  font-size: var(--font-size-icon);
   line-height: 1;
 }
 
