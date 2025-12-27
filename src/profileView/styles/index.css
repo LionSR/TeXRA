@@ -135,12 +135,18 @@ h2 {
   max-width: 300px;
 }
 
-/* Visibility badges */
-.visibility-badge {
+/* Badge base styles */
+.visibility-badge,
+.category-badge,
+.multi-output-badge {
   display: inline-block;
-  padding: 2px var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: var(--border-radius-small);
   font-size: var(--font-size-sm);
+}
+
+/* Visibility badges */
+.visibility-badge {
   text-transform: lowercase;
 }
 
@@ -156,10 +162,6 @@ h2 {
 
 /* Category badges */
 .category-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
   font-weight: 500;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
@@ -167,10 +169,6 @@ h2 {
 
 /* Multi-output badges */
 .multi-output-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 
@@ -182,7 +180,7 @@ h2 {
 .multi-output-badge.not-supported {
   background: var(--vscode-input-background);
   color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  border: var(--border-thin) solid var(--color-border);
 }
 
 /* Select button */
