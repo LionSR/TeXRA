@@ -2,7 +2,14 @@
  * Core utilities - consolidated path, string, and type helpers.
  */
 
-export { toPosixPath, getPathSegments, normalizeLatexPath } from './pathCore';
+export {
+  toPosixPath,
+  getPathSegments,
+  normalizeLatexPath,
+  getExtensionLowercase,
+  hasExtension,
+  getFilenameWithoutExtension,
+} from './pathCore';
 export {
   isNonEmptyString,
   isString,
