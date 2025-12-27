@@ -63,37 +63,6 @@ export function generateGroupedBackslashFixes(commandGroups: {
 }
 
 /**
- * Generates patterns for fixing extra backslashes with special patterns
- * Example: \\\\\\rho -> \\rho (for triple backslashes)
- */
-export function generateTripleBackslashFixes(commands: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    commands.map((cmd) => [`\\\\\\${cmd}`, `\\${cmd}`]),
-  );
-}
-
-/**
- * Generates patterns for fixing backslashes in both lowercase and uppercase commands
- */
-export function generateBackslashFixesWithCase(commands: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    commands.flatMap((cmd) => {
-      const entries: [string, string][] = [[`\\\\${cmd}`, `\\${cmd}`]];
-      // Only capitalize the first letter if it makes sense for the command
-      if (/^[a-z]/.test(cmd)) {
-        const capitalizedCmd = capitalize(cmd);
-        entries.push([`\\\\${capitalizedCmd}`, `\\${capitalizedCmd}`]);
-      }
-      return entries;
-    }),
-  );
-}
-
-/**
  * Generates patterns for converting XML tags to LaTeX environments and vice versa
  */
 export function generateXmlLatexConversions(environments: string[]): {
@@ -240,20 +209,6 @@ export function generateReferenceSpacing(referenceTypes: string[]): {
 }
 
 /**
- * Generates patterns for environment spacing fixes
- */
-export function generateEnvironmentSpacingFixes(environments: string[]): {
-  [key: string]: string;
-} {
-  return Object.fromEntries(
-    environments.flatMap((env) => [
-      [`\n\n\\begin{${env}}`, `\n\\begin{${env}}`],
-      [`\\end{${env}}\n\n`, `\\end{${env}}\n`],
-    ]),
-  );
-}
-
-/**
  * Generates patterns for linebreak fixes within environments
  */
 export function generateEnvironmentLinebreakFixes(environments: string[]): {
@@ -379,26 +334,6 @@ export function generateNestedDecoratorShortcuts(
 }
 
 /**
- * Generate patterns for Greek letter with nested decorators
- * Example: \tilde{\boldsymbol{\zeta}} -> \tbze
- */
-export function generateDecoratedGreekShortcuts(
-  outerDecorator: string,
-  innerDecorator: string,
-  greekLetters: { [key: string]: string },
-  outerPrefix: string,
-): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  for (const [greekLetter, shortcut] of Object.entries(greekLetters)) {
-    patterns[`\\${outerDecorator}{\\${innerDecorator}{\\${greekLetter}}}`] =
-      `\\${outerPrefix}${shortcut}`;
-  }
-
-  return patterns;
-}
-
-/**
  * Generate patterns for vector shortcuts
  * Examples: \vec{x} -> \vx, \vec{p} -> \vp
  */
@@ -408,31 +343,6 @@ export function generateVectorShortcuts(
 ): { [key: string]: string } {
   return Object.fromEntries(
     letters.map((letter) => [`\\vec{${letter}}`, `\\${prefix}${letter}`]),
-  );
-}
-
-/**
- * Generate patterns to normalize different text/math roman style commands
- * Examples: \mathrm{const} -> \text{const}, {\rm const} -> \text{const}
- *
- * @param terms List of terms to generate patterns for
- * @param targetCommand Target command to convert to (default: 'text')
- * @param variant Specific variant to convert from: 'mathrm', 'mbox', or 'textrm'.
- *                If not provided, handles all variants.
- */
-export function generateTextCommandNormalization(
-  terms: string[],
-  targetCommand: string = 'text',
-  variant?: string,
-): { [key: string]: string } {
-  // Define all possible variants if none specified
-  const allVariants = ['mathrm', 'mbox', 'textrm'];
-  const variantsToUse = variant ? [variant] : allVariants;
-
-  return Object.fromEntries(
-    variantsToUse.flatMap((v) =>
-      terms.map((term) => [`\\${v}{${term}}`, `\\${targetCommand}{${term}}`]),
-    ),
   );
 }
 

@@ -1,4 +1,4 @@
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 
 type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;

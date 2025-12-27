@@ -16,7 +16,7 @@ import { GlobalStorageFS, StorageFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
-} from '@utils/editor/activeFileGuards';
+} from '@frontend/editor/activeFileGuards';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

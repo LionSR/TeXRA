@@ -1,4 +1,6 @@
-// Utility functions for working with URLs
+/**
+ * URL utilities - pure URL helper functions.
+ */
 
 /**
  * Normalize a URL-like string by removing any protocol prefix and trailing slashes.
