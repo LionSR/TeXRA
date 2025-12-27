@@ -88,7 +88,7 @@ export function registerArXivCommands(context: vscode.ExtensionContext) {
 
         if (result === openFolderAction) {
           // Open the extracted folder in Explorer
-          vscode.commands.executeCommand(
+          void vscode.commands.executeCommand(
             'revealFileInOS',
             vscode.Uri.file(extractedPath),
           );

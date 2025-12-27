@@ -15,5 +15,7 @@ export {
   ErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
+  isContextWindowError,
+  enrichError,
   buildErrorLogData,
 } from './sdkErrorUtils';
