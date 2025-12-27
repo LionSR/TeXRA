@@ -48,8 +48,11 @@ body {
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
-  --font-size-sm: calc(var(--font-size) * 0.9);
   --font-size-lg: calc(var(--font-size) * 1.2);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-xs: calc(var(--font-size) * 0.85);
+  --font-size-2xs: calc(var(--font-size) * 0.8);
+  --font-size-3xs: calc(var(--font-size) * 0.75);
 
   /* Spacing */
   --spacing-tiny: 2px;
