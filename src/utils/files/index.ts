@@ -13,3 +13,4 @@ export * from './taskRunStorage';
 export * from './copyUtils';
 export * from './flexibleFS';
 export * from './rulesUtils';
+export * from './varsUtils';

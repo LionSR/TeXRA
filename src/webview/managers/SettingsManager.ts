@@ -1,5 +1,5 @@
 // Local imports - utils
-import { safeExecuteCommand } from '@frontend/system';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { SETTINGS_QUERY } from '@utils/config';
 
 const CHANNEL = 'SettingsManager';
