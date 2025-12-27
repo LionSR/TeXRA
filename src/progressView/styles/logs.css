@@ -58,12 +58,12 @@
 }
 
 .level-warn {
-  color: var(--vscode-editorWarning-foreground, #cca700);
+  color: var(--color-warning);
   font-weight: bold;
 }
 
 .level-error {
-  color: var(--vscode-editorError-foreground, #f14c4c);
+  color: var(--color-error);
   font-weight: bold;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .message-error {
-  color: var(--vscode-editorError-foreground, #f14c4c);
+  color: var(--color-error);
 }
 
 .log-header {
@@ -230,19 +230,19 @@
 }
 
 .status-indicator.running {
-  background-color: var(--vscode-testing-runAction, #2ea043);
-  box-shadow: 0 0 4px var(--vscode-testing-runAction, #2ea043);
+  background-color: var(--color-success);
+  box-shadow: 0 0 4px var(--color-success);
   animation: pulse-scale 2s infinite;
 }
 
 .status-indicator.error {
-  background-color: var(--vscode-testing-iconFailed, #f14c4c);
-  box-shadow: 0 0 4px var(--vscode-testing-iconFailed, #f14c4c);
+  background-color: var(--color-error);
+  box-shadow: 0 0 4px var(--color-error);
 }
 
 .status-indicator.stopped {
-  background-color: var(--vscode-testing-iconSkipped, #cca700);
-  box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
+  background-color: var(--color-warning);
+  box-shadow: 0 0 4px var(--color-warning);
 }
 
 .status-indicator.waiting {
