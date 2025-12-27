@@ -73,7 +73,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
       } catch (err) {
         logger.warn(
           'extension',
-          `Failed to delete legacy agent file ${legacyFile}: ${err}`,
+          `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(err)}`,
         );
       }
     }
@@ -81,7 +81,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
   } catch (err) {
-    logger.error('extension', `Error copying default agents: ${err}`);
+    logger.error('extension', `Error copying default agents: ${toErrorMessage(err)}`);
   }
 }
 
@@ -334,6 +334,6 @@ export async function configureLatexSettings() {
       );
     }
   } catch (err) {
-    logger.error('extension', `Error configuring LaTeX settings: ${err}`);
+    logger.error('extension', `Error configuring LaTeX settings: ${toErrorMessage(err)}`);
   }
 }
