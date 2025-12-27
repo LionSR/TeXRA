@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import fsExtra from 'fs-extra';
+
 // VS Code imports
 import * as vscode from 'vscode';
 
@@ -9,7 +12,7 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { safeExecuteCommand } from '@utils/system';
 import { updateConfig } from '@utils/config';
 
@@ -60,8 +63,14 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     await GlobalStorageFS.ensureDir('tool_use_agents');
 
     // Start recursive copy from root
-    await copyDirToFS(resourcesPath, 'agents', GlobalStorageFS);
-    await copyDirToFS(resourcesToolUse, 'tool_use_agents', GlobalStorageFS);
+    await fsExtra.copy(resourcesPath, GlobalStorageFS.fullPath('agents'), {
+      overwrite: true,
+    });
+    await fsExtra.copy(
+      resourcesToolUse,
+      GlobalStorageFS.fullPath('tool_use_agents'),
+      { overwrite: true },
+    );
 
     // Clean up legacy agent files that have moved to remote-only
     for (const legacyFile of LEGACY_AGENT_FILES) {
