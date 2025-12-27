@@ -36,6 +36,7 @@ export class ProgressViewProvider
   extends BaseWebviewProvider
   implements vscode.WebviewViewProvider, IRunStorageService
 {
+  public static readonly viewType = 'texra.progressView';
   private static _instance: ProgressViewProvider | undefined;
 
   // New modular architecture components
