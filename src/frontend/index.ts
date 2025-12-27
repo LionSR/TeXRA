@@ -1,7 +1,5 @@
 export * from './files/fileLister';
 export * from './files/listing';
-export * from './files/vars';
-export * from './files/rules';
 export * from './latex/openBuild';
 export * from './latex/linter';
 export * from './ui/messageUtils';

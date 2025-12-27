@@ -13,7 +13,7 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { getConfig, setConfig } from '@utils/config';
-import { safeExecuteCommand } from '@frontend/system';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/config';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';

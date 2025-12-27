@@ -10,7 +10,7 @@ import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
-import { safeExecuteCommand } from '@frontend/system';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { updateConfig } from '@utils/config';
 
 /**
