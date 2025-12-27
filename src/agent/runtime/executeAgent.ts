@@ -235,7 +235,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
         {
           title: openDocs,
           callback: () =>
-            vscode.commands.executeCommand('texra.openDoc', 'models'),
+            void vscode.commands.executeCommand('texra.openDoc', 'models'),
         },
       ],
       false,
@@ -461,7 +461,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                     )
                     .then((selection) => {
                       if (selection === 'Show ProgressBoard') {
-                        vscode.commands.executeCommand(
+                        void vscode.commands.executeCommand(
                           'texra.showProgressView',
                         );
                       }
@@ -522,12 +522,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
         [
           {
             title: setKey,
-            callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+            callback: () => void vscode.commands.executeCommand('texra.setApiKey'),
           },
           {
             title: openGuide,
             callback: () =>
-              vscode.commands.executeCommand('texra.openDoc', 'configuration'),
+              void vscode.commands.executeCommand('texra.openDoc', 'configuration'),
           },
         ],
         false,
