@@ -61,7 +61,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { flexibleFS, getDisplayPath } from '@utils/files';
+import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -675,7 +675,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((loc) => getDisplayPath(loc))
+          .map((loc) => getShortDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
@@ -704,7 +704,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (formattedMedia.length > 0) {
         const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
-          .map((loc) => getDisplayPath(loc))
+          .map((loc) => getShortDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
