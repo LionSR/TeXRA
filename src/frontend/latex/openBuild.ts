@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { toErrorMessage } from '@common/errors';
 import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - log
@@ -51,13 +52,13 @@ export async function openAndBuildIfTex(
       try {
         await vscode.commands.executeCommand('latex-workshop.build', uri);
       } catch (err) {
-        logger.warn(CHANNEL, `LaTeX Workshop build failed: ${err}`);
+        logger.warn(CHANNEL, `LaTeX Workshop build failed: ${toErrorMessage(err)}`);
       }
     } else {
       await vscode.commands.executeCommand('vscode.open', uri);
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error opening file: ${err}`);
+    logger.error(CHANNEL, `Error opening file: ${toErrorMessage(err)}`);
   }
 }
 
@@ -80,12 +81,12 @@ export async function openBuildDisplayIfTex(
       setTimeout(async () => {
         await vscode.commands.executeCommand('latex-workshop.view');
         setTimeout(
-          () => vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
+          () => void vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
           LATEX_VIEWER_REFRESH_DELAY_MS,
         );
       }, LATEX_VIEWER_OPEN_DELAY_MS);
     } catch (err) {
-      logger.warn(CHANNEL, `Viewer display failed: ${err}`);
+      logger.warn(CHANNEL, `Viewer display failed: ${toErrorMessage(err)}`);
     }
   }
 }

@@ -289,7 +289,7 @@ export async function checkToolInstalled(
       if (choice === 'View Installation Guide' && config.openDocsCommand) {
         // Handle commands with additional arguments separated by comma
         const [command, ...args] = config.openDocsCommand.split(',');
-        vscode.commands.executeCommand(command, ...args);
+        void vscode.commands.executeCommand(command, ...args);
       }
     }
 

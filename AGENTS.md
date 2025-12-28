@@ -110,7 +110,7 @@ Aim for code that looks like it was designed correctly from the start:
 **Miscellaneous**
 
 - Maintain text cleanup rules in the `src/replacement` modules.
-- Execute VS Code commands with `safeExecuteCommand` from `src/utils/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
+- Execute VS Code commands with `safeExecuteCommand` from `src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
 - Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
 - Initialize new agent YAML files from the templates in `resources/agents/` and `resources/tool_use_agents/`.
 - Dispose event listeners and watchers when webviews close to prevent leaks.

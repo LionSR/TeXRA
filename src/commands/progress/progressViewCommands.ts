@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-import { safeExecuteCommand } from '@utils/system';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 const CHANNEL = 'progressViewCommands';
 const logger = new AgentLogger(CHANNEL);

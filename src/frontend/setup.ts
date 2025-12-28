@@ -13,8 +13,8 @@ import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { safeExecuteCommand } from '@utils/system';
-import { updateConfig } from '@utils/config';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { getConfig, updateConfig } from '@utils/config';
 
 /**
  * Version number for the default model list.
@@ -82,7 +82,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
       } catch (err) {
         logger.warn(
           'extension',
-          `Failed to delete legacy agent file ${legacyFile}: ${err}`,
+          `Failed to delete legacy agent file ${legacyFile}: ${toErrorMessage(err)}`,
         );
       }
     }
@@ -90,7 +90,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
   } catch (err) {
-    logger.error('extension', `Error copying default agents: ${err}`);
+    logger.error('extension', `Error copying default agents: ${toErrorMessage(err)}`);
   }
 }
 
@@ -147,9 +147,7 @@ export async function refreshModelListIfNeeded(): Promise<void> {
     // Check if user has explicitly customized their model list
     if (isConfigExplicitlySet('texra.models')) {
       // User has customized - merge new defaults into their list
-      const currentModels =
-        vscode.workspace.getConfiguration('texra').get<string[]>('models') ??
-        [];
+      const currentModels = getConfig<string[]>('models', []);
 
       const modelsToAdd = DEFAULT_MODELS.filter(
         (model) => !currentModels.includes(model),
@@ -343,6 +341,6 @@ export async function configureLatexSettings() {
       );
     }
   } catch (err) {
-    logger.error('extension', `Error configuring LaTeX settings: ${err}`);
+    logger.error('extension', `Error configuring LaTeX settings: ${toErrorMessage(err)}`);
   }
 }
