@@ -109,6 +109,28 @@ const value = Schema.catch(defaultValue).parse(data);
 description: z.string().nullish(),  // null | undefined → undefined
 ```
 
+**Tool input schemas (IMPORTANT)**
+
+Use `.nullish()` instead of `.optional()` for optional fields in tool input schemas. OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require optional fields to also be nullable for structured output compatibility.
+
+```typescript
+// Tool schemas - use .nullish() for API compatibility
+const ToolInputSchema = z.strictObject({
+  required: z.string(),
+  optional: z.string().nullish(),  // NOT .optional()
+});
+```
+
+When checking for missing optional values, use `== null` (not `=== undefined`) to handle both null and undefined:
+
+```typescript
+if (input.optional == null) {
+  // handles both null and undefined
+}
+```
+
+See: https://platform.openai.com/docs/guides/structured-outputs
+
 ### Refactoring for simplicity
 
 Aim for code that looks like it was designed correctly from the start:
