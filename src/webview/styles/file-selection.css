@@ -131,5 +131,5 @@ vscode-toolbar-container.file-select-actions {
 }
 
 #commit::part(listbox) {
-  max-height: 300px;
+  max-height: var(--height-large);
 }
