@@ -57,7 +57,10 @@ export class ArxivMetadataTool extends defineTool({
     // Take the first result (should be the only one for ID lookup)
     const targetEntry = entries[0];
 
-    const authorNames = getAuthorNames(targetEntry.authors, input.maxAuthors);
+    const authorNames = getAuthorNames(
+      targetEntry.authors,
+      input.maxAuthors ?? undefined,
+    );
     const includeAbstract = input.includeAbstract !== false;
 
     const metadata: ArxivPaperMetadata = {
