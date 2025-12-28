@@ -87,6 +87,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /** Pending resume parameters, set by prepareResume() and consumed by startAndInitRun() */
   private resumeParams: ResumeParams | null = null;
   private hydratedRoundCount = 0;
+  /** Cached services object to avoid creating new closures on each access */
+  private _cachedServices: ReflectionServices<C> | null = null;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -163,7 +165,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * - Flow nodes use these services via _params.services
    */
   public get services(): ReflectionServices<C> {
-    return {
+    return (this._cachedServices ??= {
       modelHandler: this.modelHandler,
       outputHandler: this.outputHandler,
       latexMediaManager: this.latexMediaManager,
@@ -184,7 +186,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       getOutputFileLocation: (round) => this.getOutputFileLocation(round),
       shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure(),
       getUsageRecorder: () => this.getUsageRecorder('workflow'),
-    };
+    });
   }
 
   // =========================================================================
