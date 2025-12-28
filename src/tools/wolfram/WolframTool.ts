@@ -22,7 +22,7 @@ export class WolframTool extends defineTool({
 }) {
   protected async execute(input: WolframInput): Promise<ToolResult> {
     const result = await executeWolframCode(input.code, {
-      timeout: input.timeout,
+      timeout: input.timeout ?? undefined,
       showErrorsToUser: false,
     });
     if (result.success) {
