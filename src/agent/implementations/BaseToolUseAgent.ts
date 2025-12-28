@@ -183,6 +183,12 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Build services for flow nodes with explicit snapshot parameter.
    *
+   * Snapshot Lifecycle:
+   * - snapshot is captured by closure at service creation time (in run())
+   * - run() clears this.resumeSnapshot immediately after capturing
+   * - This ensures the snapshot value is frozen for the entire flow execution
+   * - The snapshot is only used by prepareState() to restore session state
+   *
    * @param snapshot - Optional snapshot to resume from (passed explicitly for clear data flow)
    * @returns Services object for flow injection
    */
@@ -209,6 +215,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       session: this.sessionLifecycle,
 
       // Cycle operations (bound to agent methods)
+      // Note: snapshot is captured by closure - see Snapshot Lifecycle above
       prepareState: () => this.prepareInitialState(snapshot),
       buildCycleOptions: (store) => this.createCycleOptions(store),
       runCycle: (options, messages, store) =>
@@ -258,7 +265,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     } finally {
       // === FINALIZE (agent-owns-lifecycle) ===
       this.endRun(status);
-      // Clear persisted snapshot before cleanup
       await this.sessionLifecycle.clearPersistedSnapshot();
       this.cleanupRun();
     }
