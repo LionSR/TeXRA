@@ -261,10 +261,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Hydrate agent state from saved resume parameters.
    *
-   * Option B (stateless): Creates RoundOutput objects directly in agent
-   * without going through OutputHandler.hydrateFromArtifacts/getRoundArtifacts.
-   * This eliminates the dual source of truth between OutputHandler.rounds Map
-   * and agent.roundOutputs[].
+   * Single Source of Truth: agent.roundOutputs[] is the canonical storage
+   * for round results during runtime. OutputHandler.rounds is only used
+   * transiently during active file processing within a round - it does NOT
+   * persist across runs or resume.
+   *
+   * On resume, we create RoundOutput objects directly in agent.roundOutputs[]
+   * without going through OutputHandler. This is intentional - OutputHandler
+   * is a processing utility, not a persistence layer.
    */
   private async hydrateFromResume(params: ResumeParams): Promise<void> {
     this.roundOutputs = [];
@@ -281,8 +285,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       (a, b) => a - b,
     );
 
-    // Create RoundOutput objects directly (Option B: stateless approach)
-    // No need to go through OutputHandler.hydrateFromArtifacts/getRoundArtifacts
+    // Create RoundOutput objects directly in agent.roundOutputs[] (canonical storage)
     for (const round of sortedRounds) {
       const savedOutputs = params.rounds.get(round) ?? [];
       this.roundOutputs[round] = {
@@ -474,14 +477,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       throw error;
     } finally {
       // === FINALIZE (agent-owns-lifecycle) ===
-      // End current round stage before closing run
       shared?.state.roundStage?.end(status);
 
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
-      this.hydratedRoundCount = Math.max(
-        previousHydratedRounds,
-        currentOutputs,
-      );
+      this.hydratedRoundCount = Math.max(previousHydratedRounds, currentOutputs);
 
       this.endRun(status);
       this.cleanupRun();
