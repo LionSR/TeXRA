@@ -137,13 +137,7 @@ export function resolveToolDefinitions(
     if (!registry.get(item.name)) {
       warnOnMissing?.(item.name);
     }
-    // Validate against schema - if invalid, return minimal definition
-    const parsed = ToolDefinitionSchema.safeParse(item);
-    if (parsed.success) {
-      // Safe: ToolDefinition extends SerializableToolDefinition (schema output)
-      return parsed.data;
-    }
-    // Fallback: return just the name if validation fails
-    return { name: item.name };
+    // Parse with fallback to minimal definition if validation fails
+    return ToolDefinitionSchema.catch({ name: item.name }).parse(item);
   });
 }

@@ -59,6 +59,56 @@ When updating CHANGELOG.md:
 - **One error path**: Surface errors once through the shared error utilities in `@common/errors`. Let exceptions propagate naturally to that single handler.
 - **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
+### Zod v4 Schema Patterns
+
+This project uses Zod v4. Follow these idiomatic patterns:
+
+**Type definitions**
+- `.int()` instead of `.number().int()` - native integer type
+- `.uuid()` instead of `.string().uuid()` - native UUID type
+- `.iso.datetime()` instead of `.string().datetime()` - ISO datetime validator
+- `.enum(MyEnum)` instead of `.nativeEnum(MyEnum)` - works with TS enums
+- `.looseObject({...})` instead of `.object({...}).passthrough()` - allows extra keys
+
+**Default values**
+- `.prefault(val)` - Normalizes input BEFORE validation (for deserialization/loading)
+- `.default(val)` - Provides fallback AFTER validation fails
+- `.catch(val)` - Provides fallback when validation throws (field-level or schema-level)
+
+**When to use each default pattern:**
+```typescript
+// Deserialization (loading saved state) - use .prefault()
+const SnapshotSchema = z.object({
+  count: z.int().prefault(0),        // normalize missing fields
+  items: z.array(z.string()).prefault([]),
+});
+
+// Field-level fallback (preserve valid fields) - use .catch()
+const UserSchema = z.object({
+  tier: TierSchema.catch('free'),    // invalid tier → 'free', valid tier preserved
+  perms: z.array(z.string()).catch([]),
+});
+
+// Schema-level fallback (all-or-nothing) - use .catch() on schema
+const config = ConfigSchema.catch(DEFAULT_CONFIG).parse(data);
+```
+
+**Safe parsing with fallback**
+```typescript
+// Old verbose pattern
+const result = Schema.safeParse(data);
+const value = result.success ? result.data : defaultValue;
+
+// Zod v4 native
+const value = Schema.catch(defaultValue).parse(data);
+```
+
+**Null handling from databases**
+```typescript
+// Accept null from DB, normalize to undefined
+description: z.string().nullish(),  // null | undefined → undefined
+```
+
 ### Refactoring for simplicity
 
 Aim for code that looks like it was designed correctly from the start:
