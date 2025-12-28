@@ -59,7 +59,7 @@ interface PendingApprovalEntry {
 }
 
 /** All valid approval actions for tool edit prompts */
-export const ProgressViewApprovalActions = [
+export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'approve',
   'reject',
   'openDiff',
@@ -68,7 +68,7 @@ export const ProgressViewApprovalActions = [
 ] as const;
 
 export type ProgressViewApprovalAction =
-  (typeof ProgressViewApprovalActions)[number];
+  (typeof PROGRESS_VIEW_APPROVAL_ACTIONS)[number];
 
 interface ProgressViewApprovalActionPayload {
   requestId: string;
@@ -217,7 +217,7 @@ function countChangedLines(text: string): number {
     return 0;
   }
 
-  const normalized = text.replace(/\r\n/g, '\n');
+  const normalized = text.replaceAll('\r\n', '\n');
   const segments = normalized.split('\n');
   if (normalized.endsWith('\n')) {
     return Math.max(segments.length - 1, 0);

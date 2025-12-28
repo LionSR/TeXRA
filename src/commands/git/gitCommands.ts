@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { logger } from '@logger/logUtils';
 
 // Type imports
 import type { Dirent } from 'fs';
@@ -209,7 +210,7 @@ async function cloneOverleafProject(
     vscode.window.showErrorMessage(
       'Unable to inspect the workspace folder before cloning the Overleaf project.',
     );
-    console.error('Failed to read workspace contents:', error);
+    logger.error('Failed to read workspace contents:', error);
     return;
   }
 
@@ -250,9 +251,9 @@ async function cloneOverleafProject(
       const sanitizedMessage = error.message
         .replaceAll(token, '********')
         .replaceAll(encodedToken, '********');
-      console.error('Overleaf clone failed:', sanitizedMessage);
+      logger.error('Overleaf clone failed:', sanitizedMessage);
     } else {
-      console.error('Overleaf clone failed with non-error value:', error);
+      logger.error('Overleaf clone failed with non-error value:', error);
     }
   }
 }
