@@ -40,11 +40,11 @@ const SNIPPET_LINES = 4;
 export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
-  file_text: z.string().optional(),
-  view_range: z.tuple([z.number(), z.number()]).optional(),
-  old_str: z.string().optional(),
-  new_str: z.string().optional(),
-  insert_line: z.number().optional(),
+  file_text: z.string().nullish(),
+  view_range: z.tuple([z.number(), z.number()]).nullish(),
+  old_str: z.string().nullish(),
+  new_str: z.string().nullish(),
+  insert_line: z.number().nullish(),
 });
 
 /** Derived from TextEditorInputSchema - single source of truth */
@@ -129,7 +129,7 @@ export class TextEditorTool extends defineTool({
         );
 
       case 'insert':
-        if (input.insert_line === undefined) {
+        if (input.insert_line == null) {
           throw new ToolError(
             'Parameter `insert_line` is required for command: insert',
           );

@@ -29,14 +29,14 @@ const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
 
 const ArxivSearchInputSchema = z.strictObject({
   query: z.string(),
-  field: SearchFieldSchema.optional().describe(
+  field: SearchFieldSchema.nullish().describe(
     'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
   ),
-  categories: z.array(z.string()).optional(),
-  maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).optional(),
-  start: z.int().min(0).optional(),
-  sortBy: SortBySchema.optional(),
-  sortOrder: SortOrderSchema.optional(),
+  categories: z.array(z.string()).nullish(),
+  maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).nullish(),
+  start: z.int().min(0).nullish(),
+  sortBy: SortBySchema.nullish(),
+  sortOrder: SortOrderSchema.nullish(),
 });
 
 export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
