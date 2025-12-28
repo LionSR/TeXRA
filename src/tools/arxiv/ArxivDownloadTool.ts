@@ -13,7 +13,7 @@ import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivDownloadInputSchema = z.strictObject({
   id: z.string(),
-  autoIndent: z.boolean().optional(),
+  autoIndent: z.boolean().nullish(),
 });
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
