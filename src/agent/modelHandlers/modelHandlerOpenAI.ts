@@ -1385,4 +1385,66 @@ export class ModelHandlerOpenAI<
     // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
     return countTokens(textToCount); // Assuming cl100k_base default
   }
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   */
+  prependTextToUserMessage(
+    messages: ChatCompletionMessageParam[],
+    text: string,
+  ): void {
+    if (!text.trim()) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg || !('content' in lastUserMsg)) return;
+
+    if (typeof lastUserMsg.content === 'string') {
+      lastUserMsg.content = text + lastUserMsg.content;
+    } else if (Array.isArray(lastUserMsg.content)) {
+      const firstTextPart = lastUserMsg.content.find((p) => p.type === 'text');
+      if (firstTextPart && 'text' in firstTextPart) {
+        firstTextPart.text = text + firstTextPart.text;
+      } else {
+        lastUserMsg.content.unshift({ type: 'text', text });
+      }
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   */
+  async addMediaToUserMessage(
+    messages: ChatCompletionMessageParam[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg || !('content' in lastUserMsg)) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      if (typeof lastUserMsg.content === 'string') {
+        lastUserMsg.content = [
+          ...formattedMedia,
+          {
+            type: 'text',
+            text: lastUserMsg.content,
+          } as ChatCompletionContentPart,
+        ];
+      } else if (Array.isArray(lastUserMsg.content)) {
+        lastUserMsg.content.unshift(...formattedMedia);
+      }
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
+  }
 }

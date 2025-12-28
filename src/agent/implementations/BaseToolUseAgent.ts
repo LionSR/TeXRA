@@ -8,34 +8,41 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 // Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
+import {
+  AgentPrompt,
+  AgentSetting,
+  type AgentToolUseSetting,
+} from '@agent/core/AgentDataclass';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
 import {
   createToolUseRunFlow,
+  createInitialToolUseState,
   type ToolUseRunShared,
-  type ToolUseRunPhase,
-  type ToolUseRunHooks,
 } from '@agent/implementations/flows/ToolUseRunFlow';
+import type { ToolUseServices } from '@agent/implementations/flows/tooluse';
 // Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
-import { AgentLifecycle } from '@agent/implementations/flows/common/AgentLifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
+import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
+import {
+  ToolUseSessionLifecycle,
+  type IToolUseSession,
+} from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Type imports
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 
 // Internal imports - use IToolRegistry from core (single source of truth)
@@ -129,30 +136,24 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return tools;
   }
 
+  // =========================================================================
+  // Session Lifecycle Access
+  // =========================================================================
+
   /**
-   * Appends a follow-up message to the queue or resolves a waiting promise
-   * @param text - The follow-up message text
+   * Exposes session lifecycle operations for flows and external callers.
+   * Follows composition over delegation pattern.
    */
-  public appendFollowUp(text: string): void {
-    this.sessionLifecycle.appendFollowUp(text);
+  public get session(): IToolUseSession {
+    return this.sessionLifecycle;
   }
 
   /**
-   * Configures the agent to resume from a persisted snapshot
-   * @param snapshot - The snapshot to resume from
+   * Sets the snapshot to restore state from during initialization.
+   * Actual hydration happens in prepareInitialState().
    */
-  public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
+  public setResumeSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.resumeSnapshot = snapshot;
-  }
-
-  public async waitForFollowUp(): Promise<string | null> {
-    return this.sessionLifecycle.waitForFollowUp(() =>
-      this.checkInterruption(),
-    );
-  }
-
-  public hasQueuedFollowUp(): boolean {
-    return this.sessionLifecycle.hasQueuedFollowUp();
   }
 
   public async applyFollowUpMessage(
@@ -174,50 +175,119 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     this.sessionLifecycle.setStore(null);
   }
 
-  public async run(): Promise<void> {
-    const lifecycle = new AgentLifecycle<ToolUseRunPhase>('idle');
+  // =========================================================================
+  // Services Pattern
+  // Agent = Service Provider, Flow = Execution Engine
+  // =========================================================================
 
-    // Flow-specific hooks only - lifecycle is on the agent (IFlowAgent)
-    const hooks: ToolUseRunHooks<C> = {
-      prepareState: () => this.prepareInitialState(),
+  /**
+   * Build services for flow nodes with explicit snapshot parameter.
+   *
+   * Snapshot Lifecycle:
+   * - snapshot is captured by closure at service creation time (in run())
+   * - run() clears this.resumeSnapshot immediately after capturing
+   * - This ensures the snapshot value is frozen for the entire flow execution
+   * - The snapshot is only used by prepareState() to restore session state
+   *
+   * @param snapshot - Optional snapshot to resume from (passed explicitly for clear data flow)
+   * @returns Services object for flow injection
+   */
+  public getServices(
+    snapshot: ToolUseSessionSnapshot | null,
+  ): ToolUseServices<C> {
+    return {
+      // Base services (from BaseFlowServices)
+      modelHandler: this.modelHandler,
+      logger: this.logger,
+      config: this.agentConfig,
+      setting: this.agentSetting as AgentToolUseSetting,
+      prompt: this.agentPrompt,
+      context: this.context,
+      userVarChannels: this.userVarChannels,
+      checkInterruption: () => this.isInterruptionRequested(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+      getClient: () => this.getClientInstance(),
+
+      // Tool-use specific services
+      toolRegistry: this.toolRegistry,
+      session: this.sessionLifecycle,
+
+      // Cycle operations (bound to agent methods)
+      // Note: snapshot is captured by closure - see Snapshot Lifecycle above
+      prepareState: () => this.prepareInitialState(snapshot),
       buildCycleOptions: (store) => this.createCycleOptions(store),
       runCycle: (options, messages, store) =>
         runToolUseCycle({ options, messages, store }),
-      persistCheckpoint: (messages, store) =>
-        this.persistCheckpoint(messages, store),
+      persistCheckpoint: (messages, _store) =>
+        this.session.persistCheckpoint(messages),
+      applyFollowUpMessage: (message, conversation) =>
+        this.applyFollowUpMessage(message, conversation),
     };
+  }
 
-    await this.executeAgentRunFlow<ToolUseRunShared<C>>({
-      lifecycle,
-      hooks,
-      createState: () => ({
-        conversation: [],
-        cycleOptions: null,
-        shouldSkipCycle: false,
-        store: null,
-        runState: new AgentRunState(),
-      }),
-      createFlow: () => createToolUseRunFlow<C>(),
-    });
+  /**
+   * Main execution method for tool-use agents.
+   *
+   * Architecture:
+   * - Agent owns lifecycle (init before flow, finalize in finally)
+   * - Flow is pure execution (prepare → cycle → wait loop)
+   * - Errors throw directly from flow; caught here for cleanup
+   */
+  public async run(): Promise<void> {
+    // Capture and clear snapshot at start of run for explicit data flow
+    const snapshot = this.resumeSnapshot;
+    this.resumeSnapshot = null;
+
+    let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+    try {
+      // === INIT (agent-owns-lifecycle) ===
+      // Init inside try block ensures cleanup runs even if init fails
+      await this.startAndInitRun();
+      await this.initializeClient();
+
+      // Create shared state (mutable runtime state only - no lifecycle!)
+      const shared: ToolUseRunShared<C> = {
+        state: createInitialToolUseState<C>(),
+      };
+
+      // Create flow and inject services with explicit snapshot
+      const flow = createToolUseRunFlow<C>();
+      flow.setServices(this.getServices(snapshot));
+
+      // Run the flow - errors throw directly
+      await flow.run(shared);
+    } catch (error) {
+      status = END_GROUP_STATUS.ERROR;
+      throw error;
+    } finally {
+      // === FINALIZE (agent-owns-lifecycle) ===
+      this.endRun(status);
+      await this.sessionLifecycle.clearPersistedSnapshot();
+      this.cleanupRun();
+    }
   }
 
   /**
    * Prepares the initial state for the tool-use session.
    * Handles both new sessions and resumed sessions from snapshots.
    *
+   * @param snapshot - Optional snapshot to resume from (passed explicitly for clear data flow)
+   *
    * Pure method: Returns data for the flow to update state.
    * Only side effect: Sets sessionLifecycle store (necessary for persistence).
    */
-  public async prepareInitialState(): Promise<{
+  public async prepareInitialState(
+    snapshot: ToolUseSessionSnapshot | null,
+  ): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
     runState: AgentRunState;
   }> {
-    if (this.resumeSnapshot) {
+    if (snapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
-      const snapshot = this.resumeSnapshot;
-      this.resumeSnapshot = null;
 
       const messages = snapshot.messages;
       const store = createSharedStore({
@@ -298,26 +368,5 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       modelName: this.agentConfig.model,
       agentName: this.agentConfig.agent,
     };
-  }
-
-  public async enterWaitingState(
-    conversation: ProviderMessage[],
-  ): Promise<void> {
-    await this.sessionLifecycle.enterWaitingState(conversation);
-  }
-
-  public async markRunning(): Promise<void> {
-    await this.sessionLifecycle.markRunning();
-  }
-
-  public async clearPersistedSnapshot(): Promise<void> {
-    await this.sessionLifecycle.clearPersistedSnapshot();
-  }
-
-  public async persistCheckpoint(
-    messages: ProviderMessage[],
-    _store: AgentSharedStore,
-  ): Promise<void> {
-    await this.sessionLifecycle.persistCheckpoint(messages);
   }
 }

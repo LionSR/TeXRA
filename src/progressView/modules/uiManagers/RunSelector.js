@@ -246,7 +246,7 @@ export class RunSelector {
     }
 
     if (!targetId && runs.length > 0) {
-      targetId = runs[runs.length - 1].id;
+      targetId = runs.at(-1).id;
     }
 
     this._dropdown.value = targetId ?? '';
