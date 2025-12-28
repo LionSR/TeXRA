@@ -5,9 +5,6 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - utils
-import { ensureDirCommon } from './ensureDirCommon';
-
 type PathInput = string;
 
 /**
@@ -109,11 +106,17 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: PathInput,
   ): Promise<void> {
-    await ensureDirCommon(
-      target,
-      this.exists.bind(this),
-      this.createDir.bind(this),
-    );
+    try {
+      const existsResult = await this.exists(target);
+      if (!existsResult) {
+        await this.createDir(target);
+      }
+    } catch (err) {
+      if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
+        return;
+      }
+      throw err;
+    }
   }
 
   public static async readDir(

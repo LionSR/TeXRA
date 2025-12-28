@@ -1,8 +1,6 @@
-// Local imports
-import * as path from 'path';
-
 // Internal imports
 import { getConfig } from '@utils/config';
+import { hasExtension } from '@utils/core';
 
 /**
  * File categories for extension configuration lookups.
@@ -51,6 +49,5 @@ export function getIncludedExtensions(
  * Returns true if the file has a .tex extension.
  */
 export function isTexFile(filePath: string): boolean {
-  const fileName = path.basename(filePath);
-  return fileName.toLowerCase().endsWith('.tex');
+  return hasExtension(filePath, '.tex');
 }
