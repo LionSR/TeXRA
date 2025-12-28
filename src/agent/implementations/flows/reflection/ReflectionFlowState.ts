@@ -100,13 +100,20 @@ export interface ReflectionFlowShared {
 
 /**
  * Create initial state for a reflection flow run.
+ *
+ * @param totalRounds - Total rounds to execute
+ * @param initialWorkspaceState - Initial workspace state
+ * @param hydratedOutputs - Optional pre-hydrated round outputs from resume
  */
 export function createInitialReflectionState(
   totalRounds: number,
   initialWorkspaceState: AgentWorkspaceState,
+  hydratedOutputs?: RoundOutput[],
 ): ReflectionFlowState {
+  // Calculate starting round from hydrated outputs (resume from next round)
+  const startingRound = hydratedOutputs?.length ?? 0;
   return {
-    currentRound: 0,
+    currentRound: startingRound,
     totalRounds,
     workspaceState: initialWorkspaceState,
     context: null,
@@ -114,7 +121,7 @@ export function createInitialReflectionState(
     conversation: [],
     runState: new AgentRunState(),
     roundStates: [],
-    roundOutputs: [],
+    roundOutputs: hydratedOutputs ? [...hydratedOutputs] : [],
     continueRounds: true,
     endTurn: false,
     roundStage: null, // Set by agent.run() before flow starts

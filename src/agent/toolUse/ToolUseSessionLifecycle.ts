@@ -98,12 +98,16 @@ export class ToolUseSessionLifecycle<C = unknown> implements IToolUseSession {
     }
 
     const args = this.buildPersistenceArgs(messages);
-    if (args) {
-      // Attempt to persist idle snapshot (best effort, non-blocking)
-      await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
+    if (!args) {
+      // Preconditions not met (no store or executionId) - don't set waiting status
+      // This can happen during interruption when store is cleared
+      return;
     }
 
-    // Always set waiting status regardless of persistence result
+    // Attempt to persist idle snapshot (best effort, non-blocking)
+    await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
+
+    // Set waiting status after successful persistence setup
     StreamStatusService.set(this.agent.getStreamTabId(), STREAM_STATUS.WAITING);
   }
 
