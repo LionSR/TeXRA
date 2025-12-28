@@ -72,4 +72,12 @@ export interface IOutputHandler {
    * @param storageKey - THE key for storage operations (task group ID or execution ID)
    */
   setActiveRun(storageKey: StorageKey): void;
+
+  /**
+   * Hydrate a round's outputs from previously saved state.
+   * Used during resume to populate the internal rounds map without reprocessing.
+   * @param round - Round number to hydrate
+   * @param outputs - Previously saved output file info
+   */
+  hydrateRound(round: number, outputs: OutputFileInfo[]): void;
 }
