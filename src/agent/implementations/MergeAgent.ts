@@ -7,13 +7,17 @@ import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentFileLocation } from '@utils/files';
 
-import { DirectAgent } from './DirectAgent';
+import { BaseReflectionAgent } from './BaseReflectionAgent';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
  * Handles complex filename parsing and maintains file relationships during merging.
+ *
+ * Note: MergeAgent uses `agentType: 'direct'` in its YAML configuration, which
+ * provides single-round execution and scratchpad-only XML structure (via
+ * BaseReflectionAgent's config-driven behavior).
  */
-export class MergeAgent extends DirectAgent {
+export class MergeAgent extends BaseReflectionAgent {
   constructor(
     modelHandler: IModelHandler,
     agentConfig: AgentConfig,

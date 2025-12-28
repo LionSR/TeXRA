@@ -57,11 +57,17 @@ export interface ResumeParams {
 }
 
 /**
- * Abstract base class for agents that support multi-turn reflection.
+ * Base class for agents that support multi-turn reflection.
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
+ *
+ * ## Config-Driven Behavior
+ *
+ * This class handles all workflow agent types (direct, CoT) via config-driven
+ * behavior based on the `agentType` field in settings. Subclasses are only
+ * needed for specialized behavior (e.g., MergeAgent for custom file naming).
  */
-export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
+export class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /** File paths for each round's raw model output - always workspace or runStorage */
   protected outputFile: AgentFileLocation[];
   /** Multi-file output locations per round - always workspace or runStorage */
@@ -311,22 +317,26 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    *
    * ## Config-Driven Behavior (Flow-First Architecture)
    *
-   * If `setting.maxRounds` is set, uses that value directly.
-   * This allows YAML configuration to control rounds without subclassing.
+   * Priority order:
+   * 1. `setting.maxRounds` - explicit YAML configuration
+   * 2. `agentType: 'direct'` - implies single-round execution (maxRounds=1)
+   * 3. Default calculation - max(configured rounds, userRequest array length)
    *
-   * ## Legacy Behavior
-   *
-   * If `maxRounds` is not set, falls back to:
-   * - Subclass override (DirectAgent returns 1)
-   * - Default: max(configured rounds, userRequest array length)
+   * This allows the same BaseReflectionAgent class to handle all workflow
+   * agent types without requiring subclasses.
    */
   protected getTotalRounds(): number {
-    // Config-driven: maxRounds takes precedence
+    // 1. Explicit maxRounds config takes highest precedence
     if (this.agentSetting.maxRounds !== undefined) {
       return this.agentSetting.maxRounds;
     }
 
-    // Default behavior (can be overridden by subclasses)
+    // 2. agentType-driven: 'direct' implies single-round execution
+    if (this.agentSetting.agentType === 'direct') {
+      return 1;
+    }
+
+    // 3. Default behavior for CoT and other types
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
       : this.agentPrompt.userRequest
@@ -377,20 +387,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    *
    * ## Config-Driven Behavior (Flow-First Architecture)
    *
-   * If `setting.xmlStructureMode` is set, uses that configuration:
-   * - 'never': Don't ensure XML structure
-   * - 'scratchpadOnly': Only when prefills include scratchpad
-   * - 'always': Always ensure XML structure
+   * Priority order:
+   * 1. `setting.xmlStructureMode` - explicit YAML configuration
+   *    - 'never': Don't ensure XML structure
+   *    - 'scratchpadOnly': Only when prefills include scratchpad
+   *    - 'always': Always ensure XML structure
+   * 2. `agentType: 'CoT'` - implies always ensure XML structure
+   * 3. `agentType: 'direct'` - implies scratchpadOnly mode
+   * 4. Default: false (no XML structure enforcement)
    *
-   * ## Legacy Behavior
-   *
-   * If `xmlStructureMode` is not set, falls back to subclass overrides:
-   * - DirectAgent: returns this.useScratchpad
-   * - CoTAgent: returns true
-   * - Default: false
+   * This allows the same BaseReflectionAgent class to handle all workflow
+   * agent types without requiring subclasses.
    */
   protected shouldEnsureXmlStructure(): boolean {
-    // Config-driven: xmlStructureMode takes precedence
+    // 1. Explicit xmlStructureMode takes highest precedence
     const mode = this.agentSetting.xmlStructureMode;
     if (mode !== undefined) {
       switch (mode) {
@@ -404,7 +414,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       }
     }
 
-    // Default behavior (can be overridden by subclasses)
+    // 2. agentType-driven: 'CoT' implies always ensure XML structure
+    if (this.agentSetting.agentType === 'CoT') {
+      return true;
+    }
+
+    // 3. agentType-driven: 'direct' implies scratchpadOnly mode
+    if (this.agentSetting.agentType === 'direct') {
+      return this.useScratchpad;
+    }
+
+    // 4. Default behavior (no explicit type or config)
     return false;
   }
 
