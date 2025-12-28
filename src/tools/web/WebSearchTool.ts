@@ -38,7 +38,8 @@ export class WebSearchTool extends defineTool({
   schema: WebSearchInputSchema,
 }) {
   protected async execute(input: WebSearchInput): Promise<ToolResult> {
-    const { query, max_results = 3 } = input;
+    const { query } = input;
+    const max_results = input.max_results ?? 3;
     let response;
     try {
       response = await axios.get<DuckDuckGoResponse>(
