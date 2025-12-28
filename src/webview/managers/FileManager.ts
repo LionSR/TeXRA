@@ -470,7 +470,11 @@ export class FileManager extends BaseWebviewManager {
       }
       return relativePaths;
     } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
+      await showLoggedErrorMessage(
+        CHANNEL,
+        'Error selecting output files',
+        err,
+      );
       return null;
     }
   }

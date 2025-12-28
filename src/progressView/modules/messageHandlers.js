@@ -159,6 +159,28 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  // =========================================================================
+  // Stream validation helpers - reduce duplication across 14+ handlers
+  // =========================================================================
+
+  /**
+   * Check if message targets the active stream
+   * @param {object} message - Message with optional stream property
+   * @returns {boolean} true if message.stream matches activeStream
+   */
+  _isActiveStream(message) {
+    return message.stream === state.activeStream;
+  }
+
+  /**
+   * Get target stream from message with fallback to activeStream
+   * @param {object} message - Message with optional stream property
+   * @returns {string|null} The target stream or null if none available
+   */
+  _getTargetStream(message) {
+    return message.stream || state.activeStream || null;
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -307,7 +329,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
-    if (message.stream !== state.activeStream) {
+    if (!this._isActiveStream(message)) {
       this._updatePlaceholderVisibility();
       return;
     }
@@ -404,7 +426,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _handleIncrementalUpdate(message) {
     // Defensive guard: caller should verify stream matches active stream
-    if (message.stream !== state.activeStream) {
+    if (!this._isActiveStream(message)) {
       console.debug(
         `[incremental] stream mismatch: ${message.stream} !== ${state.activeStream}`,
       );
@@ -448,7 +470,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleAppendLog(message) {
-    if (message.stream === state.activeStream) {
+    if (this._isActiveStream(message)) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       const logId = message.logMessage?.id;
       const pendingUpdate = logId ? pendingLogUpdates.get(logId) : null;
@@ -484,7 +506,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLog(message) {
-    if (message.stream === state.activeStream) {
+    if (this._isActiveStream(message)) {
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         const logId = message.logMessage?.id;
@@ -500,7 +522,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleAddTaskGroup(message) {
-    if (message.stream === state.activeStream) {
+    if (this._isActiveStream(message)) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
       if (message.group && !message.group.parentGroupId) {
@@ -602,11 +624,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateUsage(message) {
-    if (message.stream && message.stream !== state.activeStream) {
+    if (message.stream && !this._isActiveStream(message)) {
       return;
     }
 
-    const targetStream = message.stream || state.activeStream || null;
+    const targetStream = this._getTargetStream(message);
     if (!targetStream) {
       return;
     }
@@ -624,11 +646,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * More efficient than handleUpdateUsage during streaming.
    */
   handleUpdateRunUsage(message) {
-    if (message.stream && message.stream !== state.activeStream) {
+    if (message.stream && !this._isActiveStream(message)) {
       return;
     }
 
-    const targetStream = message.stream || state.activeStream || null;
+    const targetStream = this._getTargetStream(message);
     if (!targetStream || !message.runId) {
       return;
     }
@@ -639,7 +661,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateFiles(message) {
-    const targetStream = message.stream || state.activeStream || null;
+    const targetStream = this._getTargetStream(message);
     if (!targetStream) {
       return;
     }
@@ -670,7 +692,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateMissingOutputs(message) {
-    const targetStream = message.stream || state.activeStream || null;
+    const targetStream = this._getTargetStream(message);
     if (!targetStream) {
       return;
     }
