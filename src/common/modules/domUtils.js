@@ -348,12 +348,13 @@ export function scrollToBottom(element) {
 // --- Element Visibility Utilities ---
 
 /**
- * Clear an element's content by setting innerHTML to empty string.
+ * Clear an element's content by removing all child nodes.
+ * Uses replaceChildren() which is more efficient than innerHTML = ''.
  * @param {HTMLElement} element - The element to clear
  */
 export function clearElement(element) {
   if (element) {
-    element.innerHTML = '';
+    element.replaceChildren();
   }
 }
 
