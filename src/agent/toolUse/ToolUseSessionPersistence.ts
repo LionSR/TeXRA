@@ -20,8 +20,9 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local imports - persistence helpers
 
-// Local file imports
-import { ToolUseFollowUpQueue, type FollowUpQueue } from './ToolUseFollowUp';
+// Local file imports - from extracted modules to avoid circular dependencies
+import { FollowUpQueue } from './FollowUpQueue';
+import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 import {
   ToolUseSessionManager,
   type SaveToolUseSnapshotPayload,
