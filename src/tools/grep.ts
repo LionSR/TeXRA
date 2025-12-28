@@ -100,7 +100,9 @@ export class GrepTool extends defineTool({
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
     const outputMode: OutputMode = input.output_mode ?? 'content';
-    const { resolved: searchPath, display } = resolveAndFormat(input.path);
+    const { resolved: searchPath, display } = resolveAndFormat(
+      input.path ?? undefined,
+    );
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
     const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
@@ -122,7 +124,10 @@ export class GrepTool extends defineTool({
       );
     }
 
-    const limitedOutput = applyHeadLimit(result.stdout, input.head_limit);
+    const limitedOutput = applyHeadLimit(
+      result.stdout,
+      input.head_limit ?? undefined,
+    );
     const outputText =
       limitedOutput || `No matches found for pattern in ${display}`;
     const summary = limitedOutput
