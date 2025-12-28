@@ -103,7 +103,7 @@ export class TextEditorTool extends defineTool({
     // Execute the appropriate command
     switch (command) {
       case 'view':
-        return await this.view(filePath, input.view_range);
+        return await this.view(filePath, input.view_range ?? undefined);
       case 'create':
         if (!input.file_text) {
           throw new ToolError(

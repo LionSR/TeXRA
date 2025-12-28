@@ -122,7 +122,7 @@ Use `.nullish()` instead of `.optional()` for optional fields in tool input sche
 // Tool schemas - use .nullish() for API compatibility
 const ToolInputSchema = z.strictObject({
   required: z.string(),
-  optional: z.string().nullish(),  // NOT .optional()
+  optional: z.string().nullish(), // NOT .optional()
 });
 ```
 
