@@ -354,7 +354,7 @@ export class ProgressViewState {
         groupToggleStates: this.toggleStates.entries(),
       });
     } catch (e) {
-      console.error('Failed to save state:', e);
+      console.error('[ProgressViewState] Failed to save toggle states:', e);
     }
   }
 
@@ -492,7 +492,7 @@ export class ProgressViewState {
       return aTime - bTime;
     });
 
-    const latest = rootGroups[rootGroups.length - 1];
+    const latest = rootGroups.at(-1);
     return latest?.id || null;
   }
 
