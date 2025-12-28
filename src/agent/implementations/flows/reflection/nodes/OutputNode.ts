@@ -33,6 +33,7 @@ import type {
   ReflectionFlowParams,
   ReflectionServices,
 } from '../ReflectionServices';
+import { createBaseFileLocations } from '../helpers';
 
 // ============================================================================
 // Types
@@ -76,12 +77,9 @@ export class OutputNode<C = unknown> extends Node<
       );
     }
 
-    // Base files for latexdiff come from outputFiles config
-    // (same logic as BaseReflectionAgent constructor)
-    const baseFiles =
-      config.outputFiles.length > 0
-        ? config.outputFiles.map((f) => fileService.createLocation(f))
-        : [fileService.createLocation(config.inputFile)];
+    // Base files for latexdiff - MUST be workspace locations
+    // (uses same helper as BaseReflectionAgent constructor)
+    const baseFiles = createBaseFileLocations(config);
 
     // Determine if we should ensure XML structure (delegates to agent for polymorphism)
     // DirectAgent: returns useScratchpad, CoTAgent: returns true, Default: false

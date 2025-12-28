@@ -8,7 +8,13 @@
 import type { RoundOutput } from '@agent/output';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation, TaskRunFileService } from '@utils/files';
+import {
+  WorkspaceFS,
+  createWorkspaceLocation,
+  type FileLocation,
+  type TaskRunFileService,
+  type WorkspaceFileLocation,
+} from '@utils/files';
 
 /**
  * Determine which files to process for a given round.
@@ -48,4 +54,30 @@ export function getFilesForRound(
   }
 
   return [];
+}
+
+/**
+ * Create base file locations for latexdiff and artifact tracking.
+ *
+ * Base files are ALWAYS workspace locations (inputs from workspace).
+ * Even in run-storage mode, we snapshot FROM workspace TO run storage.
+ * Latexdiff must reference the original workspace files, not their
+ * run storage copies.
+ *
+ * @param config - Agent configuration with outputFiles and inputFile
+ * @returns Array of workspace file locations for base files
+ */
+export function createBaseFileLocations(
+  config: AgentConfig,
+): WorkspaceFileLocation[] {
+  return config.outputFiles.length > 0
+    ? config.outputFiles.map((f) =>
+        createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
+      )
+    : [
+        createWorkspaceLocation(
+          WorkspaceFS.fullPath(config.inputFile),
+          config.inputFile,
+        ),
+      ];
 }
