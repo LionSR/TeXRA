@@ -35,8 +35,12 @@ body {
   /* Border colors */
   --color-border: var(--vscode-panel-border);
 
-  /* Status colors */
-  --color-success: var(--vscode-testing-iconPassed);
+  /* Status colors - semantic aliases with fallbacks */
+  --color-success: var(--vscode-testing-iconPassed, #2ea043);
+  --color-error: var(--vscode-editorError-foreground, #f14c4c);
+  --color-warning: var(--vscode-editorWarning-foreground, #cca700);
+  --color-added: var(--vscode-charts-green, #4caf50);
+  --color-removed: var(--vscode-charts-red, #f44336);
 
   /* Aliases used by components */
   --background-color: var(--color-bg-secondary);
@@ -44,12 +48,15 @@ body {
   --button-hover-background: var(--vscode-button-hoverBackground);
   --dropdown-border: var(--vscode-dropdown-border);
 
-  /* Typography */
+  /* Typography - text: lg (1.2x), sm (0.9x), xs (0.8x); icons reuse lg and base */
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
-  --font-size-sm: calc(var(--font-size) * 0.9);
   --font-size-lg: calc(var(--font-size) * 1.2);
+  --font-size-sm: calc(var(--font-size) * 0.9);
+  --font-size-xs: calc(var(--font-size) * 0.8);
+  --font-size-icon: var(--font-size-lg);
+  --font-size-icon-sm: var(--font-size);
 
   /* Spacing */
   --spacing-tiny: 2px;
@@ -105,7 +112,7 @@ body {
 vscode-toolbar-container {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-small);
   flex-wrap: nowrap;
 }
 

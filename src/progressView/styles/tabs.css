@@ -121,11 +121,11 @@
   background-color: var(--vscode-list-hoverBackground);
 }
 
-.tab-container.active {
+.tab-container.is-active {
   background-color: var(--vscode-list-activeSelectionBackground);
 }
 
-.tab-container.active .tab {
+.tab-container.is-active .tab {
   color: var(--vscode-list-activeSelectionForeground);
 }
 

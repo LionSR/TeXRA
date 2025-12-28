@@ -135,54 +135,50 @@ h2 {
   max-width: 300px;
 }
 
-/* Visibility badges */
-.visibility-badge {
+/* Badge base styles (BEM base class) */
+.badge {
   display: inline-block;
-  padding: 2px var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
   border-radius: var(--border-radius-small);
   font-size: var(--font-size-sm);
+}
+
+/* Visibility badge modifier */
+.badge.visibility-badge {
   text-transform: lowercase;
 }
 
-.visibility-badge.public {
+.badge.visibility-badge.public {
   background: var(--vscode-testing-iconPassed);
   color: white;
 }
 
-.visibility-badge.custom {
+.badge.visibility-badge.custom {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Category badges */
-.category-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
+/* Category badge modifier */
+.badge.category-badge {
   font-weight: 500;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Multi-output badges */
-.multi-output-badge {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
+/* Multi-output badge modifier */
+.badge.multi-output-badge {
   font-weight: 500;
 }
 
-.multi-output-badge.supported {
+.badge.multi-output-badge.supported {
   background: var(--vscode-testing-iconPassed);
   color: var(--vscode-button-foreground);
 }
 
-.multi-output-badge.not-supported {
+.badge.multi-output-badge.not-supported {
   background: var(--vscode-input-background);
   color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  border: var(--border-thin) solid var(--color-border);
 }
 
 /* Select button */
