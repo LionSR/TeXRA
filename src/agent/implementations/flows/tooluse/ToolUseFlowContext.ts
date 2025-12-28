@@ -87,12 +87,37 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   private readonly init: ToolUseFlowContextInit<C>;
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle;
+  private readonly resolvedTools: ToolDefinition[];
   private _services: ToolUseServices<C> | null = null;
 
   constructor(init: ToolUseFlowContextInit<C>) {
     this.init = init;
     this.toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
     this.sessionLifecycle = new ToolUseSessionLifecycle(this);
+    // Resolve tools once at construction time instead of on every cycle
+    this.resolvedTools = this.resolveToolsFromSetting();
+  }
+
+  /**
+   * Resolves tool definitions from setting at construction time.
+   * This is computed once and cached to avoid repeated registry lookups.
+   */
+  private resolveToolsFromSetting(): ToolDefinition[] {
+    const cfg = Array.isArray(this.init.setting.tools)
+      ? this.init.setting.tools
+      : [];
+    const tools: ToolDefinition[] = [];
+    for (const t of cfg) {
+      const def = typeof t === 'string' ? { name: t } : t;
+      if (!this.toolRegistry.has(def.name)) {
+        this.init.executionContext.logger.warn(
+          `Tool "${def.name}" not found in registry`,
+        );
+        continue;
+      }
+      tools.push(def);
+    }
+    return tools;
   }
 
   // =========================================================================
@@ -179,24 +204,6 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   // State Preparation
   // =========================================================================
 
-  private getTools(): ToolDefinition[] {
-    const cfg = Array.isArray(this.init.setting.tools)
-      ? this.init.setting.tools
-      : [];
-    const tools: ToolDefinition[] = [];
-    for (const t of cfg) {
-      const def = typeof t === 'string' ? { name: t } : t;
-      if (!this.toolRegistry.has(def.name)) {
-        this.init.executionContext.logger.warn(
-          `Tool "${def.name}" not found in registry`,
-        );
-        continue;
-      }
-      tools.push(def);
-    }
-    return tools;
-  }
-
   private async prepareInitialState(
     snapshot: ToolUseSessionSnapshot | null,
   ): Promise<PrepareStateResult> {
@@ -272,9 +279,10 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
     } = this.init;
     const client = this.init.getClient();
 
+    // Use pre-resolved tools (computed at construction time)
     const resolvedSetting = {
       ...setting,
-      tools: this.getTools(),
+      tools: this.resolvedTools,
     };
 
     // Build base cycle options (AgentCycleBaseOptions + ToolUseCycleOptions)
