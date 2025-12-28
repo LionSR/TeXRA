@@ -72,8 +72,8 @@ export interface BaseFlowServices<C = unknown> {
   /** User variable channels for template rendering */
   readonly userVarChannels: UserVariableChannels;
 
-  /** Check if user requested interruption */
-  readonly checkInterruption: () => Promise<boolean> | boolean;
+  /** Check if user requested interruption (synchronous) */
+  readonly checkInterruption: () => boolean;
 
   /** Set abort controller for cancellation */
   readonly setAbortController: (ctrl: AbortController | null) => void;

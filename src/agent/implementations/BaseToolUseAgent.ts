@@ -249,7 +249,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
       // Create shared state (mutable runtime state only - no lifecycle!)
       const shared: ToolUseRunShared<C> = {
-        agent: this,
         state: createInitialToolUseState<C>(),
       };
 
