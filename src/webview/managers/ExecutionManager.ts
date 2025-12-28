@@ -9,7 +9,7 @@ import {
   AgentType,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
-import { ToolConfig } from '@agent/core/ToolConfig';
+import { DEFAULT_TOOL_CONFIG, ToolConfig } from '@agent/core/ToolConfig';
 import { capitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import {
@@ -81,8 +81,18 @@ export class ExecutionManager {
       message.outputFilesActive || outputFiles.length > 1
     );
 
+    // toolConfig only applies to workflow agents
+    const toolConfig: ToolConfig = {
+      autoExtractFigure: message.autoExtractFigure,
+      autoExtractTikzFigure: message.autoExtractTikzFigure,
+      attachTeXCount: message.attachTeXCount,
+      attachDiagnostics: message.attachDiagnostics,
+      autoCompileInputPdf: message.autoCompileInputPdf,
+    };
+
     return {
       ...baseConfig,
+      toolConfig,
       useMultipleOutputs,
       outputFiles,
     };
@@ -96,6 +106,8 @@ export class ExecutionManager {
 
     return {
       ...baseConfig,
+      // Tool-use agents use default (all-false) toolConfig
+      toolConfig: DEFAULT_TOOL_CONFIG,
       // Tool-use runs intentionally stay single-output so the execution
       // pipeline never attempts to resolve `_multiple` agent variants or
       // manage output file selections that the UI disables for this mode.
@@ -107,15 +119,7 @@ export class ExecutionManager {
   private composeBaseAgentConfig(
     message: any,
     session: AgentSessionDescriptor,
-  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles'> {
-    const toolConfig: ToolConfig = {
-      autoExtractFigure: message.autoExtractFigure,
-      autoExtractTikzFigure: message.autoExtractTikzFigure,
-      attachTeXCount: message.attachTeXCount,
-      attachDiagnostics: message.attachDiagnostics,
-      autoCompileInputPdf: message.autoCompileInputPdf,
-    };
-
+  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles' | 'toolConfig'> {
     const mapMediaPath = (f: string | null): string | null => {
       if (!f) return null;
       if (isPastedImage(f)) {
@@ -141,7 +145,6 @@ export class ExecutionManager {
           .filter((f: string | null): f is string => f !== null),
       ),
       editedFile: null,
-      toolConfig,
       agentType: session.agentType,
       session,
     };
