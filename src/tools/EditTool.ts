@@ -72,13 +72,13 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    if (!replace_all && occurrences > 1) {
+    if (replace_all !== true && occurrences > 1) {
       throw new ToolError(
         `old_string is not unique within ${targetPath}. Include more surrounding context or set replace_all to true.`,
       );
     }
 
-    const updatedContent = replace_all
+    const updatedContent = replace_all === true
       ? currentContent.replaceAll(old_string, new_string)
       : currentContent.replace(old_string, new_string);
 
@@ -104,10 +104,10 @@ export class EditFileTool extends defineTool({
       finalContent,
     );
 
-    const replacementSummary = replace_all
+    const replacementSummary = replace_all === true
       ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
       : 'Replaced 1 occurrence.';
-    const summary = replace_all
+    const summary = replace_all === true
       ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
           occurrences === 1 ? '' : 's'
         }`
