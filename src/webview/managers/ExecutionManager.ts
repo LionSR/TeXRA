@@ -54,7 +54,7 @@ export class ExecutionManager {
         openDocs,
       );
       if (choice === openDocs) {
-        vscode.commands.executeCommand('texra.openDoc', 'file-management');
+        void vscode.commands.executeCommand('texra.openDoc', 'file-management');
       }
       return null;
     }
@@ -148,7 +148,7 @@ export class ExecutionManager {
   }
 
   private handleFileOperation(message: any): void {
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.baseFile,
@@ -169,11 +169,11 @@ export class ExecutionManager {
   }
 
   handleHousekeeping(message: any): void {
-    vscode.commands.executeCommand(`texra.${message.command}`);
+    void vscode.commands.executeCommand(`texra.${message.command}`);
   }
 
   handleSingleOperation(message: any): void {
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.agent,
@@ -194,7 +194,7 @@ export class ExecutionManager {
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
 
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.agent,

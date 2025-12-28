@@ -134,8 +134,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Initialize Supabase authentication if enabled
-  const authConfig = vscode.workspace.getConfiguration('texra.auth');
-  const authEnabled = authConfig.get<boolean>('enabled', true);
+  const authEnabled = getConfig<boolean>('auth.enabled', true);
 
   if (authEnabled) {
     try {
@@ -258,7 +257,9 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(apiKeyStatusBarItem);
   // Non-blocking refresh to avoid delaying extension activation
-  refreshApiKeyStatus().catch(console.error);
+  void refreshApiKeyStatus().catch((err) =>
+    logger.error('extension', `API key status refresh failed: ${toErrorMessage(err)}`),
+  );
 
   const runningStreams = new Set<string>();
   const NON_RUNNING_STATUSES = ['stopped', 'error', 'cancelled', 'waiting'];
@@ -341,7 +342,9 @@ export async function activate(context: vscode.ExtensionContext) {
       ],
     )
       .then(() => context.globalState.update(welcomeKey, true))
-      .catch(console.error);
+      .catch((err) =>
+        logger.error('extension', `Welcome instruction failed: ${toErrorMessage(err)}`),
+      );
   }
 }
 

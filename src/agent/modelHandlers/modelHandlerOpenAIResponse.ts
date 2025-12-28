@@ -29,7 +29,7 @@ import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { sleepWithAbort } from '@utils/helpers';
+import { sleepWithAbort } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';

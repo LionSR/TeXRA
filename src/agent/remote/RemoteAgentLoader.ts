@@ -2,7 +2,7 @@
  * Remote Agent Loader - loads agent configurations from Supabase.
  */
 
-import * as vscode from 'vscode';
+import { getConfig } from '@utils/config';
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 
@@ -52,8 +52,7 @@ export class RemoteAgentLoader {
     }
 
     // Check if remote agents are enabled
-    const config = vscode.workspace.getConfiguration('texra.remoteAgents');
-    const enabled = config.get<boolean>('enabled', true);
+    const enabled = getConfig<boolean>('remoteAgents.enabled', true);
     if (!enabled) {
       throw new Error(
         'Remote agents are disabled. Enable them in settings: texra.remoteAgents.enabled',

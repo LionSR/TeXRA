@@ -8,3 +8,5 @@ export * from './pathUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './flexibleFS';
+export * from './rulesUtils';
+export * from './varsUtils';

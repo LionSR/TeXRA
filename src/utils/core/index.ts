@@ -1,5 +1,5 @@
 /**
- * Core utilities - consolidated path, string, and type helpers.
+ * Core utilities - consolidated path, string, type, and async helpers.
  */
 
 export {
@@ -17,3 +17,4 @@ export {
   type SerializedError,
 } from './stringCore';
 export { contentToString, isObject, type MessageContent } from './typeGuards';
+export { sleep, sleepWithAbort } from './async';

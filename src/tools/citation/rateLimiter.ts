@@ -1,4 +1,4 @@
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 
 /**
  * Simple rate limiter to respect API rate limits for academic metadata services.

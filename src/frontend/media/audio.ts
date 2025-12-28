@@ -11,7 +11,7 @@ import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config';
 import { getConfig } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
