@@ -192,7 +192,8 @@ export class HistoryRenderer {
         <span class="history-value">${encodedOutputs}</span>`;
     }
 
-    if (config.toolConfig) {
+    // Only show toolConfig for workflow agents - these options don't apply to tool-use agents
+    if (config.toolConfig && !isToolUse) {
       const toolsIcon = createCodicon('tools');
       detailsHTML += this._renderToolConfig(
         `${toolsIcon ? toolsIcon.outerHTML : ''} Config`,
