@@ -41,11 +41,19 @@ async function isPandocAvailable(): Promise<boolean> {
   }
 
   // Start new check and store the promise
-  pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
-    pandocAvailable = result;
-    pandocCheckPromise = null; // Clear the promise after completion
-    return result;
-  });
+  pandocCheckPromise = checkToolInstalled('pandoc', false)
+    .then((result) => {
+      pandocAvailable = result;
+      return result;
+    })
+    .catch(() => {
+      // Cache negative result on error to prevent infinite retries
+      pandocAvailable = false;
+      return false;
+    })
+    .finally(() => {
+      pandocCheckPromise = null;
+    });
 
   return pandocCheckPromise;
 }
