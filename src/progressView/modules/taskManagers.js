@@ -159,7 +159,7 @@ export class TaskGroupDomManager {
     }
 
     if (topLevel.length > 0) {
-      progressViewState.currentGroupId = topLevel[topLevel.length - 1].id;
+      progressViewState.currentGroupId = topLevel.at(-1).id;
       this.collapsePreviousActiveGroup();
     }
   }

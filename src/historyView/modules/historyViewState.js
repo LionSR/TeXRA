@@ -11,8 +11,7 @@ export class HistoryViewState {
   }
 
   initialize() {
-    const state = this.stateManager.getState();
-    const saved = typeof state === 'object' && state !== null ? state : {};
+    const saved = this.stateManager.getState();
     this.searchIndex = saved.searchIndex || 0;
     this.totalMatches = saved.totalMatches || 0;
     if (Array.isArray(saved.toggleStates)) {

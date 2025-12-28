@@ -1742,4 +1742,58 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
     return true;
   }
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   * Finds the last user message and prepends text to its content.
+   */
+  prependTextToUserMessage(messages: ResponseInputItem[], text: string): void {
+    if (!text.trim()) return;
+
+    const lastUserMsg = messages.findLast(
+      (m) => (m as { role?: string }).role === 'user',
+    ) as { role: 'user'; content?: unknown } | undefined;
+    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
+
+    const content = lastUserMsg.content as { type?: string; text?: string }[];
+    const firstTextPart = content.find((part) => part.type === 'input_text');
+    if (firstTextPart && 'text' in firstTextPart) {
+      firstTextPart.text = text + firstTextPart.text;
+    } else {
+      content.unshift({ type: 'input_text', text });
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   * Inserts media content parts at the beginning of the user message.
+   */
+  async addMediaToUserMessage(
+    messages: ResponseInputItem[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    const lastUserMsg = messages.findLast(
+      (m) => (m as { role?: string }).role === 'user',
+    ) as { role: 'user'; content?: unknown[] } | undefined;
+    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
+
+    try {
+      const formattedMedia = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ResponseInputMessageContentList;
+      lastUserMsg.content.unshift(...formattedMedia);
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
+  }
 }

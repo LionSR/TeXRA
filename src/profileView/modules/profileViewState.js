@@ -18,8 +18,7 @@ class ProfileViewState {
    * Initialize state from persisted storage.
    */
   initialize() {
-    const state = this.stateManager.getState();
-    const saved = typeof state === 'object' && state !== null ? state : {};
+    const saved = this.stateManager.getState();
     this._authenticated = saved.authenticated ?? false;
     this._user = saved.user ?? null;
     this._tier = saved.tier ?? 'free';

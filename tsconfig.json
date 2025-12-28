@@ -2,7 +2,7 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2023", "DOM"],
     "sourceMap": false,
     "rootDir": "src",
     "baseUrl": ".",

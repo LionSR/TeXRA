@@ -1,6 +1,5 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports - agent commands
 import { showLoggedErrorMessage } from '@common/errors';
@@ -10,9 +9,7 @@ import { HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager } from '@common/history';
 import { agentConfigToTaskState } from '@utils/config';
 import { executeCommand } from '@commands/agent/executeCommand';
-
-// --- Message Schemas ---
-const HistoryIdMessage = z.object({ historyId: z.string().min(1) });
+import { HistoryIdMessageSchema } from '@webview/types/messages';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -55,7 +52,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withValidatedMessage(
-      HistoryIdMessage,
+      HistoryIdMessageSchema,
       message,
       'rerunAgent',
       async ({ historyId }) => {
@@ -84,7 +81,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withValidatedMessage(
-      HistoryIdMessage,
+      HistoryIdMessageSchema,
       message,
       'restoreAgent',
       async ({ historyId }) => {
@@ -116,7 +113,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withValidatedMessage(
-      HistoryIdMessage,
+      HistoryIdMessageSchema,
       message,
       'deleteAgent',
       async ({ historyId }) => {

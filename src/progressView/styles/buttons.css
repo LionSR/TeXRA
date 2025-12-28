@@ -6,7 +6,7 @@
 /* Button-specific styles */
 .stop-button {
   margin-right: var(--spacing-tiny);
-  color: var(--vscode-testing-iconFailed, #f14c4c);
+  color: var(--color-error);
 }
 
 .pack-button {
@@ -15,7 +15,7 @@
 
 .run-button {
   margin-left: var(--spacing-tiny);
-  color: var(--vscode-testing-runAction, #2ea043);
+  color: var(--color-success);
 }
 
 #toolbarContainer .toolbar-button--hidden {
