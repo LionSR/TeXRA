@@ -1,5 +1,7 @@
 // Shared utility functions for the progress view modules
 
+import { CSS_CLASSES } from './constants.js';
+
 // Constants
 const DECIMAL_RADIX = 10; // Explicit base-10 for parseInt to avoid octal interpretation
 
@@ -101,16 +103,16 @@ function defaultChildTimestamp(child) {
   if (!child || !child.classList) {
     return null;
   }
-  if (child.classList.contains('log-group')) {
-    const startElem = child.querySelector('.group-start-time');
+  if (child.classList.contains(CSS_CLASSES.LOG_GROUP)) {
+    const startElem = child.querySelector(`.${CSS_CLASSES.GROUP_START_TIME}`);
     const start = startElem?.dataset.start;
     return start ? parseInt(start, DECIMAL_RADIX) : null;
   }
 
   if (
-    child.classList.contains('log-line') ||
-    child.classList.contains('banner-details') ||
-    child.classList.contains('native-status-line')
+    child.classList.contains(CSS_CLASSES.LOG_LINE) ||
+    child.classList.contains(CSS_CLASSES.BANNER_DETAILS) ||
+    child.classList.contains(CSS_CLASSES.NATIVE_STATUS_LINE)
   ) {
     const fullTs = child.dataset.fullTimestamp;
     if (fullTs) {

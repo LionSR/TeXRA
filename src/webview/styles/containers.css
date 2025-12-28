@@ -41,7 +41,8 @@
   overflow: visible;
 }
 
-/* Ensure all button sizes are consistent */
+/* Icon button sizing - uses .icon-button from common.css
+   Apply class in HTML or use these selectors for legacy compatibility */
 .latexdiffs-section vscode-button,
 .latexdiffs-section vscode-toolbar-button,
 .file-select-actions vscode-button,

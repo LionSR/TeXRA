@@ -1,6 +1,6 @@
 // Local imports - webview
 import { ELEMENT_IDS, BASE_FILE, EDITED_FILE } from '../constants.js';
-import { BaseUIManager } from './BaseUIManager.js';
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { collectCurrentContext } from '../state/currentContext.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
