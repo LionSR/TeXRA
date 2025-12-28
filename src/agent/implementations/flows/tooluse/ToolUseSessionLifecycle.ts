@@ -49,27 +49,26 @@ export interface IToolUseSession {
 /**
  * Interface for what the session lifecycle needs from its host.
  *
- * Both BaseToolUseAgent and ToolUseFlowContext can implement this,
- * enabling the session lifecycle to work in both contexts.
+ * Implemented by ToolUseFlowContext to provide session lifecycle with
+ * necessary context for flow-first execution.
  */
 export interface IToolUseSessionHost {
-  getStreamTabId(): StreamTabId;
-  getExecutionId(): ExecutionId | undefined;
+  readonly streamTabId: StreamTabId;
+  readonly executionId: ExecutionId | undefined;
   readonly config: AgentConfig;
 }
 
 /**
  * Session lifecycle that works with any IToolUseSessionHost.
  *
- * Used by both BaseToolUseAgent and ToolUseFlowContext for unified
- * session management across agent-based and flow-first execution.
+ * Provides unified session management for flow-first execution.
  */
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private store: AgentSharedStore | null = null;
 
   constructor(private readonly host: IToolUseSessionHost) {
-    this.followUps = ToolUseFollowUpQueue.acquire(host.getStreamTabId());
+    this.followUps = ToolUseFollowUpQueue.acquire(host.streamTabId);
   }
 
   setStore(store: AgentSharedStore | null): void {
@@ -100,13 +99,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
    */
   private buildPersistenceArgs(messages: ProviderMessage[]) {
     const store = this.store;
-    const executionId = this.host.getExecutionId();
+    const executionId = this.host.executionId;
     if (!store || !executionId) {
       return null;
     }
     return {
       executionId,
-      streamId: this.host.getStreamTabId(),
+      streamId: this.host.streamTabId,
       agentConfig: this.host.config,
       messages,
       store,
@@ -129,16 +128,16 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
 
     // Set waiting status after successful persistence setup
-    StreamStatusService.set(this.host.getStreamTabId(), STREAM_STATUS.WAITING);
+    StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.WAITING);
   }
 
   async markRunning(): Promise<void> {
-    StreamStatusService.set(this.host.getStreamTabId(), STREAM_STATUS.RUNNING);
+    StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.RUNNING);
   }
 
   async clearPersistedSnapshot(): Promise<void> {
     await ToolUseSessionPersistence.clearPersistedSnapshot(
-      this.host.getExecutionId(),
+      this.host.executionId,
     );
   }
 
@@ -163,8 +162,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
    */
   dispose(): void {
     this.setStore(null);
-    ToolUseFollowUpQueue.release(this.host.getStreamTabId());
+    ToolUseFollowUpQueue.release(this.host.streamTabId);
     // Clear any cached snapshot to prevent memory leaks
-    ToolUseSessionManager.clearByStream(this.host.getStreamTabId());
+    ToolUseSessionManager.clearByStream(this.host.streamTabId);
   }
 }
