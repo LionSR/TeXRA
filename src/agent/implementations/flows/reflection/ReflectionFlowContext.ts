@@ -1,46 +1,39 @@
 /**
- * ReflectionFlowContext - Unified execution context for reflection flows.
+ * ReflectionFlowContext - Self-contained execution context for reflection flows.
  *
- * This module consolidates all services and configuration needed by the flow,
- * replacing the previous pattern where agents provided services via callbacks.
+ * ## Flow-First Architecture
  *
- * ## Architecture: Flow-First Design
- *
- * Instead of:
+ * This module enables flows to run WITHOUT agent class instances. Instead of:
  *   Agent creates services → passes to flow → flow calls back to agent
  *
- * We now have:
- *   Context factory creates everything → flow owns all services
+ * We have:
+ *   Context factory creates everything → flow is self-contained
  *
- * ## Key Changes:
+ * ## Key Design Decisions:
  *
- * 1. **Services created here, not in agent** - outputHandler, promptBuilder,
- *    latexMediaManager, fileService are all created during context setup.
+ * 1. **Services created here** - outputHandler, promptBuilder, latexMediaManager,
+ *    fileService are all created during context setup.
  *
- * 2. **Strategies instead of callbacks** - Polymorphic behavior (like
- *    shouldEnsureXmlStructure) is captured via strategy objects at creation
- *    time, not via callbacks to agent methods.
+ * 2. **Configuration-driven behavior** - Instead of relying on subclass overrides
+ *    (DirectAgent.shouldEnsureXmlStructure), behavior is determined by config
+ *    fields like `xmlStructureMode` and `maxRounds`.
  *
- * 3. **No agent reference** - The flow doesn't need to know about the agent.
- *    All necessary state and behavior is in the context.
+ * 3. **No agent reference** - The flow doesn't need to know about agent classes.
+ *    All necessary state and behavior is computed from configuration.
  *
  * ## Usage:
  *
  * ```typescript
- * // In agent.run() or factory function:
+ * // Create context with all configuration
  * const context = createReflectionFlowContext({
  *   modelHandler,
  *   config: agentConfig,
  *   setting: agentSetting,
  *   prompt: agentPrompt,
  *   executionContext,
- *   userVarChannels,
- *   strategies: {
- *     getOutputFileLocation: (round) => ...,
- *     shouldEnsureXmlStructure: () => ...,
- *   },
  * });
  *
+ * // Run the flow
  * const flow = createReflectionFlow();
  * flow.setServices(context.services);
  * await flow.run(shared);
@@ -52,58 +45,20 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
+  XmlStructureMode,
 } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
-import type { LatexMediaManager } from '@latex';
-import type { IOutputHandler } from '@agent/output';
-import type { PromptBuilder } from '@utils/prompt';
+import type { AgentFileLocation } from '@utils/files';
+
+import { OutputHandler, type IOutputHandler } from '@agent/output';
+import { LatexMediaManager } from '@latex';
+import { PromptBuilder } from '@utils/prompt';
+import { TaskRunFileService } from '@utils/files';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { createBaseFileLocations } from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
-
-// ============================================================================
-// Strategy Interfaces
-// ============================================================================
-
-/**
- * Strategies for polymorphic behavior in reflection flows.
- *
- * These replace direct callbacks to agent methods. By capturing strategies
- * at context creation time, we:
- * 1. Remove the flow's dependency on agent instance
- * 2. Make polymorphism explicit and testable
- * 3. Allow alternative implementations without subclassing
- */
-export interface ReflectionFlowStrategies {
-  /**
-   * Strategy for determining output file location.
-   *
-   * Different agent types have different naming conventions:
-   * - DirectAgent: uses agentConfig.inputFile
-   * - MergeAgent: extracts filename from response
-   * - CoTAgent: adds round suffix
-   */
-  getOutputFileLocation: (round: number) => AgentFileLocation;
-
-  /**
-   * Strategy for XML structure enforcement.
-   *
-   * Different agent types have different requirements:
-   * - DirectAgent: only when useScratchpad is true
-   * - CoTAgent: always true
-   * - Default: false
-   */
-  shouldEnsureXmlStructure: () => boolean;
-
-  /**
-   * Strategy for usage recording.
-   *
-   * Returns a callback invoked when each round finalizes.
-   * This tracks token usage, response times, etc.
-   */
-  getUsageRecorder: () => AgentRoundFinalizedCallback;
-}
 
 // ============================================================================
 // Context Initialization
@@ -112,11 +67,11 @@ export interface ReflectionFlowStrategies {
 /**
  * Configuration for creating a ReflectionFlowContext.
  *
- * All required dependencies are provided here. The context factory
- * creates derived services (outputHandler, promptBuilder, etc.) from these.
+ * This is the minimal set of inputs needed. The context factory
+ * creates all derived services from these.
  */
 export interface ReflectionFlowContextInit<C = unknown> {
-  // Core dependencies (provided by caller)
+  // Core dependencies
   modelHandler: IModelHandler<any, any, any, any, C>;
   config: AgentConfig;
   setting: AgentWorkflowSetting;
@@ -124,19 +79,102 @@ export interface ReflectionFlowContextInit<C = unknown> {
   executionContext: AgentExecutionContext;
   userVarChannels: UserVariableChannels;
 
-  // Pre-built services (optional - context can create if not provided)
-  outputHandler?: IOutputHandler;
-  promptBuilder?: PromptBuilder;
-  latexMediaManager?: LatexMediaManager;
-  fileService?: TaskRunFileService;
-
-  // Control callbacks (must be from agent for interruption/abort)
+  // Control callbacks (required for interruption/abort)
   checkInterruption: () => boolean;
   setAbortController: (ctrl: AbortController | null) => void;
   getClient: () => C;
 
-  // Strategies for polymorphic behavior
-  strategies: ReflectionFlowStrategies;
+  // Usage tracking callback
+  getUsageRecorder: () => AgentRoundFinalizedCallback;
+}
+
+// ============================================================================
+// Behavior Computation
+// ============================================================================
+
+/**
+ * Compute whether XML structure should be ensured based on configuration.
+ *
+ * This replaces the polymorphic shouldEnsureXmlStructure() method that was
+ * overridden in DirectAgent and CoTAgent.
+ */
+function computeShouldEnsureXmlStructure(
+  setting: AgentWorkflowSetting,
+): boolean {
+  const mode: XmlStructureMode = setting.xmlStructureMode ?? 'never';
+
+  switch (mode) {
+    case 'always':
+      return true;
+    case 'scratchpadOnly': {
+      const useScratchpad =
+        setting.prefills?.includes('<scratchpad>') ?? false;
+      return useScratchpad;
+    }
+    case 'never':
+    default:
+      return false;
+  }
+}
+
+/**
+ * Compute total rounds based on configuration.
+ *
+ * This replaces the polymorphic getTotalRounds() method that was
+ * overridden in DirectAgent.
+ */
+function computeTotalRounds(
+  setting: AgentWorkflowSetting,
+  prompt: AgentPrompt,
+): number {
+  // If maxRounds is explicitly set, use it
+  if (setting.maxRounds !== undefined) {
+    return setting.maxRounds;
+  }
+
+  // Default: max of configured rounds and userRequest array length
+  const requestArray = Array.isArray(prompt.userRequest)
+    ? prompt.userRequest
+    : prompt.userRequest
+      ? [prompt.userRequest]
+      : [];
+  return Math.max(setting.rounds ?? 2, requestArray.length);
+}
+
+/**
+ * Compute output file location for a given round.
+ *
+ * This replaces the polymorphic getOutputFileLocation() method.
+ * MergeAgent has special logic that would need a separate strategy.
+ */
+function createOutputFileLocationGetter(
+  config: AgentConfig,
+  setting: AgentWorkflowSetting,
+  modelHandler: IModelHandler<any, any, any, any, any>,
+  fileService: TaskRunFileService,
+): (round: number) => AgentFileLocation {
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+
+  return (currRound: number): AgentFileLocation => {
+    const baseOutputFile = config.inputFile;
+    const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
+
+    const fileName = getOutputFileName(
+      baseOutputFile,
+      config.agent,
+      modelHandler.config.name,
+      fileExtension,
+      currRound,
+      config.editedFile || undefined,
+    );
+
+    // Route raw XML to isolated storage, direct outputs respect user preference
+    return (
+      useScratchpad
+        ? fileService.createRawOutputLocation(fileName)
+        : fileService.createLocation(fileName)
+    ) as AgentFileLocation;
+  };
 }
 
 // ============================================================================
@@ -144,25 +182,112 @@ export interface ReflectionFlowContextInit<C = unknown> {
 // ============================================================================
 
 /**
- * Unified execution context for reflection flows.
+ * Self-contained execution context for reflection flows.
  *
- * This class holds all services and configuration needed by flow nodes.
- * It implements the ReflectionServices interface for compatibility with
- * existing node code.
+ * Creates all services internally and computes behavior from configuration.
+ * No agent class instance is needed.
  */
 export class ReflectionFlowContext<C = unknown> {
   private readonly init: ReflectionFlowContextInit<C>;
   private _services: ReflectionServices<C> | null = null;
 
+  // Services created internally
+  private _outputHandler: IOutputHandler | null = null;
+  private _promptBuilder: PromptBuilder | null = null;
+  private _latexMediaManager: LatexMediaManager | null = null;
+  private _fileService: TaskRunFileService | null = null;
+
+  // Computed values
+  private _totalRounds: number | null = null;
+  private _shouldEnsureXmlStructure: boolean | null = null;
+
   constructor(init: ReflectionFlowContextInit<C>) {
     this.init = init;
   }
 
+  // =========================================================================
+  // Service Creation (lazy initialization)
+  // =========================================================================
+
+  private get fileService(): TaskRunFileService {
+    if (!this._fileService) {
+      this._fileService = new TaskRunFileService(
+        this.init.executionContext.executionId,
+      );
+    }
+    return this._fileService;
+  }
+
+  private get baseFiles(): AgentFileLocation[] {
+    return createBaseFileLocations(this.init.config);
+  }
+
+  private get outputHandler(): IOutputHandler {
+    if (!this._outputHandler) {
+      this._outputHandler = new OutputHandler(
+        this.init.setting,
+        this.init.config,
+        0, // logId
+        this.baseFiles,
+        this.init.executionContext.logger,
+        this.fileService,
+        this.init.executionContext.executionId,
+      );
+    }
+    return this._outputHandler;
+  }
+
+  private get promptBuilder(): PromptBuilder {
+    if (!this._promptBuilder) {
+      this._promptBuilder = new PromptBuilder(
+        this.init.prompt,
+        this.init.setting,
+        this.init.userVarChannels.transient,
+        this.init.executionContext.logger,
+      );
+    }
+    return this._promptBuilder;
+  }
+
+  private get latexMediaManager(): LatexMediaManager {
+    if (!this._latexMediaManager) {
+      this._latexMediaManager = new LatexMediaManager(
+        this.init.executionContext.logger,
+        this.fileService,
+      );
+    }
+    return this._latexMediaManager;
+  }
+
+  // =========================================================================
+  // Computed Behavior
+  // =========================================================================
+
+  get totalRounds(): number {
+    if (this._totalRounds === null) {
+      this._totalRounds = computeTotalRounds(this.init.setting, this.init.prompt);
+    }
+    return this._totalRounds;
+  }
+
+  get shouldEnsureXmlStructure(): boolean {
+    if (this._shouldEnsureXmlStructure === null) {
+      this._shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(
+        this.init.setting,
+      );
+    }
+    return this._shouldEnsureXmlStructure;
+  }
+
+  // =========================================================================
+  // Services Interface (for flow injection)
+  // =========================================================================
+
   /**
    * Get services for flow injection.
    *
-   * This returns the same interface as the old agent.services getter,
-   * allowing existing nodes to work unchanged.
+   * This implements the ReflectionServices interface, allowing existing
+   * flow nodes to work unchanged.
    */
   get services(): ReflectionServices<C> {
     if (this._services) {
@@ -179,22 +304,16 @@ export class ReflectionFlowContext<C = unknown> {
       checkInterruption,
       setAbortController,
       getClient,
-      strategies,
+      getUsageRecorder,
     } = this.init;
 
-    // Use provided services or throw if not available
-    // (In full implementation, context would create these)
-    const outputHandler = this.init.outputHandler;
-    const promptBuilder = this.init.promptBuilder;
-    const latexMediaManager = this.init.latexMediaManager;
-    const fileService = this.init.fileService;
-
-    if (!outputHandler || !promptBuilder || !latexMediaManager || !fileService) {
-      throw new Error(
-        'ReflectionFlowContext: Required services not provided. ' +
-          'Provide outputHandler, promptBuilder, latexMediaManager, and fileService.',
-      );
-    }
+    // Create output file location getter using computed values
+    const getOutputFileLocation = createOutputFileLocationGetter(
+      config,
+      setting,
+      modelHandler,
+      this.fileService,
+    );
 
     this._services = {
       // Base services
@@ -209,16 +328,16 @@ export class ReflectionFlowContext<C = unknown> {
       setAbortController,
       getClient,
 
-      // Reflection-specific services
-      outputHandler,
-      latexMediaManager,
-      promptBuilder,
-      fileService,
+      // Services created by context
+      outputHandler: this.outputHandler,
+      latexMediaManager: this.latexMediaManager,
+      promptBuilder: this.promptBuilder,
+      fileService: this.fileService,
 
-      // Strategies (no callbacks to agent!)
-      getOutputFileLocation: strategies.getOutputFileLocation,
-      shouldEnsureXmlStructure: strategies.shouldEnsureXmlStructure,
-      getUsageRecorder: strategies.getUsageRecorder,
+      // Strategies computed from configuration (no callbacks to agent!)
+      getOutputFileLocation,
+      shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure,
+      getUsageRecorder,
     };
 
     return this._services;
@@ -247,6 +366,24 @@ export class ReflectionFlowContext<C = unknown> {
   get setting() {
     return this.init.setting;
   }
+
+  // =========================================================================
+  // Lifecycle helpers
+  // =========================================================================
+
+  /**
+   * Reset the prompt builder (call before each run).
+   */
+  resetPromptBuilder(): void {
+    this._promptBuilder = null;
+  }
+
+  /**
+   * Set the active run storage key on the output handler.
+   */
+  setActiveRun(storageKey: string): void {
+    this.outputHandler.setActiveRun(storageKey as any);
+  }
 }
 
 // ============================================================================
@@ -254,10 +391,10 @@ export class ReflectionFlowContext<C = unknown> {
 // ============================================================================
 
 /**
- * Creates a ReflectionFlowContext with all services configured.
+ * Creates a ReflectionFlowContext with all services and behaviors configured.
  *
- * This is the primary entry point for setting up flow execution.
- * Call this in agent.run() instead of building services inline.
+ * This is the primary entry point for setting up flow execution without
+ * needing an agent class instance.
  */
 export function createReflectionFlowContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
