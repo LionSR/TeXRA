@@ -16,7 +16,6 @@ export {
   getWorkflowAgents,
   getToolUseAgents,
   getAgentsBySource,
-  isLoaded,
   refresh,
   // HTML options
   buildAgentOptions,

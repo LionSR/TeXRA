@@ -268,11 +268,6 @@ export function getAgentsBySource(source: AgentSource): AgentEntry[] {
   return [...cache.values()].filter((e) => e.source === source);
 }
 
-/** Check if cache is loaded. */
-export function isLoaded(): boolean {
-  return initialized;
-}
-
 /** Refresh the cache. */
 export async function refresh(): Promise<void> {
   initialized = false;
