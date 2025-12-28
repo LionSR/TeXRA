@@ -44,7 +44,6 @@ export {
 // Direct flow execution (bypasses agent classes)
 export {
   runReflectionFlow,
-  initializeFlowClient,
   type RunReflectionFlowInput,
   type RunReflectionFlowResult,
 } from './runReflectionFlow';
