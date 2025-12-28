@@ -272,6 +272,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const sortedRounds = Array.from(params.rounds.keys()).sort((a, b) => a - b);
 
     // Create RoundOutput objects directly in agent.roundOutputs[] (canonical storage)
+    // Also hydrate OutputHandler's rounds map for latexdiff to work after resume
     for (const round of sortedRounds) {
       const savedOutputs = params.rounds.get(round) ?? [];
       this.roundOutputs[round] = {
@@ -285,6 +286,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           sourceLocation: null,
         },
       };
+      // Hydrate OutputHandler so getRoundMapping works for latexdiff
+      this.outputHandler.hydrateRound(round, savedOutputs);
     }
 
     this.hydratedRoundCount = sortedRounds.length;
