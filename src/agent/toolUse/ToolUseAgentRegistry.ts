@@ -1,11 +1,9 @@
 /**
  * Unified execution registry for agent interruption.
  *
- * This module provides a single registry for all interruptible executions:
- * - Tool-use flow contexts (primary)
- * - Agent class instances (MergeAgent)
- *
- * The registry enables unified interrupt handling from agentCommands.
+ * This module provides a single registry for all interruptible executions,
+ * primarily tool-use flow contexts. The registry enables unified interrupt
+ * handling from agentCommands.
  */
 
 // Local imports - agent

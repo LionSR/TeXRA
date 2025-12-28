@@ -73,6 +73,13 @@ export interface ReflectionFlowContextInit<C = unknown>
 
   /** Usage tracking callback (required for reflection flows) */
   getUsageRecorder: () => AgentRoundFinalizedCallback;
+
+  /**
+   * Optional custom output file location getter.
+   * When provided, overrides the default file naming logic.
+   * Used by merge operations which have specialized naming conventions.
+   */
+  getOutputFileLocation?: (round: number) => AgentFileLocation;
 }
 
 // ============================================================================
@@ -306,13 +313,15 @@ export class ReflectionFlowContext<C = unknown> {
 
     const { config, setting, getUsageRecorder } = this.init;
 
-    // Create output file location getter using computed values
-    const getOutputFileLocation = createOutputFileLocationGetter(
-      config,
-      setting,
-      this.init.modelHandler,
-      this.fileService,
-    );
+    // Use custom getter if provided, otherwise create default
+    const getOutputFileLocation =
+      this.init.getOutputFileLocation ??
+      createOutputFileLocationGetter(
+        config,
+        setting,
+        this.init.modelHandler,
+        this.fileService,
+      );
 
     // Build base services from init, then add reflection-specific ones
     this._services = {
