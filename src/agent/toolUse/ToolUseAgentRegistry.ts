@@ -1,5 +1,4 @@
 // Local imports - agent
-import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -10,33 +9,10 @@ export interface IInterruptible {
   interrupt(): void;
 }
 
-// Registry now stores anything that can be interrupted (agent or flow context)
+// Registry stores flow contexts that can be interrupted
 const registry = new Map<StreamTabId, IInterruptible>();
 
-// Legacy: agent-specific registry for backward compatibility
-export function registerToolUseAgent(
-  streamTabId: StreamTabId,
-  agent: BaseToolUseAgent<any>,
-): void {
-  registry.set(streamTabId, agent);
-}
-
-export function unregisterToolUseAgent(streamTabId: StreamTabId): void {
-  registry.delete(streamTabId);
-}
-
-export function getToolUseAgent(
-  streamTabId: StreamTabId,
-): BaseToolUseAgent<any> | undefined {
-  const entry = registry.get(streamTabId);
-  // Type guard: check if it's a BaseToolUseAgent
-  if (entry && 'session' in entry) {
-    return entry as BaseToolUseAgent<any>;
-  }
-  return undefined;
-}
-
-// Flow-first: flow context registration
+// Flow context registration
 export function registerToolUseFlowContext(
   streamTabId: StreamTabId,
   context: ToolUseFlowContext<any>,
