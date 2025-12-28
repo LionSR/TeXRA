@@ -57,7 +57,8 @@ const AgentConfigBaseSchema = z
     outputFiles: stringArrayField(),
     editedFile: z.string().nullable().prefault(null),
 
-    toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
+    // Defaults to all-false for tool-use agents; workflow agents populate from UI
+    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
   })
   .superRefine((config, ctx) => {
     if (
