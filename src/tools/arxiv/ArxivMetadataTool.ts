@@ -18,8 +18,8 @@ import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),
-  includeAbstract: z.boolean().optional(),
-  maxAuthors: z.int().positive().max(ARXIV_CONSTANTS.MAX_AUTHORS).optional(),
+  includeAbstract: z.boolean().nullish(),
+  maxAuthors: z.int().positive().max(ARXIV_CONSTANTS.MAX_AUTHORS).nullish(),
 });
 
 export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
