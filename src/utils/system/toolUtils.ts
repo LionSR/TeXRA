@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { ExecResult } from '@agent/types/ResultTypes';
+import { logger } from '@logger/logUtils';
 
 // Local file imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
@@ -403,7 +404,7 @@ export async function checkCoreDependencies(
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error
-    console.error('Failed to check core dependencies:', error);
+    logger.error('Failed to check core dependencies:', error);
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }
