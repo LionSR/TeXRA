@@ -16,26 +16,24 @@ A **Node** is the smallest building block. Each Node has 3 steps `prep->exec->po
 1. `prep(shared)`
    - **Read and preprocess data** from `shared` store.
    - Examples: _query DB, read files, or serialize data into a string_.
-   - Return `prep_res`, which is used by `exec()` and `post()`.
+   - Return `prepRes`, which is used by `exec()` and `post()`.
 
-2. `exec(prep_res)`
+2. `exec(prepRes)`
    - **Execute compute logic**, with optional retries and error handling (below).
    - Examples: _(mostly) LLM calls, remote APIs, tool use_.
    - ⚠️ This shall be only for compute and **NOT** access `shared`.
    - ⚠️ If retries enabled, ensure idempotent implementation.
-   - ⚠️ Defer exception handling to the Node's built-in retry mechanism.
-   - Return `exec_res`, which is passed to `post()`.
+   - Return `execRes`, which is passed to `post()`.
 
-3. `post(shared, prep_res, exec_res)`
+3. `post(shared, prepRes, execRes)`
    - **Postprocess and write data** back to `shared`.
    - Examples: _update DB, change states, log results_.
    - **Decide the next action** by returning a _string_ (`action = "default"` if _None_).
 
-::: info Why 3 steps?
-To enforce the principle of _separation of concerns_. The data storage and data processing are operated separately.
-
-All steps are _optional_. E.g., you can only implement `prep` and `post` if you just need to process data.
-:::
+> **Why 3 steps?** To enforce the principle of _separation of concerns_. The data storage and data processing are operated separately.
+>
+> All steps are _optional_. E.g., you can only implement `prep` and `post` if you just need to process data.
+> {: .note }
 
 ### Fault Tolerance & Retries
 
@@ -45,63 +43,64 @@ You can **retry** `exec()` if it raises an exception via two parameters when def
 - `wait` (int): The time to wait (in **seconds**) before next retry. By default, `wait=0` (no waiting).
   `wait` is helpful when you encounter rate-limits or quota errors from your LLM provider and need to back off.
 
-```python
-my_node = SummarizeFile(max_retries=3, wait=10)
+```typescript
+const myNode = new SummarizeFile(3, 10); // maxRetries = 3, wait = 10 seconds
 ```
 
 When an exception occurs in `exec()`, the Node automatically retries until:
 
 - It either succeeds, or
-- The Node has retried `max_retries - 1` times already and fails on the last attempt.
+- The Node has retried `maxRetries - 1` times already and fails on the last attempt.
 
-You can get the current retry times (0-based) from `self.cur_retry`.
-
-```python
-class RetryNode(Node):
-    def exec(self, prep_res):
-        print(f"Retry {self.cur_retry} times")
-        raise Exception("Failed")
-```
+You can get the current retry times (0-based) from `this.currentRetry`.
 
 ### Graceful Fallback
 
 To **gracefully handle** the exception (after all retries) rather than raising it, override:
 
-```python
-def exec_fallback(self, prep_res, exc):
-    raise exc
+```typescript
+execFallback(prepRes: unknown, error: Error): unknown {
+  return "There was an error processing your request.";
+}
 ```
 
-By default, it just re-raises exception. But you can return a fallback result instead, which becomes the `exec_res` passed to `post()`.
+By default, it just re-raises the exception.
 
 ### Example: Summarize file
 
-```python
-class SummarizeFile(Node):
-    def prep(self, shared):
-        return shared["data"]
+```typescript
+type SharedStore = {
+  data: string;
+  summary?: string;
+};
 
-    def exec(self, prep_res):
-        if not prep_res:
-            return "Empty file content"
-        prompt = f"Summarize this text in 10 words: {prep_res}"
-        summary = call_llm(prompt)  # might fail
-        return summary
+class SummarizeFile extends Node<SharedStore> {
+  prep(shared: SharedStore): string {
+    return shared.data;
+  }
 
-    def exec_fallback(self, prep_res, exc):
-        # Provide a simple fallback instead of crashing
-        return "There was an error processing your request."
+  exec(content: string): string {
+    if (!content) return 'Empty file content';
 
-    def post(self, shared, prep_res, exec_res):
-        shared["summary"] = exec_res
-        # Return "default" by not returning
+    const prompt = `Summarize this text in 10 words: ${content}`;
+    return callLlm(prompt);
+  }
 
-summarize_node = SummarizeFile(max_retries=3)
+  execFallback(_: string, error: Error): string {
+    return 'There was an error processing your request.';
+  }
 
-# node.run() calls prep->exec->post
-# If exec() fails, it retries up to 3 times before calling exec_fallback()
-action_result = summarize_node.run(shared)
+  post(shared: SharedStore, _: string, summary: string): string | undefined {
+    shared.summary = summary;
+    return undefined; // "default" action
+  }
+}
 
-print("Action returned:", action_result)  # "default"
-print("Summary stored:", shared["summary"])
+// Example usage
+const node = new SummarizeFile(3); // maxRetries = 3
+const shared: SharedStore = { data: 'Long text to summarize...' };
+const action = node.run(shared);
+
+console.log('Action:', action);
+console.log('Summary:', shared.summary);
 ```

@@ -15,33 +15,75 @@ Each Node's `post()` returns an **Action** string. By default, if `post()` doesn
 
 You define transitions with the syntax:
 
-1. **Basic default transition**: `node_a >> node_b`
-   This means if `node_a.post()` returns `"default"`, go to `node_b`.
-   (Equivalent to `node_a - "default" >> node_b`)
+1. **Basic default transition**: `nodeA.next(nodeB)`
+   This means if `nodeA.post()` returns `"default"`, go to `nodeB`.
+   (Equivalent to `nodeA.on("default", nodeB)`)
 
-2. **Named action transition**: `node_a - "action_name" >> node_b`
-   This means if `node_a.post()` returns `"action_name"`, go to `node_b`.
+2. **Named action transition**: `nodeA.on("actionName", nodeB)`
+   This means if `nodeA.post()` returns `"actionName"`, go to `nodeB`.
 
 It's possible to create loops, branching, or multi-step flows.
 
-## 2. Creating a Flow
+## 2. Method Chaining
 
-A **Flow** begins with a **start** node. You call `Flow(start=some_node)` to specify the entry point. When you call `flow.run(shared)`, it executes the start node, looks at its returned Action from `post()`, follows the transition, and continues until there's no next node.
+The transition methods support **chaining** for more concise flow creation:
+
+### Chaining `on()` Methods
+
+The `on()` method returns the current node, so you can chain multiple action definitions:
+
+```typescript
+// All transitions from the same node
+nodeA.on('approved', nodeB).on('rejected', nodeC).on('needs_review', nodeD);
+
+// Equivalent to:
+nodeA.on('approved', nodeB);
+nodeA.on('rejected', nodeC);
+nodeA.on('needs_review', nodeD);
+```
+
+### Chaining `next()` Methods
+
+The `next()` method returns the target node, allowing you to create linear sequences in a single expression:
+
+```typescript
+// Creates a linear A → B → C → D sequence
+nodeA.next(nodeB).next(nodeC).next(nodeD);
+
+// Equivalent to:
+nodeA.next(nodeB);
+nodeB.next(nodeC);
+nodeC.next(nodeD);
+```
+
+### Combining Chain Types
+
+You can combine both chaining styles for complex flows:
+
+```typescript
+nodeA
+  .on('action1', nodeB.next(nodeC).next(nodeD))
+  .on('action2', nodeE.on('success', nodeF).on('failure', nodeG));
+```
+
+## 3. Creating a Flow
+
+A **Flow** begins with a **start** node. You call `const flow = new Flow(someNode)` to specify the entry point. When you call `flow.run(shared)`, it executes the start node, looks at its returned Action from `post()`, follows the transition, and continues until there's no next node.
 
 ### Example: Simple Sequence
 
 Here's a minimal flow of two nodes in a chain:
 
-```python
-node_a >> node_b
-flow = Flow(start=node_a)
-flow.run(shared)
+```typescript
+nodeA.next(nodeB);
+const flow = new Flow(nodeA);
+flow.run(shared);
 ```
 
-- When you run the flow, it executes `node_a`.
-- Suppose `node_a.post()` returns `"default"`.
-- The flow then sees `"default"` Action is linked to `node_b` and runs `node_b`.
-- `node_b.post()` returns `"default"` but we didn't define `node_b >> something_else`. So the flow ends there.
+- When you run the flow, it executes `nodeA`.
+- Suppose `nodeA.post()` returns `"default"`.
+- The flow then sees `"default"` Action is linked to `nodeB` and runs `nodeB`.
+- `nodeB.post()` returns `"default"` but we didn't define a successor for `nodeB`. So the flow ends there.
 
 ### Example: Branching & Looping
 
@@ -53,16 +95,16 @@ Here's a simple expense approval flow that demonstrates branching and looping. T
 
 We can wire them like this:
 
-```python
-# Define the flow connections
-review - "approved" >> payment        # If approved, process payment
-review - "needs_revision" >> revise   # If needs changes, go to revision
-review - "rejected" >> finish         # If rejected, finish the process
+```typescript
+// Define the flow connections
+review.on('approved', payment); // If approved, process payment
+review.on('needs_revision', revise); // If needs changes, go to revision
+review.on('rejected', finish); // If rejected, finish the process
 
-revise >> review   # After revision, go back for another review
-payment >> finish  # After payment, finish the process
+revise.next(review); // After revision, go back for another review
+payment.next(finish); // After payment, finish the process
 
-flow = Flow(start=review)
+const flow = new Flow(review);
 ```
 
 Let's see how it flows:
@@ -86,14 +128,13 @@ flowchart TD
 - `node.run(shared)`: Just runs that node alone (calls `prep->exec->post()`), returns an Action.
 - `flow.run(shared)`: Executes from the start node, follows Actions to the next node, and so on until the flow can't continue.
 
-::: warning
-`node.run(shared)` **does not** proceed to the successor.
-This is mainly for debugging or testing a single node.
+> `node.run(shared)` **does not** proceed to the successor.
+> This is mainly for debugging or testing a single node.
+>
+> Always use `flow.run(...)` in production to ensure the full pipeline runs correctly.
+> {: .warning }
 
-Always use `flow.run(...)` in production to ensure the full pipeline runs correctly.
-:::
-
-## 3. Nested Flows
+## 4. Nested Flows
 
 A **Flow** can act like a Node, which enables powerful composition patterns. This means you can:
 
@@ -106,55 +147,55 @@ A **Flow** can act like a Node, which enables powerful composition patterns. Thi
 A **Flow** is also a **Node**, so it will run `prep()` and `post()`. However:
 
 - It **won't** run `exec()`, as its main logic is to orchestrate its nodes.
-- `post()` always receives `None` for `exec_res` and should instead get the flow execution results from the shared store.
+- `post()` always receives `undefined` for `execRes` and should instead get the flow execution results from the shared store.
 
 ### Basic Flow Nesting
 
 Here's how to connect a flow to another node:
 
-```python
-# Create a sub-flow
-node_a >> node_b
-subflow = Flow(start=node_a)
+```typescript
+// Create a sub-flow
+nodeA.next(nodeB);
+const subflow = new Flow(nodeA);
 
-# Connect it to another node
-subflow >> node_c
+// Connect it to another node
+subflow.next(nodeC);
 
-# Create the parent flow
-parent_flow = Flow(start=subflow)
+// Create the parent flow
+const parentFlow = new Flow(subflow);
 ```
 
-When `parent_flow.run()` executes:
+When `parentFlow.run()` executes:
 
 1. It starts `subflow`
-2. `subflow` runs through its nodes (`node_a->node_b`)
-3. After `subflow` completes, execution continues to `node_c`
+2. `subflow` runs through its nodes (`nodeA->nodeB`)
+3. After `subflow` completes, execution continues to `nodeC`
 
 ### Example: Order Processing Pipeline
 
 Here's a practical example that breaks down order processing into nested flows:
 
-```python
-# Payment processing sub-flow
-validate_payment >> process_payment >> payment_confirmation
-payment_flow = Flow(start=validate_payment)
+```typescript
+// Payment processing sub-flow
+validatePayment.next(processPayment).next(paymentConfirmation);
+const paymentFlow = new Flow(validatePayment);
 
-# Inventory sub-flow
-check_stock >> reserve_items >> update_inventory
-inventory_flow = Flow(start=check_stock)
+// Inventory sub-flow
+checkStock.next(reserveItems).next(updateInventory);
+const inventoryFlow = new Flow(checkStock);
 
-# Shipping sub-flow
-create_label >> assign_carrier >> schedule_pickup
-shipping_flow = Flow(start=create_label)
+// Shipping sub-flow
+createLabel.next(assignCarrier).next(schedulePickup);
+const shippingFlow = new Flow(createLabel);
 
-# Connect the flows into a main order pipeline
-payment_flow >> inventory_flow >> shipping_flow
+// Connect the flows into a main order pipeline
+paymentFlow.next(inventoryFlow).next(shippingFlow);
 
-# Create the master flow
-order_pipeline = Flow(start=payment_flow)
+// Create the master flow
+const orderPipeline = new Flow(paymentFlow);
 
-# Run the entire pipeline
-order_pipeline.run(shared_data)
+// Run the entire pipeline
+orderPipeline.run(sharedData);
 ```
 
 This creates a clean separation of concerns while maintaining a clear execution path:

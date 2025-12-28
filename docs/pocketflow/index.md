@@ -4,16 +4,16 @@ title: 'Home'
 nav_order: 1
 ---
 
-# Pocket Flow
+# PocketFlow.js
 
-A [100-line](https://github.com/the-pocket/PocketFlow/blob/main/pocketflow/__init__.py) minimalist LLM framework for _Agents, Task Decomposition, RAG, etc_.
+A [100-line](https://github.com/The-Pocket/PocketFlow-Typescript/blob/main/src/index.ts) minimalist LLM framework for _Agents, Task Decomposition, RAG, etc_.
 
 - **Lightweight**: Just the core graph abstraction in 100 lines. ZERO dependencies, and vendor lock-in.
 - **Expressive**: Everything you love from larger frameworks—([Multi-](./design_pattern/multi_agent.html))[Agents](./design_pattern/agent.html), [Workflow](./design_pattern/workflow.html), [RAG](./design_pattern/rag.html), and more.
 - **Agentic-Coding**: Intuitive enough for AI agents to help humans build complex LLM applications.
 
 <div align="center">
-  <img src="https://github.com/the-pocket/.github/raw/main/assets/meme.jpg?raw=true" alt="Pocket Flow – 100-line minimalist LLM framework" width="400"/>
+  <img src="https://github.com/the-pocket/.github/raw/main/assets/meme.jpg?raw=true" width="400"/>
 </div>
 
 ## Core Abstraction
@@ -24,13 +24,10 @@ We model the LLM workflow as a **Graph + Shared Store**:
 - [Flow](./core_abstraction/flow.md) connects nodes through **Actions** (labeled edges).
 - [Shared Store](./core_abstraction/communication.md) enables communication between nodes within flows.
 - [Batch](./core_abstraction/batch.md) nodes/flows allow for data-intensive tasks.
-- [Async](./core_abstraction/async.md) nodes/flows allow waiting for asynchronous tasks.
 - [(Advanced) Parallel](./core_abstraction/parallel.md) nodes/flows handle I/O-bound tasks.
-- [TeXRA state architecture](./state_architecture.md) shows how the shared store
-  is applied inside the extension.
 
 <div align="center">
-  <img src="https://github.com/the-pocket/.github/raw/main/assets/abstraction.png" alt="Pocket Flow – Core Abstraction" width="700"/>
+  <img src="https://github.com/the-pocket/.github/raw/main/assets/abstraction.png" width="700"/>
 </div>
 
 ## Design Pattern
@@ -45,7 +42,7 @@ From there, it’s easy to implement popular design patterns:
 - [(Advanced) Multi-Agents](./design_pattern/multi_agent.md) coordinate multiple agents.
 
 <div align="center">
-  <img src="https://github.com/the-pocket/.github/raw/main/assets/design.png" alt="Pocket Flow – Design Pattern" width="700"/>
+  <img src="https://github.com/the-pocket/.github/raw/main/assets/design.png" width="700"/>
 </div>
 
 ## Utility Function
@@ -68,6 +65,4 @@ We **do not** provide built-in utilities. Instead, we offer _examples_—please 
 
 ## Ready to build your Apps?
 
-Check out [Agentic Coding Guidance](./guide.md), the fastest way to develop LLM projects with Pocket Flow!
-
-Note that the documentation is written in python but in this repo we are using typescript version in `src/agent/node/index.ts`
+Check out [Agentic Coding Guidance](./guide.md), the fastest way to develop LLM projects with PocketFlow.js!

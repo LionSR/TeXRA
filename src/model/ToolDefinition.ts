@@ -17,15 +17,15 @@ import { z, type ZodType } from 'zod';
  * without breaking validation when tools flow through AgentSettingSchema.
  */
 export const ToolDefinitionSchema = z.looseObject({
-    /** Name of the tool or function */
-    name: z.string(),
-    /** Optional description for the model */
-    description: z.string().optional(),
-    /** Parameter schema (JSON Schema format) */
-    parameters: z.record(z.string(), z.unknown()).optional(),
-    /** Runtime-only: original Zod schema for SDK-native conversion */
-    zodSchema: z.custom<ZodType>().optional(),
-  });
+  /** Name of the tool or function */
+  name: z.string(),
+  /** Optional description for the model */
+  description: z.string().optional(),
+  /** Parameter schema (JSON Schema format) */
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  /** Runtime-only: original Zod schema for SDK-native conversion */
+  zodSchema: z.custom<ZodType>().optional(),
+});
 
 /** Tool definition type - derived from schema */
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
