@@ -119,7 +119,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
     if (execRes.kind === 'finalize') {
       // Don't end round stage here - agent.run() finally block handles it
       // This ensures proper status (ERROR vs STOPPED) is applied
-      return undefined; // Flow ends gracefully
+      return FlowTransition.DEFAULT; // Flow ends gracefully
     }
 
     // === ROUND TRANSITION ===
