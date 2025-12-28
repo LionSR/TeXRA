@@ -478,25 +478,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   protected computeRuntimeXmlExports(): OutputXmlSummary {
     // Find the most recent round with XML summary data
-    for (let round = this.roundOutputs.length - 1; round >= 0; round--) {
-      const output = this.roundOutputs[round];
-      if (!output) continue;
-
+    const lastWithData = this.roundOutputs.findLast((output) => {
+      if (!output) return false;
       const xml = output.xmlSummary;
-      const hasData =
+      return (
         Object.keys(xml.tagContents).length > 0 ||
         xml.documents.length > 0 ||
-        xml.singleOutputFile !== null;
+        xml.singleOutputFile !== null
+      );
+    });
 
-      if (hasData) {
-        // Return a copy of the xmlSummary - this IS the single source of truth
-        return {
-          tagContents: { ...xml.tagContents },
-          documents: [...xml.documents],
-          singleOutputFile: xml.singleOutputFile,
-          sourceLocation: xml.sourceLocation,
-        };
-      }
+    if (lastWithData) {
+      const xml = lastWithData.xmlSummary;
+      // Return a copy of the xmlSummary - this IS the single source of truth
+      return {
+        tagContents: { ...xml.tagContents },
+        documents: [...xml.documents],
+        singleOutputFile: xml.singleOutputFile,
+        sourceLocation: xml.sourceLocation,
+      };
     }
 
     return {
