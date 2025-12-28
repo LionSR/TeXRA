@@ -87,7 +87,6 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle;
   private _services: ToolUseServices<C> | null = null;
-  private _client: C | null = null;
 
   constructor(init: ToolUseFlowContextInit<C>) {
     this.init = init;
@@ -153,13 +152,6 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   // =========================================================================
   // Lifecycle Operations
   // =========================================================================
-
-  async initializeClient(): Promise<C> {
-    if (this._client === null) {
-      this._client = await this.init.modelHandler.getClient();
-    }
-    return this._client;
-  }
 
   /**
    * Disposes session lifecycle resources.
