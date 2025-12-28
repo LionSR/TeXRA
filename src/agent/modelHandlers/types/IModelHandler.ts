@@ -375,4 +375,29 @@ export interface IModelHandler<
    * @returns Array of content blocks suitable for message building, or empty array if not supported
    */
   extractAssistantContent(responseObject: Resp): unknown[];
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   * Used by TeXCountNode to add stats before the user's content.
+   *
+   * @param messages - Existing messages array (mutated in place)
+   * @param text - Text to prepend
+   */
+  prependTextToUserMessage(messages: M[], text: string): void;
+
+  /**
+   * Add media files to the last user message in the conversation.
+   * Used by MediaPreparationNode to add figures/PDFs after message building.
+   *
+   * @param messages - Existing messages array (mutated in place)
+   * @param mediaFiles - Media files to add
+   */
+  addMediaToUserMessage(
+    messages: M[],
+    mediaFiles: FileLocation[],
+  ): Promise<void>;
 }

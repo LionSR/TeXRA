@@ -1,12 +1,39 @@
 import { sleep } from '@utils/helpers';
 
-type NonIterableObject = Partial<Record<string, unknown>> & {
+export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
 type Action = string;
-class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
+
+/**
+ * Base node class for PocketFlow.
+ *
+ * Type parameters:
+ * - S: Shared state type (mutable, flows through nodes)
+ * - P: Params type (per-execution, can vary per batch item)
+ * - Svc: Services type (immutable dependencies, set once)
+ *
+ * Architecture:
+ * - shared: Mutable state passed through prep/post
+ * - _params: Per-execution parameters (merged in batch flows)
+ * - _services: Immutable dependencies (propagated by Flow)
+ */
+class BaseNode<
+  S = unknown,
+  P extends NonIterableObject = NonIterableObject,
+  Svc = unknown,
+> {
   protected _params: P = {} as P;
+  protected _services: Svc = {} as Svc;
   protected _successors: Map<Action, BaseNode> = new Map();
+
+  /**
+   * Get typed services. Override in subclasses for better typing.
+   */
+  get services(): Svc {
+    return this._services;
+  }
+
   protected async _exec(prepRes: unknown): Promise<unknown> {
     return await this.exec(prepRes);
   }
@@ -37,6 +64,10 @@ class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
     this._params = params;
     return this;
   }
+  setServices(services: Svc): this {
+    this._services = services;
+    return this;
+  }
   next<T extends BaseNode>(node: T): T {
     this.on('default', node);
     return node;
@@ -60,6 +91,8 @@ class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
     const clonedNode = Object.create(Object.getPrototypeOf(this));
     Object.assign(clonedNode, this);
     clonedNode._params = { ...this._params };
+    // Services are immutable, shallow copy is safe
+    clonedNode._services = this._services;
     clonedNode._successors = new Map(this._successors);
     return clonedNode;
   }
@@ -67,7 +100,8 @@ class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
 class Node<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
-> extends BaseNode<S, P> {
+  Svc = unknown,
+> extends BaseNode<S, P, Svc> {
   maxRetries: number;
   wait: number;
   currentRetry: number = 0;
@@ -180,7 +214,8 @@ class Node<
 class BatchNode<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
-> extends Node<S, P> {
+  Svc = unknown,
+> extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
     const results = [];
@@ -191,7 +226,8 @@ class BatchNode<
 class ParallelBatchNode<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
-> extends Node<S, P> {
+  Svc = unknown,
+> extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
     return Promise.all(items.map((item) => super._exec(item)));
@@ -200,7 +236,8 @@ class ParallelBatchNode<
 class Flow<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
-> extends BaseNode<S, P> {
+  Svc = unknown,
+> extends BaseNode<S, P, Svc> {
   start: BaseNode;
   constructor(start: BaseNode) {
     super();
@@ -211,6 +248,8 @@ class Flow<
     const p = params ?? this._params;
     while (current) {
       current.setParams(p);
+      // Propagate services to each node (immutable, same instance)
+      current.setServices(this._services);
       const action = await current._run(shared);
       current = current.getNextNode(action);
       current = current?.clone();
@@ -228,8 +267,9 @@ class Flow<
 class BatchFlow<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
+  Svc = unknown,
   NP extends NonIterableObject[] = NonIterableObject[],
-> extends Flow<S, P> {
+> extends Flow<S, P, Svc> {
   async _run(shared: S): Promise<Action | undefined> {
     const batchParams = await this.prep(shared);
     for (const bp of batchParams) {
@@ -246,8 +286,9 @@ class BatchFlow<
 class ParallelBatchFlow<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
+  Svc = unknown,
   NP extends NonIterableObject[] = NonIterableObject[],
-> extends BatchFlow<S, P, NP> {
+> extends BatchFlow<S, P, Svc, NP> {
   async _run(shared: S): Promise<Action | undefined> {
     const batchParams = await this.prep(shared);
     await Promise.all(
