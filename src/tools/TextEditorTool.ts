@@ -395,9 +395,9 @@ export class TextEditorTool extends defineTool({
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
-      const expandedFileContent = fileContent.replace(/\t/g, '    ');
-      const expandedOldStr = oldStr.replace(/\t/g, '    ');
-      const expandedNewStr = newStr.replace(/\t/g, '    ');
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedOldStr = oldStr.replaceAll('\t', '    ');
+      const expandedNewStr = newStr.replaceAll('\t', '    ');
 
       // Check for occurrences of oldStr
       const occurrences = expandedFileContent.split(expandedOldStr).length - 1;
@@ -520,8 +520,8 @@ export class TextEditorTool extends defineTool({
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
-      const expandedFileContent = fileContent.replace(/\t/g, '    ');
-      const expandedNewStr = newStr.replace(/\t/g, '    ');
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedNewStr = newStr.replaceAll('\t', '    ');
 
       // Split content into lines
       const fileLines = expandedFileContent.split('\n');
