@@ -18,28 +18,18 @@ import {
 export type { LoadAgentOptions as RemoteAgentLoadOptions } from '@agent/runtime/agentLoad';
 
 /**
- * Helper to transform null to undefined for optional fields.
- * Database returns null, but codebase uses undefined for optional values.
- */
-const nullToUndefined = <T>(val: T | null): T | undefined =>
-  val === null ? undefined : val;
-
-/**
  * Schema for remote agent metadata.
- * Accepts null from database but transforms to undefined for codebase compatibility.
+ * Uses .nullish() to accept null from database and normalize to undefined.
  */
 export const RemoteAgentMetadataSchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** Description can be NULL in the database, transformed to undefined */
-  description: z.string().nullable().transform(nullToUndefined),
-  /** Visibility can be NULL in the database, transformed to undefined */
-  visibility: z.array(z.string()).nullable().transform(nullToUndefined),
+  /** Description can be NULL in the database */
+  description: z.string().nullish(),
+  /** Visibility can be NULL in the database */
+  visibility: z.array(z.string()).nullish(),
   /** Agent category: 'workflow' or 'toolUse' */
-  agentCategory: z
-    .nativeEnum(AgentCategory)
-    .nullable()
-    .transform(nullToUndefined),
+  agentCategory: z.nativeEnum(AgentCategory).nullish(),
 });
 
 export type RemoteAgentMetadata = z.infer<typeof RemoteAgentMetadataSchema>;
