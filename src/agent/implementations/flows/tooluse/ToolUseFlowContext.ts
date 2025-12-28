@@ -99,11 +99,11 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   // IToolUseSessionHost implementation
   // =========================================================================
 
-  getStreamTabId(): StreamTabId {
+  get streamTabId(): StreamTabId {
     return this.init.streamTabId;
   }
 
-  getExecutionId() {
+  get executionId() {
     return this.init.executionContext.executionId;
   }
 

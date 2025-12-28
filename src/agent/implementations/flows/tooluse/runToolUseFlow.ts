@@ -100,7 +100,7 @@ export async function runToolUseFlow<C = unknown>(
     resumeSnapshot: input.resumeSnapshot ?? null,
   });
 
-  const streamTabId = flowContext.getStreamTabId();
+  const streamTabId = flowContext.streamTabId;
 
   // Notify that context is ready (for agent registry if needed)
   callbacks?.onContextReady?.(
