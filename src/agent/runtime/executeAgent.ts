@@ -433,7 +433,7 @@ export async function executeAgent(
         const client = await ctx.modelHandler.getClient();
 
         // Interruption state (shared across flow execution)
-        // TODO: Wire up to unified execution registry for proper interrupt handling
+        // Updated via onInterrupt callback when context.interrupt() is called
         const interruptState = { isInterrupted: false };
 
         if (agentSetting.agentType === 'toolUse') {
@@ -450,6 +450,9 @@ export async function executeAgent(
               checkInterruption: () => interruptState.isInterrupted,
               setAbortController: () => {},
               getClient: () => client,
+              onInterrupt: () => {
+                interruptState.isInterrupted = true;
+              },
             },
             {
               onContextReady: (streamId, context) => {
@@ -638,6 +641,9 @@ export async function resumeToolUseFromSnapshot(
         setAbortController: () => {},
         getClient: () => client,
         resumeSnapshot: snapshot,
+        onInterrupt: () => {
+          interruptState.isInterrupted = true;
+        },
       },
       {
         onContextReady: (streamId, context) => {

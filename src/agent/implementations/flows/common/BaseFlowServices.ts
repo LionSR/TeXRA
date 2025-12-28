@@ -75,6 +75,9 @@ export interface BaseFlowContextInit<C = unknown> {
 
   /** Get the API client instance */
   getClient: () => C;
+
+  /** Callback invoked when interrupt() is called on the flow context */
+  onInterrupt?: () => void;
 }
 
 // ============================================================================
