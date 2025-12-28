@@ -2,8 +2,8 @@
 import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - common
-import { safeGetElementById } from '@common/domUtils.js';
 import { copyWithFeedback } from '@common/clipboardUtils.js';
+import { safeGetElementById, showElement, hideElement } from '@common/domUtils.js';
 
 /**
  * Manages the instruction panel that surfaces the active stream instruction.
@@ -52,8 +52,7 @@ export class InstructionPanel {
     this._currentText = normalized;
 
     elements.text.value = normalized;
-    elements.container.classList.add('is-visible');
-    elements.container.setAttribute('aria-hidden', 'false');
+    showElement(elements.container);
 
     this._resetCopyButton(false);
   }
@@ -67,8 +66,7 @@ export class InstructionPanel {
     this._currentText = '';
 
     elements.text.value = '';
-    elements.container.classList.remove('is-visible');
-    elements.container.setAttribute('aria-hidden', 'true');
+    hideElement(elements.container);
 
     this._resetCopyButton(true);
   }

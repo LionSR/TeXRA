@@ -51,13 +51,9 @@ h2 {
   color: var(--vscode-foreground);
 }
 
-/* Tier badge */
+/* Tier badge - extends .badge from common.css */
 .tier-badge {
-  display: inline-block;
-  padding: var(--spacing-small) var(--spacing-medium);
-  border-radius: var(--border-radius);
   text-transform: uppercase;
-  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
@@ -66,7 +62,8 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
-.tier-badge.max {
+.tier-badge.max,
+.tier-badge.researcher {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
@@ -74,12 +71,6 @@ h2 {
 .tier-badge.ultra {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
-}
-
-/* Legacy: keep researcher for backwards compat */
-.tier-badge.researcher {
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
 }
 
 /* Not authenticated state */
@@ -135,16 +126,8 @@ h2 {
   max-width: 300px;
 }
 
-/* Badge base styles (BEM base class) */
-.badge {
-  display: inline-block;
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-}
-
-/* Visibility badge modifier */
-.badge.visibility-badge {
+/* Visibility badges - extends .badge.badge--small from common.css */
+.visibility-badge {
   text-transform: lowercase;
 }
 
@@ -158,19 +141,14 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Category badge modifier */
-.badge.category-badge {
-  font-weight: 500;
+/* Category badges - extends .badge.badge--small from common.css */
+.category-badge {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
 
-/* Multi-output badge modifier */
-.badge.multi-output-badge {
-  font-weight: 500;
-}
-
-.badge.multi-output-badge.supported {
+/* Multi-output badges - extends .badge.badge--small from common.css */
+.multi-output-badge.supported {
   background: var(--vscode-testing-iconPassed);
   color: var(--vscode-button-foreground);
 }

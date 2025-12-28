@@ -3,11 +3,11 @@ import { COMMANDS, ELEMENT_IDS, GROUP_DOM_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common
+import { copyWithFeedback } from '@common/clipboardUtils.js';
 import {
   addEventListenerSafely,
   setChevronIconHorizontal,
 } from '@common/domUtils.js';
-import { copyWithFeedback } from '@common/clipboardUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
