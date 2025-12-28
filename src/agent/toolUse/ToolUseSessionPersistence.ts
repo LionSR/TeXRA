@@ -2,21 +2,14 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-// Local imports - agent core
-import { AgentType } from '@agent/core/AgentDataclass';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-// Internal imports
-import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
-import {
-  prepareAgentInstance,
-  runPreparedAgent,
-} from '@agent/runtime/executeAgent';
-import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
+import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 
 // Local imports - logging
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -86,26 +79,6 @@ async function persistSnapshot({
 
   ToolUseSessionManager.cacheSnapshot(stored);
   return true;
-}
-
-async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
-  agent: BaseToolUseAgent;
-  context: AgentExecutionContext;
-}> {
-  const config: AgentConfig = snapshot.agentConfig;
-
-  const { agent, agentType, context } =
-    await prepareAgentInstance<BaseToolUseAgent>({
-      agentName: config.agent,
-      configPayload: config,
-      executionId: snapshot.executionId as ExecutionId,
-    });
-
-  if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
-    throw new Error('Attempted to resume a non tool-use agent.');
-  }
-
-  return { agent, context };
 }
 
 /** Schema for agent resume operation result. */
@@ -213,27 +186,20 @@ export const ToolUseSessionPersistence = {
 
     let queuedFollowUps: string[] = [];
     try {
-      // Build and configure the agent
-      const { agent, context } = await buildToolUseAgent(snapshot);
-
-      // Restore agent state from snapshot
-      agent.setResumeSnapshot(snapshot);
-
-      // Append any follow-up messages
-      if (followUp !== undefined) {
-        agent.session.appendFollowUp(followUp);
-      }
-
-      // Drain and append any queued follow-ups
+      // Drain queued follow-ups before starting the flow
       queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
-      for (const queuedFollowUp of queuedFollowUps) {
-        agent.session.appendFollowUp(queuedFollowUp);
-      }
 
-      // Run the prepared agent
-      await runPreparedAgent(agent, context, {
-        isResume: true,
-        executionId: snapshot.executionId as ExecutionId,
+      // Resume using flow-first execution
+      await resumeToolUseFromSnapshot(snapshot, (session) => {
+        // Append any follow-up messages to the session
+        if (followUp !== undefined) {
+          session.appendFollowUp(followUp);
+        }
+
+        // Append any queued follow-ups
+        for (const queuedFollowUp of queuedFollowUps) {
+          session.appendFollowUp(queuedFollowUp);
+        }
       });
 
       ToolUseSessionManager.clearByStream(streamId);

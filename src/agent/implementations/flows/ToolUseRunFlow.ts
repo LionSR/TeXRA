@@ -23,7 +23,7 @@ import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
+import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 
 // Internal imports
 import {
