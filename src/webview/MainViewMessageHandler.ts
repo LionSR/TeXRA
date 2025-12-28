@@ -13,11 +13,8 @@ import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { getConfig, setConfig, SETTINGS_QUERY } from '@utils/config';
-import {
-  safeExecuteCommand,
-  checkCoreDependencies,
-  getToolDocsCommand,
-} from '@utils/system';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
