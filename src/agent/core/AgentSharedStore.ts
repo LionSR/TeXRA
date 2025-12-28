@@ -112,10 +112,6 @@ export class AgentSharedStore {
     return this.roundState;
   }
 
-  setRound(roundState: ConversationRoundState): void {
-    this.roundState = roundState;
-  }
-
   resetRound(roundIndex: number): ConversationRoundState {
     this.roundState = new ConversationRoundState(roundIndex);
     return this.roundState;
