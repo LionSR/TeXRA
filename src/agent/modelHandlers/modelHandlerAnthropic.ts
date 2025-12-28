@@ -279,23 +279,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  private findCacheControlCandidate(
-    content: (ContentBlockParam | ContentBlock)[] | undefined,
-  ): CacheControlEligibleBlock | undefined {
-    if (!Array.isArray(content) || content.length === 0) {
-      return undefined;
-    }
-
-    for (let idx = content.length - 1; idx >= 0; idx -= 1) {
-      const candidate = content[idx];
-      if (isCacheControlEligibleBlock(candidate)) {
-        return candidate;
-      }
-    }
-
-    return undefined;
-  }
-
   private assignCacheControlToLatest(
     content: (ContentBlockParam | ContentBlock)[] | undefined,
   ): void {
@@ -303,7 +286,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    const target = this.findCacheControlCandidate(content);
+    const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
       this.setCacheControlTarget(target);
     } else if (Array.isArray(content) && content.length > 0) {
@@ -1915,5 +1898,66 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return [callMsg, resultMsg];
+  }
+
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   */
+  prependTextToUserMessage(messages: MessageParam[], text: string): void {
+    if (!text.trim()) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg) return;
+
+    if (typeof lastUserMsg.content === 'string') {
+      lastUserMsg.content = text + lastUserMsg.content;
+    } else if (Array.isArray(lastUserMsg.content)) {
+      const firstTextBlock = lastUserMsg.content.find(
+        (block): block is TextBlockParam => block.type === 'text',
+      );
+      if (firstTextBlock) {
+        firstTextBlock.text = text + firstTextBlock.text;
+      } else {
+        lastUserMsg.content.unshift({
+          type: 'text',
+          text,
+        } as ContentBlockParam);
+      }
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   */
+  async addMediaToUserMessage(
+    messages: MessageParam[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user');
+    if (!lastUserMsg) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      if (typeof lastUserMsg.content === 'string') {
+        lastUserMsg.content = [
+          ...formattedMedia,
+          { type: 'text', text: lastUserMsg.content } as ContentBlockParam,
+        ];
+      } else if (Array.isArray(lastUserMsg.content)) {
+        lastUserMsg.content.unshift(...formattedMedia);
+      }
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
   }
 }
