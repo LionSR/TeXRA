@@ -37,13 +37,13 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   continuationCount: z
     .int()
     .nonnegative()
-    .default(ROUND_STATE_DEFAULTS.continuationCount),
+    .prefault(ROUND_STATE_DEFAULTS.continuationCount),
   responseTimeMs: z
     .number()
     .nonnegative()
-    .default(ROUND_STATE_DEFAULTS.responseTimeMs),
-  outputFile: z.string().default(ROUND_STATE_DEFAULTS.outputFile),
-  normalizedUsage: NormalizedUsageSchema.nullable().default(
+    .prefault(ROUND_STATE_DEFAULTS.responseTimeMs),
+  outputFile: z.string().prefault(ROUND_STATE_DEFAULTS.outputFile),
+  normalizedUsage: NormalizedUsageSchema.nullable().prefault(
     ROUND_STATE_DEFAULTS.normalizedUsage,
   ),
 });
@@ -117,14 +117,13 @@ const RUN_STATE_DEFAULTS = {
 } as const;
 
 export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative().default(RUN_STATE_DEFAULTS.totalRounds),
+  totalRounds: z.int().nonnegative().prefault(RUN_STATE_DEFAULTS.totalRounds),
   totalResponseTimeMs: z
     .number()
     .nonnegative()
-    .default(RUN_STATE_DEFAULTS.totalResponseTimeMs),
-  // Zod .default() requires OUTPUT type; DEFAULT_TOTALS satisfies TypeScript
-  // (runtime: inner schema defaults would handle {}, but types don't reflect that)
-  usageAccumulator: RunUsageAccumulatorJSONSchema.default({
+    .prefault(RUN_STATE_DEFAULTS.totalResponseTimeMs),
+  // Prefault normalizes missing accumulator before validation
+  usageAccumulator: RunUsageAccumulatorJSONSchema.prefault({
     totals: DEFAULT_TOTALS,
     normalizedSnapshots: [],
   }),
