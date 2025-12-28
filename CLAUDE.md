@@ -61,6 +61,8 @@ Key directories in `src/`:
 - `webview/` - Main agent interaction interface
 - `progressView/` - Task tracking board
 - `historyView/` - Execution history browser
+- `profileView/` - Agent profile/settings view
+- `explorer/` - VS Code file explorer integration
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
