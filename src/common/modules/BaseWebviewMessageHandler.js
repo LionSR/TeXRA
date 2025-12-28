@@ -74,5 +74,3 @@ export class BaseWebviewMessageHandler {
     }
   }
 }
-
-export default BaseWebviewMessageHandler;

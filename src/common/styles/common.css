@@ -181,13 +181,22 @@ vscode-toolbar-button {
    Utility Classes
    ========================================================================== */
 
-/* Visibility */
-.hidden {
-  display: none;
+/* ==========================================================================
+   Badge Base - Common styling for badge components
+   Addresses duplication in profileView and historyView
+   ========================================================================== */
+
+.badge {
+  display: inline-block;
+  padding: var(--spacing-small) var(--spacing-medium);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
 }
 
-.hidden.is-visible {
-  display: flex;
+.badge--small {
+  padding: var(--spacing-tiny) var(--spacing-small);
+  border-radius: var(--border-radius-small);
 }
 
 /* ==========================================================================
