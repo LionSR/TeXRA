@@ -19,9 +19,10 @@ export {
 } from './ToolUseFlowContext';
 
 export {
-  ToolUseSessionLifecycleStandalone,
+  ToolUseSessionLifecycle,
+  type IToolUseSession,
   type IToolUseSessionHost,
-} from './ToolUseSessionLifecycleStandalone';
+} from './ToolUseSessionLifecycle';
 
 export {
   runToolUseFlow,
