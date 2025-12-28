@@ -95,44 +95,67 @@ export interface ReflectionFlowContextInit<C = unknown> {
 /**
  * Compute whether XML structure should be ensured based on configuration.
  *
- * This replaces the polymorphic shouldEnsureXmlStructure() method that was
- * overridden in DirectAgent and CoTAgent.
+ * Priority order (matches BaseReflectionAgent.shouldEnsureXmlStructure):
+ * 1. `setting.xmlStructureMode` - explicit YAML configuration
+ * 2. `agentType: 'CoT'` - implies always ensure XML structure
+ * 3. `agentType: 'direct'` - implies scratchpadOnly mode
+ * 4. Default: false (no XML structure enforcement)
  */
 function computeShouldEnsureXmlStructure(
   setting: AgentWorkflowSetting,
 ): boolean {
-  const mode: XmlStructureMode = setting.xmlStructureMode ?? 'never';
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
 
-  switch (mode) {
-    case 'always':
-      return true;
-    case 'scratchpadOnly': {
-      const useScratchpad =
-        setting.prefills?.includes('<scratchpad>') ?? false;
-      return useScratchpad;
+  // 1. Explicit xmlStructureMode takes highest precedence
+  if (setting.xmlStructureMode !== undefined) {
+    switch (setting.xmlStructureMode) {
+      case 'always':
+        return true;
+      case 'scratchpadOnly':
+        return useScratchpad;
+      case 'never':
+      default:
+        return false;
     }
-    case 'never':
-    default:
-      return false;
   }
+
+  // 2. agentType-driven: 'CoT' implies always ensure XML structure
+  if (setting.agentType === 'CoT') {
+    return true;
+  }
+
+  // 3. agentType-driven: 'direct' implies scratchpadOnly mode
+  if (setting.agentType === 'direct') {
+    return useScratchpad;
+  }
+
+  // 4. Default behavior (no explicit type or config)
+  return false;
 }
 
 /**
  * Compute total rounds based on configuration.
  *
- * This replaces the polymorphic getTotalRounds() method that was
- * overridden in DirectAgent.
+ * Priority order (matches BaseReflectionAgent.getTotalRounds):
+ * 1. `setting.maxRounds` - explicit YAML configuration
+ * 2. `agentType: 'direct'` - implies single-round execution (maxRounds=1)
+ * 3. Default calculation - max(configured rounds, userRequest array length)
  */
 function computeTotalRounds(
   setting: AgentWorkflowSetting,
   prompt: AgentPrompt,
 ): number {
-  // If maxRounds is explicitly set, use it
+  // 1. Explicit maxRounds config takes highest precedence
   if (setting.maxRounds !== undefined) {
     return setting.maxRounds;
   }
 
-  // Default: max of configured rounds and userRequest array length
+  // 2. agentType-driven: 'direct' implies single-round execution
+  if (setting.agentType === 'direct') {
+    return 1;
+  }
+
+  // 3. Default behavior for CoT and other types
   const requestArray = Array.isArray(prompt.userRequest)
     ? prompt.userRequest
     : prompt.userRequest
