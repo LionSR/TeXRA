@@ -133,7 +133,8 @@ export class UsageMonitor {
 
       // Validate provider against schema, fallback to 'unknown' if invalid
       const providerLower = modelConfig.provider.toLowerCase();
-      const provider = UsageProviderSchema.catch('unknown').parse(providerLower);
+      const provider =
+        UsageProviderSchema.catch('unknown').parse(providerLower);
 
       // Check if server-side keys (relay) were used for this request
       const usedRelay = getServerSideKeyService().shouldUseServerSideKeysSync(
