@@ -94,7 +94,23 @@ export {
   type ReasoningExtractor,
 } from './normalizers/openaiNormalizer';
 
-// TODO: Implement remaining normalizers
-// export { normalizeGoogleStream } from './normalizers/googleNormalizer';
-// export { normalizeOpenAIResponseStream } from './normalizers/openaiResponseNormalizer';
-// export { normalizeOpenRouterStream } from './normalizers/openrouterNormalizer';
+export {
+  normalizeGoogleStream,
+  type GoogleContentStream,
+} from './normalizers/googleNormalizer';
+
+export {
+  normalizeOpenRouterStream,
+  openRouterReasoningExtractor,
+} from './normalizers/openrouterNormalizer';
+
+export {
+  normalizeOpenAIResponseStream,
+  type OpenAIResponseStream,
+} from './normalizers/openaiResponseNormalizer';
+
+// Reasoning extractors for OpenAI-compatible providers
+export {
+  kimiReasoningExtractor,
+  deepSeekReasoningExtractor,
+} from './normalizers/reasoningExtractors';

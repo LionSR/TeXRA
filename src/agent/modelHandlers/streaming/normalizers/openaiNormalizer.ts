@@ -263,7 +263,7 @@ export async function* normalizeOpenAIStream(
           outputTokens: usage.completion_tokens,
           cost: 0, // Will be calculated by caller
           responseTimeMs,
-          provider: (options.provider as 'openai') ?? 'openai',
+          provider: options.provider ?? 'openai',
         }
       : undefined,
     raw: finalCompletion,
@@ -415,7 +415,7 @@ export async function* normalizeOpenAIStreamWithCustomExtractor(
           outputTokens: usage.completion_tokens,
           cost: 0,
           responseTimeMs,
-          provider: (options.provider as 'openai') ?? 'openai',
+          provider: options.provider ?? 'openai',
         }
       : undefined,
     raw: finalCompletion,

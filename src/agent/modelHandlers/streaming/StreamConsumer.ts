@@ -61,6 +61,9 @@ interface ConsumerState {
   // Web search deduplication
   emittedWebSearchIds: Set<string>;
 
+  // Final response from done event
+  finalResponse: NormalizedResponse | null;
+
   // Metrics
   hadThinking: boolean;
   hadContent: boolean;
@@ -126,6 +129,7 @@ export class StreamConsumer {
       contentBuffer: '',
       toolCalls: new Map(),
       emittedWebSearchIds: new Set(),
+      finalResponse: null,
       hadThinking: false,
       hadContent: false,
       webSearchCount: 0,
@@ -316,8 +320,9 @@ export class StreamConsumer {
   /**
    * Handle done event.
    */
-  private handleDone(_event: DoneEvent, _state: ConsumerState): void {
-    // Done event is processed when we exit the consumption loop
+  private handleDone(event: DoneEvent, state: ConsumerState): void {
+    // Store the final response for use in buildResult
+    state.finalResponse = event.response;
   }
 
   /**
@@ -339,11 +344,20 @@ export class StreamConsumer {
    * Build the final consumption result.
    */
   private buildResult(state: ConsumerState): StreamConsumptionResult {
-    // Build tool calls array from map
+    // If we received a done event with a final response, use it
+    if (state.finalResponse) {
+      return {
+        response: state.finalResponse,
+        hadThinking: state.hadThinking,
+        hadContent: state.hadContent,
+        toolCallCount: state.finalResponse.toolCalls?.length ?? 0,
+        webSearchCount: state.webSearchCount,
+      };
+    }
+
+    // Fallback: build response from accumulated state (should rarely happen)
     const toolCalls = Array.from(state.toolCalls.values());
 
-    // Create a minimal response object
-    // The full response comes from the 'done' event
     const response: NormalizedResponse = {
       text: state.contentBuffer,
       thinking: state.thinkingBuffer || undefined,
@@ -355,7 +369,8 @@ export class StreamConsumer {
               arguments: tc.arguments,
             }))
           : undefined,
-      stopReason: 'stop',
+      // Default to 'unknown' if no done event was received
+      stopReason: 'unknown',
     };
 
     return {

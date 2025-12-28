@@ -55,6 +55,12 @@ import type {
   WebSearchResult,
 } from './types/ServerToolTypes';
 
+import {
+  StreamConsumer,
+  type StreamEvent,
+  type StreamConsumptionResult,
+} from './streaming';
+
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
 
@@ -217,6 +223,41 @@ export abstract class ModelHandler<
       messageType: MESSAGE_TYPES.WEB_SEARCH,
       data: result,
     });
+  }
+
+  /**
+   * Consume a normalized stream using the unified StreamConsumer.
+   *
+   * This method provides a consistent way to handle streaming across all providers.
+   * The normalizer (provider-specific) converts SDK events to StreamEvents,
+   * and this method handles stream creation, interleaving, and finalization.
+   *
+   * @param stream - Normalized stream of unified StreamEvents
+   * @param options - Optional configuration for stream consumption
+   * @returns The consumption result including the normalized response
+   *
+   * @example
+   * ```typescript
+   * // In a model handler:
+   * const normalizedStream = normalizeAnthropicStream(sdkStream, { provider: 'anthropic' });
+   * const result = await this.consumeNormalizedStream(normalizedStream);
+   * return result.response;
+   * ```
+   */
+  protected async consumeNormalizedStream(
+    stream: AsyncIterable<StreamEvent>,
+    options?: {
+      handleInterleavedBlocks?: boolean;
+    },
+  ): Promise<StreamConsumptionResult> {
+    const consumer = new StreamConsumer(this.logger, {
+      thinkingEnabled: true,
+      outputEnabled: this.isOutputStreamingEnabled(),
+      progressViewEnabled: this.progressViewEnabled,
+      handleInterleavedBlocks: options?.handleInterleavedBlocks ?? false,
+    });
+
+    return consumer.consume(stream);
   }
 
   /**

@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 
+import type { UsageProvider } from '@agent/types/NormalizedUsage';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
@@ -58,7 +59,7 @@ export interface NormalizerOptions {
   /**
    * Provider identifier for usage normalization.
    */
-  provider?: string;
+  provider?: UsageProvider;
 
   /**
    * Model name for provider-specific behavior.

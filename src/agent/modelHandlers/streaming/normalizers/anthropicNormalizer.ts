@@ -11,19 +11,19 @@
  * - Tool calls: Yields tool_call_* events for streaming tool arguments
  */
 
+import { extractDomain } from '@agent/modelHandlers/types/ServerToolTypes';
+
 import type {
   BetaRawMessageStreamEvent,
   BetaMessage,
+  BetaContentBlock,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
-  BetaContentBlock,
-  BetaToolUseBlock,
+  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
-
-import { extractDomain } from '@agent/modelHandlers/types/ServerToolTypes';
 
 import type {
   StreamEvent,
@@ -141,7 +141,7 @@ function extractToolCalls(
 
   for (const block of message.content) {
     if (block.type === 'tool_use') {
-      const toolBlock = block as BetaToolUseBlock;
+      const toolBlock = block as ToolUseBlock;
       toolCalls.push({
         id: toolBlock.id,
         name: toolBlock.name,
@@ -240,7 +240,7 @@ function* handleBlockStart(
     state.currentTextBlockIndex = null;
   } else if (blockType === 'tool_use') {
     // Start of a tool call
-    const toolBlock = event.content_block as BetaToolUseBlock;
+    const toolBlock = event.content_block as ToolUseBlock;
     yield {
       type: 'tool_call_start',
       id: toolBlock.id,
@@ -370,8 +370,8 @@ export async function* normalizeAnthropicStream(
           cost: 0, // Will be calculated by caller
           responseTimeMs,
           provider: 'anthropic',
-          cachedInputTokens: finalMessage.usage.cache_read_input_tokens,
-          cacheCreationTokens: finalMessage.usage.cache_creation_input_tokens,
+          cachedInputTokens: finalMessage.usage.cache_read_input_tokens ?? undefined,
+          cacheCreationTokens: finalMessage.usage.cache_creation_input_tokens ?? undefined,
         }
       : undefined,
     raw: finalMessage,
