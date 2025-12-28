@@ -20,7 +20,7 @@ const ExtractTikzInputSchema = z.strictObject({
   compile: z
     .boolean()
     .describe('Compile extracted TikZ pictures into standalone PDFs.')
-    .optional(),
+    .nullish(),
 });
 
 export type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
