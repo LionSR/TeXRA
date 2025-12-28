@@ -433,8 +433,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       // Create shared state for the flow (no lifecycle - errors thrown directly)
       // Pass hydrated outputs to preserve them during resume
+      // Note: No agent reference - flow accesses all services via flow.setServices()
       shared = {
-        agent: this,
         state: createInitialReflectionState(
           totalRounds,
           AgentWorkspaceState.create(),
