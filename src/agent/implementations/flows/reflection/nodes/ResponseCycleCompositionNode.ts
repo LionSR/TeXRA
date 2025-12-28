@@ -21,7 +21,10 @@
  */
 
 import { Node, Flow } from '@agent/node';
-import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
+import {
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {

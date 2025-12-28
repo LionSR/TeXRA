@@ -281,9 +281,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     // Sort rounds for consistent ordering
-    const sortedRounds = Array.from(params.rounds.keys()).sort(
-      (a, b) => a - b,
-    );
+    const sortedRounds = Array.from(params.rounds.keys()).sort((a, b) => a - b);
 
     // Create RoundOutput objects directly in agent.roundOutputs[] (canonical storage)
     for (const round of sortedRounds) {
@@ -480,7 +478,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       shared?.state.roundStage?.end(status);
 
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
-      this.hydratedRoundCount = Math.max(previousHydratedRounds, currentOutputs);
+      this.hydratedRoundCount = Math.max(
+        previousHydratedRounds,
+        currentOutputs,
+      );
 
       this.endRun(status);
       this.cleanupRun();
