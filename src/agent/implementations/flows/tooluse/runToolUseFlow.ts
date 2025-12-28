@@ -106,9 +106,6 @@ export async function runToolUseFlow<C = unknown>(
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
-    // Initialize client
-    await flowContext.initializeClient();
-
     // Create shared state
     const shared: ToolUseRunShared<C> = {
       state: createInitialToolUseState<C>(),
