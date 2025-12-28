@@ -328,7 +328,8 @@ class ToolUseCycleNode<C> extends Node<
 
       case 'cancelled':
         // User cancelled - not an error, flow ends gracefully
-        return undefined;
+        // Return FINALIZE to exit flow (no finalize successor = flow ends)
+        return FlowTransition.FINALIZE;
     }
   }
 }

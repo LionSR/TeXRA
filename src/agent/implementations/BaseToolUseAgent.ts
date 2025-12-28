@@ -233,18 +233,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const snapshot = this.resumeSnapshot;
     this.resumeSnapshot = null;
 
-    // === INIT (agent-owns-lifecycle) ===
-    await this.startAndInitRun();
-    await this.initializeClient();
-
-    // Create shared state (mutable runtime state only - no lifecycle!)
-    const shared: ToolUseRunShared<C> = {
-      agent: this,
-      state: createInitialToolUseState<C>(),
-    };
-
     let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
     try {
+      // === INIT (agent-owns-lifecycle) ===
+      // Init inside try block ensures cleanup runs even if init fails
+      await this.startAndInitRun();
+      await this.initializeClient();
+
+      // Create shared state (mutable runtime state only - no lifecycle!)
+      const shared: ToolUseRunShared<C> = {
+        agent: this,
+        state: createInitialToolUseState<C>(),
+      };
+
       // Create flow and inject services with explicit snapshot
       const flow = createToolUseRunFlow<C>();
       flow.setServices(this.getServices(snapshot));

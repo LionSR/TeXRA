@@ -197,6 +197,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       // Delegate to agent methods to preserve polymorphism
       getOutputFileLocation: (round) => this.getOutputFileLocation(round),
       shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure(),
+      getUsageRecorder: () => this.getUsageRecorder('workflow'),
     };
   }
 
@@ -397,13 +398,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * - No temporal coupling - all resume logic in lifecycle methods
    */
   public async run(): Promise<void> {
-    // Note: Resume hydration now happens in startAndInitRun() when resumeParams is set
+    // Note: Resume hydration happens in startAndInitRun() when resumeParams is set
     // This eliminates the temporal coupling of the old awaitPendingHydration() pattern
-    const previousHydratedRounds = this.hydratedRoundCount;
-    const hadHydratedRounds = previousHydratedRounds > 0;
-    if (!hadHydratedRounds) {
-      this.roundOutputs = [];
-    }
+
+    // Reset runtime exports before run
     this.runtimeXmlExports = {
       tagContents: {},
       documents: [],
@@ -411,37 +409,56 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       sourceLocation: null,
     };
 
-    // === INIT (agent-owns-lifecycle) ===
-    await this.startAndInitRun();
-    await this.initializeClient();
-    this.resetPromptBuilder();
-
-    const totalRounds = this.getTotalRounds();
-
-    // Ensure we have a run stage for round grouping
-    if (!this.runStage) {
-      throw new Error('Run stage required for reflection agent.');
-    }
-
-    // Create initial round stage (r0) for UI grouping
-    const r0Stage = await this.logger.stage('r0', { parent: this.runStage });
-
-    // Create shared state for the flow (no lifecycle - errors thrown directly)
-    const shared: ReflectionFlowShared = {
-      agent: this,
-      state: createInitialReflectionState(
-        totalRounds,
-        AgentWorkspaceState.create(),
-      ),
-      retryState: createRetryState(),
-      runStage: this.runStage,
-    };
-
-    // Set initial round stage
-    shared.state.roundStage = r0Stage;
-
     let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+    let shared: ReflectionFlowShared | undefined;
+    let previousHydratedRounds = 0;
+
     try {
+      // === INIT (agent-owns-lifecycle) ===
+      // Init inside try block ensures cleanup runs even if init fails
+      await this.startAndInitRun();
+      await this.initializeClient();
+      this.resetPromptBuilder();
+
+      // Check hydration state AFTER startAndInitRun (which calls hydrateFromResume)
+      previousHydratedRounds = this.hydratedRoundCount;
+      const hadHydratedRounds = previousHydratedRounds > 0;
+      if (!hadHydratedRounds) {
+        this.roundOutputs = [];
+      }
+
+      const totalRounds = this.getTotalRounds();
+
+      // Ensure we have a run stage for round grouping
+      if (!this.runStage) {
+        throw new Error('Run stage required for reflection agent.');
+      }
+
+      // Determine starting round from hydrated outputs (for resume)
+      const startingRound = hadHydratedRounds ? this.roundOutputs.length : 0;
+
+      // Create initial round stage for UI grouping (r0, r1, etc.)
+      const roundStageName = `r${startingRound}`;
+      const roundStage = await this.logger.stage(roundStageName, {
+        parent: this.runStage,
+      });
+
+      // Create shared state for the flow (no lifecycle - errors thrown directly)
+      // Pass hydrated outputs to preserve them during resume
+      shared = {
+        agent: this,
+        state: createInitialReflectionState(
+          totalRounds,
+          AgentWorkspaceState.create(),
+          hadHydratedRounds ? this.roundOutputs : undefined,
+        ),
+        retryState: createRetryState(),
+        runStage: this.runStage,
+      };
+
+      // Set initial round stage
+      shared.state.roundStage = roundStage;
+
       // Create flow and inject services (native service pattern)
       const flow = createReflectionFlow<C>();
       flow.setServices(this.services);
@@ -458,7 +475,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     } finally {
       // === FINALIZE (agent-owns-lifecycle) ===
       // End current round stage before closing run
-      shared.state.roundStage?.end(status);
+      shared?.state.roundStage?.end(status);
 
       const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
