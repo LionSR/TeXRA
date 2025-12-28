@@ -42,15 +42,11 @@
 
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentWorkflowSetting,
-  XmlStructureMode,
-} from '@agent/core/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { AgentPrompt, AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentFileLocation } from '@utils/files';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import { buildBaseFlowServices } from '@agent/implementations/flows/common';
 
 import { OutputHandler, type IOutputHandler } from '@agent/output';
 import { LatexMediaManager } from '@latex';
@@ -67,24 +63,15 @@ import type { ReflectionServices } from './ReflectionServices';
 /**
  * Configuration for creating a ReflectionFlowContext.
  *
- * This is the minimal set of inputs needed. The context factory
- * creates all derived services from these.
+ * Extends BaseFlowContextInit with reflection-specific fields.
+ * The context factory creates all derived services from these.
  */
-export interface ReflectionFlowContextInit<C = unknown> {
-  // Core dependencies
-  modelHandler: IModelHandler<any, any, any, any, C>;
-  config: AgentConfig;
+export interface ReflectionFlowContextInit<C = unknown>
+  extends BaseFlowContextInit<C> {
+  /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
-  prompt: AgentPrompt;
-  executionContext: AgentExecutionContext;
-  userVarChannels: UserVariableChannels;
 
-  // Control callbacks (required for interruption/abort)
-  checkInterruption: () => boolean;
-  setAbortController: (ctrl: AbortController | null) => void;
-  getClient: () => C;
-
-  // Usage tracking callback
+  /** Usage tracking callback (required for reflection flows) */
   getUsageRecorder: () => AgentRoundFinalizedCallback;
 }
 
@@ -317,39 +304,21 @@ export class ReflectionFlowContext<C = unknown> {
       return this._services;
     }
 
-    const {
-      modelHandler,
-      config,
-      setting,
-      prompt,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
-      getUsageRecorder,
-    } = this.init;
+    const { config, setting, getUsageRecorder } = this.init;
 
     // Create output file location getter using computed values
     const getOutputFileLocation = createOutputFileLocationGetter(
       config,
       setting,
-      modelHandler,
+      this.init.modelHandler,
       this.fileService,
     );
 
+    // Build base services from init, then add reflection-specific ones
     this._services = {
-      // Base services
-      modelHandler,
-      logger: executionContext.logger,
-      config,
+      ...buildBaseFlowServices(this.init),
+      // Narrow setting type for reflection flows
       setting,
-      prompt,
-      context: executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
 
       // Services created by context
       outputHandler: this.outputHandler,

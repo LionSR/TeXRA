@@ -20,9 +20,14 @@ import type {
   UserVariableChannels,
 } from '@agent/core/AgentCycleOptions';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import {
+  registerInterruptible,
+  unregisterInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import {
   END_GROUP_STATUS,
@@ -34,8 +39,10 @@ import { sleep } from '@utils/core';
 
 /**
  * Minimal abstract base class providing shared setup and interruption logic.
+ *
+ * Implements IInterruptible for unified interrupt handling via the execution registry.
  */
-export abstract class BaseAgent<C = unknown> implements IAgent {
+export abstract class BaseAgent<C = unknown> implements IAgent, IInterruptible {
   protected modelHandler: IModelHandler<any, any, any, any, C>;
   protected agentConfig: AgentConfig;
   protected agentSetting: AgentSetting;
@@ -55,8 +62,6 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected readonly executionId: ExecutionId;
-
-  private static runningAgents: Map<string, BaseAgent> = new Map();
 
   public get config(): AgentConfig {
     return this.agentConfig;
@@ -190,7 +195,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
         output: {},
       };
       this.resetTransientUserVars();
-      this.registerRunningAgent(this.getStreamTabId());
+      this.registerInRegistry(this.getStreamTabId());
     };
 
     const parent = parentStage ?? this.runStage;
@@ -325,23 +330,25 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.lastRunStageId;
   }
 
-  public static getRunningAgent(
-    streamTabId: StreamTabId,
-  ): BaseAgent | undefined {
-    return BaseAgent.runningAgents.get(streamTabId);
-  }
-
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
-    this.unregisterRunningAgent(streamTabId);
+    this.unregisterFromRegistry(streamTabId);
   }
 
-  protected registerRunningAgent(streamTabId: StreamTabId): void {
-    BaseAgent.runningAgents.set(streamTabId, this);
+  /**
+   * Register this agent in the unified execution registry.
+   * Called during init() to enable interrupt handling.
+   */
+  protected registerInRegistry(streamTabId: StreamTabId): void {
+    registerInterruptible(streamTabId, this);
   }
 
-  protected unregisterRunningAgent(streamTabId: StreamTabId): void {
-    BaseAgent.runningAgents.delete(streamTabId);
+  /**
+   * Unregister this agent from the unified execution registry.
+   * Called during cleanup() when execution completes.
+   */
+  protected unregisterFromRegistry(streamTabId: StreamTabId): void {
+    unregisterInterruptible(streamTabId);
   }
 
   abstract run(): Promise<void>;
