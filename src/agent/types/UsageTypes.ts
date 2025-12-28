@@ -4,6 +4,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - identifier schemas
+import { StreamTabIdSchema, StorageKeySchema } from './IdentifierTypes';
+
 export const TokenUsageStatsSchema = z.strictObject({
   /** Number of input tokens consumed */
   inputTokens: z.number(),
@@ -42,8 +45,8 @@ export type ExtendedTokenUsageStats = z.infer<
  */
 export const StreamUsageMessageSchema = z.strictObject({
   command: z.literal('updateUsage'),
-  stream: z.string(),
-  usageByRun: z.record(z.string(), TokenUsageStatsSchema).prefault({}),
+  stream: StreamTabIdSchema,
+  usageByRun: z.record(StorageKeySchema, TokenUsageStatsSchema).prefault({}),
 });
 
 export type StreamUsageMessage = z.infer<typeof StreamUsageMessageSchema>;

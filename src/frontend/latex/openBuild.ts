@@ -4,15 +4,11 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import {
-  WorkspaceFS,
-  AbsoluteFS,
-  resolveFilePath,
-  isTexFile,
-} from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, resolveFilePath } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,

@@ -1,9 +1,25 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { ModelProvider } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
-import { normalizeUrl } from '@utils/core';
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
+
+/**
+ * Normalize a URL-like string by removing any protocol prefix and trailing slashes.
+ * Preserves any path component provided.
+ */
+function normalizeUrl(input: string): string {
+  if (!input) {
+    return '';
+  }
+  try {
+    const url = new URL(input.includes('://') ? input : `https://${input}`);
+    const withoutProtocol = `${url.host}${url.pathname}`;
+    return withoutProtocol.replace(/\/+$/, '');
+  } catch (_err) {
+    return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  }
+}
 
 const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
   [ModelProvider.GOOGLE]: 'generativelanguage',

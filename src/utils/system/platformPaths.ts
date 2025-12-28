@@ -9,8 +9,8 @@ import { execaSync } from 'execa';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
-// Local file imports
-import { TEX_TOOLS } from './constants';
+// Common LaTeX tool names used across the system
+const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
 const CHANNEL = 'platformPaths';
 logger.initialize(CHANNEL);
@@ -160,14 +160,6 @@ export function getExtraDirs(): string[] {
   // Cache and return the unique directories
   cachedExtraDirs = Array.from(new Set(dirs));
   return cachedExtraDirs;
-}
-
-/**
- * Clear the cached directories. Useful for testing or when system configuration changes.
- */
-export function clearExtraDirsCache(): void {
-  cachedExtraDirs = null;
-  cachedExtendedPaths.clear();
 }
 
 // Cache for extended PATH strings

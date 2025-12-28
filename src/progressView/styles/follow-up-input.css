@@ -22,13 +22,13 @@
   flex: 1;
   line-height: 1.4;
   min-height: 106px;
-  max-height: 400px;
+  max-height: var(--height-xlarge);
   height: auto;
 }
 
 #followUpInput::part(control) {
   min-height: 106px;
-  max-height: 400px;
+  max-height: var(--height-xlarge);
   overflow-y: auto;
 }
 

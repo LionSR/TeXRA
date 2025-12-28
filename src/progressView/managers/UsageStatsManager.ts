@@ -61,11 +61,6 @@ const UsageDataSchema = createSingleValueRunMapSchema(
  */
 type RunUsageMap = Map<string, TokenUsageStats>;
 
-/** Stream ID used for migrated legacy data */
-const LEGACY_MIGRATION_STREAM = '_legacy_migrated_' as StreamTabId;
-/** Run ID used for migrated legacy data */
-const LEGACY_MIGRATION_RUN_ID = '_migrated_run_';
-
 export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
   RunUsageMap
@@ -239,72 +234,11 @@ export class UsageStatsManager extends PersistentMapManager<
   async load(): Promise<void> {
     await super.load();
 
-    // Migrate orphaned texra.runUsage data (legacy key never loaded before)
-    await this.migrateLegacyRunUsage();
-
     if (this.items.size > 0) {
       this.logger.debug(
         `Loaded usage statistics for ${this.items.size} streams`,
       );
     }
-  }
-
-  /**
-   * Migrates orphaned data from legacy texra.runUsage key.
-   * This key was defined but never loaded, leaving data orphaned.
-   * Extracts totals and stores under a _legacy_ stream, then deletes the old key.
-   */
-  private async migrateLegacyRunUsage(): Promise<void> {
-    const LEGACY_KEY = 'texra.runUsage';
-
-    interface LegacyRunUsageTotals {
-      totalInputTokens?: number;
-      totalOutputTokens?: number;
-      totalCost?: number;
-    }
-
-    interface LegacyAgentRunStateJSON {
-      usageAccumulator?: {
-        totals?: LegacyRunUsageTotals;
-      };
-    }
-
-    const legacy = this.storage.get<LegacyAgentRunStateJSON>(LEGACY_KEY);
-    if (!legacy?.usageAccumulator?.totals) {
-      return;
-    }
-
-    const totals = legacy.usageAccumulator.totals;
-    const usage: TokenUsageStats = TokenUsageStatsParsingSchema.parse({
-      inputTokens: totals.totalInputTokens ?? 0,
-      outputTokens: totals.totalOutputTokens ?? 0,
-      cost: totals.totalCost ?? 0,
-    });
-
-    // Skip if no meaningful data
-    if (
-      usage.inputTokens === 0 &&
-      usage.outputTokens === 0 &&
-      usage.cost === 0
-    ) {
-      await this.storage.update(LEGACY_KEY, undefined as never);
-      return;
-    }
-
-    // Store under legacy migration identifiers
-    const existing =
-      this.items.get(LEGACY_MIGRATION_STREAM) ??
-      new Map<string, TokenUsageStats>();
-    existing.set(LEGACY_MIGRATION_RUN_ID, usage);
-    this.items.set(LEGACY_MIGRATION_STREAM, existing);
-
-    // Save migrated data and clean up legacy key
-    await this.save();
-    await this.storage.update(LEGACY_KEY, undefined as never);
-
-    this.logger.info(
-      `Migrated legacy usage data: ${usage.inputTokens} input, ${usage.outputTokens} output, $${usage.cost.toFixed(4)} cost`,
-    );
   }
 
   /** Normalize loaded usage records */
