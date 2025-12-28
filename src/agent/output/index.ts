@@ -8,10 +8,5 @@ export type {
   RoundOutput,
   RoundFileMapping,
 } from './types';
-export {
-  getFileBasename,
-  getFileDirectory,
-  getDisplayLabel,
-  getDisplayDir,
-  getDisplayPath,
-} from './displayUtils';
+// Note: Display utils (getFileBasename, getFileDirectory, getDisplayLabel, getDisplayDir)
+// are internal to the output module. Use @utils/files/getDisplayPath for external use.

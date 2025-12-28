@@ -351,7 +351,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
             ? message.activeRunId
             : previousRunId && runIds.includes(previousRunId)
               ? previousRunId
-              : runIds[runIds.length - 1];
+              : runIds.at(-1);
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
         dom.taskGroups.showRun(preferredRun);
