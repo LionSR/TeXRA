@@ -23,7 +23,7 @@ const ExtractBibliographyInputSchema = z.strictObject({
     .describe(
       'Optional path to a BibTeX file to include when resolving citations.',
     )
-    .optional(),
+    .nullish(),
 });
 
 export type ExtractBibliographyInput = z.infer<

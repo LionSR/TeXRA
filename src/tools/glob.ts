@@ -19,7 +19,7 @@ import { defineTool } from './core/define';
 
 const GlobInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().optional(),
+  path: z.string().nullish(),
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;

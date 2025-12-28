@@ -19,16 +19,16 @@ import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),
-  rows: z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS).optional(),
-  offset: z.int().min(0).optional(),
-  sort: z.string().optional(),
-  order: z.enum(['asc', 'desc']).optional(),
+  rows: z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS).nullish(),
+  offset: z.int().min(0).nullish(),
+  sort: z.string().nullish(),
+  order: z.enum(['asc', 'desc']).nullish(),
   filter: z
     .union([
       z.string(),
       z.record(z.string(), z.union([z.string(), z.array(z.string())])),
     ])
-    .optional(),
+    .nullish(),
 });
 
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
