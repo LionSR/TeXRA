@@ -91,8 +91,8 @@ export class AgentsTable {
     const tierBadge = safeGetElementById(ELEMENT_IDS.USER_TIER);
     if (tierBadge) {
       tierBadge.textContent = tier;
-      // Normalize tier to lowercase for CSS class consistency
-      tierBadge.className = `${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
+      // Keep 'badge' base class for shared styling, add tier-badge and tier variant
+      tierBadge.className = `badge ${CLASS_NAMES.TIER_BADGE} ${tier.toLowerCase()}`;
     }
 
     // Update access expiration display

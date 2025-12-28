@@ -3,7 +3,7 @@ import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - common
 import { copyWithFeedback } from '@common/clipboardUtils.js';
-import { safeGetElementById, showElement, hideElement } from '@common/domUtils.js';
+import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
 
 /**
  * Manages the instruction panel that surfaces the active stream instruction.
@@ -52,7 +52,7 @@ export class InstructionPanel {
     this._currentText = normalized;
 
     elements.text.value = normalized;
-    showElement(elements.container);
+    setVisibilityState(elements.container, true);
 
     this._resetCopyButton(false);
   }
@@ -66,7 +66,7 @@ export class InstructionPanel {
     this._currentText = '';
 
     elements.text.value = '';
-    hideElement(elements.container);
+    setVisibilityState(elements.container, false);
 
     this._resetCopyButton(true);
   }
