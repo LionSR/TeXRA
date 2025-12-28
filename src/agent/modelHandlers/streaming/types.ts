@@ -10,7 +10,6 @@
 import { z } from 'zod';
 
 import type { UsageProvider } from '@agent/types/NormalizedUsage';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
 // Web Search Types (mirrored from ServerToolTypes for schema validation)
@@ -70,27 +69,6 @@ export interface NormalizerOptions {
    * Start time for response time calculation.
    */
   startTime?: number;
-}
-
-/**
- * Stream consumer options.
- * Controls how the consumer processes events.
- */
-export interface StreamConsumerOptions {
-  /** Whether to create thinking streams */
-  thinkingEnabled?: boolean;
-
-  /** Whether to create output streams */
-  outputEnabled?: boolean;
-
-  /** Whether progress view is enabled */
-  progressViewEnabled?: boolean;
-
-  /** Whether to handle interleaved blocks (Anthropic) */
-  handleInterleavedBlocks?: boolean;
-
-  /** Logger instance for creating streams */
-  logger: AgentLogger;
 }
 
 // ============================================================================
@@ -227,26 +205,6 @@ export type StreamNormalizer<TStream> = (
   stream: TStream,
   options: NormalizerOptions,
 ) => NormalizedStream;
-
-// ============================================================================
-// Factory Types
-// ============================================================================
-
-/**
- * Factory for creating logger streams.
- * Abstraction for testing and dependency injection.
- */
-export interface StreamFactory {
-  createThinkingStream(): {
-    append(text: string): void;
-    finalize(finalText?: string): string;
-  };
-
-  createOutputStream(): {
-    append(text: string): void;
-    finalize(finalText?: string): string;
-  };
-}
 
 // ============================================================================
 // Result Types

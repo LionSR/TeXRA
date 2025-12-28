@@ -4,15 +4,13 @@
  * This module provides a consistent streaming abstraction across all providers:
  * - Normalized event types (StreamEvent)
  * - Provider-specific normalizers
- * - Shared stream consumer
  *
  * Usage:
  * ```typescript
- * import { StreamConsumer, StreamEvent } from '@agent/modelHandlers/streaming';
- *
  * // In a model handler:
- * const consumer = new StreamConsumer(this.logger, options);
- * const response = await consumer.consume(normalizedStream);
+ * const normalizedStream = normalizeAnthropicStream(sdkStream, options);
+ * const result = await this.consumeNormalizedStream(normalizedStream);
+ * return result.response.raw;
  * ```
  */
 
@@ -65,10 +63,8 @@ export {
   // Types
   type WebSearchResultEntry,
   type NormalizerOptions,
-  type StreamConsumerOptions,
   type NormalizedStream,
   type StreamNormalizer,
-  type StreamFactory,
   type StreamConsumptionResult,
   // State types (for normalizer implementations)
   type AnthropicNormalizerState,
@@ -76,9 +72,6 @@ export {
   type GoogleNormalizerState,
   type OpenAIResponseNormalizerState,
 } from './types';
-
-// StreamConsumer
-export { StreamConsumer } from './StreamConsumer';
 
 // Normalizers
 export {

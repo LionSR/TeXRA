@@ -13,7 +13,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type AgentLogStream } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Internal imports
@@ -56,8 +56,8 @@ import type {
 } from './types/ServerToolTypes';
 
 import {
-  StreamConsumer,
   type StreamEvent,
+  type NormalizedResponse,
   type StreamConsumptionResult,
 } from './streaming';
 
@@ -226,7 +226,7 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Consume a normalized stream using the unified StreamConsumer.
+   * Consume a normalized stream directly, without intermediate abstraction.
    *
    * This method provides a consistent way to handle streaming across all providers.
    * The normalizer (provider-specific) converts SDK events to StreamEvents,
@@ -235,14 +235,6 @@ export abstract class ModelHandler<
    * @param stream - Normalized stream of unified StreamEvents
    * @param options - Optional configuration for stream consumption
    * @returns The consumption result including the normalized response
-   *
-   * @example
-   * ```typescript
-   * // In a model handler:
-   * const normalizedStream = normalizeAnthropicStream(sdkStream, { provider: 'anthropic' });
-   * const result = await this.consumeNormalizedStream(normalizedStream);
-   * return result.response;
-   * ```
    */
   protected async consumeNormalizedStream(
     stream: AsyncIterable<StreamEvent>,
@@ -250,14 +242,119 @@ export abstract class ModelHandler<
       handleInterleavedBlocks?: boolean;
     },
   ): Promise<StreamConsumptionResult> {
-    const consumer = new StreamConsumer(this.logger, {
-      thinkingEnabled: true,
-      outputEnabled: this.isOutputStreamingEnabled(),
-      progressViewEnabled: this.progressViewEnabled,
-      handleInterleavedBlocks: options?.handleInterleavedBlocks ?? false,
-    });
+    const outputEnabled = this.isOutputStreamingEnabled();
+    const handleInterleaved = options?.handleInterleavedBlocks ?? false;
 
-    return consumer.consume(stream);
+    // Stream state
+    let thinkingStream: AgentLogStream | null = null;
+    let outputStream: AgentLogStream | null = null;
+    let currentThinkingBlockIndex = -1;
+    let currentContentBlockIndex = -1;
+    const emittedWebSearchIds = new Set<string>();
+
+    // Metrics
+    let hadThinking = false;
+    let hadContent = false;
+    let webSearchCount = 0;
+    let finalResponse: NormalizedResponse | null = null;
+
+    const finalizeStreams = () => {
+      thinkingStream?.finalize();
+      thinkingStream = null;
+      outputStream?.finalize();
+      outputStream = null;
+    };
+
+    try {
+      for await (const event of stream) {
+        switch (event.type) {
+          case 'thinking': {
+            hadThinking = true;
+
+            // Handle interleaved blocks (Anthropic)
+            if (handleInterleaved && event.blockIndex !== undefined) {
+              if (event.blockIndex !== currentThinkingBlockIndex) {
+                thinkingStream?.finalize();
+                thinkingStream = this.createThinkingStream();
+                currentThinkingBlockIndex = event.blockIndex;
+              }
+            } else if (!thinkingStream) {
+              thinkingStream = this.createThinkingStream();
+            }
+
+            thinkingStream?.append(event.delta);
+            break;
+          }
+
+          case 'content': {
+            if (!outputEnabled) break;
+            hadContent = true;
+
+            // Handle interleaved blocks (Anthropic)
+            if (handleInterleaved && event.blockIndex !== undefined) {
+              const isConsecutive =
+                outputStream !== null &&
+                event.blockIndex === currentContentBlockIndex + 1;
+
+              if (!isConsecutive) {
+                outputStream?.finalize();
+                outputStream = this.createOutputStream();
+              }
+              currentContentBlockIndex = event.blockIndex;
+            } else if (!outputStream) {
+              outputStream = this.createOutputStream();
+            }
+
+            outputStream?.append(event.delta);
+            break;
+          }
+
+          case 'web_search': {
+            if (emittedWebSearchIds.has(event.callId)) break;
+            emittedWebSearchIds.add(event.callId);
+            webSearchCount++;
+
+            if (this.progressViewEnabled) {
+              this.logger.info('', {
+                messageType: MESSAGE_TYPES.WEB_SEARCH,
+                data: {
+                  query: event.query,
+                  results: event.results,
+                  provider: event.provider,
+                  callId: event.callId,
+                  status: event.status,
+                },
+              });
+            }
+            break;
+          }
+
+          case 'done':
+            finalResponse = event.response;
+            break;
+
+          // tool_call_start, tool_call_delta, tool_call_done, usage, error
+          // are handled by the normalizer - done event contains final data
+        }
+      }
+
+      finalizeStreams();
+
+      if (!finalResponse) {
+        throw new Error('Stream ended without done event');
+      }
+
+      return {
+        response: finalResponse,
+        hadThinking,
+        hadContent,
+        toolCallCount: finalResponse.toolCalls?.length ?? 0,
+        webSearchCount,
+      };
+    } catch (error) {
+      finalizeStreams();
+      throw error;
+    }
   }
 
   /**
