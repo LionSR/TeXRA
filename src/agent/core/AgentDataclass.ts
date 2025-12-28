@@ -71,7 +71,7 @@ export function resolveAgentSessionDescriptor(
 
 /** Shared fields for all agent settings. */
 export const AgentSettingBaseSchema = z.strictObject({
-  agentType: z.nativeEnum(AgentType).prefault(AgentType.CoT),
+  agentType: z.enum(AgentType).prefault(AgentType.CoT),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
