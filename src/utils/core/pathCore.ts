@@ -1,7 +1,9 @@
 /**
  * Path normalization and utility functions.
- * These are pure functions with no external dependencies.
  */
+
+// Standard library imports
+import * as path from 'path';
 
 const PATH_SEPARATORS = /[\\/]/;
 
@@ -47,12 +49,11 @@ export function normalizeLatexPath(value: string): string {
  * @example
  * getExtensionLowercase('Document.TEX') // returns '.tex'
  * getExtensionLowercase('file') // returns ''
+ * getExtensionLowercase('/my.project/file') // returns '' (dot is in directory, not filename)
  */
 export function getExtensionLowercase(filePath: string): string {
   if (!filePath) return '';
-  const lastDot = filePath.lastIndexOf('.');
-  if (lastDot === -1 || lastDot === filePath.length - 1) return '';
-  return filePath.slice(lastDot).toLowerCase();
+  return path.extname(filePath).toLowerCase();
 }
 
 /**
