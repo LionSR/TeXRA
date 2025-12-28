@@ -178,7 +178,7 @@ export abstract class BaseViewMessageHandler<
    * @param messageName - Human-readable name for logging
    * @param handler - Callback to execute with validated data
    */
-  protected async withValidatedMessage<S extends z.ZodTypeAny>(
+  protected async withValidatedMessage<S extends z.ZodType>(
     schema: S,
     message: unknown,
     messageName: string,

@@ -20,25 +20,27 @@ export const DEFAULT_TOTALS = {
   totalServerToolRequests: 0,
 } as const;
 
-/** Schema for run usage totals with defaults */
+/** Schema for run usage totals - uses .prefault() for input normalization */
 export const RunUsageTotalsSchema = z.object({
-  firstInputTokens: z.number().default(DEFAULT_TOTALS.firstInputTokens),
-  totalInputTokens: z.number().default(DEFAULT_TOTALS.totalInputTokens),
-  totalOutputTokens: z.number().default(DEFAULT_TOTALS.totalOutputTokens),
-  totalCost: z.number().default(DEFAULT_TOTALS.totalCost),
+  firstInputTokens: z.number().prefault(DEFAULT_TOTALS.firstInputTokens),
+  totalInputTokens: z.number().prefault(DEFAULT_TOTALS.totalInputTokens),
+  totalOutputTokens: z.number().prefault(DEFAULT_TOTALS.totalOutputTokens),
+  totalCost: z.number().prefault(DEFAULT_TOTALS.totalCost),
   totalCacheReadInputTokens: z
     .number()
-    .default(DEFAULT_TOTALS.totalCacheReadInputTokens),
+    .prefault(DEFAULT_TOTALS.totalCacheReadInputTokens),
   totalCacheCreationInputTokens: z
     .number()
-    .default(DEFAULT_TOTALS.totalCacheCreationInputTokens),
-  totalReasoningTokens: z.number().default(DEFAULT_TOTALS.totalReasoningTokens),
+    .prefault(DEFAULT_TOTALS.totalCacheCreationInputTokens),
+  totalReasoningTokens: z
+    .number()
+    .prefault(DEFAULT_TOTALS.totalReasoningTokens),
   totalToolUsePromptTokens: z
     .number()
-    .default(DEFAULT_TOTALS.totalToolUsePromptTokens),
+    .prefault(DEFAULT_TOTALS.totalToolUsePromptTokens),
   totalServerToolRequests: z
     .number()
-    .default(DEFAULT_TOTALS.totalServerToolRequests),
+    .prefault(DEFAULT_TOTALS.totalServerToolRequests),
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
@@ -53,13 +55,11 @@ export type NormalizedUsageSnapshot = z.infer<
 
 /**
  * Schema for RunUsageAccumulator JSON serialization.
- * Input accepts partial totals; transform merges with defaults.
+ * Uses .prefault() for input normalization before validation.
  */
 export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.partial()
-    .default({})
-    .transform((partial) => ({ ...DEFAULT_TOTALS, ...partial })),
-  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).default([]),
+  totals: RunUsageTotalsSchema.prefault(DEFAULT_TOTALS),
+  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
 });
 
 /**

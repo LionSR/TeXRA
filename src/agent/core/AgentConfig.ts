@@ -23,16 +23,8 @@ export const validateOutputFiles = (cfg: {
   return cfg.outputFiles.length <= inputs.length;
 };
 
-/**
- * Session descriptor schema for AgentConfig.
- * The session field is the canonical source of truth for agent classification.
- */
 /** Zod schema for validating AgentConfig objects */
-const stringArrayField = () =>
-  z
-    .array(z.string())
-    .nullish()
-    .transform((value) => value ?? []);
+const stringArrayField = () => z.array(z.string()).prefault([]);
 
 const AgentConfigBaseSchema = z
   .object({
@@ -58,7 +50,7 @@ const AgentConfigBaseSchema = z
     editedFile: z.string().nullable().prefault(null),
 
     // Defaults to all-false for tool-use agents; workflow agents populate from UI
-    toolConfig: ToolConfigSchema.default(DEFAULT_TOOL_CONFIG),
+    toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
   })
   .superRefine((config, ctx) => {
     if (

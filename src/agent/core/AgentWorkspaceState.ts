@@ -26,8 +26,8 @@ export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
 /** Schema for ResponseAssemblyState serialization */
 export const ResponseAssemblyStateSnapshotSchema = z.object({
-  lastResponse: z.string().default(''),
-  accumulatedOutput: z.string().default(''),
+  lastResponse: z.string().prefault(''),
+  accumulatedOutput: z.string().prefault(''),
 });
 export type ResponseAssemblyStateSnapshot = z.output<
   typeof ResponseAssemblyStateSnapshotSchema
@@ -85,8 +85,8 @@ export class ResponseAssemblyState {
 
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
-  readFiles: z.array(z.string()).default([]),
-  edits: z.array(FlattenedEditRecordSchema).default([]),
+  readFiles: z.array(z.string()).prefault([]),
+  edits: z.array(FlattenedEditRecordSchema).prefault([]),
 });
 /**
  * Output type for FileInteractionState serialization.
@@ -209,7 +209,7 @@ const MediaFileEntrySchema = z
 
 /** Schema for MediaAttachmentState serialization */
 export const MediaAttachmentStateSnapshotSchema = z.object({
-  files: z.array(MediaFileEntrySchema).default([]),
+  files: z.array(MediaFileEntrySchema).prefault([]),
 });
 export type MediaAttachmentStateSnapshot = z.output<
   typeof MediaAttachmentStateSnapshotSchema
@@ -265,8 +265,8 @@ export class MediaAttachmentState {
 
 /** Schema for ReasoningCacheState serialization */
 export const ReasoningCacheStateSnapshotSchema = z.object({
-  thinkingBlocks: z.array(ThinkingBlockSchema).default([]),
-  thinkingAdded: z.boolean().default(false),
+  thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
+  thinkingAdded: z.boolean().prefault(false),
 });
 export type ReasoningCacheStateSnapshot = z.output<
   typeof ReasoningCacheStateSnapshotSchema
@@ -345,7 +345,7 @@ export class ServerToolContentState {
 
 /** Schema for DocumentStatsState serialization */
 export const DocumentStatsStateSnapshotSchema = z.object({
-  texcountStats: z.string().nullable().default(null),
+  texcountStats: z.string().nullable().prefault(null),
 });
 export type DocumentStatsStateSnapshot = z.output<
   typeof DocumentStatsStateSnapshotSchema
@@ -377,7 +377,7 @@ import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
 
 /** Schema for TodoState serialization */
 export const TodoStateSnapshotSchema = z.object({
-  todos: z.array(TodoItemSchema).default([]),
+  todos: z.array(TodoItemSchema).prefault([]),
 });
 /**
  * Output type for TodoState serialization.
@@ -449,21 +449,21 @@ export class TodoState {
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
 export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSnapshotSchema.default({
+  assembly: ResponseAssemblyStateSnapshotSchema.prefault({
     lastResponse: '',
     accumulatedOutput: '',
   }),
-  media: MediaAttachmentStateSnapshotSchema.default({ files: [] }),
-  reasoning: ReasoningCacheStateSnapshotSchema.default({
+  media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
+  reasoning: ReasoningCacheStateSnapshotSchema.prefault({
     thinkingBlocks: [],
     thinkingAdded: false,
   }),
-  document: DocumentStatsStateSnapshotSchema.default({ texcountStats: null }),
-  interactions: FileInteractionStateSnapshotSchema.default({
+  document: DocumentStatsStateSnapshotSchema.prefault({ texcountStats: null }),
+  interactions: FileInteractionStateSnapshotSchema.prefault({
     readFiles: [],
     edits: [],
   }),
-  todos: TodoStateSnapshotSchema.default({ todos: [] }),
+  todos: TodoStateSnapshotSchema.prefault({ todos: [] }),
 });
 
 /**
