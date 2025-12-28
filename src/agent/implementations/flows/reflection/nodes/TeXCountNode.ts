@@ -14,7 +14,10 @@
  */
 
 import { Node } from '@agent/node';
-import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
+import {
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
