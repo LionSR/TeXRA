@@ -17,6 +17,7 @@
  */
 
 import { Node } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -192,6 +193,6 @@ export class MediaPreparationNode<C = unknown> extends Node<
     }
 
     // Continue to next node
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }

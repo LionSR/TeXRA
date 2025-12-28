@@ -225,7 +225,7 @@ class ToolUsePrepNode<C> extends BaseNode<
       objectType: 'messages',
     });
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 
@@ -372,7 +372,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       objectType: 'response',
     });
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 
@@ -615,7 +615,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     state.stopReason = execRes.stopReason;
     store.resetRound(nextRoundIndex);
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 
