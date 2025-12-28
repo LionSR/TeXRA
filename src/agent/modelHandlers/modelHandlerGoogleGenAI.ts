@@ -1442,25 +1442,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /**
    * Prepend text to the last user message in the conversation.
-   * Finds the last user message and prepends text to its parts.
    */
   prependTextToUserMessage(messages: Content[], text: string): void {
     if (!text.trim()) return;
 
-    // Find the last user message
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === 'user' && msg.parts) {
-        // Add text part at the beginning
-        msg.parts.unshift(createPartFromText(text));
-        return;
-      }
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (lastUserMsg?.parts) {
+      lastUserMsg.parts.unshift(createPartFromText(text));
     }
   }
 
   /**
    * Add media files to the last user message in the conversation.
-   * Inserts media parts at the beginning of the user message.
    */
   async addMediaToUserMessage(
     messages: Content[],
@@ -1468,25 +1461,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): Promise<void> {
     if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
 
-    // Find the last user message
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === 'user' && msg.parts) {
-        try {
-          const formattedMedia = await this.createMediaMessage(mediaFiles);
-          // Insert media at the beginning
-          msg.parts.unshift(...formattedMedia);
-        } catch (err) {
-          this.logger.logError(
-            `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-            err,
-            { operation: 'add media to user message' },
-          );
-        }
-        return;
-      }
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (!lastUserMsg?.parts) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      lastUserMsg.parts.unshift(...formattedMedia);
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
     }
   }
-
-  // Assuming containCutOffMessage is available from base class ModelHandler
 }
