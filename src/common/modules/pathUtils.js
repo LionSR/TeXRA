@@ -24,5 +24,5 @@ export function getBasename(filePath) {
 
   // Split and get last part
   const parts = cleaned.split('/');
-  return parts[parts.length - 1] || '';
+  return parts.at(-1) || '';
 }

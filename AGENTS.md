@@ -85,7 +85,7 @@ Aim for code that looks like it was designed correctly from the start:
 **Agent execution and tool-use**
 
 - Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
-- Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgentWithLogging` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
+- Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgent` or `runPreparedAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
 
 **Webviews and UI**

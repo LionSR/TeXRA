@@ -10,6 +10,7 @@ import { historyViewState } from '../historyViewState.js';
 import {
   addEventListenerSafely,
   safeGetElementById,
+  clearElement,
 } from '@common/domUtils.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
@@ -33,8 +34,8 @@ export class HistoryRenderer {
     );
     if (!historyContainer || !clearButtonContainer) return;
 
-    historyContainer.innerHTML = '';
-    clearButtonContainer.innerHTML = '';
+    clearElement(historyContainer);
+    clearElement(clearButtonContainer);
 
     if (!historyItems || historyItems.length === 0) {
       historyContainer.innerHTML = `<div class="empty-state">${LABELS.EMPTY_STATE}</div>`;
