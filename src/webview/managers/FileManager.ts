@@ -13,7 +13,7 @@ import {
   toErrorMessage,
 } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { selectFiles } from '@utils/dialogs';
+import { selectFiles } from '@frontend/ui/dialogs';
 import { fileLister } from '@frontend/files';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
