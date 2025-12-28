@@ -635,8 +635,6 @@ export function pathToLocation(target: string): FileLocation {
  *
  * This provides a concise human-readable path suitable for showing to users or models,
  * while absolutePath should be used for actual file operations.
- *
- * Note: For full path display of external files, use getDisplayPath from @agent/output.
  */
 export function getShortDisplayPath(location: FileLocation): string {
   if (location.kind === 'workspace' || location.kind === 'runStorage') {
