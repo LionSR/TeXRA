@@ -38,7 +38,8 @@ import {
 import {
   ToolUseSessionLifecycle,
   type IToolUseSession,
-} from '@agent/toolUse/ToolUseSessionLifecycle';
+  type IToolUseSessionHost,
+} from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 
 // Type imports
 import type { IToolRegistry } from '@agent/core/ToolTypes';
@@ -60,9 +61,12 @@ export interface BaseToolUseAgentOptions {
   toolRegistry?: IToolRegistry;
 }
 
-export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
+export class BaseToolUseAgent<C = unknown>
+  extends BaseAgent<C>
+  implements IToolUseSessionHost
+{
   private readonly toolRegistry: IToolRegistry;
-  private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
+  private readonly sessionLifecycle: ToolUseSessionLifecycle;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
 
   constructor(

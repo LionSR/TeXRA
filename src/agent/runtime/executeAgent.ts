@@ -24,11 +24,12 @@ import {
 import {
   runToolUseFlow,
   ToolUseFlowContext,
+  type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
-// Note: RoundOutput import removed - resume hydration handled by flow context
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 
 // Local imports - agent components (minimal - only for MergeAgent and types)
-import { MergeAgent, BaseToolUseAgent } from '@agent/implementations';
+import { MergeAgent } from '@agent/implementations';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { resolveAgent, isRemoteAgent } from '@agent/index';
 import type { ResolvedAgent } from '@agent/index';
@@ -640,126 +641,99 @@ export async function executeMergeAgent(
 }
 
 // ============================================================================
-// Legacy Functions (for backward compatibility with ToolUseSessionPersistence)
+// Tool-Use Session Resume (Flow-First)
 // ============================================================================
 
-/** @deprecated Use prepareFlowExecution instead */
-export interface PrepareAgentInstanceParams {
-  agentName: string;
-  configPayload: Partial<AgentConfig>;
-  executionId?: ExecutionId;
-  agentClassOverride?: any;
-}
-
-/** @deprecated Use flow execution directly */
-export interface RunPreparedAgentOptions {
-  isResume?: boolean;
-  executionId?: ExecutionId;
-}
-
-type AgentConstructor = {
-  new (
-    modelHandler: any,
-    agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
-    agentPrompt: AgentPrompt,
-    agentPath: string,
-    context: AgentExecutionContext,
-  ): IAgent;
-};
-
 /**
- * @deprecated Use prepareFlowExecution and flow-first execution instead.
- * This function is kept for backward compatibility with ToolUseSessionPersistence.
+ * Resume a tool-use session from a snapshot using flow-first execution.
+ *
+ * This replaces the legacy agent-based resume and provides access to the
+ * session interface for appending follow-up messages before execution.
+ *
+ * @param snapshot - The snapshot to resume from
+ * @param setupSession - Optional callback to configure the session before running
+ *                       (e.g., append follow-up messages)
  */
-export async function prepareAgentInstance<T extends IAgent = IAgent>(
-  params: PrepareAgentInstanceParams,
-): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
-  const { agentName, configPayload, executionId, agentClassOverride } = params;
+export async function resumeToolUseFromSnapshot(
+  snapshot: ToolUseSessionSnapshot,
+  setupSession?: (session: IToolUseSession) => void,
+): Promise<void> {
+  const config = snapshot.agentConfig;
+  const executionId = snapshot.executionId as ExecutionId;
+  const streamTabId = snapshot.streamId as StreamTabId;
 
-  const ctx = await prepareFlowExecution(agentName, configPayload, executionId);
-  const { modelHandler, agentConfig, agentSetting, agentPrompt, agentPath, executionContext } = ctx;
-
-  // Determine agent class
-  const AgentClass: AgentConstructor = agentClassOverride ??
-    (agentSetting.agentType === 'toolUse' ? BaseToolUseAgent : MergeAgent);
-
-  const agent = new AgentClass(
+  // Prepare flow execution context
+  const ctx = await prepareFlowExecution(config.agent, config, executionId);
+  const {
     modelHandler,
     agentConfig,
     agentSetting,
     agentPrompt,
-    agentPath,
     executionContext,
-  );
+    userVarChannels,
+  } = ctx;
 
-  return {
-    agent: agent as T,
-    agentType: agentSetting.agentType,
-    context: executionContext,
-  };
-}
+  // Validate agent type
+  if (agentSetting.agentType !== 'toolUse') {
+    throw new Error('Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.');
+  }
 
-/**
- * @deprecated Use flow execution directly instead.
- * This function is kept for backward compatibility with ToolUseSessionPersistence.
- */
-export async function runPreparedAgent<T extends IAgent>(
-  agent: T,
-  context: AgentExecutionContext,
-  options?: RunPreparedAgentOptions,
-): Promise<void> {
-  const isResume = options?.isResume ?? false;
-  const executionId = options?.executionId;
-  const config = agent.config;
-  const streamTabId = agent.getStreamTabId();
-  const agentName = config.agent;
-
-  if (!config.session)
-    throw new Error('Agent configuration is missing session metadata.');
-  if (!streamTabId)
-    throw new Error('Failed to resolve stream tab ID for agent execution');
+  // State for interruption handling
+  const isInterrupted = false;
+  let abortController: AbortController | null = null;
+  let client: any = null;
+  let flowContext: ToolUseFlowContext<any> | null = null;
 
   try {
-    if (executionId) await ensureRunDir(executionId);
+    // Initialize client
+    client = await modelHandler.getClient();
 
-    const runStorage = getRunStorageService();
-
-    // Setup UI state
+    // Setup UI state for resume
     bus.emit('setActiveStream', {
       stream: streamTabId,
-      session: config.session,
-      isRemote: isRemoteAgent(config.agent),
-      hasMultipleOutputs: config.useMultipleOutputs,
+      session: agentConfig.session!,
+      isRemote: isRemoteAgent(agentConfig.agent),
+      hasMultipleOutputs: agentConfig.useMultipleOutputs,
     });
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
-    if (!isResume) {
-      logger.info(`Starting task execution for ${streamTabId}`);
-      if (!runStorage.isViewVisible()) {
-        await vscode.commands.executeCommand('texra.showProgressView');
-      }
-      if (!runStorage.isViewVisible()) {
-        showAgentNotification(config);
-      }
-      bus.emit('setTaskState', {
+    // Run the flow with resume snapshot
+    await runToolUseFlow(
+      {
+        modelHandler,
+        config: agentConfig,
+        setting: agentSetting as AgentToolUseSetting,
+        prompt: agentPrompt,
+        executionContext,
+        userVarChannels,
         streamTabId,
-        executionId,
-        taskState: agentConfigToTaskState(config),
-      });
-    }
-
-    // Run agent
-    await logger.withScope(
-      `Task: ${agentName}@${config.model}`,
-      async () => {
-        await agent.run();
-        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+        checkInterruption: () => isInterrupted,
+        setAbortController: (ctrl) => {
+          abortController = ctrl;
+        },
+        getClient: () => client,
+        resumeSnapshot: snapshot,
       },
-      { skip: isResume },
+      {
+        onContextReady: (streamId, context) => {
+          flowContext = context;
+          registerToolUseFlowContext(streamId, context);
+
+          // Allow caller to configure session (e.g., append follow-ups)
+          if (setupSession) {
+            setupSession(context.session);
+          }
+        },
+        onFlowComplete: (streamId) => {
+          unregisterToolUseFlowContext(streamId);
+        },
+      },
     );
-  } catch (err) {
+
+    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+  } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(err, agentName, streamTabId, context);
+    await handleFlowError(error, config.agent, streamTabId, executionContext);
+    throw error;
   }
 }
