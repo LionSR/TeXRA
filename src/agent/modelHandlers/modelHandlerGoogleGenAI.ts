@@ -87,18 +87,6 @@ function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
 
-function findLastTextPart(
-  parts: Part[],
-): (Part & { text: string }) | undefined {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (isTextPart(part)) {
-      return part;
-    }
-  }
-  return undefined;
-}
-
 /**
  * Validates that messages have proper alternating user/model turns.
  * All message creation should enforce this natively, so this is a safety check.
@@ -996,7 +984,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const modelMessage = messages.at(-1);
     if (modelMessage?.role === 'model') {
       const parts = (modelMessage.parts ??= []);
-      const lastTextPart = findLastTextPart(parts);
+      const lastTextPart = parts.findLast(isTextPart);
       if (lastTextPart) {
         lastTextPart.text =
           (lastTextPart.text ?? '') + bestConnector + newResponse;
@@ -1436,5 +1424,43 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return [callMsg, resultMsg];
   }
 
-  // Assuming containCutOffMessage is available from base class ModelHandler
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   */
+  prependTextToUserMessage(messages: Content[], text: string): void {
+    if (!text.trim()) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (lastUserMsg?.parts) {
+      lastUserMsg.parts.unshift(createPartFromText(text));
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   */
+  async addMediaToUserMessage(
+    messages: Content[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (!lastUserMsg?.parts) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      lastUserMsg.parts.unshift(...formattedMedia);
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
+  }
 }

@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent core
 import { AgentType } from '@agent/core/AgentDataclass';
@@ -9,13 +10,10 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Internal imports
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
-  executeAgentWithLogging,
   prepareAgentInstance,
+  runPreparedAgent,
 } from '@agent/runtime/executeAgent';
-import {
-  AgentExecutionContext,
-  type AgentExecutionContextInit,
-} from '@agent/runtime/AgentExecutionContext';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -30,17 +28,13 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 // Local imports - persistence helpers
 
 // Local file imports
+import { ToolUseFollowUpQueue, type FollowUpQueue } from './ToolUseFollowUp';
 import {
-  ToolUseFollowUpQueue,
-  type FollowUpQueue,
-} from './ToolUseFollowUpQueue';
-import { ToolUseSessionManager } from './ToolUseSnapshotCache';
-import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
-// Type imports
-import {
+  ToolUseSessionManager,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
-} from './ToolUseSnapshotTypes';
+} from './ToolUseSessionManager';
+import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);
@@ -94,12 +88,8 @@ async function persistSnapshot({
   return true;
 }
 
-async function buildToolUseAgent(
-  snapshot: ToolUseSessionSnapshot,
-  contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
-): Promise<{
+async function buildToolUseAgent(snapshot: ToolUseSessionSnapshot): Promise<{
   agent: BaseToolUseAgent;
-  agentType: AgentType;
   context: AgentExecutionContext;
 }> {
   const config: AgentConfig = snapshot.agentConfig;
@@ -109,20 +99,23 @@ async function buildToolUseAgent(
       agentName: config.agent,
       configPayload: config,
       executionId: snapshot.executionId as ExecutionId,
-      contextFactory,
     });
 
   if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
     throw new Error('Attempted to resume a non tool-use agent.');
   }
 
-  return { agent, agentType, context };
+  return { agent, context };
 }
 
-export interface ResumeAgentResult {
-  success: boolean;
-  lostFollowUps?: number;
-}
+/** Schema for agent resume operation result. */
+export const ResumeAgentResultSchema = z.object({
+  success: z.boolean(),
+  lostFollowUps: z.number().nonnegative().optional(),
+});
+
+/** Result of resuming a tool-use agent from a snapshot. */
+export type ResumeAgentResult = z.infer<typeof ResumeAgentResultSchema>;
 
 export const ToolUseSessionPersistence = {
   isEnabled(): boolean {
@@ -220,29 +213,28 @@ export const ToolUseSessionPersistence = {
 
     let queuedFollowUps: string[] = [];
     try {
-      await executeAgentWithLogging(
-        snapshot.agentConfig.agent,
-        async (contextFactory) => {
-          const { agent, agentType, context } = await buildToolUseAgent(
-            snapshot,
-            contextFactory,
-          );
+      // Build and configure the agent
+      const { agent, context } = await buildToolUseAgent(snapshot);
 
-          agent.resumeFromSnapshot(snapshot);
-          if (followUp !== undefined) {
-            agent.appendFollowUp(followUp);
-          }
+      // Restore agent state from snapshot
+      agent.setResumeSnapshot(snapshot);
 
-          queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
-          for (const queuedFollowUp of queuedFollowUps) {
-            agent.appendFollowUp(queuedFollowUp);
-          }
+      // Append any follow-up messages
+      if (followUp !== undefined) {
+        agent.session.appendFollowUp(followUp);
+      }
 
-          return { agent, agentType, context };
-        },
-        snapshot.executionId as ExecutionId,
-        { resume: true },
-      );
+      // Drain and append any queued follow-ups
+      queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
+      for (const queuedFollowUp of queuedFollowUps) {
+        agent.session.appendFollowUp(queuedFollowUp);
+      }
+
+      // Run the prepared agent
+      await runPreparedAgent(agent, context, {
+        isResume: true,
+        executionId: snapshot.executionId as ExecutionId,
+      });
 
       ToolUseSessionManager.clearByStream(streamId);
 
@@ -283,5 +275,3 @@ function formatLostFollowUpSuffix(count: number): string {
   const label = count === 1 ? 'follow-up was' : 'follow-ups were';
   return ` ${count} queued ${label} lost.`;
 }
-
-export type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
