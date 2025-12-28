@@ -9,7 +9,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
-const CHANNEL = 'texraRulesUtils';
+const CHANNEL = 'rulesUtils';
 logger.initialize(CHANNEL);
 
 /**
@@ -38,10 +38,7 @@ export async function loadTexraRules(): Promise<string> {
       }
     }
   } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to load ${'.texrarules'}: ${toErrorMessage(err)}`,
-    );
+    logger.warn(CHANNEL, `Failed to load ${'.texrarules'}: ${toErrorMessage(err)}`);
   }
   return '';
 }

@@ -6,8 +6,8 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Internal imports
-import { getBaseName, getMultipleName } from '@agent/index';
+// Internal imports - import directly to avoid circular dependency via barrel export
+import { getBaseName, getMultipleName } from '@agent/index/agentRegistry';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import {
   AgentType,
