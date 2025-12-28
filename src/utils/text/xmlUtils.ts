@@ -31,7 +31,11 @@ import {
 } from './xmlExtraction';
 
 // Re-export from CDATA module
-export { removeCDATA, addCdataToTags, addCdataToTagsMultiple } from './xmlCdata';
+export {
+  removeCDATA,
+  addCdataToTags,
+  addCdataToTagsMultiple,
+} from './xmlCdata';
 
 // Re-export from format detection module
 export {
