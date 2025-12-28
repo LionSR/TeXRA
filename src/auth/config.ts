@@ -117,9 +117,9 @@ export const FREE_TIER: UserTier = 'free';
  */
 export const UserAuthContextSchema = z.object({
   /** Visibility values user can access: ['researcher', 'math', etc.] */
-  permissions: z.array(z.string()).prefault([]),
+  permissions: z.array(z.string()).catch([]),
   /** User's tier (reserved for future API key access) */
-  tier: UserTierSchema.prefault('free'),
+  tier: UserTierSchema.catch('free'),
 });
 export type UserAuthContext = z.infer<typeof UserAuthContextSchema>;
 
