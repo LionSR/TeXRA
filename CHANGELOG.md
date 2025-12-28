@@ -33,7 +33,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Updated core dependencies: Supabase, fs-extra, OpenAI, webpack.
+- Updated core dependencies: Supabase, fs-extra, OpenAI, webpack, Zod v4.
 
 ## [0.35.0] - 2025-12-16
 
