@@ -9,7 +9,7 @@ import { defineTool } from '@tools/core/define';
 
 const WebSearchInputSchema = z.strictObject({
   query: z.string(),
-  max_results: z.number().min(1).max(5).optional(),
+  max_results: z.number().min(1).max(5).nullish(),
 });
 
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;

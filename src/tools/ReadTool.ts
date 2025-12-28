@@ -20,13 +20,13 @@ const ReadInputSchema = z.strictObject({
   range: z
     .strictObject({
       start: z.int().min(1),
-      end: z.int().min(1).optional(),
+      end: z.int().min(1).nullish(),
     })
-    .refine((value) => value.end === undefined || value.end >= value.start, {
+    .refine((value) => value.end == null || value.end >= value.start, {
       path: ['end'],
       error: 'range.end must be greater than or equal to range.start',
     })
-    .optional(),
+    .nullish(),
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;
