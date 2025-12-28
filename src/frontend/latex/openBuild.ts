@@ -52,7 +52,10 @@ export async function openAndBuildIfTex(
       try {
         await vscode.commands.executeCommand('latex-workshop.build', uri);
       } catch (err) {
-        logger.warn(CHANNEL, `LaTeX Workshop build failed: ${toErrorMessage(err)}`);
+        logger.warn(
+          CHANNEL,
+          `LaTeX Workshop build failed: ${toErrorMessage(err)}`,
+        );
       }
     } else {
       await vscode.commands.executeCommand('vscode.open', uri);
@@ -81,7 +84,10 @@ export async function openBuildDisplayIfTex(
       setTimeout(async () => {
         await vscode.commands.executeCommand('latex-workshop.view');
         setTimeout(
-          () => void vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
+          () =>
+            void vscode.commands.executeCommand(
+              'latex-workshop.refresh-viewer',
+            ),
           LATEX_VIEWER_REFRESH_DELAY_MS,
         );
       }, LATEX_VIEWER_OPEN_DELAY_MS);
