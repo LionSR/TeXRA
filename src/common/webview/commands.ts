@@ -8,6 +8,7 @@ export const COMMON_COMMANDS = {
   DEBUG_MODE_SET: 'setDebugMode',
   STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
+  ERROR: 'error',
 };
 
 // Main view specific commands
