@@ -10,7 +10,7 @@ import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 // Local file imports
 import { FileItem } from './FileItem';

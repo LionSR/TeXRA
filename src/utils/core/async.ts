@@ -1,4 +1,6 @@
-// Utility helper functions
+/**
+ * Async utilities - pure async helper functions.
+ */
 
 /**
  * Asynchronously wait for the specified number of milliseconds.

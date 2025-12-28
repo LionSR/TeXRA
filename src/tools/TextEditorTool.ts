@@ -34,6 +34,7 @@ import { ToolResult, ToolError, cliResult, toolResult } from './result';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
+logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
 
 export const TextEditorInputSchema = z.strictObject({

@@ -14,7 +14,7 @@ import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
-} from '@utils/editor/activeFileGuards';
+} from '@frontend/editor/activeFileGuards';
 
 // Local imports - core
 

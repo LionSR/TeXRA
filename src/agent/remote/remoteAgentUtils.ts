@@ -12,7 +12,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
-import { sleep } from '@utils/helpers';
+import { sleep } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);

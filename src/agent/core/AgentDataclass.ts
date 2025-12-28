@@ -11,6 +11,15 @@ import type { AgentSessionDescriptor } from './AgentSessionSchema';
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
 
+/** Where the agent definition comes from. */
+export const AgentSource = z.enum([
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+  'remote',
+]);
+export type AgentSource = z.infer<typeof AgentSource>;
+
 /** Primary discriminator for agent families. */
 export enum AgentCategory {
   Workflow = 'workflow',
