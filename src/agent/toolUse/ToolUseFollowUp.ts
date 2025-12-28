@@ -17,7 +17,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Lazy imports to avoid circular dependency
 // ToolUseSessionManager and ToolUseSessionPersistence are imported at runtime
-import type { ToolUseSessionSnapshot } from './ToolUseSessionManager';
 
 const logger = new AgentLogger('ToolUseFollowUp');
 
@@ -46,10 +45,6 @@ export class FollowUpQueue {
 
   isEmpty(): boolean {
     return this.queued.length === 0;
-  }
-
-  size(): number {
-    return this.queued.length;
   }
 
   drain(): string[] {
@@ -194,10 +189,6 @@ export class ToolUseFollowUpQueue {
       `Drained ${drained.length} queued follow-ups for stream ${streamId}.`,
     );
     return drained;
-  }
-
-  static get(streamId: StreamTabId): FollowUpQueue | undefined {
-    return this.queues.get(streamId);
   }
 }
 
