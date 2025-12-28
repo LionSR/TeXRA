@@ -6,6 +6,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import { streamPosterRegistry } from '@agent/modelHandlers/streaming';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -122,6 +123,28 @@ export class ProgressViewProvider
 
     // Setup event listeners using the new architecture
     this._disposables.push(...this.eventHandler.setupEventListeners());
+
+    // Register direct stream poster for bypassing EventBus during streaming.
+    // This reduces the streaming path from 5+ hops to 2-3 hops:
+    // Before: Handler → Logger → EventBus → ProgressEventHandler → WebviewUpdater → webview
+    // After:  Handler → DirectStreamPoster → webview
+    streamPosterRegistry.register(
+      {
+        appendLogMessage: (stream, logMessage) =>
+          this.webviewUpdater.appendLogMessage(stream, logMessage),
+        updateLogMessage: (stream, logMessage) =>
+          this.webviewUpdater.updateLogMessage(stream, logMessage),
+        isAvailable: () => this.webviewUpdater.isAvailable(),
+      },
+      // Group ID resolver - returns undefined for now, group ID is optional
+      // The streaming messages will still be displayed correctly
+      () => undefined,
+    );
+
+    // Unregister on dispose
+    this._disposables.push({
+      dispose: () => streamPosterRegistry.unregister(),
+    });
 
     this.logger.debug(
       'ProgressViewProvider initialized with new modular architecture',

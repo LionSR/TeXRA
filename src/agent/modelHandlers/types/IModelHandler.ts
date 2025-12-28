@@ -23,6 +23,7 @@ import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/re
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 import type { ServerToolExtractionResult } from './ServerToolTypes';
+import type { StreamPoster } from '../streaming';
 
 /**
  * Options for creating a model response.
@@ -178,6 +179,9 @@ export interface IModelHandler<
 
   /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
+
+  /** Set the direct stream poster for bypassing EventBus. */
+  setStreamPoster(poster: StreamPoster | null): void;
 
   /** Inform the handler about the active agent type. */
   setAgentType(agentType?: AgentType | null): void;

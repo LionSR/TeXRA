@@ -107,3 +107,13 @@ export {
   kimiReasoningExtractor,
   deepSeekReasoningExtractor,
 } from './normalizers/reasoningExtractors';
+
+// Direct streaming (bypasses EventBus)
+export {
+  DirectStreamPoster,
+  type StreamPoster,
+  type DirectStream,
+  type WebviewMessagePoster,
+} from './DirectStreamPoster';
+
+export { streamPosterRegistry } from './StreamPosterRegistry';

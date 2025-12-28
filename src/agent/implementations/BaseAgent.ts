@@ -1,5 +1,6 @@
 // Local imports - agent components
 import type { IModelHandler } from '@agent/modelHandlers';
+import { streamPosterRegistry } from '@agent/modelHandlers/streaming';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import {
@@ -93,6 +94,12 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.logger = context.logger;
     this.modelHandler.setLogger(this.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
+
+    // Set up direct stream poster if webview is available (bypasses EventBus)
+    const streamPoster = streamPosterRegistry.createPoster(context.identity.streamTabId);
+    if (streamPoster) {
+      this.modelHandler.setStreamPoster(streamPoster);
+    }
     // Extract isMultipleOutput from workflow settings (undefined for tool-use)
     const isMultipleOutput =
       agentSetting.agentCategory === AgentCategory.Workflow

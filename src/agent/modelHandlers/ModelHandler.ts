@@ -59,6 +59,7 @@ import {
   type StreamEvent,
   type NormalizedResponse,
   type StreamConsumptionResult,
+  type StreamPoster,
 } from './streaming';
 
 // Default continuation limits
@@ -110,6 +111,13 @@ export abstract class ModelHandler<
   protected mediaProcessor: MediaAttachmentProcessor;
 
   /**
+   * Optional direct stream poster for bypassing EventBus.
+   * When set, streaming content is posted directly to webview (2-3 hops).
+   * When null, falls back to logger.createStream (5+ hops via EventBus).
+   */
+  protected streamPoster: StreamPoster | null = null;
+
+  /**
    * Whether the handler supports processing attachments in tool results.
    * Override in handlers that don't support attachments (e.g., DeepSeek).
    */
@@ -146,6 +154,15 @@ export abstract class ModelHandler<
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
+  }
+
+  /**
+   * Sets the direct stream poster for bypassing EventBus.
+   * When set, streaming content is posted directly to webview.
+   * Pass null to revert to EventBus-based streaming.
+   */
+  public setStreamPoster(poster: StreamPoster | null): void {
+    this.streamPoster = poster;
   }
 
   /**
@@ -194,8 +211,12 @@ export abstract class ModelHandler<
 
   /**
    * Convenience wrapper for thinking streams.
+   * Uses direct poster when available (2-3 hops), falls back to logger (5+ hops).
    */
-  protected createThinkingStream() {
+  protected createThinkingStream(): AgentLogStream {
+    if (this.streamPoster && this.progressViewEnabled) {
+      return this.streamPoster.createStream(MESSAGE_TYPES.THINKING);
+    }
     return this.logger.createStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
     });
@@ -203,8 +224,12 @@ export abstract class ModelHandler<
 
   /**
    * Convenience wrapper for output streams.
+   * Uses direct poster when available (2-3 hops), falls back to logger (5+ hops).
    */
-  protected createOutputStream() {
+  protected createOutputStream(): AgentLogStream {
+    if (this.streamPoster && this.progressViewEnabled) {
+      return this.streamPoster.createStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    }
     return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
     });
