@@ -20,6 +20,7 @@
  */
 
 import { Node } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { RoundOutput } from '@agent/output';
 import {
   NODE_NO_RETRY,
@@ -236,7 +237,7 @@ export class OutputNode<C = unknown> extends Node<
     shared.state.roundOutputs[shared.state.currentRound] = execRes.output;
 
     // Continue to RoundCompleteNode
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 
   /**

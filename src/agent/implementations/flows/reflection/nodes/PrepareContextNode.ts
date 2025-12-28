@@ -150,7 +150,7 @@ export class PrepareContextNode<C = unknown> extends Node<
 
       // Bounds check to prevent infinite loop when all remaining rounds are empty
       if (shared.state.currentRound >= shared.state.totalRounds) {
-        return undefined; // Exit flow - no more rounds
+        return FlowTransition.DEFAULT; // Exit flow - no more rounds
       }
 
       return FlowTransition.CONTINUE;
@@ -160,6 +160,6 @@ export class PrepareContextNode<C = unknown> extends Node<
     shared.state.context = execRes.context;
 
     // Continue to TeXCountNode
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
