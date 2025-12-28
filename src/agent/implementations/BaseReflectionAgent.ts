@@ -32,6 +32,7 @@ import {
   type ReflectionServices,
 } from '@agent/implementations/flows/reflection';
 import { createInitialReflectionState } from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import { createBaseFileLocations } from '@agent/implementations/flows/reflection/helpers';
 
 // Internal imports
 import { createRetryState } from '@agent/core/flows/RetryState';
@@ -39,12 +40,7 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { normalizeRunId } from '@common/constants/runIds';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { PromptBuilder } from '@utils/prompt';
-import {
-  WorkspaceFS,
-  TaskRunFileService,
-  createWorkspaceLocation,
-  type AgentFileLocation,
-} from '@utils/files';
+import { TaskRunFileService, type AgentFileLocation } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -123,17 +119,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
     // Base files are ALWAYS workspace locations (inputs from workspace)
     // Even in run-storage mode, we snapshot FROM workspace TO run storage
-    this.baseFiles =
-      this.agentConfig.outputFiles.length > 0
-        ? this.agentConfig.outputFiles.map((f) =>
-            createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
-          )
-        : [
-            createWorkspaceLocation(
-              WorkspaceFS.fullPath(this.agentConfig.inputFile),
-              this.agentConfig.inputFile,
-            ),
-          ];
+    this.baseFiles = createBaseFileLocations(this.agentConfig);
 
     // Check scratchpad usage
     // this is not so neat
