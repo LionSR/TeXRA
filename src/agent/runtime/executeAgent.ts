@@ -16,8 +16,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent components
 import {
-  DirectAgent,
-  CoTAgent,
   MergeAgent,
   BaseToolUseAgent,
   BaseReflectionAgent,
@@ -118,13 +116,28 @@ export async function getAgentPath(
   throw new Error(`Could not find agent: ${agentIdentifier}`);
 }
 
+/**
+ * Get the agent class constructor based on agent settings.
+ *
+ * ## Config-Driven Architecture
+ *
+ * Previously, this function mapped agentType to specific subclasses:
+ * - 'direct' -> DirectAgent (single round, scratchpad-only XML)
+ * - 'CoT' -> CoTAgent (multi-round, always ensure XML)
+ *
+ * Now, BaseReflectionAgent handles all workflow types via config-driven
+ * behavior based on the `agentType` field. The subclasses are eliminated.
+ *
+ * - 'direct' / 'CoT' / undefined -> BaseReflectionAgent (behavior from agentType)
+ * - 'toolUse' -> BaseToolUseAgent (different execution model)
+ */
 function getAgentClass(settings: AgentSetting): AgentConstructor {
-  const mapping: Record<string, AgentConstructor> = {
-    direct: DirectAgent,
-    CoT: CoTAgent,
-    toolUse: BaseToolUseAgent,
-  };
-  return mapping[settings.agentType] || DirectAgent;
+  if (settings.agentType === 'toolUse') {
+    return BaseToolUseAgent;
+  }
+  // All workflow types (direct, CoT, or unset) use BaseReflectionAgent
+  // Behavior is determined by agentType field within the agent
+  return BaseReflectionAgent;
 }
 
 async function validateAndGetModelConfig(modelName: string): Promise<void> {
