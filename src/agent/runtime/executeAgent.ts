@@ -1,11 +1,13 @@
 /**
- * Agent execution module.
+ * Agent execution module - Flow-First Architecture.
  *
- * Provides entry points for executing agents:
- * - executeAgent: Execute a new agent run
+ * This module provides direct flow execution without agent class instantiation.
+ * Flows run directly, bypassing the agent class hierarchy entirely.
+ *
+ * Entry points:
+ * - executeAgent: Execute a new agent run (via flow)
  * - resumeAgentExecution: Resume a paused agent run
- * - executeMergeAgent: Execute the merge agent
- * - runPreparedAgent: Run a pre-configured agent instance
+ * - executeMergeAgent: Execute the merge agent (still uses agent class for custom file naming)
  */
 
 // Standard library imports
@@ -14,12 +16,20 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent components
+// Local imports - flows (primary execution path)
 import {
-  MergeAgent,
-  BaseToolUseAgent,
-  BaseReflectionAgent,
-} from '@agent/implementations';
+  runReflectionFlow,
+  type RunReflectionFlowInput,
+} from '@agent/implementations/flows/reflection/runReflectionFlow';
+import {
+  runToolUseFlow,
+  ToolUseFlowContext,
+} from '@agent/implementations/flows/tooluse';
+// Note: RoundOutput import removed - resume hydration handled by flow context
+
+// Local imports - agent components (minimal - only for MergeAgent and types)
+import { MergeAgent, BaseToolUseAgent } from '@agent/implementations';
+import type { IModelHandler } from '@agent/modelHandlers';
 import { resolveAgent, isRemoteAgent } from '@agent/index';
 import type { ResolvedAgent } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
@@ -28,14 +38,22 @@ import {
   AgentPrompt,
   AgentType,
   getAgentSessionDescriptor,
+  type AgentWorkflowSetting,
+  type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
-import { IAgent } from '@agent/core/IAgent';
+import type { IAgent } from '@agent/core/IAgent';
+import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { buildUserVars } from '@agent/utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import {
+  registerToolUseFlowContext,
+  unregisterToolUseFlowContext,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -43,6 +61,7 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
+import { END_GROUP_STATUS } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -51,10 +70,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
-import {
-  AgentExecutionContext,
-  type AgentExecutionContextInit,
-} from './AgentExecutionContext';
+import { AgentExecutionContext } from './AgentExecutionContext';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -63,35 +79,26 @@ const logger = new AgentLogger(CHANNEL);
 // Types
 // ============================================================================
 
-type AgentConstructor = {
-  new (
-    modelHandler: any,
-    agentConfig: AgentConfig,
-    agentSetting: AgentSetting,
-    agentPrompt: AgentPrompt,
-    agentPath: string,
-    context: AgentExecutionContext,
-  ): IAgent;
-};
-
 export interface AgentResolveOptions {
   preferMultiple?: boolean;
-}
-
-interface PrepareAgentInstanceParams {
-  agentName: string;
-  configPayload: Partial<AgentConfig>;
-  executionId?: ExecutionId;
-  agentClassOverride?: AgentConstructor;
 }
 
 export interface ExecuteAgentOptions {
   resume?: boolean;
 }
 
-export interface RunPreparedAgentOptions {
-  isResume?: boolean;
-  executionId?: ExecutionId;
+/**
+ * Prepared execution context for flow-first execution.
+ */
+interface FlowExecutionContext {
+  modelHandler: IModelHandler<any, any, any, any, any>;
+  agentConfig: AgentConfig;
+  agentSetting: AgentSetting;
+  agentPrompt: AgentPrompt;
+  agentPath: string;
+  executionContext: AgentExecutionContext;
+  streamTabId: StreamTabId;
+  userVarChannels: UserVariableChannels;
 }
 
 // ============================================================================
@@ -114,30 +121,6 @@ export async function getAgentPath(
     customDirSet: true,
   });
   throw new Error(`Could not find agent: ${agentIdentifier}`);
-}
-
-/**
- * Get the agent class constructor based on agent settings.
- *
- * ## Config-Driven Architecture
- *
- * Previously, this function mapped agentType to specific subclasses:
- * - 'direct' -> DirectAgent (single round, scratchpad-only XML)
- * - 'CoT' -> CoTAgent (multi-round, always ensure XML)
- *
- * Now, BaseReflectionAgent handles all workflow types via config-driven
- * behavior based on the `agentType` field. The subclasses are eliminated.
- *
- * - 'direct' / 'CoT' / undefined -> BaseReflectionAgent (behavior from agentType)
- * - 'toolUse' -> BaseToolUseAgent (different execution model)
- */
-function getAgentClass(settings: AgentSetting): AgentConstructor {
-  if (settings.agentType === 'toolUse') {
-    return BaseToolUseAgent;
-  }
-  // All workflow types (direct, CoT, or unset) use BaseReflectionAgent
-  // Behavior is determined by agentType field within the agent
-  return BaseReflectionAgent;
 }
 
 async function validateAndGetModelConfig(modelName: string): Promise<void> {
@@ -167,11 +150,15 @@ function createModelHandler(
   return ModelFactory.createHandler(modelConfig);
 }
 
-export async function prepareAgentInstance<T extends IAgent = IAgent>(
-  params: PrepareAgentInstanceParams,
-): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
-  const { agentName, configPayload, executionId, agentClassOverride } = params;
-
+/**
+ * Prepare execution context for flow-first execution.
+ * Creates all dependencies needed to run flows directly without agent classes.
+ */
+async function prepareFlowExecution(
+  agentName: string,
+  configPayload: Partial<AgentConfig>,
+  executionId?: ExecutionId,
+): Promise<FlowExecutionContext> {
   // 1. Resolve agent definition
   const fullConfig = parseAgentConfig({ agent: agentName, ...configPayload });
   const resolution = await getAgentPath(fullConfig.agent, {
@@ -187,6 +174,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     resolution.entry.source,
   );
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
+  const agentPath = path.dirname(resolution.definitionPath);
 
   // 2. Validate and create model handler
   await validateAndGetModelConfig(fullConfig.model);
@@ -201,7 +189,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   );
 
   // 3. Create execution context
-  const streamId = getStreamTabId(
+  const streamTabId = getStreamTabId(
     agentConfig.agent,
     fullConfig.model,
     agentConfig.inputFile,
@@ -211,105 +199,153 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
       useMultipleOutputs: agentConfig.useMultipleOutputs,
     },
   );
-  const context = new AgentExecutionContext({
-    streamId,
+  const executionContext = new AgentExecutionContext({
+    streamId: streamTabId,
     executionId,
     agentCategory: sessionDescriptor.agentCategory,
   });
 
-  // 4. Instantiate agent
-  const AgentClass = (agentClassOverride ??
-    getAgentClass(agentSetting)) as AgentConstructor;
-  const agent = new AgentClass(
+  // 4. Build user variable channels (replaces agent.init() logic)
+  const baseVars = await buildUserVars(
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    agentPath,
+    modelHandler,
+    executionContext.logger,
+  );
+  const userVarChannels: UserVariableChannels = {
+    input: Object.freeze({ ...baseVars }),
+    transient: { ...baseVars },
+    output: {},
+  };
+
+  return {
     modelHandler,
     agentConfig,
     agentSetting,
     agentPrompt,
-    path.dirname(resolution.definitionPath),
-    context,
-  );
-
-  return { agent: agent as T, agentType: agentSetting.agentType, context };
+    agentPath,
+    executionContext,
+    streamTabId,
+    userVarChannels,
+  };
 }
 
 // ============================================================================
-// Core Execution
+// Flow Execution
 // ============================================================================
 
 /**
- * Run a prepared agent instance. This is the core execution function.
+ * Execute a reflection flow (direct/CoT agents).
  */
-export async function runPreparedAgent<T extends IAgent>(
-  agent: T,
-  context: AgentExecutionContext,
-  options?: RunPreparedAgentOptions,
-): Promise<void> {
-  const isResume = options?.isResume ?? false;
-  const executionId = options?.executionId;
-  const config = agent.config;
-  const streamTabId = agent.getStreamTabId();
-  const agentName = config.agent;
+async function executeReflectionFlow(ctx: FlowExecutionContext): Promise<void> {
+  const {
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    executionContext,
+    streamTabId,
+    userVarChannels,
+  } = ctx;
 
-  if (!config.session)
-    throw new Error('Agent configuration is missing session metadata.');
-  if (!streamTabId)
-    throw new Error('Failed to resolve stream tab ID for agent execution');
+  // State for interruption handling
+  // TODO: Wire up proper interrupt handling via ToolUseAgentRegistry or similar
+  const isInterrupted = false;
+  let abortController: AbortController | null = null;
+  let client: any = null;
+
+  const input: RunReflectionFlowInput = {
+    modelHandler,
+    config: agentConfig,
+    setting: agentSetting as AgentWorkflowSetting,
+    prompt: agentPrompt,
+    executionContext,
+    userVarChannels,
+    checkInterruption: () => isInterrupted,
+    setAbortController: (ctrl) => {
+      abortController = ctrl;
+    },
+    getClient: () => client,
+  };
 
   try {
-    if (executionId) await ensureRunDir(executionId);
+    // Initialize client
+    client = await modelHandler.getClient();
 
-    const runStorage = getRunStorageService();
+    // Run the flow
+    await runReflectionFlow(input);
 
-    // Setup UI state
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: config.session,
-      isRemote: isRemoteAgent(config.agent),
-      hasMultipleOutputs: config.useMultipleOutputs,
-    });
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
-
-    if (!isResume) {
-      logger.info(`Starting task execution for ${streamTabId}`);
-      logger.info(`Input file: ${config.inputFile}`);
-      logger.debug(
-        `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
-      );
-      logger.debug(
-        `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-      );
-
-      // Try to show progress view; if still not visible (e.g., user has it hidden),
-      // fall back to showing a notification so user knows the task started
-      if (!runStorage.isViewVisible()) {
-        await vscode.commands.executeCommand('texra.showProgressView');
-      }
-      if (!runStorage.isViewVisible()) {
-        showAgentNotification(config);
-      }
-      bus.emit('setTaskState', {
-        streamTabId,
-        executionId,
-        taskState: agentConfigToTaskState(config),
-      });
-    }
-
-    // Run agent
-    await logger.withScope(
-      `Task: ${agentName}@${config.model}`,
-      async () => {
-        logger.info(`Executing ${agentName} with model ${config.model}`);
-        await agent.run();
-        logger.debug(`Task completed successfully`);
-        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
-      },
-      { skip: isResume },
-    );
-  } catch (err) {
+    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+  } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleError(err, agentName, streamTabId, agent, context); // always throws
+    throw error;
   }
 }
+
+/**
+ * Execute a tool-use flow.
+ */
+async function executeToolUseFlow(ctx: FlowExecutionContext): Promise<void> {
+  const {
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    executionContext,
+    streamTabId,
+    userVarChannels,
+  } = ctx;
+
+  // State for interruption handling
+  // TODO: Wire up proper interrupt handling via ToolUseAgentRegistry
+  const isInterrupted = false;
+  let abortController: AbortController | null = null;
+  let client: any = null;
+  let flowContext: ToolUseFlowContext<any> | null = null;
+
+  try {
+    // Initialize client
+    client = await modelHandler.getClient();
+
+    // Run the flow with registration callbacks
+    await runToolUseFlow(
+      {
+        modelHandler,
+        config: agentConfig,
+        setting: agentSetting as AgentToolUseSetting,
+        prompt: agentPrompt,
+        executionContext,
+        userVarChannels,
+        streamTabId,
+        checkInterruption: () => isInterrupted,
+        setAbortController: (ctrl) => {
+          abortController = ctrl;
+        },
+        getClient: () => client,
+      },
+      {
+        onContextReady: (streamId, context) => {
+          flowContext = context;
+          registerToolUseFlowContext(streamId, context);
+        },
+        onFlowComplete: (streamId) => {
+          unregisterToolUseFlowContext(streamId);
+        },
+      },
+    );
+
+    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+  } catch (error) {
+    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    throw error;
+  }
+}
+
+// ============================================================================
+// UI and Error Handling
+// ============================================================================
 
 function showAgentNotification(config: AgentConfig): void {
   const inputName = config.inputFile
@@ -363,39 +399,26 @@ async function showApiKeyErrorNotification(): Promise<void> {
   );
 }
 
-async function logAgentError(
+async function logFlowError(
   errorMsg: string,
   err: unknown,
   agentName: string,
   streamId: StreamTabId,
-  agent?: IAgent,
-  context?: AgentExecutionContext,
+  context: AgentExecutionContext,
 ): Promise<void> {
-  const errorLogger = context?.logger ?? new AgentLogger(streamId, true);
   const errorContext = { operation: `execute ${agentName}` };
-  const groupId = agent?.getLastRunGroupId();
-
-  if (groupId && context?.logger) {
-    await errorLogger.withExistingGroup(
-      groupId,
-      async () => errorLogger.logError(errorMsg, err, errorContext),
-      { label: `Error: ${agentName}` },
-    );
-  } else {
-    await errorLogger.withScope(
-      `Error: ${agentName}`,
-      async () => errorLogger.logError(errorMsg, err, errorContext),
-      { errorStatus: 'error' },
-    );
-  }
+  await context.logger.withScope(
+    `Error: ${agentName}`,
+    async () => context.logger.logError(errorMsg, err, errorContext),
+    { errorStatus: 'error' },
+  );
 }
 
-async function handleError(
+async function handleFlowError(
   err: unknown,
   agentName: string,
   streamId: StreamTabId,
-  agent?: IAgent,
-  context?: AgentExecutionContext,
+  context: AgentExecutionContext,
 ): Promise<never> {
   const rawMsg = toErrorMessage(err);
   const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
@@ -408,7 +431,7 @@ async function handleError(
   }
 
   // Log with proper grouping
-  await logAgentError(errorMsg, err, agentName, streamId, agent, context);
+  await logFlowError(errorMsg, err, agentName, streamId, context);
 
   throw new Error(errorMsg);
 }
@@ -419,6 +442,11 @@ async function handleError(
 
 /**
  * Execute an agent with the provided configuration.
+ *
+ * ## Flow-First Architecture
+ *
+ * This function runs flows directly without instantiating agent classes.
+ * The flow contexts create all necessary services internally.
  */
 export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
@@ -431,17 +459,22 @@ export async function executeAgent(
 
   const isResume = options?.resume ?? false;
 
-  const { agent, context } = await prepareAgentInstance({
-    agentName: agentConfig.agent,
-    configPayload: agentConfig,
+  // Prepare flow execution context
+  const ctx = await prepareFlowExecution(
+    agentConfig.agent,
+    agentConfig,
     executionId,
-  });
+  );
 
-  const streamTabId = agent.getStreamTabId();
+  const { streamTabId, agentSetting, executionContext } = ctx;
+  const config = ctx.agentConfig;
+  const agentName = config.agent;
+
+  if (!config.session) {
+    throw new Error('Agent configuration is missing session metadata.');
+  }
 
   // Check if already running before any state modifications
-  // Note: Allow resume even when status is RUNNING to recover from crashed tasks
-  // that didn't properly transition to ERROR status
   const currentStatus = StreamStatusService.get(streamTabId);
   if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
     throw new Error(
@@ -452,38 +485,83 @@ export async function executeAgent(
     throw new Error(`Task "${streamTabId}" is already being resumed.`);
   }
 
-  // Prepare resume for reflection agents (hydration happens in startAndInitRun)
-  if (isResume && agent instanceof BaseReflectionAgent && executionId) {
+  // Handle resume state
+  // Note: Full resume hydration is handled internally by agents/flows
+  // Here we just set the status for UI feedback
+  if (isResume && agentSetting.agentType !== 'toolUse' && executionId) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
+  }
+
+  try {
+    if (executionId) await ensureRunDir(executionId);
+
     const runStorage = getRunStorageService();
-    const activeRunId = runStorage.getActiveRunId(streamTabId);
-    const storageKey = normalizeRunId(activeRunId ?? executionId);
-    const runOutputs = runStorage.getRunOutputFiles(streamTabId, {
-      storageKey,
+
+    // Setup UI state
+    bus.emit('setActiveStream', {
+      stream: streamTabId,
+      session: config.session,
+      isRemote: isRemoteAgent(config.agent),
+      hasMultipleOutputs: config.useMultipleOutputs,
     });
-    if (runOutputs) {
-      // Synchronous setup - actual hydration happens in agent.startAndInitRun()
-      agent.prepareResume({
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+
+    if (!isResume) {
+      logger.info(`Starting task execution for ${streamTabId}`);
+      logger.info(`Input file: ${config.inputFile}`);
+      logger.debug(
+        `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
+      );
+      logger.debug(
+        `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+      );
+
+      // Try to show progress view
+      if (!runStorage.isViewVisible()) {
+        await vscode.commands.executeCommand('texra.showProgressView');
+      }
+      if (!runStorage.isViewVisible()) {
+        showAgentNotification(config);
+      }
+      bus.emit('setTaskState', {
+        streamTabId,
         executionId,
-        storageKey,
-        rounds: runOutputs,
+        taskState: agentConfigToTaskState(config),
       });
     }
-  }
 
-  // Log multi-output warning
-  const { outputFiles, useMultipleOutputs } = agent.config;
-  if (
-    Array.isArray(outputFiles) &&
-    outputFiles.length > 1 &&
-    !useMultipleOutputs
-  ) {
-    logger.warn(
-      `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+    // Log multi-output warning
+    const { outputFiles, useMultipleOutputs } = config;
+    if (
+      Array.isArray(outputFiles) &&
+      outputFiles.length > 1 &&
+      !useMultipleOutputs
+    ) {
+      logger.warn(
+        `Multiple output files provided (${outputFiles.length}) but useMultipleOutputs flag is disabled.`,
+      );
+    }
+
+    // Execute the appropriate flow based on agent type
+    await logger.withScope(
+      `Task: ${agentName}@${config.model}`,
+      async () => {
+        logger.info(`Executing ${agentName} with model ${config.model}`);
+
+        if (agentSetting.agentType === 'toolUse') {
+          await executeToolUseFlow(ctx);
+        } else {
+          await executeReflectionFlow(ctx);
+        }
+
+        logger.debug(`Task completed successfully`);
+      },
+      { skip: isResume },
     );
+  } catch (err) {
+    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    await handleFlowError(err, agentName, streamTabId, executionContext);
   }
-
-  await runPreparedAgent(agent, context, { isResume, executionId });
 }
 
 /**
@@ -499,20 +577,26 @@ export async function resumeAgentExecution(
 
 /**
  * Execute the merge agent for file merging operations.
+ *
+ * Note: MergeAgent still uses agent class for custom getOutputFileLocation().
+ * This is the only agent that requires class-based execution.
  */
 export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  const { agent, context } = await prepareAgentInstance<MergeAgent>({
-    agentName: 'merge',
-    configPayload: { agent: 'merge', model, inputFile, editedFile },
-    agentClassOverride: MergeAgent,
+  // MergeAgent requires agent class for custom file naming logic
+  const ctx = await prepareFlowExecution('merge', {
+    agent: 'merge',
+    model,
+    inputFile,
+    editedFile,
   });
 
-  // Check if already running before execution (same protection as executeAgent)
-  const streamTabId = agent.getStreamTabId();
+  const { streamTabId, modelHandler, agentConfig, agentSetting, agentPrompt, agentPath, executionContext } = ctx;
+
+  // Check if already running
   const currentStatus = StreamStatusService.get(streamTabId);
   if (currentStatus === STREAM_STATUS.RUNNING) {
     throw new Error(
@@ -520,5 +604,162 @@ export async function executeMergeAgent(
     );
   }
 
-  await runPreparedAgent(agent, context);
+  // Create MergeAgent instance (only agent class still needed)
+  const agent = new MergeAgent(
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    agentPath,
+    executionContext,
+  );
+
+  try {
+    // Setup UI state
+    bus.emit('setActiveStream', {
+      stream: streamTabId,
+      session: agentConfig.session!,
+      isRemote: isRemoteAgent(agentConfig.agent),
+      hasMultipleOutputs: agentConfig.useMultipleOutputs,
+    });
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+
+    await logger.withScope(
+      `Task: merge@${model}`,
+      async () => {
+        logger.info(`Executing merge with model ${model}`);
+        await agent.run();
+        logger.debug(`Task completed successfully`);
+        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+      },
+    );
+  } catch (err) {
+    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    await handleFlowError(err, 'merge', streamTabId, executionContext);
+  }
+}
+
+// ============================================================================
+// Legacy Functions (for backward compatibility with ToolUseSessionPersistence)
+// ============================================================================
+
+/** @deprecated Use prepareFlowExecution instead */
+export interface PrepareAgentInstanceParams {
+  agentName: string;
+  configPayload: Partial<AgentConfig>;
+  executionId?: ExecutionId;
+  agentClassOverride?: any;
+}
+
+/** @deprecated Use flow execution directly */
+export interface RunPreparedAgentOptions {
+  isResume?: boolean;
+  executionId?: ExecutionId;
+}
+
+type AgentConstructor = {
+  new (
+    modelHandler: any,
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
+    agentPath: string,
+    context: AgentExecutionContext,
+  ): IAgent;
+};
+
+/**
+ * @deprecated Use prepareFlowExecution and flow-first execution instead.
+ * This function is kept for backward compatibility with ToolUseSessionPersistence.
+ */
+export async function prepareAgentInstance<T extends IAgent = IAgent>(
+  params: PrepareAgentInstanceParams,
+): Promise<{ agent: T; agentType: AgentType; context: AgentExecutionContext }> {
+  const { agentName, configPayload, executionId, agentClassOverride } = params;
+
+  const ctx = await prepareFlowExecution(agentName, configPayload, executionId);
+  const { modelHandler, agentConfig, agentSetting, agentPrompt, agentPath, executionContext } = ctx;
+
+  // Determine agent class
+  const AgentClass: AgentConstructor = agentClassOverride ??
+    (agentSetting.agentType === 'toolUse' ? BaseToolUseAgent : MergeAgent);
+
+  const agent = new AgentClass(
+    modelHandler,
+    agentConfig,
+    agentSetting,
+    agentPrompt,
+    agentPath,
+    executionContext,
+  );
+
+  return {
+    agent: agent as T,
+    agentType: agentSetting.agentType,
+    context: executionContext,
+  };
+}
+
+/**
+ * @deprecated Use flow execution directly instead.
+ * This function is kept for backward compatibility with ToolUseSessionPersistence.
+ */
+export async function runPreparedAgent<T extends IAgent>(
+  agent: T,
+  context: AgentExecutionContext,
+  options?: RunPreparedAgentOptions,
+): Promise<void> {
+  const isResume = options?.isResume ?? false;
+  const executionId = options?.executionId;
+  const config = agent.config;
+  const streamTabId = agent.getStreamTabId();
+  const agentName = config.agent;
+
+  if (!config.session)
+    throw new Error('Agent configuration is missing session metadata.');
+  if (!streamTabId)
+    throw new Error('Failed to resolve stream tab ID for agent execution');
+
+  try {
+    if (executionId) await ensureRunDir(executionId);
+
+    const runStorage = getRunStorageService();
+
+    // Setup UI state
+    bus.emit('setActiveStream', {
+      stream: streamTabId,
+      session: config.session,
+      isRemote: isRemoteAgent(config.agent),
+      hasMultipleOutputs: config.useMultipleOutputs,
+    });
+    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+
+    if (!isResume) {
+      logger.info(`Starting task execution for ${streamTabId}`);
+      if (!runStorage.isViewVisible()) {
+        await vscode.commands.executeCommand('texra.showProgressView');
+      }
+      if (!runStorage.isViewVisible()) {
+        showAgentNotification(config);
+      }
+      bus.emit('setTaskState', {
+        streamTabId,
+        executionId,
+        taskState: agentConfigToTaskState(config),
+      });
+    }
+
+    // Run agent
+    await logger.withScope(
+      `Task: ${agentName}@${config.model}`,
+      async () => {
+        await agent.run();
+        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+      },
+      { skip: isResume },
+    );
+  } catch (err) {
+    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    await handleFlowError(err, agentName, streamTabId, context);
+  }
 }
