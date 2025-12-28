@@ -439,8 +439,8 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
         multiplePath: multiple ? multiple.name : undefined,
         category,
         agentType,
-        description: primary.description,
-        visibility: primary.visibility,
+        description: primary.description ?? undefined,
+        visibility: primary.visibility ?? undefined,
       });
     }
 
