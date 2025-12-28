@@ -9,18 +9,15 @@ import {
   createSharedStore,
   type AgentSharedStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
-import {
-  resumeFromSnapshot,
-  sendFollowUp,
-} from '@agent/toolUse/ToolUseFollowUpCoordinator';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
-describe('ToolUseFollowUpCoordinator', () => {
+describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
   const workspace = AgentWorkspaceState.create();
   const store = createSharedStore({
@@ -59,8 +56,10 @@ describe('ToolUseFollowUpCoordinator', () => {
   it('sends follow-ups to active agents', async () => {
     const calls: string[] = [];
     (AgentRegistry as any).getToolUseAgent = () => ({
-      appendFollowUp: (text: string) => {
-        calls.push(text);
+      session: {
+        appendFollowUp: (text: string) => {
+          calls.push(text);
+        },
       },
     });
 
@@ -69,14 +68,17 @@ describe('ToolUseFollowUpCoordinator', () => {
     assert.deepEqual(calls, ['hello']);
   });
 
-  it('resumes from snapshot through the session coordinator', async () => {
+  it('resumes from snapshot through session persistence', async () => {
     ToolUseSessionPersistence.resumeFromSnapshot = async (snap, followUp) => {
       assert.equal(snap, snapshot);
       assert.equal(followUp, 'next');
       return { success: true };
     };
 
-    const result = await resumeFromSnapshot(snapshot, 'next');
+    const result = await ToolUseSessionPersistence.resumeFromSnapshot(
+      snapshot,
+      'next',
+    );
 
     assert.deepEqual(result, { success: true });
   });
