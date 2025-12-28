@@ -4,6 +4,8 @@
  */
 import { z } from 'zod';
 
+import { ProgressViewApprovalActions } from '@tools/approval/toolEditApproval';
+
 // --- Base Schemas (composable building blocks) ---
 
 /** Base for all messages - command field */
@@ -211,7 +213,7 @@ export type InfoMessage = z.infer<typeof InfoMessageSchema>;
 /** Approval action message from progress view */
 export const ApprovalActionMessageSchema = z.object({
   requestId: z.string().min(1),
-  action: z.enum(['approve', 'reject', 'openDiff', 'approveAll', 'resumeApprovals']),
+  action: z.enum(ProgressViewApprovalActions),
   note: z.string().optional(),
 });
 
