@@ -105,7 +105,6 @@ export function createReflectionFlow<C = unknown>(): Flow<
 
 // Re-export types for convenience
 export type {
-  IReflectionFlowAgent,
   ReflectionFlowShared,
   ReflectionFlowState,
 } from './ReflectionFlowState';
