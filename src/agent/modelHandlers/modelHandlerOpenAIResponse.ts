@@ -1754,25 +1754,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   prependTextToUserMessage(messages: ResponseInputItem[], text: string): void {
     if (!text.trim()) return;
 
-    // Find the last user message
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as { role?: string; content?: unknown };
-      if (msg.role === 'user') {
-        if (Array.isArray(msg.content)) {
-          // Array of content parts - find first text part and prepend
-          const firstTextIdx = (
-            msg.content as { type?: string; text?: string }[]
-          ).findIndex((part) => part.type === 'input_text');
-          if (firstTextIdx >= 0) {
-            const textPart = msg.content[firstTextIdx] as { text: string };
-            textPart.text = text + textPart.text;
-          } else {
-            // No text part found - add one at the beginning
-            msg.content.unshift({ type: 'input_text', text: text });
-          }
-        }
-        return;
-      }
+    const lastUserMsg = messages.findLast(
+      (m) => (m as { role?: string }).role === 'user',
+    ) as { role: 'user'; content?: unknown } | undefined;
+    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
+
+    const content = lastUserMsg.content as { type?: string; text?: string }[];
+    const firstTextPart = content.find((part) => part.type === 'input_text');
+    if (firstTextPart && 'text' in firstTextPart) {
+      firstTextPart.text = text + firstTextPart.text;
+    } else {
+      content.unshift({ type: 'input_text', text });
     }
   }
 
@@ -1786,27 +1778,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<void> {
     if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
 
-    // Find the last user message
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i] as { role?: string; content?: unknown };
-      if (msg.role === 'user') {
-        try {
-          const formattedMedia = (await this.createMediaMessage(
-            mediaFiles,
-          )) as ResponseInputMessageContentList;
-          if (Array.isArray(msg.content)) {
-            // Insert media at the beginning
-            msg.content.unshift(...formattedMedia);
-          }
-        } catch (err) {
-          this.logger.logError(
-            `Error adding media to user message: ${getSdkErrorMessage(err)}`,
-            err,
-            { operation: 'add media to user message' },
-          );
-        }
-        return;
-      }
+    const lastUserMsg = messages.findLast(
+      (m) => (m as { role?: string }).role === 'user',
+    ) as { role: 'user'; content?: unknown[] } | undefined;
+    if (!lastUserMsg || !Array.isArray(lastUserMsg.content)) return;
+
+    try {
+      const formattedMedia = (await this.createMediaMessage(
+        mediaFiles,
+      )) as ResponseInputMessageContentList;
+      lastUserMsg.content.unshift(...formattedMedia);
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
     }
   }
 }
