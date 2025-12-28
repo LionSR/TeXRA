@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
+import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -209,13 +209,13 @@ export async function sendFollowUp(
   streamId: StreamTabId,
   text: string,
 ): Promise<void> {
-  // Try active agent first
-  const agent = getToolUseAgent(streamId);
-  if (agent) {
+  // Try active flow context first
+  const flowContext = getToolUseFlowContext(streamId);
+  if (flowContext) {
     try {
-      agent.session.appendFollowUp(text);
+      flowContext.session.appendFollowUp(text);
     } catch (error) {
-      logger.error('Failed to send follow-up to active agent.', {
+      logger.error('Failed to send follow-up to active session.', {
         data: error,
       });
       await vscode.window.showErrorMessage(
