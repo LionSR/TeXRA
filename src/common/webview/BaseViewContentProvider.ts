@@ -186,13 +186,13 @@ export abstract class BaseViewContentProvider {
         webview,
         'modules/BaseDomHandler.js',
       ),
-      baseUIManagerUri: this.getCommonUri(
-        webview,
-        'modules/BaseUIManager.js',
-      ),
+      baseUIManagerUri: this.getCommonUri(webview, 'modules/BaseUIManager.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
-      clipboardUtilsUri: this.getCommonUri(webview, 'modules/clipboardUtils.js'),
+      clipboardUtilsUri: this.getCommonUri(
+        webview,
+        'modules/clipboardUtils.js',
+      ),
       streamStatusUri: this.getCommonUri(webview, 'constants/streamStatus.js'),
       todoStatusUri: this.getCommonUri(webview, 'constants/todoStatus.js'),
       agentTypesUri: this.getCommonUri(webview, 'constants/agentTypes.js'),
