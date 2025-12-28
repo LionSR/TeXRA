@@ -84,12 +84,13 @@ export function createIconButton({
 }
 
 /**
- * Create a codicon element from the shared template.
+ * Create a codicon element programmatically.
+ * This replaces the template-based approach to eliminate HTML duplication.
  * @param {string} iconName - Icon name such as 'mic' or 'chevron-up'.
- * @returns {HTMLElement|null} The codicon element or null if template missing.
+ * @returns {HTMLElement} The codicon element.
  */
 export function createCodicon(iconName) {
-  return createFromTemplate('codiconTemplate', {
-    attributes: { '': { class: `codicon codicon-${iconName}` } },
-  });
+  const icon = document.createElement('i');
+  icon.className = `codicon codicon-${iconName}`;
+  return icon;
 }

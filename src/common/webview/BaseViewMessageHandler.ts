@@ -123,7 +123,7 @@ export abstract class BaseViewMessageHandler<
 
       // Optionally notify the webview of the error
       webviewView.webview.postMessage({
-        command: 'error',
+        command: COMMON_COMMANDS.ERROR,
         message: `Failed to handle command: ${message.command}`,
       });
     }
