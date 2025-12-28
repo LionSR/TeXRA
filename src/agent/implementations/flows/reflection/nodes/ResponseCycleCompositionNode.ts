@@ -104,12 +104,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       );
     }
 
-    // Create shared store for cycle
+    // Create shared store for cycle with usage tracking callback
     const store = new AgentSharedStore({
       round: context.stateRound,
       run: runState,
       workspace: workspaceState,
       user: userVarChannels,
+      onRoundFinalized: this.services.getUsageRecorder(),
     });
 
     // Determine output location for this round (delegates to agent for polymorphism)
@@ -129,6 +130,30 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const services = this.services;
 
+    // Initialize output file and prefill before starting cycle
+    // This handles: writing prefill to file, updating messages with assistant prefill,
+    // and detecting if existing output completes the response (endTurn=true)
+    const [prefillEndsTurn, initializedMessages] =
+      await services.modelHandler.initializeOutputAndPrefill(
+        services.config,
+        services.setting,
+        prepRes.context.messages,
+        prepRes.store.workspace,
+        prepRes.outputLocation,
+        prepRes.context.prefill,
+      );
+
+    // If prefill already completes the response, return success with endTurn=true
+    if (prefillEndsTurn) {
+      return {
+        kind: 'success',
+        endTurn: true,
+        store: prepRes.store,
+        failedWithError: false,
+        userCancelled: false,
+      };
+    }
+
     // Build ResponseCycleOptions from our services
     const cycleOptions: ResponseCycleOptions<C> = {
       modelHandler: services.modelHandler,
@@ -145,10 +170,10 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       setAbortController: services.setAbortController,
     };
 
-    // Create cycle shared state
+    // Create cycle shared state with initialized messages
     const cycleShared: ResponseCycleShared = {
       state: {
-        messages: prepRes.context.messages,
+        messages: initializedMessages,
         outputLocation: prepRes.outputLocation,
         endTurn: false,
         shouldStop: false,
@@ -240,6 +265,10 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     shared.state.runState = execRes.store.run;
     shared.state.endTurn = execRes.endTurn;
     shared.state.outputLocation = prepRes.outputLocation;
+
+    // Sync conversation state - messages are modified in-place during cycle
+    // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
+    shared.state.conversation = prepRes.context.messages;
 
     // Store round state for later
     shared.state.roundStates.push(prepRes.context.stateRound);
