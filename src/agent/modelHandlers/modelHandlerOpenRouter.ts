@@ -13,90 +13,44 @@ import { isNonEmptyString } from '@utils/core';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
+import { normalizeOpenRouterStream } from './streaming';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
-  ChatCompletionChunk,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
 /**
  * OpenRouter reasoning_details array item types.
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ * Used for extracting reasoning from final response messages.
  */
 interface ReasoningDetailItem {
   type: 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted';
-  id?: string | null;
-  format?: string;
-  index?: number;
-  text?: string; // for reasoning.text
-  summary?: string; // for reasoning.summary
-  data?: string; // for reasoning.encrypted
-  signature?: string | null; // for reasoning.text
+  text?: string;
+  summary?: string;
 }
 
 /**
  * Extracts text content from OpenRouter reasoning_details array.
- * Handles the structured format with type-specific fields.
+ * Used by extractReasoningFromMessage for final response processing.
  */
-const extractTextFromReasoningDetails = (
-  details: ReasoningDetailItem[] | unknown,
-): string => {
+function extractTextFromReasoningDetails(details: unknown): string {
   if (!Array.isArray(details)) {
-    // Fallback: if it's a string, return it directly
     if (typeof details === 'string') return details;
     return '';
   }
 
   const textParts: string[] = [];
-  for (const item of details) {
+  for (const item of details as ReasoningDetailItem[]) {
     if (!item || typeof item !== 'object') continue;
-
-    switch (item.type) {
-      case 'reasoning.text':
-        if (item.text) textParts.push(item.text);
-        break;
-      case 'reasoning.summary':
-        if (item.summary) textParts.push(item.summary);
-        break;
-      case 'reasoning.encrypted':
-        // Encrypted content is not useful for display, skip it
-        break;
+    if (item.type === 'reasoning.text' && item.text) {
+      textParts.push(item.text);
+    } else if (item.type === 'reasoning.summary' && item.summary) {
+      textParts.push(item.summary);
     }
   }
-
   return textParts.join('');
-};
-
-/**
- * Extracts reasoning delta from streaming chunks for OpenRouter.
- * Handles both:
- * - reasoning_details: array of objects (OpenRouter normalized format)
- * - reasoning_content: string (native DeepSeek/other models)
- */
-const extractOpenRouterReasoningDelta = (
-  chunk: ChatCompletionChunk,
-): string => {
-  const choice = chunk.choices[0];
-  if (!choice) return '';
-
-  const delta = choice.delta as {
-    reasoning_details?: ReasoningDetailItem[] | string;
-    reasoning_content?: string;
-  };
-
-  // Try reasoning_details first (OpenRouter normalized format)
-  if ('reasoning_details' in delta && delta.reasoning_details) {
-    return extractTextFromReasoningDetails(delta.reasoning_details);
-  }
-
-  // Fall back to reasoning_content (native format for some models)
-  if ('reasoning_content' in delta && delta.reasoning_content) {
-    return delta.reasoning_content;
-  }
-
-  return '';
-};
+}
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -154,7 +108,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
 
     if (useStreaming) {
-      kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
+      kwargs.stream_options = { include_usage: true };
       const stream = await executeRequest(
         {
           model: this.config.name,
@@ -163,35 +117,23 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         },
         () => client.chat.completions.stream(kwargs, { signal }),
       );
-      const thinking = this.createThinkingStream();
-      const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream()
-        : undefined;
-      for await (const chunk of stream) {
-        const reasoningDelta = extractOpenRouterReasoningDelta(chunk);
-        const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-        if (reasoningDelta) thinking.append(reasoningDelta);
-        if (contentDelta) output?.append(contentDelta);
-      }
 
-      // Note that there is no second consumption problem
-      // But i am not sure about openrouter's stream api, whether it works for every model.
-      let response = await stream.finalChatCompletion();
+      // Use unified streaming: normalize SDK events and consume with StreamConsumer
+      const normalizedStream = normalizeOpenRouterStream(stream, {
+        outputEnabled: this.isOutputStreamingEnabled(),
+        progressViewEnabled: this.progressViewEnabled,
+        provider: 'openrouter',
+        startTime: Date.now(),
+      });
 
-      // Ensure usage is captured - use SDK's totalUsage() as fallback
-      if (!response.usage) {
-        try {
-          const totalUsage = await stream.totalUsage();
-          response = { ...response, usage: totalUsage };
-        } catch (_err) {
-          // totalUsage() may fail if stream ended abnormally
-        }
-      }
+      const result = await this.consumeNormalizedStream(normalizedStream);
 
-      const finalReasoning = this.processThinkingBlock(response);
-      thinking.finalize(finalReasoning ?? undefined);
-      const finalOutput = response.choices?.[0]?.message?.content ?? '';
-      if (output) output.finalize(finalOutput);
+      // Get the raw response for further processing
+      const response = result.response.raw as ChatCompletion;
+
+      // Store thinking blocks for API conversation continuation
+      this.processThinkingBlock(response);
+
       return response;
     } else {
       return executeRequest(

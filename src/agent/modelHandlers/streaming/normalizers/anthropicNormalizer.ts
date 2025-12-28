@@ -40,8 +40,7 @@ import type {
  * Duck-typed interface for Anthropic message streams.
  * The SDK's MessageStream implements AsyncIterable<BetaRawMessageStreamEvent>.
  */
-export interface AnthropicMessageStream
-  extends AsyncIterable<BetaRawMessageStreamEvent> {
+export interface AnthropicMessageStream extends AsyncIterable<BetaRawMessageStreamEvent> {
   /** Get the final aggregated message after streaming completes */
   finalMessage(): Promise<BetaMessage>;
 }
@@ -370,8 +369,10 @@ export async function* normalizeAnthropicStream(
           cost: 0, // Will be calculated by caller
           responseTimeMs,
           provider: 'anthropic',
-          cachedInputTokens: finalMessage.usage.cache_read_input_tokens ?? undefined,
-          cacheCreationTokens: finalMessage.usage.cache_creation_input_tokens ?? undefined,
+          cachedInputTokens:
+            finalMessage.usage.cache_read_input_tokens ?? undefined,
+          cacheCreationTokens:
+            finalMessage.usage.cache_creation_input_tokens ?? undefined,
         }
       : undefined,
     raw: finalMessage,

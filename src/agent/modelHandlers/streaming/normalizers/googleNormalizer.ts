@@ -54,8 +54,9 @@ function isTextPart(part: Part): part is Part & { text: string } {
  */
 function extractThinkingParts(parts: Part[]): string {
   return parts
-    .filter((part): part is Part & { text: string; thought: true } =>
-      isTextPart(part) && part.thought === true
+    .filter(
+      (part): part is Part & { text: string; thought: true } =>
+        isTextPart(part) && part.thought === true,
     )
     .map((part) => part.text)
     .join('');
@@ -66,8 +67,9 @@ function extractThinkingParts(parts: Part[]): string {
  */
 function extractNonThinkingText(parts: Part[]): string {
   return parts
-    .filter((part): part is Part & { text: string } =>
-      isTextPart(part) && !part.thought
+    .filter(
+      (part): part is Part & { text: string } =>
+        isTextPart(part) && !part.thought,
     )
     .map((part) => part.text)
     .join('');
@@ -123,7 +125,10 @@ function* processChunk(
 
   // Handle content (cumulative chunk.text → delta)
   const currentText = chunk.text ?? '';
-  if (currentText.length > state.previousContentText.length && options.outputEnabled !== false) {
+  if (
+    currentText.length > state.previousContentText.length &&
+    options.outputEnabled !== false
+  ) {
     const delta = currentText.slice(state.previousContentText.length);
     state.previousContentText = currentText;
 

@@ -77,7 +77,10 @@ export class StreamConsumer {
   private readonly logger: AgentLogger;
   private readonly options: StreamConsumerOptions;
 
-  constructor(logger: AgentLogger, options: Partial<StreamConsumerOptions> = {}) {
+  constructor(
+    logger: AgentLogger,
+    options: Partial<StreamConsumerOptions> = {},
+  ) {
     this.logger = logger;
     this.options = {
       thinkingEnabled: options.thinkingEnabled ?? true,
@@ -174,7 +177,10 @@ export class StreamConsumer {
   /**
    * Handle thinking event.
    */
-  private handleThinkingEvent(event: ThinkingEvent, state: ConsumerState): void {
+  private handleThinkingEvent(
+    event: ThinkingEvent,
+    state: ConsumerState,
+  ): void {
     if (!this.options.thinkingEnabled) {
       return;
     }
@@ -183,7 +189,10 @@ export class StreamConsumer {
     state.thinkingBuffer += event.delta;
 
     // Handle interleaved blocks
-    if (this.options.handleInterleavedBlocks && event.blockIndex !== undefined) {
+    if (
+      this.options.handleInterleavedBlocks &&
+      event.blockIndex !== undefined
+    ) {
       const isNewBlock = event.blockIndex !== state.currentThinkingBlockIndex;
 
       if (isNewBlock) {
@@ -218,7 +227,10 @@ export class StreamConsumer {
     state.contentBuffer += event.delta;
 
     // Handle interleaved blocks
-    if (this.options.handleInterleavedBlocks && event.blockIndex !== undefined) {
+    if (
+      this.options.handleInterleavedBlocks &&
+      event.blockIndex !== undefined
+    ) {
       const isConsecutive =
         state.outputStream !== null &&
         event.blockIndex === state.currentContentBlockIndex + 1;

@@ -45,14 +45,13 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
-  buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
-  hasOpenAIWebSearchData,
   isOpenAIReasoningItem,
   isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
+import { normalizeOpenAIResponseStream } from './streaming';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -76,18 +75,11 @@ import type {
   ResponseInputContent,
   ResponseInputMessageContentList,
   ResponseInputFile,
-  ResponseStreamEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
   ResponseOutputMessage,
   ResponseFunctionWebSearch,
-  // Streaming event types
-  ResponseTextDeltaEvent,
-  ResponseReasoningTextDeltaEvent,
-  ResponseReasoningSummaryTextDeltaEvent,
-  ResponseOutputItemDoneEvent,
-  ResponseWebSearchCallInProgressEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -613,62 +605,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         () => client.responses.stream(streamParams, { signal }),
       );
 
-      // State for handling interleaved thinking and web search
-      // GPT can: think → web_search → think more → web_search → text
-      const state = {
-        thinkingStream: this.createThinkingStream(),
-        outputStream: this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : null,
-        emittedWebSearchIds: new Set<string>(),
-        hasThinkingContent: false,
-      };
+      // Use unified streaming: normalize SDK events and consume with StreamConsumer
+      const normalizedStream = normalizeOpenAIResponseStream(stream, {
+        outputEnabled: this.isOutputStreamingEnabled(),
+        progressViewEnabled: this.progressViewEnabled,
+        provider: 'openai-response',
+        startTime: Date.now(),
+      });
 
-      for await (const event of stream) {
-        if (this.isReasoningDeltaEvent(event)) {
-          state.thinkingStream.append(event.delta);
-          state.hasThinkingContent = true;
-        } else if (this.isTextDeltaEvent(event)) {
-          state.outputStream?.append(event.delta);
-        } else if (this.isWebSearchInProgressEvent(event)) {
-          // Web search starting - finalize current thinking stream
-          // Don't emit placeholder here - wait for output_item.done with full data
-          if (state.hasThinkingContent) {
-            state.thinkingStream.finalize();
-            state.hasThinkingContent = false;
-            // Create new thinking stream for potential continuation after search
-            state.thinkingStream = this.createThinkingStream();
-          }
-        } else if (this.isOutputItemDoneEvent(event)) {
-          // When output item is done, we can get the full web search data
-          const item = event.item;
-          if (
-            this.isWebSearchItem(item) &&
-            !state.emittedWebSearchIds.has(item.id) &&
-            hasOpenAIWebSearchData(item)
-          ) {
-            // Finalize thinking if we have content (in case in_progress didn't fire)
-            if (state.hasThinkingContent) {
-              state.thinkingStream.finalize();
-              state.hasThinkingContent = false;
-              state.thinkingStream = this.createThinkingStream();
-            }
-            this.emitOpenAIWebSearch(item);
-            state.emittedWebSearchIds.add(item.id);
-          }
-        }
-      }
+      const result = await this.consumeNormalizedStream(normalizedStream, {
+        handleInterleavedBlocks: true, // OpenAI Response supports interleaved thinking/search
+      });
 
-      const response = await stream.finalResponse();
-      // Finalize any remaining thinking content (only if there's actual content)
-      if (state.hasThinkingContent) {
-        state.thinkingStream.finalize();
-      }
-      const { response: finalText } = this.extractResponse(response, '');
-      if (state.outputStream) state.outputStream.finalize(finalText);
-
-      // Emit any web searches not yet emitted (fallback for edge cases)
-      this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+      // Get the raw response for further processing
+      const response = result.response.raw as Response;
 
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
@@ -1588,86 +1538,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     item: ResponseOutputItem,
   ): item is ResponseOutputMessage {
     return item.type === 'message';
-  }
-
-  /** Type alias for reasoning delta events (both raw and summary). */
-  private isReasoningDeltaEvent(
-    event: ResponseStreamEvent,
-  ): event is
-    | ResponseReasoningTextDeltaEvent
-    | ResponseReasoningSummaryTextDeltaEvent {
-    return (
-      event.type === 'response.reasoning_text.delta' ||
-      event.type === 'response.reasoning_summary_text.delta'
-    );
-  }
-
-  /** Type guard for web search in_progress events. */
-  private isWebSearchInProgressEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseWebSearchCallInProgressEvent {
-    return event.type === 'response.web_search_call.in_progress';
-  }
-
-  /** Type guard for text output delta events. */
-  private isTextDeltaEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseTextDeltaEvent {
-    return event.type === 'response.output_text.delta';
-  }
-
-  /** Type guard for output item done events. */
-  private isOutputItemDoneEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseOutputItemDoneEvent {
-    return event.type === 'response.output_item.done';
-  }
-
-  /** Type guard for web search output items. */
-  private isWebSearchItem(
-    item: ResponseOutputItem,
-  ): item is ResponseFunctionWebSearch {
-    return item.type === 'web_search_call';
-  }
-
-  /**
-   * Emit web search result to progress view during streaming.
-   * Uses shared helper for consistent WebSearchResult construction.
-   */
-  private emitOpenAIWebSearch(item: ResponseFunctionWebSearch): void {
-    this.emitWebSearchResult(buildOpenAIWebSearchResult(item));
-  }
-
-  /**
-   * Emit web searches from the final response that weren't already emitted during streaming.
-   *
-   * This fallback ensures web searches are displayed even if streaming events are missed:
-   * - Network interruptions may cause output_item.done events to be lost
-   * - Some edge cases in the SDK may not emit all streaming events
-   * - Non-streaming responses need this path entirely
-   *
-   * The `alreadyEmitted` set prevents duplicates when streaming worked correctly.
-   * During normal streaming, this method typically does nothing (all IDs already emitted).
-   */
-  private emitWebSearchesFromResponse(
-    response: Response,
-    alreadyEmitted: Set<string>,
-  ): void {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return;
-    }
-
-    for (const item of output) {
-      if (
-        this.isWebSearchItem(item) &&
-        !alreadyEmitted.has(item.id) &&
-        hasOpenAIWebSearchData(item)
-      ) {
-        this.emitOpenAIWebSearch(item);
-        alreadyEmitted.add(item.id);
-      }
-    }
   }
 
   private getMessageContent(

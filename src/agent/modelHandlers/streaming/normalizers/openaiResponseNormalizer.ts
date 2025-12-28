@@ -36,14 +36,16 @@ import type {
   NormalizedResponse,
   NormalizedStopReason,
 } from '../streamEventSchema';
-import type { NormalizerOptions, OpenAIResponseNormalizerState } from '../types';
+import type {
+  NormalizerOptions,
+  OpenAIResponseNormalizerState,
+} from '../types';
 
 /**
  * Duck-typed interface for OpenAI Response streams.
  * The SDK's ResponseStream implements AsyncIterable<ResponseStreamEvent>.
  */
-export interface OpenAIResponseStream
-  extends AsyncIterable<ResponseStreamEvent> {
+export interface OpenAIResponseStream extends AsyncIterable<ResponseStreamEvent> {
   /** Get the final aggregated response after streaming completes */
   finalResponse(): Promise<Response>;
 }
@@ -65,7 +67,9 @@ function createInitialState(): OpenAIResponseNormalizerState {
  */
 function isReasoningDeltaEvent(
   event: ResponseStreamEvent,
-): event is ResponseReasoningTextDeltaEvent | ResponseReasoningSummaryTextDeltaEvent {
+): event is
+  | ResponseReasoningTextDeltaEvent
+  | ResponseReasoningSummaryTextDeltaEvent {
   return (
     event.type === 'response.reasoning_text.delta' ||
     event.type === 'response.reasoning_summary_text.delta'
@@ -102,7 +106,9 @@ function isOutputItemDoneEvent(
 /**
  * Type guard for web search output items.
  */
-function isWebSearchItem(item: ResponseOutputItem): item is ResponseFunctionWebSearch {
+function isWebSearchItem(
+  item: ResponseOutputItem,
+): item is ResponseFunctionWebSearch {
   return item.type === 'web_search_call';
 }
 
@@ -339,7 +345,8 @@ export async function* normalizeOpenAIResponseStream(
 
   // Build normalized response
   const finalText = extractTextFromResponse(response) || state.contentBuffer;
-  const finalThinking = extractThinkingFromResponse(response) || state.thinkingBuffer || undefined;
+  const finalThinking =
+    extractThinkingFromResponse(response) || state.thinkingBuffer || undefined;
 
   const usage = response.usage;
   const normalizedResponse: NormalizedResponse = {
@@ -354,7 +361,8 @@ export async function* normalizeOpenAIResponseStream(
           cost: 0, // Will be calculated by caller
           responseTimeMs,
           provider: options.provider ?? 'openai-response',
-          reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? undefined,
+          reasoningTokens:
+            usage.output_tokens_details?.reasoning_tokens ?? undefined,
         }
       : undefined,
     raw: response,

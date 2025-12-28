@@ -6,14 +6,14 @@ This document describes the design for refactoring model handler streaming to us
 
 The current streaming implementations across model handlers are inconsistent and hard to maintain:
 
-| Provider | Pattern | Stream Type | Challenges |
-|----------|---------|-------------|------------|
-| Anthropic | Event emitter + Handler class | `MessageStream` | Interleaved blocks, partial JSON |
-| OpenAI | Event listeners (`on`/`off`) | `ChatCompletionStream` | Tool calls as indexed fragments |
-| Google | for-await (cumulative chunks) | `AsyncIterable<GenerateContentResponse>` | Must diff to get deltas |
-| OpenAI Response | for-await + state machine | `AsyncIterable<ResponseStreamEvent>` | Interleaved events, background mode |
-| OpenRouter | for-await | `ChatCompletionStream` | Different reasoning field names |
-| DeepSeek/Kimi | Inherits OpenAI + overrides | Event emitter | Custom reasoning extraction |
+| Provider        | Pattern                       | Stream Type                              | Challenges                          |
+| --------------- | ----------------------------- | ---------------------------------------- | ----------------------------------- |
+| Anthropic       | Event emitter + Handler class | `MessageStream`                          | Interleaved blocks, partial JSON    |
+| OpenAI          | Event listeners (`on`/`off`)  | `ChatCompletionStream`                   | Tool calls as indexed fragments     |
+| Google          | for-await (cumulative chunks) | `AsyncIterable<GenerateContentResponse>` | Must diff to get deltas             |
+| OpenAI Response | for-await + state machine     | `AsyncIterable<ResponseStreamEvent>`     | Interleaved events, background mode |
+| OpenRouter      | for-await                     | `ChatCompletionStream`                   | Different reasoning field names     |
+| DeepSeek/Kimi   | Inherits OpenAI + overrides   | Event emitter                            | Custom reasoning extraction         |
 
 ### Current Pain Points
 
@@ -41,11 +41,17 @@ type StreamEvent =
   | { type: 'tool_call_done'; id: string }
 
   // Web search (native tools)
-  | { type: 'web_search'; callId: string; query: string; results: WebSearchResultEntry[]; status: WebSearchStatus }
+  | {
+      type: 'web_search';
+      callId: string;
+      query: string;
+      results: WebSearchResultEntry[];
+      status: WebSearchStatus;
+    }
 
   // Completion
   | { type: 'usage'; usage: NormalizedUsage }
-  | { type: 'done'; response: NormalizedResponse }
+  | { type: 'done'; response: NormalizedResponse };
 ```
 
 ### Architecture
@@ -100,9 +106,9 @@ for await (const chunk of stream) {
 }
 
 // Built-in helpers (underutilized):
-await stream.finalChatCompletion();  // Wait for complete response
-await stream.totalUsage();           // Aggregate usage across chunks
-stream.toReadableStream();           // Serialization helper
+await stream.finalChatCompletion(); // Wait for complete response
+await stream.totalUsage(); // Aggregate usage across chunks
+stream.toReadableStream(); // Serialization helper
 
 // ContentDeltaEvent provides normalized (delta, snapshot) tuple
 ```
@@ -113,13 +119,14 @@ stream.toReadableStream();           // Serialization helper
 // sendMessageStream returns AsyncGenerator<GenerateContentResponse>
 // Already used correctly with for-await
 for await (const chunk of stream) {
-  chunk.candidates?.[0]?.content?.parts
+  chunk.candidates?.[0]?.content?.parts;
 }
 ```
 
 ### Stream Utilities in SDKs
 
 Both Anthropic and OpenAI export:
+
 ```typescript
 // Stream manipulation
 stream.tee(): [Stream<Item>, Stream<Item>]  // Split for parallel consumption
@@ -231,9 +238,17 @@ function* handleAnthropicEvent(
 ): Generator<StreamEvent> {
   if (event.type === 'content_block_delta') {
     if (event.delta.type === 'thinking_delta') {
-      yield { type: 'thinking', delta: event.delta.thinking, blockIndex: event.index };
+      yield {
+        type: 'thinking',
+        delta: event.delta.thinking,
+        blockIndex: event.index,
+      };
     } else if (event.delta.type === 'text_delta') {
-      yield { type: 'content', delta: event.delta.text, blockIndex: event.index };
+      yield {
+        type: 'content',
+        delta: event.delta.text,
+        blockIndex: event.index,
+      };
     }
     // ... handle other delta types
   }
@@ -254,7 +269,9 @@ export class StreamConsumer {
     private options: StreamConsumerOptions,
   ) {}
 
-  async consume(stream: AsyncIterable<StreamEvent>): Promise<NormalizedResponse> {
+  async consume(
+    stream: AsyncIterable<StreamEvent>,
+  ): Promise<NormalizedResponse> {
     const thinkingStream = this.logger.createStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.options.progressViewEnabled,
     });
@@ -337,16 +354,17 @@ protected async executeStreamingChat(params, signal): Promise<NormalizedResponse
 
 The UI layer remains **unchanged**. The consumer uses the same logger APIs:
 
-| Stream Event | Logger Call | UI MESSAGE_TYPE |
-|--------------|-------------|-----------------|
-| `thinking` | `thinkingStream.append()` | `THINKING` |
-| `content` | `outputStream.append()` | `MODEL_RESPONSE` |
-| `web_search` | `logger.info({ messageType: WEB_SEARCH })` | `WEB_SEARCH` |
-| `tool_call_*` | (accumulated, logged on done) | `TOOL_USE` |
+| Stream Event  | Logger Call                                | UI MESSAGE_TYPE  |
+| ------------- | ------------------------------------------ | ---------------- |
+| `thinking`    | `thinkingStream.append()`                  | `THINKING`       |
+| `content`     | `outputStream.append()`                    | `MODEL_RESPONSE` |
+| `web_search`  | `logger.info({ messageType: WEB_SEARCH })` | `WEB_SEARCH`     |
+| `tool_call_*` | (accumulated, logged on done)              | `TOOL_USE`       |
 
 ### Progress View Compatibility
 
 Current flow (unchanged):
+
 ```
 Stream.append() → bus.emit('addLogMessage'/'updateLogMessage') → ProgressView
 ```
@@ -511,12 +529,26 @@ for await (const event of stream) {
 describe('anthropicNormalizer', () => {
   it('yields thinking events for thinking_delta', async () => {
     const mockStream = createMockAnthropicStream([
-      { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Let me think...' } },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'thinking' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Let me think...' },
+      },
     ]);
 
-    const events = await collectEvents(normalizeAnthropicStream(mockStream, {}));
-    expect(events).toContainEqual({ type: 'thinking', delta: 'Let me think...', blockIndex: 0 });
+    const events = await collectEvents(
+      normalizeAnthropicStream(mockStream, {}),
+    );
+    expect(events).toContainEqual({
+      type: 'thinking',
+      delta: 'Let me think...',
+      blockIndex: 0,
+    });
   });
 });
 ```
@@ -528,7 +560,9 @@ describe('anthropicNormalizer', () => {
 describe('StreamConsumer integration', () => {
   it('creates thinking and output streams from normalized events', async () => {
     const mockLogger = createMockLogger();
-    const consumer = new StreamConsumer(mockLogger, { progressViewEnabled: true });
+    const consumer = new StreamConsumer(mockLogger, {
+      progressViewEnabled: true,
+    });
 
     const events = async function* () {
       yield { type: 'thinking', delta: 'Thinking...' };
@@ -538,8 +572,14 @@ describe('StreamConsumer integration', () => {
 
     await consumer.consume(events());
 
-    expect(mockLogger.createStream).toHaveBeenCalledWith(MESSAGE_TYPES.THINKING, expect.any(Object));
-    expect(mockLogger.createStream).toHaveBeenCalledWith(MESSAGE_TYPES.MODEL_RESPONSE, expect.any(Object));
+    expect(mockLogger.createStream).toHaveBeenCalledWith(
+      MESSAGE_TYPES.THINKING,
+      expect.any(Object),
+    );
+    expect(mockLogger.createStream).toHaveBeenCalledWith(
+      MESSAGE_TYPES.MODEL_RESPONSE,
+      expect.any(Object),
+    );
   });
 });
 ```
@@ -553,18 +593,19 @@ describe('StreamConsumer integration', () => {
 
 ## Benefits
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Streaming patterns | 6 different | 1 unified |
-| New handler effort | High (copy/adapt) | Low (implement normalizer) |
-| Testing | Hard (event emitters) | Easy (generators) |
-| Error handling | Inconsistent | Consistent try/finally |
-| Code duplication | High | Low (shared consumer) |
-| SDK utilization | Event-based | Native AsyncIterable |
+| Aspect             | Before                | After                      |
+| ------------------ | --------------------- | -------------------------- |
+| Streaming patterns | 6 different           | 1 unified                  |
+| New handler effort | High (copy/adapt)     | Low (implement normalizer) |
+| Testing            | Hard (event emitters) | Easy (generators)          |
+| Error handling     | Inconsistent          | Consistent try/finally     |
+| Code duplication   | High                  | Low (shared consumer)      |
+| SDK utilization    | Event-based           | Native AsyncIterable       |
 
 ## Files to Create/Modify
 
 ### New Files
+
 - `src/agent/modelHandlers/streaming/streamEventSchema.ts`
 - `src/agent/modelHandlers/streaming/types.ts`
 - `src/agent/modelHandlers/streaming/StreamConsumer.ts`
@@ -576,6 +617,7 @@ describe('StreamConsumer integration', () => {
 - `src/agent/modelHandlers/streaming/index.ts`
 
 ### Modified Files
+
 - `src/agent/modelHandlers/modelHandlerAnthropic.ts`
 - `src/agent/modelHandlers/modelHandlerOpenAI.ts`
 - `src/agent/modelHandlers/modelHandlerGoogleGenAI.ts`
@@ -585,6 +627,7 @@ describe('StreamConsumer integration', () => {
 - `src/agent/modelHandlers/modelHandlerDeepSeek.ts`
 
 ### Files to Remove (after migration)
+
 - `src/agent/modelHandlers/support/AnthropicStreamHandler.ts` (logic moves to normalizer)
 - `src/agent/modelHandlers/BaseReasoningStreamAggregator.ts` (if unused)
 

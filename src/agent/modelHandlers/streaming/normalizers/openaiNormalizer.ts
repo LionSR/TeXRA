@@ -27,8 +27,7 @@ import type { NormalizerOptions, OpenAINormalizerState } from '../types';
  * Duck-typed interface for OpenAI chat completion streams.
  * The SDK's ChatCompletionStream implements AsyncIterable<ChatCompletionChunk>.
  */
-export interface OpenAIChatCompletionStream
-  extends AsyncIterable<ChatCompletionChunk> {
+export interface OpenAIChatCompletionStream extends AsyncIterable<ChatCompletionChunk> {
   /** Get the final aggregated completion after streaming completes */
   finalChatCompletion(): Promise<ChatCompletion>;
   /** Get total usage across all chunks (may fail if stream ended abnormally) */
@@ -252,11 +251,10 @@ export async function* normalizeOpenAIStream(
   // Build normalized response
   const response: NormalizedResponse = {
     text: extractFinalText(finalCompletion) || state.contentBuffer,
-    thinking: extractThinkingText(finalCompletion) || state.thinkingBuffer || undefined,
+    thinking:
+      extractThinkingText(finalCompletion) || state.thinkingBuffer || undefined,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    stopReason: normalizeStopReason(
-      finalCompletion.choices[0]?.finish_reason,
-    ),
+    stopReason: normalizeStopReason(finalCompletion.choices[0]?.finish_reason),
     usage: usage
       ? {
           inputTokens: usage.prompt_tokens,
@@ -406,9 +404,7 @@ export async function* normalizeOpenAIStreamWithCustomExtractor(
     thinking:
       extractThinkingText(finalCompletion) || state.thinkingBuffer || undefined,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    stopReason: normalizeStopReason(
-      finalCompletion.choices[0]?.finish_reason,
-    ),
+    stopReason: normalizeStopReason(finalCompletion.choices[0]?.finish_reason),
     usage: usage
       ? {
           inputTokens: usage.prompt_tokens,

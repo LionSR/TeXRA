@@ -61,6 +61,7 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
+import { normalizeOpenAIStream } from './streaming';
 import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
@@ -284,20 +285,6 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    const thinking = this.createThinkingStream();
-    const output = this.isOutputStreamingEnabled()
-      ? this.createOutputStream()
-      : undefined;
-
-    const markRetryAttempt = (attempt: number): void => {
-      if (attempt === 1) {
-        return;
-      }
-
-      const retryNotice = `\n[Retrying request: attempt ${attempt}]`;
-      thinking.append(retryNotice);
-      output?.append(retryNotice);
-    };
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
       stream: true,
@@ -309,62 +296,29 @@ export class ModelHandlerOpenAI<
         model: this.config.name,
         operation: 'openai.chat.completions.stream',
         signal,
-        onAttemptStart: (nextAttempt) => {
-          markRetryAttempt(nextAttempt);
-        },
       },
       async () => {
         const stream = await client.chat.completions.stream(streamParams, {
           signal,
         });
-        const streamingAggregator = this.createStreamingAggregator();
 
-        const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
-          if (!delta) {
-            return;
-          }
-          output?.append(delta);
-          streamingAggregator?.appendContent(delta);
-        };
+        // Use unified streaming: normalize SDK events and consume with StreamConsumer
+        const normalizedStream = normalizeOpenAIStream(stream, {
+          outputEnabled: this.isOutputStreamingEnabled(),
+          progressViewEnabled: this.progressViewEnabled,
+          provider: this.usageProvider,
+          startTime: Date.now(),
+        });
 
-        const onChunk = (chunk: ChatCompletionChunk): void => {
-          streamingAggregator?.consumeChunk(chunk);
-          const reasoningDelta = extractReasoningDelta(chunk);
-          if (reasoningDelta) {
-            thinking.append(reasoningDelta);
-            streamingAggregator?.appendReasoning(reasoningDelta);
-          }
-        };
+        const result = await this.consumeNormalizedStream(normalizedStream);
 
-        stream.on('content.delta', onContentDelta);
-        stream.on('chunk', onChunk);
+        // Get the raw response for further processing
+        const finalResponse = result.response.raw as ChatCompletion;
 
-        const cleanup = (): void => {
-          stream.off('content.delta', onContentDelta);
-          stream.off('chunk', onChunk);
-        };
+        // Store thinking blocks for API conversation continuation
+        this.processThinkingBlock(finalResponse);
 
-        try {
-          const sdkFinalResponse = await stream.finalChatCompletion();
-          let finalResponse = streamingAggregator
-            ? streamingAggregator.finalize(sdkFinalResponse)
-            : sdkFinalResponse;
-
-          // Ensure usage is captured - use SDK's totalUsage() as fallback
-          if (!finalResponse.usage) {
-            try {
-              const totalUsage = await stream.totalUsage();
-              finalResponse = { ...finalResponse, usage: totalUsage };
-            } catch (_err) {
-              // totalUsage() may fail if stream ended abnormally
-            }
-          }
-
-          this.finalizeStreams(thinking, output ?? undefined, finalResponse);
-          return finalResponse;
-        } finally {
-          cleanup();
-        }
+        return finalResponse;
       },
     );
   }
