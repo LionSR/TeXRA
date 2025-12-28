@@ -14,8 +14,8 @@ import {
 
 const TexcountInputSchema = z.strictObject({
   files: z.union([z.string(), z.array(z.string()).min(1)]),
-  mode: z.enum(['separate', 'include', 'sum']).optional(),
-  format: z.enum(['raw', 'stats']).optional(),
+  mode: z.enum(['separate', 'include', 'sum']).nullish(),
+  format: z.enum(['raw', 'stats']).nullish(),
 });
 
 type TexcountInput = z.infer<typeof TexcountInputSchema>;
