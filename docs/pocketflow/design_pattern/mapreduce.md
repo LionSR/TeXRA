@@ -22,54 +22,75 @@ You first break down the task using [BatchNode](../core_abstraction/batch.md) in
 
 ### Example: Document Summarization
 
-```python
-class SummarizeAllFiles(BatchNode):
-    def prep(self, shared):
-        files_dict = shared["files"]  # e.g. 10 files
-        return list(files_dict.items())  # [("file1.txt", "aaa..."), ("file2.txt", "bbb..."), ...]
+```typescript
+type SharedStorage = {
+  files?: Record<string, string>;
+  file_summaries?: Record<string, string>;
+  all_files_summary?: string;
+};
 
-    def exec(self, one_file):
-        filename, file_content = one_file
-        summary_text = call_llm(f"Summarize the following file:\n{file_content}")
-        return (filename, summary_text)
+class SummarizeAllFiles extends BatchNode<SharedStorage> {
+  async prep(shared: SharedStorage): Promise<[string, string][]> {
+    return Object.entries(shared.files || {}); // [["file1.txt", "aaa..."], ["file2.txt", "bbb..."], ...]
+  }
 
-    def post(self, shared, prep_res, exec_res_list):
-        shared["file_summaries"] = dict(exec_res_list)
+  async exec([filename, content]: [string, string]): Promise<[string, string]> {
+    const summary = await callLLM(`Summarize the following file:\n${content}`);
+    return [filename, summary];
+  }
 
-class CombineSummaries(Node):
-    def prep(self, shared):
-        return shared["file_summaries"]
-
-    def exec(self, file_summaries):
-        # format as: "File1: summary\nFile2: summary...\n"
-        text_list = []
-        for fname, summ in file_summaries.items():
-            text_list.append(f"{fname} summary:\n{summ}\n")
-        big_text = "\n---\n".join(text_list)
-
-        return call_llm(f"Combine these file summaries into one final summary:\n{big_text}")
-
-    def post(self, shared, prep_res, final_summary):
-        shared["all_files_summary"] = final_summary
-
-batch_node = SummarizeAllFiles()
-combine_node = CombineSummaries()
-batch_node >> combine_node
-
-flow = Flow(start=batch_node)
-
-shared = {
-    "files": {
-        "file1.txt": "Alice was beginning to get very tired of sitting by her sister...",
-        "file2.txt": "Some other interesting text ...",
-        # ...
-    }
+  async post(
+    shared: SharedStorage,
+    _: [string, string][],
+    summaries: [string, string][],
+  ): Promise<string> {
+    shared.file_summaries = Object.fromEntries(summaries);
+    return 'summarized';
+  }
 }
-flow.run(shared)
-print("Individual Summaries:", shared["file_summaries"])
-print("\nFinal Summary:\n", shared["all_files_summary"])
+
+class CombineSummaries extends Node<SharedStorage> {
+  async prep(shared: SharedStorage): Promise<Record<string, string>> {
+    return shared.file_summaries || {};
+  }
+
+  async exec(summaries: Record<string, string>): Promise<string> {
+    const text_list = Object.entries(summaries).map(
+      ([fname, summ]) => `${fname} summary:\n${summ}\n`,
+    );
+
+    return await callLLM(
+      `Combine these file summaries into one final summary:\n${text_list.join(
+        '\n---\n',
+      )}`,
+    );
+  }
+
+  async post(
+    shared: SharedStorage,
+    _: Record<string, string>,
+    finalSummary: string,
+  ): Promise<string> {
+    shared.all_files_summary = finalSummary;
+    return 'combined';
+  }
+}
+
+// Create and connect flow
+const batchNode = new SummarizeAllFiles();
+const combineNode = new CombineSummaries();
+batchNode.on('summarized', combineNode);
+
+// Run the flow with test data
+const flow = new Flow(batchNode);
+flow.run({
+  files: {
+    'file1.txt':
+      'Alice was beginning to get very tired of sitting by her sister...',
+    'file2.txt': 'Some other interesting text ...',
+  },
+});
 ```
 
-::: tip Performance Tip
-The example above works sequentially. You can speed up the map phase by running it in parallel. See [(Advanced) Parallel](../core_abstraction/parallel.md) for more details.
-:::
+> **Performance Tip**: The example above works sequentially. You can speed up the map phase by using `ParallelBatchNode` instead of `BatchNode`. See [(Advanced) Parallel](../core_abstraction/parallel.md) for more details.
+> {: .note }

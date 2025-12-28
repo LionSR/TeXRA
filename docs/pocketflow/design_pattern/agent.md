@@ -19,52 +19,45 @@ Agent is a powerful design pattern in which nodes can take dynamic actions based
 2. **Branching:** Use branching to connect each action node to an agent node. Use action to allow the agent to direct the [flow](../core_abstraction/flow.md) between nodes—and potentially loop back for multi-step.
 3. **Agent Node:** Provide a prompt to decide action—for example:
 
-````python
-f"""
+```typescript
+`
 ### CONTEXT
-Task: {task_description}
-Previous Actions: {previous_actions}
-Current State: {current_state}
+Task: ${task}
+Previous Actions: ${prevActions}
+Current State: ${state}
 
 ### ACTION SPACE
 [1] search
   Description: Use web search to get results
-  Parameters:
-    - query (str): What to search for
+  Parameters: query (str)
 
 [2] answer
   Description: Conclude based on the results
-  Parameters:
-    - result (str): Final answer to provide
+  Parameters: result (str)
 
 ### NEXT ACTION
-Decide the next action based on the current context and available action space.
-Return your response in the following format:
+Decide the next action based on the current context.
+Return your response in YAML format:
 
-```yaml
-thinking: |
-    <your step-by-step reasoning process>
+\`\`\`yaml
+thinking: <reasoning process>
 action: <action_name>
-parameters:
-    <parameter_name>: <parameter_value>
-```"""
-````
+parameters: <parameters>
+\`\`\``;
+```
 
 The core of building **high-performance** and **reliable** agents boils down to:
 
-1. **Context Management:** Provide _relevant, minimal context._ For example, rather than including an entire chat history, retrieve the most relevant via [RAG](./rag.md). Even with larger context windows, LLMs still fall victim to ["lost in the middle"](https://arxiv.org/abs/2307.03172), overlooking mid-prompt content.
+1. **Context Management:** Provide _relevant, minimal context._ For example, rather than including an entire chat history, retrieve the most relevant via [RAG](./rag.md).
 
-2. **Action Space:** Provide _a well-structured and unambiguous_ set of actions—avoiding overlap like separate `read_databases` or `read_csvs`. Instead, import CSVs into the database.
+2. **Action Space:** Provide _a well-structured and unambiguous_ set of actions—avoiding overlap like separate `read_databases` or `read_csvs`.
 
 ## Example Good Action Design
 
-- **Incremental:** Feed content in manageable chunks (500 lines or 1 page) instead of all at once.
-
-- **Overview-zoom-in:** First provide high-level structure (table of contents, summary), then allow drilling into details (raw texts).
-
-- **Parameterized/Programmable:** Instead of fixed actions, enable parameterized (columns to select) or programmable (SQL queries) actions, for example, to read CSV files.
-
-- **Backtracking:** Let the agent undo the last step instead of restarting entirely, preserving progress when encountering errors or dead ends.
+- **Incremental:** Feed content in manageable chunks instead of all at once.
+- **Overview-zoom-in:** First provide high-level structure, then allow drilling into details.
+- **Parameterized/Programmable:** Enable parameterized or programmable actions.
+- **Backtracking:** Let the agent undo the last step instead of restarting entirely.
 
 ## Example: Search Agent
 
@@ -74,78 +67,99 @@ This agent:
 2. If searches, loops back to decide if more search needed
 3. Answers when enough context gathered
 
-````python
-class DecideAction(Node):
-    def prep(self, shared):
-        context = shared.get("context", "No previous search")
-        query = shared["query"]
-        return query, context
+````typescript
+interface SharedState {
+  query?: string;
+  context?: Array<{ term: string; result: string }>;
+  search_term?: string;
+  answer?: string;
+}
 
-    def exec(self, inputs):
-        query, context = inputs
-        prompt = f"""
-Given input: {query}
-Previous search results: {context}
+class DecideAction extends Node<SharedState> {
+  async prep(shared: SharedState): Promise<[string, string]> {
+    const context = shared.context
+      ? JSON.stringify(shared.context)
+      : 'No previous search';
+    return [shared.query || '', context];
+  }
+
+  async exec([query, context]: [string, string]): Promise<any> {
+    const prompt = `
+Given input: ${query}
+Previous search results: ${context}
 Should I: 1) Search web for more info 2) Answer with current knowledge
 Output in yaml:
-```yaml
+\`\`\`yaml
 action: search/answer
 reason: why this action
 search_term: search phrase if action is search
-```"""
-        resp = call_llm(prompt)
-        yaml_str = resp.split("```yaml")[1].split("```")[0].strip()
-        result = yaml.safe_load(yaml_str)
+\`\`\``;
+    const resp = await callLlm(prompt);
+    const yamlStr = resp.split('```yaml')[1].split('```')[0].trim();
+    return yaml.load(yamlStr);
+  }
 
-        assert isinstance(result, dict)
-        assert "action" in result
-        assert "reason" in result
-        assert result["action"] in ["search", "answer"]
-        if result["action"] == "search":
-            assert "search_term" in result
+  async post(
+    shared: SharedState,
+    _: [string, string],
+    result: any,
+  ): Promise<string> {
+    if (result.action === 'search') {
+      shared.search_term = result.search_term;
+    }
+    return result.action;
+  }
+}
 
-        return result
+class SearchWeb extends Node<SharedState> {
+  async prep(shared: SharedState): Promise<string> {
+    return shared.search_term || '';
+  }
 
-    def post(self, shared, prep_res, exec_res):
-        if exec_res["action"] == "search":
-            shared["search_term"] = exec_res["search_term"]
-        return exec_res["action"]
+  async exec(searchTerm: string): Promise<string> {
+    return await searchWeb(searchTerm);
+  }
 
-class SearchWeb(Node):
-    def prep(self, shared):
-        return shared["search_term"]
+  async post(shared: SharedState, _: string, execRes: string): Promise<string> {
+    shared.context = [
+      ...(shared.context || []),
+      { term: shared.search_term || '', result: execRes },
+    ];
+    return 'decide';
+  }
+}
 
-    def exec(self, search_term):
-        return search_web(search_term)
+class DirectAnswer extends Node<SharedState> {
+  async prep(shared: SharedState): Promise<[string, string]> {
+    return [
+      shared.query || '',
+      shared.context ? JSON.stringify(shared.context) : '',
+    ];
+  }
 
-    def post(self, shared, prep_res, exec_res):
-        prev_searches = shared.get("context", [])
-        shared["context"] = prev_searches + [
-            {"term": shared["search_term"], "result": exec_res}
-        ]
-        return "decide"
+  async exec([query, context]: [string, string]): Promise<string> {
+    return await callLlm(`Context: ${context}\nAnswer: ${query}`);
+  }
 
-class DirectAnswer(Node):
-    def prep(self, shared):
-        return shared["query"], shared.get("context", "")
+  async post(
+    shared: SharedState,
+    _: [string, string],
+    execRes: string,
+  ): Promise<undefined> {
+    shared.answer = execRes;
+    return undefined;
+  }
+}
 
-    def exec(self, inputs):
-        query, context = inputs
-        return call_llm(f"Context: {context}\nAnswer: {query}")
+// Connect nodes
+const decide = new DecideAction();
+const search = new SearchWeb();
+const answer = new DirectAnswer();
 
-    def post(self, shared, prep_res, exec_res):
-       print(f"Answer: {exec_res}")
-       shared["answer"] = exec_res
+decide.on('search', search);
+decide.on('answer', answer);
+search.on('decide', decide); // Loop back
 
-# Connect nodes
-decide = DecideAction()
-search = SearchWeb()
-answer = DirectAnswer()
-
-decide - "search" >> search
-decide - "answer" >> answer
-search - "decide" >> decide  # Loop back
-
-flow = Flow(start=decide)
-flow.run({"query": "Who won the Nobel Prize in Physics 2024?"})
+const flow = new Flow(decide);
+await flow.run({ query: 'Who won the Nobel Prize in Physics 2024?' });
 ````

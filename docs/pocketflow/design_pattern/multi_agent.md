@@ -10,56 +10,102 @@ nav_order: 6
 Multiple [Agents](./flow.md) can work together by handling subtasks and communicating the progress.
 Communication between agents is typically implemented using message queues in shared storage.
 
-::: tip Best Practice
-Most of time, you don't need Multi-Agents. Start with a simple solution first.
-:::
+> Most of time, you don't need Multi-Agents. Start with a simple solution first.
+> {: .best-practice }
 
 ### Example Agent Communication: Message Queue
 
-Here's a simple example showing how to implement agent communication using `asyncio.Queue`.
+Here's a simple example showing how to implement agent communication using a TypeScript message queue.
 The agent listens for messages, processes them, and continues listening:
 
-```python
-class AgentNode(AsyncNode):
-    async def prep_async(self, _):
-        message_queue = self.params["messages"]
-        message = await message_queue.get()
-        print(f"Agent received: {message}")
-        return message
+```typescript
+import { Node, Flow } from '../src/index';
 
-# Create node and flow
-agent = AgentNode()
-agent >> agent  # connect to self
-flow = AsyncFlow(start=agent)
+// Define shared storage with message queue
+type SharedStorage = {
+  messages: string[];
+  processing?: boolean;
+};
 
-# Create heartbeat sender
-async def send_system_messages(message_queue):
-    counter = 0
-    messages = [
-        "System status: all systems operational",
-        "Memory usage: normal",
-        "Network connectivity: stable",
-        "Processing load: optimal"
-    ]
+class AgentNode extends Node<SharedStorage> {
+  async prep(shared: SharedStorage): Promise<string | undefined> {
+    // Check if there are messages to process
+    if (shared.messages.length === 0) {
+      return undefined;
+    }
+    // Get the next message
+    return shared.messages.shift();
+  }
 
-    while True:
-        message = f"{messages[counter % len(messages)]} | timestamp_{counter}"
-        await message_queue.put(message)
-        counter += 1
-        await asyncio.sleep(1)
+  async exec(message: string | undefined): Promise<string | undefined> {
+    if (!message) {
+      return undefined;
+    }
+    console.log(`Agent received: ${message}`);
+    return message;
+  }
 
-async def main():
-    message_queue = asyncio.Queue()
-    shared = {}
-    flow.set_params({"messages": message_queue})
+  async post(
+    shared: SharedStorage,
+    prepRes: string | undefined,
+    execRes: string | undefined,
+  ): Promise<string> {
+    if (shared.messages.length === 0) {
+      // Add a small delay to avoid tight loop CPU consumption
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    // Continue processing messages
+    return 'continue';
+  }
+}
 
-    # Run both coroutines
-    await asyncio.gather(
-        flow.run_async(shared),
-        send_system_messages(message_queue)
-    )
+// Message sender function
+function sendSystemMessages(shared: SharedStorage) {
+  let counter = 0;
+  const messages = [
+    'System status: all systems operational',
+    'Memory usage: normal',
+    'Network connectivity: stable',
+    'Processing load: optimal',
+  ];
 
-asyncio.run(main())
+  // Add a new message every second
+  let intervalId: NodeJS.Timeout;
+  intervalId = setInterval(() => {
+    const message = `${
+      messages[counter % messages.length]
+    } | timestamp_${counter}`;
+    shared.messages.push(message);
+    counter++;
+
+    // Stop after a few messages for demonstration
+    if (counter >= 10) {
+      clearInterval(intervalId);
+    }
+  }, 1000);
+}
+
+async function main() {
+  // Create shared storage with empty message queue
+  const shared: SharedStorage = {
+    messages: [],
+  };
+
+  // Create agent node
+  const agent = new AgentNode();
+  agent.on('continue', agent); // Connect to self to continue processing
+
+  // Create flow
+  const flow = new Flow(agent);
+
+  // Start sending messages
+  sendSystemMessages(shared);
+
+  // Run the flow
+  await flow.run(shared);
+}
+
+main().catch(console.error);
 ```
 
 The output:
@@ -69,6 +115,12 @@ Agent received: System status: all systems operational | timestamp_0
 Agent received: Memory usage: normal | timestamp_1
 Agent received: Network connectivity: stable | timestamp_2
 Agent received: Processing load: optimal | timestamp_3
+Agent received: System status: all systems operational | timestamp_4
+Agent received: Memory usage: normal | timestamp_5
+Agent received: Network connectivity: stable | timestamp_6
+Agent received: Processing load: optimal | timestamp_7
+Agent received: System status: all systems operational | timestamp_8
+Agent received: Memory usage: normal | timestamp_9
 ```
 
 ### Interactive Multi-Agent Example: Taboo Game
@@ -76,93 +128,212 @@ Agent received: Processing load: optimal | timestamp_3
 Here's a more complex example where two agents play the word-guessing game Taboo.
 One agent provides hints while avoiding forbidden words, and another agent tries to guess the target word:
 
-```python
-class AsyncHinter(AsyncNode):
-    async def prep_async(self, shared):
-        guess = await shared["hinter_queue"].get()
-        if guess == "GAME_OVER":
-            return None
-        return shared["target_word"], shared["forbidden_words"], shared.get("past_guesses", [])
+```typescript
+import { Node, Flow } from '../src/index';
 
-    async def exec_async(self, inputs):
-        if inputs is None:
-            return None
-        target, forbidden, past_guesses = inputs
-        prompt = f"Generate hint for '{target}'\nForbidden words: {forbidden}"
-        if past_guesses:
-            prompt += f"\nPrevious wrong guesses: {past_guesses}\nMake hint more specific."
-        prompt += "\nUse at most 5 words."
+// Define shared storage for the game
+type SharedStorage = {
+  targetWord: string;
+  forbiddenWords: string[];
+  pastGuesses: string[];
+  hinterQueue: string[];
+  guesserQueue: string[];
+  gameOver: boolean;
+};
 
-        hint = call_llm(prompt)
-        print(f"\nHinter: Here's your hint - {hint}")
-        return hint
+// Utility function to simulate LLM call
+function callLLM(prompt: string): string {
+  // In a real implementation, this would call an actual LLM API
+  console.log(`[LLM PROMPT]: ${prompt}`);
 
-    async def post_async(self, shared, prep_res, exec_res):
-        if exec_res is None:
-            return "end"
-        await shared["guesser_queue"].put(exec_res)
-        return "continue"
+  // For demonstration, return predefined responses
+  if (prompt.includes('Generate hint')) {
+    if (prompt.includes('popsicle')) {
+      return 'When childhood cartoons make you emotional';
+    }
+    if (prompt.includes('nostalgic')) {
+      return 'When old songs move you';
+    }
+    if (prompt.includes('memories')) {
+      return 'That warm emotion about childhood';
+    }
+    return 'Thinking of childhood summer days';
+  } else if (prompt.includes('Given hint')) {
+    if (prompt.includes('Thinking of childhood summer days')) {
+      return 'popsicle';
+    }
+    if (prompt.includes('When childhood cartoons make you emotional')) {
+      return 'nostalgic';
+    }
+    if (prompt.includes('When old songs move you')) {
+      return 'memories';
+    }
+    if (prompt.includes('That warm emotion about childhood')) {
+      return 'nostalgia';
+    }
+    return 'unknown';
+  }
+  return 'no response';
+}
 
-class AsyncGuesser(AsyncNode):
-    async def prep_async(self, shared):
-        hint = await shared["guesser_queue"].get()
-        return hint, shared.get("past_guesses", [])
-
-    async def exec_async(self, inputs):
-        hint, past_guesses = inputs
-        prompt = f"Given hint: {hint}, past wrong guesses: {past_guesses}, make a new guess. Directly reply a single word:"
-        guess = call_llm(prompt)
-        print(f"Guesser: I guess it's - {guess}")
-        return guess
-
-    async def post_async(self, shared, prep_res, exec_res):
-        if exec_res.lower() == shared["target_word"].lower():
-            print("Game Over - Correct guess!")
-            await shared["hinter_queue"].put("GAME_OVER")
-            return "end"
-
-        if "past_guesses" not in shared:
-            shared["past_guesses"] = []
-        shared["past_guesses"].append(exec_res)
-
-        await shared["hinter_queue"].put(exec_res)
-        return "continue"
-
-async def main():
-    # Set up game
-    shared = {
-        "target_word": "nostalgia",
-        "forbidden_words": ["memory", "past", "remember", "feeling", "longing"],
-        "hinter_queue": asyncio.Queue(),
-        "guesser_queue": asyncio.Queue()
+// Hinter agent that provides clues
+class Hinter extends Node<SharedStorage> {
+  async prep(shared: SharedStorage): Promise<any> {
+    if (shared.gameOver) {
+      return null;
     }
 
-    print("Game starting!")
-    print(f"Target word: {shared['target_word']}")
-    print(f"Forbidden words: {shared['forbidden_words']}")
+    // Wait for a message in the hinter queue
+    while (shared.hinterQueue.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (shared.gameOver) return null;
+    }
 
-    # Initialize by sending empty guess to hinter
-    await shared["hinter_queue"].put("")
+    const guess = shared.hinterQueue.shift();
+    if (guess === 'GAME_OVER') {
+      shared.gameOver = true;
+      return null;
+    }
 
-    # Create nodes and flows
-    hinter = AsyncHinter()
-    guesser = AsyncGuesser()
+    return {
+      target: shared.targetWord,
+      forbidden: shared.forbiddenWords,
+      pastGuesses: shared.pastGuesses,
+    };
+  }
 
-    # Set up flows
-    hinter_flow = AsyncFlow(start=hinter)
-    guesser_flow = AsyncFlow(start=guesser)
+  async exec(inputs: any): Promise<string | null> {
+    if (inputs === null) {
+      return null;
+    }
 
-    # Connect nodes to themselves
-    hinter - "continue" >> hinter
-    guesser - "continue" >> guesser
+    const { target, forbidden, pastGuesses } = inputs;
+    let prompt = `Generate hint for '${target}'\nForbidden words: ${forbidden.join(
+      ', ',
+    )}`;
 
-    # Run both agents concurrently
-    await asyncio.gather(
-        hinter_flow.run_async(shared),
-        guesser_flow.run_async(shared)
-    )
+    if (pastGuesses && pastGuesses.length > 0) {
+      prompt += `\nPrevious wrong guesses: ${pastGuesses.join(
+        ', ',
+      )}\nMake hint more specific.`;
+    }
 
-asyncio.run(main())
+    prompt += '\nUse at most 5 words.';
+
+    const hint = callLLM(prompt);
+    console.log(`\nHinter: Here's your hint - ${hint}`);
+    return hint;
+  }
+
+  async post(
+    shared: SharedStorage,
+    prepRes: any,
+    execRes: string | null,
+  ): Promise<string> {
+    if (execRes === null) {
+      return 'end';
+    }
+
+    // Send the hint to the guesser
+    shared.guesserQueue.push(execRes);
+    return 'continue';
+  }
+}
+
+// Guesser agent that tries to guess the word
+class Guesser extends Node<SharedStorage> {
+  async prep(shared: SharedStorage): Promise<any> {
+    if (shared.gameOver) {
+      return null;
+    }
+
+    // Wait for a hint in the guesser queue
+    while (shared.guesserQueue.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (shared.gameOver) return null;
+    }
+
+    const hint = shared.guesserQueue.shift();
+    return {
+      hint,
+      pastGuesses: shared.pastGuesses,
+    };
+  }
+
+  async exec(inputs: any): Promise<string | null> {
+    if (inputs === null) {
+      return null;
+    }
+
+    const { hint, pastGuesses } = inputs;
+    const prompt = `Given hint: ${hint}, past wrong guesses: ${pastGuesses.join(
+      ', ',
+    )}, make a new guess. Directly reply a single word:`;
+
+    const guess = callLLM(prompt);
+    console.log(`Guesser: I guess it's - ${guess}`);
+    return guess;
+  }
+
+  async post(
+    shared: SharedStorage,
+    prepRes: any,
+    execRes: string | null,
+  ): Promise<string> {
+    if (execRes === null) {
+      return 'end';
+    }
+
+    if (execRes.toLowerCase() === shared.targetWord.toLowerCase()) {
+      console.log('Game Over - Correct guess!');
+      shared.gameOver = true;
+      shared.hinterQueue.push('GAME_OVER');
+      return 'end';
+    }
+
+    // Add to past guesses
+    shared.pastGuesses.push(execRes);
+
+    // Send the guess to the hinter
+    shared.hinterQueue.push(execRes);
+    return 'continue';
+  }
+}
+
+async function main() {
+  // Set up game
+  const shared: SharedStorage = {
+    targetWord: 'nostalgia',
+    forbiddenWords: ['memory', 'past', 'remember', 'feeling', 'longing'],
+    pastGuesses: [],
+    hinterQueue: [],
+    guesserQueue: [],
+    gameOver: false,
+  };
+
+  console.log('Game starting!');
+  console.log(`Target word: ${shared.targetWord}`);
+  console.log(`Forbidden words: ${shared.forbiddenWords.join(', ')}`);
+
+  // Initialize by sending empty guess to hinter
+  shared.hinterQueue.push('');
+
+  // Create agents
+  const hinter = new Hinter();
+  const guesser = new Guesser();
+
+  // Set up flows
+  hinter.on('continue', hinter);
+  guesser.on('continue', guesser);
+
+  const hinterFlow = new Flow(hinter);
+  const guesserFlow = new Flow(guesser);
+
+  // Run both agents
+  await Promise.all([hinterFlow.run(shared), guesserFlow.run(shared)]);
+}
+
+main().catch(console.error);
 ```
 
 The Output:
@@ -170,18 +341,48 @@ The Output:
 ```
 Game starting!
 Target word: nostalgia
-Forbidden words: ['memory', 'past', 'remember', 'feeling', 'longing']
+Forbidden words: memory, past, remember, feeling, longing
+
+[LLM PROMPT]: Generate hint for 'nostalgia'
+Forbidden words: memory, past, remember, feeling, longing
+Use at most 5 words.
 
 Hinter: Here's your hint - Thinking of childhood summer days
+
+[LLM PROMPT]: Given hint: Thinking of childhood summer days, past wrong guesses: , make a new guess. Directly reply a single word:
 Guesser: I guess it's - popsicle
 
+[LLM PROMPT]: Generate hint for 'nostalgia'
+Forbidden words: memory, past, remember, feeling, longing
+Previous wrong guesses: popsicle
+Make hint more specific.
+Use at most 5 words.
+
 Hinter: Here's your hint - When childhood cartoons make you emotional
+
+[LLM PROMPT]: Given hint: When childhood cartoons make you emotional, past wrong guesses: popsicle, make a new guess. Directly reply a single word:
 Guesser: I guess it's - nostalgic
 
+[LLM PROMPT]: Generate hint for 'nostalgia'
+Forbidden words: memory, past, remember, feeling, longing
+Previous wrong guesses: popsicle, nostalgic
+Make hint more specific.
+Use at most 5 words.
+
 Hinter: Here's your hint - When old songs move you
+
+[LLM PROMPT]: Given hint: When old songs move you, past wrong guesses: popsicle, nostalgic, make a new guess. Directly reply a single word:
 Guesser: I guess it's - memories
 
+[LLM PROMPT]: Generate hint for 'nostalgia'
+Forbidden words: memory, past, remember, feeling, longing
+Previous wrong guesses: popsicle, nostalgic, memories
+Make hint more specific.
+Use at most 5 words.
+
 Hinter: Here's your hint - That warm emotion about childhood
+
+[LLM PROMPT]: Given hint: That warm emotion about childhood, past wrong guesses: popsicle, nostalgic, memories, make a new guess. Directly reply a single word:
 Guesser: I guess it's - nostalgia
 Game Over - Correct guess!
 ```
