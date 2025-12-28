@@ -48,8 +48,14 @@ When updating CHANGELOG.md:
 ### Directory organization
 
 - `src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
+  - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
+  - `frontend/ui/` - Dialog helpers, diff views, message utilities
+  - `frontend/editor/` - Active file guards and editor utilities
 - `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
+  - `common/state/` - State managers including `pendingStateManager`
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
+  - `utils/core/` - Async utilities (`debounce`, `withTimeout`, `delay`)
+  - `utils/files/` - Filesystem utilities, rules, and vars
 
 ### Pragmatic implementations
 
@@ -134,7 +140,36 @@ if (input.optional == null) {
 }
 ```
 
+When passing nullish tool values to functions expecting `T | undefined` (not `T | null | undefined`), coalesce to undefined:
+
+```typescript
+// Function expects string | undefined, but .nullish() gives string | null | undefined
+const result = processPath(input.path ?? undefined);
+```
+
 See: https://platform.openai.com/docs/guides/structured-outputs
+
+### ES2023+ Patterns
+
+Use modern JavaScript features available with ES2022+ target:
+
+```typescript
+// Use findLast() for reverse array search
+const lastMessage = messages.findLast((m) => m.role === 'assistant');
+
+// Use ??= for lazy initialization
+this._builder ??= new PromptBuilder();
+
+// Use optional chaining consistently
+abortController?.abort();
+if (!runStage?.id) return;
+
+// Use ?? false for boolean coercion (not || false)
+const isEnabled = config.enabled ?? false;
+
+// Iterate Sets directly without Array.from()
+for (const item of mySet) { ... }
+```
 
 ### Refactoring for simplicity
 
@@ -164,6 +199,17 @@ Aim for code that looks like it was designed correctly from the start:
 - Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
 - Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgent` or `runPreparedAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
+
+**PocketFlow architecture**
+
+Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
+
+- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowServices`.
+- **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
+- **Flow transitions** use `FlowTransition.DEFAULT` instead of magic `undefined` for clarity.
+- Node lifecycle: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Use constants `NODE_NO_RETRY` and `NODE_NO_WAIT` for node configuration.
+
+See `docs/pocketflow/` for full framework documentation.
 
 **Webviews and UI**
 
@@ -197,7 +243,7 @@ Aim for code that looks like it was designed correctly from the start:
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup
+- **Base Classes**: All webviews extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup. UI managers extend `BaseUIManager` from `src/common/modules/BaseUIManager.js`.
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
@@ -206,6 +252,7 @@ Aim for code that looks like it was designed correctly from the start:
 - **Module Structure**: Keep UI managers focused on a single responsibility
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
+- **CSS Organization**: Keep per-component styles in view-specific `styles/` directories, shared tokens in `src/common/styles/common.css`
 
 ### Source Organization
 
