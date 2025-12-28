@@ -119,10 +119,3 @@ function defaultChildTimestamp(child) {
   }
   return null;
 }
-
-// Re-export clipboard utilities from common module
-export {
-  COPY_RESET_DELAY_MS,
-  copyTextToClipboard,
-  copyWithFeedback,
-} from '@common/modules/clipboardUtils.js';
