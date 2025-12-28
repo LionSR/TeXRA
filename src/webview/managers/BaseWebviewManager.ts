@@ -24,7 +24,10 @@ export abstract class BaseWebviewManager {
     return this.webview;
   }
 
-  protected postMessage(message: { command: string; [key: string]: unknown }): void {
+  protected postMessage(message: {
+    command: string;
+    [key: string]: unknown;
+  }): void {
     const webviewView = this.getWebview();
     if (webviewView) {
       webviewView.webview.postMessage(message);

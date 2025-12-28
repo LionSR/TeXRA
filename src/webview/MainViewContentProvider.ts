@@ -20,7 +20,6 @@ const MAIN_VIEW_MODULES = [
   { key: 'eventBusUri', path: 'modules/eventBus.js' },
   { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
   { key: 'fileSelectUri', path: 'modules/uiManagers/FileSelect.js' },
-  { key: 'baseUIManagerUri', path: 'modules/uiManagers/BaseUIManager.js' },
   {
     key: 'fileInputManagerUri',
     path: 'modules/uiManagers/FileInputManager.js',

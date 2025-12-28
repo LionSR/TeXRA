@@ -13,7 +13,9 @@
    ========================================================================== */
 
 /* ==========================================================================
-   Interactive - Copy button base behavior
+   Interactive - Copy button behavior
+   Base .copy-button class is in common.css
+   These are view-specific selectors that extend the pattern
    ========================================================================== */
 
 .banner-content-copy,
@@ -30,5 +32,5 @@
 
 .banner-content-copy.copy-success,
 .instruction-panel__copy.copy-success {
-  color: var(--vscode-testing-iconPassed);
+  color: var(--color-success);
 }
