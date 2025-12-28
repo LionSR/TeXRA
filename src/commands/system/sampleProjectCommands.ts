@@ -2,12 +2,13 @@
 import * as path from 'path';
 
 // Third-party imports
+import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports - fs
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS, copyDirToFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'SampleProjectCommands';
 logger.initialize(CHANNEL);
@@ -44,7 +45,10 @@ export function registerSampleProjectCommands(
           'examples',
         );
 
-        await copyDirToFS(sourcePath, destFolder, WorkspaceFS);
+        await WorkspaceFS.ensureDir(destFolder);
+        await fsExtra.copy(sourcePath, WorkspaceFS.fullPath(destFolder), {
+          overwrite: true,
+        });
 
         void vscode.window.showInformationMessage(
           'Created TeXRA sample project.',

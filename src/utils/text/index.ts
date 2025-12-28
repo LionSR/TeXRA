@@ -1,4 +1,8 @@
+// String utilities
 export * from './stringUtils';
-export * from './xmlUtils';
+
+// Text enhancement
 export * from './textEnhancementUtils';
-export { xmlUtils as default } from './xmlUtils';
+
+// Note: XML utilities are imported directly from '@utils/text/xmlUtils'
+// to avoid a double re-export chain (index → xmlUtils → submodules)
