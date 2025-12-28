@@ -100,6 +100,14 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
+/** XML structure enforcement modes for workflow agents. */
+export const XmlStructureMode = z.enum([
+  'never', // Never ensure XML structure (default for BaseReflectionAgent)
+  'scratchpadOnly', // Only when useScratchpad is true (DirectAgent behavior)
+  'always', // Always ensure XML structure (CoTAgent behavior)
+]);
+export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
+
 /** Workflow agents: CoT or Direct patterns with workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
@@ -111,6 +119,25 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
+
+  // === Flow-first behavior configuration ===
+  // These replace subclass polymorphism with explicit configuration
+
+  /**
+   * Maximum rounds to execute. When set, overrides the default calculation.
+   * - undefined: Use max(rounds, userRequest.length) (default)
+   * - 1: Single-pass processing (like DirectAgent)
+   * - N: Fixed number of rounds
+   */
+  maxRounds: z.number().optional(),
+
+  /**
+   * XML structure enforcement mode.
+   * - 'never': Don't ensure XML structure (default)
+   * - 'scratchpadOnly': Only when prefills include scratchpad (DirectAgent)
+   * - 'always': Always ensure XML structure (CoTAgent)
+   */
+  xmlStructureMode: XmlStructureMode.optional(),
 });
 
 /** Tool-use agents: interactive agents with tool-calling capabilities. */
