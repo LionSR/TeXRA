@@ -191,21 +191,8 @@ export class SupabaseClient {
         return defaultContext;
       }
 
-      // Validate and parse with Zod schema, fallback to defaults for invalid fields
-      const result = UserAuthContextSchema.safeParse({
-        tier: data.tier ?? 'free',
-        permissions: data.permissions ?? [],
-      });
-
-      if (!result.success) {
-        logger.warn(
-          'SupabaseClient',
-          `Invalid profile data: ${result.error.message}`,
-        );
-        return defaultContext;
-      }
-
-      return result.data;
+      // Parse with Zod schema - defaults are defined in schema via .prefault()
+      return UserAuthContextSchema.catch(defaultContext).parse(data);
     } catch (error) {
       logger.error(
         'SupabaseClient',
