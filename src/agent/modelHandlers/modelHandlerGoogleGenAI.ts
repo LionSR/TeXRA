@@ -87,6 +87,16 @@ function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
 
+/** Extract concatenated text from parts, excluding thought parts */
+function extractNonThinkingText(parts: Part[], trim = false): string {
+  const text = parts
+    .filter((part): part is Part & { text: string } => isTextPart(part))
+    .filter((part) => !part.thought)
+    .map((part) => part.text)
+    .join('');
+  return trim ? text.trim() : text;
+}
+
 /**
  * Validates that messages have proper alternating user/model turns.
  * All message creation should enforce this natively, so this is a safety check.
@@ -193,11 +203,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
-      // SDK only exports LOW/HIGH; Gemini 3 Flash supports MEDIUM via API but SDK lacks enum
-      this.logger.warn(
-        "SDK ThinkingLevel enum doesn't include 'MEDIUM'. Falling back to 'HIGH'.",
-      );
-      return ThinkingLevel.HIGH;
+      return ThinkingLevel.MEDIUM;
     }
 
     if (requestedLevel === ReasoningEffort.LOW) {
@@ -581,11 +587,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
 
-        const nonThinkingText = aggregatedParts
-          .filter((part): part is Part & { text: string } => isTextPart(part))
-          .filter((part) => !part.thought)
-          .map((part) => part.text)
-          .join('');
+        const nonThinkingText = extractNonThinkingText(aggregatedParts);
 
         let finalOutputText = aggregatedText || nonThinkingText;
         if (!finalOutputText && baseResponse.text) {
@@ -800,12 +802,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // The getter may use cached values that don't reflect mutations we made
     // to the candidates array during streaming (lines 536-550, 577-584).
     // Filter out thought parts and concatenate text from remaining parts.
-    const rawResponseText = parts
-      .filter((part): part is Part & { text: string } => isTextPart(part))
-      .filter((part) => !part.thought)
-      .map((part) => part.text)
-      .join('')
-      .trim();
+    const rawResponseText = extractNonThinkingText(parts, true);
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = replacementEngine.applyAll(rawResponseText);
