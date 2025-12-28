@@ -5,9 +5,8 @@ title: 'Agentic Coding'
 
 # Agentic Coding: Humans Design, Agents code!
 
-::: warning
-If you are an AI agent involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
-:::
+> If you are an AI agents involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
+> {: .warning }
 
 ## Agentic Coding Steps
 
@@ -18,11 +17,10 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
 | 1. Requirements   |  ★★★ High  |  ★☆☆ Low   | Humans understand the requirements and context.                                                |
 | 2. Flow           | ★★☆ Medium | ★★☆ Medium | Humans specify the high-level design, and the AI fills in the details.                         |
 | 3. Utilities      | ★★☆ Medium | ★★☆ Medium | Humans provide available external APIs and integrations, and the AI helps with implementation. |
-| 4. Data           |  ★☆☆ Low   |  ★★★ High  | AI designs the data schema, and humans verify.                                                 |
-| 5. Node           |  ★☆☆ Low   |  ★★★ High  | The AI helps design the node based on the flow.                                                |
-| 6. Implementation |  ★☆☆ Low   |  ★★★ High  | The AI implements the flow based on the design.                                                |
-| 7. Optimization   | ★★☆ Medium | ★★☆ Medium | Humans evaluate the results, and the AI helps optimize.                                        |
-| 8. Reliability    |  ★☆☆ Low   |  ★★★ High  | The AI writes test cases and addresses corner cases.                                           |
+| 4. Node           |  ★☆☆ Low   |  ★★★ High  | The AI helps design the node types and data handling based on the flow.                        |
+| 5. Implementation |  ★☆☆ Low   |  ★★★ High  | The AI implements the flow based on the design.                                                |
+| 6. Optimization   | ★★☆ Medium | ★★☆ Medium | Humans evaluate the results, and the AI helps optimize.                                        |
+| 7. Reliability    |  ★☆☆ Low   |  ★★★ High  | The AI writes test cases and addresses corner cases.                                           |
 
 1. **Requirements**: Clarify the requirements for your project, and evaluate whether an AI system is a good fit.
    - Understand AI systems' strengths and limitations:
@@ -55,9 +53,8 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
          process --> endNode[End]
      ```
 
-   ::: tip Best Practice
-   **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.
-   :::
+   - > **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.  
+     > {: .best-practice }
 
 3. **Utilities**: Based on the Flow Design, identify and implement necessary utility functions.
    - Think of your AI system as the brain. It needs a body—these _external utility functions_—to interact with the real world:
@@ -69,290 +66,223 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
 
    - For each utility function, implement it and write a simple test.
    - Document their input/output, as well as why they are necessary. For example:
-     - `name`: `get_embedding` (`utils/get_embedding.py`)
-     - `input`: `str`
-     - `output`: a vector of 3072 floats
+     - `name`: `getEmbedding` (`src/utils/getEmbedding.ts`)
+     - `input`: `string`
+     - `output`: a vector of 3072 numbers
      - `necessity`: Used by the second node to embed text
    - Example utility implementation:
 
-     ```python
-     # utils/call_llm.py
-     from openai import OpenAI
+     ```typescript
+     // src/utils/callLlm.ts
+     import { OpenAI } from 'openai';
 
-     def call_llm(prompt):
-         client = OpenAI(api_key="YOUR_API_KEY_HERE")
-         r = client.chat.completions.create(
-             model="gpt-4o",
-             messages=[{"role": "user", "content": prompt}]
-         )
-         return r.choices[0].message.content
+     export async function callLlm(prompt: string): Promise<string> {
+       const client = new OpenAI({
+         apiKey: process.env.OPENAI_API_KEY,
+       });
 
-     if __name__ == "__main__":
-         prompt = "What is the meaning of life?"
-         print(call_llm(prompt))
+       const response = await client.chat.completions.create({
+         model: 'gpt-4o',
+         messages: [{ role: 'user', content: prompt }],
+       });
+
+       return response.choices[0].message.content || '';
+     }
      ```
 
-   ::: tip Best Practice
-   **Sometimes, design Utilities before Flow:** For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
-   :::
+   - > **Sometimes, design Utilies before Flow:** For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
+     > {: .best-practice }
 
-   ::: warning
-   **Avoid Exception Handling in Utilities**: If a utility function is called from a Node's `exec()` method, avoid using `try...except` blocks within the utility. Let the Node's built-in retry mechanism handle failures.
-   :::
-
-4. **Data Design**: Design the shared store that nodes will use to communicate.
-   - One core design principle for PocketFlow is to use a well-designed [shared store](./core_abstraction/communication.md)—a data contract that all nodes agree upon to retrieve and store data.
-     - For simple systems, use an in-memory dictionary.
+4. **Node Design**: Plan how each node will read and write data, and use utility functions.
+   - One core design principle for PocketFlow is to use a [shared store](./core_abstraction/communication.md), so start with a shared store design:
+     - For simple systems, use an in-memory object.
      - For more complex systems or when persistence is required, use a database.
      - **Don't Repeat Yourself**: Use in-memory references or foreign keys.
      - Example shared store design:
-       ```python
-       shared = {
-           "user": {
-               "id": "user123",
-               "context": {                # Another nested dict
-                   "weather": {"temp": 72, "condition": "sunny"},
-                   "location": "San Francisco"
-               }
-           },
-           "results": {}                   # Empty dict to store outputs
+
+       ```typescript
+       interface SharedStore {
+         user: {
+           id: string;
+           context: {
+             weather: { temp: number; condition: string };
+             location: string;
+           };
+         };
+         results: Record<string, unknown>;
        }
+
+       const shared: SharedStore = {
+         user: {
+           id: 'user123',
+           context: {
+             weather: { temp: 72, condition: 'sunny' },
+             location: 'San Francisco',
+           },
+         },
+         results: {}, // Empty object to store outputs
+       };
        ```
 
-5. **Node Design**: Plan how each node will read and write data, and use utility functions.
    - For each [Node](./core_abstraction/node.md), describe its type, how it reads and writes data, and which utility function it uses. Keep it specific but high-level without codes. For example:
-     - `type`: Regular (or Batch, or Async)
+     - `type`: Node (or BatchNode, or ParallelBatchNode)
      - `prep`: Read "text" from the shared store
-     - `exec`: Call the embedding utility function. **Avoid exception handling here**; let the Node's retry mechanism manage failures.
+     - `exec`: Call the embedding utility function
      - `post`: Write "embedding" to the shared store
 
-6. **Implementation**: Implement the initial nodes and flows based on the design.
+5. **Implementation**: Implement the initial nodes and flows based on the design.
    - 🎉 If you've reached this step, humans have finished the design. Now _Agentic Coding_ begins!
    - **"Keep it simple, stupid!"** Avoid complex features and full-scale type checking.
-   - **FAIL FAST**! Leverage the built-in [Node](./core_abstraction/node.md) retry and fallback mechanisms to handle failures gracefully. This helps you quickly identify weak points in the system.
+   - **FAIL FAST**! Avoid `try` logic so you can quickly identify any weak points in the system.
    - Add logging throughout the code to facilitate debugging.
 
-7. **Optimization**:
+6. **Optimization**:
    - **Use Intuition**: For a quick initial evaluation, human intuition is often a good start.
    - **Redesign Flow (Back to Step 3)**: Consider breaking down tasks further, introducing agentic decisions, or better managing input contexts.
    - If your flow design is already solid, move on to micro-optimizations:
      - **Prompt Engineering**: Use clear, specific instructions with examples to reduce ambiguity.
      - **In-Context Learning**: Provide robust examples for tasks that are difficult to specify with instructions alone.
 
-   ::: tip Best Practice
-   **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
+   - > **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
+     >
+     > <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/success.png?raw=true" width="400"/></div>
+     > {: .best-practice }
 
-   <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/success.png?raw=true" width="400"/></div>
-   :::
-
-8. **Reliability**
-   - **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `max_retries` and `wait` times.
+7. **Reliability**
+   - **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `maxRetries` and `wait` times.
    - **Logging and Visualization**: Maintain logs of all attempts and visualize node results for easier debugging.
    - **Self-Evaluation**: Add a separate node (powered by an LLM) to review outputs when results are uncertain.
 
 ## Example LLM Project File Structure
 
 ```
-my_project/
-├── main.py
-├── nodes.py
-├── flow.py
-├── utils/
-│   ├── __init__.py
-│   ├── call_llm.py
-│   └── search_web.py
-├── requirements.txt
-└── docs/
-    └── design.md
+my-project/
+├── src/
+│   ├── index.ts
+│   ├── nodes.ts
+│   ├── flow.ts
+│   ├── types.ts
+│   └── utils/
+│       ├── callLlm.ts
+│       └── searchWeb.ts
+├── docs/
+│   └── design.md
+├── package.json
+└── tsconfig.json
 ```
 
-- **`requirements.txt`**: Lists the Python dependencies for the project.
-
-  ```
-  PyYAML
-  pocketflow
-  ```
-
 - **`docs/design.md`**: Contains project documentation for each step above. This should be _high-level_ and _no-code_.
+- **`src/types.ts`**: Contains shared type definitions and interfaces used throughout the project.
+- **`src/utils/`**: Contains all utility functions.
+  - It's recommended to dedicate one TypeScript file to each API call, for example `callLlm.ts` or `searchWeb.ts`.
+  - Each file should export functions that can be imported elsewhere in the project
+  - Include test cases for each utility function using `utilityFunctionName.test.ts`
+- **`src/nodes.ts`**: Contains all the node definitions.
 
-  ````
-  # Design Doc: Your Project Name
-
-  > Please DON'T remove notes for AI
-
-  ## Requirements
-
-  > Notes for AI: Keep it simple and clear.
-  > If the requirements are abstract, write concrete user stories
-
-
-  ## Flow Design
-
-  > Notes for AI:
-  > 1. Consider the design patterns of agent, map-reduce, rag, and workflow. Apply them if they fit.
-  > 2. Present a concise, high-level description of the workflow.
-
-  ### Applicable Design Pattern:
-
-  1. Map the file summary into chunks, then reduce these chunks into a final summary.
-  2. Agentic file finder
-    - *Context*: The entire summary of the file
-    - *Action*: Find the file
-
-  ### Flow high-level Design:
-
-  1. **First Node**: This node is for ...
-  2. **Second Node**: This node is for ...
-  3. **Third Node**: This node is for ...
-
-  ```mermaid
-  flowchart TD
-      firstNode[First Node] --> secondNode[Second Node]
-      secondNode --> thirdNode[Third Node]
-  ```
-  ## Utility Functions
-
-  > Notes for AI:
-  > 1. Understand the utility function definition thoroughly by reviewing the doc.
-  > 2. Include only the necessary utility functions, based on nodes in the flow.
-
-  1. **Call LLM** (`utils/call_llm.py`)
-    - *Input*: prompt (str)
-    - *Output*: response (str)
-    - Generally used by most nodes for LLM tasks
-
-  2. **Embedding** (`utils/get_embedding.py`)
-    - *Input*: str
-    - *Output*: a vector of 3072 floats
-    - Used by the second node to embed text
-
-  ## Node Design
-
-  ### Shared Store
-
-  > Notes for AI: Try to minimize data redundancy
-
-  The shared store structure is organized as follows:
-
-  ```python
-  shared = {
-      "key": "value"
+  ```typescript
+  // src/types.ts
+  export interface QASharedStore {
+    question?: string;
+    answer?: string;
   }
   ```
 
-  ### Node Steps
+  ```typescript
+  // src/nodes.ts
+  import { Node } from 'pocketflow';
+  import { callLlm } from './utils/callLlm';
+  import { QASharedStore } from './types';
+  import PromptSync from 'prompt-sync';
 
-  > Notes for AI: Carefully decide whether to use Batch/Async Node/Flow.
+  const prompt = PromptSync();
 
-  1. First Node
-    - *Purpose*: Provide a short explanation of the node’s function
-    - *Type*: Decide between Regular, Batch, or Async
-    - *Steps*:
-      - *prep*: Read "key" from the shared store
-      - *exec*: Call the utility function
-      - *post*: Write "key" to the shared store
+  export class GetQuestionNode extends Node<QASharedStore> {
+    async exec(): Promise<string> {
+      // Get question directly from user input
+      const userQuestion = prompt('Enter your question: ') || '';
+      return userQuestion;
+    }
 
-  2. Second Node
-    ...
-  ````
+    async post(
+      shared: QASharedStore,
+      _: unknown,
+      execRes: string,
+    ): Promise<string | undefined> {
+      // Store the user's question
+      shared.question = execRes;
+      return 'default'; // Go to the next node
+    }
+  }
 
-- **`utils/`**: Contains all utility functions.
-  - It's recommended to dedicate one Python file to each API call, for example `call_llm.py` or `search_web.py`.
-  - Each file should also include a `main()` function to try that API call
+  export class AnswerNode extends Node<QASharedStore> {
+    async prep(shared: QASharedStore): Promise<string> {
+      // Read question from shared
+      return shared.question || '';
+    }
 
-  ```python
-  from google import genai
-  import os
+    async exec(question: string): Promise<string> {
+      // Call LLM to get the answer
+      return await callLlm(question);
+    }
 
-  def call_llm(prompt: str) -> str:
-      client = genai.Client(
-          api_key=os.getenv("GEMINI_API_KEY", ""),
-      )
-      model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-      response = client.models.generate_content(model=model, contents=[prompt])
-      return response.text
-
-  if __name__ == "__main__":
-      test_prompt = "Hello, how are you?"
-
-      # First call - should hit the API
-      print("Making call...")
-      response1 = call_llm(test_prompt, use_cache=False)
-      print(f"Response: {response1}")
+    async post(
+      shared: QASharedStore,
+      _: unknown,
+      execRes: string,
+    ): Promise<string | undefined> {
+      // Store the answer in shared
+      shared.answer = execRes;
+      return undefined;
+    }
+  }
   ```
 
-- **`nodes.py`**: Contains all the node definitions.
+- **`src/flow.ts`**: Implements functions that create flows by importing node definitions and connecting them.
 
-  ```python
-  # nodes.py
-  from pocketflow import Node
-  from utils.call_llm import call_llm
+  ```typescript
+  // src/flow.ts
+  import { Flow } from 'pocketflow';
+  import { GetQuestionNode, AnswerNode } from './nodes';
+  import { QASharedStore } from './types';
 
-  class GetQuestionNode(Node):
-      def exec(self, _):
-          # Get question directly from user input
-          user_question = input("Enter your question: ")
-          return user_question
+  export function createQaFlow(): Flow {
+    // Create nodes
+    const getQuestionNode = new GetQuestionNode();
+    const answerNode = new AnswerNode();
 
-      def post(self, shared, prep_res, exec_res):
-          # Store the user's question
-          shared["question"] = exec_res
-          return "default"  # Go to the next node
+    // Connect nodes in sequence
+    getQuestionNode.next(answerNode);
 
-  class AnswerNode(Node):
-      def prep(self, shared):
-          # Read question from shared
-          return shared["question"]
-
-      def exec(self, question):
-          # Call LLM to get the answer
-          return call_llm(question)
-
-      def post(self, shared, prep_res, exec_res):
-          # Store the answer in shared
-          shared["answer"] = exec_res
+    // Create flow starting with input node
+    return new Flow<QASharedStore>(getQuestionNode);
+  }
   ```
 
-- **`flow.py`**: Implements functions that create flows by importing node definitions and connecting them.
+- **`src/index.ts`**: Serves as the project's entry point.
 
-  ```python
-  # flow.py
-  from pocketflow import Flow
-  from nodes import GetQuestionNode, AnswerNode
+  ```typescript
+  // src/index.ts
+  import { createQaFlow } from './flow';
+  import { QASharedStore } from './types';
 
-  def create_qa_flow():
-      """Create and return a question-answering flow."""
-      # Create nodes
-      get_question_node = GetQuestionNode()
-      answer_node = AnswerNode()
+  // Example main function
+  async function main(): Promise<void> {
+    const shared: QASharedStore = {
+      question: undefined, // Will be populated by GetQuestionNode from user input
+      answer: undefined, // Will be populated by AnswerNode
+    };
 
-      # Connect nodes in sequence
-      get_question_node >> answer_node
+    // Create the flow and run it
+    const qaFlow = createQaFlow();
+    await qaFlow.run(shared);
+    console.log(`Question: ${shared.question}`);
+    console.log(`Answer: ${shared.answer}`);
+  }
 
-      # Create flow starting with input node
-      return Flow(start=get_question_node)
+  // Run the main function
+  main().catch(console.error);
   ```
 
-- **`main.py`**: Serves as the project's entry point.
+- **`package.json`**: Contains project metadata and dependencies.
 
-  ```python
-  # main.py
-  from flow import create_qa_flow
-
-  # Example main function
-  # Please replace this with your own main function
-  def main():
-      shared = {
-          "question": None,  # Will be populated by GetQuestionNode from user input
-          "answer": None     # Will be populated by AnswerNode
-      }
-
-      # Create the flow and run it
-      qa_flow = create_qa_flow()
-      qa_flow.run(shared)
-      print(f"Question: {shared['question']}")
-      print(f"Answer: {shared['answer']}")
-
-  if __name__ == "__main__":
-      main()
-  ```
+- **`tsconfig.json`**: Contains TypeScript compiler configuration.
