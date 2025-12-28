@@ -85,7 +85,7 @@ import {
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
-import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
+import { normalizeAnthropicStream } from './streaming';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -536,8 +536,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     let response: BetaMessage;
 
     if (useStreaming) {
-      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
-      // we should also make sure partial results can be returned in the presence of errors!
+      // Create SDK stream with abort handling
       const stream = await executeRequest(
         {
           model: this.config.name,
@@ -557,6 +556,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         throw abortError;
       }
 
+      // Set up abort listener
       let cleanupAbortListener: (() => void) | undefined;
       if (signal) {
         const abortListener = () => {
@@ -569,29 +569,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
         };
       }
 
-      const streamHandler = new AnthropicStreamHandler(
-        this.logger,
-        {
+      try {
+        // Use unified streaming: normalize SDK events and consume with StreamConsumer
+        const normalizedStream = normalizeAnthropicStream(stream, {
           outputEnabled: this.isOutputStreamingEnabled(),
           progressViewEnabled: this.progressViewEnabled,
-        },
-        {
-          createThinkingStream: () => this.createThinkingStream(),
-          createOutputStream: () => this.createOutputStream(),
-        },
-      );
+          provider: 'anthropic',
+          startTime: Date.now(),
+        });
 
-      try {
-        streamHandler.attachToStream(stream);
+        const result = await this.consumeNormalizedStream(normalizedStream, {
+          handleInterleavedBlocks: true, // Anthropic uses interleaved thinking/text blocks
+        });
 
-        // Note that there is no second consumption problem as per anthropic sdk examples
-        response = await stream.finalMessage();
+        // Get the raw response for further processing
+        response = result.response.raw as BetaMessage;
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } finally {
-        // Always finalize stream handler to prevent memory leaks on error
-        streamHandler.finalize();
         cleanupAbortListener?.();
       }
     } else {
