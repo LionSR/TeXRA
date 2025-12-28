@@ -1,5 +1,5 @@
 // Local imports - common helpers
-import { addEventListenerSafely } from '@common/domUtils.js';
+import { addEventListenerSafely, setVisibilityState } from '@common/domUtils.js';
 
 /**
  * Base class for UI request managers (approvals, retries, etc.)
@@ -158,8 +158,7 @@ export class BaseUIRequestManager {
       ? this.isToolAgentActive
       : true;
     const shouldShow = agentCheck && hasVisibleEntries;
-    this.container.classList.toggle('is-visible', shouldShow);
-    this.container.toggleAttribute('hidden', !shouldShow);
+    setVisibilityState(this.container, shouldShow);
   }
 
   /**

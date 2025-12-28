@@ -43,7 +43,7 @@
 .banner-details--error > .details-summary .label,
 .banner-details--error > .details-summary .codicon,
 .banner-content--error {
-  color: var(--vscode-editorError-foreground, #f14c4c);
+  color: var(--color-error);
 }
 
 .banner-content--error .error-details {
@@ -53,7 +53,7 @@
     --vscode-inputValidation-errorBackground,
     rgba(255, 0, 0, 0.1)
   );
-  border-radius: var(--radius-small, 4px);
+  border-radius: var(--border-radius-small);
 }
 
 /* Pre-wrapped text content */
