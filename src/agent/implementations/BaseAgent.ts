@@ -10,7 +10,7 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
-import type { IAgent, IFlowAgent } from '@agent/core/IAgent';
+import type { IAgent } from '@agent/core/IAgent';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { buildUserVars } from '@agent/utils/userVars';
 // Type imports

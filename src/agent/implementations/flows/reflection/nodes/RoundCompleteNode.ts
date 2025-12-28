@@ -79,8 +79,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
     const nextRound = currentRound + 1;
 
     // Check for interruption
-    const interrupted = await checkInterruption();
-    if (interrupted) {
+    if (checkInterruption()) {
       logger.debug('Interruption requested - finalizing');
       return { kind: 'finalize', reason: 'interrupted' };
     }
