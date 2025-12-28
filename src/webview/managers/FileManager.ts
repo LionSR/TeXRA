@@ -7,12 +7,18 @@ import { workspace } from 'vscode';
 
 // Local imports - webview
 import { getAgent } from '@agent/index';
-import { showLoggedMessage, toErrorMessage } from '@common/errors';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+  toErrorMessage,
+} from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { selectFiles } from '@utils/dialogs';
 import { fileLister } from '@frontend/files';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types
 import type {
@@ -39,22 +45,11 @@ type FileUpdateOptions = {
   additionalPayload?: Record<string, unknown>;
 };
 
-export class FileManager {
-  private webview: vscode.WebviewView | undefined;
+export class FileManager extends BaseWebviewManager {
+  protected readonly channel = CHANNEL;
 
-  constructor(_context: vscode.ExtensionContext) {}
-
-  attachWebview(webviewView: vscode.WebviewView): void {
-    this.webview = webviewView;
-  }
-
-  private getWebview(): vscode.WebviewView | undefined {
-    if (!this.webview) {
-      logger.warn(CHANNEL, 'Webview not attached for FileManager operation');
-      return undefined;
-    }
-
-    return this.webview;
+  constructor(_context: vscode.ExtensionContext) {
+    super();
   }
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
@@ -259,12 +254,10 @@ export class FileManager {
         });
       }
     } catch (error) {
-      logger.error(
+      await showLoggedErrorMessage(
         CHANNEL,
-        `Error in handleSelectMultipleFiles: ${toErrorMessage(error)}`,
-      );
-      vscode.window.showErrorMessage(
-        `Error selecting ${fileType}: ${toErrorMessage(error)}`,
+        `Error selecting ${fileType}`,
+        error,
       );
     }
   }
@@ -458,51 +451,26 @@ export class FileManager {
   }
 
   async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      await showLoggedMessage(CHANNEL, 'No workspace folder open');
-      return null;
-    }
-
-    const defaultUri = currentInputFile
-      ? vscode.Uri.file(
-          path.dirname(path.join(workspacePath, currentInputFile)),
-        )
-      : vscode.Uri.file(workspacePath);
-
     try {
-      const fileUris = await vscode.window.showOpenDialog({
-        canSelectMany: true,
+      const relativePaths = await selectFiles({
+        allowMany: true,
         openLabel: 'Select Output Files',
-        canSelectFiles: true,
-        canSelectFolders: false,
-        defaultUri,
         filters: { 'Text files': ['tex', 'txt', 'md'] },
+        currentFile: currentInputFile,
       });
 
-      if (!fileUris || fileUris.length === 0) {
-        return null;
+      if (relativePaths) {
+        logger.info(
+          CHANNEL,
+          `Selected output files: ${relativePaths.join(', ')}`,
+        );
+        vscode.window.showInformationMessage(
+          `Selected output files: ${relativePaths.join(', ')}`,
+        );
       }
-
-      const relativePaths = fileUris.map((uri) =>
-        WorkspaceFS.relativePath(uri.fsPath),
-      );
-      logger.info(
-        CHANNEL,
-        `Selected output files: ${relativePaths.join(', ')}`,
-      );
-      vscode.window.showInformationMessage(
-        `Selected output files: ${relativePaths.join(', ')}`,
-      );
       return relativePaths;
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error selecting output files: ${toErrorMessage(err)}`,
-      );
-      vscode.window.showErrorMessage(
-        `Error selecting output files: ${toErrorMessage(err)}`,
-      );
+      await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
       return null;
     }
   }

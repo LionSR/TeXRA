@@ -1,9 +1,28 @@
-// Local imports - logging
+/**
+ * Tool-use follow-up message handling.
+ *
+ * Provides:
+ * - Promise-based queue for follow-up messages in tool-use sessions
+ * - Static manager for queue instances indexed by stream ID
+ * - Coordination for routing follow-ups to active/resuming/pending sessions
+ */
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports
+import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
-const CHANNEL = 'ToolUseFollowUpQueue';
-const logger = new AgentLogger(CHANNEL);
+// Lazy imports to avoid circular dependency
+// ToolUseSessionManager and ToolUseSessionPersistence are imported at runtime
+
+const logger = new AgentLogger('ToolUseFollowUp');
+
+// ============================================================================
+// Follow-Up Queue (Instance)
+// ============================================================================
 
 /**
  * Promise-based queue for follow-up messages in a tool-use session.
@@ -26,10 +45,6 @@ export class FollowUpQueue {
 
   isEmpty(): boolean {
     return this.queued.length === 0;
-  }
-
-  size(): number {
-    return this.queued.length;
   }
 
   drain(): string[] {
@@ -97,11 +112,15 @@ export class FollowUpQueue {
   }
 
   private notifyListeners(): void {
-    for (const listener of Array.from(this.listeners)) {
+    for (const listener of this.listeners) {
       listener();
     }
   }
 }
+
+// ============================================================================
+// Follow-Up Queue Manager (Static)
+// ============================================================================
 
 /**
  * Static manager for follow-up queues indexed by stream ID.
@@ -171,8 +190,64 @@ export class ToolUseFollowUpQueue {
     );
     return drained;
   }
+}
 
-  static get(streamId: StreamTabId): FollowUpQueue | undefined {
-    return this.queues.get(streamId);
+// ============================================================================
+// Follow-Up Coordination
+// ============================================================================
+
+/**
+ * Send a follow-up message to a tool-use session.
+ *
+ * Routes the message based on session state:
+ * 1. Active agent: direct append
+ * 2. Resuming session: queue for later
+ * 3. Pending snapshot: lazy resume with follow-up
+ * 4. No session: show warning
+ */
+export async function sendFollowUp(
+  streamId: StreamTabId,
+  text: string,
+): Promise<void> {
+  // Try active agent first
+  const agent = getToolUseAgent(streamId);
+  if (agent) {
+    try {
+      agent.session.appendFollowUp(text);
+    } catch (error) {
+      logger.error('Failed to send follow-up to active agent.', {
+        data: error,
+      });
+      await vscode.window.showErrorMessage(
+        `Failed to send follow-up: ${(error as Error).message}`,
+      );
+    }
+    return;
   }
+
+  // Queue if session is resuming
+  if (ToolUseFollowUpQueue.isResuming(streamId)) {
+    if (ToolUseFollowUpQueue.enqueue(streamId, text)) {
+      logger.debug(`Queued follow-up while stream ${streamId} is resuming.`);
+      return;
+    }
+  }
+
+  // Lazy resume from snapshot if available
+  const { ToolUseSessionManager } = await import('./ToolUseSessionManager');
+  const { ToolUseSessionPersistence } =
+    await import('./ToolUseSessionPersistence');
+
+  const pendingSnapshot = ToolUseSessionManager.getByStream(streamId);
+  if (pendingSnapshot) {
+    logger.debug(`Resuming agent lazily for stream ${streamId}.`);
+    await ToolUseSessionPersistence.resumeFromSnapshot(pendingSnapshot, text);
+    return;
+  }
+
+  // No session found
+  logger.debug(`No active session found for follow-up on stream ${streamId}.`);
+  void vscode.window.showWarningMessage(
+    'No active tool-use session found for this follow-up.',
+  );
 }

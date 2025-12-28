@@ -20,11 +20,11 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
 
-// --- Message Schemas ---
-const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
-const SetApiAccessModeMessage = z.object({
-  mode: z.enum(['included', 'personal']),
-});
+// Message schemas
+import {
+  SelectAgentMessageSchema,
+  SetApiAccessModeMessageSchema,
+} from '@webview/types/messages';
 
 /** Schema for remote agent data sent to webview (used for type inference only) */
 const RemoteAgentPayloadSchema = z.object({
@@ -154,7 +154,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withValidatedMessage(
-      SelectAgentMessage,
+      SelectAgentMessageSchema,
       message,
       'selectAgent',
       async ({ agentName }) => {
@@ -186,7 +186,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withValidatedMessage(
-      SetApiAccessModeMessage,
+      SetApiAccessModeMessageSchema,
       message,
       'setApiAccessMode',
       async ({ mode }) => {
