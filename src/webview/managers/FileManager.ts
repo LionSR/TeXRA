@@ -470,13 +470,7 @@ export class FileManager extends BaseWebviewManager {
       }
       return relativePaths;
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error selecting output files: ${toErrorMessage(err)}`,
-      );
-      vscode.window.showErrorMessage(
-        `Error selecting output files: ${toErrorMessage(err)}`,
-      );
+      await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
       return null;
     }
   }
