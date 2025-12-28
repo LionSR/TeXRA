@@ -1,0 +1,145 @@
+/**
+ * Standalone ToolUseSessionLifecycle - Decoupled from BaseToolUseAgent.
+ *
+ * This version uses an interface (IToolUseSessionHost) instead of requiring
+ * a BaseToolUseAgent instance, enabling flow-first architecture where
+ * flows can run without agent class instances.
+ */
+
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
+
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
+import {
+  ToolUseFollowUpQueue,
+  type FollowUpQueue,
+} from '@agent/toolUse/ToolUseFollowUp';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
+
+/**
+ * Interface for what the session lifecycle needs from its host.
+ *
+ * Both BaseToolUseAgent and ToolUseFlowContext can implement this,
+ * enabling the session lifecycle to work in both contexts.
+ */
+export interface IToolUseSessionHost {
+  getStreamTabId(): StreamTabId;
+  getExecutionId(): ExecutionId | undefined;
+  readonly config: AgentConfig;
+}
+
+/**
+ * Standalone session lifecycle that works with any IToolUseSessionHost.
+ *
+ * This is functionally identical to ToolUseSessionLifecycle but decoupled
+ * from the agent class hierarchy.
+ */
+export class ToolUseSessionLifecycleStandalone implements IToolUseSession {
+  private readonly followUps: FollowUpQueue;
+  private store: AgentSharedStore | null = null;
+
+  constructor(private readonly host: IToolUseSessionHost) {
+    this.followUps = ToolUseFollowUpQueue.acquire(host.getStreamTabId());
+  }
+
+  setStore(store: AgentSharedStore | null): void {
+    this.store = store;
+  }
+
+  getStore(): AgentSharedStore | null {
+    return this.store;
+  }
+
+  appendFollowUp(text: string): void {
+    this.followUps.enqueue(text);
+  }
+
+  hasQueuedFollowUp(): boolean {
+    return !this.followUps.isEmpty();
+  }
+
+  async waitForFollowUp(
+    checkInterruption: () => boolean,
+  ): Promise<string | null> {
+    return this.followUps.waitForNext(checkInterruption);
+  }
+
+  /**
+   * Builds persistence args if store and executionId are available.
+   * Returns null if state is invalid for persistence.
+   */
+  private buildPersistenceArgs(messages: ProviderMessage[]) {
+    const store = this.store;
+    const executionId = this.host.getExecutionId();
+    if (!store || !executionId) {
+      return null;
+    }
+    return {
+      executionId,
+      streamId: this.host.getStreamTabId(),
+      agentConfig: this.host.config,
+      messages,
+      store,
+      queue: this.followUps,
+    };
+  }
+
+  async enterWaitingState(messages: ProviderMessage[]): Promise<void> {
+    if (!this.followUps.isEmpty()) {
+      return;
+    }
+
+    const args = this.buildPersistenceArgs(messages);
+    if (!args) {
+      // Preconditions not met (no store or executionId) - don't set waiting status
+      return;
+    }
+
+    // Attempt to persist idle snapshot (best effort, non-blocking)
+    await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
+
+    // Set waiting status after successful persistence setup
+    StreamStatusService.set(this.host.getStreamTabId(), STREAM_STATUS.WAITING);
+  }
+
+  async markRunning(): Promise<void> {
+    StreamStatusService.set(this.host.getStreamTabId(), STREAM_STATUS.RUNNING);
+  }
+
+  async clearPersistedSnapshot(): Promise<void> {
+    await ToolUseSessionPersistence.clearPersistedSnapshot(
+      this.host.getExecutionId(),
+    );
+  }
+
+  async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
+    const args = this.buildPersistenceArgs(messages);
+    if (!args) {
+      return;
+    }
+    await ToolUseSessionPersistence.persistCheckpointSnapshot(args);
+  }
+
+  /**
+   * Called when session is interrupted.
+   */
+  interrupt(): void {
+    this.followUps.cancelWait();
+    this.followUps.clear();
+  }
+
+  /**
+   * Dispose resources when context is cleaned up.
+   */
+  dispose(): void {
+    this.setStore(null);
+    ToolUseFollowUpQueue.release(this.host.getStreamTabId());
+    // Clear any cached snapshot to prevent memory leaks
+    ToolUseSessionManager.clearByStream(this.host.getStreamTabId());
+  }
+}
