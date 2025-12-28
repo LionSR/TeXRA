@@ -308,10 +308,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Calculates the total number of rounds to execute.
-   * Returns the maximum of configured rounds and userRequest array length.
-   * Subclasses may override to simplify workflows (e.g., DirectAgent).
+   *
+   * ## Config-Driven Behavior (Flow-First Architecture)
+   *
+   * If `setting.maxRounds` is set, uses that value directly.
+   * This allows YAML configuration to control rounds without subclassing.
+   *
+   * ## Legacy Behavior
+   *
+   * If `maxRounds` is not set, falls back to:
+   * - Subclass override (DirectAgent returns 1)
+   * - Default: max(configured rounds, userRequest array length)
    */
   protected getTotalRounds(): number {
+    // Config-driven: maxRounds takes precedence
+    if (this.agentSetting.maxRounds !== undefined) {
+      return this.agentSetting.maxRounds;
+    }
+
+    // Default behavior (can be overridden by subclasses)
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
       : this.agentPrompt.userRequest
@@ -359,11 +374,37 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Determines whether XML structure should be ensured before processing.
-   * Override in subclasses to customize behavior:
-   * - DirectAgent: returns this.useScratchpad (only when scratchpad mode)
-   * - CoTAgent: returns true (always ensure XML structure)
+   *
+   * ## Config-Driven Behavior (Flow-First Architecture)
+   *
+   * If `setting.xmlStructureMode` is set, uses that configuration:
+   * - 'never': Don't ensure XML structure
+   * - 'scratchpadOnly': Only when prefills include scratchpad
+   * - 'always': Always ensure XML structure
+   *
+   * ## Legacy Behavior
+   *
+   * If `xmlStructureMode` is not set, falls back to subclass overrides:
+   * - DirectAgent: returns this.useScratchpad
+   * - CoTAgent: returns true
+   * - Default: false
    */
   protected shouldEnsureXmlStructure(): boolean {
+    // Config-driven: xmlStructureMode takes precedence
+    const mode = this.agentSetting.xmlStructureMode;
+    if (mode !== undefined) {
+      switch (mode) {
+        case 'always':
+          return true;
+        case 'scratchpadOnly':
+          return this.useScratchpad;
+        case 'never':
+        default:
+          return false;
+      }
+    }
+
+    // Default behavior (can be overridden by subclasses)
     return false;
   }
 
