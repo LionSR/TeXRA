@@ -391,7 +391,7 @@ export function setDisplayVisible(element, shouldShow, displayValue = 'block') {
 }
 
 /**
- * Set combined visibility state using both CSS class and hidden attribute.
+ * Set combined visibility state using CSS class, hidden attribute, and aria-hidden.
  * This is the recommended pattern for consistent visibility toggling.
  * @param {HTMLElement} element - The element to modify
  * @param {boolean} shouldShow - Whether the element should be visible
@@ -400,6 +400,7 @@ export function setVisibilityState(element, shouldShow) {
   if (!element) return;
   element.classList.toggle('is-visible', shouldShow);
   element.toggleAttribute('hidden', !shouldShow);
+  element.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
 }
 
 // --- Dataset Utilities ---
