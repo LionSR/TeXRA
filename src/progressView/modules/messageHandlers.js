@@ -173,15 +173,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Check if message targets a different stream (for early return guards)
-   * @param {object} message - Message with stream property
-   * @returns {boolean} true if message.stream differs from activeStream
-   */
-  _isOtherStream(message) {
-    return message.stream !== state.activeStream;
-  }
-
-  /**
    * Get target stream from message with fallback to activeStream
    * @param {object} message - Message with optional stream property
    * @returns {string|null} The target stream or null if none available
@@ -338,7 +329,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
-    if (this._isOtherStream(message)) {
+    if (!this._isActiveStream(message)) {
       this._updatePlaceholderVisibility();
       return;
     }
@@ -435,7 +426,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _handleIncrementalUpdate(message) {
     // Defensive guard: caller should verify stream matches active stream
-    if (this._isOtherStream(message)) {
+    if (!this._isActiveStream(message)) {
       console.debug(
         `[incremental] stream mismatch: ${message.stream} !== ${state.activeStream}`,
       );
@@ -633,7 +624,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateUsage(message) {
-    if (message.stream && this._isOtherStream(message)) {
+    if (message.stream && !this._isActiveStream(message)) {
       return;
     }
 
@@ -655,7 +646,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * More efficient than handleUpdateUsage during streaming.
    */
   handleUpdateRunUsage(message) {
-    if (message.stream && this._isOtherStream(message)) {
+    if (message.stream && !this._isActiveStream(message)) {
       return;
     }
 
