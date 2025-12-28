@@ -37,7 +37,6 @@ interface RoundCompletePrepInput {
   currentRound: number;
   totalRounds: number;
   continueRounds: boolean;
-  endTurn: boolean;
 }
 
 type RoundCompleteExecResult =
@@ -65,7 +64,6 @@ export class RoundCompleteNode<C = unknown> extends Node<
       currentRound: shared.state.currentRound,
       totalRounds: shared.state.totalRounds,
       continueRounds: shared.state.continueRounds,
-      endTurn: shared.state.endTurn,
     };
   }
 
@@ -76,7 +74,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
     prepRes: RoundCompletePrepInput,
   ): Promise<RoundCompleteExecResult> {
     const { checkInterruption, logger } = this.services;
-    const { currentRound, totalRounds, continueRounds, endTurn } = prepRes;
+    const { currentRound, totalRounds, continueRounds } = prepRes;
 
     const nextRound = currentRound + 1;
 
@@ -99,11 +97,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
       return { kind: 'finalize', reason: 'all_rounds_complete' };
     }
 
-    // Check if turn didn't end properly (model didn't complete)
-    if (!endTurn) {
-      logger.debug('Turn did not end properly - finalizing');
-      return { kind: 'finalize', reason: 'turn_incomplete' };
-    }
+    // Note: endTurn=false means model didn't complete in one shot (continuation, pseudo prefill)
+    // This is handled by OutputNode skipping certain processing - it shouldn't stop the flow.
+    // The flow should continue to the next round regardless of endTurn.
 
     // Continue to next round
     logger.debug(
