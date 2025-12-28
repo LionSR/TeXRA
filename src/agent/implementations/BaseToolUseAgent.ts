@@ -127,12 +127,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       }
       tools.push(def);
     }
-    if (
-      this.agentConfig.toolConfig.attachDiagnostics &&
-      !tools.some((t) => t.name === 'diagnostics')
-    ) {
-      tools.push({ name: 'diagnostics' });
-    }
     return tools;
   }
 
