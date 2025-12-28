@@ -359,6 +359,7 @@ class ToolUseWaitNode<C> extends Node<
     }
 
     // Wait for follow-up (blocking I/O)
+    const checkInterruption = this.services.checkInterruption;
     const followUp = await session.waitForFollowUp(checkInterruption);
 
     if (!followUp || checkInterruption()) {
