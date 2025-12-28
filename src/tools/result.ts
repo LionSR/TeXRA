@@ -63,8 +63,8 @@ export type EditRecord = z.infer<typeof EditRecordSchema>;
  */
 export const FlattenedEditRecordSchema = z.object({
   path: z.string(),
-  added: z.number().default(0),
-  removed: z.number().default(0),
+  added: z.number().prefault(0),
+  removed: z.number().prefault(0),
 });
 export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
 
