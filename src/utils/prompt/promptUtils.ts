@@ -17,11 +17,10 @@ const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
 
 /**
- * Get XML formatted string from a single file
- * @param file Path to the file
- * @returns XML formatted string containing file content
+ * Get XML formatted string from a single file.
+ * Internal helper used by getXmlFormatFromFiles.
  */
-export async function getXmlFormatFromFile(file: string): Promise<string> {
+async function getXmlFormatFromFile(file: string): Promise<string> {
   try {
     const content = await WorkspaceFS.read(file);
     return `<document name="${file}">\n${content}\n</document>`;
