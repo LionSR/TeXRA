@@ -20,9 +20,7 @@
 
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentPrompt, AgentToolUseSetting } from '@agent/core/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -30,6 +28,8 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import { buildBaseFlowServices } from '@agent/implementations/flows/common';
 
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -51,27 +51,24 @@ import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
 
 /**
  * Configuration for creating a ToolUseFlowContext.
+ *
+ * Extends BaseFlowContextInit with tool-use specific fields.
  */
-export interface ToolUseFlowContextInit<C = unknown> {
-  // Core dependencies
-  modelHandler: IModelHandler<any, any, any, any, C>;
-  config: AgentConfig;
+export interface ToolUseFlowContextInit<C = unknown>
+  extends BaseFlowContextInit<C> {
+  /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
-  prompt: AgentPrompt;
-  executionContext: AgentExecutionContext;
-  userVarChannels: UserVariableChannels;
+
+  /** Stream tab ID for registry tracking */
   streamTabId: StreamTabId;
 
-  // Control callbacks
-  checkInterruption: () => boolean;
-  setAbortController: (ctrl: AbortController | null) => void;
-  getClient: () => C;
-
-  // Optional dependencies
+  /** Optional tool registry override */
   toolRegistry?: IToolRegistry;
+
+  /** Optional snapshot for session resume */
   resumeSnapshot?: ToolUseSessionSnapshot | null;
 
-  // Usage tracking
+  /** Optional usage tracking callback */
   getUsageRecorder?: () => AgentRoundFinalizedCallback;
 }
 
@@ -123,31 +120,13 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
       return this._services;
     }
 
-    const {
-      modelHandler,
-      config,
-      setting,
-      prompt,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
-      resumeSnapshot,
-    } = this.init;
+    const { setting, resumeSnapshot } = this.init;
 
+    // Build base services from init, then add tool-use specific ones
     this._services = {
-      // Base services
-      modelHandler,
-      logger: executionContext.logger,
-      config,
+      ...buildBaseFlowServices(this.init),
+      // Narrow setting type for tool-use flows
       setting,
-      prompt,
-      context: executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
 
       // Tool-use specific services
       toolRegistry: this.toolRegistry,
