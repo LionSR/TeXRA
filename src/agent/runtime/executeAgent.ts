@@ -137,7 +137,7 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
       {
         title: 'Model Documentation',
         callback: () =>
-          vscode.commands.executeCommand('texra.openDoc', 'models'),
+          void vscode.commands.executeCommand('texra.openDoc', 'models'),
       },
     ],
     false,
@@ -320,7 +320,7 @@ function showAgentNotification(config: AgentConfig): void {
       'Show ProgressBoard',
     )
     .then((sel: string | undefined) => {
-      if (sel) vscode.commands.executeCommand('texra.showProgressView');
+      if (sel) void vscode.commands.executeCommand('texra.showProgressView');
     });
 }
 
@@ -338,12 +338,12 @@ async function showApiKeyErrorNotification(): Promise<void> {
     [
       {
         title: 'Set API Key',
-        callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+        callback: () => void vscode.commands.executeCommand('texra.setApiKey'),
       },
       {
         title: 'Open Settings Guide',
         callback: () =>
-          vscode.commands.executeCommand('texra.openDoc', 'configuration'),
+          void vscode.commands.executeCommand('texra.openDoc', 'configuration'),
       },
     ],
     false,

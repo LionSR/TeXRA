@@ -22,7 +22,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelCapabilities,
 } from '@model/ModelConfig';
-import { AbsoluteFS, pathToLocation, getDisplayPath } from '@utils/files';
+import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {
   channelId: string;
@@ -172,7 +172,7 @@ describe('MediaAttachmentProcessor', () => {
   it('processes PDF fixtures using native ingestion when supported', async () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
-    const displayPath = getDisplayPath(pdfLocation);
+    const displayPath = getShortDisplayPath(pdfLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(logger, {
       supportsVision: true,
@@ -203,7 +203,7 @@ describe('MediaAttachmentProcessor', () => {
   it('processes native audio fixtures into audio media entries', async () => {
     const audioPath = createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
-    const displayPath = getDisplayPath(audioLocation);
+    const displayPath = getShortDisplayPath(audioLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(
       logger,
@@ -232,7 +232,7 @@ describe('MediaAttachmentProcessor', () => {
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
-    const displayPath = getDisplayPath(emptyLocation);
+    const displayPath = getShortDisplayPath(emptyLocation);
     const { logger, stub } = createLoggerStub();
     const processor = createProcessor(logger, { supportsVision: true });
 

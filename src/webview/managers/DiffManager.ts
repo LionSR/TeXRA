@@ -10,7 +10,7 @@ logger.initialize(CHANNEL);
 
 export class DiffManager {
   handleLatexdiff(message: any): void {
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       'texra.latexdiff',
       message.inputFile,
       message.baseFile,
@@ -19,7 +19,7 @@ export class DiffManager {
   }
 
   handleLatexdiffvc(message: any): void {
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       'texra.latexdiffvc',
       message.inputFile,
       message.baseFile,
@@ -28,7 +28,7 @@ export class DiffManager {
   }
 
   handleLatexdiffvcOperation(message: any): void {
-    vscode.commands.executeCommand(
+    void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.baseFile,

@@ -20,6 +20,7 @@ import { encode as encodeHtml } from 'he';
 import {
   AgentType,
   AgentCategory,
+  AgentSource,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
@@ -32,17 +33,8 @@ const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
 
 // =============================================================================
-// TYPES
+// TYPES (AgentSource is now imported from @agent/core/AgentDataclass)
 // =============================================================================
-
-/** Where the agent comes from. */
-export const AgentSource = z.enum([
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-  'remote',
-]);
-export type AgentSource = z.infer<typeof AgentSource>;
 
 /**
  * Remote agent visibility levels.

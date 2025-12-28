@@ -11,7 +11,7 @@ import { pathToLocation } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
-} from '@utils/editor/activeFileGuards';
+} from '@frontend/editor/activeFileGuards';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 

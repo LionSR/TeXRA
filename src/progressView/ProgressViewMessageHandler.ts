@@ -38,7 +38,7 @@ import {
 import { pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
-import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,

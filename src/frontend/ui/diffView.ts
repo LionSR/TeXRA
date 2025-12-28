@@ -23,7 +23,7 @@ function refreshDiff() {
     return;
   }
   lastRefresh = now;
-  vscode.commands.executeCommand(
+  void vscode.commands.executeCommand(
     'vscode.diff',
     diffInfo.left,
     diffInfo.right,
