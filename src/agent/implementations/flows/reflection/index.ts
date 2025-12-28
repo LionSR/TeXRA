@@ -7,8 +7,22 @@
  *
  * The flow operates independently of the agent:
  * - Services are injected via ReflectionFlowContext
- * - Polymorphic behavior uses strategies, not agent callbacks
+ * - Polymorphic behavior uses configuration, not agent subclasses
  * - No agent reference in flow shared state
+ *
+ * ## Direct Flow Execution
+ *
+ * Use `runReflectionFlow()` to run flows without agent class instances:
+ * ```typescript
+ * const result = await runReflectionFlow({
+ *   modelHandler,
+ *   config: agentConfig,
+ *   setting: agentSetting,
+ *   prompt: agentPrompt,
+ *   executionContext,
+ *   userVarChannels,
+ * });
+ * ```
  */
 
 // Flow factory and types
@@ -20,13 +34,20 @@ export {
   type ReflectionFlowParams,
 } from './ReflectionFlow';
 
-// Flow context (new flow-first pattern)
+// Flow context (self-contained, creates own services)
 export {
   ReflectionFlowContext,
   createReflectionFlowContext,
   type ReflectionFlowContextInit,
-  type ReflectionFlowStrategies,
 } from './ReflectionFlowContext';
+
+// Direct flow execution (bypasses agent classes)
+export {
+  runReflectionFlow,
+  initializeFlowClient,
+  type RunReflectionFlowInput,
+  type RunReflectionFlowResult,
+} from './runReflectionFlow';
 
 // State types
 export {
