@@ -23,7 +23,6 @@ import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { IFlowAgent } from '@agent/core/IAgent';
 import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Internal imports
@@ -35,21 +34,6 @@ import {
 
 // Service types
 import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
-
-// ============================================================================
-// Agent Interface
-// ============================================================================
-
-/**
- * Interface for agents used by ToolUseRunFlow.
- *
- * Extends IFlowAgent with tool-use specific session access.
- * This mirrors the pattern used by ReflectionFlow (IReflectionFlowAgent).
- */
-export interface IToolUseFlowAgent extends IFlowAgent {
-  /** Session lifecycle operations (follow-ups, persistence, status). */
-  readonly session: IToolUseSession;
-}
 
 // ============================================================================
 // State Types
@@ -85,16 +69,13 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
 /**
  * Shared context passed through the flow.
  *
- * Contains:
- * - agent: Reference for session access and interruption checking
- * - state: Mutable runtime state
+ * Contains only mutable runtime state. All dependencies (session, interruption
+ * checking, etc.) are accessed via this.services - NOT via shared.
  *
  * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
  * Work nodes use services from this.services, throw errors on failure.
  */
 export interface ToolUseRunShared<C = unknown> {
-  /** Agent reference for session methods */
-  agent: IToolUseFlowAgent;
   state: ToolUseRunState<C>;
 }
 
@@ -378,7 +359,7 @@ class ToolUseWaitNode<C> extends Node<
     const { checkInterruption } = this.services;
 
     // Check interruption first (via services, not shared.agent)
-    if (await checkInterruption()) {
+    if (checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
@@ -390,14 +371,9 @@ class ToolUseWaitNode<C> extends Node<
     }
 
     // Wait for follow-up (blocking I/O)
-    // Note: waitForFollowUp expects sync callback, checkInterruption may be async
-    const followUp = await session.waitForFollowUp(() => {
-      const result = checkInterruption();
-      // Handle both sync and async cases - sync poll for interruption
-      return result instanceof Promise ? false : result;
-    });
+    const followUp = await session.waitForFollowUp(checkInterruption);
 
-    if (!followUp || (await checkInterruption())) {
+    if (!followUp || checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
