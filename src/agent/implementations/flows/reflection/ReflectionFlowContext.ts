@@ -42,7 +42,10 @@
 
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentPrompt, AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type {
+  AgentPrompt,
+  AgentWorkflowSetting,
+} from '@agent/core/AgentDataclass';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { AgentFileLocation } from '@utils/files';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
@@ -66,8 +69,9 @@ import type { ReflectionServices } from './ReflectionServices';
  * Extends BaseFlowContextInit with reflection-specific fields.
  * The context factory creates all derived services from these.
  */
-export interface ReflectionFlowContextInit<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface ReflectionFlowContextInit<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
@@ -282,7 +286,10 @@ export class ReflectionFlowContext<C = unknown> {
 
   get totalRounds(): number {
     if (this._totalRounds === null) {
-      this._totalRounds = computeTotalRounds(this.init.setting, this.init.prompt);
+      this._totalRounds = computeTotalRounds(
+        this.init.setting,
+        this.init.prompt,
+      );
     }
     return this._totalRounds;
   }

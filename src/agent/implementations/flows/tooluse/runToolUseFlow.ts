@@ -39,8 +39,10 @@ import {
 /**
  * Input for running a tool-use flow.
  */
-export interface RunToolUseFlowInput<C = unknown>
-  extends Omit<ToolUseFlowContextInit<C>, 'resumeSnapshot'> {
+export interface RunToolUseFlowInput<C = unknown> extends Omit<
+  ToolUseFlowContextInit<C>,
+  'resumeSnapshot'
+> {
   /**
    * Optional: Resume snapshot for session recovery.
    */
@@ -101,7 +103,10 @@ export async function runToolUseFlow<C = unknown>(
   const streamTabId = flowContext.getStreamTabId();
 
   // Notify that context is ready (for agent registry if needed)
-  callbacks?.onContextReady?.(streamTabId, flowContext as ToolUseFlowContext<unknown>);
+  callbacks?.onContextReady?.(
+    streamTabId,
+    flowContext as ToolUseFlowContext<unknown>,
+  );
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 

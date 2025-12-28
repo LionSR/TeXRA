@@ -62,16 +62,8 @@ export class ResponseAssemblyState {
     return this._lastResponse;
   }
 
-  set lastResponse(value: string) {
-    this._lastResponse = value;
-  }
-
   get accumulatedOutput(): string {
     return this._accumulatedOutput;
-  }
-
-  set accumulatedOutput(value: string) {
-    this._accumulatedOutput = value;
   }
 
   updateLastResponse(response: string): void {
