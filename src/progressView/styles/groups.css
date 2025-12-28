@@ -16,15 +16,15 @@
 }
 
 /* Minimal styling for top-level task headers */
-.log-group-header.running {
+.log-group-header.is-running {
   border-left-color: var(--vscode-statusBarItem-warningBackground);
 }
 
-.log-group-header.error {
+.log-group-header.is-error {
   border-left-color: var(--vscode-errorForeground);
 }
 
-.log-group-header.stopped {
+.log-group-header.is-stopped {
   border-left-color: var(--vscode-testing-iconPassed);
 }
 
