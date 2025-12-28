@@ -202,7 +202,7 @@ class ResponsePrepNode<C> extends BaseNode<
       });
     }
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 
@@ -346,7 +346,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       });
     }
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 
@@ -692,7 +692,7 @@ class ResponseProcessNode<C> extends BaseNode<
       );
     }
 
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 }
 

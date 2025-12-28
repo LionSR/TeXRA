@@ -161,6 +161,21 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
+  public hydrateRound(round: number, outputs: OutputFileInfo[]): void {
+    // Populate the internal rounds map from saved state
+    // This enables getRoundMapping to work correctly after resume
+    this.rounds.set(round, {
+      outputs,
+      rawOutput: null, // Not available from saved state
+      xmlSummary: {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+        sourceLocation: null,
+      },
+    });
+  }
+
   private getStorageKey(): StorageKey {
     return this._storageKey ?? normalizeRunId(null);
   }
@@ -290,38 +305,6 @@ export class OutputHandler implements IOutputHandler {
     const prevOutputs = prevData?.outputs ?? [];
 
     return this.lineageCalculator.calculateMapping(currentOutputs, prevOutputs);
-  }
-
-  public hydrateFromArtifacts(
-    storageKey: StorageKey | null,
-    rounds: Map<number, OutputFileInfo[]>,
-  ): void {
-    const currentKey = this.getStorageKey();
-    const targetKey = storageKey ?? currentKey;
-
-    this.logger.debug(
-      `Hydrate outputs: storageKey=${storageKey ?? 'null'} current=${currentKey} target=${targetKey}`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
-
-    if (targetKey !== currentKey) {
-      this.setActiveRun(targetKey);
-    }
-
-    for (const [round, infos] of rounds.entries()) {
-      if (infos.length > 0) {
-        this.rounds.set(round, {
-          outputs: infos,
-          rawOutput: null,
-          xmlSummary: {
-            tagContents: {},
-            documents: [],
-            singleOutputFile: null,
-            sourceLocation: null,
-          },
-        });
-      }
-    }
   }
 
   public async validateExpectedOutputs(
