@@ -1644,7 +1644,7 @@
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@supabase/supabase-js": "^2.89.0",
-    "@vscode-elements/elements": "^2.3.1",
+    "@vscode-elements/elements": "^2.4.0",
     "@vscode/codicons": "^0.0.44",
     "@vscode/markdown-it-katex": "^1.1.2",
     "arxiv-client": "^0.0.9",
