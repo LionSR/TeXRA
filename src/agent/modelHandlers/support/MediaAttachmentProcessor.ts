@@ -20,7 +20,7 @@ import type { ModelCapabilities } from '@model/ModelConfig';
 import {
   AbsoluteFS,
   getMimeType,
-  getDisplayPath,
+  getShortDisplayPath,
   type FileLocation,
 } from '@utils/files';
 
@@ -180,7 +180,7 @@ export class MediaAttachmentProcessor {
       } else {
         const reason = settledResult.reason;
         const location = mediaFiles[index];
-        const displayPath = getDisplayPath(location);
+        const displayPath = getShortDisplayPath(location);
         this.logger.error(
           `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
           { data: reason },
@@ -208,7 +208,7 @@ export class MediaAttachmentProcessor {
     location: FileLocation,
   ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
     const absolutePath = location.absolutePath;
-    const displayPath = getDisplayPath(location);
+    const displayPath = getShortDisplayPath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {
