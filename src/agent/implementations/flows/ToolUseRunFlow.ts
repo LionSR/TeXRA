@@ -334,32 +334,20 @@ class ToolUseWaitNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult | null> {
-    // Pure extraction - session comes from services now
-    try {
-      const session = this.services.session;
-      return {
-        conversation: shared.state.conversation,
-        hasQueuedFollowUp: session.hasQueuedFollowUp(),
-        session,
-      };
-    } catch (error) {
-      this.services.logger.error(`ToolUseWaitNode prep error: ${error}`);
-      return null;
-    }
+  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
+    const session = this.services.session;
+    return {
+      conversation: shared.state.conversation,
+      hasQueuedFollowUp: session.hasQueuedFollowUp(),
+      session,
+    };
   }
 
-  async exec(prepRes: WaitNodePrepResult | null): Promise<WaitExecResult> {
-    // Handle prep failure
-    if (!prepRes) {
-      return { kind: 'stop', reason: 'interrupted' };
-    }
-
+  async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
     const { conversation, hasQueuedFollowUp, session } = prepRes;
-    const { checkInterruption } = this.services;
 
-    // Check interruption first (via services, not shared.agent)
-    if (checkInterruption()) {
+    // Check interruption first
+    if (this.services.checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
@@ -381,7 +369,7 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async execFallback(
-    _prepRes: WaitNodePrepResult | null,
+    _prepRes: WaitNodePrepResult,
     error: Error,
   ): Promise<WaitExecResult> {
     // Convert error to stop result - post() will handle finalization
@@ -393,7 +381,7 @@ class ToolUseWaitNode<C> extends Node<
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: WaitNodePrepResult | null,
+    _prepRes: WaitNodePrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'stop') {
