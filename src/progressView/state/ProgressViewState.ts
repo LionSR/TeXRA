@@ -46,7 +46,7 @@ import type { TodoItem } from '@eventBus/schemas';
  * Used to display UI indicators before TaskState is fully populated.
  */
 export const StreamHintsSchema = z.object({
-  sessionCategory: z.nativeEnum(AgentCategory).optional(),
+  sessionCategory: z.enum(AgentCategory).optional(),
   isRemote: z.boolean().optional(),
   hasMultipleOutputs: z.boolean().optional(),
 });
