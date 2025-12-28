@@ -1,5 +1,8 @@
 // Local imports - common helpers
-import { addEventListenerSafely, setVisibilityState } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  setVisibilityState,
+} from '@common/domUtils.js';
 
 /**
  * Base class for UI request managers (approvals, retries, etc.)

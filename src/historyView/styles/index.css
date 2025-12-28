@@ -182,7 +182,10 @@ mark.current-match {
 }
 
 .kind-workflow {
-  background-color: var(--vscode-editorInfo-background, rgba(0, 127, 212, 0.15));
+  background-color: var(
+    --vscode-editorInfo-background,
+    rgba(0, 127, 212, 0.15)
+  );
   color: var(--vscode-editorInfo-foreground, #3794ff);
 }
 
