@@ -147,7 +147,7 @@ h2 {
 }
 
 /* Multi-output badges - extends .badge.badge--small from common.css */
-.multi-output-badge.supported {
+.badge.multi-output-badge.supported {
   background: var(--vscode-testing-iconPassed);
   color: var(--vscode-button-foreground);
 }
