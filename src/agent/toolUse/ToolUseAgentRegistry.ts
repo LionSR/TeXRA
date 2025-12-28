@@ -1,42 +1,54 @@
+/**
+ * Unified execution registry for agent interruption.
+ *
+ * This module provides a single registry for all interruptible executions:
+ * - Tool-use flow contexts (primary)
+ * - Agent class instances (MergeAgent)
+ *
+ * The registry enables unified interrupt handling from agentCommands.
+ */
+
 // Local imports - agent
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 /**
- * Common interface for anything that can handle tool-use session interruption.
+ * Common interface for anything that can be interrupted.
+ * Implemented by:
+ * - ToolUseFlowContext (via sessionLifecycle.interrupt())
+ * - BaseAgent (via isInterrupted flag)
  */
 export interface IInterruptible {
   interrupt(): void;
 }
 
-// Registry stores flow contexts that can be interrupted
+// Unified registry for all interruptible executions
 const registry = new Map<StreamTabId, IInterruptible>();
 
-// Flow context registration
-export function registerToolUseFlowContext(
+// ============================================================================
+// Core Registry Operations
+// ============================================================================
+
+/**
+ * Register an interruptible execution by stream ID.
+ * Used by both flow contexts and agent classes.
+ */
+export function registerInterruptible(
   streamTabId: StreamTabId,
-  context: ToolUseFlowContext<any>,
+  interruptible: IInterruptible,
 ): void {
-  registry.set(streamTabId, context);
-}
-
-export function unregisterToolUseFlowContext(streamTabId: StreamTabId): void {
-  registry.delete(streamTabId);
-}
-
-export function getToolUseFlowContext(
-  streamTabId: StreamTabId,
-): ToolUseFlowContext<any> | undefined {
-  const entry = registry.get(streamTabId);
-  // Type guard: check if it's a ToolUseFlowContext
-  if (entry && 'services' in entry) {
-    return entry as ToolUseFlowContext<any>;
-  }
-  return undefined;
+  registry.set(streamTabId, interruptible);
 }
 
 /**
- * Get the interruptible entry (agent or flow context) for a stream.
+ * Unregister an execution from the registry.
+ */
+export function unregisterInterruptible(streamTabId: StreamTabId): void {
+  registry.delete(streamTabId);
+}
+
+/**
+ * Get the interruptible execution for a stream.
  */
 export function getInterruptible(
   streamTabId: StreamTabId,
@@ -44,8 +56,50 @@ export function getInterruptible(
   return registry.get(streamTabId);
 }
 
+// ============================================================================
+// Tool-Use Flow Context (Type-Specific Access)
+// ============================================================================
+
 /**
- * Remove registry entries for streams that no longer have an active tool-use session.
+ * Register a tool-use flow context.
+ * Convenience wrapper that uses the unified registry.
+ */
+export function registerToolUseFlowContext(
+  streamTabId: StreamTabId,
+  context: ToolUseFlowContext<any>,
+): void {
+  registerInterruptible(streamTabId, context);
+}
+
+/**
+ * Unregister a tool-use flow context.
+ * Convenience wrapper that uses the unified registry.
+ */
+export function unregisterToolUseFlowContext(streamTabId: StreamTabId): void {
+  unregisterInterruptible(streamTabId);
+}
+
+/**
+ * Get a tool-use flow context by stream ID.
+ * Returns undefined if the entry is not a ToolUseFlowContext.
+ */
+export function getToolUseFlowContext(
+  streamTabId: StreamTabId,
+): ToolUseFlowContext<any> | undefined {
+  const entry = registry.get(streamTabId);
+  // Type guard: check if it's a ToolUseFlowContext (has 'services' property)
+  if (entry && 'services' in entry) {
+    return entry as ToolUseFlowContext<any>;
+  }
+  return undefined;
+}
+
+// ============================================================================
+// Cleanup
+// ============================================================================
+
+/**
+ * Remove registry entries for streams that no longer have an active session.
  */
 export function cleanupInactiveAgents(activeStreams: Set<StreamTabId>): void {
   for (const streamId of registry.keys()) {
