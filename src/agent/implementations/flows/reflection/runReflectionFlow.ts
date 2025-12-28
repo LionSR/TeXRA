@@ -200,18 +200,3 @@ export async function runReflectionFlow<C = unknown>(
     status,
   };
 }
-
-// ============================================================================
-// Lifecycle Helpers (for integration with existing agent infrastructure)
-// ============================================================================
-
-/**
- * Initialize model client for a flow context.
- *
- * This is equivalent to agent.initializeClient() but works with flows directly.
- */
-export async function initializeFlowClient<C>(
-  modelHandler: { initializeClient: () => Promise<C> },
-): Promise<C> {
-  return await modelHandler.initializeClient();
-}

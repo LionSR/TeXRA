@@ -59,25 +59,6 @@ export function getInterruptible(
 // ============================================================================
 
 /**
- * Register a tool-use flow context.
- * Convenience wrapper that uses the unified registry.
- */
-export function registerToolUseFlowContext(
-  streamTabId: StreamTabId,
-  context: ToolUseFlowContext<any>,
-): void {
-  registerInterruptible(streamTabId, context);
-}
-
-/**
- * Unregister a tool-use flow context.
- * Convenience wrapper that uses the unified registry.
- */
-export function unregisterToolUseFlowContext(streamTabId: StreamTabId): void {
-  unregisterInterruptible(streamTabId);
-}
-
-/**
  * Get a tool-use flow context by stream ID.
  * Returns undefined if the entry is not a ToolUseFlowContext.
  */

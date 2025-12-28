@@ -39,7 +39,6 @@ import {
   type AgentWorkflowSetting,
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
-import type { IAgent } from '@agent/core/IAgent';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   loadAgentSettingAndPrompts,
@@ -49,8 +48,8 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import {
-  registerToolUseFlowContext,
-  unregisterToolUseFlowContext,
+  registerInterruptible,
+  unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -463,10 +462,10 @@ export async function executeAgent(
             },
             {
               onContextReady: (streamId, context) => {
-                registerToolUseFlowContext(streamId, context);
+                registerInterruptible(streamId, context);
               },
               onFlowComplete: (streamId) => {
-                unregisterToolUseFlowContext(streamId);
+                unregisterInterruptible(streamId);
               },
             },
           );
@@ -663,7 +662,7 @@ export async function resumeToolUseFromSnapshot(
       },
       {
         onContextReady: (streamId, context) => {
-          registerToolUseFlowContext(streamId, context);
+          registerInterruptible(streamId, context);
 
           // Allow caller to configure session (e.g., append follow-ups)
           if (setupSession) {
@@ -671,7 +670,7 @@ export async function resumeToolUseFromSnapshot(
           }
         },
         onFlowComplete: (streamId) => {
-          unregisterToolUseFlowContext(streamId);
+          unregisterInterruptible(streamId);
         },
       },
     );
