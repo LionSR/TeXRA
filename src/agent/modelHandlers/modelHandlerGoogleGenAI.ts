@@ -87,16 +87,14 @@ function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
 
-function findLastTextPart(
-  parts: Part[],
-): (Part & { text: string }) | undefined {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (isTextPart(part)) {
-      return part;
-    }
-  }
-  return undefined;
+/** Extract concatenated text from parts, excluding thought parts */
+function extractNonThinkingText(parts: Part[], trim = false): string {
+  const text = parts
+    .filter((part): part is Part & { text: string } => isTextPart(part))
+    .filter((part) => !part.thought)
+    .map((part) => part.text)
+    .join('');
+  return trim ? text.trim() : text;
 }
 
 /**
@@ -205,11 +203,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
-      // SDK only exports LOW/HIGH; Gemini 3 Flash supports MEDIUM via API but SDK lacks enum
-      this.logger.warn(
-        "SDK ThinkingLevel enum doesn't include 'MEDIUM'. Falling back to 'HIGH'.",
-      );
-      return ThinkingLevel.HIGH;
+      return ThinkingLevel.MEDIUM;
     }
 
     if (requestedLevel === ReasoningEffort.LOW) {
@@ -593,11 +587,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
 
-        const nonThinkingText = aggregatedParts
-          .filter((part): part is Part & { text: string } => isTextPart(part))
-          .filter((part) => !part.thought)
-          .map((part) => part.text)
-          .join('');
+        const nonThinkingText = extractNonThinkingText(aggregatedParts);
 
         let finalOutputText = aggregatedText || nonThinkingText;
         if (!finalOutputText && baseResponse.text) {
@@ -812,12 +802,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // The getter may use cached values that don't reflect mutations we made
     // to the candidates array during streaming (lines 536-550, 577-584).
     // Filter out thought parts and concatenate text from remaining parts.
-    const rawResponseText = parts
-      .filter((part): part is Part & { text: string } => isTextPart(part))
-      .filter((part) => !part.thought)
-      .map((part) => part.text)
-      .join('')
-      .trim();
+    const rawResponseText = extractNonThinkingText(parts, true);
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = replacementEngine.applyAll(rawResponseText);
@@ -996,7 +981,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const modelMessage = messages.at(-1);
     if (modelMessage?.role === 'model') {
       const parts = (modelMessage.parts ??= []);
-      const lastTextPart = findLastTextPart(parts);
+      const lastTextPart = parts.findLast(isTextPart);
       if (lastTextPart) {
         lastTextPart.text =
           (lastTextPart.text ?? '') + bestConnector + newResponse;
@@ -1436,5 +1421,43 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return [callMsg, resultMsg];
   }
 
-  // Assuming containCutOffMessage is available from base class ModelHandler
+  // =========================================================================
+  // Message modification methods (for post-build enrichment)
+  // =========================================================================
+
+  /**
+   * Prepend text to the last user message in the conversation.
+   */
+  prependTextToUserMessage(messages: Content[], text: string): void {
+    if (!text.trim()) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (lastUserMsg?.parts) {
+      lastUserMsg.parts.unshift(createPartFromText(text));
+    }
+  }
+
+  /**
+   * Add media files to the last user message in the conversation.
+   */
+  async addMediaToUserMessage(
+    messages: Content[],
+    mediaFiles: FileLocation[],
+  ): Promise<void> {
+    if (!mediaFiles.length || !this.config.capabilities.supportsVision) return;
+
+    const lastUserMsg = messages.findLast((m) => m.role === 'user' && m.parts);
+    if (!lastUserMsg?.parts) return;
+
+    try {
+      const formattedMedia = await this.createMediaMessage(mediaFiles);
+      lastUserMsg.parts.unshift(...formattedMedia);
+    } catch (err) {
+      this.logger.logError(
+        `Error adding media to user message: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'add media to user message' },
+      );
+    }
+  }
 }

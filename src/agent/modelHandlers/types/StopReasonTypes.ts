@@ -10,7 +10,6 @@ export const OPENAI_CHAT_FINISH = {
   STOP: 'stop',
   LENGTH: 'length',
   TOOL_CALLS: 'tool_calls',
-  TOOL_USE: 'tool_use',
   CONTENT_FILTER: 'content_filter',
   FUNCTION_CALL: 'function_call',
 } as const;
