@@ -492,7 +492,7 @@ export class ProgressViewState {
       return aTime - bTime;
     });
 
-    const latest = rootGroups[rootGroups.length - 1];
+    const latest = rootGroups.at(-1);
     return latest?.id || null;
   }
 
