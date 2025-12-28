@@ -1,5 +1,5 @@
 /**
- * Core utilities - consolidated path, string, type, async, and URL helpers.
+ * Core utilities - consolidated path, string, type, and async helpers.
  */
 
 export {
@@ -18,4 +18,3 @@ export {
 } from './stringCore';
 export { contentToString, isObject, type MessageContent } from './typeGuards';
 export { sleep, sleepWithAbort } from './async';
-export { normalizeUrl } from './urlCore';
