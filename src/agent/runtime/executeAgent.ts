@@ -17,13 +17,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - flows (primary execution path)
-import {
-  runReflectionFlow,
-  type RunReflectionFlowInput,
-} from '@agent/implementations/flows/reflection/runReflectionFlow';
+import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import {
   runToolUseFlow,
-  ToolUseFlowContext,
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
@@ -237,113 +233,6 @@ async function prepareFlowExecution(
 // Flow Execution
 // ============================================================================
 
-/**
- * Execute a reflection flow (direct/CoT agents).
- */
-async function executeReflectionFlow(ctx: FlowExecutionContext): Promise<void> {
-  const {
-    modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
-    executionContext,
-    streamTabId,
-    userVarChannels,
-  } = ctx;
-
-  // State for interruption handling
-  // TODO: Wire up proper interrupt handling via ToolUseAgentRegistry or similar
-  const isInterrupted = false;
-  let abortController: AbortController | null = null;
-  let client: any = null;
-
-  const input: RunReflectionFlowInput = {
-    modelHandler,
-    config: agentConfig,
-    setting: agentSetting as AgentWorkflowSetting,
-    prompt: agentPrompt,
-    executionContext,
-    userVarChannels,
-    checkInterruption: () => isInterrupted,
-    setAbortController: (ctrl) => {
-      abortController = ctrl;
-    },
-    getClient: () => client,
-  };
-
-  try {
-    // Initialize client
-    client = await modelHandler.getClient();
-
-    // Run the flow
-    await runReflectionFlow(input);
-
-    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
-  } catch (error) {
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    throw error;
-  }
-}
-
-/**
- * Execute a tool-use flow.
- */
-async function executeToolUseFlow(ctx: FlowExecutionContext): Promise<void> {
-  const {
-    modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
-    executionContext,
-    streamTabId,
-    userVarChannels,
-  } = ctx;
-
-  // State for interruption handling
-  // TODO: Wire up proper interrupt handling via ToolUseAgentRegistry
-  const isInterrupted = false;
-  let abortController: AbortController | null = null;
-  let client: any = null;
-  let flowContext: ToolUseFlowContext<any> | null = null;
-
-  try {
-    // Initialize client
-    client = await modelHandler.getClient();
-
-    // Run the flow with registration callbacks
-    await runToolUseFlow(
-      {
-        modelHandler,
-        config: agentConfig,
-        setting: agentSetting as AgentToolUseSetting,
-        prompt: agentPrompt,
-        executionContext,
-        userVarChannels,
-        streamTabId,
-        checkInterruption: () => isInterrupted,
-        setAbortController: (ctrl) => {
-          abortController = ctrl;
-        },
-        getClient: () => client,
-      },
-      {
-        onContextReady: (streamId, context) => {
-          flowContext = context;
-          registerToolUseFlowContext(streamId, context);
-        },
-        onFlowComplete: (streamId) => {
-          unregisterToolUseFlowContext(streamId);
-        },
-      },
-    );
-
-    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
-  } catch (error) {
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    throw error;
-  }
-}
-
 // ============================================================================
 // UI and Error Handling
 // ============================================================================
@@ -549,12 +438,53 @@ export async function executeAgent(
       async () => {
         logger.info(`Executing ${agentName} with model ${config.model}`);
 
+        // Initialize client for all flow types
+        const client = await ctx.modelHandler.getClient();
+
+        // Interruption state (shared across flow execution)
+        // TODO: Wire up to unified execution registry for proper interrupt handling
+        const interruptState = { isInterrupted: false };
+
         if (agentSetting.agentType === 'toolUse') {
-          await executeToolUseFlow(ctx);
+          // Tool-use flow execution
+          await runToolUseFlow(
+            {
+              modelHandler: ctx.modelHandler,
+              config: ctx.agentConfig,
+              setting: ctx.agentSetting as AgentToolUseSetting,
+              prompt: ctx.agentPrompt,
+              executionContext: ctx.executionContext,
+              userVarChannels: ctx.userVarChannels,
+              streamTabId: ctx.streamTabId,
+              checkInterruption: () => interruptState.isInterrupted,
+              setAbortController: () => {},
+              getClient: () => client,
+            },
+            {
+              onContextReady: (streamId, context) => {
+                registerToolUseFlowContext(streamId, context);
+              },
+              onFlowComplete: (streamId) => {
+                unregisterToolUseFlowContext(streamId);
+              },
+            },
+          );
         } else {
-          await executeReflectionFlow(ctx);
+          // Reflection flow execution (direct/CoT/workflow)
+          await runReflectionFlow({
+            modelHandler: ctx.modelHandler,
+            config: ctx.agentConfig,
+            setting: ctx.agentSetting as AgentWorkflowSetting,
+            prompt: ctx.agentPrompt,
+            executionContext: ctx.executionContext,
+            userVarChannels: ctx.userVarChannels,
+            checkInterruption: () => interruptState.isInterrupted,
+            setAbortController: () => {},
+            getClient: () => client,
+          });
         }
 
+        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
         logger.debug(`Task completed successfully`);
       },
       { skip: isResume },
@@ -679,10 +609,8 @@ export async function resumeToolUseFromSnapshot(
   }
 
   // State for interruption handling
-  const isInterrupted = false;
-  let abortController: AbortController | null = null;
+  const interruptState = { isInterrupted: false };
   let client: any = null;
-  let flowContext: ToolUseFlowContext<any> | null = null;
 
   try {
     // Initialize client
@@ -707,16 +635,13 @@ export async function resumeToolUseFromSnapshot(
         executionContext,
         userVarChannels,
         streamTabId,
-        checkInterruption: () => isInterrupted,
-        setAbortController: (ctrl) => {
-          abortController = ctrl;
-        },
+        checkInterruption: () => interruptState.isInterrupted,
+        setAbortController: () => {},
         getClient: () => client,
         resumeSnapshot: snapshot,
       },
       {
         onContextReady: (streamId, context) => {
-          flowContext = context;
           registerToolUseFlowContext(streamId, context);
 
           // Allow caller to configure session (e.g., append follow-ups)
