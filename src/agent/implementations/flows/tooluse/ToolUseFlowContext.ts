@@ -38,9 +38,9 @@ import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 import {
-  ToolUseSessionLifecycleStandalone,
+  ToolUseSessionLifecycle,
   type IToolUseSessionHost,
-} from './ToolUseSessionLifecycleStandalone';
+} from './ToolUseSessionLifecycle';
 
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
@@ -88,14 +88,14 @@ export interface ToolUseFlowContextInit<C = unknown> {
 export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   private readonly init: ToolUseFlowContextInit<C>;
   private readonly toolRegistry: IToolRegistry;
-  private readonly sessionLifecycle: ToolUseSessionLifecycleStandalone;
+  private readonly sessionLifecycle: ToolUseSessionLifecycle;
   private _services: ToolUseServices<C> | null = null;
   private _client: C | null = null;
 
   constructor(init: ToolUseFlowContextInit<C>) {
     this.init = init;
     this.toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
-    this.sessionLifecycle = new ToolUseSessionLifecycleStandalone(this);
+    this.sessionLifecycle = new ToolUseSessionLifecycle(this);
   }
 
   // =========================================================================

@@ -1,16 +1,14 @@
 /**
- * Standalone ToolUseSessionLifecycle - Decoupled from BaseToolUseAgent.
+ * ToolUseSessionLifecycle - Unified session lifecycle for tool-use flows.
  *
- * This version uses an interface (IToolUseSessionHost) instead of requiring
- * a BaseToolUseAgent instance, enabling flow-first architecture where
- * flows can run without agent class instances.
+ * This module provides the session lifecycle implementation that works with
+ * any IToolUseSessionHost, enabling both agent-based and flow-first execution.
  */
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
@@ -20,6 +18,33 @@ import {
 } from '@agent/toolUse/ToolUseFollowUp';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
+
+/**
+ * Interface for tool-use session lifecycle operations.
+ * Exposes session-related methods that flows and external callers need.
+ */
+export interface IToolUseSession {
+  /** Append a follow-up message to the session queue. */
+  appendFollowUp(text: string): void;
+
+  /** Check if there's a queued follow-up message. */
+  hasQueuedFollowUp(): boolean;
+
+  /** Wait for the next follow-up message. Returns null if interrupted. */
+  waitForFollowUp(checkInterruption: () => boolean): Promise<string | null>;
+
+  /** Clear any persisted snapshot state. */
+  clearPersistedSnapshot(): Promise<void>;
+
+  /** Enter waiting state for follow-up messages. */
+  enterWaitingState(messages: ProviderMessage[]): Promise<void>;
+
+  /** Mark the session as running (resume from waiting). */
+  markRunning(): Promise<void>;
+
+  /** Persist a checkpoint of the current session state. */
+  persistCheckpoint(messages: ProviderMessage[]): Promise<void>;
+}
 
 /**
  * Interface for what the session lifecycle needs from its host.
@@ -34,12 +59,12 @@ export interface IToolUseSessionHost {
 }
 
 /**
- * Standalone session lifecycle that works with any IToolUseSessionHost.
+ * Session lifecycle that works with any IToolUseSessionHost.
  *
- * This is functionally identical to ToolUseSessionLifecycle but decoupled
- * from the agent class hierarchy.
+ * Used by both BaseToolUseAgent and ToolUseFlowContext for unified
+ * session management across agent-based and flow-first execution.
  */
-export class ToolUseSessionLifecycleStandalone implements IToolUseSession {
+export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private store: AgentSharedStore | null = null;
 
