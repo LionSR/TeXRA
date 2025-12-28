@@ -44,7 +44,7 @@ export function getFilesForRound(
 
   // Subsequent rounds: process previous round's output files
   const prevOutput = roundOutputs[currentRound - 1];
-  if (prevOutput && prevOutput.outputs.length > 0) {
+  if (prevOutput?.outputs.length) {
     return prevOutput.outputs.map((o) => o.location);
   }
 
@@ -70,14 +70,7 @@ export function getFilesForRound(
 export function createBaseFileLocations(
   config: AgentConfig,
 ): WorkspaceFileLocation[] {
-  return config.outputFiles.length > 0
-    ? config.outputFiles.map((f) =>
-        createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
-      )
-    : [
-        createWorkspaceLocation(
-          WorkspaceFS.fullPath(config.inputFile),
-          config.inputFile,
-        ),
-      ];
+  const files =
+    config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
+  return files.map((f) => createWorkspaceLocation(WorkspaceFS.fullPath(f), f));
 }

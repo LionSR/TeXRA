@@ -279,23 +279,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  private findCacheControlCandidate(
-    content: (ContentBlockParam | ContentBlock)[] | undefined,
-  ): CacheControlEligibleBlock | undefined {
-    if (!Array.isArray(content) || content.length === 0) {
-      return undefined;
-    }
-
-    for (let idx = content.length - 1; idx >= 0; idx -= 1) {
-      const candidate = content[idx];
-      if (isCacheControlEligibleBlock(candidate)) {
-        return candidate;
-      }
-    }
-
-    return undefined;
-  }
-
   private assignCacheControlToLatest(
     content: (ContentBlockParam | ContentBlock)[] | undefined,
   ): void {
@@ -303,7 +286,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    const target = this.findCacheControlCandidate(content);
+    const target = content?.findLast(isCacheControlEligibleBlock);
     if (target) {
       this.setCacheControlTarget(target);
     } else if (Array.isArray(content) && content.length > 0) {

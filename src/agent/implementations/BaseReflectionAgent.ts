@@ -124,7 +124,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Check scratchpad usage
     // this is not so neat
     this.useScratchpad =
-      this.agentSetting.prefills?.includes('<scratchpad>') || false;
+      this.agentSetting.prefills?.includes('<scratchpad>') ?? false;
 
     // Set output files for all rounds
     for (let i = 0; i < numRounds; i++) {
@@ -228,7 +228,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Start the run stage
     const runStage = await this.startRunStage();
-    if (!runStage || !runStage.id) {
+    if (!runStage?.id) {
       throw new Error('Run group identifier is required for reflection runs.');
     }
 
@@ -289,16 +289,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   protected getPromptBuilder(): PromptBuilder {
-    if (!this.promptBuilder) {
-      this.promptBuilder = new PromptBuilder(
-        this.agentPrompt,
-        this.agentSetting,
-        this.userVarChannels.transient,
-        this.logger,
-      );
-    }
-
-    return this.promptBuilder;
+    return (this.promptBuilder ??= new PromptBuilder(
+      this.agentPrompt,
+      this.agentSetting,
+      this.userVarChannels.transient,
+      this.logger,
+    ));
   }
 
   public resetPromptBuilder(): void {

@@ -87,18 +87,6 @@ function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
 
-function findLastTextPart(
-  parts: Part[],
-): (Part & { text: string }) | undefined {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (isTextPart(part)) {
-      return part;
-    }
-  }
-  return undefined;
-}
-
 /**
  * Validates that messages have proper alternating user/model turns.
  * All message creation should enforce this natively, so this is a safety check.
@@ -996,7 +984,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const modelMessage = messages.at(-1);
     if (modelMessage?.role === 'model') {
       const parts = (modelMessage.parts ??= []);
-      const lastTextPart = findLastTextPart(parts);
+      const lastTextPart = parts.findLast(isTextPart);
       if (lastTextPart) {
         lastTextPart.text =
           (lastTextPart.text ?? '') + bestConnector + newResponse;
