@@ -5,33 +5,24 @@
  * - State is mutable and flows through nodes
  * - Services are immutable and injected via _params
  *
- * Note: We keep an agent reference for lifecycle methods (startRun, endRun, etc.)
- * but work nodes use services from _params, not agent methods.
+ * ## Flow-First Architecture
+ *
+ * The flow operates independently of the agent:
+ * - All services are accessed via this.services (injected)
+ * - State flows through nodes via shared.state
+ * - No agent reference is needed - all behavior is via strategies
+ *
+ * The agent's only responsibility is lifecycle (init/finalize) and
+ * providing the initial configuration via ReflectionFlowContext.
  */
 
 import type { RoundOutput } from '@agent/output';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { IFlowAgent } from '@agent/core/IAgent';
 import type { RetryState } from '@agent/core/flows/RetryState';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { AgentFileLocation } from '@utils/files';
-
-// ============================================================================
-// Agent Interface
-// ============================================================================
-
-/**
- * Interface for agents used by ReflectionFlow.
- *
- * Extends IFlowAgent with reflection-specific methods.
- * This mirrors the pattern used by ToolUseFlow (IToolUseFlowAgent).
- */
-export interface IReflectionFlowAgent extends IFlowAgent {
-  /** Reset prompt builder before starting rounds. */
-  resetPromptBuilder(): void;
-}
 
 /**
  * Context prepared for a round (messages + prefill).
@@ -80,18 +71,23 @@ export interface ReflectionFlowState {
  * Shared context passed through the flow.
  *
  * Contains:
- * - agent: Reference for flow-specific operations
  * - state: Mutable runtime state
  * - retryState: Retry tracking for error handling
  * - runStage: Parent stage for creating round stages (r0, r1, r2...)
  *
- * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
- * Work nodes use services from this.services, throw errors on failure.
- * The agent reference is for flow-specific operations only.
+ * ## Flow-First Design
+ *
+ * No agent reference is included. All services are accessed via this.services
+ * (injected via flow.setServices). Polymorphic behavior is captured via
+ * strategy objects in ReflectionFlowContext, not via callbacks to agent methods.
+ *
+ * The agent's responsibility is:
+ * 1. Create ReflectionFlowContext with strategies
+ * 2. Create the flow and inject services
+ * 3. Call flow.run(shared) and handle results
+ * 4. Lifecycle (init before flow, finalize after)
  */
 export interface ReflectionFlowShared {
-  /** Agent reference for flow-specific methods */
-  agent: IReflectionFlowAgent;
   state: ReflectionFlowState;
   retryState: RetryState;
   /** Parent stage for round stages (used to create r0, r1, r2... as siblings) */
