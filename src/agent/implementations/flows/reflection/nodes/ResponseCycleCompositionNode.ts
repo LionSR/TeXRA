@@ -21,6 +21,7 @@
  */
 
 import { Node, Flow } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -260,7 +261,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       shared.state.endTurn = false;
       shared.state.outputLocation = prepRes.outputLocation;
       // User cancellation is not an error - just stop gracefully
-      return undefined;
+      return FlowTransition.DEFAULT;
     }
 
     if (execRes.failedWithError) {
@@ -281,7 +282,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     shared.state.roundStates.push(prepRes.context.stateRound);
 
     // Continue to OutputNode
-    return undefined;
+    return FlowTransition.DEFAULT;
   }
 
   /**

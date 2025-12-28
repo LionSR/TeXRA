@@ -223,7 +223,7 @@ class ToolUsePrepareNode<C> extends Node<
     shared.state.store = store;
     shared.state.runState = runState;
 
-    return undefined; // Follow next() → CycleNode
+    return FlowTransition.DEFAULT; // Follow next() → CycleNode
   }
 }
 
@@ -301,10 +301,10 @@ class ToolUseCycleNode<C> extends Node<
           shared.state.conversation,
           prepRes.store,
         );
-        return undefined; // Follow next() → WaitNode
+        return FlowTransition.DEFAULT; // Follow next() → WaitNode
 
       case 'skipped':
-        return undefined; // Follow next() → WaitNode
+        return FlowTransition.DEFAULT; // Follow next() → WaitNode
 
       case 'failed':
         // Throw error - agent.run() catches and handles cleanup
@@ -387,7 +387,7 @@ class ToolUseWaitNode<C> extends Node<
   ): Promise<string | undefined> {
     if (execRes.kind === 'stop') {
       // No follow-up or interrupted - flow ends gracefully
-      return undefined;
+      return FlowTransition.DEFAULT;
     }
 
     // Apply follow-up via services
