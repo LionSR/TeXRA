@@ -55,7 +55,7 @@ export class StreamTabs {
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';
-        statusEl.classList.add(status);
+        statusEl.classList.add(`is-${status}`);
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
       }
@@ -154,13 +154,15 @@ export class StreamTabs {
     if (statusEl) {
       // Remove old status classes dynamically from STREAM_STATUS values
       // This ensures the class list stays in sync with constants
-      Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
+      Object.values(STREAM_STATUS).forEach((s) =>
+        statusEl.classList.remove(`is-${s}`),
+      );
       // READY means execution completed - display as stopped (no active indicator)
       const normalizedStatus =
         status === STREAM_STATUS.READY
           ? STREAM_STATUS.STOPPED
           : status || STREAM_STATUS.STOPPED;
-      statusEl.classList.add(normalizedStatus);
+      statusEl.classList.add(`is-${normalizedStatus}`);
       statusEl.dataset.status =
         normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
       updated = true;
