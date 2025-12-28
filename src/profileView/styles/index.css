@@ -62,8 +62,7 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
-.tier-badge.max,
-.tier-badge.researcher {
+.tier-badge.max {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
