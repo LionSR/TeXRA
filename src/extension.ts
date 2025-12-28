@@ -258,7 +258,10 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(apiKeyStatusBarItem);
   // Non-blocking refresh to avoid delaying extension activation
   void refreshApiKeyStatus().catch((err) =>
-    logger.error('extension', `API key status refresh failed: ${toErrorMessage(err)}`),
+    logger.error(
+      'extension',
+      `API key status refresh failed: ${toErrorMessage(err)}`,
+    ),
   );
 
   const runningStreams = new Set<string>();
@@ -343,7 +346,10 @@ export async function activate(context: vscode.ExtensionContext) {
     )
       .then(() => context.globalState.update(welcomeKey, true))
       .catch((err) =>
-        logger.error('extension', `Welcome instruction failed: ${toErrorMessage(err)}`),
+        logger.error(
+          'extension',
+          `Welcome instruction failed: ${toErrorMessage(err)}`,
+        ),
       );
   }
 }
