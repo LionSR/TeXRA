@@ -21,7 +21,10 @@
 
 import { Node } from '@agent/node';
 import type { RoundOutput } from '@agent/output';
-import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
+import {
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 

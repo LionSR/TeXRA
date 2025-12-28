@@ -954,11 +954,13 @@ class BaseReflectionAgent {
 ### Problem Statement
 
 The original flow order was:
+
 ```
 TeXCountNode → MediaPreparationNode → PrepareContextNode → ResponseCycle → ...
 ```
 
 Issues:
+
 1. **TeXCount as entry point** - Not all workflows use TeXCount, yet it's always first
 2. **Scattered responsibility** - TeXCount and Media store data in `workspaceState`, PrepareContext reads it
 3. **Tight coupling** - PrepareContext must know about workspaceState.document.texcountStats and workspaceState.media.files
@@ -966,11 +968,13 @@ Issues:
 ### Solution: Option 3 Architecture
 
 New flow order:
+
 ```
 PrepareContextNode → TeXCountNode → MediaPreparationNode → ResponseCycle → ...
 ```
 
 Each node handles its own contribution:
+
 - **PrepareContext**: Builds base messages (no texcount stats, no media)
 - **TeXCount**: Enriches messages by prepending stats to user content
 - **Media**: Enriches messages by adding media files to user message
@@ -983,12 +987,12 @@ This was **significantly harder than expected** due to provider-specific message
 
 Each provider has different message structures:
 
-| Provider | User Message Format |
-|----------|---------------------|
-| **Anthropic** | `{ role: 'user', content: ContentBlockParam[] }` where content is array of text/image blocks |
-| **OpenAI** | `{ role: 'user', content: string \| ChatCompletionContentPart[] }` with polymorphic content |
-| **Google** | `{ role: 'user', parts: Part[] }` with `parts` not `content` |
-| **OpenAI Response** | `{ role: 'user', content: ResponseInputMessageContentList }` with `input_text` types |
+| Provider            | User Message Format                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| **Anthropic**       | `{ role: 'user', content: ContentBlockParam[] }` where content is array of text/image blocks |
+| **OpenAI**          | `{ role: 'user', content: string \| ChatCompletionContentPart[] }` with polymorphic content  |
+| **Google**          | `{ role: 'user', parts: Part[] }` with `parts` not `content`                                 |
+| **OpenAI Response** | `{ role: 'user', content: ResponseInputMessageContentList }` with `input_text` types         |
 
 #### Challenge 2: Required New ModelHandler Methods
 
@@ -1001,6 +1005,7 @@ addMediaToUserMessage(messages: M[], mediaFiles: FileLocation[]): Promise<void>;
 ```
 
 Each implementation had to:
+
 1. Search backwards for last user message
 2. Handle content polymorphism (string vs array)
 3. Use provider-specific type guards
@@ -1009,11 +1014,13 @@ Each implementation had to:
 #### Challenge 3: Type Safety Issues
 
 TypeScript errors encountered:
+
 - `TS18048: 'msg.parts' is possibly 'undefined'` (Google handler)
 - `TS2339: Property 'createFormattedMediaParts' does not exist` (wrong method name)
 - `TS2552: Cannot find name 'ChatCompletionContentPartText'` (type doesn't exist in OpenAI SDK)
 
 Fixes required:
+
 - Add null checks: `if (msg.role === 'user' && msg.parts)`
 - Use correct method names: `createMediaMessage()` not `createFormattedMediaParts()`
 - Use inline type assertions instead of nonexistent types
@@ -1021,6 +1028,7 @@ Fixes required:
 #### Challenge 4: No Similar Existing Methods
 
 Investigated whether similar methods already existed. Found related but distinct methods:
+
 - `createUserFollowUpMessages()` - **adds new messages**, doesn't modify existing
 - `createRoundMessages()` - **creates new messages** for a round
 - `addContinueMessageWithPrefill()` - for truncated response continuation
@@ -1030,21 +1038,25 @@ The new methods serve a unique purpose: **post-build message enrichment** - modi
 ### Files Modified
 
 **Model Handler Interface & Base:**
+
 - `src/agent/modelHandlers/types/IModelHandler.ts` - Added 2 new methods
 - `src/agent/modelHandlers/ModelHandler.ts` - Added abstract methods
 
 **Handler Implementations:**
+
 - `src/agent/modelHandlers/modelHandlerAnthropic.ts` - ~70 lines added
 - `src/agent/modelHandlers/modelHandlerOpenAI.ts` - ~70 lines added
 - `src/agent/modelHandlers/modelHandlerGoogleGenAI.ts` - ~45 lines added
 - `src/agent/modelHandlers/modelHandlerOpenAIResponse.ts` - ~60 lines added
 
 **Flow Nodes:**
+
 - `src/agent/implementations/flows/reflection/nodes/PrepareContextNode.ts` - Removed texcount/media handling
 - `src/agent/implementations/flows/reflection/nodes/TeXCountNode.ts` - Now calls prependTextToUserMessage
 - `src/agent/implementations/flows/reflection/nodes/MediaPreparationNode.ts` - Now calls addMediaToUserMessage
 
 **Flow Wiring:**
+
 - `src/agent/implementations/flows/reflection/ReflectionFlow.ts` - Reordered node connections
 
 ### Lessons Learned
@@ -1056,10 +1068,10 @@ The new methods serve a unique purpose: **post-build message enrichment** - modi
 
 ### Alternatives Considered
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Option 1: ContentContributions pattern** | Clean separation | Adds new types to state |
-| **Option 2: Swap Media and TeXCount order** | Minimal change | Doesn't achieve "PrepareContext first" |
+| Approach                                    | Pros                                  | Cons                                   |
+| ------------------------------------------- | ------------------------------------- | -------------------------------------- |
+| **Option 1: ContentContributions pattern**  | Clean separation                      | Adds new types to state                |
+| **Option 2: Swap Media and TeXCount order** | Minimal change                        | Doesn't achieve "PrepareContext first" |
 | **Option 3: Message enrichment methods** ✅ | True separation, nodes self-contained | Required 4 new handler implementations |
 
 Option 3 was chosen because it properly separates concerns - each node is fully responsible for its contribution to the final messages.
@@ -1070,11 +1082,20 @@ Both Reflection and Tool-Use flows call `modelHandler.initializeMessages()` simi
 
 ```typescript
 // Reflection (PrepareContextNode)
-const messages = await modelHandler.initializeMessages(userPrefix, userRequest, undefined, systemPrompt);
+const messages = await modelHandler.initializeMessages(
+  userPrefix,
+  userRequest,
+  undefined,
+  systemPrompt,
+);
 
 // Tool-use (BaseToolUseAgent.prepareInitialState)
-const messages = await modelHandler.initializeMessages(userPrefix, userRequest, undefined,
-  systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix);
+const messages = await modelHandler.initializeMessages(
+  userPrefix,
+  userRequest,
+  undefined,
+  systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
+);
 ```
 
 The only difference is tool-use appends `TOOL_USE_INSTRUCTIONS` to the system prompt.
@@ -1091,6 +1112,7 @@ The only difference is tool-use appends `TOOL_USE_INSTRUCTIONS` to the system pr
 ### Problem Statement
 
 The hydration system is confusing with multiple interrelated methods:
+
 - `hydrateOutputState()` - Entry point in BaseReflectionAgent
 - `hydrateFromArtifacts()` - Worker in OutputHandler
 - `awaitPendingHydration()` - Synchronization primitive
@@ -1098,6 +1120,7 @@ The hydration system is confusing with multiple interrelated methods:
 ### What Hydration Does
 
 When resuming a reflection agent run, hydration:
+
 1. Restores output files from previous rounds
 2. Switches storage context (keys, paths)
 3. Makes round state available for continued execution
@@ -1127,6 +1150,7 @@ BaseReflectionAgent.run() (line 376)
 ### Identified Issues
 
 #### Issue 1: Dual Sources of Truth ⚠️ MODERATE
+
 ```typescript
 // OutputHandler stores:
 private rounds: Map<number, RoundData>;
@@ -1134,44 +1158,50 @@ private rounds: Map<number, RoundData>;
 // BaseReflectionAgent also stores:
 public roundOutputs: RoundOutput[] = [];
 ```
+
 Two separate caches of the same data. `getRoundArtifacts()` copies from one to the other.
 
 #### Issue 2: Promise Race Condition ⚠️ LOW PROBABILITY
+
 ```typescript
 // In hydrateOutputState():
 this.hydrationPromise = hydration;
 try {
   await hydration;
 } finally {
-  if (this.hydrationPromise === hydration) {  // Reference equality check
+  if (this.hydrationPromise === hydration) {
+    // Reference equality check
     this.hydrationPromise = null;
   }
 }
 ```
+
 If two resume operations happen simultaneously, cleanup could race. Unlikely in practice.
 
 #### Issue 3: Temporal Coupling ⚠️ ANTI-PATTERN
+
 - `hydrateOutputState()` called in executeAgent.ts
 - `awaitPendingHydration()` called at start of agent.run()
 - Correctness depends on two methods in different files called in specific order
 - If `awaitPendingHydration()` is removed, system breaks silently
 
 #### Issue 4: Confusing Naming
-| Current Name | Problem | Better Name |
-|--------------|---------|-------------|
-| `hydrateOutputState` | Too generic | `resumeFromSavedRounds` |
-| `hydrateFromArtifacts` | Exposes internal detail | Make private, or `restoreRoundsCache` |
-| `awaitPendingHydration` | Sounds like a condition | `waitForResumeComplete` |
+
+| Current Name            | Problem                 | Better Name                           |
+| ----------------------- | ----------------------- | ------------------------------------- |
+| `hydrateOutputState`    | Too generic             | `resumeFromSavedRounds`               |
+| `hydrateFromArtifacts`  | Exposes internal detail | Make private, or `restoreRoundsCache` |
+| `awaitPendingHydration` | Sounds like a condition | `waitForResumeComplete`               |
 
 ### Complexity Metrics
 
-| Metric | Value | Assessment |
-|--------|-------|------------|
-| Methods involved | 3 primary + 5 secondary | High |
-| Call depth | 5-6 levels | High |
-| State mutations | 6 locations | High |
-| Sources of truth | 2 (OutputHandler.rounds + roundOutputs[]) | Anti-pattern |
-| Temporal coupling | Yes (executeAgent → run → awaitPending) | Anti-pattern |
+| Metric            | Value                                     | Assessment   |
+| ----------------- | ----------------------------------------- | ------------ |
+| Methods involved  | 3 primary + 5 secondary                   | High         |
+| Call depth        | 5-6 levels                                | High         |
+| State mutations   | 6 locations                               | High         |
+| Sources of truth  | 2 (OutputHandler.rounds + roundOutputs[]) | Anti-pattern |
+| Temporal coupling | Yes (executeAgent → run → awaitPending)   | Anti-pattern |
 
 **Overall Complexity Score: 6.5/10** - Not spaghetti, but unnecessarily indirect.
 
@@ -1182,17 +1212,13 @@ The system was designed for **runtime state persistence** (tracking rounds durin
 ### Recommendations
 
 **High Priority:**
+
 1. Fix promise race condition (add version counter or make non-reentrant)
 2. Add hydration validation (verify data matches current stream)
 
-**Medium Priority:**
-3. Consolidate into single `resumeFromSavedState()` method
-4. Make OutputHandler more stateless (return directly instead of store-then-retrieve)
-5. Remove temporal coupling by having hydration set a flag checked in run()
+**Medium Priority:** 3. Consolidate into single `resumeFromSavedState()` method 4. Make OutputHandler more stateless (return directly instead of store-then-retrieve) 5. Remove temporal coupling by having hydration set a flag checked in run()
 
-**Low Priority:**
-6. Rename methods to use "Resume" terminology instead of "Hydrate"
-7. Consider explicit hydration phase in agent lifecycle
+**Low Priority:** 6. Rename methods to use "Resume" terminology instead of "Hydrate" 7. Consider explicit hydration phase in agent lifecycle
 
 ---
 
@@ -1204,6 +1230,7 @@ The system was designed for **runtime state persistence** (tracking rounds durin
 ### Problem Statement
 
 `modelHandler: this.modelHandler` is passed in multiple places:
+
 - `BaseAgent.buildCycleOptions()`
 - `BaseReflectionAgent.services` getter
 - `BaseToolUseAgent.services` getter
@@ -1244,6 +1271,7 @@ return {
 ### Potential Simplifications
 
 #### Option A: Base Services Interface
+
 ```typescript
 interface BaseFlowServices<C> {
   modelHandler: IModelHandler<any, any, any, any, C>;
@@ -1258,6 +1286,7 @@ interface ReflectionServices<C> extends BaseFlowServices<C> {
 ```
 
 #### Option B: Services Factory in BaseAgent
+
 ```typescript
 // BaseAgent
 protected get baseServices() {
@@ -1279,6 +1308,7 @@ public get services(): ReflectionServices<C> {
 ```
 
 #### Option C: Keep Current (Explicit)
+
 Each agent explicitly lists all services. Repetitive but clear.
 
 ### Recommendation
@@ -1297,6 +1327,7 @@ Each agent explicitly lists all services. Repetitive but clear.
 ### Problem Statement
 
 The hydration system had several issues identified in Phase 6:
+
 1. **Temporal Coupling** - `hydrateOutputState()` called in executeAgent.ts, `awaitPendingHydration()` called at start of agent.run()
 2. **Dual Sources of Truth** - OutputHandler.rounds Map AND agent.roundOutputs[] stored same data
 3. **Promise Race Condition** - Reference equality check in cleanup could race
@@ -1307,11 +1338,13 @@ The hydration system had several issues identified in Phase 6:
 Implemented a combined approach:
 
 **Option A: Consolidate Resume into Agent Lifecycle**
+
 - Replaced async `hydrateOutputState()` + `awaitPendingHydration()` with sync `prepareResume()`
 - Actual hydration happens in `startAndInitRun()` when `resumeParams` is set
 - Eliminates temporal coupling - all resume logic in one place
 
 **Option B (Partial): Stateless Hydration Path**
+
 - New `hydrateFromResume()` creates RoundOutput objects directly
 - No longer goes through `OutputHandler.hydrateFromArtifacts()` → `getRoundArtifacts()`
 - Eliminates dual source of truth for resume path
@@ -1320,6 +1353,7 @@ Implemented a combined approach:
 ### Implementation Details
 
 **New Methods in BaseReflectionAgent:**
+
 ```typescript
 // Stores resume params synchronously
 public prepareResume(params: ResumeParams): void;
@@ -1332,6 +1366,7 @@ private async hydrateFromResume(params: ResumeParams): Promise<void>;
 ```
 
 **Changed Methods:**
+
 ```typescript
 // Now handles resume at start
 public override async startAndInitRun(): Promise<void> {
@@ -1344,6 +1379,7 @@ public override async startAndInitRun(): Promise<void> {
 ```
 
 **Removed:**
+
 - `hydrateOutputState()` - replaced by `prepareResume()` + `hydrateFromResume()`
 - `awaitPendingHydration()` - no longer needed
 - `hydrationPromise` field - eliminated
@@ -1352,12 +1388,12 @@ public override async startAndInitRun(): Promise<void> {
 
 ### Files Modified
 
-| File | Changes |
-|------|---------|
+| File                     | Changes                                                                                                                                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `BaseReflectionAgent.ts` | Added `ResumeParams` interface, `prepareResume()`, `isResuming()`, `hydrateFromResume()`. Removed `hydrateOutputState()`, `awaitPendingHydration()`, `hydrationPromise`. Updated `startAndInitRun()` and `run()`. |
-| `executeAgent.ts` | Changed `await agent.hydrateOutputState({...})` to `agent.prepareResume({...})` |
-| `IOutputHandler.ts` | Removed `hydrateFromArtifacts()` method |
-| `OutputHandler.ts` | Removed `hydrateFromArtifacts()` implementation |
+| `executeAgent.ts`        | Changed `await agent.hydrateOutputState({...})` to `agent.prepareResume({...})`                                                                                                                                   |
+| `IOutputHandler.ts`      | Removed `hydrateFromArtifacts()` method                                                                                                                                                                           |
+| `OutputHandler.ts`       | Removed `hydrateFromArtifacts()` implementation                                                                                                                                                                   |
 
 ### Benefits
 
@@ -1383,32 +1419,38 @@ public override async startAndInitRun(): Promise<void> {
 ### Cleaned Dead Code
 
 **1. ReflectionFlowState.ts** - Removed unused phase tracking:
+
 - `REFLECTION_PHASE` constant (lines 39-48) - never used
 - `ReflectionPhase` type (lines 50-51) - never imported
 
 **2. agent/output/displayUtils.ts** - Removed unused functions:
+
 - `getDisplayPath()` - duplicated in @utils/files
 - `getAbsolutePath()` - never called
 - `getWorkspacePath()` - never called
 - `getExecutionId()` - never called
 
 **3. agent/output/index.ts** - Removed unused re-exports:
+
 - `getFileBasename`, `getFileDirectory`, `getDisplayLabel`, `getDisplayDir`, `getDisplayPath`
 - These are internal to the output module; external code uses @utils/files
 
 ### Documented But Not Removed (Lower Priority)
 
 **1. Unused Barrel Files** (never imported from):
+
 - `/src/agent/types/index.ts` - all imports use direct paths
 - `/src/agent/remote/index.ts` - all imports use direct paths
 - `/src/agent/utils/text/index.ts` - all imports use direct paths
 
 **2. Write-Only Fields in BaseReflectionAgent**:
+
 - `outputFile: AgentFileLocation[]` - written in constructor, never read
 - `outputFiles: { [key: number]: AgentFileLocation[] }` - initialized, never populated/read
 - `logId: number` - always 0, never incremented
 
 **3. Unused Model Handler Property**:
+
 - `isOpenaiCompatible: boolean` - defined in interface and base class, never read
 
 ### Why Not Remove Low-Priority Items
@@ -1420,6 +1462,7 @@ public override async startAndInitRun(): Promise<void> {
 ### Verification
 
 Build and lint passed after cleanup:
+
 ```bash
 npm run build  # ✅ compiled with 1 warning (nunjucks, unrelated)
 npm run lint   # ✅ passed

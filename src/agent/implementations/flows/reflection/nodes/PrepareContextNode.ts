@@ -20,7 +20,10 @@
 import { Node } from '@agent/node';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
+import {
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 import type {
