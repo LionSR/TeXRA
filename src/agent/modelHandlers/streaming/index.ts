@@ -80,9 +80,21 @@ export {
 // StreamConsumer
 export { StreamConsumer } from './StreamConsumer';
 
-// Normalizers will be exported once implemented
-// export { normalizeAnthropicStream } from './normalizers/anthropicNormalizer';
-// export { normalizeOpenAIStream } from './normalizers/openaiNormalizer';
+// Normalizers
+export {
+  normalizeAnthropicStream,
+  type AnthropicMessageStream,
+} from './normalizers/anthropicNormalizer';
+
+export {
+  normalizeOpenAIStream,
+  normalizeOpenAIStreamWithCustomExtractor,
+  defaultReasoningExtractor,
+  type OpenAIChatCompletionStream,
+  type ReasoningExtractor,
+} from './normalizers/openaiNormalizer';
+
+// TODO: Implement remaining normalizers
 // export { normalizeGoogleStream } from './normalizers/googleNormalizer';
 // export { normalizeOpenAIResponseStream } from './normalizers/openaiResponseNormalizer';
 // export { normalizeOpenRouterStream } from './normalizers/openrouterNormalizer';
