@@ -38,7 +38,10 @@ export async function loadTexraRules(): Promise<string> {
       }
     }
   } catch (err) {
-    logger.warn(CHANNEL, `Failed to load ${'.texrarules'}: ${toErrorMessage(err)}`);
+    logger.warn(
+      CHANNEL,
+      `Failed to load ${'.texrarules'}: ${toErrorMessage(err)}`,
+    );
   }
   return '';
 }
