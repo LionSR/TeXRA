@@ -202,18 +202,11 @@ class UsageLogServiceImpl {
       }
 
       const data = await response.json();
-      const parsed = UsageLogResponseSchema.safeParse(data);
-
-      if (!parsed.success) {
-        logger.warn(
-          CHANNEL,
-          `Invalid response from server: ${parsed.error.message}`,
-        );
-        // Return a default success response if parsing fails but HTTP was OK
-        return { success: true, accepted: batch.entries.length };
-      }
-
-      return parsed.data;
+      // Parse with fallback - if response is invalid, assume success since HTTP was OK
+      return UsageLogResponseSchema.catch({
+        success: true,
+        accepted: batch.entries.length,
+      }).parse(data);
     } finally {
       clearTimeout(timeoutId);
     }
