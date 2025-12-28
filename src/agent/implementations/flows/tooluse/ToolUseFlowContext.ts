@@ -163,8 +163,13 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
 
   /**
    * Interrupt the session.
+   * Notifies the runtime layer via onInterrupt callback and cleans up session.
    */
   interrupt(): void {
+    // Notify runtime layer to update interrupt state
+    this.init.onInterrupt?.();
+
+    // Clean up session lifecycle
     this.sessionLifecycle.interrupt();
     void this.sessionLifecycle.clearPersistedSnapshot();
     this.sessionLifecycle.setStore(null);
