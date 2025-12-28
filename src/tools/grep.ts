@@ -16,17 +16,17 @@ type OutputMode = (typeof OUTPUT_MODES)[number];
 
 const GrepInputSchema = z.strictObject({
   pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().optional(),
-  glob: z.string().optional(),
-  output_mode: z.enum(OUTPUT_MODES).optional(),
-  '-B': z.int().min(0).optional(),
-  '-A': z.int().min(0).optional(),
-  '-C': z.int().min(0).optional(),
-  '-n': z.boolean().optional(),
-  '-i': z.boolean().optional(),
-  type: z.string().optional(),
-  head_limit: z.int().min(1).optional(),
-  multiline: z.boolean().optional(),
+  path: z.string().nullish(),
+  glob: z.string().nullish(),
+  output_mode: z.enum(OUTPUT_MODES).nullish(),
+  '-B': z.int().min(0).nullish(),
+  '-A': z.int().min(0).nullish(),
+  '-C': z.int().min(0).nullish(),
+  '-n': z.boolean().nullish(),
+  '-i': z.boolean().nullish(),
+  type: z.string().nullish(),
+  head_limit: z.int().min(1).nullish(),
+  multiline: z.boolean().nullish(),
 });
 
 export type GrepInput = z.infer<typeof GrepInputSchema>;

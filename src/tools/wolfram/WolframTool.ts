@@ -10,7 +10,7 @@ import { executeWolframCode } from './wolframScriptUtils';
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
-  timeout: z.number().optional(),
+  timeout: z.number().nullish(),
 });
 
 export type WolframInput = z.infer<typeof WolframInputSchema>;

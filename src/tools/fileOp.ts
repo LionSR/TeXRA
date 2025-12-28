@@ -26,7 +26,7 @@ import { defineTool } from './core/define';
 const FileOpInputSchema = z.strictObject({
   command: z.enum(['read', 'write', 'append']),
   path: z.string(),
-  content: z.string().optional(),
+  content: z.string().nullish(),
 });
 
 export type FileOpInput = z.infer<typeof FileOpInputSchema>;
@@ -48,7 +48,7 @@ export class FileOpTool extends defineTool({
         });
       }
       case 'write': {
-        if (content === undefined) {
+        if (content == null) {
           return toolResult({
             error: 'content parameter is required for write',
             isError: true,
@@ -100,7 +100,7 @@ export class FileOpTool extends defineTool({
         });
       }
       case 'append': {
-        if (content === undefined) {
+        if (content == null) {
           return toolResult({
             error: 'content parameter is required for append',
             isError: true,
