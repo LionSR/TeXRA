@@ -54,8 +54,9 @@ import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
  *
  * Extends BaseFlowContextInit with tool-use specific fields.
  */
-export interface ToolUseFlowContextInit<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface ToolUseFlowContextInit<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
 
@@ -194,7 +195,8 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   private async prepareInitialState(
     snapshot: ToolUseSessionSnapshot | null,
   ): Promise<PrepareStateResult> {
-    const { modelHandler, prompt, userVarChannels, executionContext } = this.init;
+    const { modelHandler, prompt, userVarChannels, executionContext } =
+      this.init;
     const logger = executionContext.logger;
     const onRoundFinalized = this.init.getUsageRecorder?.();
 
@@ -231,7 +233,9 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
       userPrefix,
       userRequest,
       undefined,
-      systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
+      systemPrompt
+        ? `${systemPrompt}\n${instructionSuffix}`
+        : instructionSuffix,
     );
 
     const store = createSharedStore({
@@ -253,8 +257,14 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   }
 
   private createCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C> {
-    const { modelHandler, setting, prompt, config, executionContext, userVarChannels } =
-      this.init;
+    const {
+      modelHandler,
+      setting,
+      prompt,
+      config,
+      executionContext,
+      userVarChannels,
+    } = this.init;
     const client = this.init.getClient();
 
     const resolvedSetting = {

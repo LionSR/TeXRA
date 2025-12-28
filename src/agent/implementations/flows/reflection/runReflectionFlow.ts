@@ -46,7 +46,10 @@ import { createRetryState } from '@agent/core/flows/RetryState';
 import { normalizeRunId } from '@common/constants/runIds';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
-import { createReflectionFlow, type ReflectionFlowShared } from './ReflectionFlow';
+import {
+  createReflectionFlow,
+  type ReflectionFlowShared,
+} from './ReflectionFlow';
 import { createInitialReflectionState } from './ReflectionFlowState';
 import {
   ReflectionFlowContext,
@@ -60,8 +63,10 @@ import {
 /**
  * Input for running a reflection flow.
  */
-export interface RunReflectionFlowInput<C = unknown>
-  extends Omit<ReflectionFlowContextInit<C>, 'getUsageRecorder'> {
+export interface RunReflectionFlowInput<C = unknown> extends Omit<
+  ReflectionFlowContextInit<C>,
+  'getUsageRecorder'
+> {
   /**
    * Usage recorder callback. If not provided, usage is not tracked.
    */
