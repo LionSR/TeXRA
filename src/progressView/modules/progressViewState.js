@@ -354,7 +354,7 @@ export class ProgressViewState {
         groupToggleStates: this.toggleStates.entries(),
       });
     } catch (e) {
-      console.error('Failed to save state:', e);
+      console.error('[ProgressViewState] Failed to save toggle states:', e);
     }
   }
 

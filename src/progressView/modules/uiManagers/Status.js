@@ -15,7 +15,7 @@ export class Status {
   constructor() {
     this.STATUS_MAP = {
       [STREAM_STATUS.RUNNING]: {
-        className: 'running',
+        className: 'is-running',
         label: 'Running',
         enable: [
           ELEMENT_IDS.STOP_STREAM_BTN,
@@ -24,7 +24,7 @@ export class Status {
         ],
       },
       [STREAM_STATUS.ERROR]: {
-        className: 'error',
+        className: 'is-error',
         label: 'Error',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
@@ -37,7 +37,7 @@ export class Status {
         ],
       },
       [STREAM_STATUS.STOPPED]: {
-        className: 'stopped',
+        className: 'is-stopped',
         label: 'Stopped',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
@@ -50,7 +50,7 @@ export class Status {
         ],
       },
       [STREAM_STATUS.READY]: {
-        className: 'ready',
+        className: 'is-ready',
         label: 'Ready',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
@@ -59,7 +59,7 @@ export class Status {
         ],
       },
       [STREAM_STATUS.WAITING]: {
-        className: 'waiting',
+        className: 'is-waiting',
         label: 'Waiting for follow-up',
         enable: [
           ELEMENT_IDS.STOP_STREAM_BTN,
@@ -145,7 +145,7 @@ export class Status {
       );
 
       const cfg = this.STATUS_MAP[status] || {
-        className: 'stopped',
+        className: 'is-stopped',
         label: status || 'Ready',
         enable: [],
       };

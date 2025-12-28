@@ -1,9 +1,9 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants.js';
-import { copyWithFeedback } from '../utils.js';
 
-// Local imports - shared helpers
+// Local imports - common
 import { safeGetElementById } from '@common/domUtils.js';
+import { copyWithFeedback } from '@common/clipboardUtils.js';
 
 /**
  * Manages the instruction panel that surfaces the active stream instruction.
