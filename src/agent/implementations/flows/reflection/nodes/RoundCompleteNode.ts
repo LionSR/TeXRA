@@ -16,6 +16,7 @@
  */
 
 import { Node } from '@agent/node';
+import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
@@ -50,7 +51,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   constructor() {
-    super(1, 0); // maxRetries=1, wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
   /**

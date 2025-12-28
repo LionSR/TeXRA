@@ -17,6 +17,7 @@
  */
 
 import { Node } from '@agent/node';
+import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
@@ -58,7 +59,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   constructor() {
-    super(1, 0); // maxRetries=1, wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
   /**

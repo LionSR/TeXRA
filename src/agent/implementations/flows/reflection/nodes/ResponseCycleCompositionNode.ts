@@ -21,6 +21,7 @@
  */
 
 import { Node, Flow } from '@agent/node';
+import { NODE_NO_RETRY, NODE_NO_WAIT } from '@agent/implementations/flows/common';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
@@ -81,7 +82,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
   private cycleFlow: Flow<ResponseCycleShared, ResponseCycleParams<C>>;
 
   constructor() {
-    super(1, 0); // maxRetries=1, wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
     this.cycleFlow = createResponseCycleFlow<C>();
   }
 
