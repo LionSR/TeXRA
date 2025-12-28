@@ -121,7 +121,7 @@ export class HistoryRenderer {
 
     let basicHTML = `
       <span class="history-label">Kind:</span>
-      <span class="history-value"><span class="session-kind-badge ${kindClass}">${kindIconHtml} ${kindLabel}</span></span>
+      <span class="history-value"><span class="badge session-kind-badge ${kindClass}">${kindIconHtml} ${kindLabel}</span></span>
       <span class="history-label">Agent:</span>
       <span class="history-value">${encodedAgent}</span>
       <span class="history-label">Model:</span>

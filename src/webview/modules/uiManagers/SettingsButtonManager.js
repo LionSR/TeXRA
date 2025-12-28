@@ -12,7 +12,7 @@ import {
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from './BaseUIManager.js';
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
 import { updateModelApiKeyBanner } from './apiKeyBannerUtils.js';
