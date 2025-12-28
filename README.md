@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Proprietary-blue)](LICENSE)
 
 > **🎓 Free for Researchers!** TeXRA now offers a **Researcher Access Program** with
-> complimentary access to GPT-5 Mini, GPT-5 Nano, and other budget-friendly models.
+> complimentary access to budget-friendly models from OpenAI, DeepSeek, Gemini, and more.
 > Sign in through the Profile view to get started—no API keys required.
 
 TeXRA brings large language models to rigorous scientific workflows. The
