@@ -23,16 +23,8 @@ export const validateOutputFiles = (cfg: {
   return cfg.outputFiles.length <= inputs.length;
 };
 
-/**
- * Session descriptor schema for AgentConfig.
- * The session field is the canonical source of truth for agent classification.
- */
 /** Zod schema for validating AgentConfig objects */
-const stringArrayField = () =>
-  z
-    .array(z.string())
-    .nullish()
-    .transform((value) => value ?? []);
+const stringArrayField = () => z.array(z.string()).prefault([]);
 
 const AgentConfigBaseSchema = z
   .object({

@@ -191,8 +191,8 @@ export class SupabaseClient {
         return defaultContext;
       }
 
-      // Parse with Zod schema - defaults are defined in schema via .prefault()
-      return UserAuthContextSchema.catch(defaultContext).parse(data);
+      // Parse with Zod schema - field-level .catch() preserves valid fields
+      return UserAuthContextSchema.parse(data);
     } catch (error) {
       logger.error(
         'SupabaseClient',
