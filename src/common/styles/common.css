@@ -191,6 +191,150 @@ vscode-toolbar-button {
 }
 
 /* ==========================================================================
+   Flex Layout Utilities
+   Addresses 81 occurrences of display:flex across 20 files
+   ========================================================================== */
+
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+.flex-row--between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap-sm {
+  gap: var(--spacing-small);
+}
+
+.gap-md {
+  gap: var(--spacing-medium);
+}
+
+.gap-lg {
+  gap: var(--spacing-large);
+}
+
+/* ==========================================================================
+   Text Utilities
+   ========================================================================== */
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-muted {
+  color: var(--color-text-secondary);
+  opacity: var(--opacity-subtle);
+}
+
+.text-sm {
+  font-size: var(--font-size-sm);
+}
+
+.text-error {
+  color: var(--color-error);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Icon Button - Standardized sizing for toolbar icon buttons
+   Addresses duplication across containers.css, logs.css, tabs.css, etc.
+   ========================================================================== */
+
+.icon-button {
+  width: var(--height-control);
+  height: var(--height-control);
+  min-width: var(--height-control);
+  min-height: var(--height-control);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Badge Base - Common styling for badge components
+   Addresses duplication in profileView and historyView
+   ========================================================================== */
+
+.badge {
+  display: inline-block;
+  padding: var(--spacing-small) var(--spacing-medium);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.badge--small {
+  padding: var(--spacing-tiny) var(--spacing-small);
+  border-radius: var(--border-radius-small);
+}
+
+/* Badge color variants - shared across views */
+.badge--default {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.badge--success {
+  background: var(--vscode-testing-iconPassed);
+  color: var(--vscode-button-foreground);
+}
+
+.badge--warning {
+  background: var(--vscode-inputValidation-warningBackground);
+  color: var(--vscode-inputValidation-warningForeground);
+}
+
+.badge--info {
+  background-color: var(--vscode-editorInfo-background, rgba(0, 127, 212, 0.15));
+  color: var(--vscode-editorInfo-foreground, #3794ff);
+}
+
+.badge--muted {
+  background: var(--vscode-input-background);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   Copy Button - Show-on-hover interaction pattern
+   Addresses duplication in logs.css, instruction-panel.css, utilities.css
+   ========================================================================== */
+
+.copy-button {
+  transition: opacity 0.2s ease;
+}
+
+.copy-button:focus-visible,
+.copy-button.copy-success {
+  opacity: 1;
+}
+
+.copy-button.copy-success {
+  color: var(--color-success);
+}
+
+/* ==========================================================================
    Animations
    ========================================================================== */
 
@@ -244,4 +388,20 @@ vscode-toolbar-button {
 
 .btn-secondary:hover {
   opacity: var(--opacity-full);
+}
+
+/* ==========================================================================
+   Container Utilities
+   Addresses 15+ occurrences of padding+border-radius pattern
+   ========================================================================== */
+
+.section-box {
+  padding: var(--spacing-medium);
+  border-radius: var(--border-radius);
+}
+
+.section-box--bordered {
+  padding: var(--spacing-medium);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--color-border);
 }

@@ -14,7 +14,7 @@ import {
   BASE_FILE,
 } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from './BaseUIManager.js';
+import { BaseUIManager } from '@common/BaseUIManager.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';

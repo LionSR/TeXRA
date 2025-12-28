@@ -2,7 +2,7 @@
 import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - shared helpers
-import { safeGetElementById } from '@common/domUtils.js';
+import { safeGetElementById, showElement, hideElement } from '@common/domUtils.js';
 import { TODO_STATUS } from '@common/constants/todoStatus';
 
 /**
@@ -120,9 +120,7 @@ export class TodoList {
       return;
     }
 
-    elements.container.classList.add('is-visible');
-    elements.container.removeAttribute('hidden');
-    elements.container.setAttribute('aria-hidden', 'false');
+    showElement(elements.container, { removeHidden: true });
   }
 
   /**
@@ -134,9 +132,7 @@ export class TodoList {
       return;
     }
 
-    elements.container.classList.remove('is-visible');
-    elements.container.setAttribute('hidden', '');
-    elements.container.setAttribute('aria-hidden', 'true');
+    hideElement(elements.container, { setHidden: true });
   }
 
   /**
