@@ -12,10 +12,8 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
-import {
-  ToolUseFollowUpQueue,
-  type FollowUpQueue,
-} from '@agent/toolUse/ToolUseFollowUp';
+import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 
