@@ -7,7 +7,7 @@
  * Entry points:
  * - executeAgent: Execute a new agent run (via flow)
  * - resumeAgentExecution: Resume a paused agent run
- * - executeMergeAgent: Execute the merge agent (still uses agent class for custom file naming)
+ * - executeMergeAgent: Execute the merge agent (flow-first with custom file naming)
  */
 
 // Standard library imports
@@ -24,9 +24,10 @@ import {
 } from '@agent/implementations/flows/tooluse';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 
-// Local imports - agent components (minimal - only for MergeAgent and types)
-import { MergeAgent } from '@agent/implementations';
+// Local imports - agent components (types only - no agent class instantiation)
 import type { IModelHandler } from '@agent/modelHandlers';
+import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
+import { TaskRunFileService } from '@utils/files';
 import { resolveAgent, isRemoteAgent } from '@agent/index';
 import type { ResolvedAgent } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
@@ -509,15 +510,14 @@ export async function resumeAgentExecution(
 /**
  * Execute the merge agent for file merging operations.
  *
- * Note: MergeAgent still uses agent class for custom getOutputFileLocation().
- * This is the only agent that requires class-based execution.
+ * Uses flow-first execution with a custom output file location getter
+ * for merge-specific file naming conventions.
  */
 export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  // MergeAgent requires agent class for custom file naming logic
   const ctx = await prepareFlowExecution('merge', {
     agent: 'merge',
     model,
@@ -525,7 +525,7 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, modelHandler, agentConfig, agentSetting, agentPrompt, agentPath, executionContext } = ctx;
+  const { streamTabId, executionContext } = ctx;
 
   // Check if already running
   const currentStatus = StreamStatusService.get(streamTabId);
@@ -535,23 +535,13 @@ export async function executeMergeAgent(
     );
   }
 
-  // Create MergeAgent instance (only agent class still needed)
-  const agent = new MergeAgent(
-    modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
-    agentPath,
-    executionContext,
-  );
-
   try {
     // Setup UI state
     bus.emit('setActiveStream', {
       stream: streamTabId,
-      session: agentConfig.session!,
-      isRemote: isRemoteAgent(agentConfig.agent),
-      hasMultipleOutputs: agentConfig.useMultipleOutputs,
+      session: ctx.agentConfig.session!,
+      isRemote: isRemoteAgent(ctx.agentConfig.agent),
+      hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
     });
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
@@ -559,7 +549,38 @@ export async function executeMergeAgent(
       `Task: merge@${model}`,
       async () => {
         logger.info(`Executing merge with model ${model}`);
-        await agent.run();
+
+        // Initialize client
+        const client = await ctx.modelHandler.getClient();
+
+        // Interruption state
+        const interruptState = { isInterrupted: false };
+
+        // Create file service for merge-specific output location
+        const fileService = new TaskRunFileService(executionContext.executionId);
+
+        // Create merge-specific output file location getter
+        const getOutputFileLocation = createMergeOutputFileLocationGetter(
+          inputFile,
+          editedFile,
+          fileService,
+        );
+
+        // Run reflection flow with custom file naming
+        await runReflectionFlow({
+          modelHandler: ctx.modelHandler,
+          config: ctx.agentConfig,
+          setting: ctx.agentSetting as AgentWorkflowSetting,
+          prompt: ctx.agentPrompt,
+          executionContext: ctx.executionContext,
+          userVarChannels: ctx.userVarChannels,
+          checkInterruption: () => interruptState.isInterrupted,
+          setAbortController: () => {},
+          getClient: () => client,
+          getUsageRecorder: () => async () => {},
+          getOutputFileLocation,
+        });
+
         logger.debug(`Task completed successfully`);
         StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
       },
