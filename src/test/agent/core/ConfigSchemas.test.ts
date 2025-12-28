@@ -37,6 +37,7 @@ describe('AgentConfigSchema', () => {
       },
     } as Record<string, unknown>);
 
+    assert.ok(parsed.toolConfig, 'toolConfig should be defined when provided');
     assert.strictEqual('reflect' in parsed.toolConfig, false);
     assert.strictEqual(parsed.toolConfig.autoExtractFigure, false);
     assert.strictEqual('legacyFlag' in parsed, false);
