@@ -39,6 +39,11 @@ function createInitialState(): GoogleNormalizerState {
     previousThinkingIndex: -1,
     previousContentIndex: -1,
     seenToolCallIds: new Set(),
+    // Aggregation state
+    baseResponse: null,
+    aggregatedParts: [],
+    latestCandidate: null,
+    usageFromChunks: null,
   };
 }
 
@@ -195,7 +200,98 @@ function extractToolCalls(
 }
 
 /**
+ * Aggregate a chunk into normalizer state.
+ * Accumulates parts and metadata for final response reconstruction.
+ */
+function aggregateChunk(
+  chunk: GenerateContentResponse,
+  state: GoogleNormalizerState,
+): void {
+  const base = state.baseResponse as GenerateContentResponse | null;
+
+  // Set base response from first chunk
+  if (!base) {
+    state.baseResponse = chunk;
+  } else {
+    // Merge metadata fields from subsequent chunks into base
+    if (chunk.promptFeedback) {
+      base.promptFeedback = chunk.promptFeedback;
+    }
+    if (chunk.modelVersion) {
+      base.modelVersion = chunk.modelVersion;
+    }
+    if (chunk.responseId) {
+      base.responseId = chunk.responseId;
+    }
+    if (chunk.automaticFunctionCallingHistory?.length) {
+      const existing = base.automaticFunctionCallingHistory ?? [];
+      base.automaticFunctionCallingHistory =
+        existing.length === 0
+          ? [...chunk.automaticFunctionCallingHistory]
+          : [...existing, ...chunk.automaticFunctionCallingHistory];
+    }
+  }
+
+  // Track latest candidate
+  const candidate = chunk.candidates?.[0];
+  if (candidate) {
+    state.latestCandidate = candidate;
+    // Accumulate parts from this candidate
+    const parts = candidate.content?.parts ?? [];
+    state.aggregatedParts.push(...parts);
+  }
+
+  // Track latest usage
+  if (chunk.usageMetadata) {
+    state.usageFromChunks = chunk.usageMetadata;
+  }
+}
+
+/**
+ * Reconstruct the full response from aggregated state.
+ * Google SDK lacks built-in aggregation, so we mutate the base response.
+ *
+ * Note: GenerateContentResponse is a class with computed getters (text, data, etc.)
+ * that derive from candidates. We mutate the candidates array in-place so the
+ * getters will compute correct values.
+ */
+function reconstructResponse(
+  state: GoogleNormalizerState,
+): GenerateContentResponse {
+  const base = state.baseResponse as GenerateContentResponse;
+  const latestCandidate = state.latestCandidate as
+    | NonNullable<GenerateContentResponse['candidates']>[number]
+    | undefined;
+
+  // Reconstruct candidates with all aggregated parts
+  // Mutate in-place so class getters (text, data, etc.) work correctly
+  if (latestCandidate) {
+    base.candidates = [
+      {
+        ...latestCandidate,
+        content: {
+          role: latestCandidate.content?.role ?? 'model',
+          parts: state.aggregatedParts as Part[],
+        },
+      },
+    ];
+  }
+
+  // Use latest usage metadata
+  if (state.usageFromChunks) {
+    base.usageMetadata =
+      state.usageFromChunks as GenerateContentResponse['usageMetadata'];
+  }
+
+  return base;
+}
+
+/**
  * Normalize Google stream to unified events.
+ *
+ * Unlike OpenAI/Anthropic SDKs which provide finalMessage()/finalChatCompletion(),
+ * Google's SDK only yields chunks. This normalizer aggregates all parts and
+ * reconstructs the complete response.
  *
  * @param stream - Google content stream (implements AsyncIterable)
  * @param options - Normalizer options
@@ -208,15 +304,13 @@ export async function* normalizeGoogleStream(
   const state = createInitialState();
   const startTime = options.startTime ?? Date.now();
 
-  let lastChunk: GenerateContentResponse | undefined;
-
-  // Process streaming chunks
+  // Process streaming chunks - emit events AND aggregate
   for await (const chunk of stream) {
-    lastChunk = chunk;
+    aggregateChunk(chunk, state);
     yield* processChunk(chunk, state, options);
   }
 
-  if (!lastChunk) {
+  if (!state.baseResponse) {
     yield {
       type: 'error',
       message: 'Stream produced no response',
@@ -226,23 +320,29 @@ export async function* normalizeGoogleStream(
 
   const responseTimeMs = Date.now() - startTime;
 
-  // Build tool calls array
-  const toolCalls = extractToolCalls(lastChunk);
+  // Reconstruct the full response from aggregated state
+  const reconstructedResponse = reconstructResponse(state);
 
-  // Extract final text (non-thinking content)
-  const parts = lastChunk.candidates?.[0]?.content?.parts ?? [];
-  const finalText = extractNonThinkingText(parts) || lastChunk.text || '';
-  const finalThinking = extractThinkingParts(parts) || undefined;
+  // Build tool calls array from reconstructed response
+  const toolCalls = extractToolCalls(reconstructedResponse);
 
-  // Get usage from the final chunk
-  const usage = lastChunk.usageMetadata;
+  // Extract final text from aggregated parts
+  const aggregatedParts = state.aggregatedParts as Part[];
+  const finalText =
+    extractNonThinkingText(aggregatedParts) || reconstructedResponse.text || '';
+  const finalThinking = extractThinkingParts(aggregatedParts) || undefined;
 
-  // Build normalized response
+  // Get usage from the reconstructed response
+  const usage = reconstructedResponse.usageMetadata;
+
+  // Build normalized response with reconstructed raw response
   const response: NormalizedResponse = {
     text: finalText,
     thinking: finalThinking,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    stopReason: normalizeStopReason(lastChunk.candidates?.[0]?.finishReason),
+    stopReason: normalizeStopReason(
+      reconstructedResponse.candidates?.[0]?.finishReason,
+    ),
     usage: usage
       ? {
           inputTokens: usage.promptTokenCount ?? 0,
@@ -253,7 +353,7 @@ export async function* normalizeGoogleStream(
           reasoningTokens: usage.thoughtsTokenCount ?? undefined,
         }
       : undefined,
-    raw: lastChunk,
+    raw: reconstructedResponse, // Full reconstructed response, not just lastChunk
   };
 
   // Emit usage event if available

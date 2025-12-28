@@ -151,7 +151,10 @@ export interface OpenAINormalizerState {
 
 /**
  * State tracked during Google stream normalization.
- * Handles delta calculation from cumulative chunks.
+ * Handles delta calculation from cumulative chunks and response aggregation.
+ *
+ * Note: Google's SDK doesn't provide a finalResponse() method like OpenAI/Anthropic,
+ * so we must manually aggregate parts across all chunks to reconstruct the full response.
  */
 export interface GoogleNormalizerState {
   /** Previous thinking text (for delta calculation) */
@@ -168,6 +171,20 @@ export interface GoogleNormalizerState {
 
   /** Seen tool call IDs */
   seenToolCallIds: Set<string>;
+
+  // --- Aggregation state (Google SDK lacks built-in aggregation) ---
+
+  /** Base response from first chunk (metadata foundation) */
+  baseResponse: unknown | null;
+
+  /** All parts accumulated from all chunks */
+  aggregatedParts: unknown[];
+
+  /** Latest candidate (for finishReason, etc.) */
+  latestCandidate: unknown | null;
+
+  /** Latest usage metadata from chunks */
+  usageFromChunks: unknown | null;
 }
 
 /**

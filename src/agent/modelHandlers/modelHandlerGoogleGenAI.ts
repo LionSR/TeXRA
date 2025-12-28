@@ -73,6 +73,7 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
+import { normalizeGoogleStream } from './streaming';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -497,110 +498,27 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           () => chat.sendMessageStream(streamParams),
         );
 
-        const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : undefined;
+        // Use unified streaming: normalize SDK events and consume with StreamConsumer
+        const normalizedStream = normalizeGoogleStream(stream, {
+          outputEnabled: this.isOutputStreamingEnabled(),
+          progressViewEnabled: this.progressViewEnabled,
+          provider: 'google',
+          startTime: Date.now(),
+        });
 
-        let baseResponse: GenerateContentResponse | undefined;
-        let latestCandidate:
-          | NonNullable<GenerateContentResponse['candidates']>[number]
-          | undefined;
-        const aggregatedParts: Part[] = [];
-        let aggregatedText = '';
-        let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
+        const result = await this.consumeNormalizedStream(normalizedStream, {
+          handleInterleavedBlocks: true,
+        });
 
-        for await (const chunk of stream) {
-          baseResponse ??= chunk;
-          const candidate = chunk.candidates?.[0];
-          if (candidate) {
-            latestCandidate = candidate;
-            const parts = candidate.content?.parts ?? [];
-            aggregatedParts.push(...parts);
-            for (const part of parts) {
-              if (part.thought && isTextPart(part)) {
-                thinking.append(part.text);
-              }
-            }
-          }
+        // Get the reconstructed response (normalizer aggregates all parts)
+        const response = result.response.raw as GenerateContentResponse;
 
-          const chunkText = chunk.text ?? '';
-          if (chunkText) {
-            aggregatedText += chunkText;
-            output?.append(chunkText);
-          }
-
-          if (chunk.usageMetadata) {
-            usageFromChunks = chunk.usageMetadata;
-          }
-
-          if (baseResponse && chunk !== baseResponse) {
-            if (chunk.promptFeedback) {
-              baseResponse.promptFeedback = chunk.promptFeedback;
-            }
-            if (chunk.modelVersion) {
-              baseResponse.modelVersion = chunk.modelVersion;
-            }
-            if (chunk.automaticFunctionCallingHistory?.length) {
-              const existingHistory =
-                baseResponse.automaticFunctionCallingHistory ?? [];
-              baseResponse.automaticFunctionCallingHistory =
-                existingHistory.length === 0
-                  ? [...chunk.automaticFunctionCallingHistory]
-                  : [
-                      ...existingHistory,
-                      ...chunk.automaticFunctionCallingHistory,
-                    ];
-            }
-            if (chunk.responseId) {
-              baseResponse.responseId = chunk.responseId;
-            }
-          }
-        }
-
-        if (!baseResponse) {
-          throw new Error('Stream produced no response');
-        }
-
-        const candidateSource = latestCandidate ?? baseResponse.candidates?.[0];
-        if (candidateSource) {
-          const candidateParts = aggregatedParts.length
-            ? aggregatedParts
-            : (candidateSource.content?.parts ?? []);
-          baseResponse.candidates = [
-            {
-              ...candidateSource,
-              content: {
-                role: candidateSource.content?.role ?? 'model',
-                parts: candidateParts,
-              },
-            },
-          ];
-        }
-
-        // Always prefer the latest usage metadata from chunks (typically the final
-        // chunk has complete data). The first chunk may have partial/empty metadata.
-        if (usageFromChunks) {
-          baseResponse.usageMetadata = usageFromChunks;
-        }
-
-        const finalReasoning = this.processThinkingBlock(baseResponse);
-        thinking.finalize(finalReasoning ?? undefined);
-
-        const nonThinkingText = extractNonThinkingText(aggregatedParts);
-
-        let finalOutputText = aggregatedText || nonThinkingText;
-        if (!finalOutputText && baseResponse.text) {
-          finalOutputText = baseResponse.text;
-          this.logger.warn(
-            'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
-          );
-        }
-        output?.finalize(finalOutputText);
+        // Process thinking blocks for API conversation continuation
+        this.processThinkingBlock(response);
 
         // Ensure text field excludes thinking content
         // Part.thought is a native property of the Google GenAI SDK Part interface
-        const candidateContent = baseResponse.candidates?.[0]?.content;
+        const candidateContent = response.candidates?.[0]?.content;
         if (candidateContent?.parts) {
           const filteredParts = candidateContent.parts.filter(
             (part) => !part.thought,
@@ -609,7 +527,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           candidateContent.parts = filteredParts;
         }
 
-        return baseResponse;
+        return response;
       }
 
       const sendParams: SendMessageParameters = {
