@@ -214,9 +214,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   /** Interrupt the agent's execution. */
   public interrupt(): void {
     this.isInterrupted = true;
-    if (this.abortController) {
-      this.abortController.abort();
-    }
+    this.abortController?.abort();
     // Clean up any pending retry request to avoid memory leaks
     retryCoordinator.clearRequest(this.getStreamTabId());
     this.logger.error(
