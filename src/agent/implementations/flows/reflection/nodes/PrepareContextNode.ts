@@ -147,6 +147,12 @@ export class PrepareContextNode<C = unknown> extends Node<
     if (execRes.kind === 'skip') {
       // Increment round and loop back to start of flow
       shared.state.currentRound += 1;
+
+      // Bounds check to prevent infinite loop when all remaining rounds are empty
+      if (shared.state.currentRound >= shared.state.totalRounds) {
+        return undefined; // Exit flow - no more rounds
+      }
+
       return FlowTransition.CONTINUE;
     }
 

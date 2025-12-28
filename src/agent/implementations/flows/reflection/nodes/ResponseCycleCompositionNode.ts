@@ -256,6 +256,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
       shared.state.continueRounds = false;
+      // Clear stale state to prevent OutputNode from processing previous round's data
+      shared.state.endTurn = false;
+      shared.state.outputLocation = prepRes.outputLocation;
       // User cancellation is not an error - just stop gracefully
       return undefined;
     }
