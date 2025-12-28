@@ -27,7 +27,11 @@ import type { IFlowAgent } from '@agent/core/IAgent';
 import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Internal imports
-import { type NodeExecResult } from '@agent/implementations/flows/common';
+import {
+  type NodeExecResult,
+  NODE_NO_RETRY,
+  NODE_NO_WAIT,
+} from '@agent/implementations/flows/common';
 
 // Service types
 import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
@@ -143,7 +147,6 @@ interface CycleNodePrepResult<C> {
  * Contains only the data needed to execute the wait operation.
  */
 interface WaitNodePrepResult {
-  agent: IToolUseFlowAgent;
   conversation: ProviderMessage[];
   hasQueuedFollowUp: boolean;
   session: IToolUseSession;
@@ -190,7 +193,7 @@ class ToolUsePrepareNode<C> extends Node<
   ToolUseServices<C>
 > {
   constructor() {
-    super(1, 0); // maxRetries=1 (no retry), wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
   async prep(_shared: ToolUseRunShared<C>): Promise<void> {
@@ -256,7 +259,7 @@ class ToolUseCycleNode<C> extends Node<
   ToolUseServices<C>
 > {
   constructor() {
-    super(1, 0); // maxRetries=1 (no retry), wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
   async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
@@ -347,7 +350,7 @@ class ToolUseWaitNode<C> extends Node<
   ToolUseServices<C>
 > {
   constructor() {
-    super(1, 0); // maxRetries=1 (no retry), wait=0
+    super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
   async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult | null> {
@@ -355,7 +358,6 @@ class ToolUseWaitNode<C> extends Node<
     try {
       const session = this.services.session;
       return {
-        agent: shared.agent,
         conversation: shared.state.conversation,
         hasQueuedFollowUp: session.hasQueuedFollowUp(),
         session,
@@ -372,10 +374,11 @@ class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    const { agent, conversation, hasQueuedFollowUp, session } = prepRes;
+    const { conversation, hasQueuedFollowUp, session } = prepRes;
+    const { checkInterruption } = this.services;
 
-    // Check interruption first
-    if (agent.isInterruptionRequested()) {
+    // Check interruption first (via services, not shared.agent)
+    if (await checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
@@ -387,11 +390,14 @@ class ToolUseWaitNode<C> extends Node<
     }
 
     // Wait for follow-up (blocking I/O)
-    const followUp = await session.waitForFollowUp(() =>
-      agent.isInterruptionRequested(),
-    );
+    // Note: waitForFollowUp expects sync callback, checkInterruption may be async
+    const followUp = await session.waitForFollowUp(() => {
+      const result = checkInterruption();
+      // Handle both sync and async cases - sync poll for interruption
+      return result instanceof Promise ? false : result;
+    });
 
-    if (!followUp || agent.isInterruptionRequested()) {
+    if (!followUp || (await checkInterruption())) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
