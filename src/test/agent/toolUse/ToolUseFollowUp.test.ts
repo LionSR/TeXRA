@@ -45,17 +45,17 @@ describe('ToolUseFollowUp', () => {
     lastUpdated: Date.now(),
   };
 
-  const originalGetAgent = AgentRegistry.getToolUseAgent;
+  const originalGetFlowContext = AgentRegistry.getToolUseFlowContext;
   const originalResume = ToolUseSessionPersistence.resumeFromSnapshot;
 
   afterEach(() => {
-    (AgentRegistry as any).getToolUseAgent = originalGetAgent;
+    (AgentRegistry as any).getToolUseFlowContext = originalGetFlowContext;
     ToolUseSessionPersistence.resumeFromSnapshot = originalResume;
   });
 
-  it('sends follow-ups to active agents', async () => {
+  it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    (AgentRegistry as any).getToolUseAgent = () => ({
+    (AgentRegistry as any).getToolUseFlowContext = () => ({
       session: {
         appendFollowUp: (text: string) => {
           calls.push(text);
