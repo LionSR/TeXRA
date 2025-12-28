@@ -1125,8 +1125,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.lastResponse =
-      workspaceState.assembly.accumulatedOutput;
+    workspaceState.assembly.updateLastResponse(
+      workspaceState.assembly.accumulatedOutput,
+    );
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

@@ -1073,7 +1073,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       'Existing file content found without end tag - continuing generation.',
     );
     workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.lastResponse = fileContent;
+    workspaceState.assembly.updateLastResponse(fileContent);
     const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,

@@ -5,8 +5,7 @@
  * Flows run directly, bypassing the agent class hierarchy entirely.
  *
  * Entry points:
- * - executeAgent: Execute a new agent run (via flow)
- * - resumeAgentExecution: Resume a paused agent run
+ * - executeAgent: Execute a new agent run (or resume with { resume: true })
  * - executeMergeAgent: Execute the merge agent (flow-first with custom file naming)
  */
 
@@ -138,15 +137,6 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
   throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
 }
 
-function createModelHandler(
-  modelName: string,
-  toolConfig: AgentConfig['toolConfig'],
-) {
-  const baseConfig = MODEL_CONFIGS[modelName];
-  const modelConfig = { ...baseConfig, toolConfig };
-  return ModelFactory.createHandler(modelConfig);
-}
-
 /**
  * Prepare execution context for flow-first execution.
  * Creates all dependencies needed to run flows directly without agent classes.
@@ -180,10 +170,11 @@ async function prepareFlowExecution(
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
-  const modelHandler = createModelHandler(
-    fullConfig.model,
-    agentConfig.toolConfig,
-  );
+  const modelConfig = {
+    ...MODEL_CONFIGS[fullConfig.model],
+    toolConfig: agentConfig.toolConfig,
+  };
+  const modelHandler = ModelFactory.createHandler(modelConfig);
 
   // 3. Create execution context
   const streamTabId = getStreamTabId(
@@ -496,17 +487,6 @@ export async function executeAgent(
 }
 
 /**
- * Resume a paused agent execution.
- */
-export async function resumeAgentExecution(
-  agentConfig: Partial<AgentConfig>,
-  executionId: ExecutionId,
-): Promise<void> {
-  if (!executionId) throw new Error('Cannot resume without an execution ID.');
-  await executeAgent(agentConfig, executionId, { resume: true });
-}
-
-/**
  * Execute the merge agent for file merging operations.
  *
  * Uses flow-first execution with a custom output file location getter
@@ -544,46 +524,43 @@ export async function executeMergeAgent(
     });
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
-    await logger.withScope(
-      `Task: merge@${model}`,
-      async () => {
-        logger.info(`Executing merge with model ${model}`);
+    await logger.withScope(`Task: merge@${model}`, async () => {
+      logger.info(`Executing merge with model ${model}`);
 
-        // Initialize client
-        const client = await ctx.modelHandler.getClient();
+      // Initialize client
+      const client = await ctx.modelHandler.getClient();
 
-        // Interruption state
-        const interruptState = { isInterrupted: false };
+      // Interruption state
+      const interruptState = { isInterrupted: false };
 
-        // Create file service for merge-specific output location
-        const fileService = new TaskRunFileService(executionContext.executionId);
+      // Create file service for merge-specific output location
+      const fileService = new TaskRunFileService(executionContext.executionId);
 
-        // Create merge-specific output file location getter
-        const getOutputFileLocation = createMergeOutputFileLocationGetter(
-          inputFile,
-          editedFile,
-          fileService,
-        );
+      // Create merge-specific output file location getter
+      const getOutputFileLocation = createMergeOutputFileLocationGetter(
+        inputFile,
+        editedFile,
+        fileService,
+      );
 
-        // Run reflection flow with custom file naming
-        await runReflectionFlow({
-          modelHandler: ctx.modelHandler,
-          config: ctx.agentConfig,
-          setting: ctx.agentSetting as AgentWorkflowSetting,
-          prompt: ctx.agentPrompt,
-          executionContext: ctx.executionContext,
-          userVarChannels: ctx.userVarChannels,
-          checkInterruption: () => interruptState.isInterrupted,
-          setAbortController: () => {},
-          getClient: () => client,
-          getUsageRecorder: () => async () => {},
-          getOutputFileLocation,
-        });
+      // Run reflection flow with custom file naming
+      await runReflectionFlow({
+        modelHandler: ctx.modelHandler,
+        config: ctx.agentConfig,
+        setting: ctx.agentSetting as AgentWorkflowSetting,
+        prompt: ctx.agentPrompt,
+        executionContext: ctx.executionContext,
+        userVarChannels: ctx.userVarChannels,
+        checkInterruption: () => interruptState.isInterrupted,
+        setAbortController: () => {},
+        getClient: () => client,
+        getUsageRecorder: () => async () => {},
+        getOutputFileLocation,
+      });
 
-        logger.debug(`Task completed successfully`);
-        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
-      },
-    );
+      logger.debug(`Task completed successfully`);
+      StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+    });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(err, 'merge', streamTabId, executionContext);
@@ -625,7 +602,9 @@ export async function resumeToolUseFromSnapshot(
 
   // Validate agent type
   if (agentSetting.agentType !== 'toolUse') {
-    throw new Error('Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.');
+    throw new Error(
+      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+    );
   }
 
   // State for interruption handling
