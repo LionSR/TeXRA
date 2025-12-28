@@ -19,7 +19,7 @@ export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
 /** Unique UUID for each execution instance */
-export const ExecutionIdSchema = z.string().uuid();
+export const ExecutionIdSchema = z.uuid();
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
 /** Valid storage key: UUID or '__default__' for legacy */

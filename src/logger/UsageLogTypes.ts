@@ -58,10 +58,10 @@ export type UsageLogMetadata = z.infer<typeof UsageLogMetadataSchema>;
  */
 export const UsageLogStatsSchema = z.object({
   /** Number of input tokens consumed */
-  inputTokens: z.number().int().nonnegative(),
+  inputTokens: z.int().nonnegative(),
 
   /** Number of output tokens generated */
-  outputTokens: z.number().int().nonnegative(),
+  outputTokens: z.int().nonnegative(),
 
   /** Computed cost in USD */
   cost: z.number().nonnegative(),
@@ -70,10 +70,10 @@ export const UsageLogStatsSchema = z.object({
   responseTimeMs: z.number().nonnegative().optional(),
 
   /** Tokens served from cache */
-  cachedInputTokens: z.number().int().nonnegative().optional(),
+  cachedInputTokens: z.int().nonnegative().optional(),
 
   /** Tokens used for reasoning (o1, DeepSeek-R1, etc.) */
-  reasoningTokens: z.number().int().nonnegative().optional(),
+  reasoningTokens: z.int().nonnegative().optional(),
 });
 
 export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
@@ -90,7 +90,7 @@ export const UsageLogEntrySchema = UsageLogMetadataSchema.merge(
   UsageLogStatsSchema,
 ).extend({
   /** Timestamp when the API call completed (ISO 8601) */
-  timestamp: z.string().datetime(),
+  timestamp: z.iso.datetime(),
 
   /** Extension version for debugging */
   extensionVersion: z.string().optional(),
@@ -110,7 +110,7 @@ export const UsageLogBatchSchema = z.object({
   entries: z.array(UsageLogEntrySchema),
 
   /** Client-generated batch ID for deduplication */
-  batchId: z.string().uuid(),
+  batchId: z.uuid(),
 });
 
 export type UsageLogBatch = z.infer<typeof UsageLogBatchSchema>;
@@ -127,7 +127,7 @@ export const UsageLogResponseSchema = z.object({
   success: z.boolean(),
 
   /** Number of entries accepted */
-  accepted: z.number().int().nonnegative(),
+  accepted: z.int().nonnegative(),
 
   /** Error message if any entries failed */
   error: z.string().optional(),
