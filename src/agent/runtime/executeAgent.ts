@@ -427,8 +427,10 @@ export async function executeAgent(
   const streamTabId = agent.getStreamTabId();
 
   // Check if already running before any state modifications
+  // Note: Allow resume even when status is RUNNING to recover from crashed tasks
+  // that didn't properly transition to ERROR status
   const currentStatus = StreamStatusService.get(streamTabId);
-  if (currentStatus === STREAM_STATUS.RUNNING) {
+  if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
     throw new Error(
       `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
     );
@@ -495,6 +497,15 @@ export async function executeMergeAgent(
     configPayload: { agent: 'merge', model, inputFile, editedFile },
     agentClassOverride: MergeAgent,
   });
+
+  // Check if already running before execution (same protection as executeAgent)
+  const streamTabId = agent.getStreamTabId();
+  const currentStatus = StreamStatusService.get(streamTabId);
+  if (currentStatus === STREAM_STATUS.RUNNING) {
+    throw new Error(
+      `Merge task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
+    );
+  }
 
   await runPreparedAgent(agent, context);
 }
