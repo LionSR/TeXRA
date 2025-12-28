@@ -4,7 +4,7 @@ import { z } from 'zod';
 /**
  * Coerces and validates integer round keys from string record keys.
  */
-export const RoundKeySchema = z.coerce.number().int();
+export const RoundKeySchema = z.coerce.int();
 
 /**
  * Factory for creating round map schemas that transform { roundNum: items[] } to Map<number, T[]>.
