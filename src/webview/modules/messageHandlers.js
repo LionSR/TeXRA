@@ -1106,13 +1106,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       instruction.dispatchEvent(new Event('input'));
     }
 
-    // Set single file selections
-    if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
-    if (state.referenceFile)
-      safeSetElementValue(REFERENCE_FILE, state.referenceFile);
-    if (state.auxiliaryFile)
-      safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
-    if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
+    // Set single file selections (explicitly clear to '' if not in state)
+    safeSetElementValue(INPUT_FILE, state.inputFile || '');
+    safeSetElementValue(REFERENCE_FILE, state.referenceFile || '');
+    safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile || '');
+    safeSetElementValue(MEDIA_FILE, state.mediaFile || '');
 
     // Restore checkbox values
     const toolConfig = state.toolConfig || {};
@@ -1131,10 +1129,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
-      inputFile: state.inputFile,
-      referenceFile: state.referenceFile,
-      auxiliaryFile: state.auxiliaryFile,
-      mediaFile: state.mediaFile,
+      inputFile: state.inputFile || '',
+      referenceFile: state.referenceFile || '',
+      auxiliaryFile: state.auxiliaryFile || '',
+      mediaFile: state.mediaFile || '',
       autoExtractFigure:
         state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
       autoExtractTikzFigure:
