@@ -654,8 +654,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Set the value and dispatch change event to update the component's display
-    safeSetElementValue(selectId, value);
+    // Dispatch change event to update the component's display.
+    // The selected attribute is already set, so no need to also set .value
     selectElement.dispatchEvent(new Event('change'));
   }
 

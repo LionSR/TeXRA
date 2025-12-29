@@ -142,14 +142,12 @@ export class FileSelect {
         );
 
         if (!existingOption) {
+          // Add new option with selected=true
           this.addOption(
             commitDiv,
             manualSelection.commitHash,
             manualSelection.commitLabel,
-          );
-          safeSetElementValue(
-            ELEMENT_IDS.COMMIT_SELECT,
-            manualSelection.commitHash,
+            true,
           );
         } else {
           if (
@@ -158,10 +156,7 @@ export class FileSelect {
           ) {
             existingOption.textContent = manualSelection.commitLabel;
           }
-          safeSetElementValue(
-            ELEMENT_IDS.COMMIT_SELECT,
-            manualSelection.commitHash,
-          );
+          existingOption.selected = true;
         }
       }
       setElementsDisabled([commitDiv, ...commitButtons], false);
@@ -200,12 +195,14 @@ export class FileSelect {
     );
 
     if (!existingOption) {
-      this.addOption(commitDiv, commitHash, commitLabel || commitHash);
-    } else if (commitLabel) {
-      existingOption.textContent = commitLabel;
+      this.addOption(commitDiv, commitHash, commitLabel || commitHash, true);
+    } else {
+      if (commitLabel) {
+        existingOption.textContent = commitLabel;
+      }
+      existingOption.selected = true;
     }
 
-    safeSetElementValue(ELEMENT_IDS.COMMIT_SELECT, commitHash);
     this._manualCommitSelection = {
       commitHash,
       commitLabel: commitLabel || commitHash,
