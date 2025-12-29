@@ -75,6 +75,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       context,
     );
     SupabaseAuthProvider.instance = this;
+    SupabaseClient.setAuthProvider(this);
   }
 
   /** Get singleton instance for sign out operations. */

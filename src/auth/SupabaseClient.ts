@@ -13,6 +13,11 @@ import {
   SUPABASE_SESSION_KEY,
 } from './config';
 
+/** Interface for auth provider to avoid circular imports. */
+interface AuthTokenProvider {
+  ensureFreshToken(): Promise<string | null>;
+}
+
 /**
  * Singleton Supabase client with authentication helpers.
  */
@@ -20,6 +25,15 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static context: vscode.ExtensionContext | null = null;
+  private static authProvider: AuthTokenProvider | null = null;
+
+  /**
+   * Register an auth provider for token refresh.
+   * Called by SupabaseAuthProvider on initialization.
+   */
+  static setAuthProvider(provider: AuthTokenProvider): void {
+    this.authProvider = provider;
+  }
 
   /**
    * Initialize the Supabase client with project credentials.
@@ -60,17 +74,13 @@ export class SupabaseClient {
 
   /**
    * Get the current user's access token from VS Code authentication.
-   * Automatically refreshes the token if it's about to expire via SupabaseAuthProvider.
+   * Automatically refreshes the token if it's about to expire via the registered auth provider.
    */
   static async getAccessToken(): Promise<string | null> {
     try {
-      // Import dynamically to avoid circular dependency
-      const { SupabaseAuthProvider } = await import('./SupabaseAuthProvider');
-      const authProvider = SupabaseAuthProvider.getInstance();
-
-      // Use auth provider's ensureFreshToken() which handles proactive refresh
-      if (authProvider) {
-        const token = await authProvider.ensureFreshToken();
+      // Use registered auth provider for proactive token refresh
+      if (this.authProvider) {
+        const token = await this.authProvider.ensureFreshToken();
         if (token) {
           return token;
         }
@@ -81,7 +91,7 @@ export class SupabaseClient {
       } else {
         logger.debug(
           'SupabaseClient',
-          'Auth provider not initialized, using VS Code auth fallback',
+          'Auth provider not registered, using VS Code auth fallback',
         );
       }
 
@@ -89,9 +99,7 @@ export class SupabaseClient {
       const session = await vscode.authentication.getSession(
         'texra-supabase',
         [],
-        {
-          silent: true,
-        },
+        { silent: true },
       );
       return session?.accessToken || null;
     } catch (error) {
