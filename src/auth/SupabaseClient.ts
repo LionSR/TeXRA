@@ -10,6 +10,7 @@ import {
   type UserAuthContext,
   type UserTier,
   UserAuthContextSchema,
+  SUPABASE_SESSION_KEY,
 } from './config';
 
 /**
@@ -19,7 +20,6 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static context: vscode.ExtensionContext | null = null;
-  private static readonly SESSION_KEY = 'texra.supabase.session';
 
   /**
    * Initialize the Supabase client with project credentials.
@@ -111,7 +111,7 @@ export class SupabaseClient {
     }
 
     try {
-      const sessionData = await this.context.secrets.get(this.SESSION_KEY);
+      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
       if (!sessionData) {
         return null;
       }
