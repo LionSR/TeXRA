@@ -23,6 +23,7 @@ import {
 } from '../config';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
+import { logger } from '@logger/logUtils';
 
 const LOG_PREFIX = '[ServerSideKeyService]';
 
@@ -303,7 +304,7 @@ export class ServerSideKeyService {
 
       // Check if access has expired
       if (this.tierService.isAccessExpired()) {
-        console.log(`${LOG_PREFIX} User access has expired`);
+        logger.info(`${LOG_PREFIX} User access has expired`);
         this.accessResult = false;
         return false;
       }
@@ -312,7 +313,7 @@ export class ServerSideKeyService {
       // If tier config failed, report no access so UI shows API key banner
       const tierConfigRequired = !this.hasFullAccess();
       if (tierConfigRequired && tierConfig === null) {
-        console.log(
+        logger.info(
           `${LOG_PREFIX} Tier config unavailable for non-Ultra user, denying access`,
         );
         this.accessResult = false;

@@ -110,7 +110,7 @@ export class RemoteAgentLoader {
             throw new Error('Session expired. Sign in again to continue.');
           } else if (response.status === StatusCodes.NOT_FOUND) {
             // If not found and we have more candidates to try, continue to next
-            if (candidateName !== candidateNames[candidateNames.length - 1]) {
+            if (candidateName !== candidateNames.at(-1)) {
               logger.debug(
                 CHANNEL,
                 `Agent variant "${candidateName}" not found, trying next candidate`,
@@ -213,7 +213,7 @@ export class RemoteAgentLoader {
         };
       } catch (error) {
         // If this is the last candidate, throw the error
-        if (candidateName === candidateNames[candidateNames.length - 1]) {
+        if (candidateName === candidateNames.at(-1)) {
           logger.error(
             CHANNEL,
             `Failed to load remote agent "${agentName}": ${toErrorMessage(error)}`,
