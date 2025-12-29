@@ -8,11 +8,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { ExecResult } from '@agent/types/ResultTypes';
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
 import { executeCommand } from './execUtils';
+
+const CHANNEL = 'toolUtils';
 
 // Interface for tool configuration
 export interface ToolConfig {
@@ -404,7 +406,8 @@ export async function checkCoreDependencies(
   } catch (error) {
     // If checking fails, assume all tools are missing to prompt user to check
     // This is safer than silently ignoring the error
-    logger.error('Failed to check core dependencies:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(CHANNEL, `Failed to check core dependencies: ${message}`);
     return ['latexindent', 'perl', 'gs', 'gm/magick'];
   }
 }

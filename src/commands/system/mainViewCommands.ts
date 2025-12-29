@@ -5,7 +5,9 @@ import * as vscode from 'vscode';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'mainViewCommands';
 
 export const mainViewCommands = {
   reset: 'texra.mainView.reset',
@@ -57,7 +59,9 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
             options,
           });
         } catch (error) {
-          logger.error('Failed to refresh model options:', error);
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
           vscode.window.showErrorMessage(
             'Failed to refresh model options. Please check the output console for details.',
           );
