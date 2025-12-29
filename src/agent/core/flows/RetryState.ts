@@ -154,6 +154,7 @@ interface RetryableNodeServices {
   options: {
     context: { streamId: string };
     logger: AgentLogger;
+    setAbortController: (ac: AbortController | null) => void;
   };
 }
 
@@ -237,6 +238,47 @@ export abstract class RetryableInvocationNode<
     const cloned = super.clone();
     cloned._userCancelled = false;
     return cloned;
+  }
+
+  /**
+   * Wraps an async operation with automatic AbortController lifecycle management.
+   *
+   * Provides single source of truth for the abort controller pattern that was
+   * previously duplicated across ResponseModelInvocationNode and ToolUseCallNode.
+   *
+   * Handles:
+   * - Create AbortController and register with Node.signal for retry detection
+   * - Call setAbortController(controller) on services to enable interruption
+   * - Execute the operation with the signal
+   * - Cleanup: call setAbortController(null) in finally block
+   *
+   * @param operation - Async operation that uses the AbortController's signal
+   * @returns Result of the operation
+   *
+   * @example
+   * ```typescript
+   * async exec(prepRes: PrepResult): Promise<Result> {
+   *   if (prepRes.shouldStop) return { kind: 'skipped' };
+   *   return this.withAbortController(async (signal) => {
+   *     const response = await modelHandler.createResponse({ signal });
+   *     return { kind: 'success', response };
+   *   });
+   * }
+   * ```
+   */
+  protected async withAbortController<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const abortController = new AbortController();
+    // Set signal on Node so retry loop can detect user cancellation
+    this.signal = abortController.signal;
+    const services = this.getServices();
+    services.options.setAbortController(abortController);
+    try {
+      return await operation(abortController.signal);
+    } finally {
+      services.options.setAbortController(null);
+    }
   }
 
   /**
