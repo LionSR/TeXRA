@@ -154,16 +154,12 @@ function* processEvent(
       };
     }
   } else if (isWebSearchInProgressEvent(event)) {
-    // Web search starting - this is just a signal, data comes in output_item.done
-    // We yield a status event to indicate search is in progress
-    yield {
-      type: 'web_search',
-      callId: event.item_id,
-      query: '', // Query is not available at this point
-      results: [],
-      status: 'in_progress',
-      provider: 'openai',
-    };
+    // Web search starting - don't emit anything here.
+    // The actual search results come in output_item.done.
+    // Previously we emitted an in_progress event, but that caused deduplication issues:
+    // the consumer would see the callId from in_progress, then drop the completed event
+    // with actual results because it had the same callId.
+    // Do nothing here, just like the old handler.
   } else if (isOutputItemDoneEvent(event)) {
     const item = event.item;
     if (

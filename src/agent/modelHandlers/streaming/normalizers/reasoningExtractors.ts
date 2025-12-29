@@ -24,7 +24,7 @@ interface ReasoningDelta {
  * Extract reasoning text from reasoning_content field.
  * Handles both string and array formats.
  */
-function extractReasoningText(
+export function extractReasoningText(
   content: ReasoningDelta['reasoning_content'],
 ): string {
   if (!content) return '';

@@ -315,8 +315,13 @@ export class ModelHandlerOpenAI<
         // Get the raw response for further processing
         const finalResponse = result.response.raw as ChatCompletion;
 
-        // Store thinking blocks for API conversation continuation
-        this.processThinkingBlock(finalResponse);
+        // Ensure reasoning from normalizer is available in the raw response
+        // for processThinkingBlock to find it when called with workspaceState
+        // in the flow classes (ResponseCycleFlow, ToolUseCycleFlow)
+        if (result.response.thinking && finalResponse.choices?.[0]?.message) {
+          (finalResponse.choices[0].message as any).reasoning_content =
+            result.response.thinking;
+        }
 
         return finalResponse;
       },

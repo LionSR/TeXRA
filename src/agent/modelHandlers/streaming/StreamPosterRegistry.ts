@@ -25,6 +25,7 @@ import {
 class StreamPosterRegistryImpl {
   private webviewPoster: WebviewMessagePoster | null = null;
   private groupIdResolver: ((streamId: StreamTabId) => string | undefined) | null = null;
+  private posterCache: Map<StreamTabId, StreamPoster> = new Map();
 
   /**
    * Register the webview poster and group ID resolver.
@@ -45,10 +46,12 @@ class StreamPosterRegistryImpl {
   unregister(): void {
     this.webviewPoster = null;
     this.groupIdResolver = null;
+    this.posterCache.clear();
   }
 
   /**
    * Create a stream poster for the given stream tab ID.
+   * Returns cached poster if available, creates new one otherwise.
    * Returns null if no webview poster is registered.
    */
   createPoster(streamTabId: StreamTabId): StreamPoster | null {
@@ -56,14 +59,24 @@ class StreamPosterRegistryImpl {
       return null;
     }
 
+    // Return cached poster if available
+    const cached = this.posterCache.get(streamTabId);
+    if (cached) {
+      return cached;
+    }
+
+    // Create and cache new poster
     const poster = this.webviewPoster;
     const resolver = this.groupIdResolver;
 
-    return new DirectStreamPoster(
+    const newPoster = new DirectStreamPoster(
       poster,
       streamTabId,
       () => resolver(streamTabId),
     );
+
+    this.posterCache.set(streamTabId, newPoster);
+    return newPoster;
   }
 
   /**

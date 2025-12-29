@@ -112,7 +112,6 @@ export {
 export {
   DirectStreamPoster,
   type StreamPoster,
-  type DirectStream,
   type WebviewMessagePoster,
 } from './DirectStreamPoster';
 

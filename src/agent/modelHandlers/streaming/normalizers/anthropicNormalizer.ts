@@ -393,12 +393,3 @@ export async function* normalizeAnthropicStream(
   };
 }
 
-/**
- * Get the set of emitted search IDs from the normalizer state.
- * Useful for deduplication when also extracting from final response.
- */
-export function getEmittedSearchIds(
-  state: AnthropicNormalizerState,
-): Set<string> {
-  return state.emittedSearchIds;
-}

@@ -354,11 +354,15 @@ export abstract class ModelHandler<
             break;
           }
 
+          case 'error':
+            finalizeStreams();
+            throw new Error(event.message);
+
           case 'done':
             finalResponse = event.response;
             break;
 
-          // tool_call_start, tool_call_delta, tool_call_done, usage, error
+          // tool_call_start, tool_call_delta, tool_call_done, usage
           // are handled by the normalizer - done event contains final data
         }
       }

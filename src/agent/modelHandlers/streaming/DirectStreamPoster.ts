@@ -34,12 +34,6 @@ export interface StreamPoster {
 }
 
 /**
- * Alias for LogStream - used by DirectStreamPoster.
- * @deprecated Use LogStream directly from @logger/LogTypes
- */
-export type DirectStream = LogStream;
-
-/**
  * Function signature for posting messages to webview.
  * Uses LogMessageData for type compatibility with WebviewUpdater.
  */
