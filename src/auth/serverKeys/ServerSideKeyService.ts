@@ -31,6 +31,7 @@ const CHANNEL = 'ServerSideKeyService';
 const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
   openai: '/v1',
   xai: '/v1',
+  deepseek: '/v1',
   moonshot: '/v1',
   dashscope: '/compatible-mode/v1',
 };
