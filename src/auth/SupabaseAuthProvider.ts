@@ -8,6 +8,7 @@ import {
   OAUTH_PROVIDERS,
   getAuthCallbackUri,
   AUTH_CALLBACK_TIMEOUT_MS,
+  TOKEN_REFRESH_THRESHOLD_MS,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
@@ -81,6 +82,48 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Get singleton instance for sign out operations. */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
+  }
+
+  /**
+   * Ensure the access token is fresh, refreshing proactively if near expiry.
+   * Called by SupabaseClient.getAccessToken() to avoid token expiration during
+   * long-running operations (e.g., GPT-5 background mode).
+   *
+   * @returns Fresh access token, or null if no session or refresh failed
+   */
+  async ensureFreshToken(): Promise<string | null> {
+    try {
+      const sessionData = await this.context.secrets.get(
+        SupabaseAuthProvider.SESSION_KEY,
+      );
+      if (!sessionData) {
+        return null;
+      }
+
+      const session: SupabaseSession = JSON.parse(sessionData);
+      const timeUntilExpiry = session.expiresAt - Date.now();
+
+      // Refresh proactively if token expires within threshold
+      if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
+        logger.info(
+          'SupabaseAuthProvider',
+          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
+        );
+        const refreshed = await this.refreshSession(session);
+        if (refreshed) {
+          return refreshed.accessToken;
+        }
+        // Fall through to return existing token if refresh fails
+      }
+
+      return session.accessToken;
+    } catch (error) {
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error ensuring fresh token: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
   }
 
   /**
