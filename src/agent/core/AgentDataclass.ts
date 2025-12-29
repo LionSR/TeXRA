@@ -102,9 +102,9 @@ export const AgentSettingBaseSchema = z.strictObject({
 
 /** XML structure enforcement modes for workflow agents. */
 export const XmlStructureMode = z.enum([
-  'never', // Never ensure XML structure (default for BaseReflectionAgent)
-  'scratchpadOnly', // Only when useScratchpad is true (DirectAgent behavior)
-  'always', // Always ensure XML structure (CoTAgent behavior)
+  'never', // Never ensure XML structure (default)
+  'scratchpadOnly', // Only when useScratchpad is true
+  'always', // Always ensure XML structure
 ]);
 export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
 
@@ -126,7 +126,7 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   /**
    * Maximum rounds to execute. When set, overrides the default calculation.
    * - undefined: Use max(rounds, userRequest.length) (default)
-   * - 1: Single-pass processing (like DirectAgent)
+   * - 1: Single-pass processing
    * - N: Fixed number of rounds
    */
   maxRounds: z.number().optional(),
@@ -134,8 +134,8 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   /**
    * XML structure enforcement mode.
    * - 'never': Don't ensure XML structure (default)
-   * - 'scratchpadOnly': Only when prefills include scratchpad (DirectAgent)
-   * - 'always': Always ensure XML structure (CoTAgent)
+   * - 'scratchpadOnly': Only when prefills include scratchpad
+   * - 'always': Always ensure XML structure
    */
   xmlStructureMode: XmlStructureMode.optional(),
 });
