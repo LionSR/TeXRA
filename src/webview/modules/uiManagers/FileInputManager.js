@@ -112,11 +112,11 @@ export class FileInputManager extends BaseUIManager {
       });
     });
 
-    this.addListener(BASE_FILE, 'change', () => {
+    this.addListener(BASE_FILE, 'change', (e) => {
       if (this.state.isBlocked()) {
         return;
       }
-      const baseFile = safeGetElementValue(BASE_FILE);
+      const baseFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
