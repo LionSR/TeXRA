@@ -51,6 +51,7 @@ import {
 } from './ReflectionFlow';
 import { createInitialReflectionState } from './ReflectionFlowState';
 import {
+  createReadyReflectionContext,
   ReflectionFlowContext,
   type ReflectionFlowContextInit,
 } from './ReflectionFlowContext';
@@ -150,32 +151,30 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
   } = input;
 
-  // Create the flow context (owns all services)
-  const flowContext = new ReflectionFlowContext({
-    modelHandler,
-    config,
-    setting,
-    prompt,
-    executionContext,
-    userVarChannels,
-    checkInterruption,
-    setAbortController,
-    getClient,
-    getUsageRecorder,
-  });
+  const storageKey = executionContext.storageKey;
+
+  // Create ready-to-use flow context (handles resetPromptBuilder + setActiveRun)
+  const flowContext = createReadyReflectionContext(
+    {
+      modelHandler,
+      config,
+      setting,
+      prompt,
+      executionContext,
+      userVarChannels,
+      checkInterruption,
+      setAbortController,
+      getClient,
+      getUsageRecorder,
+    },
+    storageKey,
+  );
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
   let createdRunStage = false;
-  const storageKey = executionContext.storageKey;
 
   try {
-    // Reset prompt builder before run
-    flowContext.resetPromptBuilder();
-
-    // Update storage key for workflow agents
-    flowContext.setActiveRun(storageKey);
-
     // Register context for interrupt handling
     callbacks?.onContextReady?.(storageKey, flowContext);
 
@@ -232,6 +231,9 @@ export async function runReflectionFlow<C = unknown>(
     if (createdRunStage && shared?.runStage) {
       shared.runStage.end(status);
     }
+
+    // Clean up context resources
+    flowContext.dispose();
 
     // Unregister from interrupt registry
     callbacks?.onFlowComplete?.(storageKey);
