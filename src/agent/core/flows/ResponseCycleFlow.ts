@@ -97,6 +97,20 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 }
 
 /**
+ * Safely finalize a round, ensuring it's only done once.
+ * Guard pattern prevents double-finalization from multiple exit paths.
+ */
+async function safelyFinalizeRound(
+  state: ResponseCycleRuntimeState,
+  store: { finalizeRound(): Promise<void> },
+): Promise<void> {
+  if (!state.roundFinalized) {
+    state.roundFinalized = true;
+    await store.finalizeRound();
+  }
+}
+
+/**
  * Shared state for response cycle flows.
  * Uses BaseCycleShared with ResponseCycleState for type safety.
  *
@@ -574,10 +588,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -609,10 +620,7 @@ class ResponseProcessNode<C> extends BaseNode<
     if (result.repetitionDetected) {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -621,10 +629,7 @@ class ResponseProcessNode<C> extends BaseNode<
     if (!processedResponse) {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -793,10 +798,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -806,10 +808,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     state.shouldStop = shouldStop;
 
     if (shouldStop) {
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -817,10 +816,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     const willContinue = shouldContinue || reachedTokenLimit;
 
     if (!willContinue) {
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
+      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
