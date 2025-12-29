@@ -75,7 +75,7 @@ export async function runResponseCycle<C = unknown>(
       debugFileOptions: undefined,
       startTime: undefined,
       responseObject: undefined,
-      responseTime: undefined,
+      responseTimeMs: undefined,
       stopReason: undefined,
       processedResponse: undefined,
       roundFinalized: false,
