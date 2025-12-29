@@ -222,6 +222,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         kind: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
       };
+    } finally {
+      // Ensure round finalization even on error paths (usage tracking, statistics)
+      // Uses same guard pattern as safelyFinalizeRound in ResponseCycleFlow
+      if (!cycleShared.state.roundFinalized) {
+        cycleShared.state.roundFinalized = true;
+        await prepRes.store.finalizeRound();
+      }
     }
   }
 

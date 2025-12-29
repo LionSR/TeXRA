@@ -277,6 +277,8 @@ export abstract class RetryableInvocationNode<
     try {
       return await operation(abortController.signal);
     } finally {
+      // Clear both references to allow GC and prevent stale state
+      this.signal = undefined;
       services.options.setAbortController(null);
     }
   }
