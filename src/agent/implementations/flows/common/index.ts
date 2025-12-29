@@ -9,4 +9,5 @@
  */
 
 export * from './AgentRunFlowRunner';
+export * from './BaseFlowContext';
 export * from './BaseFlowServices';
