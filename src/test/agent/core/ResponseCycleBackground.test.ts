@@ -342,7 +342,6 @@ describe('ResponseCycle background reasoning logs', () => {
         agentConfig,
         agentPrompt,
         userVars: userVarChannels.transient,
-        userVarChannels,
         logger: loggerStub,
         client: {} as OpenAI,
         checkInterruption: () => false,

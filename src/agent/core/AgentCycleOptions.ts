@@ -28,8 +28,8 @@ export interface AgentCycleBaseOptions<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;
   agentSetting: AgentSetting;
   agentPrompt: AgentPrompt;
+  /** User variables for template rendering (merged from channels) */
   userVars: Record<string, any>;
-  userVarChannels: UserVariableChannels;
   logger: AgentLogger;
   context: AgentExecutionContext;
   client: C;
