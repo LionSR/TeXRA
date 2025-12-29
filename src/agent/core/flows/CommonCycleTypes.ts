@@ -33,7 +33,7 @@ export interface BaseCycleState {
   messages: ProviderMessage[];
   /** Whether the cycle should stop processing */
   shouldStop: boolean;
-  /** Time taken for response in seconds */
+  /** Time taken for response in milliseconds */
   responseTime?: number;
   /** Reason the model stopped generating */
   stopReason?: ProviderStopReason;
@@ -137,7 +137,7 @@ export interface BaseInvocationPrepResult {
 export interface BaseInvocationSuccessData {
   /** Raw response from the model */
   response: unknown;
-  /** Time taken for the response in seconds */
+  /** Time taken for the response in milliseconds */
   responseTime?: number;
 }
 
