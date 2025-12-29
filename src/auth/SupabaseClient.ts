@@ -74,6 +74,15 @@ export class SupabaseClient {
         if (token) {
           return token;
         }
+        logger.debug(
+          'SupabaseClient',
+          'ensureFreshToken returned null, falling back to VS Code auth',
+        );
+      } else {
+        logger.debug(
+          'SupabaseClient',
+          'Auth provider not initialized, using VS Code auth fallback',
+        );
       }
 
       // Fallback to VS Code's authentication API
