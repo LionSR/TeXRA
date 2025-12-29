@@ -166,7 +166,6 @@ describe('BashTool', () => {
       userVarChannels: {
         input: Object.freeze({}) as Readonly<Record<string, any>>,
         transient: {},
-        output: {},
       },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,

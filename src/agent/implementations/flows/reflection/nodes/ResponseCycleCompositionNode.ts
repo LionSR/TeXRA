@@ -184,9 +184,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         shouldStop: false,
         outputExists: false,
         systemPrompt: undefined,
-        debugContext: undefined,
-        debugFileOptions: undefined,
-        startTime: undefined,
+        debug: undefined,
         responseObject: undefined,
         responseTimeMs: undefined,
         stopReason: undefined,
@@ -287,13 +285,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
   /**
    * Get user variables for prompt rendering.
+   * Merges input (frozen base) with transient (runtime modifications).
    */
   private getUserVars(): Record<string, any> {
     const channels = this.services.userVarChannels;
     return {
       ...channels.input,
       ...channels.transient,
-      ...channels.output,
     };
   }
 }

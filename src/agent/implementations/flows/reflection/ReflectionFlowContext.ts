@@ -324,13 +324,6 @@ export class ReflectionFlowContext<C = unknown>
   // =========================================================================
 
   /**
-   * Reset the prompt builder (call before each run).
-   */
-  resetPromptBuilder(): void {
-    this._promptBuilder = null;
-  }
-
-  /**
    * Set the active run storage key on the output handler.
    */
   setActiveRun(storageKey: string): void {
@@ -388,27 +381,14 @@ export function createReflectionFlowContext<C = unknown>(
 /**
  * Creates a ReflectionFlowContext ready for execution.
  *
- * Encapsulates the lifecycle setup that was previously done manually:
- * - resetPromptBuilder() - clears cached prompt state
+ * Encapsulates lifecycle setup:
  * - setActiveRun(storageKey) - configures output handler for this run
- *
- * This eliminates the error-prone manual setup pattern:
- * ```
- * // Old pattern (error-prone):
- * const context = new ReflectionFlowContext(init);
- * context.resetPromptBuilder();  // Easy to forget!
- * context.setActiveRun(storageKey);  // Easy to forget!
- *
- * // New pattern:
- * const context = createReadyReflectionContext(init, storageKey);
- * ```
  */
 export function createReadyReflectionContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
   storageKey: string,
 ): ReflectionFlowContext<C> {
   const context = new ReflectionFlowContext(init);
-  context.resetPromptBuilder();
   context.setActiveRun(storageKey);
   return context;
 }

@@ -124,7 +124,7 @@ export async function runReflectionFlow<C = unknown>(
 
   const storageKey = executionContext.storageKey;
 
-  // Create ready-to-use flow context (handles resetPromptBuilder + setActiveRun)
+  // Create ready-to-use flow context (handles setActiveRun)
   const flowContext = createReadyReflectionContext(
     {
       modelHandler,

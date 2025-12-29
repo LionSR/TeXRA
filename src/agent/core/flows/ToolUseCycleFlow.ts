@@ -300,19 +300,16 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       'tooluse_response',
     );
 
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
-    options.setAbortController(abortController);
-
     const start = Date.now();
-    try {
+
+    // Use base class helper for abort controller lifecycle
+    return this.withAbortController(async (signal) => {
       options.modelHandler.setOutputStreaming(true);
       const response = await options.modelHandler.createResponse({
         client: options.client,
         messages: prepRes.messages,
         temperature: options.agentSetting.temperature ?? 0,
-        signal: abortController.signal,
+        signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
@@ -325,9 +322,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         debugContext,
         debugFileOptions,
       };
-    } finally {
-      options.setAbortController(null);
-    }
+    });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }

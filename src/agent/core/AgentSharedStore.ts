@@ -89,7 +89,6 @@ export class AgentSharedStore {
       user: {
         input: Object.freeze({ ...parsed.user.input }),
         transient: { ...parsed.user.transient },
-        output: { ...parsed.user.output },
       },
     });
   }
@@ -103,7 +102,6 @@ export class AgentSharedStore {
       user: {
         input: { ...this.userChannels.input },
         transient: { ...this.userChannels.transient },
-        output: { ...this.userChannels.output },
       },
     };
   }
