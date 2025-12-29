@@ -278,7 +278,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
     const start = Date.now();
     try {
-      const { response, responseTime } = await stage.run(async () => {
+      const { response, responseTimeMs } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
           client: options.client,
           messages: prepRes.messages,
@@ -293,10 +293,10 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
         const elapsedMs = Date.now() - start;
 
-        return { response: modelResponse, responseTime: elapsedMs };
+        return { response: modelResponse, responseTimeMs: elapsedMs };
       });
 
-      return { kind: 'success', response, responseTime };
+      return { kind: 'success', response, responseTimeMs };
     } finally {
       options.setAbortController(null);
     }
@@ -335,7 +335,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 
     // Apply success-specific side effects
     state.responseObject = successRes.response;
-    state.responseTime = successRes.responseTime;
+    state.responseTimeMs = successRes.responseTimeMs;
 
     if (state.debugContext && state.debugFileOptions) {
       await maybeSaveDebugObject({
@@ -357,7 +357,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
 interface ProcessPrepResult {
   shouldStop: boolean;
   responseObject: unknown;
-  responseTime?: number;
+  responseTimeMs?: number;
   messages: ProviderMessage[];
   outputLocation: AgentFileLocation;
   outputExists: boolean;
@@ -378,8 +378,8 @@ interface ProcessResult {
   /** Normalized usage - single source of truth */
   normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
-  /** Response time for store update in post() */
-  responseTime?: number;
+  /** Response time in ms for store update in post() */
+  responseTimeMs?: number;
   /** Updated last response for store update in post() */
   updatedLastResponse?: string;
   /** Updated accumulated output for store update in post() */
@@ -427,7 +427,7 @@ class ResponseProcessNode<C> extends BaseNode<
     return {
       shouldStop: state.shouldStop,
       responseObject: state.responseObject,
-      responseTime: state.responseTime,
+      responseTimeMs: state.responseTimeMs,
       messages: state.messages,
       outputLocation: state.outputLocation!,
       outputExists: state.outputExists,
@@ -462,9 +462,9 @@ class ResponseProcessNode<C> extends BaseNode<
         options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       }
 
-      if (prepRes.responseTime !== undefined) {
+      if (prepRes.responseTimeMs !== undefined) {
         options.logger.debug(
-          `Response time: ${prepRes.responseTime.toFixed(2)}s`,
+          `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
         );
       }
 
@@ -499,7 +499,7 @@ class ResponseProcessNode<C> extends BaseNode<
       // Normalize usage once - this is the single source of truth
       const normalizedUsage = options.modelHandler.normalizeUsage(
         responseUsage,
-        prepRes.responseTime ?? 0,
+        prepRes.responseTimeMs ?? 0,
       );
 
       const repetitionResult = checkForMassiveRepetition(
@@ -556,7 +556,7 @@ class ResponseProcessNode<C> extends BaseNode<
           normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
           // Pass data for post() to apply side effects
-          responseTime: prepRes.responseTime,
+          responseTimeMs: prepRes.responseTimeMs,
           updatedLastResponse,
           updatedAccumulatedOutput,
         },
@@ -585,8 +585,8 @@ class ResponseProcessNode<C> extends BaseNode<
 
     // Apply side effects that were computed in exec()
     // These updates are now in post() where they belong (PocketFlow compliance)
-    if (result.responseTime !== undefined) {
-      store.round.addResponseTime(result.responseTime);
+    if (result.responseTimeMs !== undefined) {
+      store.round.addResponseTime(result.responseTimeMs);
     }
 
     if (result.normalizedUsage) {
