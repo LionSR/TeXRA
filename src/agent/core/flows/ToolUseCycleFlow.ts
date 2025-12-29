@@ -316,12 +316,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
-      const responseTime = Date.now() - start;
+      const responseTimeMs = Date.now() - start;
 
       return {
         kind: 'success',
         response,
-        responseTime,
+        responseTimeMs,
         debugContext,
         debugFileOptions,
       };
@@ -363,7 +363,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
     // Apply success-specific side effects
     state.response = successRes.response;
-    state.responseTime = successRes.responseTime;
+    state.responseTimeMs = successRes.responseTimeMs;
 
     await maybeSaveDebugObject({
       context: successRes.debugContext,
@@ -383,7 +383,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 interface ToolUseProcessPrepResult {
   shouldStop: boolean;
   response?: unknown;
-  responseTime?: number;
+  responseTimeMs?: number;
 }
 
 /**
@@ -403,7 +403,7 @@ type ToolUseProcessExecResult =
       serverToolContentBlocks?: ServerToolContentBlock[];
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
-      responseTime?: number;
+      responseTimeMs?: number;
       // Message to create if endTurn
       createAssistantMessage?: boolean;
       lastResponseUpdate?: string;
@@ -432,7 +432,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     return {
       shouldStop: state.shouldStop,
       response: state.response,
-      responseTime: state.responseTime,
+      responseTimeMs: state.responseTimeMs,
     };
   }
 
@@ -515,7 +515,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     if (usage) {
       normalizedUsage = options.modelHandler.normalizeUsage(
         usage,
-        prepRes.responseTime ?? 0,
+        prepRes.responseTimeMs ?? 0,
       );
     }
 
@@ -530,7 +530,7 @@ class ToolUseProcessNode<C> extends BaseNode<
         serverToolContentBlocks: serverToolData.contentBlocks,
         lastAssistantContent,
         normalizedUsage,
-        responseTime: prepRes.responseTime,
+        responseTimeMs: prepRes.responseTimeMs,
         createAssistantMessage: Boolean(text),
         lastResponseUpdate: text ?? undefined,
       };
@@ -545,7 +545,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       serverToolContentBlocks: serverToolData.contentBlocks,
       lastAssistantContent,
       normalizedUsage,
-      responseTime: prepRes.responseTime,
+      responseTimeMs: prepRes.responseTimeMs,
     };
   }
 
@@ -573,8 +573,8 @@ class ToolUseProcessNode<C> extends BaseNode<
       execRes.lastAssistantContent ?? [];
 
     // Apply side effects: response time
-    if (execRes.responseTime !== undefined) {
-      store.round.addResponseTime(execRes.responseTime);
+    if (execRes.responseTimeMs !== undefined) {
+      store.round.addResponseTime(execRes.responseTimeMs);
     }
 
     // Apply side effects: usage
