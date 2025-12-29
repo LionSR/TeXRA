@@ -5,7 +5,9 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'openFileCommands';
 
 // Local imports - utilities
 import { fileLister } from '@frontend/files';
@@ -44,7 +46,10 @@ export async function openLabel(label: string): Promise<void> {
       }
     } catch (error) {
       // Log but continue search - file might be inaccessible
-      logger.debug(`Could not read file ${file}: ${toErrorMessage(error)}`);
+      logger.debug(
+        CHANNEL,
+        `Could not read file ${file}: ${toErrorMessage(error)}`,
+      );
     }
   }
 
