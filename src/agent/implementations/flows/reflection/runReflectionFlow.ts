@@ -43,7 +43,6 @@ import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRetryState } from '@agent/core/flows/RetryState';
-import { normalizeRunId } from '@common/constants/runIds';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {
@@ -95,6 +94,27 @@ export interface RunReflectionFlowResult {
   status: EndGroupStatus;
 }
 
+/**
+ * Callbacks for reflection flow lifecycle events.
+ * Mirrors the pattern from runToolUseFlow for consistency.
+ */
+export interface RunReflectionFlowCallbacks {
+  /**
+   * Called when the flow context is ready for registration.
+   * Use this to register the context with the interrupt registry.
+   */
+  onContextReady?: (
+    storageKey: StorageKey,
+    context: ReflectionFlowContext<unknown>,
+  ) => void;
+
+  /**
+   * Called when the flow completes (success or error).
+   * Use this to unregister from the interrupt registry.
+   */
+  onFlowComplete?: (storageKey: StorageKey) => void;
+}
+
 // ============================================================================
 // Flow Runner
 // ============================================================================
@@ -108,10 +128,12 @@ export interface RunReflectionFlowResult {
  * - BaseReflectionAgent.run()
  *
  * @param input - Flow configuration and dependencies
+ * @param callbacks - Optional lifecycle callbacks for interrupt registration
  * @returns Flow execution result
  */
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
+  callbacks?: RunReflectionFlowCallbacks,
 ): Promise<RunReflectionFlowResult> {
   const {
     modelHandler,
@@ -144,14 +166,18 @@ export async function runReflectionFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
+  let createdRunStage = false;
+  const storageKey = executionContext.storageKey;
 
   try {
     // Reset prompt builder before run
     flowContext.resetPromptBuilder();
 
-    // Update storage key if needed (for workflow agents)
-    const storageKey = executionContext.storageKey;
+    // Update storage key for workflow agents
     flowContext.setActiveRun(storageKey);
+
+    // Register context for interrupt handling
+    callbacks?.onContextReady?.(storageKey, flowContext);
 
     // Create or use provided run stage
     const runStage =
@@ -159,6 +185,9 @@ export async function runReflectionFlow<C = unknown>(
       (await executionContext.logger.stage(`Run: ${config.agent}`, {
         skip: false,
       }));
+
+    // Track if we created the stage internally
+    createdRunStage = !parentStage;
 
     // Determine starting round from hydrated outputs (for resume)
     const hadHydratedRounds = hydratedOutputs && hydratedOutputs.length > 0;
@@ -198,6 +227,14 @@ export async function runReflectionFlow<C = unknown>(
   } finally {
     // Finalize round stage
     shared?.state.roundStage?.end(status);
+
+    // Finalize run stage if we created it internally
+    if (createdRunStage && shared?.runStage) {
+      shared.runStage.end(status);
+    }
+
+    // Unregister from interrupt registry
+    callbacks?.onFlowComplete?.(storageKey);
   }
 
   return {
