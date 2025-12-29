@@ -352,30 +352,6 @@ export class ReflectionFlowContext<C = unknown> {
   }
 
   // =========================================================================
-  // Convenience accessors
-  // =========================================================================
-
-  get logger() {
-    return this.init.executionContext.logger;
-  }
-
-  get executionId() {
-    return this.init.executionContext.executionId;
-  }
-
-  get storageKey() {
-    return this.init.executionContext.storageKey;
-  }
-
-  get config() {
-    return this.init.config;
-  }
-
-  get setting() {
-    return this.init.setting;
-  }
-
-  // =========================================================================
   // Lifecycle helpers
   // =========================================================================
 
