@@ -29,7 +29,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { buildBaseFlowServices } from '@agent/implementations/flows/common';
+import { BaseFlowContext } from '@agent/implementations/flows/common';
 
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -82,16 +82,19 @@ export interface ToolUseFlowContextInit<
  *
  * Implements IToolUseSessionHost to provide session lifecycle with
  * necessary context without requiring an agent instance.
+ *
+ * Extends BaseFlowContext for shared lazy initialization pattern.
  */
-export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
-  private readonly init: ToolUseFlowContextInit<C>;
+export class ToolUseFlowContext<C = unknown>
+  extends BaseFlowContext<ToolUseFlowContextInit<C>, ToolUseServices<C>, C>
+  implements IToolUseSessionHost
+{
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle;
   private readonly resolvedTools: ToolDefinition[];
-  private _services: ToolUseServices<C> | null = null;
 
   constructor(init: ToolUseFlowContextInit<C>) {
-    this.init = init;
+    super(init);
     this.toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
     this.sessionLifecycle = new ToolUseSessionLifecycle(this);
     // Resolve tools once at construction time instead of on every cycle
@@ -137,19 +140,19 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
   }
 
   // =========================================================================
-  // Service Access
+  // BaseFlowContext Implementation
   // =========================================================================
 
-  get services(): ToolUseServices<C> {
-    if (this._services) {
-      return this._services;
-    }
-
+  /**
+   * Build tool-use specific services.
+   *
+   * Called by BaseFlowContext.services getter after base services are built.
+   * Returns services that are merged on top of base services.
+   */
+  protected buildFlowSpecificServices(): Partial<ToolUseServices<C>> {
     const { setting, resumeSnapshot } = this.init;
 
-    // Build base services from init, then add tool-use specific ones
-    this._services = {
-      ...buildBaseFlowServices(this.init),
+    return {
       // Narrow setting type for tool-use flows
       setting,
 
@@ -167,8 +170,6 @@ export class ToolUseFlowContext<C = unknown> implements IToolUseSessionHost {
       applyFollowUpMessage: (message, conversation) =>
         this.applyFollowUpMessage(message, conversation),
     };
-
-    return this._services;
   }
 
   get session() {
