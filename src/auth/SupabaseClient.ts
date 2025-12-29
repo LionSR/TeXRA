@@ -113,11 +113,17 @@ export class SupabaseClient {
 
   /**
    * Get access and refresh tokens from secure storage.
+   * Ensures tokens are fresh before returning.
    */
   static async getSessionTokens(): Promise<{
     accessToken: string;
     refreshToken: string;
   } | null> {
+    // Ensure token is fresh before reading from storage
+    if (this.authProvider) {
+      await this.authProvider.ensureFreshToken();
+    }
+
     if (!this.context) {
       logger.warn('SupabaseClient', 'Extension context not set');
       const accessToken = await this.getAccessToken();
