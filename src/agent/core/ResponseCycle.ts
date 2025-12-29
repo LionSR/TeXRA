@@ -4,7 +4,7 @@
  * Response cycle execution for workflow agents.
  *
  * Returns a result indicating whether the round should end.
- * Used by BaseReflectionAgent for proactive, turn-based execution.
+ * Supports proactive, turn-based execution for structured output generation.
  *
  * @see ToolUseCycle for interactive cycle execution
  */
@@ -49,15 +49,15 @@ export interface ResponseCycleResult {
 /**
  * Executes a response cycle for workflow agents.
  *
- * Response cycles return a result indicating whether the turn should end.
- * This is used by workflow agents (BaseReflectionAgent) to determine round continuation.
+ * Response cycles return a result indicating whether the turn should end,
+ * used by workflow flows to determine round continuation.
  *
  * Unlike tool-use cycles which continue until user input, response cycles
  * complete when the model generates a full response or hits a stopping condition.
  *
  * @param input - Cycle input with options, messages, output location, and store
  * @returns Result with endTurn flag and updated store
- * @see runToolUseCycle for interactive cycle execution that doesn't return control flags
+ * @see runToolUseCycle for interactive cycle execution
  */
 export async function runResponseCycle<C = unknown>(
   input: ResponseCycleInput<C>,

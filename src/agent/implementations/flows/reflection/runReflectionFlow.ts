@@ -1,39 +1,15 @@
 /**
- * runReflectionFlow - Run reflection flows without agent class instances.
+ * runReflectionFlow - Entry point for reflection flow execution.
  *
- * ## Flow-First Architecture
- *
- * This module provides a direct way to run reflection flows, bypassing the
- * agent class hierarchy entirely. Instead of:
- *
- *   executeAgent → instantiate DirectAgent/CoTAgent → agent.run() → flow.run()
- *
- * We can now do:
- *
- *   runReflectionFlow(config) → flow.run() directly
- *
- * ## Usage:
- *
- * ```typescript
- * const result = await runReflectionFlow({
- *   modelHandler,
- *   config: agentConfig,
- *   setting: agentSetting,
- *   prompt: agentPrompt,
- *   executionContext,
- *   userVarChannels,
- * });
- * ```
- *
- * ## What This Replaces:
- *
- * - DirectAgent class (single round, scratchpad-conditional XML)
- * - CoTAgent class (multi-round, always XML)
- * - BaseReflectionAgent.run() method
- *
- * The agent type behavior is now determined by configuration fields:
- * - `setting.maxRounds`: Number of rounds (1 for direct-like behavior)
+ * Executes workflow-style agents that run for a fixed number of rounds,
+ * producing structured output. Behavior is configuration-driven:
+ * - `setting.maxRounds`: Number of reflection rounds
  * - `setting.xmlStructureMode`: 'never' | 'scratchpadOnly' | 'always'
+ *
+ * The flow manages:
+ * - Round progression and stage lifecycle
+ * - Prompt building and output handling
+ * - Interrupt handling and cleanup
  */
 
 import type { RoundOutput } from '@agent/output';
@@ -121,12 +97,7 @@ export interface RunReflectionFlowCallbacks {
 // ============================================================================
 
 /**
- * Run a reflection flow directly without agent class instances.
- *
- * This is the flow-first replacement for:
- * - DirectAgent.run()
- * - CoTAgent.run()
- * - BaseReflectionAgent.run()
+ * Run a reflection flow.
  *
  * @param input - Flow configuration and dependencies
  * @param callbacks - Optional lifecycle callbacks for interrupt registration

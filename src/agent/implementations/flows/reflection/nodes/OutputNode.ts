@@ -79,11 +79,9 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     // Base files for latexdiff - MUST be workspace locations
-    // (uses same helper as BaseReflectionAgent constructor)
     const baseFiles = createBaseFileLocations(config);
 
-    // Determine if we should ensure XML structure (delegates to agent for polymorphism)
-    // DirectAgent: returns useScratchpad, CoTAgent: returns true, Default: false
+    // Determine if we should ensure XML structure (based on xmlStructureMode config)
     const ensureXmlStructure = this.services.shouldEnsureXmlStructure();
 
     return {

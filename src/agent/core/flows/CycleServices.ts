@@ -43,7 +43,7 @@ import type { TaskRunFileService } from '@utils/files';
 
 /**
  * Options for response cycle execution.
- * Used by workflow agents (BaseReflectionAgent) for turn-based generation.
+ * Used by workflow flows for turn-based generation.
  */
 export interface ResponseCycleOptions<
   C = unknown,
@@ -54,7 +54,7 @@ export interface ResponseCycleOptions<
 
 /**
  * Options for tool-use cycle execution.
- * Used by interactive agents (BaseToolUseAgent) for session-based execution.
+ * Used by interactive flows for session-based execution.
  */
 export interface ToolUseCycleOptions<
   C = unknown,
