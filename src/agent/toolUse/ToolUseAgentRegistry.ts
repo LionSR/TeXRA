@@ -66,8 +66,15 @@ export function getToolUseFlowContext(
   streamTabId: StreamTabId,
 ): ToolUseFlowContext<any> | undefined {
   const entry = registry.get(streamTabId);
-  // Type guard: check if it's a ToolUseFlowContext (has 'services' property)
-  if (entry && 'services' in entry) {
+  // Type guard: check if it's a ToolUseFlowContext (has 'session' property with appendFollowUp method)
+  // This is more specific than checking 'services', which is shared by all BaseFlowContext subclasses
+  if (
+    entry &&
+    'session' in entry &&
+    typeof entry.session === 'object' &&
+    entry.session !== null &&
+    'appendFollowUp' in entry.session
+  ) {
     return entry as ToolUseFlowContext<any>;
   }
   return undefined;

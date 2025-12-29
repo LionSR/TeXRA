@@ -34,17 +34,20 @@ import {
   AgentSetting,
   AgentPrompt,
   AgentType,
+  AgentCategory,
   getAgentSessionDescriptor,
   type AgentWorkflowSetting,
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
+import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
@@ -57,7 +60,6 @@ import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
-import { END_GROUP_STATUS } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -95,6 +97,7 @@ interface FlowExecutionContext {
   executionContext: AgentExecutionContext;
   streamTabId: StreamTabId;
   userVarChannels: UserVariableChannels;
+  usageMonitor: UsageMonitor;
 }
 
 // ============================================================================
@@ -208,6 +211,18 @@ async function prepareFlowExecution(
     output: {},
   };
 
+  // 5. Create usage monitor for tracking API usage
+  const isMultipleOutput =
+    agentSetting.agentCategory === AgentCategory.Workflow
+      ? (agentSetting as AgentWorkflowSetting).isMultipleOutput
+      : undefined;
+
+  const usageMonitor = new UsageMonitor(modelHandler, executionContext, {
+    agentName: agentConfig.agent,
+    agentCategory: agentSetting.agentCategory,
+    isMultipleOutput,
+  });
+
   return {
     modelHandler,
     agentConfig,
@@ -217,12 +232,28 @@ async function prepareFlowExecution(
     executionContext,
     streamTabId,
     userVarChannels,
+    usageMonitor,
   };
 }
 
 // ============================================================================
-// Flow Execution
+// Flow Execution Helpers
 // ============================================================================
+
+/**
+ * Create a usage recorder callback for flow execution.
+ *
+ * This callback is invoked when a round is finalized and records usage
+ * statistics via the usage monitor.
+ */
+function createUsageRecorder(
+  usageMonitor: UsageMonitor,
+  runKind: 'workflow' | 'tool-use' = 'workflow',
+): () => AgentRoundFinalizedCallback {
+  return () => async ({ run }) => {
+    await usageMonitor.recordUsage(run, { runKind });
+  };
+}
 
 // ============================================================================
 // UI and Error Handling
@@ -450,6 +481,7 @@ export async function executeAgent(
               checkInterruption: () => interruptState.isInterrupted,
               setAbortController: () => {},
               getClient: () => client,
+              getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
               onInterrupt: () => {
                 interruptState.isInterrupted = true;
               },
@@ -465,17 +497,31 @@ export async function executeAgent(
           );
         } else {
           // Reflection flow execution (direct/CoT/workflow)
-          await runReflectionFlow({
-            modelHandler: ctx.modelHandler,
-            config: ctx.agentConfig,
-            setting: ctx.agentSetting as AgentWorkflowSetting,
-            prompt: ctx.agentPrompt,
-            executionContext: ctx.executionContext,
-            userVarChannels: ctx.userVarChannels,
-            checkInterruption: () => interruptState.isInterrupted,
-            setAbortController: () => {},
-            getClient: () => client,
-          });
+          await runReflectionFlow(
+            {
+              modelHandler: ctx.modelHandler,
+              config: ctx.agentConfig,
+              setting: ctx.agentSetting as AgentWorkflowSetting,
+              prompt: ctx.agentPrompt,
+              executionContext: ctx.executionContext,
+              userVarChannels: ctx.userVarChannels,
+              checkInterruption: () => interruptState.isInterrupted,
+              setAbortController: () => {},
+              getClient: () => client,
+              getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+              onInterrupt: () => {
+                interruptState.isInterrupted = true;
+              },
+            },
+            {
+              onContextReady: (_storageKey, context) => {
+                registerInterruptible(streamTabId, context);
+              },
+              onFlowComplete: () => {
+                unregisterInterruptible(streamTabId);
+              },
+            },
+          );
         }
 
         StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
@@ -547,19 +593,32 @@ export async function executeMergeAgent(
       );
 
       // Run reflection flow with custom file naming
-      await runReflectionFlow({
-        modelHandler: ctx.modelHandler,
-        config: ctx.agentConfig,
-        setting: ctx.agentSetting as AgentWorkflowSetting,
-        prompt: ctx.agentPrompt,
-        executionContext: ctx.executionContext,
-        userVarChannels: ctx.userVarChannels,
-        checkInterruption: () => interruptState.isInterrupted,
-        setAbortController: () => {},
-        getClient: () => client,
-        getUsageRecorder: () => async () => {},
-        getOutputFileLocation,
-      });
+      await runReflectionFlow(
+        {
+          modelHandler: ctx.modelHandler,
+          config: ctx.agentConfig,
+          setting: ctx.agentSetting as AgentWorkflowSetting,
+          prompt: ctx.agentPrompt,
+          executionContext: ctx.executionContext,
+          userVarChannels: ctx.userVarChannels,
+          checkInterruption: () => interruptState.isInterrupted,
+          setAbortController: () => {},
+          getClient: () => client,
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+          getOutputFileLocation,
+          onInterrupt: () => {
+            interruptState.isInterrupted = true;
+          },
+        },
+        {
+          onContextReady: (_storageKey, context) => {
+            registerInterruptible(streamTabId, context);
+          },
+          onFlowComplete: () => {
+            unregisterInterruptible(streamTabId);
+          },
+        },
+      );
 
       logger.debug(`Task completed successfully`);
       StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
@@ -601,6 +660,7 @@ export async function resumeToolUseFromSnapshot(
     agentPrompt,
     executionContext,
     userVarChannels,
+    usageMonitor,
   } = ctx;
 
   // Validate agent type
@@ -640,6 +700,7 @@ export async function resumeToolUseFromSnapshot(
         checkInterruption: () => interruptState.isInterrupted,
         setAbortController: () => {},
         getClient: () => client,
+        getUsageRecorder: createUsageRecorder(usageMonitor, 'tool-use'),
         resumeSnapshot: snapshot,
         onInterrupt: () => {
           interruptState.isInterrupted = true;
