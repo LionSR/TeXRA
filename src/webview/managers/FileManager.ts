@@ -263,6 +263,11 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
+
     const refreshedFiles = {
       input: await fileLister.list('input'),
       reference: await fileLister.list('reference'),
@@ -270,8 +275,15 @@ export class FileManager extends BaseWebviewManager {
       media: await fileLister.list('media'),
     };
 
-    Object.entries(refreshedFiles).forEach(([type, files]) => {
-      this.postFileUpdate(type.charAt(0).toUpperCase() + type.slice(1), files);
+    // Send all single file updates in a single batch message
+    // This allows the webview to wrap all updates in a single blockSave()
+    // preventing race conditions where change events fire between updates
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
+      inputFiles: refreshedFiles.input,
+      referenceFiles: refreshedFiles.reference,
+      auxiliaryFiles: refreshedFiles.auxiliary,
+      mediaFiles: refreshedFiles.media,
     });
 
     await this.updateBaseFileSelect();
