@@ -20,6 +20,7 @@ import {
   type TierModelConfig,
   type UserAccessStatus,
 } from './types';
+import { logger } from '@logger/logUtils';
 
 const LOG_PREFIX = '[TierService]';
 
@@ -85,12 +86,12 @@ export class TierService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(
+          logger.info(
             `${LOG_PREFIX} tier-config endpoint not available, using defaults`,
           );
           return null;
         }
-        console.error(
+        logger.error(
           `${LOG_PREFIX} Failed to fetch tier config: ${response.status}`,
         );
         return null;
@@ -109,7 +110,7 @@ export class TierService {
       const parsed = TierModelConfigSchema.safeParse(data);
 
       if (!parsed.success) {
-        console.error(
+        logger.error(
           `${LOG_PREFIX} Invalid tier config response:`,
           parsed.error,
         );
@@ -118,7 +119,7 @@ export class TierService {
 
       return parsed.data;
     } catch (error) {
-      console.error(`${LOG_PREFIX} Error fetching tier config:`, error);
+      logger.error(`${LOG_PREFIX} Error fetching tier config:`, error);
       return null;
     }
   }
