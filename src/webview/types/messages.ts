@@ -187,6 +187,21 @@ export const UpdateFilesMessageSchema = BaseMessageSchema.extend(
 
 export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
 
+/**
+ * Batch update all single file selects message from extension.
+ * Used by REFRESH_ALL_FILES to prevent race conditions during file watcher updates.
+ */
+export const SetAllSingleFilesMessageSchema = BaseMessageSchema.extend({
+  inputFiles: z.array(z.string()).optional(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  mediaFiles: z.array(z.string()).optional(),
+});
+
+export type SetAllSingleFilesMessage = z.infer<
+  typeof SetAllSingleFilesMessageSchema
+>;
+
 // --- Common Utilities ---
 
 /** Trims whitespace and requires non-empty result */
