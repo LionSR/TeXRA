@@ -165,6 +165,10 @@ export function createFileHandlers(ctx) {
    * Handle batch update of all single file selects.
    * Wraps all updates in a single blockSave() to prevent race conditions
    * where change events fire between individual file updates.
+   *
+   * Note: This results in nested blockSave() calls since fileSelect.update()
+   * also calls blockSave() internally. This is safe because blockSave uses
+   * a counter (_saveBlockCount) that supports nesting.
    */
   function handleSetAllSingleFiles(message) {
     const { inputFiles, referenceFiles, auxiliaryFiles, mediaFiles } = message;
