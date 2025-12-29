@@ -68,6 +68,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
+import { InterruptManager } from './InterruptManager';
 import { AgentExecutionContext } from './AgentExecutionContext';
 
 const CHANNEL = 'executeAgent';
@@ -463,9 +464,8 @@ export async function executeAgent(
         // Initialize client for all flow types
         const client = await ctx.modelHandler.getClient();
 
-        // Interruption state (shared across flow execution)
-        // Updated via onInterrupt callback when context.interrupt() is called
-        const interruptState = { isInterrupted: false };
+        // Create interrupt manager (replaces mutable interruptState object)
+        const interruptManager = new InterruptManager();
 
         if (agentSetting.agentType === 'toolUse') {
           // Tool-use flow execution
@@ -478,13 +478,11 @@ export async function executeAgent(
               executionContext: ctx.executionContext,
               userVarChannels: ctx.userVarChannels,
               streamTabId: ctx.streamTabId,
-              checkInterruption: () => interruptState.isInterrupted,
-              setAbortController: () => {},
+              checkInterruption: interruptManager.createCheckInterruption(),
+              setAbortController: interruptManager.createSetAbortController(),
               getClient: () => client,
               getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-              onInterrupt: () => {
-                interruptState.isInterrupted = true;
-              },
+              onInterrupt: interruptManager.createOnInterrupt(),
             },
             {
               onContextReady: (streamId, context) => {
@@ -505,13 +503,11 @@ export async function executeAgent(
               prompt: ctx.agentPrompt,
               executionContext: ctx.executionContext,
               userVarChannels: ctx.userVarChannels,
-              checkInterruption: () => interruptState.isInterrupted,
-              setAbortController: () => {},
+              checkInterruption: interruptManager.createCheckInterruption(),
+              setAbortController: interruptManager.createSetAbortController(),
               getClient: () => client,
               getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-              onInterrupt: () => {
-                interruptState.isInterrupted = true;
-              },
+              onInterrupt: interruptManager.createOnInterrupt(),
             },
             {
               onContextReady: (_storageKey, context) => {
@@ -579,8 +575,8 @@ export async function executeMergeAgent(
       // Initialize client
       const client = await ctx.modelHandler.getClient();
 
-      // Interruption state
-      const interruptState = { isInterrupted: false };
+      // Create interrupt manager
+      const interruptManager = new InterruptManager();
 
       // Create file service for merge-specific output location
       const fileService = new TaskRunFileService(executionContext.executionId);
@@ -601,14 +597,12 @@ export async function executeMergeAgent(
           prompt: ctx.agentPrompt,
           executionContext: ctx.executionContext,
           userVarChannels: ctx.userVarChannels,
-          checkInterruption: () => interruptState.isInterrupted,
-          setAbortController: () => {},
+          checkInterruption: interruptManager.createCheckInterruption(),
+          setAbortController: interruptManager.createSetAbortController(),
           getClient: () => client,
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
           getOutputFileLocation,
-          onInterrupt: () => {
-            interruptState.isInterrupted = true;
-          },
+          onInterrupt: interruptManager.createOnInterrupt(),
         },
         {
           onContextReady: (_storageKey, context) => {
@@ -670,8 +664,8 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  // State for interruption handling
-  const interruptState = { isInterrupted: false };
+  // Create interrupt manager
+  const interruptManager = new InterruptManager();
   let client: any = null;
 
   try {
@@ -697,14 +691,12 @@ export async function resumeToolUseFromSnapshot(
         executionContext,
         userVarChannels,
         streamTabId,
-        checkInterruption: () => interruptState.isInterrupted,
-        setAbortController: () => {},
+        checkInterruption: interruptManager.createCheckInterruption(),
+        setAbortController: interruptManager.createSetAbortController(),
         getClient: () => client,
         getUsageRecorder: createUsageRecorder(usageMonitor, 'tool-use'),
         resumeSnapshot: snapshot,
-        onInterrupt: () => {
-          interruptState.isInterrupted = true;
-        },
+        onInterrupt: interruptManager.createOnInterrupt(),
       },
       {
         onContextReady: (streamId, context) => {
