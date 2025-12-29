@@ -156,7 +156,9 @@ export class FileSelect {
           ) {
             existingOption.textContent = manualSelection.commitLabel;
           }
-          existingOption.selected = true;
+          // For existing options, setting .selected doesn't trigger slotchange.
+          // We must set the parent's .value to update the component.
+          commitDiv.value = manualSelection.commitHash;
         }
       }
       setElementsDisabled([commitDiv, ...commitButtons], false);
@@ -200,8 +202,12 @@ export class FileSelect {
       if (commitLabel) {
         existingOption.textContent = commitLabel;
       }
-      existingOption.selected = true;
     }
+
+    // For existing options, setting .selected doesn't trigger slotchange.
+    // We must set .value to update the component. For new options, this is
+    // redundant but harmless since addOption already set selected=true.
+    commitDiv.value = commitHash;
 
     this._manualCommitSelection = {
       commitHash,
