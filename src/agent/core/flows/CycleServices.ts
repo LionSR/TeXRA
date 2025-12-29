@@ -3,7 +3,7 @@
  *
  * This module defines:
  * 1. Cycle option interfaces (ResponseCycleOptions, ToolUseCycleOptions)
- * 2. Service container pattern for separating immutable dependencies from mutable state
+ * 2. Service containers with options flattened directly (no nested wrapper)
  *
  * ## Architecture
  *
@@ -11,18 +11,17 @@
  * - `_params.services` - immutable dependencies (logger, modelHandler, store)
  * - `shared` - mutable runtime state only
  *
- * This achieves:
- * 1. **Separation of concerns**: Dependencies vs data clearly separated
- * 2. **Single source of truth**: Services defined once, accessed consistently
- * 3. **Clean code**: Uses existing PocketFlow infrastructure
+ * Options are flattened directly into services for cleaner access:
+ * - `services.logger` instead of `services.options.logger`
+ * - `services.store` for shared state
  *
  * ## Usage
  *
  * ```typescript
  * class MyNode extends BaseNode<CycleState, CycleParams<C>> {
  *   async exec(state: CycleState) {
- *     // Access services via _params
- *     const { logger, store } = this._params.services;
+ *     // Access services directly (options flattened)
+ *     const { logger, store, modelHandler } = this.services;
  *     // Access mutable state from shared
  *     const { messages } = state;
  *   }
@@ -66,12 +65,12 @@ export interface ToolUseCycleOptions<
 }
 
 // ============================================================================
-// SERVICE CONTAINERS
+// SERVICE CONTAINERS (flattened - options merged directly into services)
 // ============================================================================
 
 /**
  * Base services shared by all cycle flows.
- * Contains immutable dependencies that nodes need.
+ * Contains shared store and common dependencies.
  */
 export interface BaseCycleServices {
   /** Shared store for workspace, round, and run state */
@@ -80,21 +79,23 @@ export interface BaseCycleServices {
 
 /**
  * Services for response cycle flows.
- * Includes options specific to response generation.
+ *
+ * Options are flattened directly into services (no nested `options` wrapper).
+ * Access via: `services.logger`, `services.modelHandler`, etc.
  */
-export interface ResponseCycleServices<C = unknown> extends BaseCycleServices {
-  /** Response cycle configuration and callbacks */
-  readonly options: ResponseCycleOptions<C>;
-}
+export interface ResponseCycleServices<C = unknown>
+  extends BaseCycleServices,
+    Readonly<ResponseCycleOptions<C>> {}
 
 /**
  * Services for tool-use cycle flows.
- * Includes options specific to tool execution.
+ *
+ * Options are flattened directly into services (no nested `options` wrapper).
+ * Access via: `services.logger`, `services.toolRegistry`, etc.
  */
-export interface ToolUseCycleServices<C = unknown> extends BaseCycleServices {
-  /** Tool-use cycle configuration and callbacks */
-  readonly options: ToolUseCycleOptions<C>;
-}
+export interface ToolUseCycleServices<C = unknown>
+  extends BaseCycleServices,
+    Readonly<ToolUseCycleOptions<C>> {}
 
 /**
  * Generic params type for cycle nodes.
