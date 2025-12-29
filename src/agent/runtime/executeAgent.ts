@@ -215,7 +215,6 @@ async function prepareFlowExecution(
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze({ ...baseVars }),
     transient: { ...baseVars },
-    output: {},
   };
 
   // 5. Create usage monitor for tracking API usage

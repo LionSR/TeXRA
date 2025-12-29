@@ -327,7 +327,6 @@ describe('ResponseCycle background reasoning logs', () => {
     const userVarChannels = {
       input: Object.freeze({}),
       transient: {} as Record<string, any>,
-      output: {} as Record<string, any>,
     };
     const store = new AgentSharedStore({
       round: stateRound,
