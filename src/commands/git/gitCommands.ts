@@ -8,11 +8,12 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
 
 // Type imports
 import type { Dirent } from 'fs';
 
+const CHANNEL = 'gitCommands';
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
@@ -210,7 +211,8 @@ async function cloneOverleafProject(
     vscode.window.showErrorMessage(
       'Unable to inspect the workspace folder before cloning the Overleaf project.',
     );
-    logger.error('Failed to read workspace contents:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(CHANNEL, `Failed to read workspace contents: ${message}`);
     return;
   }
 
@@ -251,9 +253,12 @@ async function cloneOverleafProject(
       const sanitizedMessage = error.message
         .replaceAll(token, '********')
         .replaceAll(encodedToken, '********');
-      logger.error('Overleaf clone failed:', sanitizedMessage);
+      logger.error(CHANNEL, `Overleaf clone failed: ${sanitizedMessage}`);
     } else {
-      logger.error('Overleaf clone failed with non-error value:', error);
+      logger.error(
+        CHANNEL,
+        `Overleaf clone failed with non-error value: ${String(error)}`,
+      );
     }
   }
 }
