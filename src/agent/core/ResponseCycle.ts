@@ -83,8 +83,9 @@ export async function runResponseCycle<C = unknown>(
   };
 
   const flow = createResponseCycleFlow<C>();
-  // Inject immutable services via params (PocketFlow pattern)
-  flow.setParams({ services: { options: input.options, store: input.store } });
+  // Inject immutable services directly (PocketFlow pattern)
+  // Options are spread directly into services (flattened structure)
+  flow.setServices({ ...input.options, store: input.store });
   await flow.run(shared);
 
   // Interpret cycle completion - shared logic with ToolUseCycle
