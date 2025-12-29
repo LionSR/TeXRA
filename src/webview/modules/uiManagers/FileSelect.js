@@ -46,40 +46,25 @@ export class FileSelect {
     const normalizedFiles = Array.isArray(files) ? files : [];
     const sortedFiles = [...normalizedFiles].sort((a, b) => a.localeCompare(b));
 
+    // Determine which value to restore BEFORE adding options.
+    // We set 'selected' on the option element when creating it because
+    // vscode-single-select's _setStateFromSlottedElements reads this property
+    // during slot change and defaults to index 0 if none found.
+    const { storedValue, currentValue } = options;
+    const restoredValue =
+      (storedValue && sortedFiles.includes(storedValue) && storedValue) ||
+      (currentValue && sortedFiles.includes(currentValue) && currentValue) ||
+      null;
+
     // Block saves during option updates - vscode-single-select fires change events
     // when innerHTML is cleared, which would trigger save() with temporary "None" state
     mainViewState.blockSave();
     try {
       selectDiv.innerHTML = '';
       this.addOption(selectDiv, '', 'None');
-      sortedFiles.forEach((f) => this.addOption(selectDiv, f, f));
-
-      // Restore selection if file still exists, prioritizing stored state
-      const { storedValue, currentValue } = options;
-      let restoredValue = null;
-
-      if (storedValue && sortedFiles.includes(storedValue)) {
-        restoredValue = storedValue;
-      } else if (currentValue && sortedFiles.includes(currentValue)) {
-        restoredValue = currentValue;
-      }
-
-      if (restoredValue) {
-        safeSetElementValue(id, restoredValue);
-      }
+      sortedFiles.forEach((f) => this.addOption(selectDiv, f, f, f === restoredValue));
 
       // Only update state if we successfully restored a value.
-      // Do NOT clear state when file is not in list - the file may temporarily
-      // not appear during refresh cycles, and clearing would lose the user's selection.
-      //
-      // INTENTIONAL STATE/UI DIVERGENCE: If the selected file is not in the list,
-      // the UI shows "None" but state preserves the original selection. This allows:
-      // - Recovery when file temporarily disappears (e.g., during refresh)
-      // - Persistence across agent changes that don't affect file availability
-      //
-      // Consumers should be aware that state[id] may not match UI in edge cases.
-      // The execution flow reads from DOM, so a missing file will correctly result
-      // in no file being sent. The user can manually clear via the empty button.
       if (restoredValue) {
         mainViewState.update({ [id]: restoredValue });
       }
@@ -103,13 +88,26 @@ export class FileSelect {
     }
   }
 
-  addOption(select, value, text) {
+  /**
+   * Adds an option to a select element.
+   * @param {HTMLElement} select - The select element
+   * @param {string} value - The option value
+   * @param {string} text - The option display text
+   * @param {boolean} [selected=false] - Whether this option should be selected.
+   *   Setting this is critical for vscode-single-select because its
+   *   _setStateFromSlottedElements reads this property during slot change
+   *   and defaults to index 0 if none found.
+   */
+  addOption(select, value, text, selected = false) {
     if (!select) {
       return;
     }
     const option = document.createElement('vscode-option');
     option.value = value;
     option.textContent = text;
+    if (selected) {
+      option.selected = true;
+    }
     select.appendChild(option);
   }
 
