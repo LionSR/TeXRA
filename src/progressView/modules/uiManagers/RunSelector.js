@@ -93,7 +93,6 @@ export class RunSelector {
     dropdown.addEventListener('change', this._changeHandler);
     this._dropdown = dropdown;
     this._renderOptions();
-    this._applyActiveValue();
   }
 
   _ensureDropdown() {
@@ -144,7 +143,6 @@ export class RunSelector {
 
     if (this._ensureDropdown()) {
       this._renderOptions();
-      this._applyActiveValue();
     }
 
     this._syncVisibility();
@@ -164,7 +162,6 @@ export class RunSelector {
 
     if (this._ensureDropdown()) {
       this._renderOptions();
-      this._applyActiveValue();
     }
 
     this._syncVisibility();
@@ -196,7 +193,6 @@ export class RunSelector {
 
     if (this._ensureDropdown()) {
       this._renderOptions();
-      this._applyActiveValue();
     }
 
     this._syncVisibility();
@@ -219,38 +215,49 @@ export class RunSelector {
       return;
     }
 
-    const fragment = document.createDocumentFragment();
     const runs = this._getSortedRuns();
+    const targetId = this._resolveTargetId(runs);
+
+    const fragment = document.createDocumentFragment();
     runs.forEach((group) => {
       const option = document.createElement('vscode-option');
       option.value = group.id;
       option.textContent = this._formatRunLabel(group);
+      if (group.id === targetId) {
+        option.selected = true;
+      }
       fragment.appendChild(option);
     });
 
     this._dropdown.innerHTML = '';
     this._dropdown.appendChild(fragment);
-    this._applyActiveValue(runs);
+    this._pendingActiveId = targetId || null;
   }
 
-  _applyActiveValue(sortedRuns) {
-    if (!this._dropdown) {
-      return;
-    }
-
-    const runs = sortedRuns || this._getSortedRuns();
-
+  _resolveTargetId(runs) {
     let targetId = this._pendingActiveId;
     if (targetId && !this._runs.has(targetId)) {
       targetId = null;
     }
-
-    if (!targetId && runs.length > 0) {
+    if (!targetId && runs && runs.length > 0) {
       targetId = runs.at(-1).id;
     }
+    return targetId;
+  }
 
-    this._dropdown.value = targetId ?? '';
-    this._pendingActiveId = this._dropdown.value || null;
+  _applyActiveValue() {
+    if (!this._dropdown) {
+      return;
+    }
+
+    const targetId = this._resolveTargetId(this._getSortedRuns());
+
+    // Clear existing selections and set new one
+    Array.from(this._dropdown.children).forEach((opt) => {
+      opt.selected = opt.value === targetId;
+    });
+
+    this._pendingActiveId = targetId || null;
   }
 
   _getSortedRuns() {
