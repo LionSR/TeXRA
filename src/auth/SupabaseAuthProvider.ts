@@ -111,7 +111,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         if (refreshed) {
           return refreshed.accessToken;
         }
-        // Fall through to return existing token if refresh fails
+        // If token is already expired and refresh failed, return null
+        // to trigger VS Code auth fallback instead of returning expired token
+        if (timeUntilExpiry <= 0) {
+          logger.warn(
+            'SupabaseAuthProvider',
+            'Token expired and refresh failed, returning null',
+          );
+          return null;
+        }
+        // Token still valid but refresh failed - return existing token
       }
 
       return session.accessToken;
