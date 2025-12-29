@@ -21,6 +21,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { toErrorMessage } from '@common/errors';
 import type { RoundOutput } from '@agent/output';
 import {
   NODE_NO_RETRY,
@@ -119,10 +120,9 @@ export class OutputNode<C = unknown> extends Node<
             setting.documentTag ?? 'document',
           );
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Unknown error';
-          warnings.push(`XML structure failed: ${message}`);
-          logger.debug(`XML structure failed: ${message}`);
+          const msg = toErrorMessage(error);
+          warnings.push(`XML structure failed: ${msg}`);
+          logger.debug(`XML structure failed: ${msg}`);
         }
       }
 
@@ -130,10 +130,9 @@ export class OutputNode<C = unknown> extends Node<
       try {
         await outputHandler.processOutputFiles(outputLocation, currentRound);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unknown error';
-        warnings.push(`Output processing failed: ${message}`);
-        logger.debug(`Output processing failed: ${message}`);
+        const msg = toErrorMessage(error);
+        warnings.push(`Output processing failed: ${msg}`);
+        logger.debug(`Output processing failed: ${msg}`);
       }
 
       // Handle latexdiff if we have outputs and base files
@@ -141,10 +140,9 @@ export class OutputNode<C = unknown> extends Node<
         try {
           await this.handleLatexdiff(currentRound, baseFiles);
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Unknown error';
-          warnings.push(`Latexdiff failed: ${message}`);
-          logger.debug(`Latexdiff failed: ${message}`);
+          const msg = toErrorMessage(error);
+          warnings.push(`Latexdiff failed: ${msg}`);
+          logger.debug(`Latexdiff failed: ${msg}`);
         }
       }
     }
@@ -155,9 +153,9 @@ export class OutputNode<C = unknown> extends Node<
         endTurn,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      warnings.push(`Round finalization failed: ${message}`);
-      logger.debug(`Round finalization failed: ${message}`);
+      const msg = toErrorMessage(error);
+      warnings.push(`Round finalization failed: ${msg}`);
+      logger.debug(`Round finalization failed: ${msg}`);
     }
 
     // Get round artifacts
@@ -177,8 +175,7 @@ export class OutputNode<C = unknown> extends Node<
           sourceLocation: null,
         },
       };
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      warnings.push(`Failed to get artifacts: ${message}`);
+      warnings.push(`Failed to get artifacts: ${toErrorMessage(error)}`);
     }
 
     if (warnings.length > 0) {
