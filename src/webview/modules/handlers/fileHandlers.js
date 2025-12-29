@@ -161,6 +161,46 @@ export function createFileHandlers(ctx) {
     // No postHandle needed - fileSelect.update handles state
   }
 
+  /**
+   * Handle batch update of all single file selects.
+   * Wraps all updates in a single blockSave() to prevent race conditions
+   * where change events fire between individual file updates.
+   *
+   * Note: This results in nested blockSave() calls since fileSelect.update()
+   * also calls blockSave() internally. This is safe because blockSave uses
+   * a counter (_saveBlockCount) that supports nesting.
+   */
+  function handleSetAllSingleFiles(message) {
+    const { inputFiles, referenceFiles, auxiliaryFiles, mediaFiles } = message;
+
+    // Block saves for the entire batch operation
+    // This prevents vscode-single-select change events from triggering save()
+    // with temporary "None" state while options are being rebuilt
+    mainViewState.blockSave();
+    try {
+      if (inputFiles !== undefined) {
+        const options = getRestorationOptions('inputFile');
+        fileSelect.update('inputFile', inputFiles, options);
+      }
+      if (referenceFiles !== undefined) {
+        const options = getRestorationOptions('referenceFile');
+        fileSelect.update('referenceFile', referenceFiles, options);
+      }
+      if (auxiliaryFiles !== undefined) {
+        const options = getRestorationOptions('auxiliaryFile');
+        fileSelect.update('auxiliaryFile', auxiliaryFiles, options);
+      }
+      if (mediaFiles !== undefined) {
+        const options = getRestorationOptions('mediaFile');
+        fileSelect.update('mediaFile', mediaFiles, options);
+      }
+    } finally {
+      mainViewState.unblockSave();
+    }
+    // No postHandle needed - fileSelect.update handles state within blockSave
+  }
+
+  handlers[MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES] = handleSetAllSingleFiles;
   handlers[MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES] =
     handleSetDefaultOutputFiles;
   handlers[MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE] = handleAddMediaFile;
