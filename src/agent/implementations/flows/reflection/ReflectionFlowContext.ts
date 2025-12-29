@@ -355,6 +355,10 @@ export class ReflectionFlowContext<C = unknown>
    * Should be called in finally block after flow execution.
    */
   dispose(): void {
+    // Clear any pending retry request (consistent with interrupt())
+    retryCoordinator.clearRequest(this.init.executionContext.streamId);
+
+    // Clear cached services to allow GC
     this._outputHandler = null;
     this._promptBuilder = null;
     this._latexMediaManager = null;
