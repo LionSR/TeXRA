@@ -87,7 +87,13 @@ export class FileInputManager extends BaseUIManager {
       });
     });
 
+    // Guard change handlers during programmatic updates (e.g., file refresh).
+    // vscode-single-select fires change events when innerHTML is cleared,
+    // which would send empty values to the extension and corrupt state.
     this.addListener(INPUT_FILE, 'change', (e) => {
+      if (this.state.isBlocked()) {
+        return;
+      }
       const inputFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
@@ -96,6 +102,9 @@ export class FileInputManager extends BaseUIManager {
     });
 
     this.addListener(REFERENCE_FILE, 'change', (e) => {
+      if (this.state.isBlocked()) {
+        return;
+      }
       const referenceFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED,
@@ -103,8 +112,11 @@ export class FileInputManager extends BaseUIManager {
       });
     });
 
-    this.addListener(BASE_FILE, 'change', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
+    this.addListener(BASE_FILE, 'change', (e) => {
+      if (this.state.isBlocked()) {
+        return;
+      }
+      const baseFile = e.target.value;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
         baseFile,
