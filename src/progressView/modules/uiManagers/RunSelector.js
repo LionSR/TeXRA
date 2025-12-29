@@ -252,12 +252,10 @@ export class RunSelector {
 
     const targetId = this._resolveTargetId(this._getSortedRuns());
 
-    // Clear existing selections and set new one
-    Array.from(this._dropdown.children).forEach((opt) => {
-      opt.selected = opt.value === targetId;
-    });
-
-    this._pendingActiveId = targetId || null;
+    // Setting .selected on existing options doesn't trigger slotchange.
+    // We must set .value to update the component's displayed selection.
+    this._dropdown.value = targetId ?? '';
+    this._pendingActiveId = this._dropdown.value || null;
   }
 
   _getSortedRuns() {
