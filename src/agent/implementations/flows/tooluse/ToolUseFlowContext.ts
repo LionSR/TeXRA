@@ -297,7 +297,6 @@ export class ToolUseFlowContext<C = unknown>
       agentSetting: resolvedSetting,
       agentPrompt: prompt,
       userVars: userVarChannels.transient,
-      userVarChannels,
       logger: executionContext.logger,
       context: executionContext,
       client,
