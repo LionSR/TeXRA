@@ -654,8 +654,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Set the value and dispatch change event to update the component's display
-    safeSetElementValue(selectId, value);
+    // For existing options, setting .selected doesn't update the parent component
+    // (slotchange only fires when options are added/removed). We must also set .value.
+    selectElement.value = value;
     selectElement.dispatchEvent(new Event('change'));
   }
 
