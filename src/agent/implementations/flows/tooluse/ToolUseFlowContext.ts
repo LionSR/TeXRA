@@ -208,10 +208,15 @@ export class ToolUseFlowContext<C = unknown>
   private async prepareInitialState(
     snapshot: ToolUseSessionSnapshot | null,
   ): Promise<PrepareStateResult> {
-    const { modelHandler, prompt, userVarChannels, executionContext } =
-      this.init;
+    const {
+      modelHandler,
+      prompt,
+      userVarChannels,
+      executionContext,
+      getUsageRecorder,
+    } = this.init;
     const logger = executionContext.logger;
-    const onRoundFinalized = this.init.getUsageRecorder?.();
+    const onRoundFinalized = getUsageRecorder?.();
 
     if (snapshot) {
       logger.debug('Resuming tool-use session from saved state.');
@@ -277,8 +282,11 @@ export class ToolUseFlowContext<C = unknown>
       config,
       executionContext,
       userVarChannels,
+      checkInterruption,
+      setAbortController,
+      getClient,
     } = this.init;
-    const client = this.init.getClient();
+    const client = getClient();
 
     // Use pre-resolved tools (computed at construction time)
     const resolvedSetting = {
@@ -297,8 +305,8 @@ export class ToolUseFlowContext<C = unknown>
       logger: executionContext.logger,
       context: executionContext,
       client,
-      checkInterruption: this.init.checkInterruption,
-      setAbortController: this.init.setAbortController,
+      checkInterruption,
+      setAbortController,
       // ToolUseCycleOptions specific
       toolRegistry: this.toolRegistry,
       workspaceState: store.workspace,
