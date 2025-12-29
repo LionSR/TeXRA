@@ -15,6 +15,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { toErrorMessage } from '@common/errors';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -102,11 +103,10 @@ export class TeXCountNode<C = unknown> extends Node<
       logger.debug(`TeXCount computed for ${prepRes.files.length} files`);
       return { kind: 'success', stats: stats ?? null };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
       return {
         kind: 'degraded',
         stats: null,
-        warning: `TeXCount failed: ${message}`,
+        warning: `TeXCount failed: ${toErrorMessage(error)}`,
       };
     }
   }
