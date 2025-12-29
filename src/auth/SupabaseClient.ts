@@ -10,7 +10,13 @@ import {
   type UserAuthContext,
   type UserTier,
   UserAuthContextSchema,
+  SUPABASE_SESSION_KEY,
 } from './config';
+
+/** Interface for auth provider to avoid circular imports. */
+interface AuthTokenProvider {
+  ensureFreshToken(): Promise<string | null>;
+}
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -19,7 +25,15 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static context: vscode.ExtensionContext | null = null;
-  private static readonly SESSION_KEY = 'texra.supabase.session';
+  private static authProvider: AuthTokenProvider | null = null;
+
+  /**
+   * Register an auth provider for token refresh.
+   * Called by SupabaseAuthProvider on initialization.
+   */
+  static setAuthProvider(provider: AuthTokenProvider): void {
+    this.authProvider = provider;
+  }
 
   /**
    * Initialize the Supabase client with project credentials.
@@ -60,15 +74,32 @@ export class SupabaseClient {
 
   /**
    * Get the current user's access token from VS Code authentication.
+   * Automatically refreshes the token if it's about to expire via the registered auth provider.
    */
   static async getAccessToken(): Promise<string | null> {
     try {
+      // Use registered auth provider for proactive token refresh
+      if (this.authProvider) {
+        const token = await this.authProvider.ensureFreshToken();
+        if (token) {
+          return token;
+        }
+        logger.debug(
+          'SupabaseClient',
+          'ensureFreshToken returned null, falling back to VS Code auth',
+        );
+      } else {
+        logger.debug(
+          'SupabaseClient',
+          'Auth provider not registered, using VS Code auth fallback',
+        );
+      }
+
+      // Fallback to VS Code's authentication API
       const session = await vscode.authentication.getSession(
         'texra-supabase',
         [],
-        {
-          silent: true,
-        },
+        { silent: true },
       );
       return session?.accessToken || null;
     } catch (error) {
@@ -82,11 +113,17 @@ export class SupabaseClient {
 
   /**
    * Get access and refresh tokens from secure storage.
+   * Ensures tokens are fresh before returning.
    */
   static async getSessionTokens(): Promise<{
     accessToken: string;
     refreshToken: string;
   } | null> {
+    // Ensure token is fresh before reading from storage
+    if (this.authProvider) {
+      await this.authProvider.ensureFreshToken();
+    }
+
     if (!this.context) {
       logger.warn('SupabaseClient', 'Extension context not set');
       const accessToken = await this.getAccessToken();
@@ -97,7 +134,7 @@ export class SupabaseClient {
     }
 
     try {
-      const sessionData = await this.context.secrets.get(this.SESSION_KEY);
+      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
       if (!sessionData) {
         return null;
       }
