@@ -188,7 +188,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         debugFileOptions: undefined,
         startTime: undefined,
         responseObject: undefined,
-        responseTime: undefined,
+        responseTimeMs: undefined,
         stopReason: undefined,
         processedResponse: undefined,
         roundFinalized: false,
