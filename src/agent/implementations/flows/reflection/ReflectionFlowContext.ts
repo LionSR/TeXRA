@@ -376,10 +376,26 @@ export class ReflectionFlowContext<C = unknown>
   interrupt(): void {
     this.init.onInterrupt?.();
   }
+
+  // =========================================================================
+  // Lifecycle - Cleanup
+  // =========================================================================
+
+  /**
+   * Dispose context resources.
+   * Clears cached services to allow garbage collection.
+   * Should be called in finally block after flow execution.
+   */
+  dispose(): void {
+    this._outputHandler = null;
+    this._promptBuilder = null;
+    this._latexMediaManager = null;
+    this._fileService = null;
+  }
 }
 
 // ============================================================================
-// Factory Function
+// Factory Functions
 // ============================================================================
 
 /**
@@ -392,4 +408,32 @@ export function createReflectionFlowContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
 ): ReflectionFlowContext<C> {
   return new ReflectionFlowContext(init);
+}
+
+/**
+ * Creates a ReflectionFlowContext ready for execution.
+ *
+ * Encapsulates the lifecycle setup that was previously done manually:
+ * - resetPromptBuilder() - clears cached prompt state
+ * - setActiveRun(storageKey) - configures output handler for this run
+ *
+ * This eliminates the error-prone manual setup pattern:
+ * ```
+ * // Old pattern (error-prone):
+ * const context = new ReflectionFlowContext(init);
+ * context.resetPromptBuilder();  // Easy to forget!
+ * context.setActiveRun(storageKey);  // Easy to forget!
+ *
+ * // New pattern:
+ * const context = createReadyReflectionContext(init, storageKey);
+ * ```
+ */
+export function createReadyReflectionContext<C = unknown>(
+  init: ReflectionFlowContextInit<C>,
+  storageKey: string,
+): ReflectionFlowContext<C> {
+  const context = new ReflectionFlowContext(init);
+  context.resetPromptBuilder();
+  context.setActiveRun(storageKey);
+  return context;
 }
