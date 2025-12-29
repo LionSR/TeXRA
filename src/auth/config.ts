@@ -223,5 +223,11 @@ export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
 /** Cache TTL for server-side key access and tier config (5 minutes). */
 export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
 
-/** Refresh token proactively if it expires within this threshold (5 minutes). */
-export const TOKEN_REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
+/** Refresh token proactively if it expires within this threshold (15 minutes). */
+export const TOKEN_REFRESH_THRESHOLD_MS = 15 * 60 * 1000;
+
+/** Default session expiry time (1 hour). */
+export const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
+
+/** Storage key for Supabase session in VS Code SecretStorage. */
+export const SUPABASE_SESSION_KEY = 'texra.supabase.session';
