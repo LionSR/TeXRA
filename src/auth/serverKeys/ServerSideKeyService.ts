@@ -23,9 +23,9 @@ import {
 } from '../config';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
 
-const LOG_PREFIX = '[ServerSideKeyService]';
+const CHANNEL = 'ServerSideKeyService';
 
 /** Path suffixes for relay URLs, matching SDK expectations. */
 const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
@@ -304,7 +304,7 @@ export class ServerSideKeyService {
 
       // Check if access has expired
       if (this.tierService.isAccessExpired()) {
-        logger.info(`${LOG_PREFIX} User access has expired`);
+        logger.info(CHANNEL, 'User access has expired');
         this.accessResult = false;
         return false;
       }
@@ -314,7 +314,8 @@ export class ServerSideKeyService {
       const tierConfigRequired = !this.hasFullAccess();
       if (tierConfigRequired && tierConfig === null) {
         logger.info(
-          `${LOG_PREFIX} Tier config unavailable for non-Ultra user, denying access`,
+          CHANNEL,
+          'Tier config unavailable for non-Ultra user, denying access',
         );
         this.accessResult = false;
         return false;
