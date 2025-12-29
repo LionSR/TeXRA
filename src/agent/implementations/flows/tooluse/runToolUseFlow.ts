@@ -1,21 +1,11 @@
 /**
- * runToolUseFlow - Run tool-use flows without agent class instances.
+ * runToolUseFlow - Entry point for tool-use flow execution.
  *
- * ## Flow-First Architecture
- *
- * This module provides a direct way to run tool-use flows, bypassing the
- * agent class hierarchy entirely. Instead of:
- *
- *   executeAgent → instantiate BaseToolUseAgent → agent.run() → flow.run()
- *
- * We can now do:
- *
- *   runToolUseFlow(config) → flow.run() directly
- *
- * ## What This Replaces:
- *
- * - BaseToolUseAgent class instantiation
- * - BaseToolUseAgent.run() method
+ * Executes interactive tool-use sessions where the agent can call tools
+ * and wait for user follow-up messages. The flow manages:
+ * - Session lifecycle (start, persist, resume)
+ * - Tool execution cycles
+ * - Interrupt handling and cleanup
  */
 
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
@@ -82,9 +72,7 @@ export interface RunToolUseFlowCallbacks {
 // ============================================================================
 
 /**
- * Run a tool-use flow directly without agent class instances.
- *
- * This is the flow-first replacement for BaseToolUseAgent.run().
+ * Run a tool-use flow.
  *
  * @param input - Flow configuration and dependencies
  * @param callbacks - Optional lifecycle callbacks for registration

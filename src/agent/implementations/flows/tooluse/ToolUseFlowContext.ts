@@ -1,21 +1,13 @@
 /**
  * ToolUseFlowContext - Self-contained execution context for tool-use flows.
  *
- * ## Flow-First Architecture
+ * Creates and owns all services needed by ToolUseRunFlow:
+ * - Session lifecycle management (follow-ups, persistence)
+ * - Tool registry and resolution
+ * - Cycle execution options
  *
- * This module enables tool-use flows to run WITHOUT agent class instances.
- * Similar to ReflectionFlowContext, it creates all necessary services and
- * provides them to the flow.
- *
- * ## Key Design Decisions:
- *
- * 1. **Session lifecycle decoupled** - Uses IToolUseSessionHost interface
- *    instead of requiring a BaseToolUseAgent instance.
- *
- * 2. **Services created here** - All services needed by ToolUseRunFlow
- *    are created and managed by this context.
- *
- * 3. **No agent reference** - The flow doesn't need to know about agent classes.
+ * Implements IToolUseSessionHost to provide session context without
+ * coupling to any specific caller.
  */
 
 import type { IModelHandler } from '@agent/modelHandlers';

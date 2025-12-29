@@ -1,43 +1,14 @@
 /**
  * ReflectionFlowContext - Self-contained execution context for reflection flows.
  *
- * ## Flow-First Architecture
+ * Creates and owns all services needed by ReflectionFlow:
+ * - OutputHandler for structured output processing
+ * - PromptBuilder for template rendering
+ * - LatexMediaManager for media handling
+ * - TaskRunFileService for file operations
  *
- * This module enables flows to run WITHOUT agent class instances. Instead of:
- *   Agent creates services → passes to flow → flow calls back to agent
- *
- * We have:
- *   Context factory creates everything → flow is self-contained
- *
- * ## Key Design Decisions:
- *
- * 1. **Services created here** - outputHandler, promptBuilder, latexMediaManager,
- *    fileService are all created during context setup.
- *
- * 2. **Configuration-driven behavior** - Instead of relying on subclass overrides
- *    (DirectAgent.shouldEnsureXmlStructure), behavior is determined by config
- *    fields like `xmlStructureMode` and `maxRounds`.
- *
- * 3. **No agent reference** - The flow doesn't need to know about agent classes.
- *    All necessary state and behavior is computed from configuration.
- *
- * ## Usage:
- *
- * ```typescript
- * // Create context with all configuration
- * const context = createReflectionFlowContext({
- *   modelHandler,
- *   config: agentConfig,
- *   setting: agentSetting,
- *   prompt: agentPrompt,
- *   executionContext,
- * });
- *
- * // Run the flow
- * const flow = createReflectionFlow();
- * flow.setServices(context.services);
- * await flow.run(shared);
- * ```
+ * Behavior is configuration-driven via `xmlStructureMode` and `maxRounds`,
+ * not class inheritance.
  */
 
 import type { IModelHandler } from '@agent/modelHandlers';
@@ -95,7 +66,7 @@ export interface ReflectionFlowContextInit<
 /**
  * Compute whether XML structure should be ensured based on configuration.
  *
- * Priority order (matches BaseReflectionAgent.shouldEnsureXmlStructure):
+ * Priority order:
  * 1. `setting.xmlStructureMode` - explicit YAML configuration
  * 2. `agentType: 'CoT'` - implies always ensure XML structure
  * 3. `agentType: 'direct'` - implies scratchpadOnly mode
@@ -136,7 +107,7 @@ function computeShouldEnsureXmlStructure(
 /**
  * Compute total rounds based on configuration.
  *
- * Priority order (matches BaseReflectionAgent.getTotalRounds):
+ * Priority order:
  * 1. `setting.maxRounds` - explicit YAML configuration
  * 2. `agentType: 'direct'` - implies single-round execution (maxRounds=1)
  * 3. Default calculation - max(configured rounds, userRequest array length)
