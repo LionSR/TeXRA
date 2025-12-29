@@ -115,6 +115,15 @@ export class MainViewState {
     }
   }
 
+  /**
+   * Check if save() calls are currently blocked.
+   * Useful for change handlers that should not post messages during programmatic updates.
+   * @returns {boolean} True if save() calls are blocked
+   */
+  isBlocked() {
+    return this._saveBlockCount > 0;
+  }
+
   get() {
     return this.stateManager.getState();
   }
