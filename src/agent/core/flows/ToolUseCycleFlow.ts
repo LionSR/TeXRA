@@ -176,14 +176,17 @@ export type ToolUseCycleShared = BaseCycleShared<ToolUseCycleState>;
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   async prep(_shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
+    const { store } = services;
     const interrupted = Boolean(await options.checkInterruption());
     const debugContext = createDebugContext({
       logger: options.logger,
@@ -260,14 +263,11 @@ type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   protected getOperationName(): string {
     return 'Tool-use call';
-  }
-
-  protected getServices(): ToolUseCycleServices<C> {
-    return this._params.services;
   }
 
   /**
@@ -283,7 +283,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
   }
 
   async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
+    const { store } = services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
@@ -343,7 +345,8 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
-    const { options } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
     const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
@@ -416,7 +419,8 @@ type ToolUseProcessExecResult =
  */
 class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   /**
    * Extract data from shared for exec().
@@ -443,7 +447,9 @@ class ToolUseProcessNode<C> extends BaseNode<
       return { kind: 'skipped', endTurn: false };
     }
 
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
+    const { store } = services;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
     // Process thinking block (logging only, state stored in workspace)
@@ -553,7 +559,9 @@ class ToolUseProcessNode<C> extends BaseNode<
     _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
+    const { store } = services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
@@ -666,14 +674,16 @@ type ToolUseDispatchExecResult =
  */
 class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   /**
    * Extract data from shared and check interruption.
    * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
-    const { options } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
     const { state } = shared;
     const toolCalls = state.toolCalls ?? [];
 
@@ -850,7 +860,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
     prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const options = services; // backward compat alias for flattened options
+    const { store } = services;
     const { state } = shared;
     const groupId = options.logger.withCurrentGroup((id) => id);
 
