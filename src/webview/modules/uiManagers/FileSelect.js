@@ -46,38 +46,45 @@ export class FileSelect {
     const normalizedFiles = Array.isArray(files) ? files : [];
     const sortedFiles = [...normalizedFiles].sort((a, b) => a.localeCompare(b));
 
-    selectDiv.innerHTML = '';
-    this.addOption(selectDiv, '', 'None');
-    sortedFiles.forEach((f) => this.addOption(selectDiv, f, f));
+    // Block saves during option updates - vscode-single-select fires change events
+    // when innerHTML is cleared, which would trigger save() with temporary "None" state
+    mainViewState.blockSave();
+    try {
+      selectDiv.innerHTML = '';
+      this.addOption(selectDiv, '', 'None');
+      sortedFiles.forEach((f) => this.addOption(selectDiv, f, f));
 
-    // Restore selection if file still exists, prioritizing stored state
-    const { storedValue, currentValue } = options;
-    let restoredValue = null;
+      // Restore selection if file still exists, prioritizing stored state
+      const { storedValue, currentValue } = options;
+      let restoredValue = null;
 
-    if (storedValue && sortedFiles.includes(storedValue)) {
-      restoredValue = storedValue;
-    } else if (currentValue && sortedFiles.includes(currentValue)) {
-      restoredValue = currentValue;
-    }
+      if (storedValue && sortedFiles.includes(storedValue)) {
+        restoredValue = storedValue;
+      } else if (currentValue && sortedFiles.includes(currentValue)) {
+        restoredValue = currentValue;
+      }
 
-    if (restoredValue) {
-      safeSetElementValue(id, restoredValue);
-    }
+      if (restoredValue) {
+        safeSetElementValue(id, restoredValue);
+      }
 
-    // Only update state if we successfully restored a value.
-    // Do NOT clear state when file is not in list - the file may temporarily
-    // not appear during refresh cycles, and clearing would lose the user's selection.
-    //
-    // INTENTIONAL STATE/UI DIVERGENCE: If the selected file is not in the list,
-    // the UI shows "None" but state preserves the original selection. This allows:
-    // - Recovery when file temporarily disappears (e.g., during refresh)
-    // - Persistence across agent changes that don't affect file availability
-    //
-    // Consumers should be aware that state[id] may not match UI in edge cases.
-    // The execution flow reads from DOM, so a missing file will correctly result
-    // in no file being sent. The user can manually clear via the empty button.
-    if (restoredValue) {
-      mainViewState.update({ [id]: restoredValue });
+      // Only update state if we successfully restored a value.
+      // Do NOT clear state when file is not in list - the file may temporarily
+      // not appear during refresh cycles, and clearing would lose the user's selection.
+      //
+      // INTENTIONAL STATE/UI DIVERGENCE: If the selected file is not in the list,
+      // the UI shows "None" but state preserves the original selection. This allows:
+      // - Recovery when file temporarily disappears (e.g., during refresh)
+      // - Persistence across agent changes that don't affect file availability
+      //
+      // Consumers should be aware that state[id] may not match UI in edge cases.
+      // The execution flow reads from DOM, so a missing file will correctly result
+      // in no file being sent. The user can manually clear via the empty button.
+      if (restoredValue) {
+        mainViewState.update({ [id]: restoredValue });
+      }
+    } finally {
+      mainViewState.unblockSave();
     }
   }
 
