@@ -161,7 +161,7 @@ export class FileInputManager extends BaseUIManager {
         prefix: 'addOpened',
         suffix: 'FilesButton',
         command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
-        types: baseTypes,
+        types: [...baseTypes, 'media'],
       },
       {
         prefix: 'current',
