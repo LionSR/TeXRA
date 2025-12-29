@@ -197,6 +197,12 @@ async function prepareFlowExecution(
     agentCategory: sessionDescriptor.agentCategory,
   });
 
+  // Configure model handler with agent type and logger
+  // This enables provider-specific behavior (e.g., Anthropic context management beta
+  // for tool-use agents, OpenAI Response API background mode detection)
+  modelHandler.setAgentType(agentSetting.agentType);
+  modelHandler.setLogger(executionContext.logger);
+
   // 4. Build user variable channels (replaces agent.init() logic)
   const baseVars = await buildUserVars(
     agentConfig,
