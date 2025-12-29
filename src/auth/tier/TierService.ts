@@ -20,9 +20,9 @@ import {
   type TierModelConfig,
   type UserAccessStatus,
 } from './types';
-import { logger } from '@logger/logUtils';
+import * as logger from '@logger/logUtils';
 
-const LOG_PREFIX = '[TierService]';
+const CHANNEL = 'TierService';
 
 /**
  * Service for managing tier-based model access configuration.
@@ -87,12 +87,14 @@ export class TierService {
       if (!response.ok) {
         if (response.status === 404) {
           logger.info(
-            `${LOG_PREFIX} tier-config endpoint not available, using defaults`,
+            CHANNEL,
+            'Tier-config endpoint not available, using defaults',
           );
           return null;
         }
         logger.error(
-          `${LOG_PREFIX} Failed to fetch tier config: ${response.status}`,
+          CHANNEL,
+          `Failed to fetch tier config: ${response.status}`,
         );
         return null;
       }
@@ -111,15 +113,16 @@ export class TierService {
 
       if (!parsed.success) {
         logger.error(
-          `${LOG_PREFIX} Invalid tier config response:`,
-          parsed.error,
+          CHANNEL,
+          `Invalid tier config response: ${parsed.error.message}`,
         );
         return null;
       }
 
       return parsed.data;
     } catch (error) {
-      logger.error(`${LOG_PREFIX} Error fetching tier config:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(CHANNEL, `Error fetching tier config: ${message}`);
       return null;
     }
   }

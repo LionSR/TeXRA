@@ -78,9 +78,10 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    const updatedContent = replace_all === true
-      ? currentContent.replaceAll(old_string, new_string)
-      : currentContent.replace(old_string, new_string);
+    const updatedContent =
+      replace_all === true
+        ? currentContent.replaceAll(old_string, new_string)
+        : currentContent.replace(old_string, new_string);
 
     const approval = await requestToolEditApproval({
       path: targetPath,
@@ -104,14 +105,16 @@ export class EditFileTool extends defineTool({
       finalContent,
     );
 
-    const replacementSummary = replace_all === true
-      ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
-      : 'Replaced 1 occurrence.';
-    const summary = replace_all === true
-      ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
-          occurrences === 1 ? '' : 's'
-        }`
-      : `Edited ${targetPath}: replaced 1 occurrence`;
+    const replacementSummary =
+      replace_all === true
+        ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
+        : 'Replaced 1 occurrence.';
+    const summary =
+      replace_all === true
+        ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
+            occurrences === 1 ? '' : 's'
+          }`
+        : `Edited ${targetPath}: replaced 1 occurrence`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       targetPath,
