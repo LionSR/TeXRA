@@ -194,10 +194,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     };
 
     try {
-      // Inject services and run sub-flow
-      this.cycleFlow.setParams({
-        services: { options: cycleOptions, store: prepRes.store },
-      });
+      // Inject services directly and run sub-flow
+      // Options are spread directly into services (flattened structure)
+      this.cycleFlow.setServices({ ...cycleOptions, store: prepRes.store });
       await this.cycleFlow.run(cycleShared);
 
       // Extract results from cycle shared state

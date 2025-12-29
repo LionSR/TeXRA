@@ -149,13 +149,13 @@ export type InvocationResult<TSuccess> =
 /**
  * Services interface for RetryableInvocationNode.
  * Subclasses return their own service types that conform to this shape.
+ *
+ * Uses flattened structure - options fields are directly on services.
  */
 interface RetryableNodeServices {
-  options: {
-    context: { streamId: string };
-    logger: AgentLogger;
-    setAbortController: (ac: AbortController | null) => void;
-  };
+  context: { streamId: string };
+  logger: AgentLogger;
+  setAbortController: (ac: AbortController | null) => void;
 }
 
 /**
@@ -195,7 +195,8 @@ type NodeParams = Partial<Record<string, unknown>> & {
 export abstract class RetryableInvocationNode<
   S,
   P extends NodeParams = NodeParams,
-> extends Node<S, P> {
+  Svc extends RetryableNodeServices = RetryableNodeServices,
+> extends Node<S, P, Svc> {
   /**
    * Tracks if user cancelled manual retry (to distinguish from actual failures).
    *
@@ -220,9 +221,11 @@ export abstract class RetryableInvocationNode<
 
   /**
    * Access services containing streamId and logger.
-   * Subclasses implement this to access their specific params structure.
+   * Uses this.services which is typed via the Svc generic parameter.
    */
-  protected abstract getServices(): RetryableNodeServices;
+  protected getServices(): Svc {
+    return this.services;
+  }
 
   /**
    * Reset user-cancelled flag on clone to prevent stale state.
@@ -273,13 +276,13 @@ export abstract class RetryableInvocationNode<
     // Set signal on Node so retry loop can detect user cancellation
     this.signal = abortController.signal;
     const services = this.getServices();
-    services.options.setAbortController(abortController);
+    services.setAbortController(abortController);
     try {
       return await operation(abortController.signal);
     } finally {
       // Clear both references to allow GC and prevent stale state
       this.signal = undefined;
-      services.options.setAbortController(null);
+      services.setAbortController(null);
     }
   }
 
@@ -346,8 +349,8 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const services = this.getServices();
     const operationName = this.getOperationName();
-    const streamId = services.options.context.streamId;
-    const logger = services.options.logger;
+    const streamId = services.context.streamId;
+    const logger = services.logger;
 
     // Format error to check if retryable
     const formatted = formatProviderHttpError(error);
@@ -411,7 +414,7 @@ export abstract class RetryableInvocationNode<
     // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
     if (!formatted.retryable) {
       const services = this.getServices();
-      services.options.logger.logErrorData(
+      services.logger.logErrorData(
         `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
         {
           message: formatted.message,

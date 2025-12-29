@@ -93,10 +93,9 @@ export async function runToolUseCycle<C = unknown>(
   };
 
   const flow = createToolUseCycleFlow<C>();
-  // Inject immutable services via params (PocketFlow pattern)
-  flow.setParams({
-    services: { options: input.options, store: input.store },
-  });
+  // Inject immutable services directly (PocketFlow pattern)
+  // Options are spread directly into services (flattened structure)
+  flow.setServices({ ...input.options, store: input.store });
 
   try {
     await flow.run(shared);
