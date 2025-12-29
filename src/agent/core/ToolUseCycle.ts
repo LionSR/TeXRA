@@ -4,7 +4,8 @@
  * Tool-use cycle execution for interactive agents.
  *
  * Operates on messages in-place and continues until user follow-up is required.
- * Used by BaseToolUseAgent for reactive, session-based execution.
+ * Supports reactive, session-based execution where the agent can call tools
+ * and wait for user input.
  *
  * @see ResponseCycle for workflow-based cycle execution
  */
@@ -54,9 +55,6 @@ export interface ToolUseCycleResult {
  *
  * Tool-use cycles operate on messages in-place and continue until
  * user follow-up is required or an error/cancellation occurs.
- *
- * This is used by BaseToolUseAgent for reactive, session-based execution
- * where the agent responds to tools and waits for user input.
  *
  * @param input - Cycle input with options, messages, and store
  * @returns Result with failedWithError and userCancelled flags
