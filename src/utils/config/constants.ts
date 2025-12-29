@@ -1,5 +1,6 @@
 // Local imports - config utils
 import { getConfig } from './configUtils';
+import { logger } from '@logger/logUtils';
 
 // Settings query constants for VS Code settings UI
 export const SETTINGS_QUERY = {
@@ -78,7 +79,7 @@ export function getToolUsePersistenceTtlHours(): number {
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 1) {
     // Log a warning when invalid configuration is detected
-    console.warn(
+    logger.warn(
       `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
     );
     return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;

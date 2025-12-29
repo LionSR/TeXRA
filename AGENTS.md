@@ -48,8 +48,27 @@ When updating CHANGELOG.md:
 ### Directory organization
 
 - `src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
+  - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
+  - `frontend/ui/` - Dialog helpers, diff views, message utilities
+  - `frontend/editor/` - Active file guards and editor utilities
+  - `frontend/agents/` - Agent directory management (`AgentDirectoryManager`)
+  - `frontend/files/` - File lister and discovery utilities
+  - `frontend/webview/` - Webview HTML builder (`buildWebviewHtml`)
+  - `frontend/latex/` - LaTeX build integration, linting
+  - `frontend/media/` - Image and audio handling
 - `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
+  - `common/state/` - State managers including `pendingStateManager`
+  - `common/modules/` - Shared webview modules (`BaseUIManager`, `domUtils`, `templateUtils`)
+  - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), theme handlers
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
+  - `utils/core/` - Async utilities (`debounce`, `withTimeout`, `delay`)
+  - `utils/files/` - Filesystem utilities, rules, and vars
+  - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
+  - `utils/system/` - Shell command execution (`execUtils`)
+  - `utils/text/` - Text and XML processing utilities
+  - `utils/prompt/` - Prompt builder utilities
+- `src/explorer/` - VS Code file explorer integration and watchers
+- `src/profileView/` - Agent profile/settings webview (follows same pattern as progressView/historyView)
 
 ### Pragmatic implementations
 
@@ -70,6 +89,18 @@ This project uses Zod v4. Follow these idiomatic patterns:
 - `.iso.datetime()` instead of `.string().datetime()` - ISO datetime validator
 - `.enum(MyEnum)` instead of `.nativeEnum(MyEnum)` - works with TS enums
 - `.looseObject({...})` instead of `.object({...}).passthrough()` - allows extra keys
+- `.strictObject({...})` - disallows extra keys (use for tool input schemas)
+
+**Validation and refinement**
+
+- `.describe('...')` - add field documentation for tool schemas and types
+- `.refine()` / `.superRefine()` - custom validation logic
+- `.nullable()` - accept null (distinct from `.nullish()` which accepts null OR undefined)
+- `.nonnegative()` / `.positive()` - numeric constraints
+- `.regex()` - pattern matching for strings
+- `.url()` - URL validation
+- `.transform()` - value transformation after validation
+- `.custom<T>()` - use sparingly for external SDK types with explanatory comments
 
 **Default values**
 
@@ -134,7 +165,42 @@ if (input.optional == null) {
 }
 ```
 
+When passing nullish tool values to functions expecting `T | undefined` (not `T | null | undefined`), coalesce to undefined:
+
+```typescript
+// Function expects string | undefined, but .nullish() gives string | null | undefined
+const result = processPath(input.path ?? undefined);
+```
+
 See: https://platform.openai.com/docs/guides/structured-outputs
+
+### ES2023+ Patterns
+
+Use modern JavaScript features available with ES2022+ target:
+
+```typescript
+// Use .at() for negative array indexing
+const lastItem = items.at(-1);
+
+// Use Object.hasOwn() instead of hasOwnProperty
+if (Object.hasOwn(obj, 'key')) { ... }
+
+// Use .flatMap() for map+flatten
+const allItems = groups.flatMap((g) => g.items);
+
+// Use .replaceAll() for global string replacement
+const cleaned = text.replaceAll('\r\n', '\n');
+
+// Use optional chaining consistently
+abortController?.abort();
+if (!runStage?.id) return;
+
+// Use ?? false for boolean coercion (not || false)
+const isEnabled = config.enabled ?? false;
+
+// Iterate Sets directly without Array.from()
+for (const item of mySet) { ... }
+```
 
 ### Refactoring for simplicity
 
@@ -165,11 +231,28 @@ Aim for code that looks like it was designed correctly from the start:
 - Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgent` or `runPreparedAgent` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
 
+**PocketFlow architecture**
+
+Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
+
+- **Flow types**: `ReflectionFlow` for multi-round reflection agents, `ToolUseRunFlow` for tool-use agents
+- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowServices`.
+- **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
+- **Flow transitions** - use named constants instead of magic values:
+  - `FlowTransition.DEFAULT` - follow next() successor
+  - `FlowTransition.CONTINUE` - loop back to flow entry
+  - `FlowTransition.FINALIZE` - exit flow after finalization
+  - `FlowTransition.COMPLETE` - return control to caller
+- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Use constants `NODE_NO_RETRY` and `NODE_NO_WAIT` for node configuration.
+- **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
+
+See `docs/pocketflow/` for full framework documentation.
+
 **Webviews and UI**
 
 - Generate HTML through `BaseViewContentProvider` (`src/common/webview/BaseViewContentProvider.ts`) and `buildWebviewHtml` (`src/frontend/webview/html.ts`). Extend `BaseViewMessageHandler` and `BaseDomHandler` for consistent lifecycle management across views.
 - Register webview message handlers with `registerMessageHandlers` (`src/common/modules/webviewContext.js`). When adding UI managers (e.g., under `src/webview/modules/uiManagers/` or `src/progressView/modules/uiManagers/`), expose their URIs in the relevant content provider and import map.
-- Use codicon-based controls and the shared helpers in `src/common/modules/` (`iconButtonInitializer`, `templateUtils`, `domUtils`, `stringUtils`, `pathUtils`, `webviewState`, `themeHandlers`) alongside `src/webview/modules/pasteHandler.js` for consistent interactions.
+- Use codicon-based controls and the shared helpers in `src/common/modules/` (`iconConstants`, `templateUtils`, `domUtils`, `stringUtils`, `pathUtils`, `webviewState`) and `src/common/webview/themeHandlers.js` alongside `src/webview/modules/pasteHandler.js` for consistent interactions.
 - Map every module dependency in the import map, including transitives, and generate URIs via helper methods (`getHistoryViewUri`, `getCommonUri`, etc.). Missing entries will prevent modules from loading in the sandboxed webview.
 - For webview dependencies, prefer CDN builds (jsdelivr for static assets, esm.sh for ES modules) for complex packages like markdown-it, KaTeX, or highlight.js, while keeping lightweight bundles (split.js, `@vscode/codicons`) local to reduce extension size.
 - Keep CSS modular (per-component styles in `src/progressView/styles`, shared tokens in `src/common/styles/common.css`) and use codicon chevrons (e.g., `<i class="codicon codicon-chevron-down"></i>`) for toggle affordances.
@@ -197,8 +280,8 @@ Aim for code that looks like it was designed correctly from the start:
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup
-- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`)
+- **Base Classes**: All webviews (webview, progressView, historyView, profileView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup. Complex UI managers can extend `BaseUIManager` from `src/common/modules/BaseUIManager.js`.
+- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`, `ProfileViewDomHandler`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
@@ -206,6 +289,7 @@ Aim for code that looks like it was designed correctly from the start:
 - **Module Structure**: Keep UI managers focused on a single responsibility
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
+- **CSS Organization**: Keep per-component styles in view-specific `styles/` directories, shared tokens in `src/common/styles/common.css`
 
 ### Source Organization
 
