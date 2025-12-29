@@ -33,8 +33,8 @@ export interface BaseCycleState {
   messages: ProviderMessage[];
   /** Whether the cycle should stop processing */
   shouldStop: boolean;
-  /** Time taken for response in seconds */
-  responseTime?: number;
+  /** Time taken for response in milliseconds */
+  responseTimeMs?: number;
   /** Reason the model stopped generating */
   stopReason?: ProviderStopReason;
 }
@@ -86,7 +86,7 @@ export function resetCycleState<T extends BaseCycleState>(
 ): void {
   // Reset base cycle state fields
   state.shouldStop = false;
-  state.responseTime = undefined;
+  state.responseTimeMs = undefined;
   state.stopReason = undefined;
 
   // Reset additional optional fields to undefined
@@ -137,8 +137,8 @@ export interface BaseInvocationPrepResult {
 export interface BaseInvocationSuccessData {
   /** Raw response from the model */
   response: unknown;
-  /** Time taken for the response in seconds */
-  responseTime?: number;
+  /** Time taken for the response in milliseconds */
+  responseTimeMs?: number;
 }
 
 // ============================================================================
