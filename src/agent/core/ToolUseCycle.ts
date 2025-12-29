@@ -27,6 +27,7 @@ import {
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState } from './flows/RetryState';
+import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 import type { FileInteractionStateSnapshot } from './AgentWorkspaceState';
 
 // Import and re-export from single source of truth
@@ -110,23 +111,8 @@ export async function runToolUseCycle<C = unknown>(
   // Emit edited files to the progress view
   emitEditedFiles(input);
 
-  // Determine if the cycle failed due to an error (not user cancellation).
-  // User cancellation in retryPrompt does not record an error, so:
-  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
-  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
-  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
-  const failedWithError =
-    shared.state.shouldStop && !!shared.retryState.lastError;
-  const userCancelled =
-    shared.state.shouldStop &&
-    !shared.retryState.lastError &&
-    !shared.state.endTurn;
-
-  return {
-    failedWithError,
-    errorMessage: shared.retryState.lastError?.message,
-    userCancelled,
-  };
+  // Interpret cycle completion - shared logic with ResponseCycle
+  return interpretCycleCompletion(shared.state, shared.retryState);
 }
 
 /**

@@ -21,6 +21,7 @@ import {
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 import { createRetryState } from './flows/RetryState';
+import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 
 // Import and re-export from single source of truth
 import type { ResponseCycleOptions } from './flows/CycleServices';
@@ -88,23 +89,12 @@ export async function runResponseCycle<C = unknown>(
   flow.setParams({ services: { options: input.options, store: input.store } });
   await flow.run(shared);
 
-  // Determine if the cycle failed due to an error (not user cancellation).
-  // User cancellation in retryPrompt does not record an error, so:
-  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
-  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
-  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
-  const failedWithError =
-    shared.state.shouldStop && !!shared.retryState.lastError;
-  const userCancelled =
-    shared.state.shouldStop &&
-    !shared.retryState.lastError &&
-    !shared.state.endTurn;
+  // Interpret cycle completion - shared logic with ToolUseCycle
+  const completion = interpretCycleCompletion(shared.state, shared.retryState);
 
   return {
     store: input.store,
     endTurn: shared.state.endTurn,
-    failedWithError,
-    errorMessage: shared.retryState.lastError?.message,
-    userCancelled,
+    ...completion,
   };
 }
