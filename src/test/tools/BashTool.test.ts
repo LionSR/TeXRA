@@ -163,10 +163,6 @@ describe('BashTool', () => {
         userRequest: '',
       } satisfies AgentPrompt,
       userVars: {},
-      userVarChannels: {
-        input: Object.freeze({}) as Readonly<Record<string, any>>,
-        transient: {},
-      },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
       toolRegistry: createToolRegistry({ bash: bashTool }),
@@ -183,7 +179,10 @@ describe('BashTool', () => {
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
       workspace: workspaceState,
-      user: options.userVarChannels,
+      user: {
+        input: Object.freeze({}) as Readonly<Record<string, any>>,
+        transient: {},
+      },
     });
 
     const messages: ProviderMessage[] = [];

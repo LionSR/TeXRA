@@ -169,7 +169,6 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       context: services.context,
       client: services.getClient(),
       userVars: this.getUserVars(),
-      userVarChannels: services.userVarChannels,
       fileService: services.fileService,
       checkInterruption: services.checkInterruption,
       setAbortController: services.setAbortController,
