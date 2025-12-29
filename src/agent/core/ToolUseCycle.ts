@@ -84,7 +84,7 @@ export async function runToolUseCycle<C = unknown>(
       messages: input.messages,
       shouldStop: false,
       response: undefined,
-      responseTime: undefined,
+      responseTimeMs: undefined,
       toolCalls: undefined,
       text: undefined,
       stopReason: undefined,
