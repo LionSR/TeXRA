@@ -49,7 +49,7 @@ import type {
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { AgentFileLocation } from '@utils/files';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { buildBaseFlowServices } from '@agent/implementations/flows/common';
+import { BaseFlowContext } from '@agent/implementations/flows/common';
 
 import { OutputHandler, type IOutputHandler } from '@agent/output';
 import { LatexMediaManager } from '@latex';
@@ -207,11 +207,14 @@ function createOutputFileLocationGetter(
  *
  * Creates all services internally and computes behavior from configuration.
  * No agent class instance is needed.
+ *
+ * Extends BaseFlowContext for shared lazy initialization pattern.
  */
-export class ReflectionFlowContext<C = unknown> {
-  private readonly init: ReflectionFlowContextInit<C>;
-  private _services: ReflectionServices<C> | null = null;
-
+export class ReflectionFlowContext<C = unknown> extends BaseFlowContext<
+  ReflectionFlowContextInit<C>,
+  ReflectionServices<C>,
+  C
+> {
   // Services created internally
   private _outputHandler: IOutputHandler | null = null;
   private _promptBuilder: PromptBuilder | null = null;
@@ -223,7 +226,7 @@ export class ReflectionFlowContext<C = unknown> {
   private _shouldEnsureXmlStructure: boolean | null = null;
 
   constructor(init: ReflectionFlowContextInit<C>) {
-    this.init = init;
+    super(init);
   }
 
   // =========================================================================
@@ -304,20 +307,16 @@ export class ReflectionFlowContext<C = unknown> {
   }
 
   // =========================================================================
-  // Services Interface (for flow injection)
+  // BaseFlowContext Implementation
   // =========================================================================
 
   /**
-   * Get services for flow injection.
+   * Build reflection-specific services.
    *
-   * This implements the ReflectionServices interface, allowing existing
-   * flow nodes to work unchanged.
+   * Called by BaseFlowContext.services getter after base services are built.
+   * Returns services that are merged on top of base services.
    */
-  get services(): ReflectionServices<C> {
-    if (this._services) {
-      return this._services;
-    }
-
+  protected buildFlowSpecificServices(): Partial<ReflectionServices<C>> {
     const { config, setting, getUsageRecorder } = this.init;
 
     // Use custom getter if provided, otherwise create default
@@ -330,9 +329,7 @@ export class ReflectionFlowContext<C = unknown> {
         this.fileService,
       );
 
-    // Build base services from init, then add reflection-specific ones
-    this._services = {
-      ...buildBaseFlowServices(this.init),
+    return {
       // Narrow setting type for reflection flows
       setting,
 
@@ -347,8 +344,6 @@ export class ReflectionFlowContext<C = unknown> {
       shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure,
       getUsageRecorder,
     };
-
-    return this._services;
   }
 
   // =========================================================================
