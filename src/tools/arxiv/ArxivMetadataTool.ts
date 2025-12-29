@@ -61,7 +61,7 @@ export class ArxivMetadataTool extends defineTool({
       targetEntry.authors,
       input.maxAuthors ?? undefined,
     );
-    const includeAbstract = input.includeAbstract !== false;
+    const includeAbstract = input.includeAbstract ?? true;
 
     const metadata: ArxivPaperMetadata = {
       id: extractEntryIdentifier(targetEntry.id) ?? requestId,

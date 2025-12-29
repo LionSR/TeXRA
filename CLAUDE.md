@@ -50,6 +50,7 @@ The core of TeXRA is its agent architecture in `src/agent/`:
 Key directories in `src/`:
 
 - `agent/` - Agent core, implementations, model handlers, runtime, tool-use
+  - `implementations/flows/` - PocketFlow-based flow implementations (reflection, tool-use)
 - `commands/` - Commands organized by domain (see below)
 - `common/` - Backend-only helpers (errors, state, files, webview base classes)
 - `frontend/` - Extension-host utilities for shared UI flows
@@ -60,9 +61,15 @@ Key directories in `src/`:
 - `webview/` - Main agent interaction interface
 - `progressView/` - Task tracking board
 - `historyView/` - Execution history browser
+- `profileView/` - Agent profile/settings view
+- `explorer/` - VS Code file explorer integration
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
+
+Key documentation in `docs/`:
+
+- `pocketflow/` - PocketFlow framework documentation (core abstractions, design patterns, utility functions)
 
 ### Commands (`src/commands/`)
 
@@ -88,6 +95,8 @@ Use Zod schemas as the single source of truth for data structures:
 - **Avoid `z.custom<T>()`** when a proper schema exists—prefer `z.discriminatedUnion()` for union types
 - **Co-locate types with schemas** in the same file for maintainability
 - **Add compile-time assertions** (using `satisfies`) when schemas must stay synchronized with external types
+
+This project uses **Zod v4**. See AGENTS.md for idiomatic Zod v4 patterns including `.prefault()`, `.catch()`, and `.nullish()` for tool schemas.
 
 ### Path Aliases
 
