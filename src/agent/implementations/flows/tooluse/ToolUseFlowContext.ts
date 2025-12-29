@@ -35,6 +35,7 @@ import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 import {
@@ -194,6 +195,9 @@ export class ToolUseFlowContext<C = unknown>
   interrupt(): void {
     // Notify runtime layer to update interrupt state
     this.init.onInterrupt?.();
+
+    // Clear any pending retry request to avoid memory leaks
+    retryCoordinator.clearRequest(this.streamTabId);
 
     // Clean up session lifecycle
     this.sessionLifecycle.interrupt();
