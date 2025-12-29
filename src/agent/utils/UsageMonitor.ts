@@ -91,7 +91,9 @@ export class UsageMonitor {
 
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number((stateGlobal.totalResponseTimeMs / 1000).toFixed(1)),
+        elapsedTime: Number(
+          (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
+        ),
         ...(cachingStats && {
           cacheReadInputTokens: totals.totalCacheReadInputTokens,
           ...(this.modelHandler.capabilities.supportsPromptCaching && {

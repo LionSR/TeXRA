@@ -92,9 +92,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    */
   async ensureFreshToken(): Promise<string | null> {
     try {
-      const sessionData = await this.context.secrets.get(
-        SUPABASE_SESSION_KEY,
-      );
+      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
       if (!sessionData) {
         return null;
       }
@@ -173,9 +171,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession = await this.context.secrets.get(
-        SUPABASE_SESSION_KEY,
-      );
+      const existingSession =
+        await this.context.secrets.get(SUPABASE_SESSION_KEY);
       if (existingSession) {
         return;
       }
@@ -306,9 +303,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    const sessionData = await this.context.secrets.get(
-      SUPABASE_SESSION_KEY,
-    );
+    const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
     if (!sessionData) {
       return [];
     }
