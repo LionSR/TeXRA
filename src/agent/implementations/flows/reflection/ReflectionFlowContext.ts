@@ -50,6 +50,7 @@ import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { AgentFileLocation } from '@utils/files';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { BaseFlowContext } from '@agent/implementations/flows/common';
+import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 
 import { OutputHandler, type IOutputHandler } from '@agent/output';
 import { LatexMediaManager } from '@latex';
@@ -209,12 +210,12 @@ function createOutputFileLocationGetter(
  * No agent class instance is needed.
  *
  * Extends BaseFlowContext for shared lazy initialization pattern.
+ * Implements IInterruptible for unified interrupt handling via registry.
  */
-export class ReflectionFlowContext<C = unknown> extends BaseFlowContext<
-  ReflectionFlowContextInit<C>,
-  ReflectionServices<C>,
-  C
-> {
+export class ReflectionFlowContext<C = unknown>
+  extends BaseFlowContext<ReflectionFlowContextInit<C>, ReflectionServices<C>, C>
+  implements IInterruptible
+{
   // Services created internally
   private _outputHandler: IOutputHandler | null = null;
   private _promptBuilder: PromptBuilder | null = null;
@@ -362,6 +363,18 @@ export class ReflectionFlowContext<C = unknown> extends BaseFlowContext<
    */
   setActiveRun(storageKey: string): void {
     this.outputHandler.setActiveRun(storageKey as any);
+  }
+
+  // =========================================================================
+  // IInterruptible Implementation
+  // =========================================================================
+
+  /**
+   * Interrupt the flow execution.
+   * Notifies the runtime layer via onInterrupt callback.
+   */
+  interrupt(): void {
+    this.init.onInterrupt?.();
   }
 }
 
