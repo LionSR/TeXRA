@@ -19,17 +19,14 @@ import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
 
 /**
- * Services provided by BaseReflectionAgent for flow nodes.
+ * Services for reflection flow nodes.
  *
  * Extends BaseFlowServices with reflection-specific dependencies:
  * - outputHandler: File processing and artifacts
  * - latexMediaManager: Figure/TikZ/PDF extraction
  * - promptBuilder: Message construction
  * - fileService: Location resolution
- * - Agent method delegates for polymorphism
- *
- * The agent becomes a "service provider" - it holds these but doesn't
- * execute logic. Nodes do the work using these services.
+ * - Configuration-driven behavior delegates
  */
 export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
   /** Narrow setting to workflow-specific type */
@@ -60,10 +57,7 @@ export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
 
   /**
    * Check if XML structure should be ensured before processing.
-   * Delegates to agent.shouldEnsureXmlStructure() for polymorphic behavior.
-   * - DirectAgent: returns useScratchpad
-   * - CoTAgent: returns true
-   * - Default: returns false
+   * Based on xmlStructureMode config: 'never', 'scratchpadOnly', or 'always'.
    */
   readonly shouldEnsureXmlStructure: () => boolean;
 

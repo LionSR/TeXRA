@@ -39,15 +39,12 @@ export interface RunCycleResult {
 }
 
 /**
- * Services provided by BaseToolUseAgent for flow nodes.
+ * Services for tool-use flow nodes.
  *
  * Extends BaseFlowServices with tool-use specific dependencies:
  * - toolRegistry: Available tools for the agent
  * - session: Session lifecycle management (persistence, follow-ups)
  * - Operations: prepareState, buildCycleOptions, runCycle, persistCheckpoint
- *
- * The agent becomes a "service provider" - it holds these but doesn't
- * execute logic. Nodes do the work using these services.
  */
 export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   /** Narrow setting to tool-use specific type */
