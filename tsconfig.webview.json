@@ -1,0 +1,34 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "./dist/webview",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@webview-client/*": ["src/webview/client/*"]
+    }
+  },
+  "include": [
+    "src/shared/**/*",
+    "src/webview/client/**/*",
+    "src/progressView/client/**/*",
+    "src/historyView/client/**/*",
+    "src/profileView/client/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "out",
+    "prototypes",
+    "supabase"
+  ]
+}
