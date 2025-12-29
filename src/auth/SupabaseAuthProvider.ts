@@ -8,13 +8,13 @@ import {
   OAUTH_PROVIDERS,
   getAuthCallbackUri,
   AUTH_CALLBACK_TIMEOUT_MS,
+  TOKEN_REFRESH_THRESHOLD_MS,
+  DEFAULT_SESSION_EXPIRY_MS,
+  SUPABASE_SESSION_KEY,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
 import type { SupabaseUriHandler } from './UriHandler';
-
-/** Default session expiry time in milliseconds (1 hour) */
-const DEFAULT_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 /** Session data stored in VS Code SecretStorage. */
 interface SupabaseSession {
@@ -56,7 +56,6 @@ function isOAuthProvider(value: string | undefined): value is OAuthProvider {
  * Manages user sessions for remote agent access.
  */
 export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
-  private static readonly SESSION_KEY = 'texra.supabase.session';
   private static instance: SupabaseAuthProvider | null = null;
 
   private _onDidChangeSessions =
@@ -76,11 +75,61 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       context,
     );
     SupabaseAuthProvider.instance = this;
+    SupabaseClient.setAuthProvider(this);
   }
 
   /** Get singleton instance for sign out operations. */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
+  }
+
+  /**
+   * Ensure the access token is fresh, refreshing proactively if near expiry.
+   * Called by SupabaseClient.getAccessToken() to avoid token expiration during
+   * long-running operations (e.g., GPT-5 background mode).
+   *
+   * @returns Fresh access token, or null if no session or refresh failed
+   */
+  async ensureFreshToken(): Promise<string | null> {
+    try {
+      const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
+      if (!sessionData) {
+        return null;
+      }
+
+      const session: SupabaseSession = JSON.parse(sessionData);
+      const timeUntilExpiry = session.expiresAt - Date.now();
+
+      // Refresh proactively if token expires within threshold
+      if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
+        logger.info(
+          'SupabaseAuthProvider',
+          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
+        );
+        const refreshed = await this.refreshSession(session);
+        if (refreshed) {
+          return refreshed.accessToken;
+        }
+        // If token is already expired and refresh failed, return null
+        // to trigger VS Code auth fallback instead of returning expired token
+        if (timeUntilExpiry <= 0) {
+          logger.warn(
+            'SupabaseAuthProvider',
+            'Token expired and refresh failed, returning null',
+          );
+          return null;
+        }
+        // Token still valid but refresh failed - return existing token
+      }
+
+      return session.accessToken;
+    } catch (error) {
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error ensuring fresh token: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -122,9 +171,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession = await this.context.secrets.get(
-        SupabaseAuthProvider.SESSION_KEY,
-      );
+      const existingSession =
+        await this.context.secrets.get(SUPABASE_SESSION_KEY);
       if (existingSession) {
         return;
       }
@@ -149,7 +197,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // Store session and notify - wrapped in try to ensure cleanup on partial failure
       try {
         await this.context.secrets.store(
-          SupabaseAuthProvider.SESSION_KEY,
+          SUPABASE_SESSION_KEY,
           JSON.stringify(result.session),
         );
         // Clear server-side key access cache so it refetches with new auth state
@@ -255,9 +303,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    const sessionData = await this.context.secrets.get(
-      SupabaseAuthProvider.SESSION_KEY,
-    );
+    const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
     if (!sessionData) {
       return [];
     }
@@ -370,7 +416,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             );
           }
           await this.context.secrets.store(
-            SupabaseAuthProvider.SESSION_KEY,
+            SUPABASE_SESSION_KEY,
             JSON.stringify(session),
           );
           // Clear server-side key access cache so it refetches with new auth state
@@ -404,7 +450,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async removeSession(sessionId: string): Promise<void> {
     try {
       await SupabaseClient.getClient().auth.signOut();
-      await this.context.secrets.delete(SupabaseAuthProvider.SESSION_KEY);
+      await this.context.secrets.delete(SUPABASE_SESSION_KEY);
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches();
       this._onDidChangeSessions.fire({
@@ -541,7 +587,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       // Update stored session
       await this.context.secrets.store(
-        SupabaseAuthProvider.SESSION_KEY,
+        SUPABASE_SESSION_KEY,
         JSON.stringify(refreshed),
       );
 
