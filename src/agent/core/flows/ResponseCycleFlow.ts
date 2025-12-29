@@ -464,7 +464,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
       if (prepRes.responseTime !== undefined) {
         options.logger.debug(
-          `Response time: ${prepRes.responseTime.toFixed(2)}s`,
+          `Response time: ${(prepRes.responseTime / 1000).toFixed(2)}s`,
         );
       }
 
