@@ -18,33 +18,26 @@
 import { randomUUID } from 'crypto';
 
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { LogMessageData } from '@logger/LogTypes';
+import type { LogMessageData, LogStream } from '@logger/LogTypes';
 import type { MessageType } from '@logger/messageTypes';
 
 /**
  * Interface for posting streaming content directly to the webview.
- * Matches the AgentLogStream interface for compatibility.
+ * Returns LogStream for compatibility with AgentLogger.createStream().
  */
 export interface StreamPoster {
   /**
    * Create a new stream for the given message type.
-   * Returns an object with append/finalize methods.
+   * Returns a LogStream with append/finalize methods.
    */
-  createStream(
-    type: MessageType,
-    options?: { groupId?: string },
-  ): DirectStream;
+  createStream(type: MessageType, options?: { groupId?: string }): LogStream;
 }
 
 /**
- * A direct stream that posts to webview without EventBus.
+ * Alias for LogStream - used by DirectStreamPoster.
+ * @deprecated Use LogStream directly from @logger/LogTypes
  */
-export interface DirectStream {
-  /** Append text to the stream, posting update to webview */
-  append(text: string): void;
-  /** Finalize the stream, returning accumulated text */
-  finalize(finalText?: string): string;
-}
+export type DirectStream = LogStream;
 
 /**
  * Function signature for posting messages to webview.
@@ -69,16 +62,17 @@ export class DirectStreamPoster implements StreamPoster {
   createStream(
     type: MessageType,
     options?: { groupId?: string },
-  ): DirectStream {
+  ): LogStream {
     const id = randomUUID();
     const groupId = options?.groupId ?? this.resolveGroupId();
     let buffer = '';
     let isFirstUpdate = true;
+    let isFinalized = false;
     let createdAt = 0;
 
     return {
       append: (text: string) => {
-        if (!text) return;
+        if (!text || isFinalized) return;
 
         buffer += text;
 
@@ -96,7 +90,6 @@ export class DirectStreamPoster implements StreamPoster {
           });
           isFirstUpdate = false;
         } else {
-          // updateLogMessage still requires full LogMessageData
           this.poster.updateLogMessage(this.streamTabId, {
             id,
             text: buffer,
@@ -109,6 +102,11 @@ export class DirectStreamPoster implements StreamPoster {
       },
 
       finalize: (finalText?: string): string => {
+        if (isFinalized) {
+          return buffer;
+        }
+        isFinalized = true;
+
         if (typeof finalText === 'string') {
           buffer = finalText;
         }
@@ -127,6 +125,7 @@ export class DirectStreamPoster implements StreamPoster {
             groupId,
             messageType: type,
           });
+          isFirstUpdate = false;
         } else {
           this.poster.updateLogMessage(this.streamTabId, {
             id,

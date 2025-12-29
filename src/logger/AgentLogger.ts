@@ -24,6 +24,7 @@ import type {
   MessageType,
 } from './messageTypes';
 import type { LogOptions } from './logOptions';
+import type { LogStream } from './LogTypes';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
@@ -153,10 +154,11 @@ export interface AgentLogStreamOptions {
   progressViewEnabled?: boolean;
 }
 
-export interface AgentLogStream {
-  append(text: string): void;
-  finalize(finalText?: string): string;
-}
+/**
+ * Stream interface for appending and finalizing log content.
+ * Alias for the unified LogStream interface for backward compatibility.
+ */
+export type AgentLogStream = LogStream;
 
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.

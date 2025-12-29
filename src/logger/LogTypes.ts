@@ -63,3 +63,14 @@ export const LogMessageUpdateSchema = LogMessageDataSchema.partial().required({
 });
 
 export type LogMessageUpdate = z.infer<typeof LogMessageUpdateSchema>;
+
+/**
+ * Unified interface for streaming log content.
+ * Used by both AgentLogger.createStream() and DirectStreamPoster.createStream().
+ */
+export interface LogStream {
+  /** Append text to the stream */
+  append(text: string): void;
+  /** Finalize the stream, optionally replacing buffer with finalText */
+  finalize(finalText?: string): string;
+}
