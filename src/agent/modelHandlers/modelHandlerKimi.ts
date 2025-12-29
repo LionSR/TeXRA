@@ -36,13 +36,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       this.capabilities.supportsReasoning;
     return isThinkingModel ? new BaseReasoningStreamAggregator() : null;
   }
-  /**
-   * Get the base URL for the Moonshot API.
-   * The Moonshot API has a different base URL than OpenAI.
-   */
-  getBaseUrl(): string {
-    return 'https://api.moonshot.cn/v1';
-  }
+  // Note: getBaseUrl() is NOT overridden here.
+  // The base ModelHandler.getBaseUrl() correctly handles:
+  // - Server-side keys: routes through relay
+  // - Direct access: uses BASE_URLS[MOONSHOT] = 'https://api.moonshot.cn/v1'
 
   /**
    * Override createResponse to preprocess messages for Kimi models.
