@@ -53,6 +53,7 @@ import { BaseFlowContext } from '@agent/implementations/flows/common';
 import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 
 import { OutputHandler, type IOutputHandler } from '@agent/output';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { LatexMediaManager } from '@latex';
 import { PromptBuilder } from '@utils/prompt';
 import { TaskRunFileService } from '@utils/files';
@@ -371,10 +372,13 @@ export class ReflectionFlowContext<C = unknown>
 
   /**
    * Interrupt the flow execution.
-   * Notifies the runtime layer via onInterrupt callback.
+   * Notifies the runtime layer via onInterrupt callback and cleans up retry state.
    */
   interrupt(): void {
     this.init.onInterrupt?.();
+
+    // Clear any pending retry request to avoid memory leaks
+    retryCoordinator.clearRequest(this.init.executionContext.streamId);
   }
 
   // =========================================================================
