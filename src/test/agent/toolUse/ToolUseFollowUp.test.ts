@@ -27,7 +27,6 @@ describe('ToolUseFollowUp', () => {
     userChannels: {
       input: Object.freeze({}) as Readonly<Record<string, unknown>>,
       transient: {},
-      output: {},
     },
   });
 

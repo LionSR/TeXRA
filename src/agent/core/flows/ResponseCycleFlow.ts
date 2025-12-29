@@ -58,6 +58,15 @@ interface ResponseCycleInputState {
   outputLocation: AgentFileLocation;
 }
 
+/**
+ * Debug options for cycle - consolidated from separate context/fileOptions fields.
+ * Always set/checked together, so merged into single optional field.
+ */
+interface CycleDebugOptions {
+  context: CycleDebugContext;
+  fileOptions: CycleDebugFileOptions;
+}
+
 /** Runtime state for response cycles. */
 interface ResponseCycleRuntimeState extends BaseCycleState {
   /**
@@ -76,9 +85,8 @@ interface ResponseCycleRuntimeState extends BaseCycleState {
   endTurn: boolean;
   outputExists: boolean;
   systemPrompt?: string;
-  debugContext?: CycleDebugContext;
-  debugFileOptions?: CycleDebugFileOptions;
-  startTime?: number;
+  /** Consolidated debug options (context + fileOptions always used together) */
+  debug?: CycleDebugOptions;
   responseObject?: unknown;
   processedResponse?: string;
   /** Agent output location - always workspace or runStorage (never external) */
@@ -139,8 +147,7 @@ class ResponsePrepNode<C> extends BaseNode<
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
-    debugContext?: CycleDebugContext;
-    debugFileOptions?: CycleDebugFileOptions;
+    debug?: CycleDebugOptions;
     outputLocation: AgentFileLocation;
   }> {
     const { options, store } = this._params.services;
@@ -153,29 +160,28 @@ class ResponsePrepNode<C> extends BaseNode<
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
 
-    const debugContext: CycleDebugContext | undefined = interrupted
+    // Consolidated debug options (always used together)
+    const debug: CycleDebugOptions | undefined = interrupted
       ? undefined
-      : createDebugContext({
-          logger,
-          modelName: agentConfig.model,
-          executionId: options.context.executionId,
-          isRemote: isRemoteAgent(agentConfig.agent),
-        });
-
-    const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
-      ? undefined
-      : createDebugFileOptions(
-          store.round.continuationCount,
-          'response',
-          state.outputLocation.relativePath,
-        );
+      : {
+          context: createDebugContext({
+            logger,
+            modelName: agentConfig.model,
+            executionId: options.context.executionId,
+            isRemote: isRemoteAgent(agentConfig.agent),
+          }),
+          fileOptions: createDebugFileOptions(
+            store.round.continuationCount,
+            'response',
+            state.outputLocation.relativePath,
+          ),
+        };
 
     return {
       interrupted,
       exists,
       systemPrompt,
-      debugContext,
-      debugFileOptions,
+      debug,
       outputLocation,
     };
   }
@@ -186,8 +192,7 @@ class ResponsePrepNode<C> extends BaseNode<
       interrupted: boolean;
       exists: boolean;
       systemPrompt?: string;
-      debugContext?: CycleDebugContext;
-      debugFileOptions?: CycleDebugFileOptions;
+      debug?: CycleDebugOptions;
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
@@ -201,18 +206,16 @@ class ResponsePrepNode<C> extends BaseNode<
 
     state.outputExists = prepRes.exists;
     state.systemPrompt = prepRes.systemPrompt;
-    state.debugContext = prepRes.debugContext;
-    state.debugFileOptions = prepRes.debugFileOptions;
+    state.debug = prepRes.debug;
     state.outputLocation = prepRes.outputLocation;
-    state.startTime = Date.now();
     resetResponseCycleState(state);
 
-    if (state.debugContext && state.debugFileOptions) {
+    if (state.debug) {
       await maybeSaveDebugObject({
         object: state.messages,
         objectType: 'messages',
-        context: state.debugContext,
-        fileOptions: state.debugFileOptions,
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
       });
     }
 
@@ -280,10 +283,6 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
-    options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
     const stage = await options.logger.stage('Model invocation', {
@@ -291,7 +290,9 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     });
 
     const start = Date.now();
-    try {
+
+    // Use base class helper for abort controller lifecycle
+    return this.withAbortController(async (signal) => {
       const { response, responseTimeMs } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
           client: options.client,
@@ -299,7 +300,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
           temperature: options.agentSetting.temperature || 0.0,
           systemPrompt: prepRes.systemPrompt,
           endTag: options.agentSetting.endTag,
-          signal: abortController.signal,
+          signal,
           tools: options.modelHandler.capabilities.supportsFunctionCalling
             ? options.agentSetting.tools
             : undefined,
@@ -311,9 +312,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       });
 
       return { kind: 'success', response, responseTimeMs };
-    } finally {
-      options.setAbortController(null);
-    }
+    });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
@@ -351,12 +350,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     state.responseObject = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    if (state.debugContext && state.debugFileOptions) {
+    if (state.debug) {
       await maybeSaveDebugObject({
         object: successRes.response,
         objectType: 'response',
-        context: state.debugContext,
-        fileOptions: state.debugFileOptions,
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
       });
     }
 
