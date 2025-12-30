@@ -113,10 +113,16 @@ export async function computeModelOptions(): Promise<string> {
 
       let available = hasServerSideForModel;
 
-      // Only check personal keys if:
+      // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
+      // Allow these even in "Use Included Access" mode since included access is never possible.
+      if (!available && config.openRouterOnly) {
+        available = hasOpenRouter;
+      }
+
+      // For other models, only check personal keys if:
       // 1. Not available via server-side, AND
       // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
-      if (!available && !useIncludedAccess) {
+      if (!available && !useIncludedAccess && !config.openRouterOnly) {
         available = await checkPersonalKeyAvailability(config, hasOpenRouter);
       }
 
