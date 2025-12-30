@@ -32,10 +32,10 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
   },
   qwenplus: {
     name: 'qwenplus',
-    fullName: 'qwen-plus-latest',
+    fullName: 'qwen-plus',
     openrouterFullName: 'qwen/qwen-plus',
     provider: ModelProvider.DASHSCOPE,
-    maxOutputTokens: 25600, // maximal is 32768 but there are also text input and tool use tokens
+    maxOutputTokens: 32768,
     contextWindow: 1000000,
     inputPrice: 0.4,
     outputPrice: 1.2,
