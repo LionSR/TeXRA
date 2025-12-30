@@ -8,26 +8,24 @@ import * as vscode from 'vscode';
 import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
+import { debounce } from '@utils/core';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
 export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
-  private refreshHandle: NodeJS.Timeout | undefined;
   private validationHandles: NodeJS.Timeout[] = [];
   private static readonly VALIDATION_DELAY = 300;
+
+  // Debounced refresh using perfect-debounce
+  private triggerRefresh: () => void;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
-  ) {}
-
-  private triggerRefresh() {
-    if (this.refreshHandle) {
-      clearTimeout(this.refreshHandle);
-    }
-    this.refreshHandle = setTimeout(() => this.refresh(), 200);
+  ) {
+    this.triggerRefresh = debounce(() => this.refresh(), 200);
   }
 
   async setup() {
@@ -105,10 +103,7 @@ export class WatcherManager {
   }
 
   dispose() {
-    if (this.refreshHandle) {
-      clearTimeout(this.refreshHandle);
-      this.refreshHandle = undefined;
-    }
+    // Note: debounced refresh will naturally stop when refresh is no longer needed
     this.validationHandles.forEach((h) => clearTimeout(h));
     this.validationHandles = [];
     this.disposables.forEach((d) => d.dispose());
