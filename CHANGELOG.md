@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.2] - 2025-12-30
+
+### Bug Fixes
+
+- Fixed symlink handling in workspace path resolution and file dialogs.
+- Fixed OAuth callback handling for web environments with localhost fallback.
+- Fixed status tooltip clipping by positioning it above the indicator.
+- Fixed clean auxiliary files button to use correct trash icon.
+- Added resuming status styling and changed stopped status to neutral gray.
+
+### Improvements
+
+- Optimized path conversion to avoid redundant operations.
+
 ## [0.35.1] - 2025-12-29
 
 ### Features
