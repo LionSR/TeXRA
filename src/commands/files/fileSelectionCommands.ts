@@ -194,9 +194,22 @@ async function selectEditedFile(): Promise<string | null> {
 }
 
 async function getCurrentFile(): Promise<string | null> {
+  // Try activeTextEditor first (for text files)
   const currentFile = vscode.window.activeTextEditor?.document;
   if (currentFile && currentFile.uri.scheme === 'file') {
     return WorkspaceFS.relativePath(currentFile.uri.fsPath);
+  }
+  // Fallback to active tab (for media files like images, PDFs)
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  if (activeTab?.input) {
+    const input = activeTab.input;
+    if (
+      (input instanceof vscode.TabInputText ||
+        input instanceof vscode.TabInputCustom) &&
+      input.uri.scheme === 'file'
+    ) {
+      return WorkspaceFS.relativePath(input.uri.fsPath);
+    }
   }
   return null;
 }
