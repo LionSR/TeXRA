@@ -175,21 +175,8 @@ export async function activate(context: vscode.ExtensionContext) {
         // Connect URI handler to auth provider
         authProvider.setUriHandler(uriHandler);
 
-        // Subscribe to auth state changes to refresh agent list on login/logout
-        context.subscriptions.push(
-          authProvider.onDidChangeSessions(async (event) => {
-            // Refresh agent options when user logs in or out
-            // This will fetch/clear remote agents and update dropdown
-            const mainView = getMainViewProvider();
-            if (mainView) {
-              logger.info(
-                'extension',
-                `Auth state changed (added: ${event.added?.length ?? 0}, removed: ${event.removed?.length ?? 0}), refreshing agents`,
-              );
-              await mainView.refreshOptionsAndView();
-            }
-          }),
-        );
+        // Note: Auth state change listener is handled in MainViewProvider.setupAuthListener()
+        // to avoid duplicate refresh calls when user logs in/out.
 
         // Initialize usage logging service for backend analytics (only when auth is available)
         const extensionVersion =
