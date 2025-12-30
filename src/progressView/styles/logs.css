@@ -243,14 +243,20 @@
 }
 
 .status-indicator.is-stopped {
-  background-color: var(--color-warning);
-  box-shadow: 0 0 4px var(--color-warning);
+  background-color: var(--vscode-descriptionForeground, #888888);
+  box-shadow: none;
 }
 
 .status-indicator.is-waiting {
   background-color: var(--vscode-textLink-foreground, #3794ff);
   box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
   animation: pulse-scale 3s infinite;
+}
+
+.status-indicator.is-resuming {
+  background-color: var(--vscode-textLink-foreground, #3794ff);
+  box-shadow: 0 0 4px var(--vscode-textLink-foreground, #3794ff);
+  animation: pulse-scale 1.5s infinite;
 }
 
 /* Generated files list */
