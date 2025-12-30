@@ -268,28 +268,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.outputHandler.setActiveRun(params.storageKey);
     }
 
-    // Sort rounds for consistent ordering
+    // Track how many rounds were completed in the previous run.
+    // The actual roundOutputs and outputHandler.rounds will be repopulated
+    // during replay as each round goes through OutputNode.
     const sortedRounds = Array.from(params.rounds.keys()).sort((a, b) => a - b);
-
-    // Create RoundOutput objects directly in agent.roundOutputs[] (canonical storage)
-    // Also hydrate OutputHandler's rounds map for latexdiff to work after resume
-    for (const round of sortedRounds) {
-      const savedOutputs = params.rounds.get(round) ?? [];
-      this.roundOutputs[round] = {
-        round,
-        rawOutput: null, // Not available from saved state
-        outputs: savedOutputs,
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
-      };
-      // Hydrate OutputHandler so getRoundMapping works for latexdiff
-      this.outputHandler.hydrateRound(round, savedOutputs);
-    }
-
     this.hydratedRoundCount = sortedRounds.length;
   }
 
@@ -411,8 +393,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       // Check hydration state AFTER startAndInitRun (which calls hydrateFromResume)
       previousHydratedRounds = this.hydratedRoundCount;
       const hadHydratedRounds = previousHydratedRounds > 0;
-      if (!hadHydratedRounds) {
-        this.roundOutputs = [];
+
+      // Always start fresh - roundOutputs will be repopulated during replay
+      this.roundOutputs = [];
+
+      if (hadHydratedRounds) {
+        // Inform user that previous rounds will be replayed from saved outputs
+        this.logger.info(
+          `Resuming from previous run - replaying ${previousHydratedRounds} completed round(s)`,
+        );
       }
 
       const totalRounds = this.getTotalRounds();
@@ -422,23 +411,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         throw new Error('Run stage required for reflection agent.');
       }
 
-      // Determine starting round from hydrated outputs (for resume)
-      const startingRound = hadHydratedRounds ? this.roundOutputs.length : 0;
-
-      // Create initial round stage for UI grouping (r0, r1, etc.)
-      const roundStageName = `r${startingRound}`;
-      const roundStage = await this.logger.stage(roundStageName, {
+      // Always start from round 0, even on resume.
+      // Completed rounds are "replayed" via initializeOutputAndPrefill()
+      // which reads existing output files instead of calling the model.
+      const roundStage = await this.logger.stage('r0', {
         parent: this.runStage,
       });
 
       // Create shared state for the flow (no lifecycle - errors thrown directly)
-      // Pass hydrated outputs to preserve them during resume
       shared = {
         agent: this,
         state: createInitialReflectionState(
           totalRounds,
           AgentWorkspaceState.create(),
-          hadHydratedRounds ? this.roundOutputs : undefined,
         ),
         retryState: createRetryState(),
         runStage: this.runStage,
