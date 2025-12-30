@@ -13,6 +13,7 @@ const CHANNEL = 'mainViewCommands';
 export const mainViewCommands = {
   reset: 'texra.mainView.reset',
   refreshModelOptions: 'texra.refreshModelOptions',
+  refreshAgentOptions: 'texra.refreshAgentOptions',
   refreshAllOptions: 'texra.refreshAllOptions',
 };
 
@@ -46,8 +47,62 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   );
 
   /**
+   * Refresh model options only in the webview.
+   */
+  const refreshModelOptionsCommand = vscode.commands.registerCommand(
+    mainViewCommands.refreshModelOptions,
+    async () => {
+      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
+        'texra.getWebviewView',
+        [],
+        'mainViewCommands',
+      );
+      if (webviewView) {
+        try {
+          const modelOptions = await computeModelOptions();
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+            options: modelOptions,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
+        }
+      }
+    },
+  );
+
+  /**
+   * Refresh agent options only in the webview.
+   */
+  const refreshAgentOptionsCommand = vscode.commands.registerCommand(
+    mainViewCommands.refreshAgentOptions,
+    async () => {
+      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
+        'texra.getWebviewView',
+        [],
+        'mainViewCommands',
+      );
+      if (webviewView) {
+        try {
+          const agentOptions = await computeAgentOptions();
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+            options: agentOptions,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error(CHANNEL, `Failed to refresh agent options: ${message}`);
+        }
+      }
+    },
+  );
+
+  /**
    * Refresh both model and agent options in the webview.
-   * This is the primary command for refreshing dropdown options.
+   * Used when both need to be updated together (e.g., API key changes, auth changes).
    */
   const refreshAllOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshAllOptions,
@@ -78,32 +133,22 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
           const message =
             error instanceof Error ? error.message : String(error);
           logger.error(CHANNEL, `Failed to refresh options: ${message}`);
-          vscode.window.showErrorMessage(
-            'Failed to refresh options. Please check the output console for details.',
-          );
         }
       }
     },
   );
 
-  /**
-   * Legacy command for refreshing model options only.
-   * Now delegates to refreshAllOptions for consistency.
-   * @deprecated Use refreshAllOptions instead
-   */
-  const refreshModelOptionsCommand = vscode.commands.registerCommand(
-    mainViewCommands.refreshModelOptions,
-    async () => {
-      // Delegate to refreshAllOptions for consistent behavior
-      await vscode.commands.executeCommand(mainViewCommands.refreshAllOptions);
-    },
-  );
-
   context.subscriptions.push(
     resetCommand,
-    refreshAllOptionsCommand,
     refreshModelOptionsCommand,
+    refreshAgentOptionsCommand,
+    refreshAllOptionsCommand,
   );
 
-  return { resetCommand, refreshAllOptionsCommand, refreshModelOptionsCommand };
+  return {
+    resetCommand,
+    refreshModelOptionsCommand,
+    refreshAgentOptionsCommand,
+    refreshAllOptionsCommand,
+  };
 }
