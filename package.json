@@ -983,7 +983,13 @@
             "type": "number",
             "default": 1000,
             "minimum": 0,
-            "description": "Base backoff delay in milliseconds between retry attempts for model calls",
+            "description": "Base backoff delay in milliseconds between retry attempts for model calls. With exponential backoff, delays increase as 1x, 2x, 4x, etc. of this value.",
+            "scope": "resource"
+          },
+          "texra.model.retry.useJitter": {
+            "type": "boolean",
+            "default": true,
+            "description": "Add random jitter to retry delays (recommended). Jitter prevents thundering herd problems when multiple requests retry simultaneously.",
             "scope": "resource"
           }
         }
@@ -1655,6 +1661,7 @@
     "difflib": "^0.2.4",
     "dotenv": "^17.2.3",
     "execa": "^9.6.1",
+    "exponential-backoff": "^3.1.3",
     "fast-xml-parser": "^5.3.3",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.0",

@@ -1,4 +1,4 @@
-import { sleep } from '@utils/core';
+import { sleep, calculateBackoffDelay } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -106,16 +106,22 @@ class Node<
   wait: number;
   currentRetry: number = 0;
   /**
+   * Whether to use jitter in exponential backoff (default: true).
+   * When true, adds random jitter to prevent thundering herd problems.
+   */
+  useJitter: boolean;
+  /**
    * Optional abort signal for cancellation support.
    * When set and aborted, the retry loop will skip remaining retries
    * and go directly to execFallback(). This prevents unnecessary API
    * calls when the user has intentionally cancelled the operation.
    */
   signal?: AbortSignal;
-  constructor(maxRetries: number = 1, wait: number = 0) {
+  constructor(maxRetries: number = 1, wait: number = 0, useJitter: boolean = true) {
     super();
     this.maxRetries = maxRetries;
     this.wait = wait;
+    this.useJitter = useJitter;
   }
   async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
     throw error;
@@ -199,7 +205,14 @@ class Node<
             }
             return await this.execFallback(prepRes, e as Error);
           }
-          if (this.wait > 0) await sleep(this.wait * 1000);
+          if (this.wait > 0) {
+            // Use exponential backoff with optional jitter for graceful retries
+            const backoffMs = calculateBackoffDelay(this.currentRetry, {
+              baseDelayMs: this.wait * 1000,
+              jitter: this.useJitter ? 'full' : 'none',
+            });
+            await sleep(backoffMs);
+          }
         }
       }
       // If we broke from inner loop, continue outer loop to restart auto-retries
