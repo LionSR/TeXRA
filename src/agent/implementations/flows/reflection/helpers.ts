@@ -79,9 +79,7 @@ export function createBaseFileLocations(
     // when the second arg is absolute, so we must check first.
     // See resolveFilePath in pathUtils.ts for the canonical pattern.
     const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
-    const relativePath = path.isAbsolute(f)
-      ? WorkspaceFS.relativePath(f)
-      : f;
+    const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 }
