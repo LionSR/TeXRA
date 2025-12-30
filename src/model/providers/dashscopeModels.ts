@@ -20,8 +20,8 @@ export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
     fullName: 'qwen-max-latest',
     openrouterFullName: 'qwen/qwen-max',
     provider: ModelProvider.DASHSCOPE,
-    maxOutputTokens: 25600, // maximal is 32768 but there are also text input and tool use tokens
-    contextWindow: 262144,
+    maxOutputTokens: 16384, // OpenRouter context limit is 32768, leaving room for input
+    contextWindow: 32768, // OpenRouter's context limit (native DashScope is 262144)
     inputPrice: 1.6,
     outputPrice: 6.4,
     capabilities: {
