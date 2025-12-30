@@ -23,10 +23,28 @@ interface FlowRecord {
   nodes: NodeRecord[];
 }
 
+/**
+ * A Flow that persists its execution state to a KVStore after each node.
+ *
+ * This enables:
+ * - Resume from any node on crash/restart
+ * - Distributed execution (different processes can resume)
+ * - Execution audit trail via node history
+ *
+ * Key design principles:
+ * - Only shared state is persisted (not services - they're runtime dependencies)
+ * - Node history tracks actions, not outputs (minimal storage)
+ * - Resume replays by navigating the graph, not re-executing nodes
+ *
+ * @template S - Shared state type (must be serializable)
+ * @template P - Params type (must be serializable)
+ * @template Svc - Services type (NOT serialized - injected at runtime)
+ */
 export class PersistedFlow<
   S extends Record<string, unknown> = Record<string, unknown>,
   P extends Record<string, unknown> = Record<string, unknown>,
-> extends Flow<S, P> {
+  Svc = unknown,
+> extends Flow<S, P, Svc> {
   private readonly runId: string;
   private readonly kv: KVStore;
 
@@ -70,6 +88,8 @@ export class PersistedFlow<
 
     try {
       cursor.setParams(params as any);
+      // Propagate services to node (services are runtime dependencies, not persisted)
+      cursor.setServices(this._services);
       action = await cursor._run(shared);
     } catch (e) {
       // Don't write anything when node execution fails
@@ -83,15 +103,19 @@ export class PersistedFlow<
     return true;
   }
 
-  static async attach<S extends Record<string, unknown>>(
+  static async attach<
+    S extends Record<string, unknown>,
+    P extends Record<string, unknown> = Record<string, unknown>,
+    Svc = unknown,
+  >(
     kv: KVStore,
     runId: string,
     start: BaseNode<any, any>,
-  ): Promise<PersistedFlow<S>> {
+  ): Promise<PersistedFlow<S, P, Svc>> {
     const flow = await kv.read<FlowRecord>(`flow:${runId}`);
     if (!flow) throw new Error(`flow "${runId}" not found`);
-    const pf = new PersistedFlow<S>(start, kv, runId);
-    pf.setParams(flow.params);
+    const pf = new PersistedFlow<S, P, Svc>(start, kv, runId);
+    pf.setParams(flow.params as P);
     return pf;
   }
 
