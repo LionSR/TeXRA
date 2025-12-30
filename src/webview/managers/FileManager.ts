@@ -12,6 +12,10 @@ import {
   showLoggedMessage,
   toErrorMessage,
 } from '@common/errors';
+import {
+  getIncludedExtensions,
+  ExtensionCategory,
+} from '@common/files/fileTypeUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { selectFiles } from '@frontend/ui/dialogs';
 import { fileLister } from '@frontend/files';
@@ -414,9 +418,24 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
     const openedFiles = await this.getOpenedFiles();
+
+    // Filter files by allowed extensions for the target file type
+    // Extensions from config have leading dots (e.g., '.tex'), strip them for comparison
+    // Lowercase both sides for case-insensitive matching
+    const allowedExtensions = getIncludedExtensions(
+      fileType as ExtensionCategory,
+    ).map((ext) => ext.replace('.', '').toLowerCase());
+    const filteredFiles =
+      allowedExtensions.length > 0
+        ? openedFiles.filter((file) => {
+            const ext = path.extname(file).toLowerCase().replace('.', '');
+            return allowedExtensions.includes(ext);
+          })
+        : openedFiles;
+
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
-      files: openedFiles,
+      files: filteredFiles,
       fileType,
       shouldFilter: true,
     });
@@ -546,10 +565,28 @@ export class FileManager extends BaseWebviewManager {
       return [];
     }
 
-    const openedDocuments = workspace.textDocuments;
-    const relevantFiles = openedDocuments
-      .filter((doc) => doc.uri.scheme === 'file')
-      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
+    // Use tabGroups to get only files actually open in tabs
+    // (workspace.textDocuments includes closed files still in memory)
+    const openedFiles: string[] = [];
+    for (const tabGroup of vscode.window.tabGroups.all) {
+      for (const tab of tabGroup.tabs) {
+        // TabInputText: regular text files (.tex, .md, etc.)
+        // TabInputCustom: media files opened in custom editors (images, PDFs)
+        const input = tab.input;
+        if (
+          input instanceof vscode.TabInputText ||
+          input instanceof vscode.TabInputCustom
+        ) {
+          const uri = input.uri;
+          if (uri.scheme === 'file') {
+            openedFiles.push(workspace.asRelativePath(uri.fsPath, false));
+          }
+        }
+      }
+    }
+
+    // Remove duplicates (same file can be open in multiple tab groups)
+    const relevantFiles = [...new Set(openedFiles)];
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
