@@ -83,10 +83,8 @@ export class MainViewProvider
 
   private setupConfigurationWatcher() {
     // Watch for agent configuration changes - only refresh agent options
-    watchConfig(
-      this.context,
-      ['texra.agents', 'texra.toolUseAgents'],
-      () => this.debouncedRefreshAgentOptions(),
+    watchConfig(this.context, ['texra.agents', 'texra.toolUseAgents'], () =>
+      this.debouncedRefreshAgentOptions(),
     );
 
     // Watch for model configuration changes - only refresh model options
