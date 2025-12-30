@@ -56,7 +56,7 @@ export async function selectFiles(
   });
 
   return fileUris && fileUris.length > 0
-    ? fileUris.map((uri) => vscode.workspace.asRelativePath(uri.fsPath, false))
+    ? fileUris.map((uri) => WorkspaceFS.relativePath(uri.fsPath))
     : null;
 }
 
