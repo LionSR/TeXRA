@@ -167,7 +167,7 @@ export class FileInputManager extends BaseUIManager {
         prefix: 'current',
         suffix: 'FileButton',
         command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
-        types: [...baseTypes, 'base', 'edited'],
+        types: [...baseTypes, 'media', 'base', 'edited'],
       },
     ];
 
