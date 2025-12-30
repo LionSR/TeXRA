@@ -66,8 +66,10 @@ export async function computeModelOptions(): Promise<string> {
       const provider = config.provider;
 
       // Determine availability - server-side checks are sync after priming
+      // Note: openRouterOnly models can't use server-side relay (they need OpenRouter API)
       const hasServerSideForModel =
         hasAnyServerSideAccess &&
+        !config.openRouterOnly &&
         serverSideKeyService.isProviderOnServer(provider) &&
         serverSideKeyService.canUseModelSync(model);
 
@@ -77,7 +79,11 @@ export async function computeModelOptions(): Promise<string> {
       // 1. Not available via server-side, AND
       // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
       if (!available && !useIncludedAccess) {
-        if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+        if (config.openRouterOnly) {
+          // openRouterOnly models can ONLY use OpenRouter - check that key exists
+          available = hasOpenRouter;
+        } else if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+          // Check provider-specific API key
           try {
             available = await SecretManager.apiKeyExists(
               provider as ApiProvider,
@@ -85,13 +91,13 @@ export async function computeModelOptions(): Promise<string> {
           } catch (error) {
             console.warn(`Failed to check API key for ${provider}:`, error);
           }
-        } else {
-          // Providers not in API_PROVIDERS don't require keys (e.g., OTHERS, COPILOT)
-          available = true;
-        }
 
-        // Check OpenRouter as fallback
-        if (!available && config.openrouterFullName && hasOpenRouter) {
+          // Check OpenRouter as fallback for models that support it
+          if (!available && config.openrouterFullName && hasOpenRouter) {
+            available = true;
+          }
+        } else {
+          // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
           available = true;
         }
       }
