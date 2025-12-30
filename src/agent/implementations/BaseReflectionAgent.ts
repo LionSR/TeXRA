@@ -411,6 +411,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       // Check hydration state AFTER startAndInitRun (which calls hydrateFromResume)
       previousHydratedRounds = this.hydratedRoundCount;
       const hadHydratedRounds = previousHydratedRounds > 0;
+      // For new runs: clear roundOutputs to start fresh
+      // For resumed runs: preserve hydrated roundOutputs for latexdiff comparisons
       if (!hadHydratedRounds) {
         this.roundOutputs = [];
       }
@@ -422,12 +424,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         throw new Error('Run stage required for reflection agent.');
       }
 
-      // Determine starting round from hydrated outputs (for resume)
-      const startingRound = hadHydratedRounds ? this.roundOutputs.length : 0;
-
-      // Create initial round stage for UI grouping (r0, r1, etc.)
-      const roundStageName = `r${startingRound}`;
-      const roundStage = await this.logger.stage(roundStageName, {
+      // Always start from round 0, even on resume.
+      // Completed rounds are "replayed" via initializeOutputAndPrefill()
+      // which reads existing output files instead of calling the model.
+      const roundStage = await this.logger.stage('r0', {
         parent: this.runStage,
       });
 
