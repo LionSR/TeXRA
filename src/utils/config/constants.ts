@@ -59,6 +59,11 @@ export const LATEX_VIEWER_OPEN_DELAY_MS = 5000;
 export const LATEX_VIEWER_REFRESH_DELAY_MS = 5000;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
+// Debounce delay constants for UI responsiveness
+export const DEBOUNCE_WATCHER_MS = 200; // File system watchers (fast response)
+export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
+export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched)
+
 // Tool-use persistence defaults
 export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 
