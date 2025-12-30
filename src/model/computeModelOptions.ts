@@ -37,6 +37,9 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * - Ultra tier: All models available via relay (if provider enabled)
  * - Max tier: Only specific cheaper models available via relay (configured remotely)
  * - Free tier: Must bring own API keys
+ *
+ * When "Use Included Access" is enabled, only server-side availability is checked.
+ * When "Use My Own Keys" is selected, personal API keys are checked as fallback.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
@@ -47,6 +50,9 @@ export async function computeModelOptions(): Promise<string> {
   const serverSideKeyService = getServerSideKeyService();
   const hasAnyServerSideAccess =
     await serverSideKeyService.canUseServerSideKeys();
+
+  // Check if user wants to use included access (no personal key fallback)
+  const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
   // Build option tags for each model
   // Server-side checks are sync (caches primed above), personal key checks are async
@@ -67,8 +73,10 @@ export async function computeModelOptions(): Promise<string> {
 
       let available = hasServerSideForModel;
 
-      // Only check personal keys if not available via server-side
-      if (!available) {
+      // Only check personal keys if:
+      // 1. Not available via server-side, AND
+      // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
+      if (!available && !useIncludedAccess) {
         if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
           try {
             available = await SecretManager.apiKeyExists(
