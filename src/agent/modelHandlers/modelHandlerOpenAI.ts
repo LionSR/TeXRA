@@ -880,6 +880,11 @@ export class ModelHandlerOpenAI<
     // Write file content to output file
     await flexibleFS.write(outputLocation, fileContent);
 
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push({
       role: 'assistant',
       content: [

@@ -1103,6 +1103,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await flexibleFS.write(outputLocation, fileContent);
 
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push(this.createAssistantMessage(fileContent));
 
     if (hasEndTag(agentSetting, fileContent)) {

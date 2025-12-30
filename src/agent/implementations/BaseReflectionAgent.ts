@@ -415,6 +415,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       // For resumed runs: preserve hydrated roundOutputs for latexdiff comparisons
       if (!hadHydratedRounds) {
         this.roundOutputs = [];
+      } else {
+        // Inform user that previous rounds will be replayed from saved outputs
+        this.logger.info(
+          `Resuming from previous run - replaying ${previousHydratedRounds} completed round(s)`,
+        );
       }
 
       const totalRounds = this.getTotalRounds();
