@@ -92,6 +92,8 @@ export interface ReflectionFlowShared {
   retryState: RetryState;
   /** Parent stage for round stages (used to create r0, r1, r2... as siblings) */
   runStage: AgentLogStage;
+  /** Index signature for Record<string, unknown> compatibility with PersistedFlow */
+  [key: string]: unknown;
 }
 
 /**
