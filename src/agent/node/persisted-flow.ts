@@ -1,13 +1,27 @@
-// Code from https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
+// Based on https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts
+// Enhanced to use ExecutionKVStore as first-citizen interface
+
+import type { ExecutionKVStore } from '@agent/storage';
 
 import { BaseNode, Flow } from './index';
 
+/**
+ * Legacy KVStore interface for backward compatibility.
+ * Prefer ExecutionKVStore for new code.
+ * @deprecated Use ExecutionKVStore instead
+ */
 export interface KVStore {
-  read<T = any>(key: string): Promise<T | undefined>;
-  write(key: string, value: any): Promise<void>;
+  read<T = unknown>(key: string): Promise<T | undefined>;
+  write(key: string, value: unknown): Promise<void>;
   delete?(key: string): Promise<void>;
   listKeys?(prefix?: string): Promise<string[]>;
 }
+
+/**
+ * Union type that accepts either legacy KVStore or new ExecutionKVStore.
+ * This allows gradual migration to ExecutionKVStore.
+ */
+export type FlowStore = KVStore | ExecutionKVStore;
 
 type Action = string;
 
@@ -46,12 +60,22 @@ export class PersistedFlow<
   Svc = unknown,
 > extends Flow<S, P, Svc> {
   private readonly runId: string;
-  private readonly kv: KVStore;
+  private readonly kv: FlowStore;
 
-  constructor(start: BaseNode<any, any>, kv: KVStore, runId?: string) {
+  /**
+   * Create a new PersistedFlow.
+   *
+   * @param start - The starting node of the flow graph
+   * @param kv - Storage backend (ExecutionKVStore preferred, KVStore for legacy)
+   * @param runId - Optional run identifier. If using ExecutionKVStore, defaults to executionId.
+   *                Otherwise generates a new UUID.
+   */
+  constructor(start: BaseNode<any, any>, kv: FlowStore, runId?: string) {
     super(start);
     this.kv = kv;
-    this.runId = runId ?? crypto.randomUUID();
+    // Prefer executionId from ExecutionKVStore if available
+    this.runId =
+      runId ?? ('getExecutionId' in kv ? kv.getExecutionId() : crypto.randomUUID());
   }
 
   async run(shared: S): Promise<Action | undefined> {
@@ -103,18 +127,31 @@ export class PersistedFlow<
     return true;
   }
 
+  /**
+   * Attach to an existing persisted flow for resume.
+   *
+   * @param kv - Storage backend (ExecutionKVStore preferred)
+   * @param runId - The run identifier to resume. For ExecutionKVStore, can be omitted to use executionId.
+   * @param start - The starting node of the flow graph
+   */
   static async attach<
     S extends Record<string, unknown>,
     P extends Record<string, unknown> = Record<string, unknown>,
     Svc = unknown,
   >(
-    kv: KVStore,
-    runId: string,
+    kv: FlowStore,
+    runId: string | undefined,
     start: BaseNode<any, any>,
   ): Promise<PersistedFlow<S, P, Svc>> {
-    const flow = await kv.read<FlowRecord>(`flow:${runId}`);
-    if (!flow) throw new Error(`flow "${runId}" not found`);
-    const pf = new PersistedFlow<S, P, Svc>(start, kv, runId);
+    // Use executionId from ExecutionKVStore if runId not provided
+    const effectiveRunId =
+      runId ?? ('getExecutionId' in kv ? kv.getExecutionId() : undefined);
+    if (!effectiveRunId) {
+      throw new Error('runId is required when not using ExecutionKVStore');
+    }
+    const flow = await kv.read<FlowRecord>(`flow:${effectiveRunId}`);
+    if (!flow) throw new Error(`flow "${effectiveRunId}" not found`);
+    const pf = new PersistedFlow<S, P, Svc>(start, kv, effectiveRunId);
     pf.setParams(flow.params as P);
     return pf;
   }
