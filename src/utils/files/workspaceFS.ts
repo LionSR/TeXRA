@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -21,9 +18,16 @@ export class WorkspaceFS extends RelativeFS {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
 
+  /**
+   * Convert an absolute path to a workspace-relative path.
+   * Uses VS Code's asRelativePath which properly handles symlinks.
+   * Returns the original path if no workspace is open.
+   */
   public static relativePath(filePath: string): string {
-    const base = this.getPath();
-    return base ? path.relative(base, filePath) : filePath;
+    if (!this.getPath()) {
+      return filePath;
+    }
+    return vscode.workspace.asRelativePath(filePath, false);
   }
 
   public static async existsAndNonTrivial(target: string): Promise<boolean> {
