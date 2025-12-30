@@ -49,11 +49,6 @@ export interface RunReflectionFlowInput<C = unknown> extends Omit<
   getUsageRecorder?: () => AgentRoundFinalizedCallback;
 
   /**
-   * Optional: Pre-hydrated round outputs for resume functionality.
-   */
-  hydratedOutputs?: RoundOutput[];
-
-  /**
    * Optional: Parent log stage for creating round stages.
    * If not provided, a new stage will be created.
    */
@@ -118,7 +113,6 @@ export async function runReflectionFlow<C = unknown>(
     setAbortController,
     getClient,
     getUsageRecorder = () => async () => {},
-    hydratedOutputs,
     parentStage,
   } = input;
 
@@ -159,13 +153,10 @@ export async function runReflectionFlow<C = unknown>(
     // Track if we created the stage internally
     createdRunStage = !parentStage;
 
-    // Determine starting round from hydrated outputs (for resume)
-    const hadHydratedRounds = hydratedOutputs && hydratedOutputs.length > 0;
-    const startingRound = hadHydratedRounds ? hydratedOutputs.length : 0;
-
-    // Create initial round stage for UI grouping (r0, r1, etc.)
-    const roundStageName = `r${startingRound}`;
-    const roundStage = await executionContext.logger.stage(roundStageName, {
+    // Always start from round 0, even on resume.
+    // Completed rounds are "replayed" via initializeOutputAndPrefill()
+    // which reads existing output files instead of calling the model.
+    const roundStage = await executionContext.logger.stage('r0', {
       parent: runStage,
     });
 
@@ -174,7 +165,6 @@ export async function runReflectionFlow<C = unknown>(
       state: createInitialReflectionState(
         flowContext.totalRounds,
         AgentWorkspaceState.create(),
-        hadHydratedRounds ? hydratedOutputs : undefined,
       ),
       retryState: createRetryState(),
       runStage,

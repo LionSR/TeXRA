@@ -17,4 +17,4 @@ export {
   type SerializedError,
 } from './stringCore';
 export { contentToString, isObject, type MessageContent } from './typeGuards';
-export { sleep, sleepWithAbort } from './async';
+export { debounce, sleep, sleepWithAbort } from './async';

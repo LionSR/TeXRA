@@ -532,6 +532,26 @@ export function isContextWindowError(err: unknown): boolean {
 }
 
 /**
+ * Checks if an error is the OpenAI SDK "missing finish_reason" error.
+ * This error occurs when the streaming response doesn't include a finish_reason
+ * in the final chunk, which can happen with:
+ * - DeepSeek reasoning models
+ * - Other OpenAI-compatible APIs that don't properly send finish_reason
+ *
+ * When detected, the streaming aggregator should be used to build a fallback
+ * response with a default finish_reason of 'stop'.
+ *
+ * @see https://github.com/openai/openai-node/issues/499
+ * @see https://github.com/openai/openai-node/issues/1206
+ */
+export function isMissingFinishReasonError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  return err.message.includes('missing finish_reason');
+}
+
+/**
  * Context for building error log data.
  */
 export interface ErrorLogContext {

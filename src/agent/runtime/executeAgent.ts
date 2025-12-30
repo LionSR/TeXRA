@@ -59,6 +59,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { agentConfigToTaskState } from '@utils/config';
@@ -112,9 +113,7 @@ export async function getAgentPath(
   const result = resolveAgent(agentIdentifier, options?.preferMultiple);
   if (result) return result;
 
-  const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-    'texra.getWebviewView',
-  );
+  const view = await getMainWebview(CHANNEL);
   view?.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
     agentName: agentIdentifier,
