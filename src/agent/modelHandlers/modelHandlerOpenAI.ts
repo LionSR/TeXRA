@@ -890,23 +890,10 @@ export class ModelHandlerOpenAI<
       ],
     });
 
-    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content.at(-1);
-        if (lastPart && 'text' in lastPart) {
-          lastPart.text = fileContent;
-        }
-      } else if (lastMessage) {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
-      }
+      this.logger.debug(
+        'End tag detected - skipping model call (response already added above)',
+      );
       endTurn = true;
       return [endTurn, messages];
     }
