@@ -101,19 +101,26 @@ export interface ReflectionFlowShared {
 /**
  * Create initial state for a reflection flow run.
  *
+ * On resume, we always start from round 0 and "replay" all rounds.
+ * Completed rounds are detected by initializeOutputAndPrefill() which
+ * checks if output file exists - if so, it reads the existing response
+ * instead of calling the model, allowing conversation to build correctly.
+ *
  * @param totalRounds - Total rounds to execute
  * @param initialWorkspaceState - Initial workspace state
- * @param hydratedOutputs - Optional pre-hydrated round outputs from resume
+ * @param hydratedOutputs - Optional pre-hydrated round outputs from resume (for latexdiff)
  */
 export function createInitialReflectionState(
   totalRounds: number,
   initialWorkspaceState: AgentWorkspaceState,
   hydratedOutputs?: RoundOutput[],
 ): ReflectionFlowState {
-  // Calculate starting round from hydrated outputs (resume from next round)
-  const startingRound = hydratedOutputs?.length ?? 0;
+  // Always start from round 0, even on resume.
+  // Completed rounds are "replayed" - their output files already exist,
+  // so initializeOutputAndPrefill() will read them instead of calling the model.
+  // This ensures conversation is built correctly through the normal flow.
   return {
-    currentRound: startingRound,
+    currentRound: 0,
     totalRounds,
     workspaceState: initialWorkspaceState,
     context: null,
