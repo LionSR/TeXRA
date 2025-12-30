@@ -20,6 +20,7 @@ import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
+import { debounce } from '@common/debounce.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -161,13 +162,13 @@ export class FileInputManager extends BaseUIManager {
         prefix: 'addOpened',
         suffix: 'FilesButton',
         command: MAIN_VIEW_COMMANDS.ADD_OPENED_FILES,
-        types: baseTypes,
+        types: [...baseTypes, 'media'],
       },
       {
         prefix: 'current',
         suffix: 'FileButton',
         command: MAIN_VIEW_COMMANDS.GET_CURRENT_FILE,
-        types: [...baseTypes, 'base', 'edited'],
+        types: [...baseTypes, 'media', 'base', 'edited'],
       },
     ];
 
@@ -345,7 +346,9 @@ export class FileInputManager extends BaseUIManager {
         this.addListener(id, 'change', () => this.state.save());
       }
     });
-    this.addListener('instruction', 'input', () => this.state.save());
+    // Debounce instruction input to avoid saving on every keystroke
+    const debouncedSave = debounce(() => this.state.save(), 500);
+    this.addListener('instruction', 'input', debouncedSave);
   }
 
   setup() {

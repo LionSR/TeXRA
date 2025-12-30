@@ -1,6 +1,7 @@
 // Local imports - webview
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
+import { debounce } from '@common/debounce.js';
 import {
   awaitTextareaUpgrade,
   insertTextAtCursor,
@@ -29,9 +30,9 @@ export class InstructionManager {
         return;
       }
 
-      target.addEventListener('input', () => {
-        this.state?.save();
-      });
+      // Debounce state saves to avoid saving on every keystroke
+      const debouncedSave = debounce(() => this.state?.save(), 500);
+      target.addEventListener('input', debouncedSave);
 
       setupPasteListener(
         target,

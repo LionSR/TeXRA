@@ -46,6 +46,7 @@
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
+          "@common/debounce.js": "${debounceUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "@common/constants/agentTypes.js": "${agentTypesUri}",
@@ -347,6 +348,12 @@
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
+                  id="currentMediaFileButton"
+                  icon="file-code"
+                  label="Set current file as media"
+                  title="Set current file as media"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
                   id="emptyMediaFileButton"
                   icon="close"
                   label="Clear media file"
@@ -358,6 +365,13 @@
                   title="Show or hide additional media files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
+                <vscode-toolbar-button
+                  id="addOpenedMediaFilesButton"
+                  class="file-action-button"
+                  icon="folder-opened"
+                  label="Add opened files as media"
+                  title="Add opened files as media"
+                ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   id="emptyMediaFilesButton"
                   class="file-action-button"
