@@ -279,7 +279,21 @@ export abstract class ModelHandler<
       throw new Error(
         'Unable to authenticate with server. Please sign out and sign back in, or switch to "Use My Own Keys" mode.',
       );
-    } else if (useIncludedAccess) {
+    }
+
+    // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
+    // Allow these even in "Use Included Access" mode since included access is never possible.
+    if (this.config.openRouterOnly) {
+      try {
+        return await SecretManager.getApiKey('openRouter');
+      } catch (err) {
+        throw new Error(
+          `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
+        );
+      }
+    }
+
+    if (useIncludedAccess) {
       // User selected "Use Included Access" but model is not available for their tier
       // Don't fall back to personal API keys - throw an error to match dropdown behavior
       this.logger.debug(
