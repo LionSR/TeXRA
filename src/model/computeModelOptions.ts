@@ -37,7 +37,11 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * @returns Whether the model is available via personal keys
  */
 async function checkPersonalKeyAvailability(
-  config: { openRouterOnly?: boolean; openrouterFullName?: string; provider: string },
+  config: {
+    openRouterOnly?: boolean;
+    openrouterFullName?: string;
+    provider: string;
+  },
   hasOpenRouter: boolean,
 ): Promise<boolean> {
   // openRouterOnly models can ONLY use OpenRouter
@@ -50,7 +54,9 @@ async function checkPersonalKeyAvailability(
   // Check provider-specific API key
   if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
     try {
-      const hasProviderKey = await SecretManager.apiKeyExists(provider as ApiProvider);
+      const hasProviderKey = await SecretManager.apiKeyExists(
+        provider as ApiProvider,
+      );
       if (hasProviderKey) {
         return true;
       }
@@ -78,6 +84,10 @@ async function checkPersonalKeyAvailability(
  *
  * When "Use Included Access" is enabled, only server-side availability is checked.
  * When "Use My Own Keys" is selected, personal API keys are checked as fallback.
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);

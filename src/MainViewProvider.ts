@@ -2,17 +2,24 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { refresh } from '@agent/index';
+import { refresh, computeAgentOptions } from '@agent/index';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
-import { watchConfig, getConfig } from '@utils/config';
+import {
+  watchConfig,
+  getConfig,
+  DEBOUNCE_OPTIONS_MS,
+  DEBOUNCE_STATE_SAVE_MS,
+} from '@utils/config';
+import { debounce } from '@utils/core';
 import { consumePendingState } from '@common/state';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 import { getServerSideKeyService } from '@/auth/serverKeys';
+import { computeModelOptions } from '@model/computeModelOptions';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
@@ -30,6 +37,16 @@ export class MainViewProvider
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
+
+  // Debounced refresh methods using perfect-debounce
+  private debouncedRefreshAgentOptions = debounce(
+    () => this.refreshAgentOptions(),
+    DEBOUNCE_OPTIONS_MS,
+  );
+  private debouncedRefreshModelOptions = debounce(
+    () => this.refreshModelOptions(),
+    DEBOUNCE_OPTIONS_MS,
+  );
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
@@ -65,12 +82,18 @@ export class MainViewProvider
   }
 
   private setupConfigurationWatcher() {
-    // Watch for configuration changes that affect agent/model options
-    watchConfig(
-      this.context,
-      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
-      () => this.refreshOptionsAndView(),
+    // Watch for agent configuration changes - only refresh agent options
+    watchConfig(this.context, ['texra.agents', 'texra.toolUseAgents'], () =>
+      this.debouncedRefreshAgentOptions(),
     );
+
+    // Watch for model configuration changes - only refresh model options
+    watchConfig(this.context, ['texra.models'], () =>
+      this.debouncedRefreshModelOptions(),
+    );
+
+    // Watch for file configuration changes - only refresh file list
+    watchConfig(this.context, ['texra.files'], () => this.refreshFiles());
   }
 
   private setupAuthListener() {
@@ -93,8 +116,8 @@ export class MainViewProvider
   }
 
   /**
-   * Refresh agent options and update the webview.
-   * Called when agents change (file watcher) or auth state changes (login/logout).
+   * Refresh both agent and model options.
+   * Called when auth state changes (login/logout affects both).
    */
   async refreshOptionsAndView() {
     if (!this._view) {
@@ -110,6 +133,39 @@ export class MainViewProvider
       { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
       this._view as vscode.WebviewView,
     );
+  }
+
+  /**
+   * Refresh agent options only.
+   * Called when agent config changes (texra.agents, texra.toolUseAgents).
+   */
+  async refreshAgentOptions() {
+    if (!this._view) {
+      return;
+    }
+    // Refresh the agent index to pick up configuration changes
+    await refresh();
+
+    const agentOptions = await computeAgentOptions();
+    this._view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      options: agentOptions,
+    });
+  }
+
+  /**
+   * Refresh model options only.
+   * Called when model config changes (texra.models).
+   */
+  async refreshModelOptions() {
+    if (!this._view) {
+      return;
+    }
+    const modelOptions = await computeModelOptions();
+    this._view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+      options: modelOptions,
+    });
   }
 
   private setupFileWatcher() {
@@ -147,29 +203,22 @@ export class MainViewProvider
       return agentDirPaths.some((dir) => filePath.startsWith(dir));
     };
 
-    // Debounce agent refresh to avoid rapid reloads during file saves
-    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
-    const debouncedRefresh = (uri: vscode.Uri) => {
-      // Only refresh if the changed file is in an agent directory
-      if (!isAgentFile(uri)) {
-        return;
-      }
+    // Debounced refresh - updates agent dirs and options
+    const debouncedAgentFileRefresh = debounce(async () => {
+      await updateAgentDirs();
+      await this.refreshAgentOptions();
+    }, DEBOUNCE_STATE_SAVE_MS);
 
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
+    // Filter and debounce agent file changes
+    const onAgentFileChange = (uri: vscode.Uri) => {
+      if (isAgentFile(uri)) {
+        void debouncedAgentFileRefresh();
       }
-      refreshTimeout = setTimeout(() => {
-        // Also update agent dirs in case they changed
-        void updateAgentDirs();
-        // refreshOptionsAndView already calls refresh()
-        void this.refreshOptionsAndView();
-        refreshTimeout = undefined;
-      }, 500);
     };
 
-    this.agentWatcher.onDidCreate(debouncedRefresh);
-    this.agentWatcher.onDidChange(debouncedRefresh);
-    this.agentWatcher.onDidDelete(debouncedRefresh);
+    this.agentWatcher.onDidCreate(onAgentFileChange);
+    this.agentWatcher.onDidChange(onAgentFileChange);
+    this.agentWatcher.onDidDelete(onAgentFileChange);
 
     this.context.subscriptions.push(this.agentWatcher);
   }
