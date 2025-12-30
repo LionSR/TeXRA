@@ -185,7 +185,11 @@ function createOutputFileLocationGetter(
  * Implements IInterruptible for unified interrupt handling via registry.
  */
 export class ReflectionFlowContext<C = unknown>
-  extends BaseFlowContext<ReflectionFlowContextInit<C>, ReflectionServices<C>, C>
+  extends BaseFlowContext<
+    ReflectionFlowContextInit<C>,
+    ReflectionServices<C>,
+    C
+  >
   implements IInterruptible
 {
   // Services created internally

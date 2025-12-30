@@ -84,8 +84,7 @@ export interface BaseCycleServices {
  * Access via: `services.logger`, `services.modelHandler`, etc.
  */
 export interface ResponseCycleServices<C = unknown>
-  extends BaseCycleServices,
-    Readonly<ResponseCycleOptions<C>> {}
+  extends BaseCycleServices, Readonly<ResponseCycleOptions<C>> {}
 
 /**
  * Services for tool-use cycle flows.
@@ -94,8 +93,7 @@ export interface ResponseCycleServices<C = unknown>
  * Access via: `services.logger`, `services.toolRegistry`, etc.
  */
 export interface ToolUseCycleServices<C = unknown>
-  extends BaseCycleServices,
-    Readonly<ToolUseCycleOptions<C>> {}
+  extends BaseCycleServices, Readonly<ToolUseCycleOptions<C>> {}
 
 /**
  * Generic params type for cycle nodes.
