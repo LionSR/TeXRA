@@ -75,7 +75,8 @@ export class PersistedFlow<
     this.kv = kv;
     // Prefer executionId from ExecutionKVStore if available
     this.runId =
-      runId ?? ('getExecutionId' in kv ? kv.getExecutionId() : crypto.randomUUID());
+      runId ??
+      ('getExecutionId' in kv ? kv.getExecutionId() : crypto.randomUUID());
   }
 
   async run(shared: S): Promise<Action | undefined> {

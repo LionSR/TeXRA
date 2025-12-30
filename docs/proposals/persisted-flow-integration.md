@@ -32,6 +32,7 @@ Replace the current snapshot/resume system (ToolUseSnapshotStore, reflection hyd
 ### Why PersistedFlow
 
 The koala-code-reader PersistedFlow pattern provides:
+
 - **Automatic persistence** after each node (no manual save points)
 - **Graph-based resume** - navigate to current position via action history, no re-execution
 - **Clean separation** - services (runtime) vs state (persisted)
@@ -83,34 +84,37 @@ export interface ExecutionStorageRegistry {
 ### 2. Services Never Persisted
 
 Services are runtime dependencies injected via `setServices()`:
+
 ```typescript
 // Runtime-only, never in FlowRecord
 interface FlowServices {
   logger: AgentLogger;
   modelHandler: ModelHandler;
   toolRegistry: IToolRegistry;
-  runStage: AgentLogStage;  // UI logging state
+  runStage: AgentLogStage; // UI logging state
 }
 ```
 
 ### 3. State is Serializable and Minimal
 
 Only persist what's needed to resume:
+
 ```typescript
 interface PersistedState {
-  messages: Message[];           // Full conversation (unit of persistence)
-  workspaceSnapshot: {           // AgentWorkspaceState.toSnapshot()
+  messages: Message[]; // Full conversation (unit of persistence)
+  workspaceSnapshot: {
+    // AgentWorkspaceState.toSnapshot()
     assembly: ResponseAssemblySnapshot;
     media: { files: FileLocation[] };
-    reasoning: ReasoningCacheSnapshot;  // PRESERVES thinkingBlocks!
+    reasoning: ReasoningCacheSnapshot; // PRESERVES thinkingBlocks!
     document: { texcountStats: string | null };
-    interactions: { readFiles: string[], edits: EditEntry[] };
+    interactions: { readFiles: string[]; edits: EditEntry[] };
     todos: { todos: TodoItem[] };
     // serverToolContent: OMITTED - ephemeral
   };
   retryState: {
     consecutiveErrors: number;
-    lastError: SerializedError | null;  // Enable resume detection
+    lastError: SerializedError | null; // Enable resume detection
     lastAttemptedAt?: string;
   };
 }
@@ -120,25 +124,25 @@ interface PersistedState {
 
 Remove from persistence (calculate on resume):
 
-| Field | Derivation |
-|-------|------------|
-| `currentRound` | `nodes.length` in FlowRecord |
-| `roundStates[]` | Computed from `nodes[]` history |
-| `roundOutputs[]` | Computed from `nodes[]` history |
-| `contentBlockIndex` | Reset to 0 each node |
-| `isComplete` | Terminal node reached |
-| `continueRounds` / `endTurn` | Check last node action |
-| `lastLLMCallTokens` | Recalculated each call |
+| Field                        | Derivation                      |
+| ---------------------------- | ------------------------------- |
+| `currentRound`               | `nodes.length` in FlowRecord    |
+| `roundStates[]`              | Computed from `nodes[]` history |
+| `roundOutputs[]`             | Computed from `nodes[]` history |
+| `contentBlockIndex`          | Reset to 0 each node            |
+| `isComplete`                 | Terminal node reached           |
+| `continueRounds` / `endTurn` | Check last node action          |
+| `lastLLMCallTokens`          | Recalculated each call          |
 
 ### 5. FlowRecord is Single Source of Truth
 
 ```typescript
 interface FlowRecord {
   flowName: 'reflection' | 'toolUse';
-  params: Record<string, unknown>;  // Immutable flow config
-  shared: PersistedState;           // Mutable state (snapshot format)
+  params: Record<string, unknown>; // Immutable flow config
+  shared: PersistedState; // Mutable state (snapshot format)
   createdAt: string;
-  nodes: NodeRecord[];              // Action history for resume navigation
+  nodes: NodeRecord[]; // Action history for resume navigation
 }
 ```
 
@@ -208,8 +212,11 @@ PersistedFlow **does NOT handle retries itself**. Separation of concerns:
 ```
 
 **Resume detection logic**:
+
 ```typescript
-function decideRetryOnResume(persisted: PersistedRetryState | undefined): RetryDecision {
+function decideRetryOnResume(
+  persisted: PersistedRetryState | undefined,
+): RetryDecision {
   if (!persisted?.lastError) {
     return { shouldRetry: false, reason: 'clean-pause' };
   }
@@ -226,6 +233,7 @@ function decideRetryOnResume(persisted: PersistedRetryState | undefined): RetryD
 ### AgentWorkspaceState Serialization
 
 **Serializable components** (via existing `toSnapshot()`/`fromSnapshot()`):
+
 - `assembly` - ResponseAssemblyState
 - `media` - MediaAttachmentState (converts Set to array)
 - `reasoning` - ReasoningCacheState (**preserves thinkingBlocks!**)
@@ -234,6 +242,7 @@ function decideRetryOnResume(persisted: PersistedRetryState | undefined): RetryD
 - `todos` - TodoState
 
 **Ephemeral (never persist)**:
+
 - `serverToolContent` - ServerToolContentState (active tool streams, must restart)
 
 **structuredClone() safety**: PersistedFlow uses `structuredClone()`. Must persist **snapshot format** (plain JSON), not class instances with Map/Set.
@@ -241,18 +250,20 @@ function decideRetryOnResume(persisted: PersistedRetryState | undefined): RetryD
 ### Thinking Block Preservation
 
 Current problem at `runReflectionFlow.ts:167`:
+
 ```typescript
 // Current: Thinking blocks LOST!
 shared = {
   state: createInitialReflectionState(
     flowContext.totalRounds,
-    AgentWorkspaceState.create(),  // ← Fresh instance
+    AgentWorkspaceState.create(), // ← Fresh instance
   ),
   // ...
 };
 ```
 
 After PersistedFlow integration:
+
 ```typescript
 // New: Thinking blocks preserved via snapshot
 const kv = registry.getStore(executionId);
@@ -260,7 +271,7 @@ const flowRecord = await kv.read<FlowRecord>('flow');
 
 let workspaceSnapshot = AgentWorkspaceSnapshot.create();
 if (flowRecord?.shared?.workspaceSnapshot) {
-  workspaceSnapshot = flowRecord.shared.workspaceSnapshot;  // ← Preserved!
+  workspaceSnapshot = flowRecord.shared.workspaceSnapshot; // ← Preserved!
 }
 
 const shared = {
@@ -302,8 +313,9 @@ class InMemoryKVStore implements ExecutionKVStore {
   }
 
   async listKeys(prefix?: string): Promise<string[]> {
-    return Array.from(this.store.keys())
-      .filter(k => !prefix || k.startsWith(prefix));
+    return Array.from(this.store.keys()).filter(
+      (k) => !prefix || k.startsWith(prefix),
+    );
   }
 
   async clear(): Promise<void> {
@@ -317,21 +329,25 @@ class InMemoryKVStore implements ExecutionKVStore {
 ```
 
 **Testing approach**:
+
 - Unit tests: InMemoryKVStore (no VS Code dependencies)
 - Integration tests: Temp directory with real file I/O
 - No mocking at VS Code layer - mock at ExecutionKVStore interface
 
 ## Migration Path
 
-### Phase 1: Foundation (No Behavior Change)
+### Phase 1: Foundation (No Behavior Change) ✅ COMPLETE
+
 - [x] Copy `persisted-flow.ts` from koala-code-reader
 - [x] Fix `setServices` bug
-- [ ] Create `ExecutionKVStore` interface
-- [ ] Create `ExecutionStorageRegistry` implementation
-- [ ] Add `InMemoryKVStore` for testing
-- [ ] Write tests for PersistedFlow with InMemoryKVStore
+- [x] Create `ExecutionKVStore` interface (`src/agent/storage/ExecutionKVStore.ts`)
+- [x] Create `ExecutionStorageRegistry` implementation
+- [x] Add `InMemoryKVStore` for testing (pure Node.js, no VS Code deps)
+- [x] Update PersistedFlow to use `FlowStore` (union of KVStore | ExecutionKVStore)
+- [ ] Write tests for PersistedFlow with InMemoryKVStore (VS Code test limitations)
 
 ### Phase 2: Integrate with ReflectionFlow
+
 - [ ] Create `ReflectionPersistedFlow` wrapper
 - [ ] Persist workspace snapshot (preserves thinking blocks)
 - [ ] Add retry state to FlowRecord.shared
@@ -339,12 +355,14 @@ class InMemoryKVStore implements ExecutionKVStore {
 - [ ] Remove hydration code paths
 
 ### Phase 3: Integrate with ToolUseFlow
+
 - [ ] Create `ToolUsePersistedFlow` wrapper
 - [ ] Migrate from ToolUseSnapshotStore
 - [ ] Unify resume behavior with ReflectionFlow
 - [ ] Remove ToolUseSessionPersistence
 
 ### Phase 4: Cleanup (~1000+ lines)
+
 - [ ] Remove `ToolUseSnapshotStore.ts`
 - [ ] Remove `ToolUseSessionPersistence.ts`
 - [ ] Remove `ToolUseSessionManager.ts` snapshot code
@@ -359,59 +377,65 @@ class InMemoryKVStore implements ExecutionKVStore {
 Code that becomes unnecessary with PersistedFlow:
 
 ### Tool-Use Snapshot System (Remove Entirely)
-| File | Lines | Reason |
-|------|-------|--------|
-| `ToolUseSnapshotStore.ts` | ~200 | Replaced by ExecutionKVStore |
-| `ToolUseSessionPersistence.ts` | ~150 | Replaced by PersistedFlow |
-| `ToolUseSessionManager.ts` (snapshot code) | ~70 | Replaced by FlowRecord |
+
+| File                                       | Lines | Reason                       |
+| ------------------------------------------ | ----- | ---------------------------- |
+| `ToolUseSnapshotStore.ts`                  | ~200  | Replaced by ExecutionKVStore |
+| `ToolUseSessionPersistence.ts`             | ~150  | Replaced by PersistedFlow    |
+| `ToolUseSessionManager.ts` (snapshot code) | ~70   | Replaced by FlowRecord       |
 
 ### Snapshot Serialization (Simplify)
-| File | Lines | Reason |
-|------|-------|--------|
-| `AgentSharedStore.ts` (fromSnapshot/toSnapshot) | ~50 | Use FlowRecord.shared directly |
-| `AgentState.ts` (fromSnapshot/toSnapshot) | ~50 | Derive from nodes[] |
-| `AgentWorkspaceState.ts` | Keep | Still needed for workspace snapshot |
+
+| File                                            | Lines | Reason                              |
+| ----------------------------------------------- | ----- | ----------------------------------- |
+| `AgentSharedStore.ts` (fromSnapshot/toSnapshot) | ~50   | Use FlowRecord.shared directly      |
+| `AgentState.ts` (fromSnapshot/toSnapshot)       | ~50   | Derive from nodes[]                 |
+| `AgentWorkspaceState.ts`                        | Keep  | Still needed for workspace snapshot |
 
 ### Round Replay Logic (Remove)
-| File | Lines | Reason |
-|------|-------|--------|
-| `ReflectionFlowState.ts` (replay comments) | ~30 | PersistedFlow handles resume |
-| `ResponseCycleCompositionNode.ts` (initializeOutputAndPrefill) | ~50 | No more hydration |
-| Model handlers (initializeOutputAndPrefill) | ~100/each | No more prefill |
+
+| File                                                           | Lines     | Reason                       |
+| -------------------------------------------------------------- | --------- | ---------------------------- |
+| `ReflectionFlowState.ts` (replay comments)                     | ~30       | PersistedFlow handles resume |
+| `ResponseCycleCompositionNode.ts` (initializeOutputAndPrefill) | ~50       | No more hydration            |
+| Model handlers (initializeOutputAndPrefill)                    | ~100/each | No more prefill              |
 
 **Total**: ~1000+ lines can be removed or simplified
 
 ## State Audit Summary
 
 ### Must Persist
-| Field | Reason |
-|-------|--------|
-| `messages[]` | Full conversation history - unit of persistence |
-| `workspaceSnapshot.reasoning` | Thinking blocks preservation |
-| `workspaceSnapshot.assembly` | Model outputs for UI |
-| `workspaceSnapshot.*` (other) | Cross-round context |
-| `retryState.lastError` | Resume detection (crash vs pause) |
+
+| Field                         | Reason                                          |
+| ----------------------------- | ----------------------------------------------- |
+| `messages[]`                  | Full conversation history - unit of persistence |
+| `workspaceSnapshot.reasoning` | Thinking blocks preservation                    |
+| `workspaceSnapshot.assembly`  | Model outputs for UI                            |
+| `workspaceSnapshot.*` (other) | Cross-round context                             |
+| `retryState.lastError`        | Resume detection (crash vs pause)               |
 
 ### Can Derive (Don't Persist)
-| Field | Derivation |
-|-------|------------|
-| `currentRound` | `nodes.length` |
-| `roundStates[]` | Computed from `nodes[]` |
-| `roundOutputs[]` | Computed from `nodes[]` |
-| `roundIndex` | Position in `nodes[]` |
-| `continueRounds` | Terminal node detection |
-| `endTurn` | Last node action |
-| `contentBlockIndex` | Reset to 0 each node |
-| `isComplete` | Terminal node reached |
-| `lastLLMCallTokens` | Recalculated each call |
+
+| Field               | Derivation              |
+| ------------------- | ----------------------- |
+| `currentRound`      | `nodes.length`          |
+| `roundStates[]`     | Computed from `nodes[]` |
+| `roundOutputs[]`    | Computed from `nodes[]` |
+| `roundIndex`        | Position in `nodes[]`   |
+| `continueRounds`    | Terminal node detection |
+| `endTurn`           | Last node action        |
+| `contentBlockIndex` | Reset to 0 each node    |
+| `isComplete`        | Terminal node reached   |
+| `lastLLMCallTokens` | Recalculated each call  |
 
 ### Ephemeral (Never Persist)
-| Field | Reason |
-|-------|--------|
-| `serverToolContent` | Active tool streams, must restart |
-| `logger`, `modelHandler` | Runtime services |
-| `runStage`, `roundStage` | UI logging state |
-| `abortSignal` | Request-scoped |
+
+| Field                    | Reason                            |
+| ------------------------ | --------------------------------- |
+| `serverToolContent`      | Active tool streams, must restart |
+| `logger`, `modelHandler` | Runtime services                  |
+| `runStage`, `roundStage` | UI logging state                  |
+| `abortSignal`            | Request-scoped                    |
 
 ## Benefits
 
@@ -426,12 +450,12 @@ Code that becomes unnecessary with PersistedFlow:
 
 ## Risks & Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Migration complexity | Phased approach, feature flags |
-| Storage format changes | Version field in FlowRecord |
-| structuredClone limits | Persist snapshots (plain JSON), not class instances |
-| Performance (JSON I/O per node) | Profile first; batch writes if needed |
+| Risk                            | Mitigation                                          |
+| ------------------------------- | --------------------------------------------------- |
+| Migration complexity            | Phased approach, feature flags                      |
+| Storage format changes          | Version field in FlowRecord                         |
+| structuredClone limits          | Persist snapshots (plain JSON), not class instances |
+| Performance (JSON I/O per node) | Profile first; batch writes if needed               |
 
 ## Open Questions (Resolved)
 
@@ -439,6 +463,35 @@ Code that becomes unnecessary with PersistedFlow:
 2. **TTL/cleanup**: Match `texra.toolUse.persistence.ttlHours` (default 24h)
 3. **Concurrent flows**: Single flow per execution, use sub-flows for nesting
 4. **KVStore first-citizen**: Yes - ExecutionKVStore with automatic scoping
+
+## Progress Log
+
+### 2024-12-30: Phase 1 Complete
+
+**Completed:**
+
+- ✅ `ExecutionKVStore` interface created (`src/agent/storage/ExecutionKVStore.ts`)
+- ✅ `ExecutionStorageRegistry` implementation
+- ✅ `StorageFSKVStore` - VS Code storage backend
+- ✅ `InMemoryKVStore` - pure Node.js testing backend
+- ✅ `InMemoryRegistry` - test registry
+- ✅ PersistedFlow updated to use `FlowStore` (union type for backward compat)
+- ✅ Fixed dead code in `modelHandlerGoogleGenAI.ts` (placeholder params)
+
+**Analysis completed via subagents:**
+
+1. **Dead code audit**: 2 no-op methods fixed, unused params documented
+2. **ReflectionFlow integration plan**: Detailed code changes for `runReflectionFlow.ts`
+3. **Hydration code inventory**: ~1000+ lines identified for removal in phases
+4. **Test strategy**: InMemoryKVStore fully testable without VS Code
+
+**Key insight**: Existing test patterns (ReadTool, BashTool) show how to mock VS Code deps. InMemoryKVStore designed specifically for testing with zero VS Code dependencies.
+
+**Next steps:**
+
+- Write tests for InMemoryKVStore (easy - no VS Code deps)
+- Integrate PersistedFlow with ReflectionFlow (preserve thinking blocks)
+- Begin Phase 2 hydration code removal
 
 ## References
 
