@@ -1,4 +1,4 @@
-import { sleep, calculateBackoffDelay } from '@utils/core';
+import { sleep } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
@@ -206,11 +206,11 @@ class Node<
             return await this.execFallback(prepRes, e as Error);
           }
           if (this.wait > 0) {
-            // Use exponential backoff with optional jitter for graceful retries
-            const backoffMs = calculateBackoffDelay(this.currentRetry, {
-              baseDelayMs: this.wait * 1000,
-              jitter: this.useJitter ? 'full' : 'none',
-            });
+            // Exponential backoff: baseDelay * 2^attempt, capped at 30s
+            const baseDelayMs = this.wait * 1000;
+            const expDelay = Math.min(30000, baseDelayMs * Math.pow(2, this.currentRetry));
+            // Full jitter: random(0, expDelay) to prevent thundering herd
+            const backoffMs = this.useJitter ? Math.random() * expDelay : expDelay;
             await sleep(backoffMs);
           }
         }
