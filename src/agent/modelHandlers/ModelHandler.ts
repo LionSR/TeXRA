@@ -255,9 +255,16 @@ export abstract class ModelHandler<
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
    * which the relay Edge Function will use for authentication.
+   *
+   * When "Use Included Access" is enabled, only server-side keys are used - no fallback
+   * to personal API keys. This ensures runtime behavior matches dropdown availability.
+   *
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
+    const serverSideKeyService = getServerSideKeyService();
+    const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
+
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
       const accessToken = await SupabaseClient.getAccessToken();
@@ -267,10 +274,34 @@ export abstract class ModelHandler<
         );
         return accessToken;
       }
-      // This should not happen if shouldUseServerSideKeys returned true,
-      // but fall through to normal API key retrieval just in case
-      this.logger.warn(
-        'Server-side keys check passed but no access token available, falling back to local keys',
+      // No access token available - shouldUseServerSideKeys() returned true, meaning isEnabled()
+      // returned true. Don't fall back to personal keys - throw an actionable error.
+      throw new Error(
+        'Unable to authenticate with server. Please sign out and sign back in, or switch to "Use My Own Keys" mode.',
+      );
+    }
+
+    // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
+    // Allow these even in "Use Included Access" mode since included access is never possible.
+    if (this.config.openRouterOnly) {
+      try {
+        return await SecretManager.getApiKey('openRouter');
+      } catch (err) {
+        throw new Error(
+          `Model "${this.config.name}" requires an OpenRouter API key. Please set it using the "Set API Key" command.`,
+        );
+      }
+    }
+
+    if (useIncludedAccess) {
+      // User selected "Use Included Access" but model is not available for their tier
+      // Don't fall back to personal API keys - throw an error to match dropdown behavior
+      this.logger.debug(
+        `Model "${this.config.name}" not available for tier, useIncludedAccess=true`,
+      );
+      throw new Error(
+        `Model "${this.config.name}" is not available with your current subscription tier. ` +
+          `Switch to "Use My Own Keys" via the TeXRA Profile panel, or select a model included in your tier.`,
       );
     }
 
