@@ -917,6 +917,11 @@ export class ModelHandlerOpenAI<
     // Write file content to output file
     await flexibleFS.write(outputLocation, fileContent);
 
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push({
       role: 'assistant',
       content: [
@@ -927,23 +932,10 @@ export class ModelHandlerOpenAI<
       ],
     });
 
-    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content.at(-1);
-        if (lastPart && 'text' in lastPart) {
-          lastPart.text = fileContent;
-        }
-      } else if (lastMessage) {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
-      }
+      this.logger.debug(
+        'End tag detected - skipping model call (response already added above)',
+      );
       endTurn = true;
       return [endTurn, messages];
     }
@@ -951,9 +943,9 @@ export class ModelHandlerOpenAI<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    if (fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    } else {
+    // Note: workspace state already updated above (lines 885-886)
+    // Only need to handle case where prefill needs to be prepended
+    if (!fileContent.includes(prefill)) {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
         outputLocation,
@@ -961,8 +953,6 @@ export class ModelHandlerOpenAI<
       );
     }
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.lastResponse =
-      workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

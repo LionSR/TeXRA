@@ -1238,23 +1238,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     workspaceState.assembly.updateAccumulatedOutput(fileContent);
     workspaceState.assembly.updateLastResponse(fileContent);
 
-    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
-      // this is suspicious, because the two conflicts!!! we should check
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        const lastContent = lastMessage.content.at(-1);
-        if (lastContent && lastContent.type === 'text') {
-          lastContent.text = fileContent;
-        }
-      } else if (lastMessage) {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          } as ContentBlockParam,
-        ];
-      }
+      this.logger.debug(
+        'End tag detected - adding completed response and skipping model call',
+      );
+      // Add the completed assistant response to conversation
+      // This is critical for multi-round agents on resume - the conversation
+      // must include this round's response for subsequent rounds to have context
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: fileContent }],
+      });
 
       this.clearCacheControlTarget();
 
