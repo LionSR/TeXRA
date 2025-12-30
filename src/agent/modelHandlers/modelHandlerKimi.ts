@@ -1,5 +1,3 @@
-// (none needed)
-
 // Third-party imports
 import OpenAI from 'openai';
 
@@ -16,10 +14,6 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
-
-// Internal imports
-
-// Local file imports
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -156,10 +150,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         stream.on('chunk', onChunk);
 
         try {
-          const sdkFinalResponse = await stream.finalChatCompletion();
-
-          // Use aggregator to build the final response with all content
-          const finalResponse = streamingAggregator.finalize(sdkFinalResponse);
+          const finalResponse = await this.awaitFinalResponse(
+            stream,
+            streamingAggregator,
+          );
 
           const finalReasoning = this.processThinkingBlock(finalResponse);
           if (finalReasoning === null) {
