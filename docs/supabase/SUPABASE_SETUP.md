@@ -148,15 +148,30 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 
 1. In Supabase dashboard, go to **Authentication** → **URL Configuration**
 2. In the **Redirect URLs** section, add these URLs:
+
+   **Desktop IDE schemes** (custom protocols):
    ```
    vscode://texra-ai.texra/auth-callback
    vscode-insiders://texra-ai.texra/auth-callback
    cursor://texra-ai.texra/auth-callback
    windsurf://texra-ai.texra/auth-callback
    ```
+
+   **Web/Remote environments** (HTTPS - use wildcards):
+   ```
+   https://*.github.dev/**
+   https://*.gitpod.io/**
+   https://vscode.dev/**
+   https://*.vscode.dev/**
+   ```
+
 3. Click "Save"
 
-**Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to the IDE using a custom URI scheme. Without adding these URLs to the allowed list, Supabase will show an error "The redirect_uri is not associated with this application".
+**Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to the IDE. The extension uses `vscode.env.asExternalUri()` which returns:
+- Custom URI schemes for desktop (e.g., `cursor://...`)
+- HTTPS URLs for web environments (e.g., `https://abc.github.dev/...`)
+
+Without adding these URLs to the allowed list, Supabase will show an error "The redirect_uri is not associated with this application".
 
 **Supported IDEs and their URI schemes**:
 
@@ -164,12 +179,16 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 - **VS Code Insiders**: `vscode-insiders://`
 - **Cursor**: `cursor://`
 - **Windsurf**: `windsurf://`
+- **GitHub Codespaces**: `https://*.github.dev/`
+- **Gitpod**: `https://*.gitpod.io/`
+- **vscode.dev**: `https://vscode.dev/`
 
 **Common mistakes**:
 
 - ❌ Using `vscode://LionSR.texra/auth-callback` (wrong extension ID)
 - ❌ Only adding `localhost:3000` (this is for web apps, not VS Code extensions)
 - ❌ Forgetting to add all IDE variants (vscode, vscode-insiders, cursor, windsurf)
+- ❌ Forgetting web environment wildcards (Codespaces, Gitpod, vscode.dev)
 
 ---
 
