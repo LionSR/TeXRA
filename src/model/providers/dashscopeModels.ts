@@ -17,18 +17,18 @@ const DASHSCOPE_DEFAULT_CAPABILITIES: ModelCapabilities = {
 export const DASHSCOPE_MODELS: Record<string, ModelConfig> = {
   qwen3max: {
     name: 'qwen3max',
-    fullName: 'qwen-max-latest',
+    fullName: 'qwen3-max',
     openrouterFullName: 'qwen/qwen-max',
     provider: ModelProvider.DASHSCOPE,
-    maxOutputTokens: 16384, // OpenRouter context limit is 32768, leaving room for input
-    contextWindow: 32768, // OpenRouter's context limit (native DashScope is 262144)
-    inputPrice: 1.6,
-    outputPrice: 6.4,
+    maxOutputTokens: 65536,
+    contextWindow: 262144,
+    inputPrice: 1.2,
+    outputPrice: 6,
     capabilities: {
       ...DASHSCOPE_DEFAULT_CAPABILITIES,
       supportsVision: false,
     } satisfies ModelCapabilities,
-    openRouterOnly: true,
+    openRouterOnly: false,
   },
   qwenplus: {
     name: 'qwenplus',
