@@ -72,5 +72,9 @@ export function createBaseFileLocations(
 ): WorkspaceFileLocation[] {
   const files =
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
-  return files.map((f) => createWorkspaceLocation(WorkspaceFS.fullPath(f), f));
+  return files.map((f) => {
+    const absolutePath = WorkspaceFS.fullPath(f);
+    const relativePath = WorkspaceFS.relativePath(absolutePath);
+    return createWorkspaceLocation(absolutePath, relativePath);
+  });
 }
