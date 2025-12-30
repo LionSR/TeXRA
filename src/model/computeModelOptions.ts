@@ -29,6 +29,50 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 }
 
 /**
+ * Check if a model is available via personal API keys.
+ * Called only when server-side access is not available and user is in "Use My Own Keys" mode.
+ *
+ * @param config - Model configuration
+ * @param hasOpenRouter - Whether user has OpenRouter API key
+ * @returns Whether the model is available via personal keys
+ */
+async function checkPersonalKeyAvailability(
+  config: {
+    openRouterOnly?: boolean;
+    openrouterFullName?: string;
+    provider: string;
+  },
+  hasOpenRouter: boolean,
+): Promise<boolean> {
+  // openRouterOnly models can ONLY use OpenRouter
+  if (config.openRouterOnly) {
+    return hasOpenRouter;
+  }
+
+  const provider = config.provider;
+
+  // Check provider-specific API key
+  if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+    try {
+      const hasProviderKey = await SecretManager.apiKeyExists(
+        provider as ApiProvider,
+      );
+      if (hasProviderKey) {
+        return true;
+      }
+      // Check OpenRouter as fallback for models that support it
+      return !!(config.openrouterFullName && hasOpenRouter);
+    } catch (error) {
+      console.warn(`Failed to check API key for ${provider}:`, error);
+      return false;
+    }
+  }
+
+  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
+  return true;
+}
+
+/**
  * Compute model <vscode-option> tags based on available API keys.
  * Models missing a required key receive data-requires-key="true" so the
  * webview can handle API key setup prompts and display a red ✗ indicator.
@@ -37,6 +81,13 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * - Ultra tier: All models available via relay (if provider enabled)
  * - Max tier: Only specific cheaper models available via relay (configured remotely)
  * - Free tier: Must bring own API keys
+ *
+ * When "Use Included Access" is enabled, only server-side availability is checked.
+ * When "Use My Own Keys" is selected, personal API keys are checked as fallback.
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);
@@ -47,6 +98,9 @@ export async function computeModelOptions(): Promise<string> {
   const serverSideKeyService = getServerSideKeyService();
   const hasAnyServerSideAccess =
     await serverSideKeyService.canUseServerSideKeys();
+
+  // Check if user wants to use included access (no personal key fallback)
+  const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
   // Build option tags for each model
   // Server-side checks are sync (caches primed above), personal key checks are async
@@ -60,32 +114,26 @@ export async function computeModelOptions(): Promise<string> {
       const provider = config.provider;
 
       // Determine availability - server-side checks are sync after priming
+      // Note: openRouterOnly models can't use server-side relay (they need OpenRouter API)
       const hasServerSideForModel =
         hasAnyServerSideAccess &&
+        !config.openRouterOnly &&
         serverSideKeyService.isProviderOnServer(provider) &&
         serverSideKeyService.canUseModelSync(model);
 
       let available = hasServerSideForModel;
 
-      // Only check personal keys if not available via server-side
-      if (!available) {
-        if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
-          try {
-            available = await SecretManager.apiKeyExists(
-              provider as ApiProvider,
-            );
-          } catch (error) {
-            console.warn(`Failed to check API key for ${provider}:`, error);
-          }
-        } else {
-          // Providers not in API_PROVIDERS don't require keys (e.g., OTHERS, COPILOT)
-          available = true;
-        }
+      // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
+      // Allow these even in "Use Included Access" mode since included access is never possible.
+      if (!available && config.openRouterOnly) {
+        available = hasOpenRouter;
+      }
 
-        // Check OpenRouter as fallback
-        if (!available && config.openrouterFullName && hasOpenRouter) {
-          available = true;
-        }
+      // For other models, only check personal keys if:
+      // 1. Not available via server-side, AND
+      // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
+      if (!available && !useIncludedAccess && !config.openRouterOnly) {
+        available = await checkPersonalKeyAvailability(config, hasOpenRouter);
       }
 
       // Build option tag with data attributes
