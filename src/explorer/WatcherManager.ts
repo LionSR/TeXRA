@@ -17,15 +17,22 @@ export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
   private validationHandles: NodeJS.Timeout[] = [];
   private static readonly VALIDATION_DELAY = 300;
+  private disposed = false;
 
   // Debounced refresh using perfect-debounce
+  // Wrapped with disposed check since perfect-debounce doesn't expose cancel
   private triggerRefresh: () => void;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    this.triggerRefresh = debounce(() => this.refresh(), 200);
+    // Wrap callback with disposed check to prevent execution after dispose
+    this.triggerRefresh = debounce(() => {
+      if (!this.disposed) {
+        this.refresh();
+      }
+    }, 200);
   }
 
   async setup() {
@@ -39,6 +46,8 @@ export class WatcherManager {
       }
 
       this.dispose();
+      // Reset disposed flag for re-setup
+      this.disposed = false;
 
       const builtInAgentsPath = await agentDirectories.builtIn();
       const builtInToolUsePath = await agentDirectories.builtInToolUse();
@@ -103,7 +112,8 @@ export class WatcherManager {
   }
 
   dispose() {
-    // Note: debounced refresh will naturally stop when refresh is no longer needed
+    // Set disposed flag to prevent debounced refresh from executing
+    this.disposed = true;
     this.validationHandles.forEach((h) => clearTimeout(h));
     this.validationHandles = [];
     this.disposables.forEach((d) => d.dispose());
