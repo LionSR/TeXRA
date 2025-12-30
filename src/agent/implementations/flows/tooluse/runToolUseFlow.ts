@@ -6,10 +6,14 @@
  * - Session lifecycle (start, persist, resume)
  * - Tool execution cycles
  * - Interrupt handling and cleanup
+ * - State persistence via PersistedFlow
  */
 
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {
@@ -21,6 +25,7 @@ import {
   ToolUseFlowContext,
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
+import type { ToolUseServices } from './ToolUseServices';
 
 // ============================================================================
 // Types
@@ -99,17 +104,51 @@ export async function runToolUseFlow<C = unknown>(
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
+    // Get execution-scoped storage for persistence
+    const kv: ExecutionKVStore = getExecutionStore(
+      input.executionContext.executionId,
+    );
+
+    // Try to restore from persisted flow (resume scenario)
+    let isResume = false;
+    try {
+      const flowRecord = await kv.read<FlowRecord>(
+        `flow:${input.executionContext.executionId}`,
+      );
+      if (flowRecord?.shared) {
+        isResume = true;
+        input.executionContext.logger.debug(
+          'Resuming tool-use flow from persistence',
+        );
+      }
+    } catch {
+      // No persisted flow - fresh start
+    }
+
     // Create shared state
     const shared: ToolUseRunShared<C> = {
       state: createInitialToolUseState<C>(),
     };
 
-    // Create flow and inject services
-    const flow = createToolUseRunFlow<C>();
-    flow.setServices(flowContext.services);
+    // Create PersistedFlow with the start node
+    const startNode = createToolUseRunFlow<C>().start;
+    const pf = new PersistedFlow<
+      ToolUseRunShared<C>,
+      Record<string, unknown>,
+      ToolUseServices<C>
+    >(startNode, kv);
 
-    // Run the flow
-    await flow.run(shared);
+    // Inject services (never persisted - runtime dependencies)
+    pf.setServices(flowContext.services);
+
+    if (isResume) {
+      input.executionContext.logger.debug(
+        'PersistedFlow will resume from last node',
+      );
+    }
+
+    // Run the persisted flow - errors throw directly
+    await pf.run(shared);
 
     status = END_GROUP_STATUS.STOPPED;
   } catch (error) {
