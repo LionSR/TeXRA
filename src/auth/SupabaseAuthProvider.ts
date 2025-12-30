@@ -6,7 +6,7 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
-  getAuthCallbackUri,
+  getExternalAuthCallbackUri,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -387,18 +387,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         ? requestedProvider
         : DEFAULT_OAUTH_PROVIDER;
 
-      // Build the base callback URI using the current URI scheme
-      const baseCallbackUri = vscode.Uri.parse(
-        getAuthCallbackUri(vscode.env.uriScheme),
-      );
-
-      // Use asExternalUri to get the environment-appropriate callback URL
-      // - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
-      // - Cursor: returns cursor://texra-ai.texra/auth-callback
-      // - Codespaces: returns https://*.github.dev/extension-auth-callback
-      // - Remote SSH: handles port forwarding automatically
-      const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-      const redirectUri = externalUri.toString();
+      // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
+      const redirectUri = await getExternalAuthCallbackUri();
 
       logger.info(
         'SupabaseAuthProvider',
