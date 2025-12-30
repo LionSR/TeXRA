@@ -532,19 +532,14 @@ export interface AgentOptionsPayload {
   toolUse: string;
 }
 
-/** Optional selected values for preserving current selection */
-export interface AgentSelectedValues {
-  workflow?: string;
-  toolUse?: string;
-}
-
 /**
  * Build dropdown HTML options from cached agents.
- * @param selected - Optional current selection to preserve
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
-export function buildAgentOptions(
-  selected?: AgentSelectedValues,
-): AgentOptionsPayload {
+export function buildAgentOptions(): AgentOptionsPayload {
   const workflowEntries = getWorkflowAgents();
   const toolUseEntries = getToolUseAgents();
 
@@ -567,13 +562,11 @@ export function buildAgentOptions(
       visibleWorkflow,
       DEFAULT_WORKFLOW_AGENT,
       'No workflow agents',
-      selected?.workflow,
     ),
     toolUse: renderOptions(
       visibleToolUse,
       DEFAULT_TOOL_USE_AGENT,
       'No tool-use agents',
-      selected?.toolUse,
     ),
   };
 }
@@ -645,34 +638,23 @@ function renderOptions(
   entries: AgentEntry[],
   defaultName: string,
   emptyMsg: string,
-  selectedValue?: string,
 ): string {
   if (entries.length === 0) {
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // Determine which entry should be selected:
-  // 1. If selectedValue is provided and exists in entries, use it
-  // 2. Otherwise fall back to default
-  const selectedEntry = selectedValue
-    ? entries.find((e) => createKey(e.source, e.name) === selectedValue)
-    : undefined;
-  const effectiveSelectedEntry =
-    selectedEntry ?? entries.find((e) => e.name === defaultName);
-
-  // Sort: selected first, then alphabetically by name
+  // Sort: default agent first, then alphabetically by name
+  const defaultEntry = entries.find((e) => e.name === defaultName);
   const sorted = [...entries].sort((a, b) => {
-    if (a === effectiveSelectedEntry) return -1;
-    if (b === effectiveSelectedEntry) return 1;
+    if (a === defaultEntry) return -1;
+    if (b === defaultEntry) return 1;
     return a.name.localeCompare(b.name);
   });
 
-  return sorted
-    .map((entry) => renderOption(entry, entry === effectiveSelectedEntry))
-    .join('\n');
+  return sorted.map((entry) => renderOption(entry)).join('\n');
 }
 
-function renderOption(entry: AgentEntry, selected: boolean): string {
+function renderOption(entry: AgentEntry): string {
   const key = `${entry.source}:${entry.name}`;
   const attrs: string[] = [
     `value="${encodeHtml(key)}"`,
@@ -691,24 +673,24 @@ function renderOption(entry: AgentEntry, selected: boolean): string {
     attrs.push(`data-description="${encodeHtml(entry.description)}"`);
   if (entry.agentType)
     attrs.push(`data-agent-type="${encodeHtml(entry.agentType)}"`);
-  if (selected) attrs.push('selected');
 
   return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;
 }
 
 /**
  * Async version - ensures cache is loaded first.
- * @param selected - Optional current selection to preserve
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
-export async function computeAgentOptions(
-  selected?: AgentSelectedValues,
-): Promise<AgentOptionsPayload> {
+export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   if (!initialized) {
     await loadAgents();
   } else if (initPromise) {
     await initPromise;
   }
-  return buildAgentOptions(selected);
+  return buildAgentOptions();
 }
 
 /**
