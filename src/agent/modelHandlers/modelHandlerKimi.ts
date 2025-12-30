@@ -46,7 +46,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    *
    * Note: This handler does NOT use the getMessageNormalizationOptions() hook
    * because Kimi thinking models require additional custom logic:
-   * - Conditional `thinking: true` parameter
+   * - Reasoning auto-enabled via model name (no explicit parameter needed)
    * - Custom streaming aggregation for reasoning_content
    * - Different request structure for thinking vs regular models
    *
@@ -73,18 +73,20 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
     if (isThinkingModel) {
       this.logger.debug(
-        'Using Kimi thinking model - adding thinking parameter',
+        'Using Kimi thinking model - reasoning enabled via model name',
       );
 
       // Check if streaming is enabled
       const useStreaming = this.getStreamingConfig();
 
+      // Kimi K2 Thinking models automatically enable reasoning based on model name.
+      // No `thinking` parameter is needed - the API returns reasoning_content automatically.
+      // Recommended: temperature=1.0, max_tokens >= 16000, stream=true
       const kwargs: any = {
         model: this.config.fullName,
         messages: processedMessages,
         temperature: temperature,
         max_tokens: this.config.maxOutputTokens,
-        thinking: true,
       };
 
       if (endTag) {
