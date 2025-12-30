@@ -31,6 +31,9 @@ export class MainViewProvider
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
 
+  // Debounce timeout for config change refreshes
+  private configRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
+
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
     this.messageHandler = new MainViewMessageHandler(context);
@@ -65,12 +68,31 @@ export class MainViewProvider
   }
 
   private setupConfigurationWatcher() {
-    // Watch for configuration changes that affect agent/model options
+    // Watch for agent/model configuration changes with debounce
+    // These trigger a full options refresh which is more expensive
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
-      () => this.refreshOptionsAndView(),
+      ['texra.agents', 'texra.toolUseAgents', 'texra.models'],
+      () => this.debouncedRefreshOptionsAndView(),
     );
+
+    // Watch for file configuration changes separately
+    // These only need to refresh the file list, not agent/model options
+    watchConfig(this.context, ['texra.files'], () => this.refreshFiles());
+  }
+
+  /**
+   * Debounced version of refreshOptionsAndView to prevent rapid re-sends
+   * when multiple config changes happen in quick succession.
+   */
+  private debouncedRefreshOptionsAndView() {
+    if (this.configRefreshTimeout) {
+      clearTimeout(this.configRefreshTimeout);
+    }
+    this.configRefreshTimeout = setTimeout(() => {
+      void this.refreshOptionsAndView();
+      this.configRefreshTimeout = undefined;
+    }, 300); // 300ms debounce for config changes
   }
 
   private setupAuthListener() {
