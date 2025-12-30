@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { isMissingFinishReasonError } from '@common/errors/sdkErrorUtils';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { executeRequest } from './utils/requestExecutor';
@@ -149,25 +148,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         stream.on('chunk', onChunk);
 
         try {
-          let finalResponse: ChatCompletion;
-
-          try {
-            const sdkFinalResponse = await stream.finalChatCompletion();
-            // Use aggregator to build the final response with all content
-            finalResponse = streamingAggregator.finalize(sdkFinalResponse);
-          } catch (err) {
-            // Handle missing finish_reason error from OpenAI SDK
-            // @see https://github.com/openai/openai-node/issues/499
-            if (isMissingFinishReasonError(err)) {
-              this.logger.warn(
-                'Stream missing finish_reason - using aggregator fallback',
-              );
-              // Use aggregator without SDK response - it defaults finish_reason to 'stop'
-              finalResponse = streamingAggregator.finalize();
-            } else {
-              throw err;
-            }
-          }
+          const finalResponse = await this.awaitFinalResponse(
+            stream,
+            streamingAggregator,
+          );
 
           const finalReasoning = this.processThinkingBlock(finalResponse);
           if (finalReasoning === null) {
