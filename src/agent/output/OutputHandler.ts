@@ -161,21 +161,6 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
-  public hydrateRound(round: number, outputs: OutputFileInfo[]): void {
-    // Populate the internal rounds map from saved state
-    // This enables getRoundMapping to work correctly after resume
-    this.rounds.set(round, {
-      outputs,
-      rawOutput: null, // Not available from saved state
-      xmlSummary: {
-        tagContents: {},
-        documents: [],
-        singleOutputFile: null,
-        sourceLocation: null,
-      },
-    });
-  }
-
   private getStorageKey(): StorageKey {
     return this._storageKey ?? normalizeRunId(null);
   }

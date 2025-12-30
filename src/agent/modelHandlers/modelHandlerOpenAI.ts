@@ -906,9 +906,9 @@ export class ModelHandlerOpenAI<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    if (fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    } else {
+    // Note: workspace state already updated above (lines 885-886)
+    // Only need to handle case where prefill needs to be prepended
+    if (!fileContent.includes(prefill)) {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
         outputLocation,
@@ -916,8 +916,6 @@ export class ModelHandlerOpenAI<
       );
     }
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.lastResponse =
-      workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
