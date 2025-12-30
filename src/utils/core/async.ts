@@ -2,6 +2,9 @@
  * Async utilities - pure async helper functions.
  */
 
+// Re-export debounce from perfect-debounce for consistent usage across codebase
+export { debounce } from 'perfect-debounce';
+
 /**
  * Asynchronously wait for the specified number of milliseconds.
  * @param ms Number of milliseconds to sleep
