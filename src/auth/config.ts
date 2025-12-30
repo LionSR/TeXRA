@@ -6,6 +6,7 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
+import * as vscode from 'vscode';
 import { z } from 'zod';
 
 /**
@@ -212,9 +213,28 @@ export function getExtensionId(): string {
 /**
  * Get the OAuth callback URI for redirects.
  * Used by both OAuth and magic link flows.
+ *
+ * Note: This returns the base URI. Use getExternalAuthCallbackUri() for
+ * the environment-appropriate callback URL (handles Codespaces, Remote SSH, etc.)
  */
 export function getAuthCallbackUri(uriScheme: string): string {
   return `${uriScheme}://${getExtensionId()}/auth-callback`;
+}
+
+/**
+ * Get the environment-appropriate OAuth callback URI.
+ * Uses vscode.env.asExternalUri() to handle different environments:
+ * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
+ * - Cursor: returns cursor://texra-ai.texra/auth-callback
+ * - Codespaces: returns https://*.github.dev/extension-auth-callback
+ * - Remote SSH: handles port forwarding automatically
+ */
+export async function getExternalAuthCallbackUri(): Promise<string> {
+  const baseCallbackUri = vscode.Uri.parse(
+    getAuthCallbackUri(vscode.env.uriScheme),
+  );
+  const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
+  return externalUri.toString();
 }
 
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */
