@@ -391,7 +391,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    selectElement.innerHTML = optionsHtml;
+    // Add 'selected' attribute to the correct option in HTML before setting innerHTML.
+    // This is necessary because vscode-single-select's slotchange handler defaults to
+    // the first option if no option has selected=true. By the time we call
+    // _restoreModelSelection, slotchange has already fired and reset the selection.
+    const htmlWithSelected = this._markOptionAsSelected(optionsHtml, previous);
+    selectElement.innerHTML = htmlWithSelected;
     this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateModelOption(opt);
@@ -435,7 +440,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    selectElement.innerHTML = optionsHtml ?? '';
+    // Add 'selected' attribute to the correct option in HTML before setting innerHTML.
+    // This is necessary because vscode-single-select's slotchange handler defaults to
+    // the first option if no option has selected=true. By the time we call
+    // _restoreAgentSelection, slotchange has already fired and reset the selection.
+    const htmlWithSelected = this._markOptionAsSelected(optionsHtml ?? '', previous);
+    selectElement.innerHTML = htmlWithSelected;
     this._restoreAgentSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
@@ -821,6 +831,54 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // If matchedCandidate !== savedValue, previousValue was used.
     // Keep savedValue in state - user's preference is preserved for when
     // the model becomes available again (e.g., API key re-added).
+  }
+
+  /**
+   * Mark an option as selected in HTML string by adding the 'selected' attribute.
+   *
+   * This is necessary to work around a timing issue in vscode-single-select:
+   * When innerHTML is replaced, slotchange fires asynchronously. The component's
+   * _setStateFromSlottedElements() reads el.selected from each option, and if none
+   * are selected, it defaults to index 0. By the time we set selectElement.value,
+   * the slotchange handler has already run and reset the selection.
+   *
+   * By adding 'selected' attribute to the correct option in HTML before setting
+   * innerHTML, slotchange will read selected=true and preserve the selection.
+   *
+   * @param {string} html - The options HTML string
+   * @param {string} value - The value to mark as selected
+   * @returns {string} The HTML with 'selected' attribute added to matching option
+   */
+  _markOptionAsSelected(html, value) {
+    if (!value || !html) {
+      return html || '';
+    }
+
+    // Escape special regex characters in the value
+    const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Match <vscode-option with value="..." and add selected attribute
+    // Handle both value="..." and value='...' formats
+    // The regex captures everything up to the closing > to insert 'selected' before it
+    const doubleQuoteRegex = new RegExp(
+      `(<vscode-option\\s+[^>]*value="${escapedValue}"[^>]*)>`,
+      'i',
+    );
+    const singleQuoteRegex = new RegExp(
+      `(<vscode-option\\s+[^>]*value='${escapedValue}'[^>]*)>`,
+      'i',
+    );
+
+    // Try double quotes first, then single quotes
+    if (doubleQuoteRegex.test(html)) {
+      return html.replace(doubleQuoteRegex, '$1 selected>');
+    }
+    if (singleQuoteRegex.test(html)) {
+      return html.replace(singleQuoteRegex, '$1 selected>');
+    }
+
+    // Value not found in options - return original HTML
+    return html;
   }
 
   _getActiveAgentSelection() {
