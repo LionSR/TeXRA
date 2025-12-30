@@ -128,6 +128,7 @@ export async function signIn(): Promise<void> {
 /**
  * Sign in using email magic link.
  * Sends a one-time login link to the user's email.
+ * Uses vscode.env.asExternalUri() to get environment-appropriate callback URI.
  */
 async function signInWithEmail(): Promise<void> {
   // Prompt for email
@@ -154,10 +155,18 @@ async function signInWithEmail(): Promise<void> {
   try {
     const supabase = SupabaseClient.getClient();
 
+    // Use asExternalUri for environment-appropriate callback URL
+    // This handles Codespaces, Remote SSH, and web environments
+    const baseCallbackUri = vscode.Uri.parse(
+      getAuthCallbackUri(vscode.env.uriScheme),
+    );
+    const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
+    const redirectUri = externalUri.toString();
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: getAuthCallbackUri(vscode.env.uriScheme),
+        emailRedirectTo: redirectUri,
       },
     });
 
