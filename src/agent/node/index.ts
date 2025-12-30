@@ -106,22 +106,16 @@ class Node<
   wait: number;
   currentRetry: number = 0;
   /**
-   * Whether to use jitter in exponential backoff (default: true).
-   * When true, adds random jitter to prevent thundering herd problems.
-   */
-  useJitter: boolean;
-  /**
    * Optional abort signal for cancellation support.
    * When set and aborted, the retry loop will skip remaining retries
    * and go directly to execFallback(). This prevents unnecessary API
    * calls when the user has intentionally cancelled the operation.
    */
   signal?: AbortSignal;
-  constructor(maxRetries: number = 1, wait: number = 0, useJitter: boolean = true) {
+  constructor(maxRetries: number = 1, wait: number = 0) {
     super();
     this.maxRetries = maxRetries;
     this.wait = wait;
-    this.useJitter = useJitter;
   }
   async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
     throw error;
@@ -208,9 +202,7 @@ class Node<
           if (this.wait > 0) {
             // Exponential backoff: baseDelay * 2^attempt, capped at 30s
             const baseDelayMs = this.wait * 1000;
-            const expDelay = Math.min(30000, baseDelayMs * Math.pow(2, this.currentRetry));
-            // Full jitter: random(0, expDelay) to prevent thundering herd
-            const backoffMs = this.useJitter ? Math.random() * expDelay : expDelay;
+            const backoffMs = Math.min(30000, baseDelayMs * Math.pow(2, this.currentRetry));
             await sleep(backoffMs);
           }
         }

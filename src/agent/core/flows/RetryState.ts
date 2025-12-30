@@ -20,11 +20,7 @@ import {
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import {
-  getModelRetryBackoffMs,
-  getModelRetryMaxAttempts,
-  getModelRetryUseJitter,
-} from '@utils/config';
+import { getModelRetryBackoffMs, getModelRetryMaxAttempts } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
@@ -68,8 +64,6 @@ interface NodeRetryConfig {
   maxRetries: number;
   /** Wait time between retries in seconds. Pass to Node constructor as wait. */
   wait: number;
-  /** Whether to use jitter in exponential backoff. */
-  useJitter: boolean;
 }
 
 /**
@@ -79,14 +73,12 @@ interface NodeRetryConfig {
 function getNodeRetryConfig(): NodeRetryConfig {
   const maxAutoAttempts = getModelRetryMaxAttempts() ?? 0;
   const backoffMs = getModelRetryBackoffMs() ?? 1000;
-  const useJitter = getModelRetryUseJitter() ?? true;
 
   return {
     // maxRetries = initial attempt (1) + auto-retry attempts
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
     // Convert milliseconds to seconds for PocketFlow Node
     wait: backoffMs / 1000,
-    useJitter,
   };
 }
 
@@ -213,7 +205,7 @@ export abstract class RetryableInvocationNode<
 
   constructor() {
     const config = getNodeRetryConfig();
-    super(config.maxRetries, config.wait, config.useJitter);
+    super(config.maxRetries, config.wait);
   }
 
   /**
@@ -263,7 +255,6 @@ export abstract class RetryableInvocationNode<
     const config = getNodeRetryConfig();
     this.maxRetries = config.maxRetries;
     this.wait = config.wait;
-    this.useJitter = config.useJitter;
     return super._exec(prepRes);
   }
 

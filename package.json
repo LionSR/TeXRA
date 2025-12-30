@@ -985,12 +985,6 @@
             "minimum": 0,
             "description": "Base backoff delay in milliseconds between retry attempts for model calls. With exponential backoff, delays increase as 1x, 2x, 4x, etc. of this value.",
             "scope": "resource"
-          },
-          "texra.model.retry.useJitter": {
-            "type": "boolean",
-            "default": true,
-            "description": "Add random jitter to retry delays (recommended). Jitter prevents thundering herd problems when multiple requests retry simultaneously.",
-            "scope": "resource"
           }
         }
       }

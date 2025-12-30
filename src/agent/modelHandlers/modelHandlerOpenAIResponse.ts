@@ -919,8 +919,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       startingDelay: ModelHandlerOpenAIResponse.BACKGROUND_POLL_BASE_DELAY_MS,
       // Cap at 60 seconds between polls
       maxDelay: ModelHandlerOpenAIResponse.BACKGROUND_POLL_MAX_DELAY_MS,
-      // Use full jitter for graceful polling (prevents thundering herd)
-      jitter: 'full',
+      // No jitter - use deterministic exponential backoff
+      jitter: 'none',
       // Calculate max attempts based on timeout (generous upper bound)
       // With exponential backoff, we'll hit timeout before this limit
       numOfAttempts: 1000,
