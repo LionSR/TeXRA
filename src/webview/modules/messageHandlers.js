@@ -391,13 +391,18 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    // Add 'selected' attribute to the correct option in HTML before setting innerHTML.
-    // This is necessary because vscode-single-select's slotchange handler defaults to
-    // the first option if no option has selected=true. By the time we call
-    // _restoreModelSelection, slotchange has already fired and reset the selection.
+
+    // Two-phase selection restoration:
+    // 1. _markOptionAsSelected: Add 'selected' attribute to HTML BEFORE innerHTML assignment.
+    //    This prevents vscode-single-select's slotchange from defaulting to first option.
+    // 2. _restoreModelSelection: Handles fallback cases after innerHTML is set:
+    //    - Value not found in options (preserves user preference in state)
+    //    - Sets selectElement.value for programmatic access
+    //    Both are needed because slotchange fires asynchronously after innerHTML.
     const htmlWithSelected = this._markOptionAsSelected(optionsHtml, previous);
     selectElement.innerHTML = htmlWithSelected;
     this._restoreModelSelection(selectElement, previous);
+
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateModelOption(opt);
     });
@@ -440,13 +445,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    // Add 'selected' attribute to the correct option in HTML before setting innerHTML.
-    // This is necessary because vscode-single-select's slotchange handler defaults to
-    // the first option if no option has selected=true. By the time we call
-    // _restoreAgentSelection, slotchange has already fired and reset the selection.
+
+    // Two-phase selection restoration (see _applyModelOptions for details):
+    // 1. _markOptionAsSelected: Prevents slotchange from defaulting to first option
+    // 2. _restoreAgentSelection: Handles fallbacks (value migration, placeholder creation)
     const htmlWithSelected = this._markOptionAsSelected(optionsHtml ?? '', previous);
     selectElement.innerHTML = htmlWithSelected;
     this._restoreAgentSelection(selectElement, previous);
+
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
