@@ -8,6 +8,9 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
+// Local imports - frontend
+import { getMainWebview } from '@frontend/system/commandUtils';
+
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
@@ -92,9 +95,7 @@ export async function selectAgentInMainView(
   await sleep(100);
 
   try {
-    const webviewView = await vscode.commands.executeCommand<
-      vscode.WebviewView | undefined
-    >('texra.getWebviewView');
+    const webviewView = await getMainWebview(CHANNEL);
 
     if (webviewView) {
       // Determine session type based on agent category

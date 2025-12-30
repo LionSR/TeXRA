@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { getMainWebview } from '@frontend/system/commandUtils';
 
 export const PROVIDER_URLS: Record<ApiProvider, string> = {
   openai: 'https://platform.openai.com/api-keys',
@@ -66,9 +67,7 @@ async function setApiKeyForProvider(
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     // Refresh both model and agent options (model availability may change)
     void vscode.commands.executeCommand('texra.refreshAllOptions');
-    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-      'texra.getWebviewView',
-    );
+    const view = await getMainWebview();
     view?.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
     });
@@ -129,9 +128,7 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         // Refresh both model and agent options (model availability may change)
         void vscode.commands.executeCommand('texra.refreshAllOptions');
         const any = await SecretManager.anyApiKeyExists();
-        const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-          'texra.getWebviewView',
-        );
+        const view = await getMainWebview();
         view?.webview.postMessage({
           command: any
             ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
