@@ -75,11 +75,12 @@ export function createBaseFileLocations(
   const files =
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
   return files.map((f) => {
-    const absolutePath = WorkspaceFS.fullPath(f);
-    // Avoid round-trip conversion when f is already a workspace-relative path.
-    // Only compute relativePath from absolutePath when f is absolute.
+    // Handle absolute paths correctly: path.join() incorrectly concatenates
+    // when the second arg is absolute, so we must check first.
+    // See resolveFilePath in pathUtils.ts for the canonical pattern.
+    const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
     const relativePath = path.isAbsolute(f)
-      ? WorkspaceFS.relativePath(absolutePath)
+      ? WorkspaceFS.relativePath(f)
       : f;
     return createWorkspaceLocation(absolutePath, relativePath);
   });
