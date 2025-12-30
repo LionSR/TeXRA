@@ -40,13 +40,8 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { normalizeRunId } from '@common/constants/runIds';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { PromptBuilder } from '@utils/prompt';
-import {
-  TaskRunFileService,
-  flexibleFS,
-  type AgentFileLocation,
-} from '@utils/files';
+import { TaskRunFileService, type AgentFileLocation } from '@utils/files';
 import { LatexMediaManager } from '@latex';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 /**
  * Parameters for resuming a reflection agent from saved state.
@@ -280,12 +275,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Also hydrate OutputHandler's rounds map for latexdiff to work after resume
     for (const round of sortedRounds) {
       const savedOutputs = params.rounds.get(round) ?? [];
-      // Reconstruct raw output location - the file should still exist on disk
-      // Use the same logic as getOutputFileLocation() to get the path
-      const rawOutputLocation = this.getOutputFileLocation(round);
       this.roundOutputs[round] = {
         round,
-        rawOutput: rawOutputLocation,
+        rawOutput: null, // Not available from saved state
         outputs: savedOutputs,
         xmlSummary: {
           tagContents: {},
@@ -299,92 +291,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     this.hydratedRoundCount = sortedRounds.length;
-  }
-
-  /**
-   * Reconstruct conversation history from hydrated round outputs.
-   *
-   * On resume, the conversation array is empty but we have completed round outputs.
-   * This method rebuilds the conversation by:
-   * 1. Reading assistant responses from raw output files
-   * 2. Building user messages via promptBuilder
-   *
-   * This enables multi-round agents to continue from where they left off with
-   * full context of previous rounds.
-   *
-   * @returns The reconstructed conversation messages, or empty array if reconstruction fails
-   */
-  private async reconstructConversation(): Promise<ProviderMessage[]> {
-    if (this.roundOutputs.length === 0) {
-      return [];
-    }
-
-    const promptBuilder = this.getPromptBuilder();
-    const conversation: ProviderMessage[] = [];
-
-    for (let round = 0; round < this.roundOutputs.length; round++) {
-      const roundOutput = this.roundOutputs[round];
-      if (!roundOutput?.rawOutput) {
-        this.logger.warn(
-          `Cannot reconstruct conversation: missing rawOutput for round ${round}`,
-        );
-        return [];
-      }
-
-      try {
-        // Read assistant response from raw output file
-        const rawOutputPath = roundOutput.rawOutput.absolutePath;
-        const fileExists = await flexibleFS.exists(roundOutput.rawOutput);
-        if (!fileExists) {
-          this.logger.warn(
-            `Cannot reconstruct conversation: raw output file not found for round ${round}: ${rawOutputPath}`,
-          );
-          return [];
-        }
-
-        const assistantResponse = await flexibleFS.read(roundOutput.rawOutput);
-
-        if (round === 0) {
-          // First round: build initial prompts and add user message
-          const { systemPrompt, userRequest, userPrefix } =
-            await promptBuilder.buildInitialPrompts();
-
-          // Initialize messages with user message (similar to PrepareContextNode)
-          const messages = await this.modelHandler.initializeMessages(
-            userPrefix,
-            userRequest,
-            undefined,
-            systemPrompt,
-          );
-          conversation.push(...messages);
-        } else {
-          // Subsequent rounds: build user request only
-          const userRequest = await promptBuilder.buildUserRequest(round);
-          if (userRequest?.trim()) {
-            await this.modelHandler.createRoundMessages(
-              conversation,
-              userRequest,
-              undefined,
-            );
-          }
-        }
-
-        // Add assistant response
-        const assistantMessage =
-          this.modelHandler.createAssistantMessage(assistantResponse);
-        conversation.push(assistantMessage);
-      } catch (error) {
-        this.logger.warn(
-          `Failed to reconstruct conversation for round ${round}: ${error}`,
-        );
-        return [];
-      }
-    }
-
-    this.logger.debug(
-      `Reconstructed conversation with ${conversation.length} messages from ${this.roundOutputs.length} rounds`,
-    );
-    return conversation;
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -509,13 +415,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.roundOutputs = [];
       }
 
-      // Reconstruct conversation from hydrated rounds if resuming
-      // This enables multi-round agents to continue with full context
-      let initialConversation: ProviderMessage[] | undefined;
-      if (hadHydratedRounds) {
-        initialConversation = await this.reconstructConversation();
-      }
-
       const totalRounds = this.getTotalRounds();
 
       // Ensure we have a run stage for round grouping
@@ -533,15 +432,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       });
 
       // Create shared state for the flow (no lifecycle - errors thrown directly)
-      // Pass hydrated outputs and reconstructed conversation to preserve context during resume
+      // Pass hydrated outputs to preserve them during resume
       shared = {
         agent: this,
-        state: createInitialReflectionState({
+        state: createInitialReflectionState(
           totalRounds,
-          initialWorkspaceState: AgentWorkspaceState.create(),
-          hydratedOutputs: hadHydratedRounds ? this.roundOutputs : undefined,
-          initialConversation,
-        }),
+          AgentWorkspaceState.create(),
+          hadHydratedRounds ? this.roundOutputs : undefined,
+        ),
         retryState: createRetryState(),
         runStage: this.runStage,
       };
