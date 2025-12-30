@@ -13,7 +13,9 @@ export abstract class RelativeFS extends BaseFS {
   }
 
   protected static override resolvePath(target: string): string {
-    return path.join(this.getBasePath(), target);
+    // If target is already absolute, return it directly.
+    // path.join() incorrectly concatenates absolute paths instead of returning them.
+    return path.isAbsolute(target) ? target : path.join(this.getBasePath(), target);
   }
 
   public static override fullPath(target: string): string {
