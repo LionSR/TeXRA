@@ -29,11 +29,12 @@ async function getMainWebview(): Promise<vscode.WebviewView | undefined> {
 }
 
 /**
- * Log a refresh error.
+ * Log a refresh error and notify the user.
  */
 function logRefreshError(error: unknown, context: string): void {
   const message = error instanceof Error ? error.message : String(error);
   logger.error(CHANNEL, `Failed to ${context}: ${message}`);
+  vscode.window.showErrorMessage(`Failed to ${context}: ${message}`);
 }
 
 /**
