@@ -46,8 +46,9 @@ export class WatcherManager {
         return;
       }
 
+      // Clean up any existing watchers before setting up new ones
       this.dispose();
-      // Reset disposed flag for re-setup
+      // Re-enable after dispose() set it to true - allows new watchers to trigger refresh
       this.disposed = false;
 
       const builtInAgentsPath = await agentDirectories.builtIn();
