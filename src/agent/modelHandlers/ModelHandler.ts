@@ -255,9 +255,16 @@ export abstract class ModelHandler<
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
    * When server-side keys are enabled (experimental), returns the user's JWT token instead,
    * which the relay Edge Function will use for authentication.
+   *
+   * When "Use Included Access" is enabled, only server-side keys are used - no fallback
+   * to personal API keys. This ensures runtime behavior matches dropdown availability.
+   *
    * @throws Error if required API key is missing from environment
    */
   public async getApiKey(): Promise<string> {
+    const serverSideKeyService = getServerSideKeyService();
+    const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
+
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
       const accessToken = await SupabaseClient.getAccessToken();
@@ -271,6 +278,13 @@ export abstract class ModelHandler<
       // but fall through to normal API key retrieval just in case
       this.logger.warn(
         'Server-side keys check passed but no access token available, falling back to local keys',
+      );
+    } else if (useIncludedAccess) {
+      // User selected "Use Included Access" but model is not available for their tier
+      // Don't fall back to personal API keys - throw an error to match dropdown behavior
+      throw new Error(
+        `Model "${this.config.name}" is not available with your current subscription tier. ` +
+          `Switch to "Use My Own Keys" in the profile settings, or select a model included in your tier.`,
       );
     }
 
