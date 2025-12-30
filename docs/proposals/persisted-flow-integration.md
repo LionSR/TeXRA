@@ -512,11 +512,13 @@ Code that becomes unnecessary with PersistedFlow:
 **Hydration Code Analysis (ready for Phase 2 removal):**
 
 Files to completely remove (~597 lines):
+
 1. `src/agent/toolUse/ToolUseSnapshotStore.ts` (207 lines)
 2. `src/agent/toolUse/ToolUseSessionPersistence.ts` (245 lines)
 3. `src/agent/toolUse/ToolUseSessionManager.ts` (145 lines)
 
 Files requiring updates:
+
 - `src/extension.ts` - Remove snapshot initialization (lines 206-213, 351)
 - `src/agent/implementations/flows/ToolUseRunFlow.ts` - Replace snapshot calls
 - `src/commands/agent/resumeCommand.ts` - Use PersistedFlow.attach()
@@ -539,6 +541,7 @@ Files requiring updates:
 - ✅ Added index signature to `ToolUseRunShared` for `Record<string, unknown>` compatibility
 
 **Both flows now use PersistedFlow:**
+
 - ReflectionFlow: Preserves thinking blocks via workspace state restoration
 - ToolUseFlow: Persists tool-use session state after each node
 
