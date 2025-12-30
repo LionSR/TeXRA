@@ -1,19 +1,20 @@
 /**
  * Shared state types for reflection flow.
  *
- * Following PocketFlow patterns:
- * - State is mutable and flows through nodes
- * - Services are immutable and injected via _params
+ * ## Following koala-code-reader's Pattern
  *
- * ## Flow-First Architecture
+ * Shared state contains ONLY serializable data (plain JSON):
+ * - No class instances (use snapshots instead)
+ * - No runtime dependencies (those go in services)
+ * - No functions or callbacks
  *
- * The flow operates independently of the agent:
- * - All services are accessed via this.services (injected)
- * - State flows through nodes via shared.state
- * - No agent reference is needed - all behavior is via strategies
+ * This ensures clean serialization via structuredClone() in PersistedFlow.
  *
- * The agent's only responsibility is lifecycle (init/finalize) and
- * providing the initial configuration via ReflectionFlowContext.
+ * ## Architecture
+ *
+ * - **shared**: Mutable, serializable state (survives structuredClone)
+ * - **services**: Runtime dependencies (logger, model handler, etc.)
+ * - **params**: Immutable flow configuration
  */
 
 import type { RoundOutput } from '@agent/output';
@@ -70,29 +71,29 @@ export interface ReflectionFlowState {
 /**
  * Shared context passed through the flow.
  *
- * Contains:
- * - state: Mutable runtime state
- * - retryState: Retry tracking for error handling
- * - runStage: Parent stage for creating round stages (r0, r1, r2...)
+ * Following koala-code-reader's pattern:
+ * - Contains ONLY serializable data (plain JSON)
+ * - Runtime dependencies like `runStage` are in services, not here
+ * - All fields must survive structuredClone()
  *
- * ## Flow-First Design
+ * ## Note on Current Implementation
  *
- * No agent reference is included. All services are accessed via this.services
- * (injected via flow.setServices). Polymorphic behavior is captured via
- * strategy objects in ReflectionFlowContext, not via callbacks to agent methods.
+ * Currently, `state` contains class instances (AgentRunState, etc.) which
+ * are converted to plain objects by structuredClone(). This works for
+ * persistence but loses class methods. Future refactoring should convert
+ * to pure snapshot format (plain data only).
  *
- * The agent's responsibility is:
- * 1. Create ReflectionFlowContext with strategies
- * 2. Create the flow and inject services
- * 3. Call flow.run(shared) and handle results
- * 4. Lifecycle (init before flow, finalize after)
+ * TODO: Convert ReflectionFlowState fields to snapshot format:
+ * - workspaceState → workspaceSnapshot (via toSnapshot())
+ * - runState → runStateSnapshot (via toSnapshot())
+ * - roundStates → roundStateSnapshots (via map + toSnapshot())
  */
 export interface ReflectionFlowShared {
   state: ReflectionFlowState;
   retryState: RetryState;
-  /** Parent stage for round stages (used to create r0, r1, r2... as siblings) */
+  /** Parent stage for round stages - RUNTIME ONLY, not persisted */
   runStage: AgentLogStage;
-  /** Index signature for Record<string, unknown> compatibility with PersistedFlow */
+  /** Index signature for PersistedFlow serialization compatibility */
   [key: string]: unknown;
 }
 
