@@ -1056,6 +1056,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Cleaned and saved existing content to ${outputLocation.absolutePath}.`,
     );
+
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
       `Added existing file content to messages as 'model' role.`,
