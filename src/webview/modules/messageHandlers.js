@@ -449,7 +449,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Two-phase selection restoration (see _applyModelOptions for details):
     // 1. _markOptionAsSelected: Prevents slotchange from defaulting to first option
     // 2. _restoreAgentSelection: Handles fallbacks (value migration, placeholder creation)
-    const htmlWithSelected = this._markOptionAsSelected(optionsHtml ?? '', previous);
+    const htmlWithSelected = this._markOptionAsSelected(
+      optionsHtml ?? '',
+      previous,
+    );
     selectElement.innerHTML = htmlWithSelected;
     this._restoreAgentSelection(selectElement, previous);
 
