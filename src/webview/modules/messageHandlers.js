@@ -43,6 +43,7 @@ import {
   getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { encodeHtml } from '@common/htmlEncoding.js';
 import {
   AGENT_DECORATORS,
   getAgentTypeDecorator,
@@ -854,18 +855,23 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return html || '';
     }
 
-    // Escape special regex characters in the value
-    const escapedValue = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // HTML-encode the value to match how it appears in the HTML
+    // (agent values are encoded with he.encode() when generating options)
+    const encodedValue = encodeHtml(value);
+
+    // Escape special regex characters in the encoded value
+    const escapedValue = encodedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     // Match <vscode-option with value="..." and add selected attribute
     // Handle both value="..." and value='...' formats
-    // The regex captures everything up to the closing > to insert 'selected' before it
+    // Use word boundary after value= to avoid matching data-value or similar
+    // Check that 'selected' isn't already present to avoid duplicates
     const doubleQuoteRegex = new RegExp(
-      `(<vscode-option\\s+[^>]*value="${escapedValue}"[^>]*)>`,
+      `(<vscode-option\\s+(?![^>]*\\bselected\\b)[^>]*\\bvalue="${escapedValue}"[^>]*)>`,
       'i',
     );
     const singleQuoteRegex = new RegExp(
-      `(<vscode-option\\s+[^>]*value='${escapedValue}'[^>]*)>`,
+      `(<vscode-option\\s+(?![^>]*\\bselected\\b)[^>]*\\bvalue='${escapedValue}'[^>]*)>`,
       'i',
     );
 
