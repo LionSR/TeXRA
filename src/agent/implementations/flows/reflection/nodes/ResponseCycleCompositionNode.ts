@@ -149,6 +149,10 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       );
 
     // If prefill already completes the response, return success with endTurn=true
+    // This happens on resume when replaying completed rounds - the output file
+    // already contains the full response, so we skip the model call.
+    // Note: initializeOutputAndPrefill() modifies prepRes.context.messages in-place
+    // (adding the assistant response), so post() will sync this to shared.state.conversation.
     if (prefillEndsTurn) {
       return {
         kind: 'success',
