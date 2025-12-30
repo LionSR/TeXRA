@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { computeAgentOptions, refresh } from '@agent/index';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { computeModelOptions } from '@model/computeModelOptions';
 
@@ -16,17 +16,6 @@ export const mainViewCommands = {
   refreshAgentOptions: 'texra.refreshAgentOptions',
   refreshAllOptions: 'texra.refreshAllOptions',
 };
-
-/**
- * Get the main webview view instance.
- */
-async function getMainWebview(): Promise<vscode.WebviewView | undefined> {
-  return safeExecuteCommand<vscode.WebviewView>(
-    'texra.getWebviewView',
-    [],
-    CHANNEL,
-  );
-}
 
 /**
  * Log a refresh error and notify the user.
@@ -46,11 +35,7 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const resetCommand = vscode.commands.registerCommand(
     mainViewCommands.reset,
     async () => {
-      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-        [],
-        'mainViewCommands',
-      );
+      const webviewView = await getMainWebview(CHANNEL);
 
       if (webviewView) {
         webviewView.webview.postMessage({
@@ -72,7 +57,7 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshModelOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshModelOptions,
     async () => {
-      const webview = await getMainWebview();
+      const webview = await getMainWebview(CHANNEL);
       if (!webview) return;
 
       try {
@@ -93,7 +78,7 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshAgentOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshAgentOptions,
     async () => {
-      const webview = await getMainWebview();
+      const webview = await getMainWebview(CHANNEL);
       if (!webview) return;
 
       try {
@@ -117,7 +102,7 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshAllOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshAllOptions,
     async () => {
-      const webview = await getMainWebview();
+      const webview = await getMainWebview(CHANNEL);
       if (!webview) return;
 
       try {
