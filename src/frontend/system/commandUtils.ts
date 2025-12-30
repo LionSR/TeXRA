@@ -30,3 +30,18 @@ export async function safeExecuteCommand<T>(
     return undefined;
   }
 }
+
+/**
+ * Get the main webview view instance.
+ * @param channel Optional channel for logging errors
+ * @returns The webview view or undefined if not available
+ */
+export async function getMainWebview(
+  channel: string = CHANNEL,
+): Promise<vscode.WebviewView | undefined> {
+  return safeExecuteCommand<vscode.WebviewView>(
+    'texra.getWebviewView',
+    [],
+    channel,
+  );
+}

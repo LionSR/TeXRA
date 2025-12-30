@@ -34,6 +34,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  isMissingFinishReasonError,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -345,10 +346,10 @@ export class ModelHandlerOpenAI<
         };
 
         try {
-          const sdkFinalResponse = await stream.finalChatCompletion();
-          let finalResponse = streamingAggregator
-            ? streamingAggregator.finalize(sdkFinalResponse)
-            : sdkFinalResponse;
+          let finalResponse = await this.awaitFinalResponse(
+            stream,
+            streamingAggregator,
+          );
 
           // Ensure usage is captured - use SDK's totalUsage() as fallback
           if (!finalResponse.usage) {
@@ -389,6 +390,42 @@ export class ModelHandlerOpenAI<
           { signal },
         ),
     );
+  }
+
+  /**
+   * Awaits the final chat completion from a stream, with fallback handling
+   * for providers that don't send finish_reason (e.g., DeepSeek, Kimi).
+   *
+   * When the SDK throws "missing finish_reason", falls back to using the
+   * streaming aggregator to build a valid response from accumulated chunks.
+   *
+   * @param stream - The OpenAI chat completion stream
+   * @param aggregator - Optional streaming aggregator for fallback
+   * @returns The final ChatCompletion response
+   */
+  protected async awaitFinalResponse(
+    stream: ReturnType<typeof OpenAI.prototype.chat.completions.stream>,
+    aggregator: StreamingAggregator | null,
+  ): Promise<ChatCompletion> {
+    try {
+      const sdkFinalResponse = await stream.finalChatCompletion();
+      return aggregator
+        ? aggregator.finalize(sdkFinalResponse)
+        : sdkFinalResponse;
+    } catch (err) {
+      // Handle missing finish_reason error from OpenAI SDK
+      // This can occur with DeepSeek reasoning models and other providers
+      // that don't properly send finish_reason in streaming responses
+      // @see https://github.com/openai/openai-node/issues/499
+      if (aggregator && isMissingFinishReasonError(err)) {
+        this.logger.warn(
+          'Stream missing finish_reason - using aggregator fallback',
+        );
+        // Use aggregator without SDK response - it defaults finish_reason to 'stop'
+        return aggregator.finalize();
+      }
+      throw err;
+    }
   }
 
   /**
@@ -880,6 +917,11 @@ export class ModelHandlerOpenAI<
     // Write file content to output file
     await flexibleFS.write(outputLocation, fileContent);
 
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push({
       role: 'assistant',
       content: [
@@ -890,23 +932,10 @@ export class ModelHandlerOpenAI<
       ],
     });
 
-    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content.at(-1);
-        if (lastPart && 'text' in lastPart) {
-          lastPart.text = fileContent;
-        }
-      } else if (lastMessage) {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: fileContent,
-          },
-        ];
-      }
+      this.logger.debug(
+        'End tag detected - skipping model call (response already added above)',
+      );
       endTurn = true;
       return [endTurn, messages];
     }
@@ -914,9 +943,9 @@ export class ModelHandlerOpenAI<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    if (fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    } else {
+    // Note: workspace state already updated above (lines 885-886)
+    // Only need to handle case where prefill needs to be prepended
+    if (!fileContent.includes(prefill)) {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
         outputLocation,
@@ -924,9 +953,6 @@ export class ModelHandlerOpenAI<
       );
     }
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.updateLastResponse(
-      workspaceState.assembly.accumulatedOutput,
-    );
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

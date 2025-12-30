@@ -391,8 +391,18 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    selectElement.innerHTML = optionsHtml;
+
+    // Two-phase selection restoration:
+    // 1. _markOptionAsSelected: Add 'selected' attribute to HTML BEFORE innerHTML assignment.
+    //    This prevents vscode-single-select's slotchange from defaulting to first option.
+    // 2. _restoreModelSelection: Handles fallback cases after innerHTML is set:
+    //    - Value not found in options (preserves user preference in state)
+    //    - Sets selectElement.value for programmatic access
+    //    Both are needed because slotchange fires asynchronously after innerHTML.
+    const htmlWithSelected = this._markOptionAsSelected(optionsHtml, previous);
+    selectElement.innerHTML = htmlWithSelected;
     this._restoreModelSelection(selectElement, previous);
+
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateModelOption(opt);
     });
@@ -435,8 +445,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Caller must wrap in blockSave()/unblockSave() - vscode-single-select
     // fires change events during innerHTML replacement which would trigger save()
     const previous = selectElement.value;
-    selectElement.innerHTML = optionsHtml ?? '';
+
+    // Two-phase selection restoration (see _applyModelOptions for details):
+    // 1. _markOptionAsSelected: Prevents slotchange from defaulting to first option
+    // 2. _restoreAgentSelection: Handles fallbacks (value migration, placeholder creation)
+    const htmlWithSelected = this._markOptionAsSelected(
+      optionsHtml ?? '',
+      previous,
+    );
+    selectElement.innerHTML = htmlWithSelected;
     this._restoreAgentSelection(selectElement, previous);
+
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
@@ -654,8 +673,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    // Set the value and dispatch change event to update the component's display
-    safeSetElementValue(selectId, value);
+    // For existing options, setting .selected doesn't update the parent component
+    // (slotchange only fires when options are added/removed). We must also set .value.
+    selectElement.value = value;
     selectElement.dispatchEvent(new Event('change'));
   }
 
@@ -820,6 +840,52 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // If matchedCandidate !== savedValue, previousValue was used.
     // Keep savedValue in state - user's preference is preserved for when
     // the model becomes available again (e.g., API key re-added).
+  }
+
+  /**
+   * Mark an option as selected in HTML string by adding the 'selected' attribute.
+   *
+   * This is necessary to work around a timing issue in vscode-single-select:
+   * When innerHTML is replaced, slotchange fires asynchronously. The component's
+   * _setStateFromSlottedElements() reads el.selected from each option, and if none
+   * are selected, it defaults to index 0. By the time we set selectElement.value,
+   * the slotchange handler has already run and reset the selection.
+   *
+   * By adding 'selected' attribute to the correct option in HTML before setting
+   * innerHTML, slotchange will read selected=true and preserve the selection.
+   *
+   * Uses DOMParser for safe, encoding-aware HTML manipulation instead of regex.
+   *
+   * @param {string} html - The options HTML string
+   * @param {string} value - The value to mark as selected
+   * @returns {string} The HTML with 'selected' attribute added to matching option
+   */
+  _markOptionAsSelected(html, value) {
+    if (!value || !html) {
+      return html || '';
+    }
+
+    // Use DOMParser for safe, encoding-aware manipulation
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+    const options = doc.querySelectorAll('vscode-option');
+
+    let found = false;
+    options.forEach((opt) => {
+      // getAttribute returns decoded value, so we compare directly with value
+      if (opt.getAttribute('value') === value) {
+        opt.setAttribute('selected', '');
+        found = true;
+      }
+    });
+
+    if (!found) {
+      // Value not found in options - return original HTML
+      return html;
+    }
+
+    // Return the modified HTML (with null-safety fallback)
+    return doc.querySelector('div')?.innerHTML ?? html;
   }
 
   _getActiveAgentSelection() {
