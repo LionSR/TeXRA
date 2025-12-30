@@ -19,6 +19,8 @@ import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createRetryState } from '@agent/core/flows/RetryState';
+import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {
@@ -31,6 +33,7 @@ import {
   ReflectionFlowContext,
   type ReflectionFlowContextInit,
 } from './ReflectionFlowContext';
+import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
 // Types
@@ -160,11 +163,48 @@ export async function runReflectionFlow<C = unknown>(
       parent: runStage,
     });
 
+    // Get execution-scoped storage for persistence
+    const kv: ExecutionKVStore = getExecutionStore(
+      executionContext.executionId,
+    );
+
+    // Try to restore from persisted flow (resume scenario)
+    let initialWorkspaceState: AgentWorkspaceState;
+    let isResume = false;
+
+    try {
+      const flowRecord = await kv.read<FlowRecord>(
+        `flow:${executionContext.executionId}`,
+      );
+      if (flowRecord?.shared) {
+        const persistedShared = flowRecord.shared as {
+          workspaceSnapshot?: unknown;
+        };
+        if (persistedShared.workspaceSnapshot) {
+          // Restore workspace state - PRESERVES THINKING BLOCKS!
+          initialWorkspaceState = AgentWorkspaceState.fromSnapshot(
+            persistedShared.workspaceSnapshot,
+          );
+          isResume = true;
+          executionContext.logger.debug(
+            'Restored workspace state from persisted flow',
+          );
+        } else {
+          initialWorkspaceState = AgentWorkspaceState.create();
+        }
+      } else {
+        initialWorkspaceState = AgentWorkspaceState.create();
+      }
+    } catch {
+      // No persisted flow - fresh start
+      initialWorkspaceState = AgentWorkspaceState.create();
+    }
+
     // Create shared state for the flow
     shared = {
       state: createInitialReflectionState(
         flowContext.totalRounds,
-        AgentWorkspaceState.create(),
+        initialWorkspaceState,
       ),
       retryState: createRetryState(),
       runStage,
@@ -173,12 +213,25 @@ export async function runReflectionFlow<C = unknown>(
     // Set initial round stage
     shared.state.roundStage = roundStage;
 
-    // Create flow and inject services
-    const flow = createReflectionFlow<C>();
-    flow.setServices(flowContext.services);
+    // Create PersistedFlow with the start node
+    const startNode = createReflectionFlow<C>().start;
+    const pf = new PersistedFlow<
+      ReflectionFlowShared,
+      Record<string, unknown>,
+      ReflectionServices<C>
+    >(startNode, kv);
 
-    // Run the flow - errors throw directly
-    await flow.run(shared);
+    // Inject services (never persisted - runtime dependencies)
+    pf.setServices(flowContext.services);
+
+    if (isResume) {
+      executionContext.logger.debug(
+        'Resuming reflection flow from persistence',
+      );
+    }
+
+    // Run the persisted flow - errors throw directly
+    await pf.run(shared);
 
     status = END_GROUP_STATUS.STOPPED;
   } catch (error) {

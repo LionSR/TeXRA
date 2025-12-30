@@ -29,7 +29,7 @@ interface NodeRecord {
   action?: string;
 }
 
-interface FlowRecord {
+export interface FlowRecord {
   flowName: string;
   params: Record<string, unknown>;
   shared: Record<string, unknown>;
