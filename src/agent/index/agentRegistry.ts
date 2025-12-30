@@ -534,6 +534,10 @@ export interface AgentOptionsPayload {
 
 /**
  * Build dropdown HTML options from cached agents.
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
 export function buildAgentOptions(): AgentOptionsPayload {
   const workflowEntries = getWorkflowAgents();
@@ -639,22 +643,18 @@ function renderOptions(
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // After deduplication, each name appears only once - simple name match
+  // Sort: default agent first, then alphabetically by name
   const defaultEntry = entries.find((e) => e.name === defaultName);
-
-  // Sort: selected first, then alphabetically by name
   const sorted = [...entries].sort((a, b) => {
-    if (a.name === defaultName) return -1;
-    if (b.name === defaultName) return 1;
+    if (a === defaultEntry) return -1;
+    if (b === defaultEntry) return 1;
     return a.name.localeCompare(b.name);
   });
 
-  return sorted
-    .map((entry) => renderOption(entry, entry === defaultEntry))
-    .join('\n');
+  return sorted.map((entry) => renderOption(entry)).join('\n');
 }
 
-function renderOption(entry: AgentEntry, selected: boolean): string {
+function renderOption(entry: AgentEntry): string {
   const key = `${entry.source}:${entry.name}`;
   const attrs: string[] = [
     `value="${encodeHtml(key)}"`,
@@ -673,13 +673,16 @@ function renderOption(entry: AgentEntry, selected: boolean): string {
     attrs.push(`data-description="${encodeHtml(entry.description)}"`);
   if (entry.agentType)
     attrs.push(`data-agent-type="${encodeHtml(entry.agentType)}"`);
-  if (selected) attrs.push('selected');
 
   return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;
 }
 
 /**
  * Async version - ensures cache is loaded first.
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
 export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   if (!initialized) {

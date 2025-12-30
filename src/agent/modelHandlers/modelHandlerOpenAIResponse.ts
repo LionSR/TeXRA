@@ -1103,6 +1103,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     await flexibleFS.write(outputLocation, fileContent);
 
+    // Update workspace state - critical for multi-round agents on resume
+    // so that subsequent rounds have correct context
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
+
     messages.push(this.createAssistantMessage(fileContent));
 
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1114,9 +1119,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    if (fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    } else {
+    // Note: workspace state already updated above (lines 1108-1109)
+    // Only need to handle case where prefill needs to be prepended
+    if (!fileContent.includes(prefill)) {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
         outputLocation,
@@ -1125,9 +1130,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.updateLastResponse(
-      workspaceState.assembly.accumulatedOutput,
-    );
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

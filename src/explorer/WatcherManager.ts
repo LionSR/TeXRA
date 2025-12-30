@@ -8,26 +8,32 @@ import * as vscode from 'vscode';
 import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
+import { debounce } from '@utils/core';
+import { DEBOUNCE_WATCHER_MS } from '@utils/config';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
 export class WatcherManager {
   private disposables: vscode.FileSystemWatcher[] = [];
-  private refreshHandle: NodeJS.Timeout | undefined;
   private validationHandles: NodeJS.Timeout[] = [];
   private static readonly VALIDATION_DELAY = 300;
+  private disposed = false;
+
+  // Debounced refresh using perfect-debounce
+  // Wrapped with disposed check since perfect-debounce doesn't expose cancel
+  private triggerRefresh: () => void;
 
   constructor(
     private context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
-  ) {}
-
-  private triggerRefresh() {
-    if (this.refreshHandle) {
-      clearTimeout(this.refreshHandle);
-    }
-    this.refreshHandle = setTimeout(() => this.refresh(), 200);
+  ) {
+    // Wrap callback with disposed check to prevent execution after dispose
+    this.triggerRefresh = debounce(() => {
+      if (!this.disposed) {
+        this.refresh();
+      }
+    }, DEBOUNCE_WATCHER_MS);
   }
 
   async setup() {
@@ -40,7 +46,10 @@ export class WatcherManager {
         return;
       }
 
+      // Clean up any existing watchers before setting up new ones
       this.dispose();
+      // Re-enable after dispose() set it to true - allows new watchers to trigger refresh
+      this.disposed = false;
 
       const builtInAgentsPath = await agentDirectories.builtIn();
       const builtInToolUsePath = await agentDirectories.builtInToolUse();
@@ -105,10 +114,8 @@ export class WatcherManager {
   }
 
   dispose() {
-    if (this.refreshHandle) {
-      clearTimeout(this.refreshHandle);
-      this.refreshHandle = undefined;
-    }
+    // Set disposed flag to prevent debounced refresh from executing
+    this.disposed = true;
     this.validationHandles.forEach((h) => clearTimeout(h));
     this.validationHandles = [];
     this.disposables.forEach((d) => d.dispose());
