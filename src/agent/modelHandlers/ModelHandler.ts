@@ -274,9 +274,8 @@ export abstract class ModelHandler<
         );
         return accessToken;
       }
-      // No access token available - this shouldn't happen if shouldUseServerSideKeys returned true
-      // Since useIncludedAccess must be true here (checked in shouldUseServerSideKeys),
-      // throw an error instead of falling back to personal keys
+      // No access token available - shouldUseServerSideKeys() returned true, meaning isEnabled()
+      // returned true. Don't fall back to personal keys - throw an actionable error.
       throw new Error(
         'Unable to authenticate with server. Please sign out and sign back in, or switch to "Use My Own Keys" mode.',
       );
