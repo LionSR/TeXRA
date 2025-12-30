@@ -255,9 +255,10 @@ function createUsageRecorder(
   usageMonitor: UsageMonitor,
   runKind: 'workflow' | 'tool-use' = 'workflow',
 ): () => AgentRoundFinalizedCallback {
-  return () => async ({ run }) => {
-    await usageMonitor.recordUsage(run, { runKind });
-  };
+  return () =>
+    async ({ run }) => {
+      await usageMonitor.recordUsage(run, { runKind });
+    };
 }
 
 // ============================================================================
@@ -485,7 +486,10 @@ export async function executeAgent(
               checkInterruption: interruptManager.createCheckInterruption(),
               setAbortController: interruptManager.createSetAbortController(),
               getClient: () => client,
-              getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+              getUsageRecorder: createUsageRecorder(
+                ctx.usageMonitor,
+                'tool-use',
+              ),
               onInterrupt: interruptManager.createOnInterrupt(),
             },
             {
@@ -510,7 +514,10 @@ export async function executeAgent(
               checkInterruption: interruptManager.createCheckInterruption(),
               setAbortController: interruptManager.createSetAbortController(),
               getClient: () => client,
-              getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+              getUsageRecorder: createUsageRecorder(
+                ctx.usageMonitor,
+                'workflow',
+              ),
               onInterrupt: interruptManager.createOnInterrupt(),
             },
             {
