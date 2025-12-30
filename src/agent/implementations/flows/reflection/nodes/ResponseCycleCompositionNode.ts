@@ -43,9 +43,12 @@ import type {
 } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
-import type {
-  ReflectionFlowShared,
-  RoundContext,
+import {
+  getWorkspaceState,
+  getRunState,
+  updateRunStateSnapshot,
+  type ReflectionFlowShared,
+  type RoundContext,
 } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -101,13 +104,17 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       userVarChannels,
       getOutputFileLocation,
     } = this.services;
-    const { currentRound, context, workspaceState, runState } = shared.state;
+    const { currentRound, context } = shared.state;
 
     if (!context) {
       throw new Error(
         'Context not prepared - PrepareContextNode must run first',
       );
     }
+
+    // Reconstruct state instances from snapshots
+    const workspaceState = getWorkspaceState(shared);
+    const runState = getRunState(shared);
 
     // Create shared store for cycle with usage tracking callback
     const store = new AgentSharedStore({
@@ -276,8 +283,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       throw new Error(execRes.errorMessage ?? 'Unknown error');
     }
 
-    // Update state from store
-    shared.state.runState = execRes.store.run;
+    // Update state from store - convert to snapshot
+    updateRunStateSnapshot(shared, execRes.store.run);
     shared.state.endTurn = execRes.endTurn;
     shared.state.outputLocation = prepRes.outputLocation;
 
@@ -285,8 +292,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
     shared.state.conversation = prepRes.context.messages;
 
-    // Store round state for later
-    shared.state.roundStates.push(prepRes.context.stateRound);
+    // Store round state snapshot for later
+    shared.state.roundStateSnapshots.push(prepRes.context.stateRound.toSnapshot());
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;

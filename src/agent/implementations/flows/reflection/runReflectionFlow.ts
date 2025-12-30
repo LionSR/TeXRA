@@ -10,6 +10,13 @@
  * - Round progression and stage lifecycle
  * - Prompt building and output handling
  * - Interrupt handling and cleanup
+ *
+ * ## Koala-code-reader Pattern
+ *
+ * Following koala's approach:
+ * - shared state is natively serializable (snapshots, not class instances)
+ * - services contain runtime dependencies (runStage, logger, etc.)
+ * - PersistedFlow handles persistence transparently
  */
 
 import type { RoundOutput } from '@agent/output';
@@ -17,7 +24,10 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import {
+  AgentWorkspaceState,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/AgentWorkspaceState';
 import { createRetryState } from '@agent/core/flows/RetryState';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
@@ -168,8 +178,8 @@ export async function runReflectionFlow<C = unknown>(
       executionContext.executionId,
     );
 
-    // Try to restore from persisted flow (resume scenario)
-    let initialWorkspaceState: AgentWorkspaceState;
+    // Try to restore workspace snapshot from persisted flow (resume scenario)
+    let initialWorkspaceSnapshot: AgentWorkspaceSnapshot;
     let isResume = false;
 
     try {
@@ -178,36 +188,35 @@ export async function runReflectionFlow<C = unknown>(
       );
       if (flowRecord?.shared) {
         const persistedShared = flowRecord.shared as {
-          workspaceSnapshot?: unknown;
+          state?: { workspaceSnapshot?: unknown };
         };
-        if (persistedShared.workspaceSnapshot) {
-          // Restore workspace state - PRESERVES THINKING BLOCKS!
-          initialWorkspaceState = AgentWorkspaceState.fromSnapshot(
-            persistedShared.workspaceSnapshot,
-          );
+        if (persistedShared.state?.workspaceSnapshot) {
+          // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
+          initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
+            persistedShared.state.workspaceSnapshot,
+          ).toSnapshot();
           isResume = true;
           executionContext.logger.debug(
-            'Restored workspace state from persisted flow',
+            'Restored workspace snapshot from persisted flow',
           );
         } else {
-          initialWorkspaceState = AgentWorkspaceState.create();
+          initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         }
       } else {
-        initialWorkspaceState = AgentWorkspaceState.create();
+        initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
       }
     } catch {
       // No persisted flow - fresh start
-      initialWorkspaceState = AgentWorkspaceState.create();
+      initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
     }
 
-    // Create shared state for the flow
+    // Create shared state for the flow (natively serializable)
     shared = {
       state: createInitialReflectionState(
         flowContext.totalRounds,
-        initialWorkspaceState,
+        initialWorkspaceSnapshot,
       ),
       retryState: createRetryState(),
-      runStage,
     };
 
     // Set initial round stage
@@ -221,8 +230,11 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(startNode, kv);
 
-    // Inject services (never persisted - runtime dependencies)
-    pf.setServices(flowContext.services);
+    // Inject services with runStage (never persisted - runtime dependencies)
+    pf.setServices({
+      ...flowContext.services,
+      runStage,
+    });
 
     if (isResume) {
       executionContext.logger.debug(
@@ -242,8 +254,10 @@ export async function runReflectionFlow<C = unknown>(
     shared?.state.roundStage?.end(status);
 
     // Finalize run stage if we created it internally
-    if (createdRunStage && shared?.runStage) {
-      shared.runStage.end(status);
+    if (createdRunStage) {
+      // Get runStage from services since it's no longer in shared
+      const runStage = (flowContext.services as ReflectionServices<C> & { runStage?: AgentLogStage }).runStage;
+      runStage?.end(status);
     }
 
     // Clean up context resources
