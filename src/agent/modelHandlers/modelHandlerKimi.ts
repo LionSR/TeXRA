@@ -1,10 +1,9 @@
-// (none needed)
-
 // Third-party imports
 import OpenAI from 'openai';
 
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { isMissingFinishReasonError } from '@common/errors/sdkErrorUtils';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { executeRequest } from './utils/requestExecutor';
@@ -16,10 +15,6 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
-
-// Internal imports
-
-// Local file imports
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -154,10 +149,25 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         stream.on('chunk', onChunk);
 
         try {
-          const sdkFinalResponse = await stream.finalChatCompletion();
+          let finalResponse: ChatCompletion;
 
-          // Use aggregator to build the final response with all content
-          const finalResponse = streamingAggregator.finalize(sdkFinalResponse);
+          try {
+            const sdkFinalResponse = await stream.finalChatCompletion();
+            // Use aggregator to build the final response with all content
+            finalResponse = streamingAggregator.finalize(sdkFinalResponse);
+          } catch (err) {
+            // Handle missing finish_reason error from OpenAI SDK
+            // @see https://github.com/openai/openai-node/issues/499
+            if (isMissingFinishReasonError(err)) {
+              this.logger.warn(
+                'Stream missing finish_reason - using aggregator fallback',
+              );
+              // Use aggregator without SDK response - it defaults finish_reason to 'stop'
+              finalResponse = streamingAggregator.finalize();
+            } else {
+              throw err;
+            }
+          }
 
           const finalReasoning = this.processThinkingBlock(finalResponse);
           if (finalReasoning === null) {

@@ -34,6 +34,7 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
   getSdkErrorMessage,
   isContextWindowError,
+  isMissingFinishReasonError,
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -345,10 +346,28 @@ export class ModelHandlerOpenAI<
         };
 
         try {
-          const sdkFinalResponse = await stream.finalChatCompletion();
-          let finalResponse = streamingAggregator
-            ? streamingAggregator.finalize(sdkFinalResponse)
-            : sdkFinalResponse;
+          let finalResponse: ChatCompletion;
+
+          try {
+            const sdkFinalResponse = await stream.finalChatCompletion();
+            finalResponse = streamingAggregator
+              ? streamingAggregator.finalize(sdkFinalResponse)
+              : sdkFinalResponse;
+          } catch (err) {
+            // Handle missing finish_reason error from OpenAI SDK
+            // This can occur with DeepSeek reasoning models and other providers
+            // that don't properly send finish_reason in streaming responses
+            // @see https://github.com/openai/openai-node/issues/499
+            if (streamingAggregator && isMissingFinishReasonError(err)) {
+              this.logger.warn(
+                'Stream missing finish_reason - using aggregator fallback',
+              );
+              // Use aggregator without SDK response - it defaults finish_reason to 'stop'
+              finalResponse = streamingAggregator.finalize();
+            } else {
+              throw err;
+            }
+          }
 
           // Ensure usage is captured - use SDK's totalUsage() as fallback
           if (!finalResponse.usage) {
