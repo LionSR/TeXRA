@@ -28,9 +28,11 @@ import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
-import type {
-  ReflectionFlowShared,
-  RoundContext,
+import {
+  getWorkspaceState,
+  updateWorkspaceSnapshot,
+  type ReflectionFlowShared,
+  type RoundContext,
 } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -72,8 +74,10 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, workspaceState, context } =
-      shared.state;
+    const { currentRound, roundOutputs, context } = shared.state;
+
+    // Reconstruct workspace state from snapshot
+    const workspaceState = getWorkspaceState(shared);
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -168,13 +172,19 @@ export class MediaPreparationNode<C = unknown> extends Node<
 
   /**
    * Add media to messages via modelHandler and continue.
+   * CRITICAL: Update workspace snapshot after mutations from exec().
    */
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: MediaPrepInput,
+    prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
+
+    // CRITICAL: Save mutated workspace state back to snapshot
+    // The latexMediaManager mutated workspaceState in exec(), so we must
+    // update the snapshot to persist those changes
+    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
     // Log warning if degraded
     if (execRes.kind === 'degraded') {

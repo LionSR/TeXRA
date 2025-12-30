@@ -15,6 +15,10 @@
  *
  * Services accessed via native `this.services`:
  * - promptBuilder, modelHandler, logger
+ *
+ * State access pattern:
+ * - Uses direct state fields (currentRound, conversation, totalRounds, context)
+ * - No snapshot helpers needed (doesn't access workspaceState, runState, or roundStates)
  */
 
 import { Node } from '@agent/node';

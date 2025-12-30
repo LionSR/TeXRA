@@ -12,7 +12,7 @@
  * - post(): Update state and route
  *
  * Services accessed via native `this.services`:
- * - logger, checkInterruption
+ * - logger, checkInterruption, runStage
  */
 
 import { Node } from '@agent/node';
@@ -21,9 +21,11 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
-import type { ReflectionFlowShared } from '../ReflectionFlowState';
+import {
+  createFreshWorkspaceSnapshot,
+  type ReflectionFlowShared,
+} from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -132,12 +134,12 @@ export class RoundCompleteNode<C = unknown> extends Node<
 
     // Create new round stage (r1, r2, etc.) as sibling to r0
     const newRoundStage = await this.services.logger.stage(`r${nextRound}`, {
-      parent: shared.runStage,
+      parent: this.services.runStage,
     });
     shared.state.roundStage = newRoundStage;
 
-    // Create fresh workspace state for new round
-    shared.state.workspaceState = AgentWorkspaceState.create();
+    // Create fresh workspace snapshot for new round
+    shared.state.workspaceSnapshot = createFreshWorkspaceSnapshot();
 
     // Loop back to TeXCountNode (start of round pipeline)
     return FlowTransition.CONTINUE;

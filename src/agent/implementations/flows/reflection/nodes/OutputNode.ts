@@ -15,6 +15,11 @@
  * - exec(): Process output files and latexdiff
  * - post(): Store round output in shared
  *
+ * Serialization pattern (koala-code-reader):
+ * - Accesses only natively serializable state fields
+ * - Stores RoundOutput (plain JSON) to shared.state.roundOutputs
+ * - No class instances or runtime dependencies in state
+ *
  * Services accessed via native `this.services`:
  * - outputHandler, logger, setting, fileService
  */

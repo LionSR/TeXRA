@@ -3,8 +3,8 @@
  *
  * ## Following koala-code-reader's Pattern
  *
- * Shared state contains ONLY serializable data (plain JSON):
- * - No class instances (use snapshots instead)
+ * Shared state contains ONLY natively serializable data (plain JSON):
+ * - Use snapshots instead of class instances
  * - No runtime dependencies (those go in services)
  * - No functions or callbacks
  *
@@ -12,14 +12,25 @@
  *
  * ## Architecture
  *
- * - **shared**: Mutable, serializable state (survives structuredClone)
- * - **services**: Runtime dependencies (logger, model handler, etc.)
+ * - **shared**: Mutable, natively serializable state (survives structuredClone)
+ * - **services**: Runtime dependencies (logger, model handler, runStage, etc.)
  * - **params**: Immutable flow configuration
  */
 
 import type { RoundOutput } from '@agent/output';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import {
+  AgentRunState,
+  AgentRunStateSnapshotSchema,
+  ConversationRoundState,
+  ConversationRoundStateSnapshotSchema,
+  type AgentRunStateSnapshot,
+  type ConversationRoundStateSnapshot,
+} from '@agent/core/AgentState';
+import {
+  AgentWorkspaceState,
+  AgentWorkspaceStateSnapshotSchema,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { RetryState } from '@agent/core/flows/RetryState';
 import type { AgentLogStage } from '@logger/AgentLogger';
@@ -27,13 +38,16 @@ import type { AgentFileLocation } from '@utils/files';
 
 /**
  * Context prepared for a round (messages + prefill).
+ *
+ * Note: stateRound is kept as ConversationRoundState for runtime convenience.
+ * It gets converted to snapshot when stored in roundStateSnapshots.
  */
 export interface RoundContext {
   /** Prepared messages for the model */
   messages: ProviderMessage[];
   /** Prefill text for assistant response */
   prefill: string;
-  /** Round state for tracking */
+  /** Round state for tracking (runtime class instance) */
   stateRound: ConversationRoundState;
 }
 
@@ -41,23 +55,39 @@ export interface RoundContext {
  * Mutable state for reflection flow.
  *
  * This flows through all nodes and gets updated in post() methods.
+ *
+ * ## Serialization Strategy
+ *
+ * Following koala-code-reader's pattern, we store **snapshots** for
+ * complex state objects instead of class instances:
+ * - workspaceSnapshot: AgentWorkspaceSnapshot (not AgentWorkspaceState)
+ * - runStateSnapshot: AgentRunStateSnapshot (not AgentRunState)
+ * - roundStateSnapshots: ConversationRoundStateSnapshot[] (not class array)
+ *
+ * Nodes reconstruct class instances from snapshots when needed, then
+ * store snapshots back after mutation. This ensures structuredClone()
+ * works without any special handling.
+ *
+ * ## Runtime-Only Fields
+ *
+ * - roundStage: UI logging stage (not persisted, reconstructed on resume)
  */
 export interface ReflectionFlowState {
   // Round tracking
   currentRound: number;
   totalRounds: number;
 
-  // Per-round state (reset each round)
-  workspaceState: AgentWorkspaceState;
+  // Per-round state (natively serializable)
+  workspaceSnapshot: AgentWorkspaceSnapshot;
   context: RoundContext | null;
   outputLocation: AgentFileLocation | null;
 
-  // Accumulated state
+  // Accumulated state (natively serializable)
   conversation: ProviderMessage[];
-  runState: AgentRunState;
+  runStateSnapshot: AgentRunStateSnapshot;
 
-  // Results
-  roundStates: ConversationRoundState[];
+  // Results (natively serializable)
+  roundStateSnapshots: ConversationRoundStateSnapshot[];
   roundOutputs: RoundOutput[];
 
   // Control flags
@@ -65,6 +95,7 @@ export interface ReflectionFlowState {
   endTurn: boolean;
 
   // UI logging - round stage for collapsible groups (r0, r1, r2...)
+  // RUNTIME ONLY: Not persisted, reconstructed on resume
   roundStage: AgentLogStage | null;
 }
 
@@ -72,27 +103,13 @@ export interface ReflectionFlowState {
  * Shared context passed through the flow.
  *
  * Following koala-code-reader's pattern:
- * - Contains ONLY serializable data (plain JSON)
+ * - Contains ONLY natively serializable data (plain JSON)
  * - Runtime dependencies like `runStage` are in services, not here
- * - All fields must survive structuredClone()
- *
- * ## Note on Current Implementation
- *
- * Currently, `state` contains class instances (AgentRunState, etc.) which
- * are converted to plain objects by structuredClone(). This works for
- * persistence but loses class methods. Future refactoring should convert
- * to pure snapshot format (plain data only).
- *
- * TODO: Convert ReflectionFlowState fields to snapshot format:
- * - workspaceState → workspaceSnapshot (via toSnapshot())
- * - runState → runStateSnapshot (via toSnapshot())
- * - roundStates → roundStateSnapshots (via map + toSnapshot())
+ * - All fields survive structuredClone() without special handling
  */
 export interface ReflectionFlowShared {
   state: ReflectionFlowState;
   retryState: RetryState;
-  /** Parent stage for round stages - RUNTIME ONLY, not persisted */
-  runStage: AgentLogStage;
   /** Index signature for PersistedFlow serialization compatibility */
   [key: string]: unknown;
 }
@@ -100,38 +117,89 @@ export interface ReflectionFlowShared {
 /**
  * Create initial state for a reflection flow run.
  *
- * On resume, we always start from round 0 and "replay" all rounds.
- * Completed rounds are detected by initializeOutputAndPrefill() which
- * checks if output file exists - if so, it reads the existing response
- * instead of calling the model, allowing conversation to build correctly.
- *
  * @param totalRounds - Total rounds to execute
- * @param initialWorkspaceState - Initial workspace state
+ * @param initialWorkspaceSnapshot - Initial workspace state snapshot
  */
 export function createInitialReflectionState(
   totalRounds: number,
-  initialWorkspaceState: AgentWorkspaceState,
+  initialWorkspaceSnapshot: AgentWorkspaceSnapshot,
 ): ReflectionFlowState {
-  // Always start from round 0, even on resume.
-  // Completed rounds are "replayed" - their output files already exist,
-  // so initializeOutputAndPrefill() will read them instead of calling the model.
-  // This ensures conversation is built correctly through the normal flow.
-  // roundOutputs is populated by OutputNode as each round completes.
   return {
     currentRound: 0,
     totalRounds,
-    workspaceState: initialWorkspaceState,
+    workspaceSnapshot: initialWorkspaceSnapshot,
     context: null,
     outputLocation: null,
     conversation: [],
-    runState: new AgentRunState(),
-    roundStates: [],
+    runStateSnapshot: new AgentRunState().toSnapshot(),
+    roundStateSnapshots: [],
     roundOutputs: [],
     continueRounds: true,
     endTurn: false,
-    roundStage: null, // Set by agent.run() before flow starts
+    roundStage: null, // Set by flow runner before flow starts
   };
 }
 
-// Re-export state classes for convenience
-export { AgentRunState, ConversationRoundState };
+// ============================================================================
+// Helper Functions for Snapshot Conversion
+// ============================================================================
+
+/**
+ * Reconstruct AgentWorkspaceState from snapshot.
+ * Use this when nodes need to mutate workspace state.
+ */
+export function getWorkspaceState(
+  shared: ReflectionFlowShared,
+): AgentWorkspaceState {
+  return AgentWorkspaceState.fromSnapshot(shared.state.workspaceSnapshot);
+}
+
+/**
+ * Update workspace snapshot after mutation.
+ * Call this after modifying the workspace state.
+ */
+export function updateWorkspaceSnapshot(
+  shared: ReflectionFlowShared,
+  workspaceState: AgentWorkspaceState,
+): void {
+  shared.state.workspaceSnapshot = workspaceState.toSnapshot();
+}
+
+/**
+ * Reconstruct AgentRunState from snapshot.
+ * Use this when nodes need to access or mutate run state.
+ */
+export function getRunState(shared: ReflectionFlowShared): AgentRunState {
+  return AgentRunState.fromSnapshot(shared.state.runStateSnapshot);
+}
+
+/**
+ * Update run state snapshot after mutation.
+ * Call this after modifying the run state.
+ */
+export function updateRunStateSnapshot(
+  shared: ReflectionFlowShared,
+  runState: AgentRunState,
+): void {
+  shared.state.runStateSnapshot = runState.toSnapshot();
+}
+
+/**
+ * Create fresh workspace snapshot for a new round.
+ */
+export function createFreshWorkspaceSnapshot(): AgentWorkspaceSnapshot {
+  return AgentWorkspaceState.create().toSnapshot();
+}
+
+// Re-export state classes and schemas for convenience
+export {
+  AgentRunState,
+  AgentRunStateSnapshotSchema,
+  ConversationRoundState,
+  ConversationRoundStateSnapshotSchema,
+  AgentWorkspaceState,
+  AgentWorkspaceStateSnapshotSchema,
+};
+
+// Re-export snapshot types
+export type { AgentRunStateSnapshot, ConversationRoundStateSnapshot };
