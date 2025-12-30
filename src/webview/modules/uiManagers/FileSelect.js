@@ -62,7 +62,9 @@ export class FileSelect {
     try {
       selectDiv.innerHTML = '';
       this.addOption(selectDiv, '', 'None');
-      sortedFiles.forEach((f) => this.addOption(selectDiv, f, f, f === restoredValue));
+      sortedFiles.forEach((f) =>
+        this.addOption(selectDiv, f, f, f === restoredValue),
+      );
 
       // Only update state if we successfully restored a value.
       if (restoredValue) {
