@@ -523,9 +523,7 @@ class ResponseProcessNode<C> extends BaseNode<
         logger.error(
           `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
         );
-        logger.error(
-          'Massive repetition detected - skipping this response',
-        );
+        logger.error('Massive repetition detected - skipping this response');
         logger.error('Message structure when repetition detected:');
         logger.error(
           JSON.stringify(messageToSkeleton(prepRes.messages), null, 2),
@@ -659,9 +657,7 @@ class ResponseProcessNode<C> extends BaseNode<
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
-    logger.debug(
-      `Normalized usage: ${JSON.stringify(result.normalizedUsage)}`,
-    );
+    logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 
     logger.debug('Response preview:');
     logger.debug(
@@ -728,8 +724,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       state.shouldStop || !state.stopReason || !state.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
-    const interrupted =
-      !shouldSkip && Boolean(await checkInterruption());
+    const interrupted = !shouldSkip && Boolean(await checkInterruption());
 
     return {
       shouldSkip,
@@ -791,7 +786,8 @@ class ResponseContinuationNode<C> extends BaseNode<
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { store, logger, modelHandler, agentSetting, agentConfig } = this.services;
+    const { store, logger, modelHandler, agentSetting, agentConfig } =
+      this.services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
@@ -820,10 +816,9 @@ class ResponseContinuationNode<C> extends BaseNode<
     }
 
     store.round.incrementContinuation();
-    logger.info(
-      `Starting continuation #${store.round.continuationCount}`,
-      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
-    );
+    logger.info(`Starting continuation #${store.round.continuationCount}`, {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
 
     if (reachedTokenLimit) {
       logger.info('Continuing after hitting the model token limit', {
@@ -831,10 +826,9 @@ class ResponseContinuationNode<C> extends BaseNode<
       });
     }
 
-    logger.info(
-      '🧵 Added continuation prompt from partial XML output',
-      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
-    );
+    logger.info('🧵 Added continuation prompt from partial XML output', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(
