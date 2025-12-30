@@ -46,7 +46,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    *
    * Note: This handler does NOT use the getMessageNormalizationOptions() hook
    * because Kimi thinking models require additional custom logic:
-   * - Conditional `thinking: true` parameter
+   * - Reasoning auto-enabled via model name (no explicit parameter needed)
    * - Custom streaming aggregation for reasoning_content
    * - Different request structure for thinking vs regular models
    *
