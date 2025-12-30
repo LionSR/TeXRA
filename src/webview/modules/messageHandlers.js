@@ -881,8 +881,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return html;
     }
 
-    // Return the modified HTML
-    return doc.querySelector('div').innerHTML;
+    // Return the modified HTML (with null-safety fallback)
+    return doc.querySelector('div')?.innerHTML ?? html;
   }
 
   _getActiveAgentSelection() {

@@ -9,6 +9,7 @@ import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { debounce } from '@utils/core';
+import { DEBOUNCE_WATCHER_MS } from '@utils/config';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -32,7 +33,7 @@ export class WatcherManager {
       if (!this.disposed) {
         this.refresh();
       }
-    }, 200);
+    }, DEBOUNCE_WATCHER_MS);
   }
 
   async setup() {

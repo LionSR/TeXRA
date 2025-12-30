@@ -9,7 +9,12 @@ import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { agentDirectories } from '@frontend/agents';
-import { watchConfig, getConfig } from '@utils/config';
+import {
+  watchConfig,
+  getConfig,
+  DEBOUNCE_OPTIONS_MS,
+  DEBOUNCE_STATE_SAVE_MS,
+} from '@utils/config';
 import { debounce } from '@utils/core';
 import { consumePendingState } from '@common/state';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -36,11 +41,11 @@ export class MainViewProvider
   // Debounced refresh methods using perfect-debounce
   private debouncedRefreshAgentOptions = debounce(
     () => this.refreshAgentOptions(),
-    300,
+    DEBOUNCE_OPTIONS_MS,
   );
   private debouncedRefreshModelOptions = debounce(
     () => this.refreshModelOptions(),
-    300,
+    DEBOUNCE_OPTIONS_MS,
   );
 
   constructor(protected readonly context: vscode.ExtensionContext) {
@@ -204,7 +209,7 @@ export class MainViewProvider
     const debouncedAgentFileRefresh = debounce(async () => {
       await updateAgentDirs();
       await this.refreshAgentOptions();
-    }, 500);
+    }, DEBOUNCE_STATE_SAVE_MS);
 
     // Filter and debounce agent file changes
     const onAgentFileChange = (uri: vscode.Uri) => {
