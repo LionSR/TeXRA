@@ -78,6 +78,10 @@ async function checkPersonalKeyAvailability(
  *
  * When "Use Included Access" is enabled, only server-side availability is checked.
  * When "Use My Own Keys" is selected, personal API keys are checked as fallback.
+ *
+ * Note: Selection preservation is handled client-side via _markOptionAsSelected
+ * in the webview, which uses DOMParser to add the 'selected' attribute based
+ * on the current dropdown value before setting innerHTML.
  */
 export async function computeModelOptions(): Promise<string> {
   const models = getConfig<string[]>('texra.models', []);

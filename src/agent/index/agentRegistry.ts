@@ -532,10 +532,19 @@ export interface AgentOptionsPayload {
   toolUse: string;
 }
 
+/** Optional selected values for preserving current selection */
+export interface AgentSelectedValues {
+  workflow?: string;
+  toolUse?: string;
+}
+
 /**
  * Build dropdown HTML options from cached agents.
+ * @param selected - Optional current selection to preserve
  */
-export function buildAgentOptions(): AgentOptionsPayload {
+export function buildAgentOptions(
+  selected?: AgentSelectedValues,
+): AgentOptionsPayload {
   const workflowEntries = getWorkflowAgents();
   const toolUseEntries = getToolUseAgents();
 
@@ -558,11 +567,13 @@ export function buildAgentOptions(): AgentOptionsPayload {
       visibleWorkflow,
       DEFAULT_WORKFLOW_AGENT,
       'No workflow agents',
+      selected?.workflow,
     ),
     toolUse: renderOptions(
       visibleToolUse,
       DEFAULT_TOOL_USE_AGENT,
       'No tool-use agents',
+      selected?.toolUse,
     ),
   };
 }
@@ -634,23 +645,30 @@ function renderOptions(
   entries: AgentEntry[],
   defaultName: string,
   emptyMsg: string,
+  selectedValue?: string,
 ): string {
   if (entries.length === 0) {
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // After deduplication, each name appears only once - simple name match
-  const defaultEntry = entries.find((e) => e.name === defaultName);
+  // Determine which entry should be selected:
+  // 1. If selectedValue is provided and exists in entries, use it
+  // 2. Otherwise fall back to default
+  const selectedEntry = selectedValue
+    ? entries.find((e) => createKey(e.source, e.name) === selectedValue)
+    : undefined;
+  const effectiveSelectedEntry =
+    selectedEntry ?? entries.find((e) => e.name === defaultName);
 
   // Sort: selected first, then alphabetically by name
   const sorted = [...entries].sort((a, b) => {
-    if (a.name === defaultName) return -1;
-    if (b.name === defaultName) return 1;
+    if (a === effectiveSelectedEntry) return -1;
+    if (b === effectiveSelectedEntry) return 1;
     return a.name.localeCompare(b.name);
   });
 
   return sorted
-    .map((entry) => renderOption(entry, entry === defaultEntry))
+    .map((entry) => renderOption(entry, entry === effectiveSelectedEntry))
     .join('\n');
 }
 
@@ -680,14 +698,17 @@ function renderOption(entry: AgentEntry, selected: boolean): string {
 
 /**
  * Async version - ensures cache is loaded first.
+ * @param selected - Optional current selection to preserve
  */
-export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
+export async function computeAgentOptions(
+  selected?: AgentSelectedValues,
+): Promise<AgentOptionsPayload> {
   if (!initialized) {
     await loadAgents();
   } else if (initPromise) {
     await initPromise;
   }
-  return buildAgentOptions();
+  return buildAgentOptions(selected);
 }
 
 /**

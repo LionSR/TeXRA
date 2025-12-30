@@ -43,7 +43,6 @@ import {
   getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { encodeHtml } from '@common/htmlEncoding.js';
 import {
   AGENT_DECORATORS,
   getAgentTypeDecorator,
@@ -846,6 +845,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * By adding 'selected' attribute to the correct option in HTML before setting
    * innerHTML, slotchange will read selected=true and preserve the selection.
    *
+   * Uses DOMParser for safe, encoding-aware HTML manipulation instead of regex.
+   *
    * @param {string} html - The options HTML string
    * @param {string} value - The value to mark as selected
    * @returns {string} The HTML with 'selected' attribute added to matching option
@@ -855,36 +856,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return html || '';
     }
 
-    // HTML-encode the value to match how it appears in the HTML
-    // (agent values are encoded with he.encode() when generating options)
-    const encodedValue = encodeHtml(value);
+    // Use DOMParser for safe, encoding-aware manipulation
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+    const options = doc.querySelectorAll('vscode-option');
 
-    // Escape special regex characters in the encoded value
-    const escapedValue = encodedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let found = false;
+    options.forEach((opt) => {
+      // getAttribute returns decoded value, so we compare directly with value
+      if (opt.getAttribute('value') === value) {
+        opt.setAttribute('selected', '');
+        found = true;
+      }
+    });
 
-    // Match <vscode-option with value="..." and add selected attribute
-    // Handle both value="..." and value='...' formats
-    // Use word boundary after value= to avoid matching data-value or similar
-    // Check that 'selected' isn't already present to avoid duplicates
-    const doubleQuoteRegex = new RegExp(
-      `(<vscode-option\\s+(?![^>]*\\bselected\\b)[^>]*\\bvalue="${escapedValue}"[^>]*)>`,
-      'i',
-    );
-    const singleQuoteRegex = new RegExp(
-      `(<vscode-option\\s+(?![^>]*\\bselected\\b)[^>]*\\bvalue='${escapedValue}'[^>]*)>`,
-      'i',
-    );
-
-    // Try double quotes first, then single quotes
-    if (doubleQuoteRegex.test(html)) {
-      return html.replace(doubleQuoteRegex, '$1 selected>');
-    }
-    if (singleQuoteRegex.test(html)) {
-      return html.replace(singleQuoteRegex, '$1 selected>');
+    if (!found) {
+      // Value not found in options - return original HTML
+      return html;
     }
 
-    // Value not found in options - return original HTML
-    return html;
+    // Return the modified HTML
+    return doc.querySelector('div').innerHTML;
   }
 
   _getActiveAgentSelection() {
