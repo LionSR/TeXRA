@@ -524,9 +524,31 @@ Files requiring updates:
 
 **Next steps:**
 
+- ~~Phase 3: Integrate PersistedFlow with ToolUseFlow~~ ✅ (done - see below)
 - Phase 2: Remove ToolUse hydration code (ToolUseSnapshotStore, ToolUseSessionPersistence)
-- Phase 3: Integrate PersistedFlow with ToolUseFlow (similar to ReflectionFlow)
 - Phase 4: Simplify AgentSharedStore.toSnapshot() usage
+
+### 2024-12-30: Phase 1.6 Complete (ToolUseFlow Integration)
+
+**Completed:**
+
+- ✅ PersistedFlow integrated with ToolUseFlow (`runToolUseFlow.ts`)
+  - Automatic state persistence after each node via PersistedFlow
+  - Resume detection and logging
+  - Same pattern as ReflectionFlow for consistency
+- ✅ Added index signature to `ToolUseRunShared` for `Record<string, unknown>` compatibility
+
+**Both flows now use PersistedFlow:**
+- ReflectionFlow: Preserves thinking blocks via workspace state restoration
+- ToolUseFlow: Persists tool-use session state after each node
+
+**Next steps:**
+
+- Phase 2: Remove old hydration code now that PersistedFlow handles persistence
+  - Delete `ToolUseSnapshotStore.ts` (207 lines)
+  - Delete `ToolUseSessionPersistence.ts` (245 lines)
+  - Delete `ToolUseSessionManager.ts` (145 lines)
+  - Update callers in extension.ts, resumeCommand.ts, ToolUseFollowUp.ts
 
 ## References
 
