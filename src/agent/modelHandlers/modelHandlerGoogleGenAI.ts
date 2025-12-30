@@ -926,7 +926,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     };
   }
 
-  addContinueMessageWithPrefill(/* ... */): void {
+  addContinueMessageWithPrefill(
+    _messages: Content[],
+    _stateRound: ConversationRoundState,
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
     );
@@ -949,7 +955,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  updateMessageContentWithPrefill(/* ... */): void {
+  updateMessageContentWithPrefill(
+    _messages: Content[],
+    _bestConnector: string,
+    _newResponse: string,
+    _workspaceState: AgentWorkspaceState,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
     );
