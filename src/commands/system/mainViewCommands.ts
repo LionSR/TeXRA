@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { computeAgentOptions } from '@agent/index';
+import { computeAgentOptions, refresh } from '@agent/index';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
@@ -16,6 +16,25 @@ export const mainViewCommands = {
   refreshAgentOptions: 'texra.refreshAgentOptions',
   refreshAllOptions: 'texra.refreshAllOptions',
 };
+
+/**
+ * Get the main webview view instance.
+ */
+async function getMainWebview(): Promise<vscode.WebviewView | undefined> {
+  return safeExecuteCommand<vscode.WebviewView>(
+    'texra.getWebviewView',
+    [],
+    CHANNEL,
+  );
+}
+
+/**
+ * Log a refresh error.
+ */
+function logRefreshError(error: unknown, context: string): void {
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error(CHANNEL, `Failed to ${context}: ${message}`);
+}
 
 /**
  * Registers main view commands for the extension
@@ -52,23 +71,17 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshModelOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshModelOptions,
     async () => {
-      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-        [],
-        'mainViewCommands',
-      );
-      if (webviewView) {
-        try {
-          const modelOptions = await computeModelOptions();
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            options: modelOptions,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          logger.error(CHANNEL, `Failed to refresh model options: ${message}`);
-        }
+      const webview = await getMainWebview();
+      if (!webview) return;
+
+      try {
+        const options = await computeModelOptions();
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          options,
+        });
+      } catch (error) {
+        logRefreshError(error, 'refresh model options');
       }
     },
   );
@@ -79,23 +92,19 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshAgentOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshAgentOptions,
     async () => {
-      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-        [],
-        'mainViewCommands',
-      );
-      if (webviewView) {
-        try {
-          const agentOptions = await computeAgentOptions();
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            options: agentOptions,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          logger.error(CHANNEL, `Failed to refresh agent options: ${message}`);
-        }
+      const webview = await getMainWebview();
+      if (!webview) return;
+
+      try {
+        // Reload agent index to pick up config changes
+        await refresh();
+        const options = await computeAgentOptions();
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          options,
+        });
+      } catch (error) {
+        logRefreshError(error, 'refresh agent options');
       }
     },
   );
@@ -107,33 +116,27 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
   const refreshAllOptionsCommand = vscode.commands.registerCommand(
     mainViewCommands.refreshAllOptions,
     async () => {
-      const webviewView = await safeExecuteCommand<vscode.WebviewView>(
-        'texra.getWebviewView',
-        [],
-        'mainViewCommands',
-      );
-      if (webviewView) {
-        try {
-          // Refresh both model and agent options in parallel
-          const [modelOptions, agentOptions] = await Promise.all([
-            computeModelOptions(),
-            computeAgentOptions(),
-          ]);
+      const webview = await getMainWebview();
+      if (!webview) return;
 
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            options: modelOptions,
-          });
+      try {
+        // Reload agent index first, then compute both in parallel
+        await refresh();
+        const [modelOptions, agentOptions] = await Promise.all([
+          computeModelOptions(),
+          computeAgentOptions(),
+        ]);
 
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            options: agentOptions,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          logger.error(CHANNEL, `Failed to refresh options: ${message}`);
-        }
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          options: modelOptions,
+        });
+        webview.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          options: agentOptions,
+        });
+      } catch (error) {
+        logRefreshError(error, 'refresh options');
       }
     },
   );
