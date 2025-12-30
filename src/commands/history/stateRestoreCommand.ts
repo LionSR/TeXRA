@@ -6,6 +6,7 @@ import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
 import { setPendingState } from '@common/state';
+import { getMainWebview } from '@frontend/system/commandUtils';
 // Type imports
 
 const CHANNEL = 'stateRestoreCommand';
@@ -36,10 +37,7 @@ async function restoreState(state: TaskState) {
 
     // Try to get the webview directly using our safe command
     try {
-      const webviewView =
-        await vscode.commands.executeCommand<vscode.WebviewView>(
-          'texra.getWebviewView',
-        );
+      const webviewView = await getMainWebview(CHANNEL);
 
       if (webviewView) {
         // Send the state directly to the webview
