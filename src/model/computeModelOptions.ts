@@ -29,6 +29,44 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 }
 
 /**
+ * Check if a model is available via personal API keys.
+ * Called only when server-side access is not available and user is in "Use My Own Keys" mode.
+ *
+ * @param config - Model configuration
+ * @param hasOpenRouter - Whether user has OpenRouter API key
+ * @returns Whether the model is available via personal keys
+ */
+async function checkPersonalKeyAvailability(
+  config: { openRouterOnly?: boolean; openrouterFullName?: string; provider: string },
+  hasOpenRouter: boolean,
+): Promise<boolean> {
+  // openRouterOnly models can ONLY use OpenRouter
+  if (config.openRouterOnly) {
+    return hasOpenRouter;
+  }
+
+  const provider = config.provider;
+
+  // Check provider-specific API key
+  if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+    try {
+      const hasProviderKey = await SecretManager.apiKeyExists(provider as ApiProvider);
+      if (hasProviderKey) {
+        return true;
+      }
+      // Check OpenRouter as fallback for models that support it
+      return !!(config.openrouterFullName && hasOpenRouter);
+    } catch (error) {
+      console.warn(`Failed to check API key for ${provider}:`, error);
+      return false;
+    }
+  }
+
+  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
+  return true;
+}
+
+/**
  * Compute model <vscode-option> tags based on available API keys.
  * Models missing a required key receive data-requires-key="true" so the
  * webview can handle API key setup prompts and display a red ✗ indicator.
@@ -79,27 +117,7 @@ export async function computeModelOptions(): Promise<string> {
       // 1. Not available via server-side, AND
       // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
       if (!available && !useIncludedAccess) {
-        if (config.openRouterOnly) {
-          // openRouterOnly models can ONLY use OpenRouter - check that key exists
-          available = hasOpenRouter;
-        } else if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
-          // Check provider-specific API key
-          try {
-            available = await SecretManager.apiKeyExists(
-              provider as ApiProvider,
-            );
-          } catch (error) {
-            console.warn(`Failed to check API key for ${provider}:`, error);
-          }
-
-          // Check OpenRouter as fallback for models that support it
-          if (!available && config.openrouterFullName && hasOpenRouter) {
-            available = true;
-          }
-        } else {
-          // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
-          available = true;
-        }
+        available = await checkPersonalKeyAvailability(config, hasOpenRouter);
       }
 
       // Build option tag with data attributes
