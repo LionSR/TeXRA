@@ -217,6 +217,37 @@ export function getAuthCallbackUri(uriScheme: string): string {
   return `${uriScheme}://${getExtensionId()}/auth-callback`;
 }
 
+/**
+ * Get the localhost callback URI for OAuth redirects.
+ * Used as a fallback when custom URI schemes are not available.
+ */
+export function getLocalhostCallbackUri(port: number): string {
+  return `http://127.0.0.1:${port}/auth-callback`;
+}
+
+/**
+ * Determine if localhost callback should be used instead of custom URI scheme.
+ * This is needed when custom protocol handlers (cursor://, vscode://) may not work:
+ * - Remote development environments
+ * - Web-based VS Code instances
+ * - Systems without proper URI handler registration
+ *
+ * @param uriScheme - The VS Code URI scheme (vscode, cursor, vscode-insiders, etc.)
+ * @returns true if localhost callback should be preferred
+ */
+export function shouldUseLocalhostCallback(uriScheme: string): boolean {
+  // List of URI schemes that are known to work reliably with custom protocols
+  const reliableSchemes = ['vscode', 'vscode-insiders'];
+
+  // If not a reliable scheme (e.g., cursor, codium, etc.), use localhost fallback
+  // These may not have proper protocol handlers registered on all systems
+  if (!reliableSchemes.includes(uriScheme)) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */
 export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
 

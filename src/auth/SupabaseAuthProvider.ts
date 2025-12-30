@@ -7,12 +7,15 @@ import {
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
   getAuthCallbackUri,
+  getLocalhostCallbackUri,
+  shouldUseLocalhostCallback,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
   SUPABASE_SESSION_KEY,
   type OAuthProvider,
 } from './config';
+import { LocalCallbackServer } from './LocalCallbackServer';
 import { getServerSideKeyService } from './serverKeys';
 import type { SupabaseUriHandler } from './UriHandler';
 
@@ -374,6 +377,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
+    const useLocalhost = shouldUseLocalhostCallback(vscode.env.uriScheme);
+    let localServer: LocalCallbackServer | null = null;
+
     try {
       const supabase = SupabaseClient.getClient();
 
@@ -384,10 +390,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         ? requestedProvider
         : DEFAULT_OAUTH_PROVIDER;
 
+      // Determine redirect URI - use localhost for unreliable URI schemes
+      let redirectUri: string;
+      if (useLocalhost) {
+        localServer = new LocalCallbackServer();
+        const port = await localServer.start();
+        redirectUri = getLocalhostCallbackUri(port);
+        logger.info(
+          'SupabaseAuthProvider',
+          `Using localhost callback on port ${port} (URI scheme: ${vscode.env.uriScheme})`,
+        );
+      } else {
+        redirectUri = getAuthCallbackUri(vscode.env.uriScheme);
+        logger.info(
+          'SupabaseAuthProvider',
+          `Using custom URI scheme callback: ${redirectUri}`,
+        );
+      }
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: getAuthCallbackUri(vscode.env.uriScheme),
+          redirectTo: redirectUri,
         },
       });
 
@@ -409,7 +433,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         },
         async (progress, token) => {
           progress.report({ message: 'Waiting for authentication...' });
-          const session = await this.waitForSession(token);
+
+          // Wait for callback from appropriate source
+          const session = useLocalhost && localServer
+            ? await this.waitForLocalhostSession(localServer, token)
+            : await this.waitForSession(token);
+
           if (!session) {
             throw new Error(
               'Authentication cancelled or timed out. Try again.',
@@ -443,6 +472,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     } finally {
       // Reset flag after entire OAuth flow completes (success or failure)
       this.isProcessingCallback = false;
+      // Always stop the local server if it was started
+      localServer?.stop();
     }
   }
 
@@ -526,6 +557,73 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           }
         },
       );
+
+      const timeoutHandle = setTimeout(() => {
+        cleanupListeners();
+        reject(new Error('Authentication timed out. Try again.'));
+      }, AUTH_CALLBACK_TIMEOUT_MS);
+
+      if (cancellationToken.isCancellationRequested) {
+        cleanupListeners();
+        resolve(null);
+        return;
+      }
+
+      cancellationListener = cancellationToken.onCancellationRequested(() => {
+        cleanupListeners();
+        resolve(null);
+      });
+    });
+  }
+
+  /**
+   * Wait for OAuth callback from localhost server.
+   * Used when custom URI schemes are not available.
+   * @param localServer - The LocalCallbackServer instance
+   * @param cancellationToken - Token to cancel the wait
+   */
+  private async waitForLocalhostSession(
+    localServer: LocalCallbackServer,
+    cancellationToken: vscode.CancellationToken,
+  ): Promise<SupabaseSession | null> {
+    return new Promise((resolve, reject) => {
+      let isCleanedUp = false;
+      let cancellationListener: vscode.Disposable | undefined = undefined;
+
+      const cleanupListeners = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        clearTimeout(timeoutHandle);
+        subscription.dispose();
+        cancellationListener?.dispose();
+      };
+
+      const subscription = localServer.onDidReceiveCallback(async (uri) => {
+        cleanupListeners();
+
+        try {
+          const result = await this.parseCallbackAndCreateSession(uri);
+
+          if (!result.success) {
+            if (result.error === 'Missing tokens in callback') {
+              logger.error(
+                'SupabaseAuthProvider',
+                `Missing tokens in localhost callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
+              );
+            }
+            reject(new Error(`OAuth error: ${result.error}. Try again.`));
+            return;
+          }
+
+          resolve(result.session);
+        } catch (error) {
+          logger.error(
+            'SupabaseAuthProvider',
+            `Error processing localhost callback: ${toErrorMessage(error)}`,
+          );
+          reject(error);
+        }
+      });
 
       const timeoutHandle = setTimeout(() => {
         cleanupListeners();
