@@ -77,7 +77,7 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
  */
 export interface ToolUseRunShared<C = unknown> {
   state: ToolUseRunState<C>;
-  /** Index signature for Record<string, unknown> compatibility with PersistedFlow */
+  /** Index signature for PersistedFlow serialization compatibility */
   [key: string]: unknown;
 }
 
