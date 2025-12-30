@@ -6,7 +6,7 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
-  getAuthCallbackUri,
+  getExternalAuthCallbackUri,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -369,6 +369,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /**
    * Create authentication session via OAuth.
+   * Uses vscode.env.asExternalUri() to get environment-appropriate callback URI.
+   * This works across desktop, Codespaces, Remote SSH, and web environments.
+   *
    * @param scopes - Scopes array, may contain provider hint as "provider:github"
    */
   async createSession(
@@ -384,10 +387,18 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         ? requestedProvider
         : DEFAULT_OAUTH_PROVIDER;
 
+      // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
+      const redirectUri = await getExternalAuthCallbackUri();
+
+      logger.info(
+        'SupabaseAuthProvider',
+        `OAuth callback URI: ${redirectUri} (scheme: ${vscode.env.uriScheme})`,
+      );
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: getAuthCallbackUri(vscode.env.uriScheme),
+          redirectTo: redirectUri,
         },
       });
 
@@ -409,7 +420,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         },
         async (progress, token) => {
           progress.report({ message: 'Waiting for authentication...' });
+
           const session = await this.waitForSession(token);
+
           if (!session) {
             throw new Error(
               'Authentication cancelled or timed out. Try again.',

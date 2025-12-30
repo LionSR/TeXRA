@@ -67,6 +67,15 @@ export class Status {
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
+      [STREAM_STATUS.RESUMING]: {
+        className: 'is-resuming',
+        label: 'Resuming',
+        enable: [
+          ELEMENT_IDS.STOP_STREAM_BTN,
+          ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+        ],
+      },
     };
 
     this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
@@ -135,14 +144,6 @@ export class Status {
         console.error('Status.update: status must be a string');
         return;
       }
-
-      statusIndicator.classList.remove(
-        STREAM_STATUS.RUNNING,
-        STREAM_STATUS.ERROR,
-        STREAM_STATUS.STOPPED,
-        STREAM_STATUS.READY,
-        STREAM_STATUS.WAITING,
-      );
 
       const cfg = this.STATUS_MAP[status] || {
         className: 'is-stopped',
