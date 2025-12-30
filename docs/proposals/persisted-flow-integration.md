@@ -487,11 +487,46 @@ Code that becomes unnecessary with PersistedFlow:
 
 **Key insight**: Existing test patterns (ReadTool, BashTool) show how to mock VS Code deps. InMemoryKVStore designed specifically for testing with zero VS Code dependencies.
 
+**Next steps (COMPLETED - see Phase 1.5 below):**
+
+- ~~Write tests for InMemoryKVStore (easy - no VS Code deps)~~ ✅
+- ~~Integrate PersistedFlow with ReflectionFlow (preserve thinking blocks)~~ ✅
+- Begin Phase 2 hydration code removal
+
+### 2024-12-30: Phase 1.5 Complete (Session 2)
+
+**Completed:**
+
+- ✅ PersistedFlow integrated with ReflectionFlow (`runReflectionFlow.ts`)
+  - Automatic state persistence after each node via PersistedFlow
+  - Workspace state restoration from persisted snapshot on resume
+  - **PRESERVES THINKING BLOCKS** across resume via `AgentWorkspaceState.fromSnapshot()`
+- ✅ Added index signature to `ReflectionFlowShared` for `Record<string, unknown>` compatibility
+- ✅ Exported `FlowRecord` interface from persisted-flow.ts
+- ✅ InMemoryKVStore tests written (`src/test/agent/storage/InMemoryKVStore.test.ts`)
+  - 71 comprehensive test cases covering all methods
+  - Pure Node.js - NO VS Code dependencies
+  - Covers: read, write, delete, exists, listKeys, clear, getExecutionId
+  - Edge cases: non-existent keys, null values, deep cloning, prefix filtering
+
+**Hydration Code Analysis (ready for Phase 2 removal):**
+
+Files to completely remove (~597 lines):
+1. `src/agent/toolUse/ToolUseSnapshotStore.ts` (207 lines)
+2. `src/agent/toolUse/ToolUseSessionPersistence.ts` (245 lines)
+3. `src/agent/toolUse/ToolUseSessionManager.ts` (145 lines)
+
+Files requiring updates:
+- `src/extension.ts` - Remove snapshot initialization (lines 206-213, 351)
+- `src/agent/implementations/flows/ToolUseRunFlow.ts` - Replace snapshot calls
+- `src/commands/agent/resumeCommand.ts` - Use PersistedFlow.attach()
+- `src/agent/toolUse/ToolUseFollowUp.ts` - Remove snapshot-based resume
+
 **Next steps:**
 
-- Write tests for InMemoryKVStore (easy - no VS Code deps)
-- Integrate PersistedFlow with ReflectionFlow (preserve thinking blocks)
-- Begin Phase 2 hydration code removal
+- Phase 2: Remove ToolUse hydration code (ToolUseSnapshotStore, ToolUseSessionPersistence)
+- Phase 3: Integrate PersistedFlow with ToolUseFlow (similar to ReflectionFlow)
+- Phase 4: Simplify AgentSharedStore.toSnapshot() usage
 
 ## References
 
