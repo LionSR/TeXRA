@@ -24,6 +24,7 @@ import {
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
 import * as logger from '@logger/logUtils';
+import { getConfig, updateConfig } from '@utils/config';
 
 const CHANNEL = 'ServerSideKeyService';
 
@@ -167,7 +168,7 @@ export class ServerSideKeyService {
 
   /**
    * Set the "use included model access" preference.
-   * When enabling, pre-fetches providers and tier config.
+   * When enabling, pre-fetches providers and tier config, and syncs allowed models.
    */
   async setUseIncludedModelAccess(value: boolean): Promise<void> {
     const changed = this.useIncludedModelAccess !== value;
@@ -183,6 +184,8 @@ export class ServerSideKeyService {
       // Pre-fetch tier config (which includes providers) when enabling
       if (value) {
         await this.tierService.getConfig();
+        // Sync allowed models to user's config so dropdown shows tier models
+        await this.canUseServerSideKeys();
       }
 
       this._onDidChangeModelAccess.fire(value);
@@ -328,6 +331,9 @@ export class ServerSideKeyService {
       if (hasAccess && providers.length > 0) {
         this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
+
+        // Sync allowed models to user's texra.models config (fire-and-forget)
+        void this.syncAllowedModelsToConfig();
       }
 
       return hasAccess && providers.length > 0;
@@ -451,6 +457,48 @@ export class ServerSideKeyService {
    */
   getAccessExpirationDate(): Date | null {
     return this.tierService.getExpirationDate();
+  }
+
+  // ==========================================================================
+  // Model List Sync
+  // ==========================================================================
+
+  /**
+   * Sync allowed models from tier config into the user's texra.models list.
+   * This ensures the model dropdown includes all models available in the user's tier.
+   *
+   * Only adds missing models - never removes user's existing selections.
+   * Call canUseServerSideKeys() first to prime caches.
+   */
+  async syncAllowedModelsToConfig(): Promise<void> {
+    // Only sync when using included access
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    const allowedModels = this.getAllowedModelsForCurrentUser();
+
+    // null means all models (Ultra tier) - no sync needed
+    // empty array means error or no access - don't modify user's list
+    if (allowedModels === null || allowedModels.length === 0) {
+      return;
+    }
+
+    const currentModels = getConfig<string[]>('texra.models', []);
+    const modelsToAdd = allowedModels.filter(
+      (model) => !currentModels.includes(model),
+    );
+
+    if (modelsToAdd.length > 0) {
+      const mergedModels = [...currentModels, ...modelsToAdd];
+      await updateConfig('texra.models', mergedModels, {
+        target: vscode.ConfigurationTarget.Global,
+      });
+      logger.info(
+        CHANNEL,
+        `Synced ${modelsToAdd.length} tier-allowed models to config: ${modelsToAdd.join(', ')}`,
+      );
+    }
   }
 
   // ==========================================================================
