@@ -5,6 +5,8 @@
  * across multiple nodes, following DRY principles.
  */
 
+import * as path from 'path';
+
 import type { RoundOutput } from '@agent/output';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -74,7 +76,11 @@ export function createBaseFileLocations(
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
   return files.map((f) => {
     const absolutePath = WorkspaceFS.fullPath(f);
-    const relativePath = WorkspaceFS.relativePath(absolutePath);
+    // Avoid round-trip conversion when f is already a workspace-relative path.
+    // Only compute relativePath from absolutePath when f is absolute.
+    const relativePath = path.isAbsolute(f)
+      ? WorkspaceFS.relativePath(absolutePath)
+      : f;
     return createWorkspaceLocation(absolutePath, relativePath);
   });
 }
