@@ -48,11 +48,12 @@ export {
   type RunReflectionFlowResult,
 } from './runReflectionFlow';
 
-// State types
+// State types and schemas
 export {
   type RoundContext,
   createInitialReflectionState,
-  AgentRunState,
+  ReflectionFlowStateSchema,
+  RoundContextSchema,
 } from './ReflectionFlowState';
 
 // Individual nodes (for testing or extension)

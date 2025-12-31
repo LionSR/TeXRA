@@ -66,7 +66,7 @@ export class TeXCountNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
     const { config, fileService } = this.services;
-    const { currentRound, roundOutputs, context } = shared.state;
+    const { currentRound, roundOutputs, context } = shared;
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -141,9 +141,9 @@ export class TeXCountNode<C = unknown> extends Node<
     }
 
     // Prepend stats to messages if we have stats and context
-    if (execRes.stats && shared.state.context) {
+    if (execRes.stats && shared.context) {
       modelHandler.prependTextToUserMessage(
-        shared.state.context.messages,
+        shared.context.messages,
         execRes.stats,
       );
       logger.debug('TeXCount stats prepended to user message');

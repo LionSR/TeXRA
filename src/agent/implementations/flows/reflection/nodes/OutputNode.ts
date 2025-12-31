@@ -17,7 +17,7 @@
  *
  * Serialization pattern (koala-code-reader):
  * - Accesses only natively serializable state fields
- * - Stores RoundOutput (plain JSON) to shared.state.roundOutputs
+ * - Stores RoundOutput (plain JSON) to shared.roundOutputs
  * - No class instances or runtime dependencies in state
  *
  * Services accessed via native `this.services`:
@@ -76,7 +76,7 @@ export class OutputNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     const { config, fileService, setting } = this.services;
-    const { currentRound, outputLocation, endTurn } = shared.state;
+    const { currentRound, outputLocation, endTurn } = shared;
 
     if (!outputLocation) {
       throw new Error(
@@ -234,7 +234,7 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     // Store round output
-    shared.state.roundOutputs[shared.state.currentRound] = execRes.output;
+    shared.roundOutputs[shared.currentRound] = execRes.output;
 
     // Continue to RoundCompleteNode
     return FlowTransition.DEFAULT;

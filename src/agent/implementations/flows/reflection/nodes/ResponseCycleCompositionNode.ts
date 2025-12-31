@@ -104,7 +104,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       userVarChannels,
       getOutputFileLocation,
     } = this.services;
-    const { currentRound, context } = shared.state;
+    const { currentRound, context } = shared;
 
     if (!context) {
       throw new Error(
@@ -162,7 +162,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // This happens on resume when replaying completed rounds - the output file
     // already contains the full response, so we skip the model call.
     // Note: initializeOutputAndPrefill() modifies prepRes.context.messages in-place
-    // (adding the assistant response), so post() will sync this to shared.state.conversation.
+    // (adding the assistant response), so post() will sync this to shared.conversation.
     if (prefillEndsTurn) {
       return {
         kind: 'success',
@@ -268,35 +268,50 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
+      // Store error in shared state for persistence (enables proper resume behavior)
+      shared.lastRetryError = {
+        message: execRes.error.message,
+        retryable: false,
+      };
       throw execRes.error;
     }
 
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
-      shared.state.continueRounds = false;
+      shared.continueRounds = false;
       // Clear stale state to prevent OutputNode from processing previous round's data
-      shared.state.endTurn = false;
-      shared.state.outputLocation = prepRes.outputLocation;
+      shared.endTurn = false;
+      shared.outputLocation = prepRes.outputLocation;
+      // Clear any previous error - user cancellation is not an error
+      shared.lastRetryError = undefined;
       // User cancellation is not an error - just stop gracefully
       return FlowTransition.DEFAULT;
     }
 
     if (execRes.failedWithError) {
       logger.error(`Response cycle failed: ${execRes.errorMessage}`);
+      // Store error in shared state for persistence
+      shared.lastRetryError = {
+        message: execRes.errorMessage ?? 'Unknown error',
+        retryable: false,
+      };
       throw new Error(execRes.errorMessage ?? 'Unknown error');
     }
 
+    // Success - clear any previous error
+    shared.lastRetryError = undefined;
+
     // Update state from store - convert to snapshot
     updateRunStateSnapshot(shared, execRes.store.run);
-    shared.state.endTurn = execRes.endTurn;
-    shared.state.outputLocation = prepRes.outputLocation;
+    shared.endTurn = execRes.endTurn;
+    shared.outputLocation = prepRes.outputLocation;
 
     // Sync conversation state - messages are modified in-place during cycle
     // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
-    shared.state.conversation = prepRes.context.messages;
+    shared.conversation = prepRes.context.messages;
 
     // Store round state snapshot for later (already a snapshot, just push directly)
-    shared.state.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
+    shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;
