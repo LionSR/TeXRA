@@ -234,7 +234,8 @@ class ToolUsePrepareNode<C> extends Node<
  *
  * Uses native services pattern:
  * - this.services.runCycle() instead of shared.hooks.runCycle()
- * - this.services.persistCheckpoint() instead of shared.hooks.persistCheckpoint()
+ *
+ * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
 class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared<C>,
@@ -298,14 +299,8 @@ class ToolUseCycleNode<C> extends Node<
 
     switch (execRes.kind) {
       case 'success':
-        // Persist checkpoint via services (side effect belongs in post)
-        await this.services.persistCheckpoint(
-          shared.state.conversation,
-          prepRes.store,
-        );
-        return FlowTransition.DEFAULT; // Follow next() → WaitNode
-
       case 'skipped':
+        // PersistedFlow handles checkpoint persistence automatically after each node
         return FlowTransition.DEFAULT; // Follow next() → WaitNode
 
       case 'failed':
@@ -346,18 +341,17 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    const { conversation, hasQueuedFollowUp, session } = prepRes;
+    const { hasQueuedFollowUp, session } = prepRes;
 
     // Check interruption first
     if (this.services.checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    // Handle waiting state (I/O in exec where errors are caught)
-    if (hasQueuedFollowUp) {
-      await session.clearPersistedSnapshot();
-    } else {
-      await session.enterWaitingState(conversation);
+    // Enter waiting state if no queued follow-up
+    // PersistedFlow handles state persistence automatically
+    if (!hasQueuedFollowUp) {
+      await session.enterWaitingState();
     }
 
     // Wait for follow-up (blocking I/O)
@@ -395,7 +389,6 @@ class ToolUseWaitNode<C> extends Node<
     // Apply follow-up via services
     const session = this.services.session;
     await session.markRunning();
-    await session.clearPersistedSnapshot();
     shared.state.conversation = await this.services.applyFollowUpMessage(
       execRes.followUp,
       shared.state.conversation,
