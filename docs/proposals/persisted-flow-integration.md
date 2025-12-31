@@ -598,9 +598,53 @@ The PersistedFlow integration is now complete:
 - ReflectionFlow uses natively serializable state (koala pattern)
 - Thinking blocks preserved across resume
 
+### 2024-12-31: Phase 2.5 Complete (Koala Pattern + Simplification)
+
+**Context Serialization (koala-code-reader pattern):**
+
+- ✅ ReflectionFlow `roundStage` moved from shared state to services
+- ✅ `RoundContext.stateRound` changed to `stateRoundSnapshot` (natively serializable)
+- ✅ ToolUseFlow no-op methods removed (`clearPersistedSnapshot`, `persistCheckpoint`)
+- ✅ All shared state is now natively serializable via `structuredClone()`
+
+**Resume/Status Bug Fixes:**
+
+- ✅ Fixed status overwrite bug in `executeAgent.ts` - no longer overwrites WAITING→STOPPED
+- ✅ Added follow-up queueing for WAITING sessions in `sendFollowUp()`
+
+**Shallow Module Elimination (Single Source of Truth):**
+
+- ✅ Removed redundant `resuming` Set from ToolUseFollowUpQueueManager
+  - Now uses `StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING`
+  - `markResuming()` → `acquire()` (just creates queue)
+  - `clearResuming()` removed (StreamStatusService handles state transitions)
+- ✅ Removed dead code from FollowUpQueue (~32 lines):
+  - `runIfIdle()` method removed
+  - `onEnqueue()` listener system removed
+  - `notifyListeners()` removed
+- ✅ Removed unused factory function `createToolUseFlowContext()`
+
+**Progress View Compatibility Verified:**
+
+The "Run Again" button correctly implements resume semantics for both flows:
+- Icon: `debug-continue`
+- Title: "Resume from saved outputs (continues where it left off)"
+- Enabled for STOPPED/ERROR states when execution ID available
+- Passes `resume: true` to `texra.execute`
+
+Both ReflectionFlow and ToolUseFlow:
+- Use PersistedFlow for automatic state persistence
+- Restore from persisted state on resume
+- Preserve thinking blocks via workspace snapshot restoration
+
+**Remaining Simplification Tasks (optional):**
+
+- [ ] Remove unnecessary re-exports in ToolUseFollowUp.ts
+- [ ] Convert empty interface compositions to type aliases in CycleServices.ts
+- [ ] Add Zod schemas as SSOT for cycle state types (BaseCycleState, etc.)
+
 ## References
 
 - [koala-code-reader PersistedFlow](https://github.com/Yuyz0112/koala-code-reader/blob/main/src/code-reader/persisted-flow.ts)
 - [PocketFlow Documentation](../pocketflow/)
 - [AgentWorkspaceState.toSnapshot()](../../src/agent/core/AgentWorkspaceState.ts)
-- [ToolUseSnapshotStore](../../src/agent/toolUse/ToolUseSnapshotStore.ts)
