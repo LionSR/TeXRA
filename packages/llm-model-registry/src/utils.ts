@@ -255,6 +255,7 @@ export function cheapest(
 
 /**
  * Find the most capable model within a budget.
+ * Returns the priciest model under the limit (more expensive = usually better).
  *
  * @example
  * ```typescript
@@ -286,23 +287,10 @@ export function smartpick(
 
   if (candidates.length === 0) return undefined;
 
-  // Score by capabilities (more = better)
-  const score = (m: ModelConfig): number => {
-    let s = 0;
-    const c = m.capabilities;
-    if (c.supportsReasoning) s += 10;
-    if (c.supportsVision) s += 5;
-    if (c.supportsNativeCodeExecution) s += 5;
-    if (c.supportsNativeWebSearch) s += 3;
-    if (c.supportsPromptCaching || c.supportsAutoPromptCaching) s += 3;
-    if (c.supportsNativePdf) s += 2;
-    if (c.supportsNativeAudio) s += 2;
-    s += Math.log10(m.contextWindow) * 2; // Bonus for context
-    s += Math.log10(m.maxOutputTokens); // Bonus for output
-    return s;
-  };
-
-  return candidates.sort((a, b) => score(b) - score(a))[0];
+  // Higher price generally = more capable, so return the priciest under budget
+  return candidates.sort(
+    (a, b) => (b.inputPrice + b.outputPrice) - (a.inputPrice + a.outputPrice),
+  )[0];
 }
 
 /**
