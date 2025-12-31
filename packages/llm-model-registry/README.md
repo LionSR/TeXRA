@@ -18,19 +18,57 @@ const budget = cheapest({ supportsVision: true });
 npm install llm-model-registry
 ```
 
-## Providers
+## What's Inside
 
-| Provider | Models | Notable |
-|----------|--------|---------|
-| **Anthropic** | Claude 4.x, 3.x | 90% cache savings |
-| **OpenAI** | GPT-5.x, 4.x, o-series | Deep research |
-| **Google** | Gemini 3, 2.5 | 1M context |
-| **DeepSeek** | V3.2, R1 | Budget reasoning |
-| **xAI** | Grok 4, 3, 2 | 256K context |
-| **Moonshot** | Kimi K2 | Thinking mode |
-| **DashScope** | Qwen 3 | 1M context |
-| **Copilot** | GPT-4o | Free |
-| **OpenRouter** | Llama, etc. | Proxy access |
+### By Price ($/1M tokens, input+output)
+
+| Rank | Model | Price | Provider |
+|------|-------|-------|----------|
+| 1 | `copilot4o` | $0 | Copilot |
+| 2 | `gpt5--` | $0.45 | OpenAI |
+| 3 | `gpt41--` | $0.50 | OpenAI |
+| 4 | `qwenturbo` | $0.55 | DashScope |
+| 5 | `deepseek` | $0.70 | DeepSeek |
+| 6 | `grok3-` | $0.80 | xAI |
+| 7 | `gemini25f-` | $0.50 | Google |
+| 8 | `haiku3` | $1.50 | Anthropic |
+
+### By Context Window
+
+| Rank | Model | Context | Provider |
+|------|-------|---------|----------|
+| 1 | `gemini3p` | 1M | Google |
+| 2 | `gemini25p` | 1M | Google |
+| 3 | `qwenplus` | 1M | DashScope |
+| 4 | `gpt41` | 1M | OpenAI |
+| 5 | `gpt5` | 400K | OpenAI |
+| 6 | `kimi2` | 262K | Moonshot |
+| 7 | `grok4` | 256K | xAI |
+| 8 | `sonnet45` | 200K | Anthropic |
+
+### By Capability
+
+| Capability | Count | Examples |
+|------------|-------|----------|
+| Vision | 45+ | `sonnet45`, `gpt4o`, `gemini25p` |
+| Reasoning | 30+ | `opus45T`, `o3`, `deepseekT`, `grok4` |
+| Code Execution | 20+ | `sonnet45`, `gpt41`, `gemini3p` |
+| Web Search | 15+ | `opus45`, `gpt4o`, `o3` |
+| Prompt Caching | 25+ | All Claude, Gemini, DeepSeek |
+
+### Providers
+
+| Provider | Models | Highlights |
+|----------|--------|------------|
+| **Anthropic** | 21 | 90% cache savings, PDF support |
+| **OpenAI** | 28 | o-series reasoning, deep research |
+| **Google** | 6 | 1M context, audio input |
+| **DeepSeek** | 7 | Budget reasoning ($0.28/1M) |
+| **xAI** | 5 | Grok 4 with 256K context |
+| **Moonshot** | 8 | Kimi K2 thinking mode |
+| **DashScope** | 3 | Qwen with 1M context |
+| **Copilot** | 1 | Free GPT-4o |
+| **OpenRouter** | 2 | Llama 405B, QVQ-72B |
 
 ## API
 
@@ -90,17 +128,6 @@ interface ModelConfig {
   capabilities: ModelCapabilities;
   openRouterOnly: boolean;
   openrouterFullName?: string;
-}
-
-interface ModelCapabilities {
-  supportsFunctionCalling: boolean;
-  supportsVision: boolean;
-  supportsReasoning: boolean;
-  supportsNativeCodeExecution: boolean;
-  supportsNativeWebSearch: boolean;
-  supportsPromptCaching: boolean;
-  cacheDiscountFactor: number;
-  // ... and more
 }
 ```
 
