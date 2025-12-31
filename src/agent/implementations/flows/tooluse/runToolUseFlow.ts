@@ -9,7 +9,7 @@
  * - State persistence via PersistedFlow
  */
 
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';

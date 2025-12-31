@@ -6,8 +6,6 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
@@ -203,19 +201,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  await ToolUseSnapshotStore.initialize();
-
-  const toolUsePersistenceEnabled = ToolUseSessionPersistence.isEnabled();
-  const persistedToolUseSessions = toolUsePersistenceEnabled
-    ? await ToolUseSnapshotStore.list()
-    : [];
-  ToolUseSessionPersistence.clearAllPersistedSnapshots();
-  ToolUseSessionPersistence.registerPersistedSnapshots(
-    persistedToolUseSessions,
-  );
-  const waitingStreams = new Set(
-    persistedToolUseSessions.map((snapshot) => snapshot.streamId),
-  );
+  // PersistedFlow handles state persistence automatically.
+  // Waiting streams detection will be restored from ExecutionKVStore in future.
+  const waitingStreams = new Set<string>();
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
@@ -347,9 +335,7 @@ export async function deactivate() {
   // Flush any pending usage logs before deactivating
   await UsageLogService.dispose();
 
-  // Clean up persisted tool-use sessions when extension deactivates
-  ToolUseSessionPersistence.clearAllPersistedSnapshots();
-  await ToolUseSnapshotStore.deleteAll();
+  // PersistedFlow cleanup is handled automatically via ExecutionKVStore.
 
   // Notify all listeners that extension is deactivating
   bus.emit('extensionDeactivating', undefined);
