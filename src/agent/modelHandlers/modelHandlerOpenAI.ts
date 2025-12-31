@@ -919,8 +919,8 @@ export class ModelHandlerOpenAI<
 
     // Update workspace state - critical for multi-round agents on resume
     // so that subsequent rounds have correct context
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push({
       role: 'assistant',
@@ -946,7 +946,7 @@ export class ModelHandlerOpenAI<
     // Note: workspace state already updated above (lines 885-886)
     // Only need to handle case where prefill needs to be prepended
     if (!fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
+      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(
         outputLocation,
         workspaceState.assembly.accumulatedOutput,
