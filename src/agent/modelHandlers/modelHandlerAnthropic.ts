@@ -1621,8 +1621,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         !this.containCutOffMessage(regularThinkingContent)
       ) {
         // Store SDK thinking blocks in workspace state for conversation continuation
-        workspaceState.reasoning.thinkingBlocks =
-          thinkingBlocks as ThinkingBlock[];
+        // Use spread to create defensive copy, isolating from SDK response object
+        workspaceState.reasoning.thinkingBlocks = [
+          ...thinkingBlocks,
+        ] as ThinkingBlock[];
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
