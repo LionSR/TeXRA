@@ -11,6 +11,7 @@ import {
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
   SUPABASE_SESSION_KEY,
+  GITHUB_TOKEN_EXCHANGE_URL,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
@@ -383,24 +384,148 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
+   * Check if running in VS Code web environment (Codespaces, vscode.dev, etc.)
+   * where traditional OAuth callbacks don't work reliably.
+   */
+  private isWebEnvironment(): boolean {
+    return vscode.env.uiKind === vscode.UIKind.Web;
+  }
+
+  /**
    * Create authentication session via OAuth.
-   * Uses vscode.env.asExternalUri() to get environment-appropriate callback URI.
-   * This works across desktop, Codespaces, Remote SSH, and web environments.
+   *
+   * For GitHub: Uses VS Code's built-in GitHub authentication provider.
+   * This works seamlessly across all environments (desktop, Codespaces, Remote SSH)
+   * and avoids OAuth callback complexity. The GitHub token is exchanged for a
+   * Supabase session via Edge Function.
+   *
+   * For other providers (Google): Uses traditional Supabase OAuth flow with
+   * environment-appropriate callback URIs.
    *
    * @param scopes - Scopes array, may contain provider hint as "provider:github"
    */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
+    // Extract provider from scopes (format: "provider:github" or "provider:google")
+    const providerScope = scopes.find((s) => s.startsWith('provider:'));
+    const requestedProvider = providerScope?.split(':')[1];
+    const provider = isOAuthProvider(requestedProvider)
+      ? requestedProvider
+      : DEFAULT_OAUTH_PROVIDER;
+
+    // For GitHub, use VS Code's built-in auth - works everywhere and is simpler
+    if (provider === 'github') {
+      logger.info(
+        'SupabaseAuthProvider',
+        'Using VS Code GitHub auth (works on desktop and Codespaces)',
+      );
+      return this.createSessionViaVSCodeGitHub();
+    }
+
+    // For other providers (Google), use traditional Supabase OAuth flow
+    return this.createSessionViaSupabaseOAuth(provider);
+  }
+
+  /**
+   * Create session using VS Code's built-in GitHub authentication.
+   * Works on desktop, Codespaces, Remote SSH - anywhere VS Code runs.
+   * Exchanges the GitHub token for a Supabase session via Edge Function.
+   */
+  private async createSessionViaVSCodeGitHub(): Promise<vscode.AuthenticationSession> {
+    try {
+      // Use VS Code's built-in GitHub auth - works perfectly in Codespaces
+      const githubSession = await vscode.authentication.getSession(
+        'github',
+        ['user:email'],
+        { createIfNone: true },
+      );
+
+      if (!githubSession) {
+        throw new Error('GitHub authentication was cancelled');
+      }
+
+      logger.info(
+        'SupabaseAuthProvider',
+        `Got VS Code GitHub session for ${githubSession.account.label}`,
+      );
+
+      // Exchange GitHub token for Supabase session via Edge Function
+      const response = await fetch(GITHUB_TOKEN_EXCHANGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ github_token: githubSession.accessToken }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error || `Token exchange failed: ${response.status}`,
+        );
+      }
+
+      const data = await response.json();
+
+      if (!data.access_token || !data.refresh_token) {
+        throw new Error('Invalid response from authentication server');
+      }
+
+      // Create session in same format as Supabase OAuth
+      const session: SupabaseSession = {
+        id: data.user.id,
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        account: {
+          id: data.user.id,
+          label: data.user.email || githubSession.account.label,
+        },
+        expiresAt: data.expires_at
+          ? data.expires_at * 1000
+          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+      };
+
+      // Store session
+      await this.context.secrets.store(
+        SUPABASE_SESSION_KEY,
+        JSON.stringify(session),
+      );
+
+      // Clear server-side key cache
+      getServerSideKeyService().clearAllCaches();
+
+      // Notify listeners
+      this._onDidChangeSessions.fire({
+        added: [this.toVSCodeSession(session)],
+        removed: [],
+        changed: [],
+      });
+
+      void vscode.window.showInformationMessage(
+        `Signed in as ${session.account.label}`,
+      );
+
+      logger.info(
+        'SupabaseAuthProvider',
+        `VS Code GitHub auth successful for ${session.account.label}`,
+      );
+
+      return this.toVSCodeSession(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Create session using traditional Supabase OAuth flow.
+   * Used in desktop VS Code where OAuth callbacks work reliably.
+   */
+  private async createSessionViaSupabaseOAuth(
+    provider: OAuthProvider,
+  ): Promise<vscode.AuthenticationSession> {
     try {
       const supabase = SupabaseClient.getClient();
-
-      // Extract provider from scopes (format: "provider:github" or "provider:google")
-      const providerScope = scopes.find((s) => s.startsWith('provider:'));
-      const requestedProvider = providerScope?.split(':')[1];
-      const provider = isOAuthProvider(requestedProvider)
-        ? requestedProvider
-        : DEFAULT_OAUTH_PROVIDER;
 
       // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
       // In Codespaces, VS Code adds a state parameter that must be preserved for routing
