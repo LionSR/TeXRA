@@ -1341,7 +1341,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: GoogleToolCall,
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (!call.callId) {
@@ -1364,6 +1364,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responsePart);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
+
     return [callMsg, resultMsg];
   }
 
@@ -1382,14 +1389,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * @param calls - Array of tool calls (should preserve original order from model response)
    * @param results - Array of sanitized results (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
-   * @param _workspaceState - Unused, for interface compatibility
+   * @param workspaceState - Workspace state to reset after consumption
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
     results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
@@ -1433,6 +1440,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responseParts);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
 
     return [callMsg, resultMsg];
   }
