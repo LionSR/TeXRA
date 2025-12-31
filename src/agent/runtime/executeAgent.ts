@@ -531,7 +531,12 @@ export async function executeAgent(
           );
         }
 
-        StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+        // Only set STOPPED if flow actually completed (not paused waiting for follow-up)
+        // Tool-use flows can pause in WAITING state and resume later
+        const finalStatus = StreamStatusService.get(streamTabId);
+        if (finalStatus !== STREAM_STATUS.WAITING) {
+          StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+        }
         logger.debug(`Task completed successfully`);
       },
       { skip: isResume },
@@ -724,7 +729,11 @@ export async function resumeToolUseFromSnapshot(
       },
     );
 
-    StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+    // Only set STOPPED if flow actually completed (not paused waiting for follow-up)
+    const finalStatus = StreamStatusService.get(streamTabId);
+    if (finalStatus !== STREAM_STATUS.WAITING) {
+      StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+    }
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(error, config.agent, streamTabId, executionContext);
