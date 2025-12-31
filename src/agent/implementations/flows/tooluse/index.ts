@@ -14,7 +14,6 @@ export type {
 
 export {
   ToolUseFlowContext,
-  createToolUseFlowContext,
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
 
