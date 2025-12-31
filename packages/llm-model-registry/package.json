@@ -20,12 +20,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/LionSR/TeXRA",
-    "directory": "packages/llm-model-registry"
+    "url": "https://github.com/texra-ai/llm-model-registry"
   },
-  "homepage": "https://github.com/LionSR/TeXRA/tree/main/packages/llm-model-registry",
+  "homepage": "https://github.com/texra-ai/llm-model-registry",
   "bugs": {
-    "url": "https://github.com/LionSR/TeXRA/issues"
+    "url": "https://github.com/texra-ai/llm-model-registry/issues"
   },
   "type": "module",
   "main": "./dist/index.js",
