@@ -33,22 +33,23 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { RetryState } from '@agent/core/flows/RetryState';
-import type { AgentLogStage } from '@logger/AgentLogger';
 import type { AgentFileLocation } from '@utils/files';
 
 /**
- * Context prepared for a round (messages + prefill).
+ * Natively serializable context prepared for a round.
  *
- * Note: stateRound is kept as ConversationRoundState for runtime convenience.
- * It gets converted to snapshot when stored in roundStateSnapshots.
+ * Following koala-code-reader pattern:
+ * - stateRoundSnapshot is a plain JSON snapshot (not class instance)
+ * - Nodes reconstruct ConversationRoundState when needed for mutation
+ * - This ensures structuredClone() works correctly in PersistedFlow
  */
 export interface RoundContext {
   /** Prepared messages for the model */
   messages: ProviderMessage[];
   /** Prefill text for assistant response */
   prefill: string;
-  /** Round state for tracking (runtime class instance) */
-  stateRound: ConversationRoundState;
+  /** Round state snapshot (natively serializable) */
+  stateRoundSnapshot: ConversationRoundStateSnapshot;
 }
 
 /**
@@ -63,6 +64,7 @@ export interface RoundContext {
  * - workspaceSnapshot: AgentWorkspaceSnapshot (not AgentWorkspaceState)
  * - runStateSnapshot: AgentRunStateSnapshot (not AgentRunState)
  * - roundStateSnapshots: ConversationRoundStateSnapshot[] (not class array)
+ * - context.stateRoundSnapshot: snapshot, not ConversationRoundState
  *
  * Nodes reconstruct class instances from snapshots when needed, then
  * store snapshots back after mutation. This ensures structuredClone()
@@ -70,7 +72,7 @@ export interface RoundContext {
  *
  * ## Runtime-Only Fields
  *
- * - roundStage: UI logging stage (not persisted, reconstructed on resume)
+ * - roundStage: Moved to services (ReflectionServices.roundStage)
  */
 export interface ReflectionFlowState {
   // Round tracking
@@ -93,10 +95,6 @@ export interface ReflectionFlowState {
   // Control flags
   continueRounds: boolean;
   endTurn: boolean;
-
-  // UI logging - round stage for collapsible groups (r0, r1, r2...)
-  // RUNTIME ONLY: Not persisted, reconstructed on resume
-  roundStage: AgentLogStage | null;
 }
 
 /**
@@ -136,7 +134,6 @@ export function createInitialReflectionState(
     roundOutputs: [],
     continueRounds: true,
     endTurn: false,
-    roundStage: null, // Set by flow runner before flow starts
   };
 }
 
