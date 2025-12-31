@@ -47,6 +47,7 @@ import {
   getWorkspaceState,
   getRunState,
   updateRunStateSnapshot,
+  updateWorkspaceSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
@@ -303,6 +304,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     // Update state from store - convert to snapshot
     updateRunStateSnapshot(shared, execRes.store.run);
+    updateWorkspaceSnapshot(shared, execRes.store.workspace);
     shared.endTurn = execRes.endTurn;
     shared.outputLocation = prepRes.outputLocation;
 
