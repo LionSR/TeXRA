@@ -5,10 +5,7 @@ import { strict as assert } from 'assert';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import {
-  createSharedStore,
-  type AgentSharedStoreSnapshot,
-} from '@agent/core/AgentSharedStore';
+import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
