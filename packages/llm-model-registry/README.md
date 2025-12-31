@@ -24,14 +24,14 @@ npm install llm-model-registry
 
 | Rank | Model | Price | Provider |
 |------|-------|-------|----------|
-| 1 | `copilot4o` | $0 | Copilot |
-| 2 | `gpt5--` | $0.45 | OpenAI |
-| 3 | `gpt41--` | $0.50 | OpenAI |
+| 1 | `gpt5--` | $0.45 | OpenAI |
+| 2 | `gpt41--` | $0.50 | OpenAI |
+| 3 | `gemini25f-` | $0.50 | Google |
 | 4 | `qwenturbo` | $0.55 | DashScope |
 | 5 | `deepseek` | $0.70 | DeepSeek |
 | 6 | `grok3-` | $0.80 | xAI |
-| 7 | `gemini25f-` | $0.50 | Google |
-| 8 | `haiku3` | $1.50 | Anthropic |
+| 7 | `haiku3` | $1.50 | Anthropic |
+| 8 | `gpt4o-` | $0.75 | OpenAI |
 
 ### By Context Window
 
