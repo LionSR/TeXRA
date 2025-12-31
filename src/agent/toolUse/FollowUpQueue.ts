@@ -11,7 +11,6 @@
 export class FollowUpQueue {
   private readonly queued: string[] = [];
   private resolver: ((value: string | null) => void) | null = null;
-  private readonly listeners = new Set<() => void>();
 
   enqueue(value: string): void {
     if (this.resolver) {
@@ -21,7 +20,6 @@ export class FollowUpQueue {
     } else {
       this.queued.push(value);
     }
-    this.notifyListeners();
   }
 
   isEmpty(): boolean {
@@ -59,42 +57,5 @@ export class FollowUpQueue {
   dispose(): void {
     this.cancelWait();
     this.clear();
-    this.listeners.clear();
-  }
-
-  onEnqueue(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-
-  async runIfIdle<T>(
-    work: () => Promise<T>,
-  ): Promise<{ aborted: boolean; result?: T }> {
-    if (!this.isEmpty()) {
-      return { aborted: true };
-    }
-
-    let aborted = false;
-    const unsubscribe = this.onEnqueue(() => {
-      aborted = true;
-    });
-
-    try {
-      const result = await work();
-      if (aborted || !this.isEmpty()) {
-        return { aborted: true, result };
-      }
-      return { aborted: false, result };
-    } finally {
-      unsubscribe();
-    }
-  }
-
-  private notifyListeners(): void {
-    for (const listener of this.listeners) {
-      listener();
-    }
   }
 }

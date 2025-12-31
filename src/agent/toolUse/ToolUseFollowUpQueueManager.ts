@@ -6,6 +6,8 @@
  */
 
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { FollowUpQueue } from './FollowUpQueue';
 
@@ -16,7 +18,6 @@ const logger = new AgentLogger('ToolUseFollowUpQueue');
  */
 export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
-  private static readonly resuming = new Set<StreamTabId>();
 
   static acquire(streamId: StreamTabId): FollowUpQueue {
     let queue = this.queues.get(streamId);
@@ -34,28 +35,15 @@ export class ToolUseFollowUpQueue {
     }
     queue.dispose();
     this.queues.delete(streamId);
-    this.resuming.delete(streamId);
     logger.debug(`Released follow-up queue for stream ${streamId}.`);
   }
 
-  static markResuming(streamId: StreamTabId): FollowUpQueue {
-    const queue = this.acquire(streamId);
-    if (!this.resuming.has(streamId)) {
-      this.resuming.add(streamId);
-      logger.debug(`Marked stream ${streamId} as resuming.`);
-    }
-    return queue;
-  }
-
-  static clearResuming(streamId: StreamTabId): void {
-    if (!this.resuming.delete(streamId)) {
-      return;
-    }
-    logger.debug(`Cleared resuming session tracking for stream ${streamId}.`);
-  }
-
+  /**
+   * Check if a stream is currently resuming.
+   * Uses StreamStatusService as the single source of truth.
+   */
   static isResuming(streamId: StreamTabId): boolean {
-    return this.resuming.has(streamId);
+    return StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING;
   }
 
   static enqueue(streamId: StreamTabId, followUp: string): boolean {

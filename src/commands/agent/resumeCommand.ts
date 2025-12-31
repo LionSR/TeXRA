@@ -79,7 +79,7 @@ async function resumeFromSnapshot(
     return { success: false };
   }
 
-  ToolUseFollowUpQueue.markResuming(streamId);
+  ToolUseFollowUpQueue.acquire(streamId);
   StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
 
   let queuedFollowUps: string[] = [];
@@ -120,7 +120,7 @@ async function resumeFromSnapshot(
 
     return { success: false, lostFollowUps: lostCount };
   } finally {
-    ToolUseFollowUpQueue.clearResuming(streamId);
+    // If still resuming (flow didn't complete successfully), revert to waiting
     const status = StreamStatusService.get(streamId);
     if (status === STREAM_STATUS.RESUMING) {
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING);

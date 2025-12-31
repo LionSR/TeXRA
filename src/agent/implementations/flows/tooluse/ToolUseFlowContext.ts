@@ -321,12 +321,3 @@ export class ToolUseFlowContext<C = unknown>
   }
 }
 
-// ============================================================================
-// Factory Function
-// ============================================================================
-
-export function createToolUseFlowContext<C = unknown>(
-  init: ToolUseFlowContextInit<C>,
-): ToolUseFlowContext<C> {
-  return new ToolUseFlowContext(init);
-}
