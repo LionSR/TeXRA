@@ -1,5 +1,5 @@
 /**
- * # LLM Model Registry
+ * # LLM Zoo
  *
  * A comprehensive database of 70+ language models from 9 providers.
  * Zero dependencies. Full TypeScript. Tree-shakeable.
@@ -8,7 +8,7 @@
  *
  * @example Quick Start
  * ```typescript
- * import { lookup, cost, cheapest } from 'llm-model-registry';
+ * import { lookup, cost, cheapest } from 'llm-zoo';
  *
  * // Lookup any model
  * const claude = lookup('sonnet45');
@@ -21,15 +21,9 @@
  * ```
  */
 
-// Core types
-export {
-  ModelConfig,
-  ModelCapabilities,
-  ModelProvider,
-  ReasoningEffort,
-  DEFAULT_MODEL_CAPABILITIES,
-  DEFAULT_CONTEXT_WINDOW,
-} from './ModelConfig';
+// Core types (use `export type` for isolatedModules compatibility)
+export type { ModelConfig, ModelCapabilities } from './ModelConfig';
+export { ModelProvider, ReasoningEffort, DEFAULT_MODEL_CAPABILITIES, DEFAULT_CONTEXT_WINDOW } from './ModelConfig';
 
 // Registry
 export {
@@ -85,11 +79,4 @@ export {
   getRegistryStats,
 } from './utils';
 
-// Zod Schemas (optional, for runtime validation)
-export {
-  ModelConfigSchema,
-  ModelCapabilitiesSchema,
-  ModelProviderSchema,
-  ModelRegistrySchema,
-  ReasoningEffortSchema,
-} from './schemas';
+// Note: Zod schemas are available via 'llm-zoo/schemas' (requires zod peer dependency)
