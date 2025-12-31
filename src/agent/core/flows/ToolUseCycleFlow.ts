@@ -185,14 +185,13 @@ class ToolUsePrepNode<C> extends BaseNode<
     debugFileOptions: CycleDebugFileOptions;
   }> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { store } = services;
-    const interrupted = Boolean(await options.checkInterruption());
+    const interrupted = Boolean(await services.checkInterruption());
     const debugContext = createDebugContext({
-      logger: options.logger,
-      modelName: options.modelName,
-      executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
+      logger: services.logger,
+      modelName: services.modelName,
+      executionId: services.context.executionId,
+      isRemote: isRemoteAgent(services.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
       store.round.roundIndex,
@@ -284,7 +283,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
   async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { store } = services;
 
     if (prepRes.shouldStop) {
@@ -292,10 +290,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     }
 
     const debugContext = createDebugContext({
-      logger: options.logger,
-      modelName: options.modelName,
-      executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
+      logger: services.logger,
+      modelName: services.modelName,
+      executionId: services.context.executionId,
+      isRemote: isRemoteAgent(services.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
       store.round.roundIndex,
@@ -306,13 +304,13 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
     // Use base class helper for abort controller lifecycle
     return this.withAbortController(async (signal) => {
-      options.modelHandler.setOutputStreaming(true);
-      const response = await options.modelHandler.createResponse({
-        client: options.client,
+      services.modelHandler.setOutputStreaming(true);
+      const response = await services.modelHandler.createResponse({
+        client: services.client,
         messages: prepRes.messages,
-        temperature: options.agentSetting.temperature ?? 0,
+        temperature: services.agentSetting.temperature ?? 0,
         signal,
-        tools: options.agentSetting.tools as ToolDefinition[] | undefined,
+        tools: services.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
       const responseTimeMs = Date.now() - start;
@@ -346,12 +344,11 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
     const successRes = handleInvocationResult(execRes, state, retryState, {
-      logger: options.logger,
+      logger: services.logger,
       operationName: this.getOperationName(),
     });
 
@@ -448,20 +445,19 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { store } = services;
-    const groupId = options.logger.withCurrentGroup((id) => id);
+    const groupId = services.logger.withCurrentGroup((id) => id);
 
     // Process thinking block (logging only, state stored in workspace)
-    const thinking = options.modelHandler.processThinkingBlock(
+    const thinking = services.modelHandler.processThinkingBlock(
       prepRes.response,
       store.workspace,
     );
-    const useStreaming = options.modelHandler.getStreamingConfig();
+    const useStreaming = services.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (isNonEmptyString(formatted)) {
-        options.logger.info(formatted, {
+        services.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.THINKING,
         });
@@ -469,22 +465,22 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Extract response data
-    const toolCalls = options.modelHandler.extractToolUse(prepRes.response);
+    const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
     const {
       response: text,
       usage,
       stopReason,
-    } = options.modelHandler.extractResponse(prepRes.response, '');
+    } = services.modelHandler.extractResponse(prepRes.response, '');
 
     // Single extraction for all server tool data (single source of truth)
-    const serverToolData = options.modelHandler.extractServerToolData(
+    const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
     );
 
     // Log web search results (logging doesn't affect flow state)
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        options.logger.info('', {
+        services.logger.info('', {
           groupId,
           messageType: MESSAGE_TYPES.WEB_SEARCH,
           data: searchResult,
@@ -493,18 +489,18 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Extract assistant content for follow-up messages
-    const lastAssistantContent = options.modelHandler.extractAssistantContent(
+    const lastAssistantContent = services.modelHandler.extractAssistantContent(
       prepRes.response,
     );
 
     // Log response text
     if (text) {
-      options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
+      services.logger.debug(`Model response: ${text.slice(0, 100)}`, {
         groupId,
       });
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
-        options.logger.info(formatted, {
+        services.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
         });
@@ -514,13 +510,13 @@ class ToolUseProcessNode<C> extends BaseNode<
     // Normalize usage if present
     let normalizedUsage: NormalizedUsage | undefined;
     if (usage) {
-      normalizedUsage = options.modelHandler.normalizeUsage(
+      normalizedUsage = services.modelHandler.normalizeUsage(
         usage,
         prepRes.responseTimeMs ?? 0,
       );
     }
 
-    const endTurn = options.modelHandler.isEndTurnStop(stopReason);
+    const endTurn = services.modelHandler.isEndTurnStop(stopReason);
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       return {
@@ -560,7 +556,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { store } = services;
     const { state } = shared;
 
@@ -598,7 +593,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       state.toolCalls = undefined;
       if (execRes.createAssistantMessage && execRes.text) {
         state.messages.push(
-          options.modelHandler.createAssistantMessage(execRes.text),
+          services.modelHandler.createAssistantMessage(execRes.text),
         );
         store.workspace.assembly.updateLastResponse(execRes.text);
       }
@@ -683,14 +678,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
    */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { state } = shared;
     const toolCalls = state.toolCalls ?? [];
 
     // Check skip conditions (including interruption) in prep
     const shouldSkip = state.shouldStop || toolCalls.length === 0;
     const interrupted =
-      !shouldSkip && Boolean(await options.checkInterruption());
+      !shouldSkip && Boolean(await services.checkInterruption());
 
     return {
       shouldSkip,
@@ -861,10 +855,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const options = services; // backward compat alias for flattened options
     const { store } = services;
     const { state } = shared;
-    const groupId = options.logger.withCurrentGroup((id) => id);
+    const groupId = services.logger.withCurrentGroup((id) => id);
 
     if (execRes.kind === 'skipped') {
       // Apply interrupted side effect if needed
@@ -884,14 +877,14 @@ class ToolUseDispatchNode<C> extends BaseNode<
     for (const call of calls) {
       const execResult = await this.executeToolCall(
         call,
-        options,
+        services,
         tracker,
         todoState,
       );
       execResults.push(execResult);
 
       // Log each tool execution as it completes
-      await this.logAndProcessMediaFiles(execResult, options, store, groupId);
+      await this.logAndProcessMediaFiles(execResult, services, store, groupId);
     }
 
     // Step 2: Create follow-up messages
@@ -905,14 +898,14 @@ class ToolUseDispatchNode<C> extends BaseNode<
     // For DeepSeek thinking mode, batching ensures reasoning_content is
     // properly included in the single assistant message with all tool calls.
     const shouldBatch =
-      (options.modelHandler.isGoogle || options.modelHandler.isDeepSeek) &&
+      (services.modelHandler.isGoogle || services.modelHandler.isDeepSeek) &&
       calls.length > 1 &&
-      typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
+      typeof services.modelHandler.createBatchedToolUseFollowUpMessages ===
         'function';
 
     if (shouldBatch) {
       // Batched: All function calls in one model message, all responses in one user message
-      const followUpMsgs = await options.modelHandler
+      const followUpMsgs = await services.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
         extracted.map((e) => e.sanitizedResult),
@@ -926,8 +919,8 @@ class ToolUseDispatchNode<C> extends BaseNode<
       for (const [index, execResult] of execResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
-          await options.modelHandler.createToolUseFollowUpMessages(
-            options.client,
+          await services.modelHandler.createToolUseFollowUpMessages(
+            services.client,
             execResult.call,
             sanitizedResult,
             attachments,
@@ -941,7 +934,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
       if (isNonEmptyString(execResult.result.userInstruction)) {
-        await options.modelHandler.createUserFollowUpMessages(
+        await services.modelHandler.createUserFollowUpMessages(
           state.messages,
           execResult.result.userInstruction,
         );
