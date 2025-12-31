@@ -4,8 +4,11 @@ import * as vscode from 'vscode';
 // Local imports - Tool implementations
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { TextEditorTool, type EditorCommand } from '@tools/TextEditorTool';
-import { ToolCallInput } from '@tools/types';
+import {
+  TextEditorTool,
+  type EditorCommand,
+  type TextEditorInput,
+} from '@tools/TextEditorTool';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'TextEditorCommands';
@@ -60,7 +63,7 @@ async function handleTestTextEditor(): Promise<void> {
 
     // Prepare input based on selected command
     // Type assertion is safe because showQuickPick options match EditorCommand values
-    const input: ToolCallInput = {
+    const input: TextEditorInput = {
       command: command as EditorCommand,
       path: filePath,
     };
