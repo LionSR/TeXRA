@@ -41,6 +41,11 @@
       "import": "./dist/providers/index.js",
       "require": "./dist/providers/index.cjs",
       "types": "./dist/providers/index.d.ts"
+    },
+    "./schemas": {
+      "import": "./dist/schemas.js",
+      "require": "./dist/schemas.cjs",
+      "types": "./dist/schemas.d.ts"
     }
   },
   "files": [
@@ -55,9 +60,18 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
   },
+  "peerDependencies": {
+    "zod": "^3.22.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "tsup": "^8.0.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "zod": "^3.22.0"
   },
   "engines": {
     "node": ">=18.0.0"
