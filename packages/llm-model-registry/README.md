@@ -1,17 +1,8 @@
 # llm-model-registry
 
-## The Problem
+LLM pricing and capabilities change weekly. Docs are scattered. There's no single source of truth.
 
-Every LLM application faces the same challenges:
-
-- **Scattered documentation** — Pricing, context limits, and capabilities are spread across dozens of provider docs
-- **Constant changes** — Models update weekly. Pricing changes. New capabilities appear.
-- **Hardcoded configs** — Teams copy-paste model specs, leading to drift between client and server
-- **No single source of truth** — Is Claude Sonnet $3 or $15? Does GPT-4o support vision? Which models have 1M context?
-
-## The Solution
-
-One package. 70+ models. Always current.
+**One package. 70+ models. Always current.**
 
 ```typescript
 import { lookup, cost, cheapest } from 'llm-model-registry';
@@ -269,12 +260,9 @@ Object.keys(ANTHROPIC_MODELS);
 
 ## Contributing
 
-Model data getting stale? Pricing changed? New model released?
+Found incorrect pricing? Missing capability? New model released? **PRs welcome!**
 
-1. Fork the repo
-2. Update the relevant file in `src/providers/`
-3. Ensure all capability flags are accurate
-4. Submit a PR
+Model data lives in `src/providers/`. Just update the relevant file and submit a PR.
 
 ## License
 
