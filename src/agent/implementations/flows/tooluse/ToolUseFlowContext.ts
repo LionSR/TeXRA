@@ -2,9 +2,11 @@
  * ToolUseFlowContext - Self-contained execution context for tool-use flows.
  *
  * Creates and owns all services needed by ToolUseRunFlow:
- * - Session lifecycle management (follow-ups, persistence)
+ * - Session lifecycle management (follow-ups, status)
  * - Tool registry and resolution
  * - Cycle execution options
+ *
+ * Note: Persistence is handled automatically by PersistedFlow.
  *
  * Implements IToolUseSessionHost to provide session context without
  * coupling to any specific caller.
@@ -158,8 +160,6 @@ export class ToolUseFlowContext<C = unknown>
       buildCycleOptions: (store) => this.createCycleOptions(store),
       runCycle: (options, messages, store) =>
         runToolUseCycle({ options, messages, store }),
-      persistCheckpoint: (messages, _store) =>
-        this.sessionLifecycle.persistCheckpoint(messages),
       applyFollowUpMessage: (message, conversation) =>
         this.applyFollowUpMessage(message, conversation),
     };
@@ -191,9 +191,8 @@ export class ToolUseFlowContext<C = unknown>
     // Clear any pending retry request to avoid memory leaks
     retryCoordinator.clearRequest(this.streamTabId);
 
-    // Clean up session lifecycle
+    // Clean up session lifecycle (PersistedFlow handles state cleanup)
     this.sessionLifecycle.interrupt();
-    void this.sessionLifecycle.clearPersistedSnapshot();
     this.sessionLifecycle.setStore(null);
   }
 
