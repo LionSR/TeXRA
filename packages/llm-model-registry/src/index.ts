@@ -1,45 +1,27 @@
 /**
- * LLM Model Registry - A comprehensive database of LLM model configurations
+ * # LLM Model Registry
  *
- * This package provides detailed configuration data for language models from
- * major providers including Anthropic, OpenAI, Google, DeepSeek, xAI, and more.
+ * A comprehensive database of 70+ language models from 9 providers.
+ * Zero dependencies. Full TypeScript. Tree-shakeable.
  *
  * @packageDocumentation
  *
- * @example Basic Usage
+ * @example Quick Start
  * ```typescript
- * import { MODEL_CONFIGS, getModel, ModelProvider } from 'llm-model-registry';
+ * import { lookup, cost, cheapest } from 'llm-model-registry';
  *
- * // Access model configuration directly
- * const sonnet = MODEL_CONFIGS['sonnet45'];
- * console.log(sonnet.contextWindow); // 200000
+ * // Lookup any model
+ * const claude = lookup('sonnet45');
  *
- * // Use helper function
- * const gpt4o = getModel('gpt4o');
- * console.log(gpt4o?.capabilities.supportsVision); // true
- * ```
+ * // Calculate costs
+ * const price = cost('gpt4o', { input: 10000, output: 2000 });
  *
- * @example Cost Calculation
- * ```typescript
- * import { calculateCost } from 'llm-model-registry';
- *
- * const cost = calculateCost('sonnet45', 10000, 5000);
- * console.log(`Cost: $${cost.toFixed(4)}`);
- * ```
- *
- * @example Filtering Models
- * ```typescript
- * import { filterByCapability, getModelsByProvider, ModelProvider } from 'llm-model-registry';
- *
- * // Get all reasoning models
- * const reasoningModels = filterByCapability(c => c.supportsReasoning);
- *
- * // Get all Anthropic models
- * const anthropicModels = getModelsByProvider(ModelProvider.ANTHROPIC);
+ * // Find the perfect model
+ * const budget = cheapest({ supportsVision: true, supportsReasoning: true });
  * ```
  */
 
-// Core types and interfaces
+// Core types
 export {
   ModelConfig,
   ModelCapabilities,
@@ -49,11 +31,10 @@ export {
   DEFAULT_CONTEXT_WINDOW,
 } from './ModelConfig';
 
-// Model registry
+// Registry
 export {
   MODEL_CONFIGS,
   MODELS,
-  // Individual provider exports
   ANTHROPIC_MODELS,
   OPENAI_MODELS,
   OPENAI_REASONING_MODELS,
@@ -67,23 +48,39 @@ export {
   OTHER_MODELS,
 } from './ModelRegistry';
 
-// Utility functions
+// Utilities
 export {
   // Lookup
+  lookup,
+  resolve,
+  exists,
+  // Filtering
+  from,
+  where,
+  supporting,
+  withContext,
+  directAccess,
+  openRouterOnly,
+  // Cost
+  cost,
+  maxCost,
+  compareCosts,
+  // Smart Selection
+  cheapest,
+  smartpick,
+  ranked,
+  // Insights
+  insights,
+  // Legacy (deprecated)
   getModel,
   getModelByFullName,
   hasModel,
-  // Filtering
   getModelsByProvider,
   filterByCapability,
   getModelsWithCapability,
-  getModelsByAccess,
-  // Cost calculation
   calculateCost,
   estimateMaxCost,
-  // Comparison
   sortModelsByMetric,
   findCheapestModel,
-  // Statistics
   getRegistryStats,
 } from './utils';

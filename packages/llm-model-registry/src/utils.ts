@@ -7,113 +7,88 @@ import { ModelConfig, ModelProvider, ModelCapabilities } from './ModelConfig';
 import { MODEL_CONFIGS } from './ModelRegistry';
 
 // ============================================================================
-// Model Lookup
+// Lookup
 // ============================================================================
 
 /**
- * Get a model configuration by its short name.
- * Returns undefined if the model is not found.
- *
- * @param name - The short name of the model (e.g., "sonnet45")
- * @returns The model configuration or undefined
+ * Get a model by short name.
  *
  * @example
  * ```typescript
- * const config = getModel('sonnet45');
- * if (config) {
- *   console.log(config.fullName); // "claude-sonnet-4-5"
- * }
+ * const claude = lookup('sonnet45');
+ * const gpt = lookup('gpt4o');
  * ```
  */
-export function getModel(name: string): ModelConfig | undefined {
+export function lookup(name: string): ModelConfig | undefined {
   return MODEL_CONFIGS[name];
 }
 
 /**
- * Get a model configuration by its full API name.
- * Searches through all models to find a match.
- *
- * @param fullName - The full API name (e.g., "claude-sonnet-4-5")
- * @returns The model configuration or undefined
+ * Resolve a model by its full API identifier.
  *
  * @example
  * ```typescript
- * const config = getModelByFullName('gpt-4o-2024-11-20');
- * if (config) {
- *   console.log(config.name); // "gpt4o"
- * }
+ * const model = resolve('claude-sonnet-4-5');
+ * const model2 = resolve('gpt-4o-2024-11-20');
  * ```
  */
-export function getModelByFullName(fullName: string): ModelConfig | undefined {
+export function resolve(fullName: string): ModelConfig | undefined {
   return Object.values(MODEL_CONFIGS).find((m) => m.fullName === fullName);
 }
 
 /**
- * Check if a model exists in the registry.
- *
- * @param name - The short name of the model
- * @returns True if the model exists
+ * Check if a model exists.
  */
-export function hasModel(name: string): boolean {
+export function exists(name: string): boolean {
   return name in MODEL_CONFIGS;
 }
 
 // ============================================================================
-// Model Filtering
+// Filtering - Fluent Predicates
 // ============================================================================
 
 /**
- * Filter models by provider.
- *
- * @param provider - The provider to filter by
- * @returns Array of model configurations from that provider
+ * Get all models from a provider.
  *
  * @example
  * ```typescript
- * const anthropicModels = getModelsByProvider(ModelProvider.ANTHROPIC);
- * console.log(anthropicModels.length); // 21
+ * const claudeModels = from(ModelProvider.ANTHROPIC);
+ * const geminiModels = from(ModelProvider.GOOGLE);
  * ```
  */
-export function getModelsByProvider(provider: ModelProvider): ModelConfig[] {
+export function from(provider: ModelProvider): ModelConfig[] {
   return Object.values(MODEL_CONFIGS).filter((m) => m.provider === provider);
 }
 
 /**
- * Filter models by a capability predicate.
- *
- * @param predicate - Function that tests model capabilities
- * @returns Array of models matching the predicate
+ * Find models matching a capability predicate.
  *
  * @example
  * ```typescript
- * // Get all models with vision support
- * const visionModels = filterByCapability(c => c.supportsVision);
+ * // Vision + reasoning models
+ * const smart = where(c => c.supportsVision && c.supportsReasoning);
  *
- * // Get all models with reasoning and function calling
- * const reasoningModels = filterByCapability(
- *   c => c.supportsReasoning && c.supportsFunctionCalling
- * );
+ * // Models with great caching
+ * const cached = where(c => c.cacheDiscountFactor <= 0.1);
  * ```
  */
-export function filterByCapability(
+export function where(
   predicate: (capabilities: ModelCapabilities) => boolean,
 ): ModelConfig[] {
   return Object.values(MODEL_CONFIGS).filter((m) => predicate(m.capabilities));
 }
 
 /**
- * Get all models that support a specific capability.
- *
- * @param capability - The capability key to check
- * @returns Array of models with that capability enabled
+ * Get models supporting a specific capability.
  *
  * @example
  * ```typescript
- * const reasoningModels = getModelsWithCapability('supportsReasoning');
- * const cachingModels = getModelsWithCapability('supportsPromptCaching');
+ * const reasoners = supporting('supportsReasoning');
+ * const visionaries = supporting('supportsVision');
+ * const coders = supporting('supportsNativeCodeExecution');
  * ```
  */
-export function getModelsWithCapability(
+export function supporting(
   capability: keyof ModelCapabilities,
 ): ModelConfig[] {
   return Object.values(MODEL_CONFIGS).filter((m) => {
@@ -123,109 +98,229 @@ export function getModelsWithCapability(
 }
 
 /**
- * Get models available through a specific access method.
+ * Filter by context window size.
  *
- * @param openRouterOnly - If true, get OpenRouter-only models; if false, get direct API models
- * @returns Array of models matching the access method
+ * @example
+ * ```typescript
+ * const longContext = withContext(200000);  // 200K+ context
+ * const million = withContext(1000000);     // 1M+ context
+ * ```
  */
-export function getModelsByAccess(openRouterOnly: boolean): ModelConfig[] {
+export function withContext(minTokens: number): ModelConfig[] {
   return Object.values(MODEL_CONFIGS).filter(
-    (m) => m.openRouterOnly === openRouterOnly,
+    (m) => m.contextWindow >= minTokens,
   );
 }
 
-// ============================================================================
-// Cost Calculation
-// ============================================================================
-
 /**
- * Calculate the cost for a given number of tokens.
- *
- * @param model - The model configuration or name
- * @param inputTokens - Number of input tokens
- * @param outputTokens - Number of output tokens
- * @param cachedInputTokens - Number of cached input tokens (optional)
- * @returns Cost in USD
- *
- * @example
- * ```typescript
- * const cost = calculateCost('sonnet45', 10000, 5000);
- * console.log(`Cost: $${cost.toFixed(4)}`); // Cost: $0.1050
- *
- * // With caching
- * const cachedCost = calculateCost('sonnet45', 10000, 5000, 8000);
- * console.log(`Cached cost: $${cachedCost.toFixed(4)}`);
- * ```
+ * Get models accessible via direct API (not OpenRouter-only).
  */
-export function calculateCost(
-  model: ModelConfig | string,
-  inputTokens: number,
-  outputTokens: number,
-  cachedInputTokens: number = 0,
-): number {
-  const config = typeof model === 'string' ? getModel(model) : model;
-  if (!config) {
-    throw new Error(`Model not found: ${model}`);
-  }
-
-  const uncachedInputTokens = inputTokens - cachedInputTokens;
-  const inputCost = (uncachedInputTokens / 1_000_000) * config.inputPrice;
-  const cachedCost =
-    (cachedInputTokens / 1_000_000) *
-    config.inputPrice *
-    config.capabilities.cacheDiscountFactor;
-  const outputCost = (outputTokens / 1_000_000) * config.outputPrice;
-
-  return inputCost + cachedCost + outputCost;
+export function directAccess(): ModelConfig[] {
+  return Object.values(MODEL_CONFIGS).filter((m) => !m.openRouterOnly);
 }
 
 /**
- * Estimate maximum possible cost for a model given context usage.
- *
- * @param model - The model configuration or name
- * @param inputTokens - Number of input tokens
- * @returns Maximum cost if model generates max output tokens
+ * Get models only available through OpenRouter.
  */
-export function estimateMaxCost(
-  model: ModelConfig | string,
-  inputTokens: number,
-): number {
-  const config = typeof model === 'string' ? getModel(model) : model;
-  if (!config) {
-    throw new Error(`Model not found: ${model}`);
-  }
-
-  return calculateCost(config, inputTokens, config.maxOutputTokens);
+export function openRouterOnly(): ModelConfig[] {
+  return Object.values(MODEL_CONFIGS).filter((m) => m.openRouterOnly);
 }
 
 // ============================================================================
-// Model Comparison
+// Cost Intelligence
 // ============================================================================
 
 /**
- * Compare models by a specific metric.
- *
- * @param metric - The metric to sort by ('price', 'context', 'output')
- * @param ascending - Sort order (default: true for ascending)
- * @returns Sorted array of model configurations
+ * Calculate exact cost for a request.
  *
  * @example
  * ```typescript
- * // Get cheapest models first
- * const cheapest = sortModelsByMetric('price', true);
+ * // Basic usage
+ * const price = cost('sonnet45', { input: 10000, output: 5000 });
  *
- * // Get models with largest context windows
- * const largestContext = sortModelsByMetric('context', false);
+ * // With prompt caching
+ * const cached = cost('sonnet45', {
+ *   input: 10000,
+ *   output: 5000,
+ *   cached: 8000  // 8K tokens were cache hits
+ * });
  * ```
  */
-export function sortModelsByMetric(
-  metric: 'price' | 'context' | 'output',
-  ascending: boolean = true,
+export function cost(
+  model: ModelConfig | string,
+  tokens: { input: number; output: number; cached?: number },
+): number {
+  const config = typeof model === 'string' ? lookup(model) : model;
+  if (!config) {
+    throw new Error(`Unknown model: ${model}`);
+  }
+
+  const { input, output, cached = 0 } = tokens;
+  const uncached = input - cached;
+
+  const inputCost = (uncached / 1_000_000) * config.inputPrice;
+  const cacheCost =
+    (cached / 1_000_000) * config.inputPrice * config.capabilities.cacheDiscountFactor;
+  const outputCost = (output / 1_000_000) * config.outputPrice;
+
+  return inputCost + cacheCost + outputCost;
+}
+
+/**
+ * Estimate worst-case cost (max output tokens).
+ *
+ * @example
+ * ```typescript
+ * const worst = maxCost('gpt4o', 50000);
+ * console.log(`Budget up to $${worst.toFixed(2)}`);
+ * ```
+ */
+export function maxCost(model: ModelConfig | string, inputTokens: number): number {
+  const config = typeof model === 'string' ? lookup(model) : model;
+  if (!config) {
+    throw new Error(`Unknown model: ${model}`);
+  }
+  return cost(config, { input: inputTokens, output: config.maxOutputTokens });
+}
+
+/**
+ * Compare cost across models for the same workload.
+ *
+ * @example
+ * ```typescript
+ * const comparison = compareCosts(
+ *   ['sonnet45', 'gpt4o', 'gemini25p'],
+ *   { input: 10000, output: 2000 }
+ * );
+ * // Returns sorted by cost: [{ model, cost }, ...]
+ * ```
+ */
+export function compareCosts(
+  models: (ModelConfig | string)[],
+  tokens: { input: number; output: number; cached?: number },
+): { model: ModelConfig; cost: number }[] {
+  return models
+    .map((m) => {
+      const config = typeof m === 'string' ? lookup(m) : m;
+      if (!config) throw new Error(`Unknown model: ${m}`);
+      return { model: config, cost: cost(config, tokens) };
+    })
+    .sort((a, b) => a.cost - b.cost);
+}
+
+// ============================================================================
+// Smart Selection
+// ============================================================================
+
+/**
+ * Find the cheapest model meeting your requirements.
+ *
+ * @example
+ * ```typescript
+ * // Cheapest with vision
+ * const budget = cheapest({ supportsVision: true });
+ *
+ * // Cheapest reasoning model with 100K+ context
+ * const thinker = cheapest(
+ *   { supportsReasoning: true },
+ *   { minContext: 100000 }
+ * );
+ * ```
+ */
+export function cheapest(
+  capabilities: Partial<ModelCapabilities>,
+  options?: { minContext?: number; provider?: ModelProvider },
+): ModelConfig | undefined {
+  const candidates = Object.values(MODEL_CONFIGS).filter((m) => {
+    if (options?.minContext && m.contextWindow < options.minContext) {
+      return false;
+    }
+    if (options?.provider && m.provider !== options.provider) {
+      return false;
+    }
+    for (const [key, value] of Object.entries(capabilities)) {
+      if (m.capabilities[key as keyof ModelCapabilities] !== value) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (candidates.length === 0) return undefined;
+
+  return candidates.sort(
+    (a, b) => a.inputPrice + a.outputPrice - (b.inputPrice + b.outputPrice),
+  )[0];
+}
+
+/**
+ * Find the most capable model within a budget.
+ *
+ * @example
+ * ```typescript
+ * // Best model under $5/1M combined tokens
+ * const best = smartpick(5);
+ *
+ * // Best reasoning model under $10
+ * const bestReasoner = smartpick(10, { supportsReasoning: true });
+ * ```
+ */
+export function smartpick(
+  maxPricePerMillion: number,
+  capabilities?: Partial<ModelCapabilities>,
+): ModelConfig | undefined {
+  let candidates = Object.values(MODEL_CONFIGS).filter(
+    (m) => m.inputPrice + m.outputPrice <= maxPricePerMillion,
+  );
+
+  if (capabilities) {
+    candidates = candidates.filter((m) => {
+      for (const [key, value] of Object.entries(capabilities)) {
+        if (m.capabilities[key as keyof ModelCapabilities] !== value) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  if (candidates.length === 0) return undefined;
+
+  // Score by capabilities (more = better)
+  const score = (m: ModelConfig): number => {
+    let s = 0;
+    const c = m.capabilities;
+    if (c.supportsReasoning) s += 10;
+    if (c.supportsVision) s += 5;
+    if (c.supportsNativeCodeExecution) s += 5;
+    if (c.supportsNativeWebSearch) s += 3;
+    if (c.supportsPromptCaching || c.supportsAutoPromptCaching) s += 3;
+    if (c.supportsNativePdf) s += 2;
+    if (c.supportsNativeAudio) s += 2;
+    s += Math.log10(m.contextWindow) * 2; // Bonus for context
+    s += Math.log10(m.maxOutputTokens); // Bonus for output
+    return s;
+  };
+
+  return candidates.sort((a, b) => score(b) - score(a))[0];
+}
+
+/**
+ * Rank models by a metric.
+ *
+ * @example
+ * ```typescript
+ * const byPrice = ranked('price');        // Cheapest first
+ * const byContext = ranked('context', 'desc');  // Largest context first
+ * const byOutput = ranked('output', 'desc');    // Most output first
+ * ```
+ */
+export function ranked(
+  by: 'price' | 'context' | 'output',
+  order: 'asc' | 'desc' = 'asc',
 ): ModelConfig[] {
-  const models = Object.values(MODEL_CONFIGS);
-
   const getValue = (m: ModelConfig): number => {
-    switch (metric) {
+    switch (by) {
       case 'price':
         return m.inputPrice + m.outputPrice;
       case 'context':
@@ -235,134 +330,121 @@ export function sortModelsByMetric(
     }
   };
 
-  return models.sort((a, b) => {
+  return Object.values(MODEL_CONFIGS).sort((a, b) => {
     const diff = getValue(a) - getValue(b);
-    return ascending ? diff : -diff;
+    return order === 'asc' ? diff : -diff;
   });
 }
 
-/**
- * Find the cheapest model that meets specified requirements.
- *
- * @param requirements - Partial capabilities requirements
- * @param minContextWindow - Minimum context window size (optional)
- * @returns The cheapest matching model or undefined
- *
- * @example
- * ```typescript
- * // Find cheapest model with vision support
- * const cheapestVision = findCheapestModel({ supportsVision: true });
- *
- * // Find cheapest reasoning model with at least 100K context
- * const cheapestReasoning = findCheapestModel(
- *   { supportsReasoning: true },
- *   100000
- * );
- * ```
- */
-export function findCheapestModel(
-  requirements: Partial<ModelCapabilities>,
-  minContextWindow?: number,
-): ModelConfig | undefined {
-  const candidates = Object.values(MODEL_CONFIGS).filter((m) => {
-    // Check context window requirement
-    if (minContextWindow && m.contextWindow < minContextWindow) {
-      return false;
-    }
-
-    // Check capability requirements
-    for (const [key, value] of Object.entries(requirements)) {
-      const capKey = key as keyof ModelCapabilities;
-      if (m.capabilities[capKey] !== value) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  if (candidates.length === 0) {
-    return undefined;
-  }
-
-  // Sort by total price and return cheapest
-  return candidates.sort(
-    (a, b) => a.inputPrice + a.outputPrice - (b.inputPrice + b.outputPrice),
-  )[0];
-}
-
 // ============================================================================
-// Summary Statistics
+// Insights
 // ============================================================================
 
 /**
- * Get summary statistics about the model registry.
- *
- * @returns Object with registry statistics
+ * Get registry statistics and insights.
  *
  * @example
  * ```typescript
- * const stats = getRegistryStats();
- * console.log(`Total models: ${stats.totalModels}`);
- * console.log(`Providers: ${stats.providerCounts}`);
+ * const { totalModels, providers, capabilities } = insights();
+ * console.log(`${totalModels} models across ${Object.keys(providers).length} providers`);
  * ```
  */
-export function getRegistryStats(): {
+export function insights(): {
   totalModels: number;
-  providerCounts: Record<ModelProvider, number>;
-  capabilityCounts: Record<keyof ModelCapabilities, number>;
-  priceRange: { min: number; max: number };
-  contextRange: { min: number; max: number };
+  providers: Record<ModelProvider, number>;
+  capabilities: Record<string, number>;
+  pricing: { cheapest: ModelConfig; mostExpensive: ModelConfig };
+  context: { smallest: ModelConfig; largest: ModelConfig };
 } {
   const models = Object.values(MODEL_CONFIGS);
 
   // Count by provider
-  const providerCounts = {} as Record<ModelProvider, number>;
+  const providers = {} as Record<ModelProvider, number>;
   for (const provider of Object.values(ModelProvider)) {
-    providerCounts[provider] = models.filter(
-      (m) => m.provider === provider,
-    ).length;
+    providers[provider] = models.filter((m) => m.provider === provider).length;
   }
 
   // Count by capability
-  const capabilityCounts = {} as Record<keyof ModelCapabilities, number>;
-  const capabilityKeys: (keyof ModelCapabilities)[] = [
+  const capabilityKeys = [
     'supportsFunctionCalling',
-    'supportsNativeMCPServer',
-    'supportsNativeWebSearch',
-    'supportsNativeCodeExecution',
-    'supportsPromptCaching',
-    'supportsAutoPromptCaching',
     'supportsReasoning',
-    'supportsInterleavedThinking',
-    'supportsReasoningEffort',
     'supportsVision',
+    'supportsNativeCodeExecution',
+    'supportsNativeWebSearch',
+    'supportsPromptCaching',
     'supportsNativePdf',
     'supportsNativeAudio',
-    'supportsAssistantPrefill',
-    'supportsPredictiveOutput',
-    'supportsTokenCounting',
-    'supportsSystemPrompt',
-    'supportsIntermDevMsgs',
   ];
 
+  const capabilities: Record<string, number> = {};
   for (const key of capabilityKeys) {
-    capabilityCounts[key] = models.filter((m) => m.capabilities[key]).length;
+    const shortKey = key.replace('supports', '').replace('Native', '');
+    capabilities[shortKey] = models.filter(
+      (m) => m.capabilities[key as keyof ModelCapabilities],
+    ).length;
   }
 
-  // Price range (combined input + output)
-  const prices = models.map((m) => m.inputPrice + m.outputPrice);
-  const priceRange = { min: Math.min(...prices), max: Math.max(...prices) };
-
-  // Context range
-  const contexts = models.map((m) => m.contextWindow);
-  const contextRange = { min: Math.min(...contexts), max: Math.max(...contexts) };
+  // Extremes
+  const byPrice = [...models].sort(
+    (a, b) => a.inputPrice + a.outputPrice - (b.inputPrice + b.outputPrice),
+  );
+  const byContext = [...models].sort((a, b) => a.contextWindow - b.contextWindow);
 
   return {
     totalModels: models.length,
-    providerCounts,
-    capabilityCounts,
-    priceRange,
-    contextRange,
+    providers,
+    capabilities,
+    pricing: {
+      cheapest: byPrice[0]!,
+      mostExpensive: byPrice[byPrice.length - 1]!,
+    },
+    context: {
+      smallest: byContext[0]!,
+      largest: byContext[byContext.length - 1]!,
+    },
   };
 }
+
+// ============================================================================
+// Legacy Aliases (backward compatibility)
+// ============================================================================
+
+/** @deprecated Use `lookup()` instead */
+export const getModel = lookup;
+/** @deprecated Use `resolve()` instead */
+export const getModelByFullName = resolve;
+/** @deprecated Use `exists()` instead */
+export const hasModel = exists;
+/** @deprecated Use `from()` instead */
+export const getModelsByProvider = from;
+/** @deprecated Use `where()` instead */
+export const filterByCapability = where;
+/** @deprecated Use `supporting()` instead */
+export const getModelsWithCapability = supporting;
+/** @deprecated Use `cost()` instead */
+export function calculateCost(
+  model: ModelConfig | string,
+  inputTokens: number,
+  outputTokens: number,
+  cachedInputTokens: number = 0,
+): number {
+  return cost(model, { input: inputTokens, output: outputTokens, cached: cachedInputTokens });
+}
+/** @deprecated Use `maxCost()` instead */
+export const estimateMaxCost = maxCost;
+/** @deprecated Use `ranked()` instead */
+export function sortModelsByMetric(
+  metric: 'price' | 'context' | 'output',
+  ascending: boolean = true,
+): ModelConfig[] {
+  return ranked(metric, ascending ? 'asc' : 'desc');
+}
+/** @deprecated Use `cheapest()` instead */
+export function findCheapestModel(
+  requirements: Partial<ModelCapabilities>,
+  minContextWindow?: number,
+): ModelConfig | undefined {
+  return cheapest(requirements, { minContext: minContextWindow });
+}
+/** @deprecated Use `insights()` instead */
+export const getRegistryStats = insights;
