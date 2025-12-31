@@ -22,10 +22,8 @@ import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Local file imports - now direct imports (no circular dependency)
+// Local file imports
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
-import { ToolUseSessionManager } from './ToolUseSessionManager';
-import { ToolUseSessionPersistence } from './ToolUseSessionPersistence';
 
 // Re-export for backwards compatibility
 export { FollowUpQueue } from './FollowUpQueue';
@@ -39,8 +37,10 @@ const logger = new AgentLogger('ToolUseFollowUp');
  * Routes the message based on session state:
  * 1. Active agent: direct append
  * 2. Resuming session: queue for later
- * 3. Pending snapshot: lazy resume with follow-up
- * 4. No session: show warning
+ * 3. No session: show warning (user can resume via UI command)
+ *
+ * Note: Lazy resume from persisted flow is handled via UI resume command,
+ * not automatically on follow-up. PersistedFlow handles state persistence.
  */
 export async function sendFollowUp(
   streamId: StreamTabId,
@@ -70,17 +70,9 @@ export async function sendFollowUp(
     }
   }
 
-  // Lazy resume from snapshot if available
-  const pendingSnapshot = ToolUseSessionManager.getByStream(streamId);
-  if (pendingSnapshot) {
-    logger.debug(`Resuming agent lazily for stream ${streamId}.`);
-    await ToolUseSessionPersistence.resumeFromSnapshot(pendingSnapshot, text);
-    return;
-  }
-
-  // No session found
+  // No active session found - user can resume via UI command
   logger.debug(`No active session found for follow-up on stream ${streamId}.`);
   void vscode.window.showWarningMessage(
-    'No active tool-use session found for this follow-up.',
+    'No active tool-use session found. Use the Resume button to continue.',
   );
 }

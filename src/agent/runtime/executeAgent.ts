@@ -21,7 +21,7 @@ import {
   runToolUseFlow,
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 
 // Local imports - agent components (types only - no agent class instantiation)
 import type { IModelHandler } from '@agent/modelHandlers';
