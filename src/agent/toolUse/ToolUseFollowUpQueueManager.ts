@@ -2,10 +2,7 @@
  * Static manager for follow-up queues indexed by stream ID.
  *
  * Provides queue acquisition, release, and coordination for routing
- * follow-ups to active/resuming/pending sessions.
- *
- * Separated from ToolUseFollowUp.ts to break circular dependencies with
- * ToolUseSessionPersistence.
+ * follow-ups to active/resuming sessions.
  */
 
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
