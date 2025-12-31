@@ -19,7 +19,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { BaseFlowContext } from '@agent/implementations/flows/common';
 

@@ -15,7 +15,6 @@ import {
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -77,11 +76,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
-    const executionId = this.provider.state.getExecutionId(stream);
-    if (executionId) {
-      await ToolUseSessionPersistence.clearPersistedSnapshot(executionId);
-    }
+  private async deleteSessionSnapshot(_stream: StreamTabId): Promise<void> {
+    // PersistedFlow handles state cleanup automatically.
+    // ExecutionKVStore cleanup is managed by the flow lifecycle.
   }
 
   protected createHandlers(): Record<
