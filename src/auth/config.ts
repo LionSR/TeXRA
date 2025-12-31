@@ -49,6 +49,12 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 };
 
 /**
+ * Edge function URL for GitHub token exchange.
+ * Used in VS Code web/Codespaces where standard OAuth callbacks don't work.
+ */
+export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github-token`;
+
+/**
  * Check if Supabase is configured.
  * Returns false if using placeholder values.
  */
