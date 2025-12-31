@@ -63,9 +63,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
     return {
-      currentRound: shared.state.currentRound,
-      totalRounds: shared.state.totalRounds,
-      continueRounds: shared.state.continueRounds,
+      currentRound: shared.currentRound,
+      totalRounds: shared.totalRounds,
+      continueRounds: shared.continueRounds,
     };
   }
 
@@ -130,8 +130,8 @@ export class RoundCompleteNode<C = unknown> extends Node<
     this.services.roundStage?.end();
 
     // Increment round for next iteration
-    const nextRound = shared.state.currentRound + 1;
-    shared.state.currentRound = nextRound;
+    const nextRound = shared.currentRound + 1;
+    shared.currentRound = nextRound;
 
     // Create new round stage (r1, r2, etc.) as sibling to r0
     const newRoundStage = await this.services.logger.stage(`r${nextRound}`, {
@@ -141,7 +141,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
     this.services.roundStage = newRoundStage;
 
     // Create fresh workspace snapshot for new round
-    shared.state.workspaceSnapshot = createFreshWorkspaceSnapshot();
+    shared.workspaceSnapshot = createFreshWorkspaceSnapshot();
 
     // Loop back to TeXCountNode (start of round pipeline)
     return FlowTransition.CONTINUE;

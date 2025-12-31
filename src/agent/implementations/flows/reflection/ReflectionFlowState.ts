@@ -1,12 +1,20 @@
 /**
  * Shared state types for reflection flow.
  *
+ * ## Schema-First Pattern
+ *
+ * Schemas are the single source of truth for data structures:
+ * - Define schemas first, then derive TypeScript types using z.infer<>
+ * - Enables validation during persistence/restoration
+ * - Ensures type safety and DRY code
+ *
  * ## Following koala-code-reader's Pattern
  *
- * Shared state contains ONLY natively serializable data (plain JSON):
+ * Shared state is a FLAT structure containing ONLY natively serializable data:
  * - Use snapshots instead of class instances
  * - No runtime dependencies (those go in services)
  * - No functions or callbacks
+ * - No nested wrappers (state is accessed directly as shared.X, not shared.state.X)
  *
  * This ensures clean serialization via structuredClone() in PersistedFlow.
  *
@@ -17,7 +25,9 @@
  * - **params**: Immutable flow configuration
  */
 
-import type { RoundOutput } from '@agent/output';
+import { z } from 'zod';
+
+import { RoundOutputSchema } from '@agent/output';
 import {
   AgentRunState,
   AgentRunStateSnapshotSchema,
@@ -31,9 +41,13 @@ import {
   AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { RetryState } from '@agent/core/flows/RetryState';
-import type { AgentFileLocation } from '@utils/files';
+import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
+import { RetryErrorInfoSchema } from '@agent/core/flows/RetryState';
+import { AgentFileLocationSchema } from '@utils/files';
+
+// ============================================================================
+// Schemas (Single Source of Truth)
+// ============================================================================
 
 /**
  * Natively serializable context prepared for a round.
@@ -43,19 +57,23 @@ import type { AgentFileLocation } from '@utils/files';
  * - Nodes reconstruct ConversationRoundState when needed for mutation
  * - This ensures structuredClone() works correctly in PersistedFlow
  */
-export interface RoundContext {
+export const RoundContextSchema = z.object({
   /** Prepared messages for the model */
-  messages: ProviderMessage[];
+  messages: z.array(ProviderMessageSchema),
   /** Prefill text for assistant response */
-  prefill: string;
+  prefill: z.string(),
   /** Round state snapshot (natively serializable) */
-  stateRoundSnapshot: ConversationRoundStateSnapshot;
-}
+  stateRoundSnapshot: ConversationRoundStateSnapshotSchema,
+});
+
+/** Derived type from schema */
+export type RoundContext = z.infer<typeof RoundContextSchema>;
 
 /**
- * Mutable state for reflection flow.
+ * Shared state for reflection flow (flat structure).
  *
  * This flows through all nodes and gets updated in post() methods.
+ * Access fields directly as `shared.currentRound`, not `shared.state.currentRound`.
  *
  * ## Serialization Strategy
  *
@@ -74,43 +92,43 @@ export interface RoundContext {
  *
  * - roundStage: Moved to services (ReflectionServices.roundStage)
  */
-export interface ReflectionFlowState {
+export const ReflectionFlowStateSchema = z.object({
   // Round tracking
-  currentRound: number;
-  totalRounds: number;
+  currentRound: z.number(),
+  totalRounds: z.number(),
 
   // Per-round state (natively serializable)
-  workspaceSnapshot: AgentWorkspaceSnapshot;
-  context: RoundContext | null;
-  outputLocation: AgentFileLocation | null;
+  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+  context: RoundContextSchema.nullable(),
+  outputLocation: AgentFileLocationSchema.nullable(),
 
   // Accumulated state (natively serializable)
-  conversation: ProviderMessage[];
-  runStateSnapshot: AgentRunStateSnapshot;
+  conversation: z.array(ProviderMessageSchema),
+  runStateSnapshot: AgentRunStateSnapshotSchema,
 
   // Results (natively serializable)
-  roundStateSnapshots: ConversationRoundStateSnapshot[];
-  roundOutputs: RoundOutput[];
+  roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
+  roundOutputs: z.array(RoundOutputSchema),
 
   // Control flags
-  continueRounds: boolean;
-  endTurn: boolean;
-}
+  continueRounds: z.boolean(),
+  endTurn: z.boolean(),
+
+  // Retry state (flattened - was separate RetryState object)
+  /** Last error from model invocation, if any. Used to distinguish failure from cancellation. */
+  lastRetryError: RetryErrorInfoSchema.optional(),
+});
+
+/** Derived type from schema */
+export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
 
 /**
  * Shared context passed through the flow.
  *
- * Following koala-code-reader's pattern:
- * - Contains ONLY natively serializable data (plain JSON)
- * - Runtime dependencies like `runStage` are in services, not here
- * - All fields survive structuredClone() without special handling
+ * This is now a type alias - ReflectionFlowState IS the shared state.
+ * No more nested `shared.state.X` - access directly as `shared.X`.
  */
-export interface ReflectionFlowShared {
-  state: ReflectionFlowState;
-  retryState: RetryState;
-  /** Index signature for PersistedFlow serialization compatibility */
-  [key: string]: unknown;
-}
+export type ReflectionFlowShared = ReflectionFlowState;
 
 /**
  * Create initial state for a reflection flow run.
@@ -148,7 +166,7 @@ export function createInitialReflectionState(
 export function getWorkspaceState(
   shared: ReflectionFlowShared,
 ): AgentWorkspaceState {
-  return AgentWorkspaceState.fromSnapshot(shared.state.workspaceSnapshot);
+  return AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot);
 }
 
 /**
@@ -159,7 +177,7 @@ export function updateWorkspaceSnapshot(
   shared: ReflectionFlowShared,
   workspaceState: AgentWorkspaceState,
 ): void {
-  shared.state.workspaceSnapshot = workspaceState.toSnapshot();
+  shared.workspaceSnapshot = workspaceState.toSnapshot();
 }
 
 /**
@@ -167,7 +185,7 @@ export function updateWorkspaceSnapshot(
  * Use this when nodes need to access or mutate run state.
  */
 export function getRunState(shared: ReflectionFlowShared): AgentRunState {
-  return AgentRunState.fromSnapshot(shared.state.runStateSnapshot);
+  return AgentRunState.fromSnapshot(shared.runStateSnapshot);
 }
 
 /**
@@ -178,7 +196,7 @@ export function updateRunStateSnapshot(
   shared: ReflectionFlowShared,
   runState: AgentRunState,
 ): void {
-  shared.state.runStateSnapshot = runState.toSnapshot();
+  shared.runStateSnapshot = runState.toSnapshot();
 }
 
 /**
@@ -187,16 +205,3 @@ export function updateRunStateSnapshot(
 export function createFreshWorkspaceSnapshot(): AgentWorkspaceSnapshot {
   return AgentWorkspaceState.create().toSnapshot();
 }
-
-// Re-export state classes and schemas for convenience
-export {
-  AgentRunState,
-  AgentRunStateSnapshotSchema,
-  ConversationRoundState,
-  ConversationRoundStateSnapshotSchema,
-  AgentWorkspaceState,
-  AgentWorkspaceStateSnapshotSchema,
-};
-
-// Re-export snapshot types
-export type { AgentRunStateSnapshot, ConversationRoundStateSnapshot };
