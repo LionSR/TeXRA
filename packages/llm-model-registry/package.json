@@ -1,0 +1,66 @@
+{
+  "name": "llm-model-registry",
+  "version": "1.0.0",
+  "description": "Comprehensive registry of LLM model configurations with pricing, capabilities, and provider details",
+  "keywords": [
+    "llm",
+    "language-models",
+    "ai",
+    "openai",
+    "anthropic",
+    "claude",
+    "gpt",
+    "gemini",
+    "deepseek",
+    "model-config",
+    "pricing",
+    "capabilities"
+  ],
+  "author": "LionSR",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LionSR/TeXRA",
+    "directory": "packages/llm-model-registry"
+  },
+  "homepage": "https://github.com/LionSR/TeXRA/tree/main/packages/llm-model-registry",
+  "bugs": {
+    "url": "https://github.com/LionSR/TeXRA/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./providers": {
+      "import": "./dist/providers/index.js",
+      "require": "./dist/providers/index.cjs",
+      "types": "./dist/providers/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "sideEffects": false
+}
