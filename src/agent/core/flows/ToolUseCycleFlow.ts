@@ -595,7 +595,7 @@ class ToolUseProcessNode<C> extends BaseNode<
         state.messages.push(
           services.modelHandler.createAssistantMessage(execRes.text),
         );
-        store.workspace.assembly.updateLastResponse(execRes.text);
+        store.workspace.assembly.lastResponse = execRes.text;
       }
       // Clear ephemeral state
       store.workspace.resetServerToolContent();
