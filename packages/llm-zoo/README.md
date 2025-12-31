@@ -52,10 +52,10 @@ npm install llm-zoo
 | `gpt45` | $75 | $150 | - | OpenAI |
 | `gpt52pro` | $21 | $168 | ✓ | OpenAI |
 | `o3pro` | $20 | $80 | ✓ | OpenAI |
-| `opus45T` | $15 | $75 | ✓ | Anthropic |
-| `opus45` | $15 | $75 | - | Anthropic |
 | `opus41T` | $15 | $75 | ✓ | Anthropic |
 | `opus41` | $15 | $75 | - | Anthropic |
+| `opus45T` | $5 | $25 | ✓ | Anthropic |
+| `opus45` | $5 | $25 | - | Anthropic |
 
 ### Largest Context
 
