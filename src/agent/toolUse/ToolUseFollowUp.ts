@@ -4,11 +4,7 @@
  * Routes follow-up messages to the appropriate session based on state:
  * - Active session: direct append
  * - Resuming session: queue for later
- * - Pending snapshot: lazy resume with follow-up
- * - No session: show warning
- *
- * The queue and manager classes have been extracted to separate files to break
- * circular dependencies with ToolUseSessionPersistence.
+ * - No session: show warning (user can resume via UI)
  *
  * @see FollowUpQueue - the queue data structure
  * @see ToolUseFollowUpQueueManager - queue manager indexed by stream ID
