@@ -12,18 +12,6 @@ import {
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
 
-// Type imports
-import type {
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
-} from './ResponseUsage';
-
-export type NativeResponseUsage =
-  | ExtendedCompletionUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
-
 /** Default values for ConversationRoundState */
 const ROUND_STATE_DEFAULTS = {
   continuationCount: 0,

@@ -601,13 +601,12 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     if (result.updatedLastResponse !== undefined) {
-      store.workspace.assembly.updateLastResponse(result.updatedLastResponse);
+      store.workspace.assembly.lastResponse = result.updatedLastResponse;
     }
 
     if (result.updatedAccumulatedOutput !== undefined) {
-      store.workspace.assembly.updateAccumulatedOutput(
-        result.updatedAccumulatedOutput,
-      );
+      store.workspace.assembly.accumulatedOutput =
+        result.updatedAccumulatedOutput;
     }
 
     state.stopReason = result.stopReason;
