@@ -33,8 +33,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 64000,
     contextWindow: 200000,
-    inputPrice: 5.0,
-    outputPrice: 25.0,
+    inputPrice: 15.0,
+    outputPrice: 75.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
       supportsNativeMCPServer: true,
@@ -53,8 +53,8 @@ export const ANTHROPIC_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 64000,
     contextWindow: 200000,
-    inputPrice: 5.0,
-    outputPrice: 25.0,
+    inputPrice: 15.0,
+    outputPrice: 75.0,
     capabilities: {
       ...ANTHROPIC_DEFAULT_CAPABILITIES,
       supportsNativeWebSearch: true,
