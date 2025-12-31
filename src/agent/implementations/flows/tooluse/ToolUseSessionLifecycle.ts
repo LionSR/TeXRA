@@ -10,8 +10,6 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -91,41 +89,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     return this.followUps.waitForNext(checkInterruption);
   }
 
-  /**
-   * Builds persistence args if store and executionId are available.
-   * Returns null if state is invalid for persistence.
-   */
-  private buildPersistenceArgs(messages: ProviderMessage[]) {
-    const store = this.store;
-    const executionId = this.host.executionId;
-    if (!store || !executionId) {
-      return null;
-    }
-    return {
-      executionId,
-      streamId: this.host.streamTabId,
-      agentConfig: this.host.config,
-      messages,
-      store,
-      queue: this.followUps,
-    };
-  }
-
-  async enterWaitingState(messages: ProviderMessage[]): Promise<void> {
+  async enterWaitingState(_messages: ProviderMessage[]): Promise<void> {
     if (!this.followUps.isEmpty()) {
       return;
     }
 
-    const args = this.buildPersistenceArgs(messages);
-    if (!args) {
-      // Preconditions not met (no store or executionId) - don't set waiting status
-      return;
-    }
-
-    // Attempt to persist idle snapshot (best effort, non-blocking)
-    await ToolUseSessionPersistence.maybePersistIdleSnapshot(args);
-
-    // Set waiting status after successful persistence setup
+    // PersistedFlow handles state persistence automatically after each node.
+    // We only need to set the UI status here.
     StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.WAITING);
   }
 
@@ -134,17 +104,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   }
 
   async clearPersistedSnapshot(): Promise<void> {
-    await ToolUseSessionPersistence.clearPersistedSnapshot(
-      this.host.executionId,
-    );
+    // PersistedFlow handles cleanup automatically.
+    // This method is kept for interface compatibility but is now a no-op.
   }
 
-  async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
-    const args = this.buildPersistenceArgs(messages);
-    if (!args) {
-      return;
-    }
-    await ToolUseSessionPersistence.persistCheckpointSnapshot(args);
+  async persistCheckpoint(_messages: ProviderMessage[]): Promise<void> {
+    // PersistedFlow handles checkpoint persistence automatically after each node.
+    // This method is kept for interface compatibility but is now a no-op.
   }
 
   /**
@@ -161,7 +127,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   dispose(): void {
     this.setStore(null);
     ToolUseFollowUpQueue.release(this.host.streamTabId);
-    // Clear any cached snapshot to prevent memory leaks
-    ToolUseSessionManager.clearByStream(this.host.streamTabId);
+    // PersistedFlow handles state cleanup automatically.
   }
 }

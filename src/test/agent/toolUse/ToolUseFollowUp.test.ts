@@ -11,11 +11,10 @@ import {
 } from '@agent/core/AgentSharedStore';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
@@ -45,11 +44,9 @@ describe('ToolUseFollowUp', () => {
   };
 
   const originalGetFlowContext = AgentRegistry.getToolUseFlowContext;
-  const originalResume = ToolUseSessionPersistence.resumeFromSnapshot;
 
   afterEach(() => {
     (AgentRegistry as any).getToolUseFlowContext = originalGetFlowContext;
-    ToolUseSessionPersistence.resumeFromSnapshot = originalResume;
   });
 
   it('sends follow-ups to active flow contexts', async () => {
@@ -67,18 +64,12 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(calls, ['hello']);
   });
 
-  it('resumes from snapshot through session persistence', async () => {
-    ToolUseSessionPersistence.resumeFromSnapshot = async (snap, followUp) => {
-      assert.equal(snap, snapshot);
-      assert.equal(followUp, 'next');
-      return { success: true };
-    };
-
-    const result = await ToolUseSessionPersistence.resumeFromSnapshot(
-      snapshot,
-      'next',
-    );
-
-    assert.deepEqual(result, { success: true });
+  it('creates valid snapshot structure', () => {
+    // Test that snapshot structure is valid (used for resume operations)
+    assert.equal(snapshot.version, 1);
+    assert.equal(snapshot.streamId, streamId);
+    assert.equal(snapshot.executionId, 'exec-1');
+    assert.ok(snapshot.agentConfig);
+    assert.ok(snapshot.store);
   });
 });
