@@ -28,7 +28,7 @@ import {
   AgentWorkspaceState,
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
-import { createRetryState } from '@agent/core/flows/RetryState';
+import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
@@ -179,8 +179,9 @@ export async function runReflectionFlow<C = unknown>(
       executionContext.executionId,
     );
 
-    // Try to restore workspace snapshot from persisted flow (resume scenario)
+    // Try to restore state from persisted flow (resume scenario)
     let initialWorkspaceSnapshot: AgentWorkspaceSnapshot;
+    let restoredRetryError: RetryErrorInfo | undefined;
     let isResume = false;
 
     try {
@@ -188,13 +189,15 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
+        // Flat structure: shared.workspaceSnapshot, shared.lastRetryError
         const persistedShared = flowRecord.shared as {
-          state?: { workspaceSnapshot?: unknown };
+          workspaceSnapshot?: unknown;
+          lastRetryError?: RetryErrorInfo;
         };
-        if (persistedShared.state?.workspaceSnapshot) {
+        if (persistedShared.workspaceSnapshot) {
           // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
           initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
-            persistedShared.state.workspaceSnapshot,
+            persistedShared.workspaceSnapshot,
           ).toSnapshot();
           isResume = true;
           executionContext.logger.debug(
@@ -202,6 +205,14 @@ export async function runReflectionFlow<C = unknown>(
           );
         } else {
           initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+        }
+
+        // Restore retry error if present (for proper error classification on resume)
+        if (persistedShared.lastRetryError) {
+          restoredRetryError = persistedShared.lastRetryError;
+          executionContext.logger.debug(
+            `Restored lastRetryError from persisted flow: ${restoredRetryError.message}`,
+          );
         }
       } else {
         initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
@@ -211,14 +222,16 @@ export async function runReflectionFlow<C = unknown>(
       initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
     }
 
-    // Create shared state for the flow (natively serializable)
-    shared = {
-      state: createInitialReflectionState(
-        flowContext.totalRounds,
-        initialWorkspaceSnapshot,
-      ),
-      retryState: createRetryState(),
-    };
+    // Create shared state for the flow (natively serializable, flat structure)
+    shared = createInitialReflectionState(
+      flowContext.totalRounds,
+      initialWorkspaceSnapshot,
+    );
+
+    // Restore retry error if present
+    if (restoredRetryError) {
+      shared.lastRetryError = restoredRetryError;
+    }
 
     // Create PersistedFlow with the start node
     const startNode = createReflectionFlow<C>().start;
@@ -269,7 +282,7 @@ export async function runReflectionFlow<C = unknown>(
   }
 
   return {
-    roundOutputs: shared?.state.roundOutputs ?? [],
+    roundOutputs: shared?.roundOutputs ?? [],
     status,
   };
 }
