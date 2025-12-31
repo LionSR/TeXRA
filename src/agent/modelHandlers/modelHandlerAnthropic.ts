@@ -1235,8 +1235,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     await flexibleFS.write(outputLocation, fileContent);
 
     // Update the workspaceState with the actual file content
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug(

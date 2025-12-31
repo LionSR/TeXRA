@@ -1029,7 +1029,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
       );
-      workspaceState.assembly.updateAccumulatedOutput(prefill);
+      workspaceState.assembly.accumulatedOutput = prefill;
 
       // Add pseudo-prefill instruction to user message
       // (Google's Chat API requires alternating user/model turns)
@@ -1070,8 +1070,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Update workspace state - critical for multi-round agents on resume
     // so that subsequent rounds have correct context
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
