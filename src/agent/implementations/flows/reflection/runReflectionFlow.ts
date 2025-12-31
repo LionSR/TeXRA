@@ -150,6 +150,7 @@ export async function runReflectionFlow<C = unknown>(
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
+  let services: ReflectionServices<C> | undefined;
   let createdRunStage = false;
 
   try {
@@ -219,9 +220,6 @@ export async function runReflectionFlow<C = unknown>(
       retryState: createRetryState(),
     };
 
-    // Set initial round stage
-    shared.state.roundStage = roundStage;
-
     // Create PersistedFlow with the start node
     const startNode = createReflectionFlow<C>().start;
     const pf = new PersistedFlow<
@@ -230,11 +228,15 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(startNode, kv);
 
-    // Inject services with runStage (never persisted - runtime dependencies)
-    pf.setServices({
+    // Build services with runStage and roundStage (never persisted - runtime dependencies)
+    // roundStage is mutable - RoundCompleteNode updates it when transitioning rounds
+    // Keep reference to services for finally block access
+    services = {
       ...flowContext.services,
       runStage,
-    });
+      roundStage, // Initial round stage (r0)
+    };
+    pf.setServices(services);
 
     if (isResume) {
       executionContext.logger.debug(
@@ -250,14 +252,13 @@ export async function runReflectionFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Finalize round stage
-    shared?.state.roundStage?.end(status);
+    // Finalize round stage (from services - runtime only, not persisted)
+    // Note: roundStage may have been updated by RoundCompleteNode during execution
+    services?.roundStage?.end(status);
 
     // Finalize run stage if we created it internally
     if (createdRunStage) {
-      // Get runStage from services since it's no longer in shared
-      const runStage = (flowContext.services as ReflectionServices<C> & { runStage?: AgentLogStage }).runStage;
-      runStage?.end(status);
+      services?.runStage?.end(status);
     }
 
     // Clean up context resources
