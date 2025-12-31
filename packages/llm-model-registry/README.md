@@ -20,31 +20,44 @@ npm install llm-model-registry
 
 ## What's Inside
 
-### By Price ($/1M tokens, input+output)
+### Cheapest Models ($/1M tokens)
 
-| Rank | Model | Price | Provider |
-|------|-------|-------|----------|
-| 1 | `gpt5--` | $0.45 | OpenAI |
-| 2 | `gpt41--` | $0.50 | OpenAI |
-| 3 | `gemini25f-` | $0.50 | Google |
-| 4 | `qwenturbo` | $0.55 | DashScope |
-| 5 | `deepseek` | $0.70 | DeepSeek |
-| 6 | `grok3-` | $0.80 | xAI |
-| 7 | `haiku3` | $1.50 | Anthropic |
-| 8 | `gpt4o-` | $0.75 | OpenAI |
+| Model | Input | Output | Provider |
+|-------|-------|--------|----------|
+| `qwenturbo` | $0.05 | $0.50 | DashScope |
+| `gpt41--` | $0.10 | $0.40 | OpenAI |
+| `gemini25f-` | $0.10 | $0.40 | Google |
+| `dsv3` | $0.14 | $0.28 | DeepSeek |
+| `gpt4o-` | $0.15 | $0.60 | OpenAI |
+| `haiku3` | $0.25 | $1.25 | Anthropic |
+| `deepseek` | $0.28 | $0.42 | DeepSeek |
+| `gemini3f` | $0.30 | $2.50 | Google |
 
-### By Context Window
+### Premium Models ($/1M tokens)
 
-| Rank | Model | Context | Provider |
-|------|-------|---------|----------|
-| 1 | `gemini3p` | 1M | Google |
-| 2 | `gemini25p` | 1M | Google |
-| 3 | `qwenplus` | 1M | DashScope |
-| 4 | `gpt41` | 1M | OpenAI |
-| 5 | `gpt5` | 400K | OpenAI |
-| 6 | `kimi2` | 262K | Moonshot |
-| 7 | `grok4` | 256K | xAI |
-| 8 | `sonnet45` | 200K | Anthropic |
+| Model | Input | Output | Reasoning | Provider |
+|-------|-------|--------|-----------|----------|
+| `gpt45` | $75 | $150 | - | OpenAI |
+| `o1pro` | $150 | $600 | ✓ | OpenAI |
+| `gpt52pro` | $21 | $168 | ✓ | OpenAI |
+| `opus41` | $15 | $75 | - | Anthropic |
+| `opus41T` | $15 | $75 | ✓ | Anthropic |
+| `o3pro` | $20 | $80 | ✓ | OpenAI |
+| `gemini3p` | $2 | $12 | ✓ | Google |
+| `sonnet45T` | $3 | $15 | ✓ | Anthropic |
+
+### Largest Context Windows
+
+| Model | Context | Provider |
+|-------|---------|----------|
+| `gemini3p` | 1M | Google |
+| `gemini25p` | 1M | Google |
+| `qwenplus` | 1M | DashScope |
+| `gpt41` | 1M | OpenAI |
+| `gpt5` | 400K | OpenAI |
+| `kimi2` | 262K | Moonshot |
+| `grok4` | 256K | xAI |
+| `sonnet45` | 200K | Anthropic |
 
 ### By Capability
 
