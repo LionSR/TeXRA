@@ -5,9 +5,6 @@
  * - Active session: direct append
  * - Resuming session: queue for later
  * - No session: show warning (user can resume via UI)
- *
- * @see FollowUpQueue - the queue data structure
- * @see ToolUseFollowUpQueueManager - queue manager indexed by stream ID
  */
 
 // Third-party imports
@@ -22,10 +19,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
-
-// Re-export for backwards compatibility
-export { FollowUpQueue } from './FollowUpQueue';
-export { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
 const logger = new AgentLogger('ToolUseFollowUp');
 
