@@ -126,7 +126,8 @@ export class RoundCompleteNode<C = unknown> extends Node<
 
     // === ROUND TRANSITION ===
     // End current round stage (defaults to 'stopped' which indicates completion)
-    shared.state.roundStage?.end();
+    // roundStage is in services (not persisted - runtime only)
+    this.services.roundStage?.end();
 
     // Increment round for next iteration
     const nextRound = shared.state.currentRound + 1;
@@ -136,7 +137,8 @@ export class RoundCompleteNode<C = unknown> extends Node<
     const newRoundStage = await this.services.logger.stage(`r${nextRound}`, {
       parent: this.services.runStage,
     });
-    shared.state.roundStage = newRoundStage;
+    // Update services with new round stage (mutable service property)
+    this.services.roundStage = newRoundStage;
 
     // Create fresh workspace snapshot for new round
     shared.state.workspaceSnapshot = createFreshWorkspaceSnapshot();

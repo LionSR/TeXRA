@@ -51,6 +51,13 @@ export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
    */
   readonly runStage: AgentLogStage;
 
+  /**
+   * Current round's logging stage (r0, r1, r2...).
+   * Mutable - updated at start of each round by flow runner.
+   * Runtime-only - NOT persisted (services are never serialized).
+   */
+  roundStage: AgentLogStage | null;
+
   // =========================================================================
   // Agent method delegates
   // These delegate to agent methods to preserve polymorphism (subclass overrides)

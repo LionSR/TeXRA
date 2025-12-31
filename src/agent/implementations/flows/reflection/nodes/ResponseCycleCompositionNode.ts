@@ -115,10 +115,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // Reconstruct state instances from snapshots
     const workspaceState = getWorkspaceState(shared);
     const runState = getRunState(shared);
+    const roundState = ConversationRoundState.fromSnapshot(
+      context.stateRoundSnapshot,
+    );
 
     // Create shared store for cycle with usage tracking callback
     const store = new AgentSharedStore({
-      round: context.stateRound,
+      round: roundState,
       run: runState,
       workspace: workspaceState,
       user: userVarChannels,
@@ -292,8 +295,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
     shared.state.conversation = prepRes.context.messages;
 
-    // Store round state snapshot for later
-    shared.state.roundStateSnapshots.push(prepRes.context.stateRound.toSnapshot());
+    // Store round state snapshot for later (already a snapshot, just push directly)
+    shared.state.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;
