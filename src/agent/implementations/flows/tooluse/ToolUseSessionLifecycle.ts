@@ -7,7 +7,6 @@
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
@@ -18,6 +17,9 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 /**
  * Interface for tool-use session lifecycle operations.
  * Exposes session-related methods that flows and external callers need.
+ *
+ * Note: Persistence is handled automatically by PersistedFlow.
+ * This interface focuses on session-specific operations (follow-ups, status).
  */
 export interface IToolUseSession {
   /** Append a follow-up message to the session queue. */
@@ -29,17 +31,11 @@ export interface IToolUseSession {
   /** Wait for the next follow-up message. Returns null if interrupted. */
   waitForFollowUp(checkInterruption: () => boolean): Promise<string | null>;
 
-  /** Clear any persisted snapshot state. */
-  clearPersistedSnapshot(): Promise<void>;
-
   /** Enter waiting state for follow-up messages. */
-  enterWaitingState(messages: ProviderMessage[]): Promise<void>;
+  enterWaitingState(): Promise<void>;
 
   /** Mark the session as running (resume from waiting). */
   markRunning(): Promise<void>;
-
-  /** Persist a checkpoint of the current session state. */
-  persistCheckpoint(messages: ProviderMessage[]): Promise<void>;
 }
 
 /**
@@ -89,7 +85,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     return this.followUps.waitForNext(checkInterruption);
   }
 
-  async enterWaitingState(_messages: ProviderMessage[]): Promise<void> {
+  async enterWaitingState(): Promise<void> {
     if (!this.followUps.isEmpty()) {
       return;
     }
@@ -101,16 +97,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   async markRunning(): Promise<void> {
     StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.RUNNING);
-  }
-
-  async clearPersistedSnapshot(): Promise<void> {
-    // PersistedFlow handles cleanup automatically.
-    // This method is kept for interface compatibility but is now a no-op.
-  }
-
-  async persistCheckpoint(_messages: ProviderMessage[]): Promise<void> {
-    // PersistedFlow handles checkpoint persistence automatically after each node.
-    // This method is kept for interface compatibility but is now a no-op.
   }
 
   /**
