@@ -1,326 +1,288 @@
-# LLM Model Registry
+# 🧠 LLM Model Registry
 
-A comprehensive, type-safe registry of Large Language Model configurations with pricing, capabilities, and provider details.
+> **The single source of truth for LLM pricing, capabilities, and configurations.**
 
-## Features
+Stop copy-pasting model specs from documentation. Stop guessing at pricing. Stop wondering which model supports what.
 
-- **70+ models** from 9 providers (Anthropic, OpenAI, Google, DeepSeek, xAI, Moonshot, DashScope, Copilot, and more)
-- **Full TypeScript support** with detailed type definitions
-- **Capability-based filtering** for finding models that match your requirements
-- **Cost calculation utilities** including prompt caching support
-- **Zero dependencies** - pure TypeScript with no runtime dependencies
-- **Tree-shakeable** - only import what you need
+```typescript
+import { lookup, cost, smartpick } from 'llm-model-registry';
+
+// Know everything about any model
+const claude = lookup('sonnet45');
+console.log(claude.contextWindow);  // 200000
+console.log(claude.inputPrice);     // $3/1M tokens
+
+// Calculate exact costs
+const price = cost('gpt4o', { input: 50000, output: 10000 });
+console.log(`This will cost $${price.toFixed(4)}`);
+
+// Find the perfect model for your budget
+const best = smartpick(5);  // Best model under $5/1M tokens
+```
+
+## Why?
+
+Every LLM application needs to know:
+- **What models exist** and their identifiers
+- **What they cost** (input, output, cached tokens)
+- **What they can do** (vision, reasoning, code execution, etc.)
+- **How to access them** (direct API, OpenRouter, custom endpoints)
+
+This package gives you all of that in a single, type-safe, zero-dependency import.
 
 ## Installation
 
 ```bash
 npm install llm-model-registry
-# or
-yarn add llm-model-registry
-# or
-pnpm add llm-model-registry
 ```
 
-## Quick Start
+## What's Inside
+
+**70+ models** from **9 providers**:
+
+| Provider | Models | Highlights |
+|----------|--------|------------|
+| Anthropic | Claude 4.x, 3.x | Opus, Sonnet, Haiku variants |
+| OpenAI | GPT-5.x, 4.x, o-series | Reasoning models, deep research |
+| Google | Gemini 3, 2.5 | 1M context, code execution |
+| DeepSeek | V3.2, R1 | 90% cache savings |
+| xAI | Grok 4, 3, 2 | Large context, reasoning |
+| Moonshot | Kimi K2 | Thinking variants |
+| DashScope | Qwen 3 | Alibaba models |
+| Copilot | GPT-4o | Free tier |
+| Others | Llama, etc. | Via OpenRouter |
+
+## API at a Glance
+
+### 🔍 Lookup
 
 ```typescript
-import { MODEL_CONFIGS, getModel, calculateCost } from 'llm-model-registry';
+import { lookup, resolve, exists } from 'llm-model-registry';
 
-// Access model configuration directly
-const sonnet = MODEL_CONFIGS['sonnet45'];
-console.log(sonnet.contextWindow); // 200000
-console.log(sonnet.inputPrice);    // 3.0 ($/1M tokens)
-
-// Use helper function
-const gpt4o = getModel('gpt4o');
-console.log(gpt4o?.capabilities.supportsVision); // true
-
-// Calculate cost
-const cost = calculateCost('sonnet45', 10000, 5000);
-console.log(`Cost: $${cost.toFixed(4)}`); // Cost: $0.1050
+lookup('sonnet45');                    // By short name
+resolve('claude-sonnet-4-5');          // By API identifier
+exists('gpt4o');                       // Check if exists → true
 ```
 
-## API Reference
+### 🎯 Filtering
 
-### Types
+```typescript
+import { from, where, supporting, withContext, ModelProvider } from 'llm-model-registry';
 
-#### `ModelConfig`
+// By provider
+from(ModelProvider.ANTHROPIC);         // All Claude models
 
-Complete configuration for a language model:
+// By capability predicate
+where(c => c.supportsVision && c.supportsReasoning);
+
+// By specific capability
+supporting('supportsNativeCodeExecution');
+
+// By context window
+withContext(500000);                   // 500K+ context
+```
+
+### 💰 Cost Intelligence
+
+```typescript
+import { cost, maxCost, compareCosts } from 'llm-model-registry';
+
+// Exact cost calculation
+cost('sonnet45', { input: 10000, output: 5000 });
+
+// With prompt caching (Claude's 90% savings!)
+cost('sonnet45', { input: 10000, output: 5000, cached: 8000 });
+
+// Worst-case estimate
+maxCost('gpt4o', 50000);  // If model outputs max tokens
+
+// Compare across models
+compareCosts(['sonnet45', 'gpt4o', 'gemini25p'], { input: 10000, output: 2000 });
+// → [{ model: gemini25p, cost: 0.032 }, { model: sonnet45, cost: 0.06 }, ...]
+```
+
+### 🎨 Smart Selection
+
+```typescript
+import { cheapest, smartpick, ranked } from 'llm-model-registry';
+
+// Cheapest meeting requirements
+cheapest({ supportsVision: true });
+cheapest({ supportsReasoning: true }, { minContext: 100000 });
+
+// Best model within budget (scores by capabilities)
+smartpick(5);                          // Under $5/1M tokens
+smartpick(10, { supportsReasoning: true });
+
+// Ranked lists
+ranked('price');                       // Cheapest first
+ranked('context', 'desc');             // Largest context first
+```
+
+### 📊 Insights
+
+```typescript
+import { insights } from 'llm-model-registry';
+
+const stats = insights();
+console.log(stats.totalModels);        // 70+
+console.log(stats.providers);          // { anthropic: 21, openai: 28, ... }
+console.log(stats.capabilities);       // { Vision: 45, Reasoning: 32, ... }
+console.log(stats.pricing.cheapest);   // The $0.05 model
+console.log(stats.context.largest);    // The 1M+ context model
+```
+
+## Data Structure
+
+Every model includes:
 
 ```typescript
 interface ModelConfig {
-  name: string;              // Short name (e.g., "sonnet45")
-  fullName: string;          // API model ID (e.g., "claude-sonnet-4-5")
-  provider: ModelProvider;   // Provider enum value
-  maxOutputTokens: number;   // Max tokens in response
-  inputPrice: number;        // $/1M input tokens
-  outputPrice: number;       // $/1M output tokens
-  contextWindow: number;     // Max context size
-  capabilities: ModelCapabilities;
-  openRouterOnly: boolean;   // Only available via OpenRouter
+  name: string;              // 'sonnet45'
+  fullName: string;          // 'claude-sonnet-4-5'
+  provider: ModelProvider;   // ANTHROPIC
+
+  // Pricing (per 1M tokens)
+  inputPrice: number;        // 3.0
+  outputPrice: number;       // 15.0
+
+  // Limits
+  contextWindow: number;     // 200000
+  maxOutputTokens: number;   // 64000
+
+  // Access
+  openRouterOnly: boolean;
   openrouterFullName?: string;
-  baseUrl?: string;          // Custom endpoint
-  requiresResponsesAPI?: boolean;
+  baseUrl?: string;
+
+  // Capabilities
+  capabilities: {
+    supportsFunctionCalling: boolean;
+    supportsVision: boolean;
+    supportsReasoning: boolean;
+    supportsNativeCodeExecution: boolean;
+    supportsNativeWebSearch: boolean;
+    supportsPromptCaching: boolean;
+    cacheDiscountFactor: number;  // 0.1 = 90% savings
+    // ... and more
+  };
 }
 ```
 
-#### `ModelCapabilities`
+## Real-World Examples
 
-Feature flags for model capabilities:
-
-```typescript
-interface ModelCapabilities {
-  supportsFunctionCalling: boolean;
-  supportsNativeMCPServer: boolean;
-  supportsNativeWebSearch: boolean;
-  supportsNativeCodeExecution: boolean;
-  supportsPromptCaching: boolean;
-  supportsAutoPromptCaching: boolean;
-  cacheDiscountFactor: number;  // 0.1 = 90% savings
-  supportsReasoning: boolean;
-  supportsInterleavedThinking: boolean;
-  supportsReasoningEffort: boolean;
-  reasoningEffort: ReasoningEffort;
-  supportsVision: boolean;
-  supportsNativePdf: boolean;
-  supportsNativeAudio: boolean;
-  supportsAssistantPrefill: boolean;
-  supportsPredictiveOutput: boolean;
-  supportsTokenCounting: boolean;
-  supportsSystemPrompt: boolean;
-  supportsIntermDevMsgs: boolean;
-}
-```
-
-#### `ModelProvider`
-
-Enum of supported providers:
+### Build an LLM Router
 
 ```typescript
-enum ModelProvider {
-  ANTHROPIC = 'anthropic',
-  OPENAI = 'openai',
-  GOOGLE = 'google',
-  DEEPSEEK = 'deepseek',
-  XAI = 'xai',
-  MOONSHOT = 'moonshot',
-  DASHSCOPE = 'dashscope',
-  COPILOT = 'copilot',
-  OTHERS = 'others',
-}
-```
+import { where, cost } from 'llm-model-registry';
 
-### Registry Access
-
-#### `MODEL_CONFIGS`
-
-The complete model registry indexed by short name:
-
-```typescript
-import { MODEL_CONFIGS } from 'llm-model-registry';
-
-const claude = MODEL_CONFIGS['sonnet45'];
-const gpt = MODEL_CONFIGS['gpt4o'];
-```
-
-#### `MODELS`
-
-Array of all model short names:
-
-```typescript
-import { MODELS } from 'llm-model-registry';
-
-console.log(MODELS); // ['opus45T', 'opus45', 'sonnet45', ...]
-```
-
-#### Individual Provider Exports
-
-Access models by provider:
-
-```typescript
-import {
-  ANTHROPIC_MODELS,
-  OPENAI_MODELS,
-  GOOGLE_MODELS,
-  DEEPSEEK_MODELS,
-  // ...
-} from 'llm-model-registry';
-```
-
-### Utility Functions
-
-#### Model Lookup
-
-```typescript
-import { getModel, getModelByFullName, hasModel } from 'llm-model-registry';
-
-// Get by short name
-const model = getModel('sonnet45');
-
-// Get by full API name
-const model2 = getModelByFullName('claude-sonnet-4-5');
-
-// Check existence
-if (hasModel('gpt4o')) { ... }
-```
-
-#### Filtering
-
-```typescript
-import {
-  getModelsByProvider,
-  filterByCapability,
-  getModelsWithCapability,
-  getModelsByAccess,
-  ModelProvider,
-} from 'llm-model-registry';
-
-// Get all Anthropic models
-const anthropicModels = getModelsByProvider(ModelProvider.ANTHROPIC);
-
-// Get models with specific capabilities
-const reasoningModels = filterByCapability(c => c.supportsReasoning);
-
-// Get all vision models
-const visionModels = getModelsWithCapability('supportsVision');
-
-// Get OpenRouter-only models
-const openRouterModels = getModelsByAccess(true);
-```
-
-#### Cost Calculation
-
-```typescript
-import { calculateCost, estimateMaxCost } from 'llm-model-registry';
-
-// Basic cost calculation
-const cost = calculateCost('sonnet45', 10000, 5000);
-
-// With cached tokens (for models with prompt caching)
-const cachedCost = calculateCost('sonnet45', 10000, 5000, 8000);
-
-// Estimate maximum possible cost
-const maxCost = estimateMaxCost('sonnet45', 50000);
-```
-
-#### Model Comparison
-
-```typescript
-import { sortModelsByMetric, findCheapestModel } from 'llm-model-registry';
-
-// Sort by different metrics
-const cheapest = sortModelsByMetric('price', true);
-const largestContext = sortModelsByMetric('context', false);
-
-// Find cheapest model meeting requirements
-const cheapestVision = findCheapestModel({ supportsVision: true });
-const cheapestReasoning = findCheapestModel(
-  { supportsReasoning: true },
-  100000 // min context
-);
-```
-
-#### Registry Statistics
-
-```typescript
-import { getRegistryStats } from 'llm-model-registry';
-
-const stats = getRegistryStats();
-console.log(`Total models: ${stats.totalModels}`);
-console.log(`Price range: $${stats.priceRange.min} - $${stats.priceRange.max}`);
-console.log(`Models with vision: ${stats.capabilityCounts.supportsVision}`);
-```
-
-## Use Cases
-
-### Building an LLM Router
-
-```typescript
-import { filterByCapability, sortModelsByMetric } from 'llm-model-registry';
-
-function selectModel(requirements: {
+function routeRequest(task: {
   needsVision?: boolean;
   needsReasoning?: boolean;
-  minContext?: number;
-  preferCheap?: boolean;
+  inputTokens: number;
+  maxBudget: number;
 }) {
-  let candidates = filterByCapability(c => {
-    if (requirements.needsVision && !c.supportsVision) return false;
-    if (requirements.needsReasoning && !c.supportsReasoning) return false;
+  // Find capable models
+  let candidates = where(c => {
+    if (task.needsVision && !c.supportsVision) return false;
+    if (task.needsReasoning && !c.supportsReasoning) return false;
     return true;
   });
 
-  if (requirements.minContext) {
-    candidates = candidates.filter(m => m.contextWindow >= requirements.minContext);
-  }
-
-  if (requirements.preferCheap) {
-    candidates.sort((a, b) =>
-      (a.inputPrice + a.outputPrice) - (b.inputPrice + b.outputPrice)
-    );
-  }
-
-  return candidates[0];
-}
-```
-
-### Cost Estimation Dashboard
-
-```typescript
-import { MODEL_CONFIGS, calculateCost } from 'llm-model-registry';
-
-function estimateMonthlyCost(
-  modelName: string,
-  dailyRequests: number,
-  avgInputTokens: number,
-  avgOutputTokens: number,
-  cacheHitRate: number = 0
-) {
-  const model = MODEL_CONFIGS[modelName];
-  if (!model) throw new Error(`Unknown model: ${modelName}`);
-
-  const cachedTokens = avgInputTokens * cacheHitRate;
-  const costPerRequest = calculateCost(
-    model,
-    avgInputTokens,
-    avgOutputTokens,
-    cachedTokens
+  // Filter by budget
+  candidates = candidates.filter(m =>
+    cost(m, { input: task.inputTokens, output: m.maxOutputTokens }) <= task.maxBudget
   );
 
-  return costPerRequest * dailyRequests * 30;
+  // Return cheapest viable option
+  return candidates.sort((a, b) =>
+    a.inputPrice + a.outputPrice - b.inputPrice - b.outputPrice
+  )[0];
 }
 ```
 
-### Model Selection UI
+### Usage Dashboard
 
 ```typescript
-import { getModelsByProvider, ModelProvider } from 'llm-model-registry';
+import { MODEL_CONFIGS, cost } from 'llm-model-registry';
 
-function renderModelSelector() {
-  const providers = Object.values(ModelProvider);
-
-  return providers.map(provider => ({
-    label: provider,
-    models: getModelsByProvider(provider).map(m => ({
-      value: m.name,
-      label: m.fullName,
-      price: `$${m.inputPrice}/$${m.outputPrice} per 1M tokens`,
-      context: `${(m.contextWindow / 1000).toFixed(0)}K context`,
-    }))
+function generateReport(usage: Record<string, { input: number; output: number }>) {
+  return Object.entries(usage).map(([model, tokens]) => ({
+    model,
+    fullName: MODEL_CONFIGS[model]?.fullName,
+    cost: cost(model, tokens),
+    provider: MODEL_CONFIGS[model]?.provider,
   }));
 }
 ```
 
+### Model Comparison UI
+
+```typescript
+import { lookup, compareCosts } from 'llm-model-registry';
+
+function CompareModels({ models, tokens }) {
+  const comparison = compareCosts(models, tokens);
+
+  return comparison.map(({ model, cost }) => ({
+    name: model.name,
+    cost: `$${cost.toFixed(4)}`,
+    context: `${(model.contextWindow / 1000)}K`,
+    vision: model.capabilities.supportsVision ? '✓' : '✗',
+    reasoning: model.capabilities.supportsReasoning ? '✓' : '✗',
+  }));
+}
+```
+
+## Direct Registry Access
+
+Skip utilities and access data directly:
+
+```typescript
+import { MODEL_CONFIGS, MODELS, ANTHROPIC_MODELS } from 'llm-model-registry';
+
+// All models as a record
+MODEL_CONFIGS['sonnet45'].inputPrice;
+
+// Array of all model names
+MODELS.forEach(name => console.log(name));
+
+// Provider-specific exports
+Object.keys(ANTHROPIC_MODELS);  // ['opus45T', 'opus45', 'sonnet45', ...]
+```
+
+## TypeScript
+
+Full type inference out of the box:
+
+```typescript
+import type { ModelConfig, ModelCapabilities, ModelProvider } from 'llm-model-registry';
+
+function processModel(config: ModelConfig) {
+  // Full autocomplete for config.capabilities.*
+}
+```
+
+## Bundle Size
+
+- **Zero runtime dependencies**
+- **Tree-shakeable** - import only what you use
+- **~15KB minified** for the full registry
+
 ## Contributing
 
-Contributions are welcome! When adding new models:
+Model data getting stale? Pricing changed? New model released?
 
-1. Add the model configuration to the appropriate provider file in `src/providers/`
+1. Update the relevant file in `src/providers/`
 2. Ensure all capability flags are accurate
-3. Include the OpenRouter model name if available
-4. Update pricing information from official sources
+3. Submit a PR
 
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  <b>Stop hardcoding model configs. Start shipping.</b>
+</p>
