@@ -1,0 +1,165 @@
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  ModelCapabilities,
+  ModelConfig,
+  ModelProvider,
+} from '../ModelConfig';
+
+/**
+ * Default capabilities for OpenAI GPT models.
+ * OpenAI models feature automatic prompt caching with 50% cost savings.
+ */
+const OPENAI_DEFAULT_CAPABILITIES: ModelCapabilities = {
+  ...DEFAULT_MODEL_CAPABILITIES,
+  supportsAutoPromptCaching: true,
+  cacheDiscountFactor: 0.5,
+  supportsIntermDevMsgs: true,
+  supportsVision: true,
+  supportsNativePdf: true,
+  supportsNativeMCPServer: false,
+  supportsNativeWebSearch: false,
+  supportsNativeCodeExecution: false,
+};
+
+/**
+ * OpenAI GPT model configurations.
+ * Includes GPT-4.x, GPT-4o, and GPT-4.5 variants.
+ */
+export const OPENAI_MODELS: Record<string, ModelConfig> = {
+  gpt41: {
+    name: 'gpt41',
+    fullName: 'gpt-4.1-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 2.0,
+    outputPrice: 8.0,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsPredictiveOutput: true,
+    },
+    openRouterOnly: false,
+  },
+  'gpt41-': {
+    name: 'gpt41-',
+    fullName: 'gpt-4.1-mini-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1-mini',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 0.4,
+    outputPrice: 1.6,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsPredictiveOutput: true,
+    },
+    openRouterOnly: false,
+  },
+  'gpt41--': {
+    name: 'gpt41--',
+    fullName: 'gpt-4.1-nano-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1-nano',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 0.1,
+    outputPrice: 0.4,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsPredictiveOutput: true,
+    },
+    openRouterOnly: false,
+  },
+  gpt45: {
+    name: 'gpt45',
+    fullName: 'gpt-4.5-preview',
+    openrouterFullName: 'openai/gpt-4.5-preview',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 16384,
+    contextWindow: 128000,
+    inputPrice: 75.0,
+    outputPrice: 150.0,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsPredictiveOutput: false,
+    },
+    openRouterOnly: false,
+  },
+  gpt4o: {
+    name: 'gpt4o',
+    fullName: 'gpt-4o-2024-11-20',
+    openrouterFullName: 'openai/gpt-4o-2024-11-20',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 16384,
+    contextWindow: 128000,
+    inputPrice: 2.5,
+    outputPrice: 10.0,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsPredictiveOutput: true,
+    },
+    openRouterOnly: false,
+  },
+  gpt4t: {
+    name: 'gpt4t',
+    fullName: 'gpt-4-turbo-2024-04-09',
+    openrouterFullName: 'openai/gpt-4-turbo-2024-04-09',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 4096,
+    contextWindow: 128000,
+    inputPrice: 10.0,
+    outputPrice: 30.0,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsAutoPromptCaching: false,
+      supportsReasoning: false,
+    },
+    openRouterOnly: false,
+  },
+  'gpt4o-': {
+    name: 'gpt4o-',
+    fullName: 'gpt-4o-mini-2024-07-18',
+    openrouterFullName: 'openai/gpt-4o-mini-2024-07-18',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 16384,
+    contextWindow: 128000,
+    inputPrice: 0.15,
+    outputPrice: 0.6,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsPredictiveOutput: true,
+    },
+    openRouterOnly: false,
+  },
+  gpt4ol: {
+    name: 'gpt4ol',
+    fullName: 'chatgpt-4o-latest',
+    openrouterFullName: 'openai/chatgpt-4o-latest',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 16384,
+    contextWindow: 128000,
+    inputPrice: 5.0,
+    outputPrice: 15.0,
+    capabilities: {
+      ...OPENAI_DEFAULT_CAPABILITIES,
+      supportsReasoning: true,
+    },
+    openRouterOnly: false,
+  },
+};
