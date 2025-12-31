@@ -6,7 +6,7 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
-  getExternalAuthCallbackUri,
+  getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -242,16 +242,31 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /**
    * Parse auth callback URI and create a session.
    * Shared logic for both OAuth and magic link flows.
+   *
+   * Tokens are typically in the fragment (implicit flow), but we also
+   * check query params as fallback for PKCE flow or web environments.
    */
   private async parseCallbackAndCreateSession(
     uri: vscode.Uri,
   ): Promise<CallbackResult> {
-    const params = new URLSearchParams(uri.fragment);
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const expiresIn = params.get('expires_in');
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
+    // Try fragment first (implicit flow), then query params (PKCE/web fallback)
+    const fragmentParams = new URLSearchParams(uri.fragment);
+    const queryParams = new URLSearchParams(uri.query);
+
+    // Helper to get param from fragment or query
+    const getParam = (name: string): string | null =>
+      fragmentParams.get(name) || queryParams.get(name);
+
+    const accessToken = getParam('access_token');
+    const refreshToken = getParam('refresh_token');
+    const expiresIn = getParam('expires_in');
+    const error = getParam('error');
+    const errorDescription = getParam('error_description');
+
+    logger.debug(
+      'SupabaseAuthProvider',
+      `Parsing callback URI - path: ${uri.path}, has fragment: ${!!uri.fragment}, has query: ${!!uri.query}`,
+    );
 
     if (error) {
       return {
@@ -388,18 +403,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         : DEFAULT_OAUTH_PROVIDER;
 
       // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
-      const redirectUri = await getExternalAuthCallbackUri();
+      // In Codespaces, VS Code adds a state parameter that must be preserved for routing
+      const callbackInfo = await getExternalAuthCallbackInfo();
 
       logger.info(
         'SupabaseAuthProvider',
-        `OAuth callback URI: ${redirectUri} (scheme: ${vscode.env.uriScheme})`,
+        `OAuth callback URI: ${callbackInfo.fullUrl} (scheme: ${vscode.env.uriScheme}, vscodeState: ${callbackInfo.vscodeState ? 'present' : 'none'})`,
       );
+
+      // Build OAuth options - pass base URL without state to prevent double-encoding
+      // If VS Code provided a state (Codespaces), pass it through queryParams
+      const oauthOptions: { redirectTo: string; queryParams?: Record<string, string> } = {
+        redirectTo: callbackInfo.baseUrl,
+      };
+
+      if (callbackInfo.vscodeState) {
+        // Preserve VS Code's state for callback routing in Codespaces
+        oauthOptions.queryParams = { state: callbackInfo.vscodeState };
+      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: redirectUri,
-        },
+        options: oauthOptions,
       });
 
       if (error || !data.url) {
