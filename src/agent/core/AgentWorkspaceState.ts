@@ -455,9 +455,12 @@ export class AgentWorkspaceState {
   /** Serialize to a snapshot. */
   toSnapshot(): AgentWorkspaceSnapshot {
     return {
-      assembly: { ...this.assembly }, // Plain object copy
+      assembly: { ...this.assembly },
       media: this.media.toSnapshot(),
-      reasoning: { ...this.reasoning }, // Plain object copy
+      reasoning: {
+        ...this.reasoning,
+        thinkingBlocks: [...this.reasoning.thinkingBlocks],
+      },
       interactions: this.interactions.toSnapshot(),
       todos: this.todos.toSnapshot(),
     };
