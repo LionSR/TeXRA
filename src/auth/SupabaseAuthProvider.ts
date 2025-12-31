@@ -17,6 +17,26 @@ import {
 import { getServerSideKeyService } from './serverKeys';
 import type { SupabaseUriHandler } from './UriHandler';
 
+/** Response from GitHub token exchange Edge Function. */
+interface GitHubTokenExchangeResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  expires_in?: number;
+  token_type: string;
+  user: {
+    id: string;
+    email?: string;
+    user_metadata?: {
+      avatar_url?: string;
+      user_name?: string;
+    };
+  };
+}
+
+/** Timeout for Edge Function requests (30 seconds) */
+const EDGE_FUNCTION_TIMEOUT_MS = 30000;
+
 /** Session data stored in VS Code SecretStorage. */
 interface SupabaseSession {
   id: string;
@@ -451,11 +471,29 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
 
       // Exchange GitHub token for Supabase session via Edge Function
-      const response = await fetch(GITHUB_TOKEN_EXCHANGE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ github_token: githubSession.accessToken }),
-      });
+      // Use AbortController for timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        EDGE_FUNCTION_TIMEOUT_MS,
+      );
+
+      let response: Response;
+      try {
+        response = await fetch(GITHUB_TOKEN_EXCHANGE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ github_token: githubSession.accessToken }),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('Authentication server timeout. Please try again.');
+        }
+        throw fetchError;
+      }
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -464,13 +502,21 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         );
       }
 
-      const data = await response.json();
+      // Parse and validate response
+      let data: GitHubTokenExchangeResponse;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Invalid response format from authentication server');
+      }
 
-      if (!data.access_token || !data.refresh_token) {
-        throw new Error('Invalid response from authentication server');
+      // Validate required fields
+      if (!data.access_token || !data.refresh_token || !data.user?.id) {
+        throw new Error('Incomplete response from authentication server');
       }
 
       // Create session in same format as Supabase OAuth
+      // Note: expires_at from Edge Function is in seconds, convert to milliseconds
       const session: SupabaseSession = {
         id: data.user.id,
         accessToken: data.access_token,
