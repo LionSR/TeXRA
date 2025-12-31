@@ -70,8 +70,8 @@ export class PrepareContextNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<ContextPrepInput> {
     return {
-      currentRound: shared.state.currentRound,
-      conversation: shared.state.conversation,
+      currentRound: shared.currentRound,
+      conversation: shared.conversation,
     };
   }
 
@@ -158,10 +158,10 @@ export class PrepareContextNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     if (execRes.kind === 'skip') {
       // Increment round and loop back to start of flow
-      shared.state.currentRound += 1;
+      shared.currentRound += 1;
 
       // Bounds check to prevent infinite loop when all remaining rounds are empty
-      if (shared.state.currentRound >= shared.state.totalRounds) {
+      if (shared.currentRound >= shared.totalRounds) {
         return FlowTransition.DEFAULT; // Exit flow - no more rounds
       }
 
@@ -169,7 +169,7 @@ export class PrepareContextNode<C = unknown> extends Node<
     }
 
     // Store context for subsequent nodes to enrich
-    shared.state.context = execRes.context;
+    shared.context = execRes.context;
 
     // Continue to TeXCountNode
     return FlowTransition.DEFAULT;

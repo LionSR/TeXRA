@@ -74,7 +74,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, context } = shared.state;
+    const { currentRound, roundOutputs, context } = shared;
 
     // Reconstruct workspace state from snapshot
     const workspaceState = getWorkspaceState(shared);
@@ -192,9 +192,9 @@ export class MediaPreparationNode<C = unknown> extends Node<
     }
 
     // Add media to messages if we have files and context
-    if (execRes.mediaFiles.length > 0 && shared.state.context) {
+    if (execRes.mediaFiles.length > 0 && shared.context) {
       await modelHandler.addMediaToUserMessage(
-        shared.state.context.messages,
+        shared.context.messages,
         execRes.mediaFiles,
       );
       logger.debug(

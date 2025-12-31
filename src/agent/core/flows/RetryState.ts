@@ -12,6 +12,8 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
+import { z } from 'zod';
+
 import { Node } from '@agent/node';
 import {
   retryCoordinator,
@@ -30,16 +32,20 @@ import { bus } from '@eventBus/ProgressEventBus';
 const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
-// Types
+// Schemas (Single Source of Truth)
 // ============================================================================
 
 /**
  * Error information for retry handling.
+ * Schema-first: used for persistence validation and type derivation.
  */
-export interface RetryErrorInfo {
-  message: string;
-  retryable: boolean;
-}
+export const RetryErrorInfoSchema = z.object({
+  message: z.string(),
+  retryable: z.boolean(),
+});
+
+/** Derived type from schema */
+export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
 /**
  * Retry state for tracking errors across the retry flow.
