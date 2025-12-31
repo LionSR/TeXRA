@@ -37,14 +37,14 @@ npm install llm-model-registry
 
 | Model | Input | Output | Reasoning | Provider |
 |-------|-------|--------|-----------|----------|
-| `gpt45` | $75 | $150 | - | OpenAI |
 | `o1pro` | $150 | $600 | ✓ | OpenAI |
+| `gpt45` | $75 | $150 | - | OpenAI |
 | `gpt52pro` | $21 | $168 | ✓ | OpenAI |
-| `opus41` | $15 | $75 | - | Anthropic |
-| `opus41T` | $15 | $75 | ✓ | Anthropic |
 | `o3pro` | $20 | $80 | ✓ | OpenAI |
-| `gemini3p` | $2 | $12 | ✓ | Google |
-| `sonnet45T` | $3 | $15 | ✓ | Anthropic |
+| `opus45T` | $5 | $25 | ✓ | Anthropic |
+| `opus45` | $5 | $25 | - | Anthropic |
+| `opus41T` | $15 | $75 | ✓ | Anthropic |
+| `opus41` | $15 | $75 | - | Anthropic |
 
 ### Largest Context Windows
 
