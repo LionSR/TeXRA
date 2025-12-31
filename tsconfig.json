@@ -40,5 +40,5 @@
     // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
     // "noUnusedParameters": true,  /* Report errors on unused parameters. */
   },
-  "exclude": ["node_modules", "prototypes", "supabase"]
+  "exclude": ["node_modules", "prototypes", "supabase", "packages"]
 }

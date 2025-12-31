@@ -1,11 +1,19 @@
 /**
  * Configuration types and constants for language model interactions and capabilities.
+ * Uses Zod schemas as the single source of truth.
  */
 
-/**
- * Default configuration values
- */
+import { z } from 'zod';
+
+// ============================================================================
+// Default Values
+// ============================================================================
+
 export const DEFAULT_CONTEXT_WINDOW = 128000;
+
+// ============================================================================
+// Enums (defined first for use in schemas)
+// ============================================================================
 
 export enum ReasoningEffort {
   XHIGH = 'xhigh',
@@ -15,7 +23,81 @@ export enum ReasoningEffort {
   NONE = 'none',
 }
 
-/** Base model capabilities configuration with all features disabled by default. */
+export enum ModelProvider {
+  ANTHROPIC = 'anthropic',
+  OPENAI = 'openai',
+  GOOGLE = 'google',
+  DEEPSEEK = 'deepseek',
+  XAI = 'xai',
+  MOONSHOT = 'moonshot',
+  DASHSCOPE = 'dashscope',
+  COPILOT = 'copilot',
+  OTHERS = 'others',
+}
+
+// ============================================================================
+// Zod Schemas - Single Source of Truth
+// ============================================================================
+
+export const ReasoningEffortSchema = z.nativeEnum(ReasoningEffort);
+
+export const ModelProviderSchema = z.nativeEnum(ModelProvider);
+
+/** Feature flags defining model's supported capabilities and behaviors. */
+export const ModelCapabilitiesSchema = z.object({
+  supportsFunctionCalling: z.boolean(),
+  supportsNativeMCPServer: z.boolean(),
+  supportsNativeWebSearch: z.boolean(),
+  supportsNativeCodeExecution: z.boolean(),
+  supportsPromptCaching: z.boolean(),
+  supportsAutoPromptCaching: z.boolean(),
+  cacheDiscountFactor: z.number(),
+  supportsReasoning: z.boolean(),
+  supportsInterleavedThinking: z.boolean(),
+  reasoningEffort: ReasoningEffortSchema,
+  supportsVision: z.boolean(),
+  supportsNativePdf: z.boolean(),
+  supportsAssistantPrefill: z.boolean(),
+  supportsPredictiveOutput: z.boolean(),
+  supportsTokenCounting: z.boolean(),
+  supportsSystemPrompt: z.boolean(),
+  supportsIntermDevMsgs: z.boolean(),
+  supportsReasoningEffort: z.boolean(),
+  supportsNativeAudio: z.boolean(),
+});
+
+/** Complete configuration for a language model instance. */
+export const ModelConfigSchema = z.object({
+  name: z.string(), // Short name (e.g., "sonnet4T")
+  fullName: z.string(), // Full model name (e.g., "claude-3-7-sonnet-20250219")
+  provider: ModelProviderSchema,
+  maxOutputTokens: z.number(),
+  inputPrice: z.number(),
+  outputPrice: z.number(),
+  contextWindow: z.number(),
+  capabilities: ModelCapabilitiesSchema,
+  openRouterOnly: z.boolean(), // Whether this model is only available through OpenRouter
+  openrouterFullName: z.string().optional(), // Full model name for OpenRouter
+  baseUrl: z.string().optional(), // Custom base URL for this specific model
+  requiresResponsesAPI: z.boolean().optional(), // Whether this model requires OpenAI Responses API
+});
+
+/** Registry of all model configurations. */
+export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
+
+// ============================================================================
+// Types - Derived from Schemas
+// ============================================================================
+
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
+export type ModelConfig = z.infer<typeof ModelConfigSchema>;
+export type ModelRegistry = z.infer<typeof ModelRegistrySchema>;
+
+// ============================================================================
+// Default Values
+// ============================================================================
+
+/** Base model capabilities configuration with sensible defaults. */
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsFunctionCalling: true,
   supportsNativeMCPServer: false,
@@ -37,55 +119,3 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsReasoningEffort: false,
   supportsNativeAudio: false,
 };
-
-/** Supported language model providers with their API identifiers. */
-export enum ModelProvider {
-  ANTHROPIC = 'anthropic',
-  OPENAI = 'openai',
-  GOOGLE = 'google',
-  DEEPSEEK = 'deepseek',
-  XAI = 'xai',
-  MOONSHOT = 'moonshot',
-  DASHSCOPE = 'dashscope',
-  COPILOT = 'copilot',
-  OTHERS = 'others',
-}
-
-/** Feature flags defining model's supported capabilities and behaviors. */
-export interface ModelCapabilities {
-  supportsFunctionCalling: boolean;
-  supportsNativeMCPServer: boolean;
-  supportsNativeWebSearch: boolean;
-  supportsNativeCodeExecution: boolean;
-  supportsPromptCaching: boolean;
-  supportsAutoPromptCaching: boolean;
-  cacheDiscountFactor: number;
-  supportsReasoning: boolean;
-  supportsInterleavedThinking: boolean;
-  reasoningEffort: ReasoningEffort;
-  supportsVision: boolean;
-  supportsNativePdf: boolean;
-  supportsAssistantPrefill: boolean;
-  supportsPredictiveOutput: boolean;
-  supportsTokenCounting: boolean;
-  supportsSystemPrompt: boolean;
-  supportsIntermDevMsgs: boolean;
-  supportsReasoningEffort: boolean;
-  supportsNativeAudio: boolean;
-}
-
-/** Complete configuration for a language model instance. */
-export interface ModelConfig {
-  name: string; // Short name (e.g., "sonnet4T")
-  fullName: string; // Full model name (e.g., "claude-3-7-sonnet-20250219")
-  provider: ModelProvider; // The model provider (e.g., ANTHROPIC, OPENAI)
-  maxOutputTokens: number;
-  inputPrice: number;
-  outputPrice: number;
-  contextWindow: number;
-  capabilities: ModelCapabilities;
-  openRouterOnly: boolean; // Whether this model is only available through OpenRouter
-  openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
-  baseUrl?: string; // Custom base URL for this specific model (overrides provider default)
-  requiresResponsesAPI?: boolean; // Whether this model requires OpenAI Responses API (bypasses OpenRouter)
-}
