@@ -1,42 +1,25 @@
 /**
  * Configuration types and constants for language model interactions and capabilities.
- * Uses Zod schemas as the single source of truth.
+ * Types and runtime values from llm-zoo, Zod schemas local (Zod 4).
  */
 
 import { z } from 'zod';
 
-// ============================================================================
-// Default Values
-// ============================================================================
+// Re-export types and values from llm-zoo (no Zod dependency)
+export {
+  ModelProvider,
+  ReasoningEffort,
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MODEL_CAPABILITIES,
+} from 'llm-zoo';
 
-export const DEFAULT_CONTEXT_WINDOW = 128000;
+export type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 
-// ============================================================================
-// Enums (defined first for use in schemas)
-// ============================================================================
-
-export enum ReasoningEffort {
-  XHIGH = 'xhigh',
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
-  NONE = 'none',
-}
-
-export enum ModelProvider {
-  ANTHROPIC = 'anthropic',
-  OPENAI = 'openai',
-  GOOGLE = 'google',
-  DEEPSEEK = 'deepseek',
-  XAI = 'xai',
-  MOONSHOT = 'moonshot',
-  DASHSCOPE = 'dashscope',
-  COPILOT = 'copilot',
-  OTHERS = 'others',
-}
+// Import for local use
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // ============================================================================
-// Zod Schemas - Single Source of Truth
+// Zod Schemas - Local (Zod 4 compatible)
 // ============================================================================
 
 export const ReasoningEffortSchema = z.nativeEnum(ReasoningEffort);
@@ -68,54 +51,23 @@ export const ModelCapabilitiesSchema = z.object({
 
 /** Complete configuration for a language model instance. */
 export const ModelConfigSchema = z.object({
-  name: z.string(), // Short name (e.g., "sonnet4T")
-  fullName: z.string(), // Full model name (e.g., "claude-3-7-sonnet-20250219")
+  name: z.string(),
+  fullName: z.string(),
   provider: ModelProviderSchema,
   maxOutputTokens: z.number(),
   inputPrice: z.number(),
   outputPrice: z.number(),
   contextWindow: z.number(),
   capabilities: ModelCapabilitiesSchema,
-  openRouterOnly: z.boolean(), // Whether this model is only available through OpenRouter
-  openrouterFullName: z.string().optional(), // Full model name for OpenRouter
-  baseUrl: z.string().optional(), // Custom base URL for this specific model
-  requiresResponsesAPI: z.boolean().optional(), // Whether this model requires OpenAI Responses API
+  openRouterOnly: z.boolean(),
+  openrouterFullName: z.string().optional(),
+  baseUrl: z.string().optional(),
+  requiresResponsesAPI: z.boolean().optional(),
 });
 
 /** Registry of all model configurations. */
 export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
 
-// ============================================================================
-// Types - Derived from Schemas
-// ============================================================================
-
-export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
-export type ModelConfig = z.infer<typeof ModelConfigSchema>;
-export type ModelRegistry = z.infer<typeof ModelRegistrySchema>;
-
-// ============================================================================
-// Default Values
-// ============================================================================
-
-/** Base model capabilities configuration with sensible defaults. */
-export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
-  supportsFunctionCalling: true,
-  supportsNativeMCPServer: false,
-  supportsNativeWebSearch: false,
-  supportsNativeCodeExecution: false,
-  supportsPromptCaching: false,
-  supportsAutoPromptCaching: false,
-  cacheDiscountFactor: 1.0,
-  supportsReasoning: false,
-  supportsInterleavedThinking: false,
-  reasoningEffort: ReasoningEffort.NONE,
-  supportsVision: true,
-  supportsNativePdf: false,
-  supportsAssistantPrefill: false,
-  supportsPredictiveOutput: false,
-  supportsTokenCounting: false,
-  supportsSystemPrompt: true,
-  supportsIntermDevMsgs: false,
-  supportsReasoningEffort: false,
-  supportsNativeAudio: false,
-};
+// Type alias for registry
+import type { ModelConfig } from 'llm-zoo';
+export type ModelRegistry = Record<string, ModelConfig>;

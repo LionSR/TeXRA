@@ -72,7 +72,7 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "zod": "^3.22.0"
+    "zod": "^3.22.0 || ^4.0.0"
   },
   "peerDependenciesMeta": {
     "zod": {
