@@ -20,7 +20,6 @@ export {
 export {
   ToolUseSessionLifecycle,
   type IToolUseSession,
-  type IToolUseSessionHost,
 } from './ToolUseSessionLifecycle';
 
 export {

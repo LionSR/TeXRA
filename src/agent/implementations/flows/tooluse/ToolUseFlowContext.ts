@@ -7,13 +7,9 @@
  * - Cycle execution options
  *
  * Note: Persistence is handled automatically by PersistedFlow.
- *
- * Implements IToolUseSessionHost to provide session context without
- * coupling to any specific caller.
  */
 
 import type { IModelHandler } from '@agent/modelHandlers';
-import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
@@ -32,10 +28,7 @@ import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
-import {
-  ToolUseSessionLifecycle,
-  type IToolUseSessionHost,
-} from './ToolUseSessionLifecycle';
+import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
@@ -75,15 +68,13 @@ export interface ToolUseFlowContextInit<
 /**
  * Self-contained execution context for tool-use flows.
  *
- * Implements IToolUseSessionHost to provide session lifecycle with
- * necessary context without requiring an agent instance.
- *
  * Extends BaseFlowContext for shared lazy initialization pattern.
  */
-export class ToolUseFlowContext<C = unknown>
-  extends BaseFlowContext<ToolUseFlowContextInit<C>, ToolUseServices<C>, C>
-  implements IToolUseSessionHost
-{
+export class ToolUseFlowContext<C = unknown> extends BaseFlowContext<
+  ToolUseFlowContextInit<C>,
+  ToolUseServices<C>,
+  C
+> {
   private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle;
   private readonly resolvedTools: ToolDefinition[];
@@ -91,7 +82,7 @@ export class ToolUseFlowContext<C = unknown>
   constructor(init: ToolUseFlowContextInit<C>) {
     super(init);
     this.toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
-    this.sessionLifecycle = new ToolUseSessionLifecycle(this);
+    this.sessionLifecycle = new ToolUseSessionLifecycle(init.streamTabId);
     // Resolve tools once at construction time instead of on every cycle
     this.resolvedTools = this.resolveToolsFromSetting();
   }
@@ -119,19 +110,12 @@ export class ToolUseFlowContext<C = unknown>
   }
 
   // =========================================================================
-  // IToolUseSessionHost implementation
+  // Accessors
   // =========================================================================
 
+  /** Stream tab ID for this session */
   get streamTabId(): StreamTabId {
     return this.init.streamTabId;
-  }
-
-  get executionId() {
-    return this.init.executionContext.executionId;
-  }
-
-  get config(): AgentConfig {
-    return this.init.config;
   }
 
   // =========================================================================

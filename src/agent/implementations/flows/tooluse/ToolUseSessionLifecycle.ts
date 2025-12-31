@@ -1,13 +1,11 @@
 /**
- * ToolUseSessionLifecycle - Unified session lifecycle for tool-use flows.
+ * ToolUseSessionLifecycle - Session lifecycle for tool-use flows.
  *
- * This module provides the session lifecycle implementation that works with
- * any IToolUseSessionHost, enabling both agent-based and flow-first execution.
+ * Provides follow-up queue management and stream status updates.
  */
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -39,28 +37,17 @@ export interface IToolUseSession {
 }
 
 /**
- * Interface for what the session lifecycle needs from its host.
- *
- * Implemented by ToolUseFlowContext to provide session lifecycle with
- * necessary context for flow-first execution.
- */
-export interface IToolUseSessionHost {
-  readonly streamTabId: StreamTabId;
-  readonly executionId: ExecutionId | undefined;
-  readonly config: AgentConfig;
-}
-
-/**
- * Session lifecycle that works with any IToolUseSessionHost.
+ * Session lifecycle for tool-use flows.
  *
  * Provides unified session management for flow-first execution.
+ * Only requires streamTabId - other context is accessed via services.
  */
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
   private store: AgentSharedStore | null = null;
 
-  constructor(private readonly host: IToolUseSessionHost) {
-    this.followUps = ToolUseFollowUpQueue.acquire(host.streamTabId);
+  constructor(private readonly streamTabId: StreamTabId) {
+    this.followUps = ToolUseFollowUpQueue.acquire(streamTabId);
   }
 
   setStore(store: AgentSharedStore | null): void {
@@ -92,11 +79,11 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
     // PersistedFlow handles state persistence automatically after each node.
     // We only need to set the UI status here.
-    StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.WAITING);
+    StreamStatusService.set(this.streamTabId, STREAM_STATUS.WAITING);
   }
 
   async markRunning(): Promise<void> {
-    StreamStatusService.set(this.host.streamTabId, STREAM_STATUS.RUNNING);
+    StreamStatusService.set(this.streamTabId, STREAM_STATUS.RUNNING);
   }
 
   /**
@@ -112,7 +99,7 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
    */
   dispose(): void {
     this.setStore(null);
-    ToolUseFollowUpQueue.release(this.host.streamTabId);
+    ToolUseFollowUpQueue.release(this.streamTabId);
     // PersistedFlow handles state cleanup automatically.
   }
 }
