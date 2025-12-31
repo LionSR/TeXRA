@@ -107,7 +107,11 @@ export class PrepareContextNode<C = unknown> extends Node<
 
       return {
         kind: 'ready',
-        context: { messages, prefill: prefill ?? '', stateRound },
+        context: {
+          messages,
+          prefill: prefill ?? '',
+          stateRoundSnapshot: stateRound.toSnapshot(),
+        },
       };
     } else {
       // Subsequent rounds: build user request only
@@ -135,7 +139,11 @@ export class PrepareContextNode<C = unknown> extends Node<
 
       return {
         kind: 'ready',
-        context: { messages, prefill: prefill ?? '', stateRound },
+        context: {
+          messages,
+          prefill: prefill ?? '',
+          stateRoundSnapshot: stateRound.toSnapshot(),
+        },
       };
     }
   }
