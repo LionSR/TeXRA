@@ -181,6 +181,207 @@ async function createAccessToken(
 }
 
 // =============================================================================
+// User Management
+// =============================================================================
+
+interface FindOrCreateResult {
+  success: true;
+  userId: string;
+  userEmail: string;
+} | {
+  success: false;
+  error: string;
+}
+
+/**
+ * Find or create a user with GitHub identity.
+ * Handles race conditions by catching duplicate key errors and retrying.
+ *
+ * Flow:
+ * 1. Check if GitHub identity already exists → return that user
+ * 2. Check if user exists with same email → link GitHub identity
+ * 3. Create new user → link GitHub identity
+ *
+ * Race condition handling:
+ * - If user creation fails due to duplicate email, retry from step 1
+ * - If identity insertion fails due to duplicate, it's benign (another request won)
+ */
+async function findOrCreateGitHubUser(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  githubProviderId: string,
+  email: string,
+  githubUser: GitHubUser,
+  retryCount = 0,
+): Promise<FindOrCreateResult> {
+  const MAX_RETRIES = 2;
+
+  // Step 1: Check if GitHub identity already exists
+  const { data: identities, error: identityError } = await supabase
+    .from('identities')
+    .select('user_id')
+    .eq('provider', 'github')
+    .eq('provider_id', githubProviderId)
+    .limit(1);
+
+  if (identityError) {
+    console.error('[AUTH_GITHUB] Failed to query identities:', identityError.message);
+    return { success: false, error: 'Database error' };
+  }
+
+  if (identities && identities.length > 0) {
+    // User exists with this GitHub identity
+    const userId = identities[0].user_id;
+    console.log(`[AUTH_GITHUB] Found existing user by GitHub ID: ${userId}`);
+
+    // Get their current email
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+    if (userError) {
+      console.error('[AUTH_GITHUB] Failed to get user:', userError.message);
+      return { success: false, error: 'Failed to get user data' };
+    }
+
+    return {
+      success: true,
+      userId,
+      userEmail: userData?.user?.email || email,
+    };
+  }
+
+  // Step 2: Check if user exists with this email
+  // Use listUsers with filter instead of fetching all users
+  const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
+    filter: `email.eq.${email}`,
+    perPage: 1,
+  });
+
+  // Fallback: if filter doesn't work, try direct query
+  let existingUser = usersData?.users?.[0];
+  if (listError || !existingUser) {
+    // Some Supabase versions don't support filter, fall back to targeted query
+    const { data: allUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    existingUser = allUsers?.users?.find((u: { email: string }) => u.email === email);
+  }
+
+  let userId: string;
+
+  if (existingUser) {
+    // Link GitHub identity to existing user
+    userId = existingUser.id;
+    console.log(`[AUTH_GITHUB] Linking GitHub to existing user: ${userId}`);
+
+    // Update user metadata
+    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...existingUser.user_metadata,
+        avatar_url: githubUser.avatar_url,
+        user_name: githubUser.login,
+        full_name: githubUser.name || githubUser.login,
+        provider_id: githubProviderId,
+      },
+      app_metadata: {
+        ...existingUser.app_metadata,
+        provider: 'github',
+        providers: [
+          ...new Set([
+            ...(existingUser.app_metadata?.providers || []),
+            'github',
+          ]),
+        ],
+      },
+    });
+
+    if (updateError) {
+      console.warn('[AUTH_GITHUB] Failed to update user metadata:', updateError.message);
+      // Non-fatal: continue anyway
+    }
+  } else {
+    // Step 3: Create new user
+    console.log(`[AUTH_GITHUB] Creating new user for ${email}`);
+
+    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: {
+        avatar_url: githubUser.avatar_url,
+        email,
+        email_verified: true,
+        full_name: githubUser.name || githubUser.login,
+        iss: 'https://api.github.com',
+        preferred_username: githubUser.login,
+        provider_id: githubProviderId,
+        sub: githubProviderId,
+        user_name: githubUser.login,
+      },
+      app_metadata: {
+        provider: 'github',
+        providers: ['github'],
+      },
+    });
+
+    // Handle race condition: another request may have created the user
+    if (createError) {
+      const isDuplicate =
+        createError.message?.includes('duplicate') ||
+        createError.message?.includes('already exists') ||
+        createError.message?.includes('unique constraint');
+
+      if (isDuplicate && retryCount < MAX_RETRIES) {
+        console.log(`[AUTH_GITHUB] User creation race condition, retrying (${retryCount + 1}/${MAX_RETRIES})`);
+        return findOrCreateGitHubUser(supabase, githubProviderId, email, githubUser, retryCount + 1);
+      }
+
+      console.error('[AUTH_GITHUB] Failed to create user:', createError.message);
+      return { success: false, error: 'Failed to create user account' };
+    }
+
+    if (!newUser?.user) {
+      return { success: false, error: 'User creation returned no data' };
+    }
+
+    userId = newUser.user.id;
+  }
+
+  // Insert GitHub identity record for future lookups
+  const { error: insertIdentityError } = await supabase.from('identities').insert({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    provider: 'github',
+    provider_id: githubProviderId,
+    identity_data: {
+      sub: githubProviderId,
+      email,
+      avatar_url: githubUser.avatar_url,
+      user_name: githubUser.login,
+      full_name: githubUser.name || githubUser.login,
+    },
+    last_sign_in_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  if (insertIdentityError) {
+    // Check if it's a duplicate key error (benign race condition)
+    const isDuplicate =
+      insertIdentityError.message?.includes('duplicate') ||
+      insertIdentityError.message?.includes('unique constraint');
+
+    if (isDuplicate) {
+      console.log('[AUTH_GITHUB] Identity already exists (race condition resolved)');
+    } else {
+      console.warn('[AUTH_GITHUB] Failed to insert identity:', insertIdentityError.message);
+      // Non-fatal: user exists but identity linking failed
+    }
+  }
+
+  return {
+    success: true,
+    userId,
+    userEmail: email,
+  };
+}
+
+// =============================================================================
 // Environment Validation (fail fast)
 // =============================================================================
 
@@ -247,120 +448,20 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // 4. Find existing user with this GitHub identity
-    // Query the auth.identities table (Supabase's internal identity linking)
-    const { data: identities } = await supabase
-      .from('identities')
-      .select('user_id')
-      .eq('provider', 'github')
-      .eq('provider_id', githubProviderId)
-      .limit(1);
+    // 4. Find or create user with GitHub identity
+    // This handles race conditions by retrying on duplicate key errors
+    const result = await findOrCreateGitHubUser(
+      supabase,
+      githubProviderId,
+      email,
+      githubUser,
+    );
 
-    let userId: string;
-    let userEmail: string = email;
-
-    if (identities && identities.length > 0) {
-      // User exists with this GitHub identity
-      userId = identities[0].user_id;
-      console.log(`[AUTH_GITHUB] Found existing user: ${userId}`);
-
-      // Get their current email
-      const { data: userData } = await supabase.auth.admin.getUserById(userId);
-      if (userData?.user?.email) {
-        userEmail = userData.user.email;
-      }
-    } else {
-      // Check if user exists with this email (might have signed up differently)
-      const { data: existingUsers } = await supabase.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find(
-        (u) => u.email === email,
-      );
-
-      if (existingUser) {
-        // Link GitHub identity to existing user
-        userId = existingUser.id;
-        console.log(`[AUTH_GITHUB] Linking GitHub to existing user: ${userId}`);
-
-        // Update user metadata to include GitHub info
-        await supabase.auth.admin.updateUserById(userId, {
-          user_metadata: {
-            ...existingUser.user_metadata,
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
-            full_name: githubUser.name || githubUser.login,
-            provider_id: githubProviderId,
-          },
-          app_metadata: {
-            ...existingUser.app_metadata,
-            provider: 'github',
-            providers: [
-              ...new Set([
-                ...(existingUser.app_metadata?.providers || []),
-                'github',
-              ]),
-            ],
-          },
-        });
-      } else {
-        // Create new user with GitHub identity
-        console.log(`[AUTH_GITHUB] Creating new user for ${email}`);
-
-        const { data: newUser, error: createError } =
-          await supabase.auth.admin.createUser({
-            email,
-            email_confirm: true,
-            user_metadata: {
-              avatar_url: githubUser.avatar_url,
-              email,
-              email_verified: true,
-              full_name: githubUser.name || githubUser.login,
-              iss: 'https://api.github.com',
-              preferred_username: githubUser.login,
-              provider_id: githubProviderId,
-              sub: githubProviderId,
-              user_name: githubUser.login,
-            },
-            app_metadata: {
-              provider: 'github',
-              providers: ['github'],
-            },
-          });
-
-        if (createError || !newUser.user) {
-          console.error('[AUTH_GITHUB] Failed to create user:', createError);
-          return errorResponse('Failed to create user account', 500);
-        }
-
-        userId = newUser.user.id;
-      }
-
-      // Insert GitHub identity record for future lookups
-      const { error: identityError } = await supabase.from('identities').insert({
-        id: crypto.randomUUID(),
-        user_id: userId,
-        provider: 'github',
-        provider_id: githubProviderId,
-        identity_data: {
-          sub: githubProviderId,
-          email,
-          avatar_url: githubUser.avatar_url,
-          user_name: githubUser.login,
-          full_name: githubUser.name || githubUser.login,
-        },
-        last_sign_in_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      if (identityError) {
-        // Non-fatal: user exists but identity linking failed
-        // Could be a race condition with another request
-        console.warn(
-          '[AUTH_GITHUB] Failed to insert identity (may be duplicate):',
-          identityError.message,
-        );
-      }
+    if (!result.success) {
+      return errorResponse(result.error || 'Failed to authenticate', 500);
     }
+
+    const { userId, userEmail } = result;
 
     // 5. Generate JWT tokens for this user
     const accessToken = await createAccessToken(
