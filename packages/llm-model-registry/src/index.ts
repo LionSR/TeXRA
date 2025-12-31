@@ -84,3 +84,12 @@ export {
   findCheapestModel,
   getRegistryStats,
 } from './utils';
+
+// Zod Schemas (optional, for runtime validation)
+export {
+  ModelConfigSchema,
+  ModelCapabilitiesSchema,
+  ModelProviderSchema,
+  ModelRegistrySchema,
+  ReasoningEffortSchema,
+} from './schemas';

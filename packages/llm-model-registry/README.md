@@ -1,16 +1,34 @@
 # llm-model-registry
 
-> The single source of truth for LLM pricing, capabilities, and configurations.
+## The Problem
+
+Every LLM application faces the same challenges:
+
+- **Scattered documentation** — Pricing, context limits, and capabilities are spread across dozens of provider docs
+- **Constant changes** — Models update weekly. Pricing changes. New capabilities appear.
+- **Hardcoded configs** — Teams copy-paste model specs, leading to drift between client and server
+- **No single source of truth** — Is Claude Sonnet $3 or $15? Does GPT-4o support vision? Which models have 1M context?
+
+## The Solution
+
+One package. 70+ models. Always current.
 
 ```typescript
 import { lookup, cost, cheapest } from 'llm-model-registry';
 
+// Know everything about any model
 const claude = lookup('sonnet45');
+console.log(claude.contextWindow);  // 200000
+console.log(claude.inputPrice);     // 3
+
+// Calculate exact costs
 const price = cost('gpt4o', { input: 50000, output: 10000 });
-const budget = cheapest({ supportsVision: true });
+
+// Find the right model
+const budget = cheapest({ supportsVision: true, supportsReasoning: true });
 ```
 
-**70+ models. 9 providers. Zero dependencies. Full TypeScript.**
+**Zero dependencies. Full TypeScript. Tree-shakeable. Zod schemas included.**
 
 ## Install
 
@@ -18,9 +36,11 @@ const budget = cheapest({ supportsVision: true });
 npm install llm-model-registry
 ```
 
-## What's Inside
+---
 
-### Cheapest Models ($/1M tokens)
+## Model Rankings
+
+### Cheapest ($/1M tokens)
 
 | Model | Input | Output | Provider |
 |-------|-------|--------|----------|
@@ -33,7 +53,7 @@ npm install llm-model-registry
 | `deepseek` | $0.28 | $0.42 | DeepSeek |
 | `gemini3f` | $0.30 | $2.50 | Google |
 
-### Premium Models ($/1M tokens)
+### Premium ($/1M tokens)
 
 | Model | Input | Output | Reasoning | Provider |
 |-------|-------|--------|-----------|----------|
@@ -46,7 +66,7 @@ npm install llm-model-registry
 | `opus41T` | $15 | $75 | ✓ | Anthropic |
 | `opus41` | $15 | $75 | - | Anthropic |
 
-### Largest Context Windows
+### Largest Context
 
 | Model | Context | Provider |
 |-------|---------|----------|
@@ -59,7 +79,7 @@ npm install llm-model-registry
 | `grok4` | 256K | xAI |
 | `sonnet45` | 200K | Anthropic |
 
-### By Capability
+### Capabilities
 
 | Capability | Count | Examples |
 |------------|-------|----------|
@@ -83,6 +103,8 @@ npm install llm-model-registry
 | **Copilot** | 1 | Free GPT-4o |
 | **OpenRouter** | 2 | Llama 405B, QVQ-72B |
 
+---
+
 ## API
 
 ### Lookup
@@ -98,7 +120,7 @@ exists('gpt4o')                 // → true
 ```typescript
 from(ModelProvider.ANTHROPIC)   // → all Claude models
 where(c => c.supportsVision)    // → by capability predicate
-supporting('supportsReasoning') // → by specific capability
+supporting('supportsReasoning') // → models with reasoning
 withContext(500000)             // → 500K+ context models
 ```
 
@@ -116,16 +138,44 @@ compareCosts(['sonnet45', 'gpt4o'], { input: 10000, output: 2000 })
 ```typescript
 cheapest({ supportsVision: true })
 cheapest({ supportsReasoning: true }, { minContext: 100000 })
-smartpick(5)                    // best under $5/1M tokens
+smartpick(5)                    // best model under $5/1M tokens
 ranked('price')                 // cheapest first
 ranked('context', 'desc')       // largest context first
 ```
 
-### Stats
+### Insights
 
 ```typescript
 const { totalModels, providers, pricing, context } = insights();
 ```
+
+---
+
+## Zod Schemas
+
+Validate model configs at runtime:
+
+```typescript
+import { ModelConfigSchema } from 'llm-model-registry';
+// or import { ModelConfigSchema } from 'llm-model-registry/schemas';
+
+// Validate custom model config
+const result = ModelConfigSchema.safeParse(myConfig);
+if (!result.success) {
+  console.error(result.error);
+}
+
+// Validate API responses
+const validatedModel = ModelConfigSchema.parse(apiResponse);
+```
+
+Available schemas:
+- `ModelConfigSchema` — Full model configuration
+- `ModelCapabilitiesSchema` — Capability flags
+- `ModelProviderSchema` — Provider enum
+- `ReasoningEffortSchema` — Reasoning levels
+
+---
 
 ## Data Structure
 
@@ -142,9 +192,22 @@ interface ModelConfig {
   openRouterOnly: boolean;
   openrouterFullName?: string;
 }
+
+interface ModelCapabilities {
+  supportsFunctionCalling: boolean;
+  supportsVision: boolean;
+  supportsReasoning: boolean;
+  supportsNativeCodeExecution: boolean;
+  supportsNativeWebSearch: boolean;
+  supportsPromptCaching: boolean;
+  cacheDiscountFactor: number;   // 0.1 = 90% savings
+  // ... and more
+}
 ```
 
-## Examples
+---
+
+## Use Cases
 
 ### LLM Router
 
@@ -155,6 +218,26 @@ function route(needs: { vision?: boolean; budget: number; tokens: number }) {
   return where(c => !needs.vision || c.supportsVision)
     .filter(m => cost(m, { input: needs.tokens, output: 4000 }) <= needs.budget)
     .sort((a, b) => a.inputPrice - b.inputPrice)[0];
+}
+```
+
+### Edge Function (Supabase/Vercel)
+
+```typescript
+import { lookup, exists, cost } from 'llm-model-registry';
+
+export async function validateRequest(model: string, tokens: number, tier: string) {
+  if (!exists(model)) return { error: 'Unknown model' };
+
+  const config = lookup(model)!;
+  if (tier === 'free' && config.inputPrice > 1) {
+    return { error: 'Upgrade for premium models' };
+  }
+
+  return {
+    allowed: true,
+    estimatedCost: cost(model, { input: tokens, output: 4000 })
+  };
 }
 ```
 
@@ -170,15 +253,28 @@ const report = Object.entries(usage).map(([model, tokens]) => ({
 }));
 ```
 
+---
+
 ## Direct Access
 
 ```typescript
 import { MODEL_CONFIGS, MODELS, ANTHROPIC_MODELS } from 'llm-model-registry';
 
 MODEL_CONFIGS['sonnet45'].inputPrice;
-MODELS.forEach(name => ...);
+MODELS.forEach(name => console.log(name));
 Object.keys(ANTHROPIC_MODELS);
 ```
+
+---
+
+## Contributing
+
+Model data getting stale? Pricing changed? New model released?
+
+1. Fork the repo
+2. Update the relevant file in `src/providers/`
+3. Ensure all capability flags are accurate
+4. Submit a PR
 
 ## License
 
