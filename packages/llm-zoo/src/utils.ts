@@ -432,7 +432,7 @@ export function findCheapestModel(
   requirements: Partial<ModelCapabilities>,
   minContextWindow?: number,
 ): ModelConfig | undefined {
-  return cheapest(requirements, { minContext: minContextWindow });
+  return cheapest(requirements, minContextWindow !== undefined ? { minContext: minContextWindow } : {});
 }
 /** @deprecated Use `insights()` instead */
 export const getRegistryStats = insights;
