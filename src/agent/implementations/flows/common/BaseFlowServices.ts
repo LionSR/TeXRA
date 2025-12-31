@@ -87,46 +87,20 @@ export interface BaseFlowContextInit<C = unknown> {
 /**
  * Base services shared by all agent flows.
  *
- * These are the core immutable dependencies that every flow needs:
- * - Model interaction (modelHandler, getClient)
- * - Configuration (config, setting, prompt)
- * - Runtime context (context, logger, userVarChannels)
- * - Control (checkInterruption, setAbortController)
+ * Extends BaseFlowContextInit with convenience accessors:
+ * - logger: Direct access to executionContext.logger
+ * - context: Alias for executionContext (used by cycle options)
  *
  * Flow-specific interfaces extend this with additional services:
  * - ReflectionServices: outputHandler, promptBuilder, latexMediaManager, etc.
  * - ToolUseServices: toolRegistry, session, cycle operations, etc.
  */
-export interface BaseFlowServices<C = unknown> {
-  /** Model handler for API calls and message formatting */
-  readonly modelHandler: IModelHandler<any, any, any, any, C>;
-
-  /** Logger for debugging and progress */
+export interface BaseFlowServices<C = unknown> extends BaseFlowContextInit<C> {
+  /** Logger for debugging and progress (convenience accessor) */
   readonly logger: AgentLogger;
 
-  /** Agent configuration (input files, model, etc.) */
-  readonly config: AgentConfig;
-
-  /** Agent settings (AgentWorkflowSetting or AgentToolUseSetting) */
-  readonly setting: AgentSetting;
-
-  /** Agent prompt templates */
-  readonly prompt: AgentPrompt;
-
-  /** Execution context (IDs, storage key, etc.) */
+  /** Alias for executionContext (used by AgentCycleOptions) */
   readonly context: AgentExecutionContext;
-
-  /** User variable channels for template rendering */
-  readonly userVarChannels: UserVariableChannels;
-
-  /** Check if user requested interruption (synchronous) */
-  readonly checkInterruption: () => boolean;
-
-  /** Set abort controller for cancellation */
-  readonly setAbortController: (ctrl: AbortController | null) => void;
-
-  /** Get the API client instance */
-  readonly getClient: () => C;
 }
 
 /**
@@ -147,23 +121,14 @@ export interface FlowParams {
 /**
  * Build base flow services from initialization config.
  *
- * Extracts the common service properties that both ReflectionFlowContext
- * and ToolUseFlowContext need. Flow contexts can spread this result and
- * add their specialized services on top.
+ * Spreads init and adds convenience accessors (logger, context alias).
  */
 export function buildBaseFlowServices<C>(
   init: BaseFlowContextInit<C>,
 ): BaseFlowServices<C> {
   return {
-    modelHandler: init.modelHandler,
+    ...init,
     logger: init.executionContext.logger,
-    config: init.config,
-    setting: init.setting,
-    prompt: init.prompt,
     context: init.executionContext,
-    userVarChannels: init.userVarChannels,
-    checkInterruption: init.checkInterruption,
-    setAbortController: init.setAbortController,
-    getClient: init.getClient,
   };
 }
