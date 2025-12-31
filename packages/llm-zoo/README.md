@@ -1,11 +1,11 @@
-# llm-model-registry
+# llm-zoo 🦁
 
 LLM pricing and capabilities change weekly. Docs are scattered. There's no single source of truth.
 
 **One package. 70+ models. Always current.**
 
 ```typescript
-import { lookup, cost, cheapest } from 'llm-model-registry';
+import { lookup, cost, cheapest } from 'llm-zoo';
 
 // Know everything about any model
 const claude = lookup('sonnet45');
@@ -24,7 +24,7 @@ const budget = cheapest({ supportsVision: true, supportsReasoning: true });
 ## Install
 
 ```bash
-npm install llm-model-registry
+npm install llm-zoo
 ```
 
 ---
@@ -147,8 +147,8 @@ const { totalModels, providers, pricing, context } = insights();
 Validate model configs at runtime:
 
 ```typescript
-import { ModelConfigSchema } from 'llm-model-registry';
-// or import { ModelConfigSchema } from 'llm-model-registry/schemas';
+import { ModelConfigSchema } from 'llm-zoo';
+// or import { ModelConfigSchema } from 'llm-zoo/schemas';
 
 // Validate custom model config
 const result = ModelConfigSchema.safeParse(myConfig);
@@ -203,7 +203,7 @@ interface ModelCapabilities {
 ### LLM Router
 
 ```typescript
-import { where, cost } from 'llm-model-registry';
+import { where, cost } from 'llm-zoo';
 
 function route(needs: { vision?: boolean; budget: number; tokens: number }) {
   return where(c => !needs.vision || c.supportsVision)
@@ -215,7 +215,7 @@ function route(needs: { vision?: boolean; budget: number; tokens: number }) {
 ### Edge Function (Supabase/Vercel)
 
 ```typescript
-import { lookup, exists, cost } from 'llm-model-registry';
+import { lookup, exists, cost } from 'llm-zoo';
 
 export async function validateRequest(model: string, tokens: number, tier: string) {
   if (!exists(model)) return { error: 'Unknown model' };
@@ -235,7 +235,7 @@ export async function validateRequest(model: string, tokens: number, tier: strin
 ### Cost Dashboard
 
 ```typescript
-import { cost, MODEL_CONFIGS } from 'llm-model-registry';
+import { cost, MODEL_CONFIGS } from 'llm-zoo';
 
 const report = Object.entries(usage).map(([model, tokens]) => ({
   model,
@@ -249,7 +249,7 @@ const report = Object.entries(usage).map(([model, tokens]) => ({
 ## Direct Access
 
 ```typescript
-import { MODEL_CONFIGS, MODELS, ANTHROPIC_MODELS } from 'llm-model-registry';
+import { MODEL_CONFIGS, MODELS, ANTHROPIC_MODELS } from 'llm-zoo';
 
 MODEL_CONFIGS['sonnet45'].inputPrice;
 MODELS.forEach(name => console.log(name));
