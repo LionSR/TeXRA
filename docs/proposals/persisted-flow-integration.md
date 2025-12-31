@@ -547,11 +547,56 @@ Files requiring updates:
 
 **Next steps:**
 
-- Phase 2: Remove old hydration code now that PersistedFlow handles persistence
-  - Delete `ToolUseSnapshotStore.ts` (207 lines)
-  - Delete `ToolUseSessionPersistence.ts` (245 lines)
-  - Delete `ToolUseSessionManager.ts` (145 lines)
-  - Update callers in extension.ts, resumeCommand.ts, ToolUseFollowUp.ts
+- ~~Phase 2: Remove old hydration code now that PersistedFlow handles persistence~~ ✅ (done - see below)
+- Phase 4: Simplify AgentSharedStore.toSnapshot() usage (optional cleanup)
+
+### 2024-12-30: Phase 2 Complete (Hydration Code Removal)
+
+**Completed:**
+
+- ✅ Deleted legacy persistence files (~600 lines removed):
+  - `ToolUseSnapshotStore.ts` (207 lines) - disk persistence layer
+  - `ToolUseSessionPersistence.ts` (245 lines) - orchestration facade
+  - `ToolUseSessionManager.ts` (145 lines) - in-memory cache
+
+- ✅ Relocated types to stable location:
+  - Created `ToolUseSessionTypes.ts` with schemas still needed by flows
+
+- ✅ Updated all callers:
+  - `extension.ts` - removed snapshot initialization/cleanup
+  - `ToolUseFollowUp.ts` - removed lazy resume via snapshot
+  - `ToolUseSessionLifecycle.ts` - persistence calls now no-ops
+  - `resumeCommand.ts` - inlined resume logic (was in ToolUseSessionPersistence)
+  - `ProgressViewMessageHandler.ts` - removed snapshot cleanup call
+
+### 2024-12-30: Phase 1.7 Complete (Koala Pattern for ReflectionFlow)
+
+**Completed:**
+
+- ✅ Refactored ReflectionFlowState to use natively serializable snapshots:
+  - `workspaceState` → `workspaceSnapshot: AgentWorkspaceSnapshot`
+  - `runState` → `runStateSnapshot: AgentRunStateSnapshot`
+  - `roundStates` → `roundStateSnapshots: ConversationRoundStateSnapshot[]`
+
+- ✅ Added snapshot helper functions:
+  - `getWorkspaceState()` / `updateWorkspaceSnapshot()`
+  - `getRunState()` / `updateRunStateSnapshot()`
+  - `createFreshWorkspaceSnapshot()`
+
+- ✅ Moved `runStage` from shared state to services (runtime dependency)
+
+- ✅ Updated all 6 reflection nodes for snapshot pattern
+
+This ensures `structuredClone()` works without special handling, enabling
+clean state persistence via PersistedFlow.
+
+**Summary:**
+
+The PersistedFlow integration is now complete:
+- Both ReflectionFlow and ToolUseFlow use PersistedFlow for automatic persistence
+- Legacy hydration code removed (~600 lines)
+- ReflectionFlow uses natively serializable state (koala pattern)
+- Thinking blocks preserved across resume
 
 ## References
 
