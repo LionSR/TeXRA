@@ -43,8 +43,10 @@ export interface RunCycleResult {
  *
  * Extends BaseFlowServices with tool-use specific dependencies:
  * - toolRegistry: Available tools for the agent
- * - session: Session lifecycle management (persistence, follow-ups)
- * - Operations: prepareState, buildCycleOptions, runCycle, persistCheckpoint
+ * - session: Session lifecycle management (follow-ups, status)
+ * - Operations: prepareState, buildCycleOptions, runCycle
+ *
+ * Note: Persistence is handled automatically by PersistedFlow after each node.
  */
 export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   /** Narrow setting to tool-use specific type */
@@ -53,7 +55,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   /** Registry of available tools */
   readonly toolRegistry: IToolRegistry;
 
-  /** Session lifecycle for persistence and follow-ups */
+  /** Session lifecycle for follow-ups and status management */
   readonly session: IToolUseSession;
 
   // =========================================================================
@@ -82,14 +84,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
     messages: ProviderMessage[],
     store: AgentSharedStore,
   ) => Promise<RunCycleResult>;
-
-  /**
-   * Persist checkpoint for session recovery.
-   */
-  readonly persistCheckpoint: (
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ) => Promise<void>;
 
   /**
    * Apply a follow-up message to the conversation.

@@ -155,8 +155,7 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Cleanup
-    await flowContext.session.clearPersistedSnapshot();
+    // Cleanup (PersistedFlow handles state cleanup automatically)
     flowContext.dispose();
 
     // Notify completion
