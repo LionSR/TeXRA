@@ -926,7 +926,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     };
   }
 
-  addContinueMessageWithPrefill(/* ... */): void {
+  addContinueMessageWithPrefill(
+    _messages: Content[],
+    _stateRound: ConversationRoundState,
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
     );
@@ -949,7 +955,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  updateMessageContentWithPrefill(/* ... */): void {
+  updateMessageContentWithPrefill(
+    _messages: Content[],
+    _bestConnector: string,
+    _newResponse: string,
+    _workspaceState: AgentWorkspaceState,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
     );
@@ -1018,7 +1029,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
       );
-      workspaceState.assembly.updateAccumulatedOutput(prefill);
+      workspaceState.assembly.accumulatedOutput = prefill;
 
       // Add pseudo-prefill instruction to user message
       // (Google's Chat API requires alternating user/model turns)
@@ -1059,8 +1070,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Update workspace state - critical for multi-round agents on resume
     // so that subsequent rounds have correct context
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
@@ -1330,7 +1341,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: GoogleToolCall,
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (!call.callId) {
@@ -1353,6 +1364,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responsePart);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
+
     return [callMsg, resultMsg];
   }
 
@@ -1371,14 +1389,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * @param calls - Array of tool calls (should preserve original order from model response)
    * @param results - Array of sanitized results (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
-   * @param _workspaceState - Unused, for interface compatibility
+   * @param workspaceState - Workspace state to reset after consumption
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
     results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
@@ -1422,6 +1440,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responseParts);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
 
     return [callMsg, resultMsg];
   }

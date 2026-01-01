@@ -15,26 +15,32 @@
  * - exec(): Process output files and latexdiff
  * - post(): Store round output in shared
  *
+ * Serialization pattern (koala-code-reader):
+ * - Accesses only natively serializable state fields
+ * - Stores RoundOutput (plain JSON) to shared.roundOutputs
+ * - No class instances or runtime dependencies in state
+ *
  * Services accessed via native `this.services`:
  * - outputHandler, logger, setting, fileService
  */
 
 import { Node } from '@agent/node';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { RoundOutput } from '@agent/output';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
+import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
+import { createBaseFileLocations } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
 } from '../ReflectionServices';
-import { createBaseFileLocations } from '../helpers';
 
 // ============================================================================
 // Types
@@ -48,9 +54,7 @@ interface OutputPrepInput {
   ensureXmlStructure: boolean;
 }
 
-type OutputExecResult =
-  | { kind: 'success'; output: RoundOutput }
-  | { kind: 'degraded'; output: RoundOutput; warning: string };
+type OutputExecResult = RoundOutput;
 
 // ============================================================================
 // Node Implementation
@@ -70,7 +74,7 @@ export class OutputNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     const { config, fileService, setting } = this.services;
-    const { currentRound, outputLocation, endTurn } = shared.state;
+    const { currentRound, outputLocation, endTurn } = shared;
 
     if (!outputLocation) {
       throw new Error(
@@ -79,11 +83,9 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     // Base files for latexdiff - MUST be workspace locations
-    // (uses same helper as BaseReflectionAgent constructor)
     const baseFiles = createBaseFileLocations(config);
 
-    // Determine if we should ensure XML structure (delegates to agent for polymorphism)
-    // DirectAgent: returns useScratchpad, CoTAgent: returns true, Default: false
+    // Determine if we should ensure XML structure (based on xmlStructureMode config)
     const ensureXmlStructure = this.services.shouldEnsureXmlStructure();
 
     return {
@@ -97,6 +99,7 @@ export class OutputNode<C = unknown> extends Node<
 
   /**
    * Process output files and handle latexdiff.
+   * Logs warnings for non-critical failures. Throws on critical failures.
    */
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputHandler, setting, logger } = this.services;
@@ -107,7 +110,6 @@ export class OutputNode<C = unknown> extends Node<
       baseFiles,
       ensureXmlStructure,
     } = prepRes;
-    const warnings: string[] = [];
 
     // Only process if turn ended (model completed response)
     if (endTurn) {
@@ -121,10 +123,8 @@ export class OutputNode<C = unknown> extends Node<
             setting.documentTag ?? 'document',
           );
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Unknown error';
-          warnings.push(`XML structure failed: ${message}`);
-          logger.debug(`XML structure failed: ${message}`);
+          const msg = toErrorMessage(error);
+          logger.warn(`XML structure failed: ${msg}`);
         }
       }
 
@@ -132,10 +132,8 @@ export class OutputNode<C = unknown> extends Node<
       try {
         await outputHandler.processOutputFiles(outputLocation, currentRound);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unknown error';
-        warnings.push(`Output processing failed: ${message}`);
-        logger.debug(`Output processing failed: ${message}`);
+        const msg = toErrorMessage(error);
+        logger.warn(`Output processing failed: ${msg}`);
       }
 
       // Handle latexdiff if we have outputs and base files
@@ -143,10 +141,8 @@ export class OutputNode<C = unknown> extends Node<
         try {
           await this.handleLatexdiff(currentRound, baseFiles);
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Unknown error';
-          warnings.push(`Latexdiff failed: ${message}`);
-          logger.debug(`Latexdiff failed: ${message}`);
+          const msg = toErrorMessage(error);
+          logger.warn(`Latexdiff failed: ${msg}`);
         }
       }
     }
@@ -157,64 +153,32 @@ export class OutputNode<C = unknown> extends Node<
         endTurn,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      warnings.push(`Round finalization failed: ${message}`);
-      logger.debug(`Round finalization failed: ${message}`);
+      const msg = toErrorMessage(error);
+      logger.warn(`Round finalization failed: ${msg}`);
     }
 
-    // Get round artifacts
-    let output: RoundOutput;
-    try {
-      output = await outputHandler.getRoundArtifacts(currentRound);
-    } catch (error) {
-      // If we can't get artifacts, create empty output
-      output = {
-        round: currentRound,
-        rawOutput: null,
-        outputs: [],
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
-      };
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      warnings.push(`Failed to get artifacts: ${message}`);
-    }
-
-    if (warnings.length > 0) {
-      return {
-        kind: 'degraded',
-        output,
-        warning: warnings.join('; '),
-      };
-    }
-
-    return { kind: 'success', output };
+    // Get round artifacts - this is critical, throw if it fails
+    return await outputHandler.getRoundArtifacts(currentRound);
   }
 
   /**
-   * Handle total failure - return empty output.
+   * Handle total failure - log warning and return empty output.
    */
   async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<OutputExecResult> {
+    this.services.logger.warn(`Output processing failed: ${error.message}`);
     return {
-      kind: 'degraded',
-      output: {
-        round: prepRes.currentRound,
-        rawOutput: null,
-        outputs: [],
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
+      round: prepRes.currentRound,
+      rawOutput: null,
+      outputs: [],
+      xmlSummary: {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+        sourceLocation: null,
       },
-      warning: `Output processing failed: ${error.message}`,
     };
   }
 
@@ -226,15 +190,8 @@ export class OutputNode<C = unknown> extends Node<
     _prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this.services;
-
-    // Log warning if degraded
-    if (execRes.kind === 'degraded') {
-      logger.warn(execRes.warning);
-    }
-
     // Store round output
-    shared.state.roundOutputs[shared.state.currentRound] = execRes.output;
+    shared.roundOutputs[shared.currentRound] = execRes;
 
     // Continue to RoundCompleteNode
     return FlowTransition.DEFAULT;

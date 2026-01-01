@@ -2,8 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { BaseAgent } from '@agent/implementations/BaseAgent';
-import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
+import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import * as logger from '@logger/logUtils';
 
@@ -17,11 +16,11 @@ export function registerAgentCommands(context: vscode.ExtensionContext) {
 }
 
 async function handleStopAgent(stream: string) {
-  // Get the running agent instance
-  const agent = BaseAgent.getRunningAgent(stream) ?? getToolUseAgent(stream);
-  if (agent) {
-    // Interrupt the agent's execution
-    agent.interrupt();
+  // Get the running execution from the unified registry
+  // Handles both flow contexts and agent class instances
+  const execution = getInterruptible(stream);
+  if (execution) {
+    execution.interrupt();
   }
 
   // Update the UI status

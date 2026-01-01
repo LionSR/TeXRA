@@ -14,10 +14,15 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
-import type { BaseFlowServices } from '@agent/implementations/flows/common';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { IToolUseSession } from './ToolUseSessionLifecycle';
+
+// Note: RunCycleResult was removed - ToolUseCycleNode now directly runs ToolUseCycleFlow
 
 /**
  * Result of preparing initial state for a tool-use session.
@@ -30,33 +35,29 @@ export interface PrepareStateResult {
 }
 
 /**
- * Result of running a tool-use cycle.
- */
-export interface RunCycleResult {
-  failedWithError: boolean;
-  errorMessage?: string;
-  userCancelled: boolean;
-}
-
-/**
- * Services provided by BaseToolUseAgent for flow nodes.
+ * Services for tool-use flow nodes.
  *
- * Extends BaseFlowServices with tool-use specific dependencies:
+ * Extends BaseFlowContextInit directly with tool-use specific dependencies:
  * - toolRegistry: Available tools for the agent
- * - session: Session lifecycle management (persistence, follow-ups)
- * - Operations: prepareState, buildCycleOptions, runCycle, persistCheckpoint
+ * - session: Session lifecycle management (follow-ups, status)
+ * - Operations: prepareState, buildCycleOptions, applyFollowUpMessage
  *
- * The agent becomes a "service provider" - it holds these but doesn't
- * execute logic. Nodes do the work using these services.
+ * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
+ * Persistence is handled automatically by PersistedFlow after each node.
  */
-export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
+export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
+  /** Logger for debugging and progress */
+  readonly logger: AgentLogger;
+
+  /** Execution context (IDs, storage key, etc.) */
+  readonly context: AgentExecutionContext;
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 
   /** Registry of available tools */
   readonly toolRegistry: IToolRegistry;
 
-  /** Session lifecycle for persistence and follow-ups */
+  /** Session lifecycle for follow-ups and status management */
   readonly session: IToolUseSession;
 
   // =========================================================================
@@ -78,29 +79,18 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   ) => ToolUseCycleOptions<C>;
 
   /**
-   * Run a single tool-use cycle.
-   */
-  readonly runCycle: (
-    options: ToolUseCycleOptions<C>,
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ) => Promise<RunCycleResult>;
-
-  /**
-   * Persist checkpoint for session recovery.
-   */
-  readonly persistCheckpoint: (
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ) => Promise<void>;
-
-  /**
    * Apply a follow-up message to the conversation.
    */
   readonly applyFollowUpMessage: (
     message: string,
     conversation: ProviderMessage[],
   ) => Promise<ProviderMessage[]>;
+
+  /**
+   * Get usage recorder callback for tracking round statistics.
+   * Returns a callback that will be invoked when a round finalizes.
+   */
+  readonly getUsageRecorder: () => RoundFinalizedCallback;
 }
 
 /**

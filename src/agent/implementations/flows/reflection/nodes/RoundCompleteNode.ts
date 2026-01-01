@@ -2,26 +2,28 @@
  * RoundCompleteNode - Handles round completion and continuation logic.
  *
  * Responsibilities:
- * - Increment round counter
- * - Check if more rounds should run
- * - Route to next round or finalization
+ * - Check if more rounds should run (bounds, interruption, flags)
+ * - Signal intent to RoundPersistedFlow (CONTINUE_NEXT_ROUND or FINALIZE)
+ *
+ * Note: RoundPersistedFlow OWNS the round increment. This node only signals
+ * intent, and the flow handles all round lifecycle (increment, stages, reset).
  *
  * PocketFlow pattern:
  * - prep(): Extract current state
  * - exec(): Determine next action (pure logic)
- * - post(): Update state and route
+ * - post(): Route based on decision
  *
  * Services accessed via native `this.services`:
  * - logger, checkInterruption
  */
 
 import { Node } from '@agent/node';
+import { isRoundAtOrBeyondLimit } from '@agent/node/round-bounds';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
@@ -61,9 +63,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
     return {
-      currentRound: shared.state.currentRound,
-      totalRounds: shared.state.totalRounds,
-      continueRounds: shared.state.continueRounds,
+      currentRound: shared.currentRound,
+      totalRounds: shared.totalRounds,
+      continueRounds: shared.continueRounds,
     };
   }
 
@@ -90,15 +92,11 @@ export class RoundCompleteNode<C = unknown> extends Node<
       return { kind: 'finalize', reason: 'continue_false' };
     }
 
-    // Check if we've completed all rounds
-    if (nextRound >= totalRounds) {
+    // Check if we've completed all rounds (single source of truth for bounds)
+    if (isRoundAtOrBeyondLimit(nextRound, totalRounds)) {
       logger.debug(`Completed all ${totalRounds} rounds - finalizing`);
       return { kind: 'finalize', reason: 'all_rounds_complete' };
     }
-
-    // Note: endTurn=false means model didn't complete in one shot (continuation, pseudo prefill)
-    // This is handled by OutputNode skipping certain processing - it shouldn't stop the flow.
-    // The flow should continue to the next round regardless of endTurn.
 
     // Continue to next round
     logger.debug(
@@ -108,38 +106,29 @@ export class RoundCompleteNode<C = unknown> extends Node<
   }
 
   /**
-   * Update state and route appropriately.
-   * Manages round stage transitions for UI grouping.
+   * Route based on decision.
+   *
+   * RoundPersistedFlow OWNS all round lifecycle:
+   * - Incrementing currentRound (single source of truth)
+   * - Stage lifecycle (end old stage, create new stage)
+   * - Workspace reset (via resetForNextRound hook)
+   *
+   * This node only signals intent via FlowTransitions.
    */
   async post(
-    shared: ReflectionFlowShared,
+    _shared: ReflectionFlowShared,
     _prepRes: RoundCompletePrepInput,
     execRes: RoundCompleteExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'finalize') {
-      // Don't end round stage here - agent.run() finally block handles it
-      // This ensures proper status (ERROR vs STOPPED) is applied
-      return FlowTransition.DEFAULT; // Flow ends gracefully
+      return FlowTransition.FINALIZE;
     }
 
-    // === ROUND TRANSITION ===
-    // End current round stage (defaults to 'stopped' which indicates completion)
-    shared.state.roundStage?.end();
-
-    // Increment round for next iteration
-    const nextRound = shared.state.currentRound + 1;
-    shared.state.currentRound = nextRound;
-
-    // Create new round stage (r1, r2, etc.) as sibling to r0
-    const newRoundStage = await this.services.logger.stage(`r${nextRound}`, {
-      parent: shared.runStage,
-    });
-    shared.state.roundStage = newRoundStage;
-
-    // Create fresh workspace state for new round
-    shared.state.workspaceState = AgentWorkspaceState.create();
-
-    // Loop back to TeXCountNode (start of round pipeline)
-    return FlowTransition.CONTINUE;
+    // Signal intent to continue - RoundPersistedFlow will:
+    // 1. Increment currentRound (single source of truth)
+    // 2. End old round stage
+    // 3. Call resetForNextRound hook (workspace reset)
+    // 4. Create new round stage
+    return FlowTransition.CONTINUE_NEXT_ROUND;
   }
 }
