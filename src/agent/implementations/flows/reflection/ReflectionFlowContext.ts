@@ -21,6 +21,7 @@ import type {
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -29,7 +30,10 @@ import { TaskRunFileService } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 import { createBaseFileLocations } from './helpers';
 import { buildBaseFlowServices } from '../common';
-import type { ReflectionServices } from './ReflectionServices';
+import type {
+  ReflectionServices,
+  ReflectionServicesPartial,
+} from './ReflectionServices';
 
 // ============================================================================
 // Context Initialization
@@ -178,14 +182,14 @@ function createOutputFileLocationGetter(
  * Contains services and lifecycle methods.
  */
 export interface ReflectionFlowContext<C = unknown> {
-  /** Services for flow execution */
-  services: ReflectionServices<C>;
+  /** Services for flow execution (missing runStage - set by runReflectionFlow) */
+  services: ReflectionServicesPartial<C>;
 
   /** Total number of rounds to execute */
   totalRounds: number;
 
   /** Set the active run storage key on the output handler */
-  setActiveRun(storageKey: string): void;
+  setActiveRun(storageKey: StorageKey): void;
 
   /** Interrupt the flow execution */
   interrupt(): void;
@@ -203,10 +207,13 @@ export interface ReflectionFlowContext<C = unknown> {
  *
  * This is the PocketFlow-native way: simple factory function that creates
  * all services eagerly and returns them as a plain object.
+ *
+ * Note: Returns partial services (missing runStage). The runStage is added
+ * by runReflectionFlow after the run stage is created/provided.
  */
 export function buildReflectionServices<C = unknown>(
   init: ReflectionFlowContextInit<C>,
-): ReflectionServices<C> {
+): ReflectionServicesPartial<C> {
   const { config, setting, modelHandler, executionContext, prompt, userVarChannels, getUsageRecorder } = init;
 
   // Create services eagerly (no lazy initialization)
@@ -246,8 +253,7 @@ export function buildReflectionServices<C = unknown>(
   // Build base services
   const baseServices = buildBaseFlowServices(init);
 
-  // Return complete services object
-  // Note: runStage is set by runReflectionFlow
+  // Return partial services (missing runStage - added by runReflectionFlow)
   // Round stages (r0, r1...) are managed by RoundPersistedFlow, not by services
   return {
     ...baseServices,
@@ -259,7 +265,6 @@ export function buildReflectionServices<C = unknown>(
     getOutputFileLocation,
     shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
     getUsageRecorder,
-    runStage: null as any, // Set by runReflectionFlow
   };
 }
 
@@ -279,8 +284,8 @@ export function createReflectionFlowContext<C = unknown>(
     services,
     totalRounds,
 
-    setActiveRun(storageKey: string): void {
-      services.outputHandler.setActiveRun(storageKey as any);
+    setActiveRun(storageKey: StorageKey): void {
+      services.outputHandler.setActiveRun(storageKey);
     },
 
     interrupt(): void {
@@ -302,7 +307,7 @@ export function createReflectionFlowContext<C = unknown>(
  */
 export function createReadyReflectionContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
-  storageKey: string,
+  storageKey: StorageKey,
 ): ReflectionFlowContext<C> {
   const context = createReflectionFlowContext(init);
   context.setActiveRun(storageKey);
