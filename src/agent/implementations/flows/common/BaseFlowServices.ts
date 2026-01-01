@@ -138,7 +138,6 @@ export function buildBaseFlowServices<C>(
 // Cycle Options Builder
 // ============================================================================
 
-
 /**
  * Build AgentCycleBaseOptions from BaseFlowServices or BaseFlowContextInit.
  *
@@ -162,8 +161,10 @@ export function buildBaseCycleOptions<C>(
     agentSetting: services.setting,
     agentPrompt: services.prompt,
     userVars: services.userVarChannels.transient,
-    logger: 'logger' in services ? services.logger : services.executionContext.logger,
-    context: 'context' in services ? services.context : services.executionContext,
+    logger:
+      'logger' in services ? services.logger : services.executionContext.logger,
+    context:
+      'context' in services ? services.context : services.executionContext,
     client: services.getClient(),
     checkInterruption: services.checkInterruption,
     setAbortController: services.setAbortController,

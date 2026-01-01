@@ -14,7 +14,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
-import { AgentSharedStore } from './AgentSharedStore';
+import type { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -24,7 +24,10 @@ import { createRetryState } from './flows/RetryState';
 import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 
 // Import and re-export from single source of truth
-import type { ResponseCycleOptions } from './flows/CycleServices';
+import type {
+  ResponseCycleOptions,
+  RoundFinalizedCallback,
+} from './flows/CycleServices';
 export type { ResponseCycleOptions };
 
 export interface ResponseCycleInput<C = unknown> {
@@ -33,6 +36,8 @@ export interface ResponseCycleInput<C = unknown> {
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation: AgentFileLocation;
   store: AgentSharedStore;
+  /** Optional callback invoked when round completes. */
+  onRoundFinalized?: RoundFinalizedCallback;
 }
 
 export interface ResponseCycleResult {
@@ -83,8 +88,15 @@ export async function runResponseCycle<C = unknown>(
 
   const flow = createResponseCycleFlow<C>();
   // Inject immutable services directly (PocketFlow pattern)
-  // Options are spread directly into services (flattened structure)
-  flow.setServices({ ...input.options, store: input.store });
+  // Options are spread with state slices (no store wrapper)
+  const { store, onRoundFinalized } = input;
+  flow.setServices({
+    ...input.options,
+    round: store.round,
+    run: store.run,
+    workspace: store.workspace,
+    onRoundFinalized,
+  });
   await flow.run(shared);
 
   // Interpret cycle completion - shared logic with ToolUseCycle

@@ -154,7 +154,11 @@ export async function runReflectionFlow<C = unknown>(
   // the same key as the task group that the frontend uses for filtering.
   // For resumed runs where a parent stage is provided, we trust the existing
   // storage key since the parent stage ID should already match.
-  if (createdRunStage && runStage.id && executionContext.hasInitialStorageKey()) {
+  if (
+    createdRunStage &&
+    runStage.id &&
+    executionContext.hasInitialStorageKey()
+  ) {
     const runStorageKey = normalizeRunId(runStage.id);
     executionContext.updateStorageKey(runStorageKey);
   }
