@@ -168,7 +168,6 @@ describe('BashTool', () => {
       toolRegistry: createToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
-      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'bash-tool' as StreamTabId,

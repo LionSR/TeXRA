@@ -166,3 +166,29 @@ export type ResponseCycleParams<C = unknown> = CycleParams<
 export type ToolUseCycleParams<C = unknown> = CycleParams<
   ToolUseCycleServices<C>
 >;
+
+// ============================================================================
+// ROUND FINALIZATION (single source of truth)
+// ============================================================================
+
+/**
+ * Finalize a round by recording statistics and invoking callback.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for round finalization logic.
+ * Both ResponseCycleFlow and ToolUseCycleFlow should use this helper
+ * instead of duplicating the logic.
+ *
+ * @param slices - The cycle state slices containing round, run, workspace
+ * @returns Promise that resolves when finalization is complete
+ */
+export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
+  const { round, run, workspace, onRoundFinalized } = slices;
+
+  // Record round statistics in run state
+  run.recordRound(round);
+
+  // Invoke usage tracking callback if provided
+  if (onRoundFinalized) {
+    await onRoundFinalized({ round, run, workspace });
+  }
+}
