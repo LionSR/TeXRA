@@ -481,9 +481,11 @@ export async function executeAgent(
         // Create interrupt manager (replaces mutable interruptState object)
         const interruptManager = new InterruptManager();
 
+        let flowStatus: 'error' | 'stopped';
+
         if (agentSetting.agentType === 'toolUse') {
           // Tool-use flow execution
-          await runToolUseFlow(
+          const result = await runToolUseFlow(
             {
               modelHandler: ctx.modelHandler,
               config: ctx.agentConfig,
@@ -510,9 +512,10 @@ export async function executeAgent(
               },
             },
           );
+          flowStatus = result.status;
         } else {
           // Reflection flow execution (direct/CoT/workflow)
-          await runReflectionFlow(
+          const result = await runReflectionFlow(
             {
               modelHandler: ctx.modelHandler,
               config: ctx.agentConfig,
@@ -538,15 +541,19 @@ export async function executeAgent(
               },
             },
           );
+          flowStatus = result.status;
         }
 
-        // Only set STOPPED if flow actually completed (not paused waiting for follow-up)
-        // Tool-use flows can pause in WAITING state and resume later
-        const finalStatus = StreamStatusService.get(streamTabId);
-        if (finalStatus !== STREAM_STATUS.WAITING) {
-          StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+        // Update stream status based on flow result
+        // Tool-use flows can pause in WAITING state - don't override that
+        const currentStatus = StreamStatusService.get(streamTabId);
+        if (currentStatus !== STREAM_STATUS.WAITING) {
+          StreamStatusService.set(
+            streamTabId,
+            flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+          );
         }
-        logger.debug(`Task completed successfully`);
+        logger.debug(`Task completed with status: ${flowStatus}`);
       },
       { skip: isResume },
     );
