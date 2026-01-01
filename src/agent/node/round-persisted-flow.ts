@@ -45,6 +45,10 @@
  */
 
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import {
+  EXECUTION_STATUS,
+  type ExecutionStatus,
+} from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
@@ -142,7 +146,7 @@ export interface RoundLifecycleHooks<S extends RoundAwareState, Svc = unknown> {
    */
   onFlowEnd?: (
     shared: S,
-    status: 'completed' | 'interrupted' | 'error',
+    status: ExecutionStatus,
     services: Svc,
   ) => void | Promise<void>;
 
@@ -266,7 +270,7 @@ export class RoundPersistedFlow<
    */
   async run(shared: S): Promise<string | undefined> {
     const { hooks } = this.config;
-    let status: 'completed' | 'interrupted' | 'error' = 'completed';
+    let status: ExecutionStatus = EXECUTION_STATUS.COMPLETED;
 
     // Initialize flow record with initial shared state
     await this.init(shared);
@@ -326,10 +330,10 @@ export class RoundPersistedFlow<
         hooks?.checkInterruption?.() ||
         (!currentShared.continueRounds && !completedAllRounds);
       if (wasInterrupted) {
-        status = 'interrupted';
+        status = EXECUTION_STATUS.INTERRUPTED;
       }
     } catch (error) {
-      status = 'error';
+      status = EXECUTION_STATUS.ERROR;
       throw error;
     } finally {
       // End final round stage
