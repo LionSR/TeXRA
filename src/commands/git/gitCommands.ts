@@ -6,9 +6,9 @@ import { execa, execaSync } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import * as logger from '@logger/logUtils';
 
 // Type imports
 import type { Dirent } from 'fs';

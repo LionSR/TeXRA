@@ -7,10 +7,7 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { parseAgentConfig } from '@agent/core/AgentConfig';
-import {
-  executeAgent,
-  resumeAgentExecution,
-} from '@agent/runtime/executeAgent';
+import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
@@ -69,7 +66,7 @@ export const executeCommand = {
       const normalizedConfig = parseAgentConfig(config);
 
       if (resume && executionId) {
-        await resumeAgentExecution(normalizedConfig, executionId);
+        await executeAgent(normalizedConfig, executionId, { resume: true });
         return;
       }
 

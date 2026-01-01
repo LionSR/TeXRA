@@ -2,7 +2,6 @@
  * Remote Agent Loader - loads agent configurations from Supabase.
  */
 
-import { getConfig } from '@utils/config';
 import { StatusCodes } from 'http-status-codes';
 import yaml from 'yaml';
 
@@ -16,6 +15,7 @@ import {
 import { getMultipleName, getBaseName } from '@agent/index/agentRegistry';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { getConfig } from '@utils/config';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 

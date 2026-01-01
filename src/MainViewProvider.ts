@@ -8,7 +8,9 @@ import { refresh, computeAgentOptions } from '@agent/index';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { consumePendingState } from '@common/state';
 import { agentDirectories } from '@frontend/agents';
+import { computeModelOptions } from '@model/computeModelOptions';
 import {
   watchConfig,
   getConfig,
@@ -16,10 +18,8 @@ import {
   DEBOUNCE_STATE_SAVE_MS,
 } from '@utils/config';
 import { debounce } from '@utils/core';
-import { consumePendingState } from '@common/state';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 import { getServerSideKeyService } from '@/auth/serverKeys';
-import { computeModelOptions } from '@model/computeModelOptions';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
