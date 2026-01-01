@@ -18,7 +18,6 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 
-import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
@@ -270,8 +269,6 @@ export function buildToolUseServices<C = unknown>(
     prepareState: () => prepareInitialState(init, sessionLifecycle, snapshot),
     buildCycleOptions: (store) =>
       createCycleOptions(init, toolRegistry, resolvedTools, store),
-    runCycle: (options, messages, store) =>
-      runToolUseCycle({ options, messages, store }),
     applyFollowUpMessage: (message, conversation) =>
       applyFollowUpMessage(init, message, conversation),
   };
