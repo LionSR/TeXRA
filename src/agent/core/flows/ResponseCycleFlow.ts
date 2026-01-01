@@ -688,16 +688,18 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleParams<C>,
   ResponseCycleServices<C>
 > {
+  /**
+   * Finalization is handled by the parent node's finally block via store.finalizeRound().
+   * This node exists only to ensure proper flow graph termination.
+   *
+   * IMPORTANT: Do NOT call run.recordRound() or onRoundFinalized() here.
+   * The ResponseCycleCompositionNode.exec() finally block handles this via
+   * store.finalizeRound(), which is guarded against double execution.
+   * Calling them here would cause duplicate usage recording.
+   */
   async exec(): Promise<void> {
-    const { round, run, workspace, onRoundFinalized } = this.services;
-
-    // Record round statistics in run state
-    run.recordRound(round);
-
-    // Call usage tracking callback if provided
-    if (onRoundFinalized) {
-      await onRoundFinalized({ round, run, workspace });
-    }
+    // Intentionally empty - finalization handled by store.finalizeRound()
+    // in the parent composition node's finally block
   }
 
   async post(): Promise<string | undefined> {
