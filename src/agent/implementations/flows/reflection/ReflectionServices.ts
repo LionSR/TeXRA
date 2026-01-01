@@ -12,7 +12,7 @@
 
 import type { IOutputHandler } from '@agent/output';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { BaseFlowServices } from '@agent/implementations/flows/common';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
@@ -77,7 +77,7 @@ export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
    * Get usage recorder callback for tracking round statistics.
    * Returns a callback that will be invoked when a round finalizes.
    */
-  readonly getUsageRecorder: () => AgentRoundFinalizedCallback;
+  readonly getUsageRecorder: () => RoundFinalizedCallback;
 }
 
 /**
