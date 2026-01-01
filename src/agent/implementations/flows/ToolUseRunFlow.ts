@@ -22,6 +22,14 @@ import {
   createSharedStore,
   type AgentSharedStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
+import {
+  createToolUseCycleFlow,
+  type ToolUseCycleShared,
+  type ToolUseCycleState,
+} from '@agent/core/flows/ToolUseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
+import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import type { ToolUseCycleParams } from '@agent/core/flows/CycleServices';
 
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
@@ -243,9 +251,8 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Uses native services pattern:
- * - this.services.runCycle() instead of shared.hooks.runCycle()
- * - this.services.buildCycleOptions() to rebuild options (not stored in state)
+ * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleCompositionNode).
+ * This eliminates the circular reference through services.runCycle().
  *
  * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
@@ -254,8 +261,11 @@ class ToolUseCycleNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
+  private cycleFlow: Flow<ToolUseCycleShared, ToolUseCycleParams<C>>;
+
   constructor() {
     super(NODE_NO_RETRY, NODE_NO_WAIT);
+    this.cycleFlow = createToolUseCycleFlow<C>();
   }
 
   async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
@@ -282,20 +292,56 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Use native services pattern
-    const result = await this.services.runCycle(
-      prepRes.cycleOptions,
-      prepRes.conversation,
-      prepRes.store,
-    );
+    // Create cycle shared state (like ResponseCycleCompositionNode)
+    const cycleShared: ToolUseCycleShared = {
+      state: {
+        messages: prepRes.conversation,
+        shouldStop: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        stopReason: undefined,
+        endTurn: false,
+      } satisfies ToolUseCycleState,
+      retryState: createRetryState(),
+    };
 
-    if (result.failedWithError) {
-      return { kind: 'failed', message: result.errorMessage ?? 'Cycle failed' };
+    // Inject services directly and run sub-flow (like ResponseCycleCompositionNode)
+    // Options are spread with state slices (no store wrapper)
+    this.cycleFlow.setServices({
+      ...prepRes.cycleOptions,
+      round: prepRes.store.round,
+      run: prepRes.store.run,
+      workspace: prepRes.store.workspace,
+      // Note: onRoundFinalized is handled internally by ToolUseCycleFlow
+    });
+
+    try {
+      await this.cycleFlow.run(cycleShared);
+
+      // Interpret cycle completion using shared helper
+      const completion = interpretCycleCompletion(
+        cycleShared.state,
+        cycleShared.retryState,
+      );
+
+      if (completion.failedWithError) {
+        return {
+          kind: 'failed',
+          message: completion.errorMessage ?? 'Cycle failed',
+        };
+      }
+      if (completion.userCancelled) {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'success' };
+    } catch (error) {
+      return {
+        kind: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
-    if (result.userCancelled) {
-      return { kind: 'cancelled' };
-    }
-    return { kind: 'success' };
   }
 
   async execFallback(

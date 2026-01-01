@@ -19,6 +19,8 @@ import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowServices } from '@agent/implementations/flows/common';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 
+// Note: RunCycleResult was removed - ToolUseCycleNode now directly runs ToolUseCycleFlow
+
 /**
  * Result of preparing initial state for a tool-use session.
  */
@@ -30,23 +32,15 @@ export interface PrepareStateResult {
 }
 
 /**
- * Result of running a tool-use cycle.
- */
-export interface RunCycleResult {
-  failedWithError: boolean;
-  errorMessage?: string;
-  userCancelled: boolean;
-}
-
-/**
  * Services for tool-use flow nodes.
  *
  * Extends BaseFlowServices with tool-use specific dependencies:
  * - toolRegistry: Available tools for the agent
  * - session: Session lifecycle management (follow-ups, status)
- * - Operations: prepareState, buildCycleOptions, runCycle
+ * - Operations: prepareState, buildCycleOptions, applyFollowUpMessage
  *
- * Note: Persistence is handled automatically by PersistedFlow after each node.
+ * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
+ * Persistence is handled automatically by PersistedFlow after each node.
  */
 export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   /** Narrow setting to tool-use specific type */
@@ -75,15 +69,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
   readonly buildCycleOptions: (
     store: AgentSharedStore,
   ) => ToolUseCycleOptions<C>;
-
-  /**
-   * Run a single tool-use cycle.
-   */
-  readonly runCycle: (
-    options: ToolUseCycleOptions<C>,
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ) => Promise<RunCycleResult>;
 
   /**
    * Apply a follow-up message to the conversation.
