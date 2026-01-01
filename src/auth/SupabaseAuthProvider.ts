@@ -28,7 +28,7 @@ const GitHubTokenExchangeSchema = z.object({
   token_type: z.string(),
   user: z.object({
     id: z.string(),
-    email: z.string().optional(),
+    email: z.string().nullish(),
     user_metadata: z
       .object({
         avatar_url: z.string().optional(),

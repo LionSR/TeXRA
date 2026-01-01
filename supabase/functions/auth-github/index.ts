@@ -207,6 +207,7 @@ app.post('/exchange', async (c) => {
 
     // Find existing user by GitHub identity
     const { data: identities } = await supabase
+      .schema('auth')
       .from('identities')
       .select('user_id')
       .eq('provider', 'github')
@@ -258,7 +259,7 @@ app.post('/exchange', async (c) => {
       }
 
       // Link identity
-      await supabase.from('identities').insert({
+      await supabase.schema('auth').from('identities').insert({
         id: crypto.randomUUID(),
         user_id: userId,
         provider: 'github',
