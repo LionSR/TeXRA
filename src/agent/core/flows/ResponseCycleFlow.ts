@@ -17,7 +17,6 @@ import {
   SkippableNodeResult,
   createDebugContext,
   createDebugFileOptions,
-  safelyFinalizeRound,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -48,10 +47,6 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import {
-  checkInterruptionSafely,
-  saveDebugIfAvailable,
-} from './NodeUtils';
 import type {
   ResponseCycleParams,
   ResponseCycleServices,
@@ -96,7 +91,6 @@ interface ResponseCycleRuntimeState extends BaseCycleState {
   processedResponse?: string;
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation?: AgentFileLocation;
-  roundFinalized: boolean;
 }
 
 export type ResponseCycleState = ResponseCycleInputState &
@@ -106,7 +100,6 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   resetCycleState(cycle, ['responseObject', 'processedResponse']);
   // Boolean fields set directly to avoid undefined intermediate state
   cycle.endTurn = false;
-  cycle.roundFinalized = false;
 }
 
 /**
@@ -145,9 +138,7 @@ class ResponsePrepNode<C> extends BaseNode<
     const services = this.services;
     const { agentPrompt, userVars, logger, agentConfig, store } = services;
     const { state } = shared;
-    const interrupted = await checkInterruptionSafely(() =>
-      services.checkInterruption(),
-    );
+    const interrupted = Boolean(await services.checkInterruption());
     const outputLocation = state.outputLocation;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
@@ -204,7 +195,14 @@ class ResponsePrepNode<C> extends BaseNode<
     state.outputLocation = prepRes.outputLocation;
     resetResponseCycleState(state);
 
-    await saveDebugIfAvailable(state.messages, 'messages', state.debug);
+    if (state.debug) {
+      await maybeSaveDebugObject({
+        object: state.messages,
+        objectType: 'messages',
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
+      });
+    }
 
     return FlowTransition.DEFAULT;
   }
@@ -334,7 +332,14 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     state.responseObject = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    await saveDebugIfAvailable(successRes.response, 'response', state.debug);
+    if (state.debug) {
+      await maybeSaveDebugObject({
+        object: successRes.response,
+        objectType: 'response',
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
+      });
+    }
 
     return FlowTransition.DEFAULT;
   }
@@ -563,7 +568,6 @@ class ResponseProcessNode<C> extends BaseNode<
 
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -594,7 +598,6 @@ class ResponseProcessNode<C> extends BaseNode<
     if (result.repetitionDetected) {
       state.endTurn = false;
       state.shouldStop = true;
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -603,7 +606,6 @@ class ResponseProcessNode<C> extends BaseNode<
     if (!processedResponse) {
       state.endTurn = false;
       state.shouldStop = true;
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -674,6 +676,31 @@ class ResponseProcessNode<C> extends BaseNode<
 }
 
 /**
+ * Finalizes the response cycle by calling store.finalizeRound().
+ * All flow exit paths route through this node to ensure proper cleanup.
+ *
+ * PocketFlow pattern:
+ * - Single finalization point in the flow graph
+ * - No guard flags needed (graph ensures single execution)
+ * - Services accessed via `_params.services`
+ */
+class ResponseCycleFinalizeNode<C> extends BaseNode<
+  ResponseCycleShared,
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
+> {
+  async exec(): Promise<void> {
+    const { store } = this.services;
+    await store.finalizeRound();
+  }
+
+  async post(): Promise<string | undefined> {
+    // Flow ends here
+    return undefined;
+  }
+}
+
+/**
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
  *
@@ -702,7 +729,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       state.shouldStop || !state.stopReason || !state.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
-    const interrupted = await checkInterruptionSafely(checkInterruption, shouldSkip);
+    const interrupted = shouldSkip ? false : Boolean(await checkInterruption());
 
     return {
       shouldSkip,
@@ -771,7 +798,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -781,7 +807,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     state.shouldStop = shouldStop;
 
     if (shouldStop) {
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -789,7 +814,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     const willContinue = shouldContinue || reachedTokenLimit;
 
     if (!willContinue) {
-      await safelyFinalizeRound(state, store);
       return FlowTransition.COMPLETE;
     }
 
@@ -852,6 +876,7 @@ export function createResponseCycleFlow<C>(): Flow<
   const invokeNode = new ResponseModelInvocationNode<C>();
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();
+  const finalizeNode = new ResponseCycleFinalizeNode<C>();
 
   // Main flow: prep → invoke → process → continuation
   // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
@@ -859,6 +884,12 @@ export function createResponseCycleFlow<C>(): Flow<
   prepNode.next(invokeNode);
   invokeNode.next(processNode);
   processNode.next(continuationNode);
+
+  // All completion paths route through finalize node (PocketFlow-native pattern)
+  prepNode.on(FlowTransition.COMPLETE, finalizeNode);
+  invokeNode.on(FlowTransition.COMPLETE, finalizeNode);
+  processNode.on(FlowTransition.COMPLETE, finalizeNode);
+  continuationNode.on(FlowTransition.COMPLETE, finalizeNode);
 
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);

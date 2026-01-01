@@ -20,7 +20,7 @@
  */
 
 import type { RoundOutput } from '@agent/output';
-import type { AgentLogStage } from '@logger/AgentLogger';
+import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 
@@ -30,7 +30,7 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {

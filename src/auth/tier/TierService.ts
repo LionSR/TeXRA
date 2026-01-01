@@ -13,6 +13,7 @@
  * - Ultra: All models including premium ($3+/M input)
  */
 
+import * as logger from '@logger/logUtils';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
 import {
   TierModelConfigSchema,
@@ -20,7 +21,6 @@ import {
   type TierModelConfig,
   type UserAccessStatus,
 } from './types';
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TierService';
 

@@ -25,6 +25,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
+  buildBaseCycleOptions,
 } from '@agent/implementations/flows/common';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
@@ -41,7 +42,6 @@ import type {
   ResponseCycleOptions,
   ResponseCycleParams,
 } from '@agent/core/flows/CycleServices';
-import { safelyFinalizeRound } from '@agent/core/flows/CommonCycleTypes';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -175,19 +175,15 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       };
     }
 
-    // Build ResponseCycleOptions from our services
+    // Build ResponseCycleOptions from services using helper (eliminates manual field copying)
+    // buildBaseCycleOptions handles all AgentCycleBaseOptions fields
     const cycleOptions: ResponseCycleOptions<C> = {
-      modelHandler: services.modelHandler,
-      logger: services.logger,
-      agentSetting: services.setting,
-      agentPrompt: services.prompt,
-      agentConfig: services.config,
-      context: services.context,
-      client: services.getClient(),
+      ...buildBaseCycleOptions(services),
+      // Override userVars with merged input + transient
       userVars: this.getUserVars(),
+      // ResponseCycleOptions specific fields
+      agentConfig: services.config,
       fileService: services.fileService,
-      checkInterruption: services.checkInterruption,
-      setAbortController: services.setAbortController,
     };
 
     // Create cycle shared state with initialized messages
@@ -204,7 +200,6 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         responseTimeMs: undefined,
         stopReason: undefined,
         processedResponse: undefined,
-        roundFinalized: false,
       } satisfies ResponseCycleState,
       retryState: createRetryState(),
     };
@@ -238,7 +233,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       };
     } finally {
       // Ensure round finalization even on error paths (usage tracking, statistics)
-      await safelyFinalizeRound(cycleShared.state, prepRes.store);
+      // The store's finalizeRound() is idempotent, so safe to call from both
+      // the flow's FinalizeNode (normal path) and this finally block (error path)
+      await prepRes.store.finalizeRound();
     }
   }
 

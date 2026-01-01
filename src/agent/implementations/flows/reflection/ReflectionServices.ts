@@ -14,10 +14,10 @@ import type { IOutputHandler } from '@agent/output';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import type { BaseFlowServices } from '@agent/implementations/flows/common';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
 import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
-import type { AgentLogStage } from '@logger/AgentLogger';
 
 /**
  * Services for reflection flow nodes.

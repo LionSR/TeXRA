@@ -9,11 +9,10 @@
  * - State persistence via PersistedFlow
  */
 
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
+import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {
@@ -22,9 +21,11 @@ import {
   type ToolUseRunShared,
 } from '../ToolUseRunFlow';
 import {
-  ToolUseFlowContext,
+  createToolUseFlowContext,
+  type ToolUseFlowContext,
   type ToolUseFlowContextInit,
 } from './ToolUseFlowContext';
+import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
 // ============================================================================
@@ -88,7 +89,7 @@ export async function runToolUseFlow<C = unknown>(
   callbacks?: RunToolUseFlowCallbacks,
 ): Promise<RunToolUseFlowResult> {
   // Create the flow context (owns all services including session lifecycle)
-  const flowContext = new ToolUseFlowContext<C>({
+  const flowContext = createToolUseFlowContext<C>({
     ...input,
     resumeSnapshot: input.resumeSnapshot ?? null,
   });
