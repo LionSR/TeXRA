@@ -34,9 +34,6 @@ export interface AgentSharedStoreSlices {
   user: UserVariableChannels;
 }
 
-interface AgentSharedStoreOptions extends AgentSharedStoreSlices {
-  onRoundFinalized?: AgentRoundFinalizedCallback;
-}
 
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
@@ -60,24 +57,20 @@ export type AgentSharedStoreSnapshot = z.output<
 /**
  * Central store wiring agent run, round, workspace, and user-variable slices together.
  *
- * Only the active round slice is mutable because flows swap it out between iterations
- * while the run, workspace, and user-variable channels remain stable for the duration
- * of a run.
+ * This is a pure data holder for snapshot serialization. Round finalization logic
+ * lives in CycleServices.finalizeRound() as the single source of truth.
  */
 export class AgentSharedStore {
   private roundState: ConversationRoundState;
   private readonly runState: AgentRunState;
   private readonly workspaceState: AgentWorkspaceState;
   private readonly userChannels: UserVariableChannels;
-  private _onRoundFinalized?: AgentRoundFinalizedCallback;
-  private _roundFinalized = false;
 
-  constructor(config: AgentSharedStoreOptions) {
+  constructor(config: AgentSharedStoreSlices) {
     this.roundState = config.round;
     this.runState = config.run;
     this.workspaceState = config.workspace;
     this.userChannels = config.user;
-    this._onRoundFinalized = config.onRoundFinalized;
   }
 
   /** Deserialize from a snapshot. Validates and applies schema defaults. */
@@ -111,12 +104,6 @@ export class AgentSharedStore {
     return this.roundState;
   }
 
-  resetRound(roundIndex: number): ConversationRoundState {
-    this.roundState = new ConversationRoundState(roundIndex);
-    this._roundFinalized = false;
-    return this.roundState;
-  }
-
   get run(): AgentRunState {
     return this.runState;
   }
@@ -128,73 +115,47 @@ export class AgentSharedStore {
   get user(): UserVariableChannels {
     return this.userChannels;
   }
-
-  /**
-   * Set the callback to be called when a round is finalized.
-   * Useful for attaching callbacks after deserialization since callbacks
-   * are not serialized.
-   */
-  setOnRoundFinalized(callback: AgentRoundFinalizedCallback | undefined): void {
-    this._onRoundFinalized = callback;
-  }
-
-  async finalizeRound(): Promise<void> {
-    // Guard against double finalization (can happen from error paths + finally blocks)
-    if (this._roundFinalized) {
-      return;
-    }
-    this._roundFinalized = true;
-
-    this.runState.recordRound(this.roundState);
-    if (this._onRoundFinalized) {
-      await this._onRoundFinalized({
-        round: this.roundState,
-        run: this.runState,
-        workspace: this.workspaceState,
-      });
-    }
-  }
 }
 
+/**
+ * Factory params for creating a new store from scratch.
+ */
 interface SharedStoreFactoryParams {
   roundIndex: number;
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
   roundState?: ConversationRoundState;
-  onRoundFinalized?: AgentRoundFinalizedCallback;
 }
+
+/**
+ * Factory args - either create from params or restore from snapshot.
+ */
 type SharedStoreFactoryArgs =
   | (SharedStoreFactoryParams & { snapshot?: undefined })
-  | ({
-      snapshot: AgentSharedStoreSnapshot;
-      onRoundFinalized?: AgentRoundFinalizedCallback;
-    } & Partial<Omit<SharedStoreFactoryParams, 'onRoundFinalized'>>);
+  | { snapshot: AgentSharedStoreSnapshot };
 
+/**
+ * Create an AgentSharedStore from params or snapshot.
+ *
+ * This is the preferred way to create stores as it handles both
+ * fresh creation and snapshot restoration.
+ */
 export function createSharedStore(
   args: SharedStoreFactoryArgs,
 ): AgentSharedStore {
-  if ('snapshot' in args) {
-    const snapshot = args.snapshot;
-    if (!snapshot) {
-      throw new Error('Shared store snapshot is required.');
-    }
-    const store = AgentSharedStore.fromSnapshot(snapshot);
-
-    // Attach callback post-creation if provided (callbacks are not serialized)
-    if (args.onRoundFinalized) {
-      store.setOnRoundFinalized(args.onRoundFinalized);
-    }
-    return store;
+  if ('snapshot' in args && args.snapshot) {
+    return AgentSharedStore.fromSnapshot(args.snapshot);
   }
 
+  // Type narrowing: must be SharedStoreFactoryParams
+  const params = args as SharedStoreFactoryParams;
   const initialRound =
-    args.roundState ?? new ConversationRoundState(args.roundIndex);
+    params.roundState ?? new ConversationRoundState(params.roundIndex);
   return new AgentSharedStore({
     round: initialRound,
-    run: args.runState,
-    workspace: args.workspaceState,
-    user: args.userChannels,
-    onRoundFinalized: args.onRoundFinalized,
+    run: params.runState,
+    workspace: params.workspaceState,
+    user: params.userChannels,
   });
 }

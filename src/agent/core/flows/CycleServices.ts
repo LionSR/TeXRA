@@ -121,18 +121,12 @@ export interface ToolUseCycleOptions<
 // ============================================================================
 
 /**
- * Base services shared by all cycle flows.
- * Contains state slices passed directly (no store wrapper).
- */
-export type BaseCycleServices = CycleStateSlices;
-
-/**
  * Services for response cycle flows.
  *
  * Options are flattened directly into services (no nested `options` wrapper).
  * Access via: `services.logger`, `services.round`, etc.
  */
-export type ResponseCycleServices<C = unknown> = BaseCycleServices &
+export type ResponseCycleServices<C = unknown> = CycleStateSlices &
   Readonly<ResponseCycleOptions<C>>;
 
 /**
@@ -141,7 +135,7 @@ export type ResponseCycleServices<C = unknown> = BaseCycleServices &
  * Options are flattened directly into services (no nested `options` wrapper).
  * Access via: `services.logger`, `services.round`, etc.
  */
-export type ToolUseCycleServices<C = unknown> = BaseCycleServices &
+export type ToolUseCycleServices<C = unknown> = CycleStateSlices &
   Readonly<ToolUseCycleOptions<C>>;
 
 /**
@@ -152,7 +146,7 @@ export type ToolUseCycleServices<C = unknown> = BaseCycleServices &
  *
  * @template TServices - The specific services type for this cycle
  */
-export interface CycleParams<TServices extends BaseCycleServices> {
+export interface CycleParams<TServices extends CycleStateSlices> {
   [key: string]: unknown;
   services: TServices;
 }
