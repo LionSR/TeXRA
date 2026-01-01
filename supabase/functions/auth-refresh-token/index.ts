@@ -24,69 +24,16 @@ import {
   create,
   getNumericDate,
 } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
+import { handleCors } from '../_shared/cors.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const AUTH_REFRESH_VERSION = '1.0.0';
-
-/**
- * Allowed CORS origins for security.
- * Must match auth-github-token for consistency.
- */
-const ALLOWED_ORIGINS = [
-  // VS Code and forks (opaque origins, sent as null in most browsers)
-  'vscode://',
-  'vscode-insiders://',
-  'cursor://',
-  'windsurf://',
-  'antigravity://',
-  // Codespaces and github.dev
-  /^https:\/\/[a-z0-9-]+\.github\.dev$/,
-  /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/,
-  // TeXRA domains
-  /^https:\/\/([a-z0-9-]+\.)?texra\.ai$/,
-  // localhost for development
-  /^http:\/\/localhost(:\d+)?$/,
-];
+const AUTH_REFRESH_VERSION = '1.0.1';
 
 // Session duration: 1 hour access token
 const ACCESS_TOKEN_EXPIRY_SECONDS = 3600;
-
-// =============================================================================
-// CORS Helpers
-// =============================================================================
-
-function getAllowedOrigin(origin: string | null): string | null {
-  if (!origin) {
-    return '*';
-  }
-
-  for (const allowed of ALLOWED_ORIGINS) {
-    if (typeof allowed === 'string') {
-      if (origin.startsWith(allowed)) {
-        return origin;
-      }
-    } else if (allowed.test(origin)) {
-      return origin;
-    }
-  }
-
-  return null;
-}
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('Origin');
-  const allowedOrigin = getAllowedOrigin(origin);
-
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin || '',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
-  };
-}
 
 // =============================================================================
 // Response Helpers
@@ -173,15 +120,9 @@ if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
 // =============================================================================
 
 Deno.serve(async (req: Request) => {
-  const corsHeaders = getCorsHeaders(req);
-
-  if (!corsHeaders['Access-Control-Allow-Origin']) {
-    return new Response('Forbidden', { status: 403 });
-  }
-
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Handle CORS (preflight, origin validation)
+  const { corsHeaders, response: corsResponse } = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   if (req.method !== 'POST') {
     return errorResponse('Method not allowed', 405, corsHeaders);
