@@ -113,6 +113,7 @@ export class AgentSharedStore {
 
   resetRound(roundIndex: number): ConversationRoundState {
     this.roundState = new ConversationRoundState(roundIndex);
+    this._roundFinalized = false;
     return this.roundState;
   }
 
