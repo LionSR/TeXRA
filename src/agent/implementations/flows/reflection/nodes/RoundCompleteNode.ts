@@ -98,10 +98,6 @@ export class RoundCompleteNode<C = unknown> extends Node<
       return { kind: 'finalize', reason: 'all_rounds_complete' };
     }
 
-    // Note: endTurn=false means model didn't complete in one shot (continuation, pseudo prefill)
-    // This is handled by OutputNode skipping certain processing - it shouldn't stop the flow.
-    // The flow should continue to the next round regardless of endTurn.
-
     // Continue to next round
     logger.debug(
       `Round ${currentRound + 1} complete, continuing to round ${nextRound + 1}`,
