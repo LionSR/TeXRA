@@ -23,7 +23,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
 import {
   create,
   getNumericDate,
-} from 'https://deno.land/x/djwt@v3.0.1/mod.ts';
+} from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 
 // =============================================================================
 // Constants
@@ -36,11 +36,18 @@ const AUTH_REFRESH_VERSION = '1.0.0';
  * Must match auth-github-token for consistency.
  */
 const ALLOWED_ORIGINS = [
+  // VS Code and forks (opaque origins, sent as null in most browsers)
   'vscode://',
+  'vscode-insiders://',
   'cursor://',
+  'windsurf://',
+  'antigravity://',
+  // Codespaces and github.dev
   /^https:\/\/[a-z0-9-]+\.github\.dev$/,
   /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/,
+  // TeXRA domains
   /^https:\/\/([a-z0-9-]+\.)?texra\.ai$/,
+  // localhost for development
   /^http:\/\/localhost(:\d+)?$/,
 ];
 
