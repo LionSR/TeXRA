@@ -621,7 +621,7 @@ export async function executeMergeAgent(
       );
 
       // Run reflection flow with custom file naming
-      await runReflectionFlow(
+      const result = await runReflectionFlow(
         {
           modelHandler: ctx.modelHandler,
           config: ctx.agentConfig,
@@ -647,7 +647,10 @@ export async function executeMergeAgent(
       );
 
       logger.debug(`Task completed successfully`);
-      StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+      StreamStatusService.set(
+        streamTabId,
+        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+      );
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
@@ -714,7 +717,7 @@ export async function resumeToolUseFromSnapshot(
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     // Run the flow with resume snapshot
-    await runToolUseFlow(
+    const result = await runToolUseFlow(
       {
         modelHandler,
         config: agentConfig,
@@ -745,10 +748,13 @@ export async function resumeToolUseFromSnapshot(
       },
     );
 
-    // Only set STOPPED if flow actually completed (not paused waiting for follow-up)
+    // Only set status if flow actually completed (not paused waiting for follow-up)
     const finalStatus = StreamStatusService.get(streamTabId);
     if (finalStatus !== STREAM_STATUS.WAITING) {
-      StreamStatusService.set(streamTabId, STREAM_STATUS.STOPPED);
+      StreamStatusService.set(
+        streamTabId,
+        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+      );
     }
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
