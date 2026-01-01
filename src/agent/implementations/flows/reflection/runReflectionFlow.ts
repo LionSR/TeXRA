@@ -26,9 +26,6 @@ import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
-import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
@@ -194,45 +191,10 @@ export async function runReflectionFlow<C = unknown>(
       executionContext.executionId,
     );
 
-    // Try to restore state from persisted flow (resume scenario)
-    // Note: The serialization hooks handle conversion from snapshots to instances
-    let initialWorkspace: AgentWorkspaceState | undefined;
-    let restoredRetryError: RetryErrorInfo | undefined;
-    let isResume = false;
-
-    try {
-      const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionContext.executionId}`,
-      );
-      if (flowRecord?.shared) {
-        const persistedShared = flowRecord.shared as {
-          workspaceSnapshot?: unknown;
-          lastRetryError?: RetryErrorInfo;
-        };
-        if (persistedShared.workspaceSnapshot) {
-          // Restore workspace instance from persisted snapshot
-          initialWorkspace = AgentWorkspaceState.fromSnapshot(
-            persistedShared.workspaceSnapshot,
-          );
-          isResume = true;
-          executionContext.logger.debug('Restored workspace from persisted flow');
-        }
-        if (persistedShared.lastRetryError) {
-          restoredRetryError = persistedShared.lastRetryError;
-          executionContext.logger.debug(
-            `Restored lastRetryError: ${restoredRetryError.message}`,
-          );
-        }
-      }
-    } catch {
-      // No persisted flow - fresh start
-    }
-
-    // Create shared state with live instances (serialization hooks handle persistence)
-    shared = createInitialReflectionState(flowContext.totalRounds, initialWorkspace);
-    if (restoredRetryError) {
-      shared.lastRetryError = restoredRetryError;
-    }
+    // Create fresh initial state - PersistedFlow handles resume automatically:
+    // - For new runs: uses this initial state via ensureRecord()
+    // - For resumes: deserializes from FlowRecord via serialization hooks
+    shared = createInitialReflectionState(flowContext.totalRounds);
 
     // Create RoundPersistedFlow with the start node
     // Round stage management is now handled by the flow, not by nodes
@@ -275,13 +237,8 @@ export async function runReflectionFlow<C = unknown>(
     };
     pf.setServices(services);
 
-    if (isResume) {
-      executionContext.logger.debug(
-        'Resuming reflection flow from persistence',
-      );
-    }
-
     // Run the persisted flow - errors throw directly
+    // PersistedFlow handles resume automatically via FlowRecord
     // RoundPersistedFlow automatically manages round stages
     await pf.run(shared);
 
