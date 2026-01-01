@@ -2,9 +2,9 @@
 import * as path from 'path';
 
 // Local imports
+import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import { parseFilenameParts } from './mergeFileUtils';
-import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
 /**
  * Generates an output filename incorporating model and round information.

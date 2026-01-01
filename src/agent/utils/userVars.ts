@@ -10,12 +10,12 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { setVarFromFile } from '@utils/files/varsUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { FileListEntry } from '@logger/messageTypes';
 import { getXmlFormatFromFiles, getListOfFiles } from '@utils/prompt';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { setVarFromFile } from '@utils/files/varsUtils';
 
 /**
  * User variables for prompt rendering

@@ -8,9 +8,9 @@ import * as vscode from 'vscode';
 import { showLoggedErrorMessage } from '@common/errors';
 import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 
 // Local file imports
 import { FileItem } from './FileItem';

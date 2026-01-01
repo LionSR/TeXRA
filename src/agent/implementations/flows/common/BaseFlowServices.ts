@@ -35,6 +35,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
@@ -130,5 +131,41 @@ export function buildBaseFlowServices<C>(
     ...init,
     logger: init.executionContext.logger,
     context: init.executionContext,
+  };
+}
+
+// ============================================================================
+// Cycle Options Builder
+// ============================================================================
+
+
+/**
+ * Build AgentCycleBaseOptions from BaseFlowServices or BaseFlowContextInit.
+ *
+ * Eliminates manual field copying by mapping service fields to cycle option fields:
+ * - setting -> agentSetting
+ * - prompt -> agentPrompt
+ * - userVarChannels.transient -> userVars
+ * - executionContext -> context (via services.context if available)
+ * - getClient() -> client
+ *
+ * This helper enables inheritance-based option building instead of manual field copying.
+ *
+ * @param services - Flow services or initialization config
+ * @returns Base cycle options ready for extension
+ */
+export function buildBaseCycleOptions<C>(
+  services: BaseFlowServices<C> | BaseFlowContextInit<C>,
+): AgentCycleBaseOptions<C> {
+  return {
+    modelHandler: services.modelHandler,
+    agentSetting: services.setting,
+    agentPrompt: services.prompt,
+    userVars: services.userVarChannels.transient,
+    logger: 'logger' in services ? services.logger : services.executionContext.logger,
+    context: 'context' in services ? services.context : services.executionContext,
+    client: services.getClient(),
+    checkInterruption: services.checkInterruption,
+    setAbortController: services.setAbortController,
   };
 }

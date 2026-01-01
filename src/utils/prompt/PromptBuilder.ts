@@ -1,8 +1,8 @@
 // Local imports - agent
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { loadTexraRules } from '@utils/files/rulesUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { loadTexraRules } from '@utils/files/rulesUtils';
 
 // Local imports - utilities
 import { renderPrompt } from './promptUtils';
