@@ -39,7 +39,10 @@ import {
   createReflectionFlow,
   type ReflectionFlowShared,
 } from './ReflectionFlow';
-import { createInitialReflectionState } from './ReflectionFlowState';
+import {
+  createFreshWorkspaceSnapshot,
+  createInitialReflectionState,
+} from './ReflectionFlowState';
 import {
   createReadyReflectionContext,
   ReflectionFlowContext,
@@ -251,18 +254,23 @@ export async function runReflectionFlow<C = unknown>(
         // Create round stages (r0, r1, r2, ...)
         createRoundStage: async (roundIndex, parent) => {
           return await executionContext.logger.stage(`r${roundIndex}`, {
-            parent,
+            parent: parent ?? undefined,
           });
         },
+        // Reset workspace state for new round (managed at flow level, not node level)
+        resetForNextRound: (s) => {
+          s.workspaceSnapshot = createFreshWorkspaceSnapshot();
+        },
+        // Check for interruption (for status detection)
+        checkInterruption,
       },
     });
 
-    // Build services without roundStage (managed by RoundPersistedFlow)
+    // Build services - round stages are managed by RoundPersistedFlow
     // Keep reference to services for finally block access
     services = {
       ...flowContext.services,
       runStage,
-      roundStage: null, // No longer managed here - RoundPersistedFlow handles it
     };
     pf.setServices(services);
 
