@@ -342,3 +342,78 @@ export function updateRunStateSnapshot(
 export function createFreshWorkspaceSnapshot(): AgentWorkspaceSnapshot {
   return AgentWorkspaceState.create().toSnapshot();
 }
+
+// ============================================================================
+// Array Mutation Helpers
+// ============================================================================
+
+/**
+ * Append a round state snapshot to the accumulated snapshots array.
+ *
+ * ## Why this helper exists
+ *
+ * In-place array mutations (e.g., `shared.roundStateSnapshots.push(...)`) can cause
+ * issues with PersistedFlow's `structuredClone()` serialization. While the mutation
+ * itself works, it creates a pattern that's harder to audit for correctness.
+ *
+ * This helper makes the mutation explicit and provides a clear audit point for
+ * state changes. It also allows for future optimization (e.g., immutable updates)
+ * without changing call sites.
+ *
+ * @param shared - The reflection flow shared state
+ * @param snapshot - The round state snapshot to append
+ *
+ * @example
+ * // In ResponseCycleCompositionNode.post()
+ * appendRoundStateSnapshot(shared, prepRes.context.stateRoundSnapshot);
+ */
+export function appendRoundStateSnapshot(
+  shared: ReflectionFlowShared,
+  snapshot: ConversationRoundStateSnapshot,
+): void {
+  shared.roundStateSnapshots = [...shared.roundStateSnapshots, snapshot];
+}
+
+/**
+ * Set a round output at the specified round index.
+ *
+ * ## Why this helper exists
+ *
+ * Direct array index assignment (e.g., `shared.roundOutputs[index] = output`) can
+ * be error-prone and harder to audit. This helper provides:
+ * - Bounds checking (auto-expands array if needed)
+ * - Clear mutation point for debugging
+ * - Consistent pattern across the codebase
+ *
+ * @param shared - The reflection flow shared state
+ * @param roundIndex - The round index to set
+ * @param output - The round output to set
+ *
+ * @example
+ * // In OutputNode.post()
+ * setRoundOutput(shared, shared.currentRound, execRes);
+ */
+export function setRoundOutput(
+  shared: ReflectionFlowShared,
+  roundIndex: number,
+  output: z.infer<typeof RoundOutputSchema>,
+): void {
+  // Create a new array to ensure clean serialization
+  const newOutputs = [...shared.roundOutputs];
+  // Expand array if needed (shouldn't happen in normal flow, but defensive)
+  while (newOutputs.length <= roundIndex) {
+    newOutputs.push({
+      round: newOutputs.length,
+      rawOutput: null,
+      outputs: [],
+      xmlSummary: {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+        sourceLocation: null,
+      },
+    });
+  }
+  newOutputs[roundIndex] = output;
+  shared.roundOutputs = newOutputs;
+}

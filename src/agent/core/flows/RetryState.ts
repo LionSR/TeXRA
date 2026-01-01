@@ -25,11 +25,9 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
+  getManualRetryTimeoutMs,
 } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
-
-/** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
-const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
 // Schemas (Single Source of Truth)
@@ -383,7 +381,7 @@ export abstract class RetryableInvocationNode<
         operation: operationName,
         errorMessage: formatted.message,
         logger,
-        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
+        timeoutMs: getManualRetryTimeoutMs(),
       },
     );
 

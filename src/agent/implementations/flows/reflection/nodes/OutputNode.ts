@@ -36,7 +36,10 @@ import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
 import { createBaseFileLocations } from '../helpers';
-import type { ReflectionFlowShared } from '../ReflectionFlowState';
+import {
+  setRoundOutput,
+  type ReflectionFlowShared,
+} from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -190,8 +193,8 @@ export class OutputNode<C = unknown> extends Node<
     _prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    // Store round output
-    shared.roundOutputs[shared.currentRound] = execRes;
+    // Store round output using explicit helper (ensures clean serialization)
+    setRoundOutput(shared, shared.currentRound, execRes);
 
     // Continue to RoundCompleteNode
     return FlowTransition.DEFAULT;

@@ -72,6 +72,9 @@ export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 0;
 export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
 
+// Manual retry UI timeout (5 minutes default)
+export const DEFAULT_MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
@@ -106,5 +109,12 @@ export function getModelRetryBackoffMs(): number {
   return getConfig<number>(
     'texra.model.retry.backoffMs',
     DEFAULT_MODEL_RETRY_BACKOFF_MS,
+  );
+}
+
+export function getManualRetryTimeoutMs(): number {
+  return getConfig<number>(
+    'texra.model.retry.manualTimeoutMs',
+    DEFAULT_MANUAL_RETRY_TIMEOUT_MS,
   );
 }

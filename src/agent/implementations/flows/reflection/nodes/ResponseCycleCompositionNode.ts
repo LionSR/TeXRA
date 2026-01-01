@@ -47,6 +47,7 @@ import {
   getRunState,
   updateRunStateSnapshot,
   updateWorkspaceSnapshot,
+  appendRoundStateSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
@@ -319,8 +320,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
     shared.conversation = prepRes.context.messages;
 
-    // Store round state snapshot for later (already a snapshot, just push directly)
-    shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
+    // Store round state snapshot for later using explicit helper (ensures clean serialization)
+    appendRoundStateSnapshot(shared, prepRes.context.stateRoundSnapshot);
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;

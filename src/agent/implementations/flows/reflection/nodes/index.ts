@@ -7,10 +7,13 @@
  * - ResponseCycleFlow is composed as a sub-flow
  *
  * Node flow:
- * TeXCountNode → MediaPreparationNode → PrepareContextNode
+ * PrepareContextNode → TeXCountNode → MediaPreparationNode
  *   → ResponseCycleCompositionNode → OutputNode → RoundCompleteNode
  *
- * TeXCountNode is the first node in each round - it creates workspace state.
+ * PrepareContextNode is the first node in each round - it builds base messages.
+ * Each subsequent node enriches the context:
+ * - TeXCountNode: prepends LaTeX word count stats
+ * - MediaPreparationNode: adds media files (figures, TikZ, PDFs)
  */
 
 export { TeXCountNode } from './TeXCountNode';
