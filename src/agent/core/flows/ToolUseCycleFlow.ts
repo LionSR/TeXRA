@@ -51,6 +51,10 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+import {
+  checkInterruptionSafely,
+  saveDebugIfAvailable,
+} from './NodeUtils';
 import type {
   ToolUseCycleOptions,
   ToolUseCycleServices,
@@ -186,7 +190,9 @@ class ToolUsePrepNode<C> extends BaseNode<
   }> {
     const services = this.services;
     const { store } = services;
-    const interrupted = Boolean(await services.checkInterruption());
+    const interrupted = await checkInterruptionSafely(() =>
+      services.checkInterruption(),
+    );
     const debugContext = createDebugContext({
       logger: services.logger,
       modelName: services.modelName,
@@ -220,11 +226,9 @@ class ToolUsePrepNode<C> extends BaseNode<
     // runtime state before enriching it with model responses.
     resetToolUseState(state);
 
-    await maybeSaveDebugObject({
+    await saveDebugIfAvailable(state.messages, 'messages', {
       context: prepRes.debugContext,
       fileOptions: prepRes.debugFileOptions,
-      object: state.messages,
-      objectType: 'messages',
     });
 
     return FlowTransition.DEFAULT;
@@ -360,11 +364,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     state.response = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    await maybeSaveDebugObject({
+    await saveDebugIfAvailable(successRes.response, 'response', {
       context: successRes.debugContext,
       fileOptions: successRes.debugFileOptions,
-      object: successRes.response,
-      objectType: 'response',
     });
 
     return FlowTransition.DEFAULT;
@@ -683,8 +685,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Check skip conditions (including interruption) in prep
     const shouldSkip = state.shouldStop || toolCalls.length === 0;
-    const interrupted =
-      !shouldSkip && Boolean(await services.checkInterruption());
+    const interrupted = await checkInterruptionSafely(
+      () => services.checkInterruption(),
+      shouldSkip,
+    );
 
     return {
       shouldSkip,
