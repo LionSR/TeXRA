@@ -13,13 +13,13 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 
 // ============================================================================
 // Types

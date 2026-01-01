@@ -11,12 +11,12 @@ import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { toErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

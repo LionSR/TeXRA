@@ -77,7 +77,6 @@ export async function runResponseCycle<C = unknown>(
       responseTimeMs: undefined,
       stopReason: undefined,
       processedResponse: undefined,
-      roundFinalized: false,
     } satisfies ResponseCycleState,
     retryState: createRetryState(),
   };

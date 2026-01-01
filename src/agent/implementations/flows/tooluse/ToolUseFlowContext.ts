@@ -1,7 +1,7 @@
 /**
- * ToolUseFlowContext - Self-contained execution context for tool-use flows.
+ * ToolUseFlowContext - Simple factory function for tool-use flow services.
  *
- * Creates and owns all services needed by ToolUseRunFlow:
+ * Creates all services needed by ToolUseRunFlow:
  * - Session lifecycle management (follow-ups, status)
  * - Tool registry and resolution
  * - Cycle execution options
@@ -12,33 +12,33 @@
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { ToolDefinition } from '@model';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { BaseFlowContext } from '@agent/implementations/flows/common';
 
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import { buildBaseFlowServices, buildBaseCycleOptions } from '../common';
 import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
+import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 // ============================================================================
 // Context Initialization
 // ============================================================================
 
 /**
- * Configuration for creating a ToolUseFlowContext.
+ * Configuration for creating tool-use flow services.
  *
  * Extends BaseFlowContextInit with tool-use specific fields.
  */
@@ -62,246 +62,259 @@ export interface ToolUseFlowContextInit<
 }
 
 // ============================================================================
-// Context Class
+// Context Object (simple object, not a class)
 // ============================================================================
 
 /**
- * Self-contained execution context for tool-use flows.
- *
- * Extends BaseFlowContext for shared lazy initialization pattern.
+ * Tool-use flow context returned by factory function.
+ * Contains services and lifecycle methods.
  */
-export class ToolUseFlowContext<C = unknown> extends BaseFlowContext<
-  ToolUseFlowContextInit<C>,
-  ToolUseServices<C>,
-  C
-> {
-  private readonly toolRegistry: IToolRegistry;
-  private readonly sessionLifecycle: ToolUseSessionLifecycle;
-  private readonly resolvedTools: ToolDefinition[];
-
-  constructor(init: ToolUseFlowContextInit<C>) {
-    super(init);
-    this.toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
-    this.sessionLifecycle = new ToolUseSessionLifecycle(init.streamTabId);
-    // Resolve tools once at construction time instead of on every cycle
-    this.resolvedTools = this.resolveToolsFromSetting();
-  }
-
-  /**
-   * Resolves tool definitions from setting at construction time.
-   * This is computed once and cached to avoid repeated registry lookups.
-   */
-  private resolveToolsFromSetting(): ToolDefinition[] {
-    const cfg = Array.isArray(this.init.setting.tools)
-      ? this.init.setting.tools
-      : [];
-    const tools: ToolDefinition[] = [];
-    for (const t of cfg) {
-      const def = typeof t === 'string' ? { name: t } : t;
-      if (!this.toolRegistry.has(def.name)) {
-        this.init.executionContext.logger.warn(
-          `Tool "${def.name}" not found in registry`,
-        );
-        continue;
-      }
-      tools.push(def);
-    }
-    return tools;
-  }
-
-  // =========================================================================
-  // Accessors
-  // =========================================================================
+export interface ToolUseFlowContext<C = unknown> {
+  /** Services for flow execution */
+  services: ToolUseServices<C>;
 
   /** Stream tab ID for this session */
-  get streamTabId(): StreamTabId {
-    return this.init.streamTabId;
-  }
+  streamTabId: StreamTabId;
 
-  // =========================================================================
-  // BaseFlowContext Implementation
-  // =========================================================================
+  /** Session lifecycle manager */
+  session: ToolUseSessionLifecycle;
 
-  /**
-   * Build tool-use specific services.
-   *
-   * Called by BaseFlowContext.services getter after base services are built.
-   * Returns services that are merged on top of base services.
-   */
-  protected buildFlowSpecificServices(): Partial<ToolUseServices<C>> {
-    const { setting, resumeSnapshot } = this.init;
+  /** Interrupt the session */
+  interrupt(): void;
 
-    return {
-      // Narrow setting type for tool-use flows
-      setting,
+  /** Dispose context resources */
+  dispose(): void;
+}
 
-      // Tool-use specific services
-      toolRegistry: this.toolRegistry,
-      session: this.sessionLifecycle,
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
-      // Cycle operations - capture snapshot in closure
-      prepareState: () => this.prepareInitialState(resumeSnapshot ?? null),
-      buildCycleOptions: (store) => this.createCycleOptions(store),
-      runCycle: (options, messages, store) =>
-        runToolUseCycle({ options, messages, store }),
-      applyFollowUpMessage: (message, conversation) =>
-        this.applyFollowUpMessage(message, conversation),
-    };
-  }
-
-  get session() {
-    return this.sessionLifecycle;
-  }
-
-  // =========================================================================
-  // Lifecycle Operations
-  // =========================================================================
-
-  /**
-   * Disposes session lifecycle resources.
-   */
-  dispose(): void {
-    this.sessionLifecycle.dispose();
-  }
-
-  /**
-   * Interrupt the session.
-   * Notifies the runtime layer via onInterrupt callback and cleans up session.
-   */
-  interrupt(): void {
-    // Notify runtime layer to update interrupt state
-    this.init.onInterrupt?.();
-
-    // Clear any pending retry request to avoid memory leaks
-    retryCoordinator.clearRequest(this.streamTabId);
-
-    // Clean up session lifecycle (PersistedFlow handles state cleanup)
-    this.sessionLifecycle.interrupt();
-    this.sessionLifecycle.setStore(null);
-  }
-
-  // =========================================================================
-  // State Preparation
-  // =========================================================================
-
-  private async prepareInitialState(
-    snapshot: ToolUseSessionSnapshot | null,
-  ): Promise<PrepareStateResult> {
-    const {
-      modelHandler,
-      prompt,
-      userVarChannels,
-      executionContext,
-      getUsageRecorder,
-    } = this.init;
-    const logger = executionContext.logger;
-    const onRoundFinalized = getUsageRecorder?.();
-
-    if (snapshot) {
-      logger.debug('Resuming tool-use session from saved state.');
-
-      const messages = snapshot.messages;
-      const store = createSharedStore({
-        snapshot: snapshot.store,
-        onRoundFinalized,
-      });
-
-      this.sessionLifecycle.setStore(store);
-
-      return {
-        messages,
-        store,
-        shouldSkipCycle: true,
-        runState: store.run,
-      };
+/**
+ * Resolves tool definitions from setting at construction time.
+ * This is computed once and cached to avoid repeated registry lookups.
+ */
+function resolveToolsFromSetting(
+  setting: AgentToolUseSetting,
+  toolRegistry: IToolRegistry,
+  logger: any,
+): ToolDefinition[] {
+  const cfg = Array.isArray(setting.tools) ? setting.tools : [];
+  const tools: ToolDefinition[] = [];
+  for (const t of cfg) {
+    const def = typeof t === 'string' ? { name: t } : t;
+    if (!toolRegistry.has(def.name)) {
+      logger.warn(`Tool "${def.name}" not found in registry`);
+      continue;
     }
+    tools.push(def);
+  }
+  return tools;
+}
 
-    // Create a fresh run state for new sessions
-    const currentRunState = new AgentRunState();
+/**
+ * Prepare initial state for the tool-use session.
+ * Handles both new sessions and resumed sessions from snapshots.
+ */
+async function prepareInitialState<C>(
+  init: ToolUseFlowContextInit<C>,
+  sessionLifecycle: ToolUseSessionLifecycle,
+  snapshot: ToolUseSessionSnapshot | null,
+): Promise<PrepareStateResult> {
+  const {
+    modelHandler,
+    prompt,
+    userVarChannels,
+    executionContext,
+    getUsageRecorder,
+  } = init;
+  const logger = executionContext.logger;
+  const onRoundFinalized = getUsageRecorder?.();
 
-    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-      await buildInitialToolUsePrompts(
-        prompt,
-        userVarChannels.transient,
-        logger,
-      );
+  if (snapshot) {
+    logger.debug('Resuming tool-use session from saved state.');
 
-    const messages = await modelHandler.initializeMessages(
-      userPrefix,
-      userRequest,
-      undefined,
-      systemPrompt
-        ? `${systemPrompt}\n${instructionSuffix}`
-        : instructionSuffix,
-    );
-
+    const messages = snapshot.messages;
     const store = createSharedStore({
-      roundIndex: currentRunState.totalRounds,
-      runState: currentRunState,
-      workspaceState: AgentWorkspaceState.create(),
-      userChannels: userVarChannels,
+      snapshot: snapshot.store,
       onRoundFinalized,
     });
 
-    this.sessionLifecycle.setStore(store);
+    sessionLifecycle.setStore(store);
 
     return {
       messages,
       store,
-      shouldSkipCycle: false,
-      runState: currentRunState,
+      shouldSkipCycle: true,
+      runState: store.run,
     };
   }
 
-  private createCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C> {
-    const {
-      modelHandler,
-      setting,
+  // Create a fresh run state for new sessions
+  const currentRunState = new AgentRunState();
+
+  const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
+    await buildInitialToolUsePrompts(
       prompt,
-      config,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
-    } = this.init;
-    const client = getClient();
-
-    // Use pre-resolved tools (computed at construction time)
-    const resolvedSetting = {
-      ...setting,
-      tools: this.resolvedTools,
-    };
-
-    // Build base cycle options (AgentCycleBaseOptions + ToolUseCycleOptions)
-    return {
-      // AgentCycleBaseOptions
-      modelHandler: modelHandler as IModelHandler<any, any, any, any, C>,
-      agentSetting: resolvedSetting,
-      agentPrompt: prompt,
-      userVars: userVarChannels.transient,
-      logger: executionContext.logger,
-      context: executionContext,
-      client,
-      checkInterruption,
-      setAbortController,
-      // ToolUseCycleOptions specific
-      toolRegistry: this.toolRegistry,
-      workspaceState: store.workspace,
-      modelName: config.model,
-      agentName: config.agent,
-    };
-  }
-
-  private async applyFollowUpMessage(
-    followUp: string,
-    messages: ProviderMessage[],
-  ): Promise<ProviderMessage[]> {
-    this.init.executionContext.logger.userMessage(followUp);
-    return await this.init.modelHandler.createUserFollowUpMessages(
-      messages,
-      followUp,
+      userVarChannels.transient,
+      logger,
     );
-  }
+
+  const messages = await modelHandler.initializeMessages(
+    userPrefix,
+    userRequest,
+    undefined,
+    systemPrompt
+      ? `${systemPrompt}\n${instructionSuffix}`
+      : instructionSuffix,
+  );
+
+  const store = createSharedStore({
+    roundIndex: currentRunState.totalRounds,
+    runState: currentRunState,
+    workspaceState: AgentWorkspaceState.create(),
+    userChannels: userVarChannels,
+    onRoundFinalized,
+  });
+
+  sessionLifecycle.setStore(store);
+
+  return {
+    messages,
+    store,
+    shouldSkipCycle: false,
+    runState: currentRunState,
+  };
 }
 
+/**
+ * Create cycle options for tool-use execution.
+ */
+function createCycleOptions<C>(
+  init: ToolUseFlowContextInit<C>,
+  toolRegistry: IToolRegistry,
+  resolvedTools: ToolDefinition[],
+  store: AgentSharedStore,
+): ToolUseCycleOptions<C> {
+  // Use pre-resolved tools (computed at construction time)
+  const resolvedSetting = {
+    ...init.setting,
+    tools: resolvedTools,
+  };
+
+  // Build base cycle options using helper (eliminates manual field copying)
+  // Then extend with tool-use specific fields
+  return {
+    ...buildBaseCycleOptions(init),
+    // Override with resolved setting (includes pre-resolved tools)
+    agentSetting: resolvedSetting,
+    // ToolUseCycleOptions specific fields
+    toolRegistry: toolRegistry,
+    workspaceState: store.workspace,
+    modelName: init.config.model,
+    agentName: init.config.agent,
+  };
+}
+
+/**
+ * Apply a follow-up message to the conversation.
+ */
+async function applyFollowUpMessage<C>(
+  init: ToolUseFlowContextInit<C>,
+  followUp: string,
+  messages: ProviderMessage[],
+): Promise<ProviderMessage[]> {
+  init.executionContext.logger.userMessage(followUp);
+  return await init.modelHandler.createUserFollowUpMessages(
+    messages,
+    followUp,
+  );
+}
+
+// ============================================================================
+// Factory Functions
+// ============================================================================
+
+/**
+ * Build tool-use flow services from initialization config.
+ *
+ * This is the PocketFlow-native way: simple factory function that creates
+ * all services eagerly and returns them as a plain object.
+ */
+export function buildToolUseServices<C = unknown>(
+  init: ToolUseFlowContextInit<C>,
+): {
+  services: ToolUseServices<C>;
+  sessionLifecycle: ToolUseSessionLifecycle;
+  resolvedTools: ToolDefinition[];
+} {
+  const { setting, streamTabId, toolRegistry: customRegistry, resumeSnapshot } = init;
+
+  // Create services eagerly (no lazy initialization)
+  const toolRegistry = customRegistry ?? getDefaultToolRegistry();
+  const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
+
+  // Resolve tools once at construction time instead of on every cycle
+  const resolvedTools = resolveToolsFromSetting(
+    setting,
+    toolRegistry,
+    init.executionContext.logger,
+  );
+
+  // Capture snapshot in closure for prepareState
+  const snapshot = resumeSnapshot ?? null;
+
+  // Build base services
+  const baseServices = buildBaseFlowServices(init);
+
+  // Return complete services object
+  const services: ToolUseServices<C> = {
+    ...baseServices,
+    setting,
+    toolRegistry,
+    session: sessionLifecycle,
+    prepareState: () => prepareInitialState(init, sessionLifecycle, snapshot),
+    buildCycleOptions: (store) =>
+      createCycleOptions(init, toolRegistry, resolvedTools, store),
+    runCycle: (options, messages, store) =>
+      runToolUseCycle({ options, messages, store }),
+    applyFollowUpMessage: (message, conversation) =>
+      applyFollowUpMessage(init, message, conversation),
+  };
+
+  return { services, sessionLifecycle, resolvedTools };
+}
+
+/**
+ * Creates a ToolUseFlowContext with all services and behaviors configured.
+ *
+ * This is the primary entry point for setting up flow execution.
+ * Returns a simple object with services and lifecycle methods.
+ */
+export function createToolUseFlowContext<C = unknown>(
+  init: ToolUseFlowContextInit<C>,
+): ToolUseFlowContext<C> {
+  const { services, sessionLifecycle } = buildToolUseServices(init);
+
+  return {
+    services,
+    streamTabId: init.streamTabId,
+    session: sessionLifecycle,
+
+    interrupt(): void {
+      // Notify runtime layer to update interrupt state
+      init.onInterrupt?.();
+
+      // Clear any pending retry request to avoid memory leaks
+      retryCoordinator.clearRequest(init.streamTabId);
+
+      // Clean up session lifecycle (PersistedFlow handles state cleanup)
+      sessionLifecycle.interrupt();
+      sessionLifecycle.setStore(null);
+    },
+
+    dispose(): void {
+      sessionLifecycle.dispose();
+    },
+  };
+}

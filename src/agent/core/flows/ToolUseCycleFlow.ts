@@ -51,10 +51,6 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import {
-  checkInterruptionSafely,
-  saveDebugIfAvailable,
-} from './NodeUtils';
 import type {
   ToolUseCycleOptions,
   ToolUseCycleServices,
@@ -190,9 +186,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   }> {
     const services = this.services;
     const { store } = services;
-    const interrupted = await checkInterruptionSafely(() =>
-      services.checkInterruption(),
-    );
+    const interrupted = Boolean(await services.checkInterruption());
     const debugContext = createDebugContext({
       logger: services.logger,
       modelName: services.modelName,
@@ -226,7 +220,9 @@ class ToolUsePrepNode<C> extends BaseNode<
     // runtime state before enriching it with model responses.
     resetToolUseState(state);
 
-    await saveDebugIfAvailable(state.messages, 'messages', {
+    await maybeSaveDebugObject({
+      object: state.messages,
+      objectType: 'messages',
       context: prepRes.debugContext,
       fileOptions: prepRes.debugFileOptions,
     });
@@ -364,7 +360,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     state.response = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    await saveDebugIfAvailable(successRes.response, 'response', {
+    await maybeSaveDebugObject({
+      object: successRes.response,
+      objectType: 'response',
       context: successRes.debugContext,
       fileOptions: successRes.debugFileOptions,
     });
@@ -685,10 +683,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Check skip conditions (including interruption) in prep
     const shouldSkip = state.shouldStop || toolCalls.length === 0;
-    const interrupted = await checkInterruptionSafely(
-      () => services.checkInterruption(),
-      shouldSkip,
-    );
+    const interrupted = shouldSkip
+      ? false
+      : Boolean(await services.checkInterruption());
 
     return {
       shouldSkip,

@@ -16,8 +16,8 @@ import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { BaseFlowServices } from '@agent/implementations/flows/common';
+import type { IToolUseSession } from './ToolUseSessionLifecycle';
 
 /**
  * Result of preparing initial state for a tool-use session.

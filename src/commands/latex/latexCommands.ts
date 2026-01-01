@@ -3,13 +3,13 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
-import replacementEngine from '@replacement/engine';
-import { sleep } from '@utils/core';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
+import replacementEngine from '@replacement/engine';
+import { sleep } from '@utils/core';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import { runIndentTeX } from '@housekeeping';

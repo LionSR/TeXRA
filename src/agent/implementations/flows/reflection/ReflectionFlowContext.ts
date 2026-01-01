@@ -1,7 +1,7 @@
 /**
- * ReflectionFlowContext - Self-contained execution context for reflection flows.
+ * ReflectionFlowContext - Simple factory function for reflection flow services.
  *
- * Creates and owns all services needed by ReflectionFlow:
+ * Creates all services needed by ReflectionFlow:
  * - OutputHandler for structured output processing
  * - PromptBuilder for template rendering
  * - LatexMediaManager for media handling
@@ -12,24 +12,23 @@
  */
 
 import type { IModelHandler } from '@agent/modelHandlers';
+import { OutputHandler, type IOutputHandler } from '@agent/output';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
-import type { AgentFileLocation } from '@utils/files';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { BaseFlowContext } from '@agent/implementations/flows/common';
-import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
-
-import { OutputHandler, type IOutputHandler } from '@agent/output';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import { LatexMediaManager } from '@latex';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import type { AgentFileLocation } from '@utils/files';
+
 import { PromptBuilder } from '@utils/prompt';
 import { TaskRunFileService } from '@utils/files';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { LatexMediaManager } from '@latex';
 import { createBaseFileLocations } from './helpers';
+import { buildBaseFlowServices } from '../common';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -37,10 +36,9 @@ import type { ReflectionServices } from './ReflectionServices';
 // ============================================================================
 
 /**
- * Configuration for creating a ReflectionFlowContext.
+ * Configuration for creating reflection flow services.
  *
  * Extends BaseFlowContextInit with reflection-specific fields.
- * The context factory creates all derived services from these.
  */
 export interface ReflectionFlowContextInit<
   C = unknown,
@@ -172,202 +170,28 @@ function createOutputFileLocationGetter(
 }
 
 // ============================================================================
-// Context Class
+// Context Object (simple object, not a class)
 // ============================================================================
 
 /**
- * Self-contained execution context for reflection flows.
- *
- * Creates all services internally and computes behavior from configuration.
- * No agent class instance is needed.
- *
- * Extends BaseFlowContext for shared lazy initialization pattern.
- * Implements IInterruptible for unified interrupt handling via registry.
+ * Reflection flow context returned by factory function.
+ * Contains services and lifecycle methods.
  */
-export class ReflectionFlowContext<C = unknown>
-  extends BaseFlowContext<
-    ReflectionFlowContextInit<C>,
-    ReflectionServices<C>,
-    C
-  >
-  implements IInterruptible
-{
-  // Services created internally
-  private _outputHandler: IOutputHandler | null = null;
-  private _promptBuilder: PromptBuilder | null = null;
-  private _latexMediaManager: LatexMediaManager | null = null;
-  private _fileService: TaskRunFileService | null = null;
+export interface ReflectionFlowContext<C = unknown> {
+  /** Services for flow execution */
+  services: ReflectionServices<C>;
 
-  // Computed values
-  private _totalRounds: number | null = null;
-  private _shouldEnsureXmlStructure: boolean | null = null;
+  /** Total number of rounds to execute */
+  totalRounds: number;
 
-  constructor(init: ReflectionFlowContextInit<C>) {
-    super(init);
-  }
+  /** Set the active run storage key on the output handler */
+  setActiveRun(storageKey: string): void;
 
-  // =========================================================================
-  // Service Creation (lazy initialization)
-  // =========================================================================
+  /** Interrupt the flow execution */
+  interrupt(): void;
 
-  private get fileService(): TaskRunFileService {
-    if (!this._fileService) {
-      this._fileService = new TaskRunFileService(
-        this.init.executionContext.executionId,
-      );
-    }
-    return this._fileService;
-  }
-
-  private get baseFiles(): AgentFileLocation[] {
-    return createBaseFileLocations(this.init.config);
-  }
-
-  private get outputHandler(): IOutputHandler {
-    if (!this._outputHandler) {
-      this._outputHandler = new OutputHandler(
-        this.init.setting,
-        this.init.config,
-        0, // logId
-        this.baseFiles,
-        this.init.executionContext.logger,
-        this.fileService,
-        this.init.executionContext.executionId,
-      );
-    }
-    return this._outputHandler;
-  }
-
-  private get promptBuilder(): PromptBuilder {
-    if (!this._promptBuilder) {
-      this._promptBuilder = new PromptBuilder(
-        this.init.prompt,
-        this.init.setting,
-        this.init.userVarChannels.transient,
-        this.init.executionContext.logger,
-      );
-    }
-    return this._promptBuilder;
-  }
-
-  private get latexMediaManager(): LatexMediaManager {
-    if (!this._latexMediaManager) {
-      this._latexMediaManager = new LatexMediaManager(
-        this.init.executionContext.logger,
-        this.fileService,
-      );
-    }
-    return this._latexMediaManager;
-  }
-
-  // =========================================================================
-  // Computed Behavior
-  // =========================================================================
-
-  get totalRounds(): number {
-    if (this._totalRounds === null) {
-      this._totalRounds = computeTotalRounds(
-        this.init.setting,
-        this.init.prompt,
-      );
-    }
-    return this._totalRounds;
-  }
-
-  get shouldEnsureXmlStructure(): boolean {
-    if (this._shouldEnsureXmlStructure === null) {
-      this._shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(
-        this.init.setting,
-      );
-    }
-    return this._shouldEnsureXmlStructure;
-  }
-
-  // =========================================================================
-  // BaseFlowContext Implementation
-  // =========================================================================
-
-  /**
-   * Build reflection-specific services.
-   *
-   * Called by BaseFlowContext.services getter after base services are built.
-   * Returns services that are merged on top of base services.
-   */
-  protected buildFlowSpecificServices(): Partial<ReflectionServices<C>> {
-    const { config, setting, getUsageRecorder } = this.init;
-
-    // Use custom getter if provided, otherwise create default
-    const getOutputFileLocation =
-      this.init.getOutputFileLocation ??
-      createOutputFileLocationGetter(
-        config,
-        setting,
-        this.init.modelHandler,
-        this.fileService,
-      );
-
-    return {
-      // Narrow setting type for reflection flows
-      setting,
-
-      // Services created by context
-      outputHandler: this.outputHandler,
-      latexMediaManager: this.latexMediaManager,
-      promptBuilder: this.promptBuilder,
-      fileService: this.fileService,
-
-      // Strategies computed from configuration (no callbacks to agent!)
-      getOutputFileLocation,
-      shouldEnsureXmlStructure: () => this.shouldEnsureXmlStructure,
-      getUsageRecorder,
-    };
-  }
-
-  // =========================================================================
-  // Lifecycle helpers
-  // =========================================================================
-
-  /**
-   * Set the active run storage key on the output handler.
-   */
-  setActiveRun(storageKey: string): void {
-    this.outputHandler.setActiveRun(storageKey as any);
-  }
-
-  // =========================================================================
-  // IInterruptible Implementation
-  // =========================================================================
-
-  /**
-   * Interrupt the flow execution.
-   * Notifies the runtime layer via onInterrupt callback and cleans up retry state.
-   */
-  interrupt(): void {
-    this.init.onInterrupt?.();
-
-    // Clear any pending retry request to avoid memory leaks
-    retryCoordinator.clearRequest(this.init.executionContext.streamId);
-  }
-
-  // =========================================================================
-  // Lifecycle - Cleanup
-  // =========================================================================
-
-  /**
-   * Dispose context resources.
-   * Clears cached services to allow garbage collection.
-   * Should be called in finally block after flow execution.
-   */
-  dispose(): void {
-    // Clear any pending retry request (consistent with interrupt())
-    retryCoordinator.clearRequest(this.init.executionContext.streamId);
-
-    // Clear cached services to allow GC
-    this._outputHandler = null;
-    this._promptBuilder = null;
-    this._latexMediaManager = null;
-    this._fileService = null;
-  }
+  /** Dispose context resources */
+  dispose(): void;
 }
 
 // ============================================================================
@@ -375,15 +199,99 @@ export class ReflectionFlowContext<C = unknown>
 // ============================================================================
 
 /**
+ * Build reflection flow services from initialization config.
+ *
+ * This is the PocketFlow-native way: simple factory function that creates
+ * all services eagerly and returns them as a plain object.
+ */
+export function buildReflectionServices<C = unknown>(
+  init: ReflectionFlowContextInit<C>,
+): ReflectionServices<C> {
+  const { config, setting, modelHandler, executionContext, prompt, userVarChannels, getUsageRecorder } = init;
+
+  // Create services eagerly (no lazy initialization)
+  const fileService = new TaskRunFileService(executionContext.executionId);
+  const baseFiles = createBaseFileLocations(config);
+
+  const outputHandler = new OutputHandler(
+    setting,
+    config,
+    0, // logId
+    baseFiles,
+    executionContext.logger,
+    fileService,
+    executionContext.executionId,
+  );
+
+  const promptBuilder = new PromptBuilder(
+    prompt,
+    setting,
+    userVarChannels.transient,
+    executionContext.logger,
+  );
+
+  const latexMediaManager = new LatexMediaManager(
+    executionContext.logger,
+    fileService,
+  );
+
+  // Compute behavior from configuration
+  const shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(setting);
+
+  // Use custom getter if provided, otherwise create default
+  const getOutputFileLocation =
+    init.getOutputFileLocation ??
+    createOutputFileLocationGetter(config, setting, modelHandler, fileService);
+
+  // Build base services
+  const baseServices = buildBaseFlowServices(init);
+
+  // Return complete services object
+  return {
+    ...baseServices,
+    setting,
+    outputHandler,
+    latexMediaManager,
+    promptBuilder,
+    fileService,
+    getOutputFileLocation,
+    shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
+    getUsageRecorder,
+    // Runtime-only fields (will be set by runReflectionFlow)
+    runStage: null as any, // Set by runReflectionFlow
+    roundStage: null,
+  };
+}
+
+/**
  * Creates a ReflectionFlowContext with all services and behaviors configured.
  *
- * This is the primary entry point for setting up flow execution without
- * needing an agent class instance.
+ * This is the primary entry point for setting up flow execution.
+ * Returns a simple object with services and lifecycle methods.
  */
 export function createReflectionFlowContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
 ): ReflectionFlowContext<C> {
-  return new ReflectionFlowContext(init);
+  const services = buildReflectionServices(init);
+  const totalRounds = computeTotalRounds(init.setting, init.prompt);
+
+  return {
+    services,
+    totalRounds,
+
+    setActiveRun(storageKey: string): void {
+      services.outputHandler.setActiveRun(storageKey as any);
+    },
+
+    interrupt(): void {
+      init.onInterrupt?.();
+      retryCoordinator.clearRequest(init.executionContext.streamId);
+    },
+
+    dispose(): void {
+      retryCoordinator.clearRequest(init.executionContext.streamId);
+    },
+  };
 }
 
 /**
@@ -396,7 +304,7 @@ export function createReadyReflectionContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
   storageKey: string,
 ): ReflectionFlowContext<C> {
-  const context = new ReflectionFlowContext(init);
+  const context = createReflectionFlowContext(init);
   context.setActiveRun(storageKey);
   return context;
 }

@@ -74,7 +74,7 @@ export type SkippableNodeResult<T> =
  *
  * IMPORTANT: Only pass fields that should be reset to undefined.
  * - Do NOT pass 'messages' (preserved across cycles)
- * - Do NOT pass boolean fields like 'endTurn' or 'roundFinalized'
+ * - Do NOT pass boolean fields like 'endTurn'
  *   (these should be reset to false separately, not undefined)
  *
  * @param state - The state object to reset
@@ -225,23 +225,3 @@ export function createDebugFileOptions(
   };
 }
 
-// ============================================================================
-// Round Finalization Utility
-// ============================================================================
-
-/**
- * Safely finalize a round, ensuring it's only done once.
- * Guard pattern prevents double-finalization from multiple exit paths.
- *
- * @param state - State object with roundFinalized flag
- * @param store - Store object with finalizeRound method
- */
-export async function safelyFinalizeRound(
-  state: { roundFinalized?: boolean },
-  store: { finalizeRound(): Promise<void> },
-): Promise<void> {
-  if (!state.roundFinalized) {
-    state.roundFinalized = true;
-    await store.finalizeRound();
-  }
-}

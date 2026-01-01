@@ -6,11 +6,11 @@ import { XMLParser } from 'fast-xml-parser';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
