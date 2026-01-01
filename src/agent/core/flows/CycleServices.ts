@@ -3,25 +3,26 @@
  *
  * This module defines:
  * 1. Cycle option interfaces (ResponseCycleOptions, ToolUseCycleOptions)
- * 2. Service containers with options flattened directly (no nested wrapper)
+ * 2. Service containers with state slices passed directly (no store wrapper)
  *
  * ## Architecture
  *
  * Services are injected via PocketFlow's `_params` mechanism:
- * - `_params.services` - immutable dependencies (logger, modelHandler, store)
+ * - `_params.services` - immutable dependencies (logger, modelHandler, state slices)
  * - `shared` - mutable runtime state only
  *
- * Options are flattened directly into services for cleaner access:
- * - `services.logger` instead of `services.options.logger`
- * - `services.store` for shared state
+ * State slices are passed directly for clarity:
+ * - `services.round` - current round statistics and state
+ * - `services.run` - accumulated run statistics
+ * - `services.workspace` - workspace assembly and media
  *
  * ## Usage
  *
  * ```typescript
  * class MyNode extends BaseNode<CycleState, CycleParams<C>> {
  *   async exec(state: CycleState) {
- *     // Access services directly (options flattened)
- *     const { logger, store, modelHandler } = this.services;
+ *     // Access state slices directly
+ *     const { round, workspace, modelHandler } = this.services;
  *     // Access mutable state from shared
  *     const { messages } = state;
  *   }
@@ -29,12 +30,61 @@
  * ```
  */
 
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type {
+  AgentRunState,
+  ConversationRoundState,
+} from '@agent/core/AgentState';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { TaskRunFileService } from '@utils/files';
+
+// ============================================================================
+// CYCLE STATE SLICES
+// ============================================================================
+
+/**
+ * Context passed to round finalization callback.
+ * Contains all state slices for statistics recording.
+ */
+export interface RoundFinalizedContext {
+  round: ConversationRoundState;
+  run: AgentRunState;
+  workspace: AgentWorkspaceState;
+}
+
+/**
+ * Callback invoked when a round completes.
+ * Used for usage tracking and statistics recording.
+ */
+export type RoundFinalizedCallback = (
+  context: RoundFinalizedContext,
+) => void | Promise<void>;
+
+/**
+ * State slices passed directly to cycle flows.
+ * Replaces the AgentSharedStore wrapper for cleaner access.
+ *
+ * Names match the original store accessors (store.round, store.run, store.workspace)
+ * for easy migration.
+ */
+export interface CycleStateSlices {
+  /** Current round state for statistics (mutable for tool-use multi-round) */
+  round: ConversationRoundState;
+
+  /** Accumulated run state */
+  readonly run: AgentRunState;
+
+  /** Workspace state for assembly and media */
+  readonly workspace: AgentWorkspaceState;
+
+  /**
+   * Callback invoked when round completes.
+   * Called by finalize nodes for usage tracking.
+   */
+  readonly onRoundFinalized?: RoundFinalizedCallback;
+}
 
 // ============================================================================
 // CYCLE OPTIONS (single source of truth)
@@ -65,23 +115,20 @@ export interface ToolUseCycleOptions<
 }
 
 // ============================================================================
-// SERVICE CONTAINERS (flattened - options merged directly into services)
+// SERVICE CONTAINERS (state slices + options merged directly)
 // ============================================================================
 
 /**
  * Base services shared by all cycle flows.
- * Contains shared store and common dependencies.
+ * Contains state slices passed directly (no store wrapper).
  */
-export interface BaseCycleServices {
-  /** Shared store for workspace, round, and run state */
-  readonly store: AgentSharedStore;
-}
+export type BaseCycleServices = CycleStateSlices;
 
 /**
  * Services for response cycle flows.
  *
  * Options are flattened directly into services (no nested `options` wrapper).
- * Access via: `services.logger`, `services.modelHandler`, etc.
+ * Access via: `services.logger`, `services.round`, etc.
  */
 export type ResponseCycleServices<C = unknown> = BaseCycleServices &
   Readonly<ResponseCycleOptions<C>>;
@@ -90,7 +137,7 @@ export type ResponseCycleServices<C = unknown> = BaseCycleServices &
  * Services for tool-use cycle flows.
  *
  * Options are flattened directly into services (no nested `options` wrapper).
- * Access via: `services.logger`, `services.toolRegistry`, etc.
+ * Access via: `services.logger`, `services.round`, etc.
  */
 export type ToolUseCycleServices<C = unknown> = BaseCycleServices &
   Readonly<ToolUseCycleOptions<C>>;

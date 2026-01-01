@@ -593,6 +593,7 @@ clean state persistence via PersistedFlow.
 **Summary:**
 
 The PersistedFlow integration is now complete:
+
 - Both ReflectionFlow and ToolUseFlow use PersistedFlow for automatic persistence
 - Legacy hydration code removed (~600 lines)
 - ReflectionFlow uses natively serializable state (koala pattern)
@@ -627,12 +628,14 @@ The PersistedFlow integration is now complete:
 **Progress View Compatibility Verified:**
 
 The "Run Again" button correctly implements resume semantics for both flows:
+
 - Icon: `debug-continue`
 - Title: "Resume from saved outputs (continues where it left off)"
 - Enabled for STOPPED/ERROR states when execution ID available
 - Passes `resume: true` to `texra.execute`
 
 Both ReflectionFlow and ToolUseFlow:
+
 - Use PersistedFlow for automatic state persistence
 - Restore from persisted state on resume
 - Preserve thinking blocks via workspace snapshot restoration
