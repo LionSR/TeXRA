@@ -203,14 +203,23 @@ async function prepareFlowExecution(
   modelHandler.setLogger(executionContext.logger);
 
   // 4. Build user variable channels (replaces agent.init() logic)
-  const baseVars = await buildUserVars(
-    agentConfig,
-    agentSetting,
-    agentPrompt,
-    agentPath,
-    modelHandler,
-    executionContext.logger,
-  );
+  // Wrap in "Init" stage so file loading logs are properly grouped
+  const initStage = await executionContext.logger.stage('Init');
+  let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
+  try {
+    baseVars = await buildUserVars(
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+      modelHandler,
+      executionContext.logger,
+    );
+    initStage.end('stopped');
+  } catch (err) {
+    initStage.end('error');
+    throw err;
+  }
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze({ ...baseVars }),
     transient: { ...baseVars },
