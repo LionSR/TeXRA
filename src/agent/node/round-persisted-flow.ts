@@ -196,6 +196,17 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
    * If not provided, uses structuredClone (requires plain JSON state).
    */
   serialization?: SerializationHooks<S>;
+
+  /**
+   * Use lazy persistence mode.
+   *
+   * When true (default), state is only serialized at round boundaries
+   * via setShared(), not after every node. This reduces serialization
+   * from N operations per round to 1.
+   *
+   * @default true
+   */
+  lazyPersistence?: boolean;
 }
 
 // ============================================================================
@@ -252,9 +263,13 @@ export class RoundPersistedFlow<
     config?: RoundFlowConfig<S, Svc>,
     runId?: string,
   ) {
-    // Pass serialization hooks to parent PersistedFlow
+    // Default to lazy persistence for round flows (serialize only at round boundaries)
+    const useLazyPersistence = config?.lazyPersistence ?? true;
+
+    // Pass serialization hooks and persistence mode to parent PersistedFlow
     super(start, kv, runId, {
       serialization: config?.serialization,
+      persistenceMode: useLazyPersistence ? 'lazy' : 'step',
     });
     this.config = config ?? {};
   }
@@ -320,6 +335,9 @@ export class RoundPersistedFlow<
           this._services as Svc,
         );
       }
+
+      // Persist final state (critical for lazy persistence mode)
+      await this.setShared(currentShared);
 
       // Determine final status: interrupted if stopped before completing all rounds
       const completedAllRounds = isRoundAtOrBeyondLimit(

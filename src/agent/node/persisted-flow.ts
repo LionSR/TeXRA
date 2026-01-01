@@ -90,6 +90,17 @@ export interface SerializationHooks<S> {
 }
 
 /**
+ * Persistence mode for PersistedFlow.
+ *
+ * - `'step'`: Serialize after every node (default, for full resumability)
+ * - `'lazy'`: Only serialize on explicit setShared() calls (for performance)
+ *
+ * Use `'lazy'` mode with RoundPersistedFlow which calls setShared() at round
+ * boundaries, reducing serialization from N per round to 1 per round.
+ */
+export type PersistenceMode = 'step' | 'lazy';
+
+/**
  * Configuration for PersistedFlow.
  */
 export interface PersistedFlowConfig<S> {
@@ -98,6 +109,15 @@ export interface PersistedFlowConfig<S> {
    * If not provided, uses structuredClone (requires plain JSON state).
    */
   serialization?: SerializationHooks<S>;
+
+  /**
+   * Persistence mode.
+   * - `'step'`: Persist after every node execution (default)
+   * - `'lazy'`: Only persist on explicit setShared() calls
+   *
+   * @default 'step'
+   */
+  persistenceMode?: PersistenceMode;
 }
 
 /**
@@ -125,6 +145,13 @@ export class PersistedFlow<
   protected readonly runId: string;
   protected readonly kv: FlowStore;
   protected readonly serialization?: SerializationHooks<S>;
+  protected readonly persistenceMode: PersistenceMode;
+
+  /**
+   * In-memory shared state for lazy persistence mode.
+   * Updated after each node, persisted only on setShared() calls.
+   */
+  protected lazyShared: S | null = null;
 
   /**
    * Create a new PersistedFlow.
@@ -143,6 +170,7 @@ export class PersistedFlow<
     super(start);
     this.kv = kv;
     this.serialization = config?.serialization;
+    this.persistenceMode = config?.persistenceMode ?? 'step';
     this.runId = runId ?? kv.getExecutionId();
   }
 
@@ -195,6 +223,11 @@ export class PersistedFlow<
    *
    * The returned shared reference is the same object that was mutated by the node,
    * so callers can use it directly without Object.assign.
+   *
+   * ## Persistence Modes
+   *
+   * - `'step'` mode: Serializes and persists after every node (full resumability)
+   * - `'lazy'` mode: Only records action, skips serialization (use setShared() to persist)
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
     const key = `flow:${this.runId}`;
@@ -211,15 +244,24 @@ export class PersistedFlow<
 
     // No more nodes to execute
     if (!cursor) {
+      // In lazy mode, use in-memory state if available
+      const finalShared =
+        this.persistenceMode === 'lazy' && this.lazyShared
+          ? this.lazyShared
+          : this.deserializeShared(flow.shared);
       return {
         hasMore: false,
         action: flow.nodes.at(-1)?.action,
-        shared: this.deserializeShared(flow.shared),
+        shared: finalShared,
       };
     }
 
     const params = flow.params as P;
-    const shared = this.deserializeShared(flow.shared);
+    // In lazy mode, use in-memory state; otherwise deserialize from storage
+    const shared =
+      this.persistenceMode === 'lazy' && this.lazyShared
+        ? this.lazyShared
+        : this.deserializeShared(flow.shared);
 
     if (!shared) {
       throw new Error('Missing shared state in flow record');
@@ -238,9 +280,19 @@ export class PersistedFlow<
       throw e;
     }
 
+    // Record node action (always needed for graph traversal on resume)
     flow.nodes.push({ action });
-    flow.shared = this.serializeShared(shared);
-    await this.kv.write(key, flow);
+
+    if (this.persistenceMode === 'lazy') {
+      // Lazy mode: keep state in memory, only persist action for graph traversal
+      this.lazyShared = shared;
+      // Still need to write the action to enable resume from correct node
+      await this.kv.write(key, flow);
+    } else {
+      // Step mode: full serialization after every node
+      flow.shared = this.serializeShared(shared);
+      await this.kv.write(key, flow);
+    }
 
     return {
       hasMore: true,
@@ -274,15 +326,30 @@ export class PersistedFlow<
   }
 
   async getShared(): Promise<S | undefined> {
+    // In lazy mode, prefer in-memory state
+    if (this.persistenceMode === 'lazy' && this.lazyShared) {
+      return this.lazyShared;
+    }
     const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
     return flow?.shared ? this.deserializeShared(flow.shared) : undefined;
   }
 
+  /**
+   * Persist shared state to storage.
+   *
+   * In lazy mode, this is the ONLY place where state gets serialized.
+   * Call this at persistence boundaries (e.g., round completion).
+   */
   async setShared(newShared: S): Promise<void> {
     const key = `flow:${this.runId}`;
     const flow = (await this.kv.read<FlowRecord>(key))!;
     flow.shared = this.serializeShared(newShared);
     await this.kv.write(key, flow);
+
+    // Update in-memory state for lazy mode
+    if (this.persistenceMode === 'lazy') {
+      this.lazyShared = newShared;
+    }
   }
 
   getRunId(): string {
@@ -291,6 +358,10 @@ export class PersistedFlow<
 
   async init(shared: S): Promise<void> {
     await this.ensureRecord(shared);
+    // Initialize in-memory state for lazy mode
+    if (this.persistenceMode === 'lazy') {
+      this.lazyShared = shared;
+    }
   }
 
   private async ensureRecord(shared: S): Promise<void> {
