@@ -26,7 +26,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
 import {
   create,
   getNumericDate,
-} from 'https://deno.land/x/djwt@v3.0.1/mod.ts';
+} from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 
 // =============================================================================
 // Constants
@@ -40,9 +40,12 @@ const AUTH_GITHUB_VERSION = '1.0.1';
  * Codespaces uses *.github.dev domains.
  */
 const ALLOWED_ORIGINS = [
-  // VS Code desktop schemes (opaque origins, sent as null in most browsers)
+  // VS Code and forks (opaque origins, sent as null in most browsers)
   'vscode://',
+  'vscode-insiders://',
   'cursor://',
+  'windsurf://',
+  'antigravity://',
   // Codespaces and github.dev
   /^https:\/\/[a-z0-9-]+\.github\.dev$/,
   /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/,
@@ -300,12 +303,26 @@ async function findOrCreateGitHubUser(
     };
   }
 
-  // Step 2: Check if user exists with this email via admin API
-  // For small-medium user bases this is fine. For larger scale, add an RPC function.
+  // Step 2: Check if user exists with this email
+  // Try RPC first (O(1) lookup), fall back to admin API if RPC not available
   let existingUser: { id: string; email: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } | undefined;
 
-  const { data: adminData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  existingUser = adminData?.users?.find((u: { email: string }) => u.email === email);
+  const { data: rpcUser, error: rpcError } = await supabase.rpc('get_user_by_email', {
+    user_email: email,
+  });
+
+  if (!rpcError && rpcUser) {
+    existingUser = {
+      id: rpcUser.id,
+      email: rpcUser.email,
+      user_metadata: rpcUser.raw_user_meta_data,
+      app_metadata: rpcUser.raw_app_meta_data,
+    };
+  } else if (rpcError?.message?.includes('does not exist')) {
+    // RPC function not created yet - fall back to admin API
+    const { data: adminData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    existingUser = adminData?.users?.find((u: { email: string }) => u.email === email);
+  }
 
   let userId: string;
 
