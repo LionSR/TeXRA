@@ -17,23 +17,12 @@ import {
   type UserVariableChannels,
 } from './AgentCycleOptions';
 
-export interface AgentRoundFinalizedContext {
-  round: ConversationRoundState;
-  run: AgentRunState;
-  workspace: AgentWorkspaceState;
-}
-
-export type AgentRoundFinalizedCallback = (
-  context: AgentRoundFinalizedContext,
-) => void | Promise<void>;
-
 export interface AgentSharedStoreSlices {
   round: ConversationRoundState;
   run: AgentRunState;
   workspace: AgentWorkspaceState;
   user: UserVariableChannels;
 }
-
 
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible

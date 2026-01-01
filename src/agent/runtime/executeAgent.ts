@@ -39,7 +39,7 @@ import {
   type AgentToolUseSetting,
 } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
@@ -254,7 +254,7 @@ async function prepareFlowExecution(
 function createUsageRecorder(
   usageMonitor: UsageMonitor,
   runKind: 'workflow' | 'tool-use' = 'workflow',
-): () => AgentRoundFinalizedCallback {
+): () => RoundFinalizedCallback {
   return () =>
     async ({ run }) => {
       await usageMonitor.recordUsage(run, { runKind });

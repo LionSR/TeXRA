@@ -23,7 +23,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
@@ -58,7 +58,7 @@ export interface ToolUseFlowContextInit<
   resumeSnapshot?: ToolUseSessionSnapshot | null;
 
   /** Optional usage tracking callback */
-  getUsageRecorder?: () => AgentRoundFinalizedCallback;
+  getUsageRecorder?: () => RoundFinalizedCallback;
 }
 
 // ============================================================================
