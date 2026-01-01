@@ -38,6 +38,7 @@ shared: structuredClone(shared),
 ```
 
 **The problem**: `structuredClone()` cannot serialize:
+
 - Class instances with private fields
 - Maps and Sets (become empty objects `{}`)
 - Functions and callbacks
@@ -48,6 +49,7 @@ shared: structuredClone(shared),
 Our state classes **require** these features for correctness:
 
 #### FileInteractionState
+
 ```typescript
 export class FileInteractionState {
   private readonly readFiles = new Set<string>();  // ❌ Set → becomes {}
@@ -56,6 +58,7 @@ export class FileInteractionState {
 ```
 
 #### MediaAttachmentState
+
 ```typescript
 export class MediaAttachmentState {
   private readonly pathSet = new Set<string>(); // ❌ Set for O(1) dedup
@@ -63,6 +66,7 @@ export class MediaAttachmentState {
 ```
 
 #### TodoState
+
 ```typescript
 export class TodoState {
   private _onUpdate?: (todos: TodoItem[]) => void; // ❌ Callback → becomes undefined
@@ -70,6 +74,7 @@ export class TodoState {
 ```
 
 **Result**: If we tried to store class instances directly in shared state, `structuredClone()` would:
+
 1. Lose all Map/Set data (empty objects)
 2. Strip callbacks and methods
 3. Corrupt the state silently
@@ -81,7 +86,9 @@ export class TodoState {
 Four one-line helpers encapsulate the pattern:
 
 ```typescript
-export function getWorkspaceState(shared: ReflectionFlowShared): AgentWorkspaceState {
+export function getWorkspaceState(
+  shared: ReflectionFlowShared,
+): AgentWorkspaceState {
   return AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot);
 }
 
@@ -107,6 +114,7 @@ export function updateRunStateSnapshot(
 ### Usage (Only 2 Nodes Out of 6)
 
 **MediaPreparationNode.ts**:
+
 ```typescript
 async prep(shared: ReflectionFlowShared) {
   const workspaceState = getWorkspaceState(shared);
@@ -120,6 +128,7 @@ async post(shared, prepRes, execRes) {
 ```
 
 **ResponseCycleCompositionNode.ts**:
+
 ```typescript
 async prep(shared: ReflectionFlowShared) {
   const workspaceState = getWorkspaceState(shared);
@@ -141,14 +150,18 @@ async post(shared, prepRes, execRes) {
 ### Option 1: Inline the Helpers ❌
 
 **Change**:
+
 ```typescript
 // Instead of
 const workspaceState = getWorkspaceState(shared);
 // Write
-const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot);
+const workspaceState = AgentWorkspaceState.fromSnapshot(
+  shared.workspaceSnapshot,
+);
 ```
 
 **Rejected because**:
+
 - Lose extensive documentation explaining WHY the pattern exists
 - More verbose at call sites
 - Harder for new developers to discover the correct pattern
@@ -157,6 +170,7 @@ const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot
 ### Option 2: Store Class Instances Directly ❌
 
 **Rejected because**:
+
 - `structuredClone()` silently corrupts Maps/Sets/callbacks
 - Would require custom serialization in PersistedFlow
 - Defeats the purpose of using `structuredClone()` (safe deep cloning)
@@ -164,6 +178,7 @@ const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot
 ### Option 3: Make All State Plain Objects ❌
 
 **Rejected because**:
+
 - Lose encapsulation (no private fields)
 - Lose methods (would need utility functions everywhere)
 - Lose the benefits of OOP patterns
@@ -172,6 +187,7 @@ const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot
 ### Option 4: Use Serialization Library (superjson, etc.) ❌
 
 **Rejected because**:
+
 - Additional dependency
 - Different semantics than `structuredClone()` (behavior changes)
 - Would require rewriting PersistedFlow
@@ -179,13 +195,13 @@ const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot
 
 ## Metrics: How Minimal Is It?
 
-| Metric | Count | Assessment |
-|--------|-------|------------|
-| Helper functions | 4 | Each is 1-2 lines |
-| Lines of code in helpers | ~8 | Minimal |
-| Usage sites | 6 calls across 2 nodes | Only where needed |
-| Documentation lines | ~150 | Extensive WHY explanations |
-| Nodes requiring pattern | 2 out of 6 | Limited scope |
+| Metric                   | Count                  | Assessment                 |
+| ------------------------ | ---------------------- | -------------------------- |
+| Helper functions         | 4                      | Each is 1-2 lines          |
+| Lines of code in helpers | ~8                     | Minimal                    |
+| Usage sites              | 6 calls across 2 nodes | Only where needed          |
+| Documentation lines      | ~150                   | Extensive WHY explanations |
+| Nodes requiring pattern  | 2 out of 6             | Limited scope              |
 
 **Conclusion**: The pattern is **already maximally lean** while remaining clear.
 
@@ -214,11 +230,13 @@ This pattern follows the [koala-code-reader](https://github.com/Yuyz0112/koala-c
 > "Shared state is a FLAT structure containing ONLY natively serializable data"
 
 From `ReflectionFlowState.ts:18-19`:
+
 ```typescript
 // This ensures clean serialization via structuredClone() in PersistedFlow.
 ```
 
 Our implementation is **faithful to this pattern** and achieves its goals:
+
 - ✅ Clean serialization (no special handling needed)
 - ✅ Flat state structure (no nested class instances)
 - ✅ Runtime dependencies in services (not persisted)
@@ -246,6 +264,7 @@ But the **code itself is already optimal**.
 ## Conclusion
 
 The snapshot ceremony is not over-engineering - it's the **minimal correct implementation** given the constraints of:
+
 - JavaScript's `structuredClone()` limitations
 - State classes using Maps/Sets/callbacks for correctness
 - Need for clean serialization without custom logic

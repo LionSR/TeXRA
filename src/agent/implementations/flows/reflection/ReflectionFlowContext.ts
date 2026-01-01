@@ -214,7 +214,15 @@ export interface ReflectionFlowContext<C = unknown> {
 export function buildReflectionServices<C = unknown>(
   init: ReflectionFlowContextInit<C>,
 ): ReflectionServicesPartial<C> {
-  const { config, setting, modelHandler, executionContext, prompt, userVarChannels, getUsageRecorder } = init;
+  const {
+    config,
+    setting,
+    modelHandler,
+    executionContext,
+    prompt,
+    userVarChannels,
+    getUsageRecorder,
+  } = init;
 
   // Create services eagerly (no lazy initialization)
   const fileService = new TaskRunFileService(executionContext.executionId);

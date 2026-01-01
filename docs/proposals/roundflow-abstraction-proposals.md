@@ -15,11 +15,13 @@ This document presents findings from a comprehensive investigation into round or
 **Issue:** The `_roundFinalized` flag is set to `true` in `finalizeRound()` but `resetRound()` never resets it to `false`. This causes subsequent rounds in multi-round tool-use cycles to skip finalization entirely.
 
 **Impact:**
+
 - Usage data from rounds 2+ not recorded
 - Response time tracking incomplete
 - `onRoundFinalized` callback only fires once
 
 **Fix Required:**
+
 ```typescript
 resetRound(roundIndex: number): ConversationRoundState {
   this.roundState = new ConversationRoundState(roundIndex);
@@ -35,11 +37,13 @@ resetRound(roundIndex: number): ConversationRoundState {
 **Issue:** `PersistedFlow.run(shared)` uses `structuredClone()` to create a deep copy that gets persisted. All node mutations happen to the cloned copy in storage, NOT the original `shared` object. When the function returns `shared?.roundOutputs`, it returns the original empty array.
 
 **Impact:**
+
 - `roundOutputs` always returns `[]` to caller
 - All accumulated round results lost in return value
 - Resume works correctly (uses internal `getShared()`)
 
 **Fix Required:**
+
 ```typescript
 // BEFORE (line 298):
 return {
@@ -63,13 +67,14 @@ return {
 
 **Problem:** Round stages (r0, r1, r2) are created and finalized in 3 different locations:
 
-| Aspect | Location |
-|--------|----------|
-| r0 created | `runReflectionFlow.ts:184` |
-| r1+ created | `RoundCompleteNode.ts:137` |
+| Aspect        | Location                                   |
+| ------------- | ------------------------------------------ |
+| r0 created    | `runReflectionFlow.ts:184`                 |
+| r1+ created   | `RoundCompleteNode.ts:137`                 |
 | All finalized | `runReflectionFlow.ts:281` (finally block) |
 
 **Why problematic:**
+
 - Tight coupling between flow runner and domain logic
 - Mutable `roundStage` in services violates immutability pattern
 - Error-prone coordination
@@ -77,11 +82,13 @@ return {
 ### 2.2 Snapshot Serialization Overhead
 
 **Problem:** Multiple nodes reconstruct class instances from snapshots, mutate them, and update snapshots. This pattern is repeated across:
+
 - `MediaPreparationNode` (workspace)
 - `ResponseCycleCompositionNode` (workspace, run, round)
 - `ToolUseCycleNode` (store)
 
 **Why problematic:**
+
 - Easy to forget `toSnapshot()` calls (no compile-time safety)
 - Multiple reconstruction/serialization cycles per round
 - "CRITICAL" comments warning about missing updates
@@ -91,6 +98,7 @@ return {
 **Problem:** `ToolUseSessionLifecycle` lives outside flow persistence, but `conversation` lives inside.
 
 **Why problematic:**
+
 - On resume, session is recreated fresh (queued follow-ups lost)
 - Two sources of truth that can diverge
 - Subtle bugs if interruption happens during wait
@@ -98,10 +106,12 @@ return {
 ### 2.4 Nested Flow Composition Complexity
 
 **Problem:** ToolUseFlow has two layers:
+
 - **Outer Flow:** ToolUseRunFlow (session management)
 - **Inner Flow:** ToolUseCycleFlow (single cycle execution)
 
 **Why problematic:**
+
 - Hard to reason about error propagation
 - State flows through multiple levels
 - Two independent state machines to understand
@@ -109,10 +119,12 @@ return {
 ### 2.5 Implicit Control Flow
 
 **Problem:** `FlowTransition.CONTINUE` and `FlowTransition.DEFAULT` have different meanings in different nodes:
+
 - PrepareContextNode: CONTINUE = "skip this round", DEFAULT = "continue normally"
 - RoundCompleteNode: CONTINUE = "next round", DEFAULT = "flow ends"
 
 **Why problematic:**
+
 - No clear documentation of semantics per node
 - Routing is implicit via `node.on()` wiring
 
@@ -198,6 +210,7 @@ class ReflectionRounds extends RoundIterable<ReflectionFlowShared, ...> {
 ```
 
 **Pros:**
+
 - Simple, intuitive API
 - Automatic stage lifecycle (no manual cleanup)
 - Clear three-phase structure
@@ -205,6 +218,7 @@ class ReflectionRounds extends RoundIterable<ReflectionFlowShared, ...> {
 - Reduces ~200 lines of boilerplate per flow
 
 **Cons:**
+
 - Loses PocketFlow's graph-based flexibility
 - Harder to integrate with PersistedFlow checkpointing (checkpoints at phase boundaries, not node boundaries)
 - Tightly couples round logic to iteration
@@ -279,6 +293,7 @@ await orchestrator.run(shared, services);
 ```
 
 **Pros:**
+
 - Preserves existing PocketFlow node graphs
 - Automatic stage lifecycle
 - Services updated per-round (no mutable field)
@@ -286,6 +301,7 @@ await orchestrator.run(shared, services);
 - Incremental migration possible
 
 **Cons:**
+
 - Extra abstraction layer
 - Flow runs once per round (some state reset overhead)
 - Need to split existing flows into "round" and "meta" portions
@@ -410,6 +426,7 @@ const flow = new Flow(init);
 ```
 
 **Pros:**
+
 - Minimal new abstraction - extends existing patterns
 - Full PocketFlow compatibility (graph, checkpointing, actions)
 - Works with PersistedFlow unchanged
@@ -419,6 +436,7 @@ const flow = new Flow(init);
 - Low learning curve
 
 **Cons:**
+
 - Less automation than Proposals A/B
 - Still need per-flow implementations of 3 phase nodes
 - RoundStageManager is a new service to inject
@@ -431,17 +449,17 @@ const flow = new Flow(init);
 
 ## Part 4: Comparison Matrix
 
-| Criterion | Proposal A (Iterator) | Proposal B (Orchestrator) | Proposal C (RoundPhase) |
-|-----------|----------------------|---------------------------|-------------------------|
-| **PocketFlow Fidelity** | Low | Medium | Very High |
-| **PersistedFlow Compatibility** | Requires changes | Compatible | Fully compatible |
-| **Simplicity** | High | Medium | Medium |
-| **Flexibility** | Low | High | Very High |
-| **Migration Effort** | High | Medium | Low |
-| **Stage Lifecycle** | Automatic | Automatic | Via RoundStageManager |
-| **Preserves Existing Code** | No | Partially | Yes |
-| **Learning Curve** | Low | Medium | Low |
-| **Future Extensibility** | Limited | Good | Excellent |
+| Criterion                       | Proposal A (Iterator) | Proposal B (Orchestrator) | Proposal C (RoundPhase) |
+| ------------------------------- | --------------------- | ------------------------- | ----------------------- |
+| **PocketFlow Fidelity**         | Low                   | Medium                    | Very High               |
+| **PersistedFlow Compatibility** | Requires changes      | Compatible                | Fully compatible        |
+| **Simplicity**                  | High                  | Medium                    | Medium                  |
+| **Flexibility**                 | Low                   | High                      | Very High               |
+| **Migration Effort**            | High                  | Medium                    | Low                     |
+| **Stage Lifecycle**             | Automatic             | Automatic                 | Via RoundStageManager   |
+| **Preserves Existing Code**     | No                    | Partially                 | Yes                     |
+| **Learning Curve**              | Low                   | Medium                    | Low                     |
+| **Future Extensibility**        | Limited               | Good                      | Excellent               |
 
 ---
 
@@ -461,26 +479,31 @@ const flow = new Flow(init);
 ### Implementation Roadmap
 
 **Phase 1: Fix Immediate Bugs (1-2 hours)**
+
 - [ ] Fix `_roundFinalized` flag in `AgentSharedStore.resetRound()`
 - [ ] Fix `roundOutputs` retrieval in `runReflectionFlow.ts`
 
 **Phase 2: Add Base Abstractions (2-4 hours)**
+
 - [ ] Create `RoundPhaseNode` base class
 - [ ] Create `InitializePhaseNode`, `ExecutePhaseNode`, `FinalizePhaseNode`
 - [ ] Create `RoundStageManager` service
 - [ ] Add to `src/agent/implementations/flows/common/`
 
 **Phase 3: Refactor ReflectionFlow (4-8 hours)**
+
 - [ ] Extract nodes to use phase base classes
 - [ ] Integrate `RoundStageManager` into services
 - [ ] Remove mutable `roundStage` from services
 - [ ] Update `runReflectionFlow.ts` to use RoundStageManager
 
 **Phase 4: Refactor ToolUseFlow (4-8 hours)**
+
 - [ ] Apply same pattern to ToolUseFlow
 - [ ] Consider if session state should move into persistence
 
 **Phase 5: Documentation (2 hours)**
+
 - [ ] Add `docs/pocketflow/design_pattern/round_orchestration.md`
 - [ ] Update AGENTS.md with round pattern guidance
 
@@ -489,14 +512,17 @@ const flow = new Flow(init);
 ## Appendix: Files to Modify
 
 ### Bug Fixes (Immediate)
+
 - `src/agent/core/AgentSharedStore.ts` - Add flag reset
 - `src/agent/implementations/flows/reflection/runReflectionFlow.ts` - Use getShared()
 
 ### New Files (Proposal C)
+
 - `src/agent/implementations/flows/common/RoundPhaseNode.ts`
 - `src/agent/implementations/flows/common/RoundStageManager.ts`
 
 ### Refactored Files (Proposal C)
+
 - `src/agent/implementations/flows/reflection/nodes/PrepareContextNode.ts` → extends `InitializePhaseNode`
 - `src/agent/implementations/flows/reflection/nodes/ResponseCycleCompositionNode.ts` → extends `ExecutePhaseNode`
 - `src/agent/implementations/flows/reflection/nodes/RoundCompleteNode.ts` → extends `FinalizePhaseNode`
@@ -505,4 +531,4 @@ const flow = new Flow(init);
 
 ---
 
-*Document generated from comprehensive codebase analysis. Please review and select your preferred approach.*
+_Document generated from comprehensive codebase analysis. Please review and select your preferred approach._
