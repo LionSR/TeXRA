@@ -127,14 +127,14 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     // Create shared state
-    const shared: ToolUseRunShared<C> = {
-      state: createInitialToolUseState<C>(),
+    const shared: ToolUseRunShared = {
+      state: createInitialToolUseState(),
     };
 
     // Create PersistedFlow with the start node
     const startNode = createToolUseRunFlow<C>().start;
     const pf = new PersistedFlow<
-      ToolUseRunShared<C>,
+      ToolUseRunShared,
       Record<string, unknown>,
       ToolUseServices<C>
     >(startNode, kv);

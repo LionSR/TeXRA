@@ -154,19 +154,13 @@ async function prepareInitialState<C>(
   const currentRunState = new AgentRunState();
 
   const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-    await buildInitialToolUsePrompts(
-      prompt,
-      userVarChannels.transient,
-      logger,
-    );
+    await buildInitialToolUsePrompts(prompt, userVarChannels.transient, logger);
 
   const messages = await modelHandler.initializeMessages(
     userPrefix,
     userRequest,
     undefined,
-    systemPrompt
-      ? `${systemPrompt}\n${instructionSuffix}`
-      : instructionSuffix,
+    systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
   );
 
   const store = createSharedStore({
@@ -225,10 +219,7 @@ async function applyFollowUpMessage<C>(
   messages: ProviderMessage[],
 ): Promise<ProviderMessage[]> {
   init.executionContext.logger.userMessage(followUp);
-  return await init.modelHandler.createUserFollowUpMessages(
-    messages,
-    followUp,
-  );
+  return await init.modelHandler.createUserFollowUpMessages(messages, followUp);
 }
 
 // ============================================================================
@@ -248,7 +239,12 @@ export function buildToolUseServices<C = unknown>(
   sessionLifecycle: ToolUseSessionLifecycle;
   resolvedTools: ToolDefinition[];
 } {
-  const { setting, streamTabId, toolRegistry: customRegistry, resumeSnapshot } = init;
+  const {
+    setting,
+    streamTabId,
+    toolRegistry: customRegistry,
+    resumeSnapshot,
+  } = init;
 
   // Create services eagerly (no lazy initialization)
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();

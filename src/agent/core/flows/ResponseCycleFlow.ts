@@ -136,7 +136,7 @@ class ResponsePrepNode<C> extends BaseNode<
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { agentPrompt, userVars, logger, agentConfig, store } = services;
+    const { agentPrompt, userVars, logger, agentConfig, round } = services;
     const { state } = shared;
     const interrupted = Boolean(await services.checkInterruption());
     const outputLocation = state.outputLocation;
@@ -156,7 +156,7 @@ class ResponsePrepNode<C> extends BaseNode<
             isRemote: isRemoteAgent(agentConfig.agent),
           }),
           fileOptions: createDebugFileOptions(
-            store.round.continuationCount,
+            round.continuationCount,
             'response',
             state.outputLocation.relativePath,
           ),
@@ -418,7 +418,7 @@ class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
-    const { store } = this.services;
+    const { workspace } = this.services;
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -427,14 +427,14 @@ class ResponseProcessNode<C> extends BaseNode<
       messages: state.messages,
       outputLocation: state.outputLocation!,
       outputExists: state.outputExists,
-      // Read store values before they're updated (for connector calculation)
-      lastResponse: store.workspace.assembly.lastResponse,
-      accumulatedOutput: store.workspace.assembly.accumulatedOutput,
+      // Read workspace values before they're updated (for connector calculation)
+      lastResponse: workspace.assembly.lastResponse,
+      accumulatedOutput: workspace.assembly.accumulatedOutput,
     };
   }
 
   async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
-    const { store, logger, modelHandler, agentSetting } = this.services;
+    const { workspace, logger, modelHandler, agentSetting } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
@@ -469,7 +469,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
       const thinkingContent = modelHandler.processThinkingBlock(
         prepRes.responseObject,
-        store.workspace,
+        workspace,
       );
       const useStreaming = modelHandler.getStreamingConfig();
 
@@ -563,7 +563,7 @@ class ResponseProcessNode<C> extends BaseNode<
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { store, logger, modelHandler } = this.services;
+    const { round, workspace, logger, modelHandler } = this.services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
@@ -576,20 +576,19 @@ class ResponseProcessNode<C> extends BaseNode<
     // Apply side effects that were computed in exec()
     // These updates are now in post() where they belong (PocketFlow compliance)
     if (result.responseTimeMs !== undefined) {
-      store.round.addResponseTime(result.responseTimeMs);
+      round.addResponseTime(result.responseTimeMs);
     }
 
     if (result.normalizedUsage) {
-      store.round.setNormalizedUsage(result.normalizedUsage);
+      round.setNormalizedUsage(result.normalizedUsage);
     }
 
     if (result.updatedLastResponse !== undefined) {
-      store.workspace.assembly.lastResponse = result.updatedLastResponse;
+      workspace.assembly.lastResponse = result.updatedLastResponse;
     }
 
     if (result.updatedAccumulatedOutput !== undefined) {
-      store.workspace.assembly.accumulatedOutput =
-        result.updatedAccumulatedOutput;
+      workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     }
 
     state.stopReason = result.stopReason;
@@ -654,14 +653,14 @@ class ResponseProcessNode<C> extends BaseNode<
         state.messages,
         connector,
         processedResponse,
-        store.workspace,
+        workspace,
       );
     } else {
       modelHandler.updateMessageContentWithoutPrefill(
         state.messages,
         connector,
         processedResponse,
-        store.workspace,
+        workspace,
       );
     }
 
@@ -676,7 +675,7 @@ class ResponseProcessNode<C> extends BaseNode<
 }
 
 /**
- * Finalizes the response cycle by calling store.finalizeRound().
+ * Finalizes the response cycle by recording round statistics.
  * All flow exit paths route through this node to ensure proper cleanup.
  *
  * PocketFlow pattern:
@@ -690,8 +689,15 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async exec(): Promise<void> {
-    const { store } = this.services;
-    await store.finalizeRound();
+    const { round, run, workspace, onRoundFinalized } = this.services;
+
+    // Record round statistics in run state
+    run.recordRound(round);
+
+    // Call usage tracking callback if provided
+    if (onRoundFinalized) {
+      await onRoundFinalized({ round, run, workspace });
+    }
   }
 
   async post(): Promise<string | undefined> {
@@ -745,7 +751,7 @@ class ResponseContinuationNode<C> extends BaseNode<
    * PocketFlow compliance: Pure computation, no side effects.
    */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
-    const { store, modelHandler, agentSetting } = this.services;
+    const { round, run, modelHandler, agentSetting } = this.services;
 
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -769,8 +775,8 @@ class ResponseContinuationNode<C> extends BaseNode<
       modelHandler.checkStopConditions(
         stopReason,
         processedResponse,
-        store.round,
-        store.run,
+        round,
+        run,
         agentSetting,
       );
 
@@ -791,8 +797,14 @@ class ResponseContinuationNode<C> extends BaseNode<
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { store, logger, modelHandler, agentSetting, agentConfig } =
-      this.services;
+    const {
+      round,
+      workspace,
+      logger,
+      modelHandler,
+      agentSetting,
+      agentConfig,
+    } = this.services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
@@ -817,8 +829,8 @@ class ResponseContinuationNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    store.round.incrementContinuation();
-    logger.info(`Starting continuation #${store.round.continuationCount}`, {
+    round.incrementContinuation();
+    logger.info(`Starting continuation #${round.continuationCount}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
@@ -835,16 +847,16 @@ class ResponseContinuationNode<C> extends BaseNode<
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(
         state.messages,
-        store.round,
-        store.workspace,
+        round,
+        workspace,
         agentSetting,
         agentConfig,
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
         state.messages,
-        store.round,
-        store.workspace,
+        round,
+        workspace,
         agentSetting,
         agentConfig,
       );

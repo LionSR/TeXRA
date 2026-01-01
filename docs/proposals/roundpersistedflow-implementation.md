@@ -29,18 +29,21 @@ RoundPersistedFlow (adds round iteration in run())
 ## Implementation Status
 
 ### Phase 1: Core Infrastructure
+
 - [x] RoundAwareState interface
 - [x] RoundPersistedFlow base class
 - [x] Lifecycle hooks interface
 - [x] Helper functions
 
 ### Phase 2: ReflectionFlow Migration
+
 - [x] ReflectionFlowShared already extends RoundAwareState (has currentRound, totalRounds, etc.)
 - [x] Create reflection-specific hooks (createRoundStage)
 - [x] Update runReflectionFlow to use RoundPersistedFlow
 - [x] Simplify RoundCompleteNode (removed stage management)
 
 ### Phase 3: Cleanup
+
 - [x] Remove mutable roundStage from services (field removed entirely)
 - [x] Implement resetForNextRound hook (was declared but never called)
 - [x] Move workspace reset from RoundCompleteNode to hook
@@ -53,13 +56,16 @@ RoundPersistedFlow (adds round iteration in run())
 ## Progress Log
 
 ### Entry 1: Initial Setup
+
 **Status**: Complete
 **Date**: 2026-01-01
 
 Created core infrastructure:
+
 - `src/agent/node/round-persisted-flow.ts` - RoundPersistedFlow class with lifecycle hooks
 
 ### Entry 2: Design Revision
+
 **Status**: Complete
 **Date**: 2026-01-01
 
@@ -75,13 +81,16 @@ RoundPersistedFlow now just watches for round transitions and manages stages.
 **Key insight**: The graph loops internally, but stage lifecycle is external.
 
 ### Entry 3: Implementation Complete
+
 **Status**: Complete
 **Date**: 2026-01-01
 
 Files created:
+
 - `src/agent/node/round-persisted-flow.ts` - 380 lines
 
 Files modified:
+
 - `src/agent/implementations/flows/reflection/runReflectionFlow.ts` - Use RoundPersistedFlow
 - `src/agent/implementations/flows/reflection/nodes/RoundCompleteNode.ts` - Remove stage management
 
@@ -107,19 +116,20 @@ Files modified:
 
 **Before/After comparison:**
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Stage creation (r0) | runReflectionFlow.ts:184 | RoundPersistedFlow.run() |
-| Stage creation (r1+) | RoundCompleteNode.ts:137 | RoundPersistedFlow.handleRoundTransition() |
-| Stage end | RoundCompleteNode + finally block | RoundPersistedFlow.handleRoundTransition() + finally |
-| Workspace reset | RoundCompleteNode.post() | resetForNextRound hook |
-| services.roundStage | Mutable field, always null | Field removed entirely |
-| Interrupted status | Never detected | checkInterruption hook |
-| RoundCompleteNode lines | 150 | ~140 (removed stage + workspace code) |
+| Aspect                  | Before                            | After                                                |
+| ----------------------- | --------------------------------- | ---------------------------------------------------- |
+| Stage creation (r0)     | runReflectionFlow.ts:184          | RoundPersistedFlow.run()                             |
+| Stage creation (r1+)    | RoundCompleteNode.ts:137          | RoundPersistedFlow.handleRoundTransition()           |
+| Stage end               | RoundCompleteNode + finally block | RoundPersistedFlow.handleRoundTransition() + finally |
+| Workspace reset         | RoundCompleteNode.post()          | resetForNextRound hook                               |
+| services.roundStage     | Mutable field, always null        | Field removed entirely                               |
+| Interrupted status      | Never detected                    | checkInterruption hook                               |
+| RoundCompleteNode lines | 150                               | ~140 (removed stage + workspace code)                |
 
 ---
 
 ### Entry 4: Code Review Cleanup
+
 **Status**: Complete
 **Date**: 2026-01-01
 
@@ -147,31 +157,37 @@ Code review revealed dead code and incomplete patterns. Fixed:
 ---
 
 ### Entry 5: Code Review Findings
+
 **Status**: Complete
 **Date**: 2026-01-01
 
 Comprehensive code review by parallel subagents. Key findings:
 
 **✅ Working Correctly:**
+
 - Progress view integration: Round stages appear with correct parent-child hierarchy
 - Serialization: All state fields are natively serializable (structuredClone safe)
 - PrepareContextNode skip logic: Works correctly via round detection mechanism
 - Tool-use flow: Different pattern, RoundPersistedFlow correctly focused on reflection
 
 **Interface Improvements:**
+
 - Removed `endTurn` from RoundAwareState (not used by flow, only by OutputNode)
 - Interface now truly minimal: `currentRound`, `totalRounds`, `continueRounds`
 
 **Architecture Verification:**
+
 - Round logic is 60-70% invisible to nodes (legitimate domain uses remain)
 - Nodes legitimately need `currentRound` for domain logic (output naming, media processing)
 - Two round progression paths (PrepareContextNode skip, RoundCompleteNode continue) both trigger flow hooks
 
 **Unused Hooks (intentional):**
+
 - `onRoundStart`/`onRoundEnd`/`onFlowEnd` hooks declared but not used in runReflectionFlow
 - Could integrate usage tracking via these hooks in future
 
 **Not Generalized (by design):**
+
 - RoundPersistedFlow is reflection-specific (counter-based detection)
 - Tool-use flow has different iteration model (session-based cycles)
 - Keep abstractions focused rather than over-generalized

@@ -31,6 +31,7 @@ import type {
   FileInteractionState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 
@@ -185,7 +186,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     debugFileOptions: CycleDebugFileOptions;
   }> {
     const services = this.services;
-    const { store } = services;
+    const { round } = services;
     const interrupted = Boolean(await services.checkInterruption());
     const debugContext = createDebugContext({
       logger: services.logger,
@@ -194,7 +195,7 @@ class ToolUsePrepNode<C> extends BaseNode<
       isRemote: isRemoteAgent(services.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
-      store.round.roundIndex,
+      round.roundIndex,
       'tooluse',
     );
     return { interrupted, debugContext, debugFileOptions };
@@ -283,7 +284,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
   async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const services = this.services;
-    const { store } = services;
+    const { round } = services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
@@ -296,7 +297,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       isRemote: isRemoteAgent(services.agentName),
     });
     const debugFileOptions = createDebugFileOptions(
-      store.round.roundIndex,
+      round.roundIndex,
       'tooluse_response',
     );
 
@@ -434,7 +435,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   /**
    * Process response and extract tool calls.
-   * PocketFlow compliance: Pure computation, no side effects on shared/store.
+   * PocketFlow compliance: Pure computation, no side effects on shared state.
    * Logging is allowed as it doesn't affect flow state.
    */
   async exec(
@@ -445,13 +446,13 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const services = this.services;
-    const { store } = services;
+    const { workspace } = services;
     const groupId = services.logger.withCurrentGroup((id) => id);
 
     // Process thinking block (logging only, state stored in workspace)
     const thinking = services.modelHandler.processThinkingBlock(
       prepRes.response,
-      store.workspace,
+      workspace,
     );
     const useStreaming = services.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
@@ -547,7 +548,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 
   /**
-   * Apply all side effects to shared/store.
+   * Apply all side effects to shared state and slices.
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
@@ -556,37 +557,39 @@ class ToolUseProcessNode<C> extends BaseNode<
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const { store } = services;
+    const { round, run, workspace, onRoundFinalized } = services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
-      store.round.clearUsage();
+      round.clearUsage();
       return FlowTransition.COMPLETE;
     }
 
     // Apply side effects: server tool content
-    store.workspace.serverToolContent.contentBlocks =
+    workspace.serverToolContent.contentBlocks =
       execRes.serverToolContentBlocks ?? [];
-    store.workspace.serverToolContent.lastAssistantContent =
+    workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
     // Apply side effects: response time
     if (execRes.responseTimeMs !== undefined) {
-      store.round.addResponseTime(execRes.responseTimeMs);
+      round.addResponseTime(execRes.responseTimeMs);
     }
 
     // Apply side effects: usage
     if (execRes.normalizedUsage) {
-      store.round.setNormalizedUsage(execRes.normalizedUsage);
+      round.setNormalizedUsage(execRes.normalizedUsage);
     } else {
-      store.round.clearUsage();
+      round.clearUsage();
     }
 
-    // Finalize round
-    const completedRound = store.round;
-    await store.finalizeRound();
-    store.run.incrementRounds();
-    const nextRoundIndex = completedRound.roundIndex + 1;
+    // Finalize round - record usage and invoke callback
+    run.recordRound(round);
+    if (onRoundFinalized) {
+      await onRoundFinalized({ round, run, workspace });
+    }
+    run.incrementRounds();
+    const nextRoundIndex = round.roundIndex + 1;
 
     if (execRes.endTurn) {
       // Apply side effects for end turn
@@ -595,15 +598,16 @@ class ToolUseProcessNode<C> extends BaseNode<
         state.messages.push(
           services.modelHandler.createAssistantMessage(execRes.text),
         );
-        store.workspace.assembly.lastResponse = execRes.text;
+        workspace.assembly.lastResponse = execRes.text;
       }
       // Clear ephemeral state
-      store.workspace.resetServerToolContent();
-      store.workspace.resetReasoning();
+      workspace.resetServerToolContent();
+      workspace.resetReasoning();
       state.shouldStop = true;
       state.endTurn = true; // Normal completion (model said end_turn)
       state.stopReason = execRes.stopReason;
-      store.resetRound(nextRoundIndex);
+      // Reset round for next cycle
+      services.round = new ConversationRoundState(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
 
@@ -611,7 +615,8 @@ class ToolUseProcessNode<C> extends BaseNode<
     state.toolCalls = execRes.toolCalls;
     state.text = execRes.text;
     state.stopReason = execRes.stopReason;
-    store.resetRound(nextRoundIndex);
+    // Reset round for next cycle
+    services.round = new ConversationRoundState(nextRoundIndex);
 
     return FlowTransition.DEFAULT;
   }
@@ -800,7 +805,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
     options: ToolUseCycleOptions<C>,
-    store: ToolUseCycleServices<C>['store'],
+    workspace: ToolUseCycleServices<C>['workspace'],
     groupId: string | undefined,
   ): Promise<void> {
     const { call, result, parsedInput, sanitizedOutput, editedFiles } =
@@ -841,7 +846,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
       if (toAdd.length > 0) {
         // addMediaFiles handles deduplication (both within toAdd and against existing files)
-        store.workspace.media.addMediaFiles(toAdd);
+        workspace.media.addMediaFiles(toAdd);
       }
     }
   }
@@ -856,7 +861,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const { store } = services;
+    const { workspace } = services;
     const { state } = shared;
     const groupId = services.logger.withCurrentGroup((id) => id);
 
@@ -870,8 +875,8 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     const { calls } = execRes;
     const assistantText = prepRes.text ?? '';
-    const tracker = store.workspace.interactions;
-    const todoState = store.workspace.todos;
+    const tracker = workspace.interactions;
+    const todoState = workspace.todos;
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
@@ -885,7 +890,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
       execResults.push(execResult);
 
       // Log each tool execution as it completes
-      await this.logAndProcessMediaFiles(execResult, services, store, groupId);
+      await this.logAndProcessMediaFiles(
+        execResult,
+        services,
+        workspace,
+        groupId,
+      );
     }
 
     // Step 2: Create follow-up messages
@@ -911,7 +921,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         calls,
         extracted.map((e) => e.sanitizedResult),
         extracted.map((e) => e.attachments),
-        store.workspace,
+        workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
       state.messages.push(...followUpMsgs);
@@ -925,7 +935,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
             execResult.call,
             sanitizedResult,
             attachments,
-            store.workspace,
+            workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );
         state.messages.push(...followUpMsgs);
