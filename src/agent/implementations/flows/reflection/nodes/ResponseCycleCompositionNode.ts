@@ -204,6 +204,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       retryState: createRetryState(),
     };
 
+    // Get the finalization callback for this round
+    const onRoundFinalized = this.services.getUsageRecorder();
+
     try {
       // Inject services directly and run sub-flow
       // Options are spread with state slices (no store wrapper)
@@ -212,10 +215,11 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         round: prepRes.store.round,
         run: prepRes.store.run,
         workspace: prepRes.store.workspace,
-        // onRoundFinalized is handled via store callback set during store creation
+        onRoundFinalized, // Pass callback so FinalizeNode can invoke it
       });
       await this.cycleFlow.run(cycleShared);
 
+      // Success: FinalizeNode has already called finalizeRound()
       // Extract results from cycle shared state
       const failedWithError =
         cycleShared.state.shouldStop && !!cycleShared.retryState.lastError;
@@ -233,15 +237,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         userCancelled,
       };
     } catch (error) {
+      // Error path: FinalizeNode may not have run, so finalize here
+      // Use store's finalizeRound which has a guard against double execution
+      await prepRes.store.finalizeRound();
       return {
         kind: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
       };
-    } finally {
-      // Ensure round finalization even on error paths (usage tracking, statistics)
-      // The store's finalizeRound() is idempotent, so safe to call from both
-      // the flow's FinalizeNode (normal path) and this finally block (error path)
-      await prepRes.store.finalizeRound();
     }
   }
 

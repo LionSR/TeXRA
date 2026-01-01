@@ -52,10 +52,11 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type {
-  ToolUseCycleOptions,
-  ToolUseCycleServices,
-  ToolUseCycleParams,
+import {
+  finalizeRound,
+  type ToolUseCycleOptions,
+  type ToolUseCycleServices,
+  type ToolUseCycleParams,
 } from './CycleServices';
 
 interface ToolValidationDiagnostics {
@@ -583,11 +584,8 @@ class ToolUseProcessNode<C> extends BaseNode<
       round.clearUsage();
     }
 
-    // Finalize round - record usage and invoke callback
-    run.recordRound(round);
-    if (onRoundFinalized) {
-      await onRoundFinalized({ round, run, workspace });
-    }
+    // Finalize round using shared helper (single source of truth)
+    await finalizeRound(services);
     run.incrementRounds();
     const nextRoundIndex = round.roundIndex + 1;
 
