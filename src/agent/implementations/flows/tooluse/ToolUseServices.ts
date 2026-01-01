@@ -16,7 +16,9 @@ import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { BaseFlowServices } from '@agent/implementations/flows/common';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 
 // Note: RunCycleResult was removed - ToolUseCycleNode now directly runs ToolUseCycleFlow
@@ -34,7 +36,7 @@ export interface PrepareStateResult {
 /**
  * Services for tool-use flow nodes.
  *
- * Extends BaseFlowServices with tool-use specific dependencies:
+ * Extends BaseFlowContextInit directly with tool-use specific dependencies:
  * - toolRegistry: Available tools for the agent
  * - session: Session lifecycle management (follow-ups, status)
  * - Operations: prepareState, buildCycleOptions, applyFollowUpMessage
@@ -42,7 +44,12 @@ export interface PrepareStateResult {
  * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
  * Persistence is handled automatically by PersistedFlow after each node.
  */
-export interface ToolUseServices<C = unknown> extends BaseFlowServices<C> {
+export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
+  /** Logger for debugging and progress */
+  readonly logger: AgentLogger;
+
+  /** Execution context (IDs, storage key, etc.) */
+  readonly context: AgentExecutionContext;
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 

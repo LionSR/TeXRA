@@ -94,17 +94,101 @@ These are appropriate orchestration abstractions.
 | Date | Fix | Lines Changed |
 |------|-----|---------------|
 | 2026-01-01 | #1 Circular Reference - ToolUseCycleNode direct composition | -15 net (removed runCycle indirection) |
+| 2026-01-01 | #5 BaseFlowServices redundancy removal | -3 net (interface → type alias) |
+| 2026-01-01 | #6 ServerToolContentState class → plain object | -12 net (class → interface + factory) |
+| 2026-01-01 | #7 Deprecated KVStore removal | -14 net (removed legacy interface + checks) |
+
+---
+
+## New Fixes (Session 2)
+
+### 5. 🟢 LOW: BaseFlowServices Redundancy
+**Status**: ✅ COMPLETE
+
+**Problem**:
+- `BaseFlowServices` extends `BaseFlowContextInit` and adds only 2 convenience accessors (`logger`, `context`)
+- Child services (`ToolUseServices`, `ReflectionServices`) extended `BaseFlowServices`
+- This created an unnecessary inheritance layer
+
+**Solution**:
+- Changed `BaseFlowServices` from interface to type alias with `@deprecated` marker
+- Updated `ToolUseServices` and `ReflectionServices` to extend `BaseFlowContextInit` directly
+- Added `logger` and `context` fields inline in child interfaces
+
+**Files modified**:
+- `src/agent/implementations/flows/common/BaseFlowServices.ts`
+- `src/agent/implementations/flows/tooluse/ToolUseServices.ts`
+- `src/agent/implementations/flows/reflection/ReflectionServices.ts`
+
+---
+
+### 6. 🟢 LOW: ServerToolContentState Class
+**Status**: ✅ COMPLETE
+
+**Problem**:
+- `ServerToolContentState` was a class (~27 lines) with just a `reset()` method
+- Ephemeral state that's not serialized - no need for class overhead
+
+**Solution**:
+- Converted to plain object pattern:
+  - `interface ServerToolContentState` (type definition)
+  - `createServerToolContentState()` (factory function)
+  - `resetServerToolContentState()` (mutation function)
+- Updated usages in `AgentWorkspaceState`
+
+**Files modified**:
+- `src/agent/core/AgentWorkspaceState.ts`
+
+**Impact**: Net reduction of ~12 lines, simpler pattern
+
+---
+
+### 7. 🟢 LOW: Deprecated KVStore Interface
+**Status**: ✅ COMPLETE
+
+**Problem**:
+- `KVStore` interface was deprecated but still defined
+- `FlowStore` was a union type `KVStore | ExecutionKVStore`
+- Legacy `'getExecutionId' in kv` checks existed for backward compatibility
+- No code actually used `KVStore` - all callers use `ExecutionKVStore`
+
+**Solution**:
+- Removed the deprecated `KVStore` interface entirely
+- Changed `FlowStore` to be a simple alias for `ExecutionKVStore`
+- Simplified constructor and `attach` method by removing legacy checks
+
+**Files modified**:
+- `src/agent/node/persisted-flow.ts`
+
+**Impact**: Net reduction of ~14 lines, cleaner code
+
+---
+
+### 8. ⏸️ SKIPPED: ConversationRoundState Factory
+**Status**: ⏭️ SKIPPED (would add code)
+
+**Analysis**:
+- Investigated creating a centralized factory for `ConversationRoundState` creation
+- Found 9 instantiation sites but constructor is already simple
+- Adding a factory would ADD lines of code, not remove them
+- Current direct instantiation is clear and readable
+
+**Decision**: Skip. Factory would increase, not decrease, code complexity.
+
+---
 
 ## Summary of Analysis
 
-After deep investigation of all 4 issues:
-- **1 actual fix** (Fix #1): Eliminated circular reference, reduced code
-- **3 deferred** (Fixes #2-4): Found to be either functionally correct or legitimate abstractions
+After deep investigation of all issues across two sessions:
+- **4 actual fixes** (Fixes #1, #5, #6, #7): Eliminated redundancy, reduced code
+- **4 deferred/skipped** (Fixes #2-4, #8): Found to be either functionally correct, legitimate abstractions, or would add code
 
-Key insight: The codebase has intentional separation between:
-- **Persistence layer** (Store with snapshots)
-- **Execution layer** (Slices with mutable state)
-- **Orchestration layer** (run*Flow functions)
-
-These boundaries serve different purposes and should not be collapsed.
+**Key insights**:
+1. The codebase has intentional separation between:
+   - **Persistence layer** (Store with snapshots)
+   - **Execution layer** (Slices with mutable state)
+   - **Orchestration layer** (run*Flow functions)
+2. Not every pattern benefits from abstraction - direct instantiation is sometimes cleaner
+3. Type aliases can replace interface inheritance when only convenience accessors are added
+4. Plain objects with factory functions often outperform classes for simple state
 
