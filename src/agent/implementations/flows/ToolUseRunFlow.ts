@@ -17,7 +17,11 @@
 // Local imports - core flow primitives
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import {
+  AgentSharedStore,
+  createSharedStore,
+  type AgentSharedStoreSnapshot,
+} from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 
 // Type imports
@@ -41,12 +45,20 @@ import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 
 /**
  * Runtime state for tool-use agent runs.
+ *
+ * Following koala-code-reader pattern: stores **snapshots** (plain JSON objects)
+ * instead of class instances. This ensures structuredClone() works correctly
+ * when PersistedFlow serializes the state.
+ *
+ * - storeSnapshot: AgentSharedStoreSnapshot (not AgentSharedStore class)
+ * - Nodes reconstruct class instances from snapshots when needed
  */
 export interface ToolUseRunState<C = unknown> {
   conversation: ProviderMessage[];
   cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
-  store: AgentSharedStore | null;
+  /** Store snapshot (natively serializable) - reconstruct via createSharedStore() */
+  storeSnapshot: AgentSharedStoreSnapshot | null;
   runState: AgentRunState;
 }
 
@@ -61,7 +73,7 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
     conversation: [],
     cycleOptions: null,
     shouldSkipCycle: false,
-    store: null,
+    storeSnapshot: null,
     runState: new AgentRunState(),
   };
 }
@@ -139,20 +151,20 @@ interface WaitNodePrepResult {
 // State Guards
 // ============================================================================
 
-/** Prepared state type with non-null cycleOptions and store. */
+/** Prepared state type with non-null cycleOptions and storeSnapshot. */
 type PreparedState<C> = ToolUseRunState<C> & {
   cycleOptions: ToolUseCycleOptions<C>;
-  store: AgentSharedStore;
+  storeSnapshot: AgentSharedStoreSnapshot;
 };
 
 /**
- * Asserts that state has been prepared (cycleOptions and store are non-null).
+ * Asserts that state has been prepared (cycleOptions and storeSnapshot are non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  */
 function assertPreparedState<C>(
   state: ToolUseRunState<C>,
 ): asserts state is PreparedState<C> {
-  if (state.cycleOptions === null || state.store === null) {
+  if (state.cycleOptions === null || state.storeSnapshot === null) {
     throw new Error(
       'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
@@ -222,7 +234,8 @@ class ToolUsePrepareNode<C> extends Node<
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
-    shared.state.store = store;
+    // Store snapshot instead of class instance (for PersistedFlow serialization)
+    shared.state.storeSnapshot = store.toSnapshot();
     shared.state.runState = runState;
 
     return FlowTransition.DEFAULT; // Follow next() → CycleNode
@@ -250,11 +263,14 @@ class ToolUseCycleNode<C> extends Node<
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
+    // Reconstruct store from snapshot (koala-code-reader pattern)
+    const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
+
     return {
       shouldSkip: shared.state.shouldSkipCycle,
       cycleOptions: shared.state.cycleOptions,
       conversation: shared.state.conversation,
-      store: shared.state.store,
+      store,
     };
   }
 
@@ -296,6 +312,10 @@ class ToolUseCycleNode<C> extends Node<
     if (prepRes.shouldSkip) {
       shared.state.shouldSkipCycle = false;
     }
+
+    // Update store snapshot after cycle (cycle mutates the store)
+    // This ensures workspace state changes (todos, interactions, etc.) are persisted
+    shared.state.storeSnapshot = prepRes.store.toSnapshot();
 
     switch (execRes.kind) {
       case 'success':
