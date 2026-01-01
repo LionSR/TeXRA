@@ -145,3 +145,35 @@ Code review revealed dead code and incomplete patterns. Fixed:
 **Result**: Round logic is now truly invisible to nodes. RoundCompleteNode is pure domain logic (decide continue vs finalize, increment counter).
 
 ---
+
+### Entry 5: Code Review Findings
+**Status**: Complete
+**Date**: 2026-01-01
+
+Comprehensive code review by parallel subagents. Key findings:
+
+**✅ Working Correctly:**
+- Progress view integration: Round stages appear with correct parent-child hierarchy
+- Serialization: All state fields are natively serializable (structuredClone safe)
+- PrepareContextNode skip logic: Works correctly via round detection mechanism
+- Tool-use flow: Different pattern, RoundPersistedFlow correctly focused on reflection
+
+**Interface Improvements:**
+- Removed `endTurn` from RoundAwareState (not used by flow, only by OutputNode)
+- Interface now truly minimal: `currentRound`, `totalRounds`, `continueRounds`
+
+**Architecture Verification:**
+- Round logic is 60-70% invisible to nodes (legitimate domain uses remain)
+- Nodes legitimately need `currentRound` for domain logic (output naming, media processing)
+- Two round progression paths (PrepareContextNode skip, RoundCompleteNode continue) both trigger flow hooks
+
+**Unused Hooks (intentional):**
+- `onRoundStart`/`onRoundEnd`/`onFlowEnd` hooks declared but not used in runReflectionFlow
+- Could integrate usage tracking via these hooks in future
+
+**Not Generalized (by design):**
+- RoundPersistedFlow is reflection-specific (counter-based detection)
+- Tool-use flow has different iteration model (session-based cycles)
+- Keep abstractions focused rather than over-generalized
+
+---
