@@ -15,10 +15,9 @@
  */
 
 import { Hono } from 'jsr:@hono/hono@4';
-import { cors } from 'jsr:@hono/hono@4/cors';
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
-import { ALLOWED_ORIGINS } from '../_shared/cors.ts';
+import { getAllowedOrigin, getCorsHeaders } from '../_shared/cors.ts';
 
 // =============================================================================
 // Constants
@@ -59,41 +58,22 @@ type Variables = {
 
 const app = new Hono<{ Variables: Variables }>();
 
-// Custom CORS middleware for VS Code origins
+// Custom CORS middleware using shared utilities
 app.use('*', async (c, next) => {
-  const origin = c.req.header('Origin');
-
-  // Check if origin is allowed
-  let allowedOrigin: string | null = null;
-  if (!origin) {
-    allowedOrigin = '*'; // VS Code opaque origins
-  } else {
-    for (const allowed of ALLOWED_ORIGINS) {
-      if (typeof allowed === 'string' && origin.startsWith(allowed)) {
-        allowedOrigin = origin;
-        break;
-      } else if (allowed instanceof RegExp && allowed.test(origin)) {
-        allowedOrigin = origin;
-        break;
-      }
-    }
-  }
+  const origin = c.req.header('Origin') || null;
+  const allowedOrigin = getAllowedOrigin(origin);
 
   if (!allowedOrigin) {
     return c.text('Forbidden', 403);
   }
 
-  // Set CORS headers
-  c.set('corsHeaders', {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
-  });
+  // Set CORS headers using shared config
+  const corsHeaders = getCorsHeaders(c.req.raw);
+  c.set('corsHeaders', corsHeaders);
 
   // Handle preflight
   if (c.req.method === 'OPTIONS') {
-    return new Response('ok', { headers: c.get('corsHeaders') });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   await next();
