@@ -261,6 +261,10 @@ export function resetReasoningCacheState(state: ReasoningCacheState): void {
   state.thinkingAdded = false;
 }
 
+// ============================================================================
+// ServerToolContentState - Plain object (no class needed)
+// ============================================================================
+
 /**
  * Cache for server tool content blocks (e.g., web_search results from Anthropic).
  * These blocks need to be preserved in the assistant message when local tools are also present.
@@ -268,37 +272,24 @@ export function resetReasoningCacheState(state: ReasoningCacheState): void {
  * **EPHEMERAL STATE**: This state is intentionally NOT serialized to snapshots.
  * Server tool content is only relevant within a single tool use cycle and is automatically
  * cleared after being consumed by `createToolUseFollowUpMessages()` or when the end-turn
- * branch is taken. It does not need to survive state restoration since:
- * 1. The response object containing the content is not persisted
- * 2. Upon restoration, the model will generate fresh server tool content if needed
- * 3. Stale content would cause duplicate blocks in conversation history
+ * branch is taken.
  */
-export class ServerToolContentState {
-  /**
-   * Server tool content blocks extracted from the model response.
-   * These include server_tool_use, web_search_tool_result (Anthropic),
-   * and web_search_call (OpenAI) blocks.
-   * Cleared after being consumed by createToolUseFollowUpMessages().
-   */
-  public contentBlocks: ServerToolContentBlock[] = [];
+export interface ServerToolContentState {
+  /** Server tool content blocks from model response (server_tool_use, web_search_tool_result, etc.) */
+  contentBlocks: ServerToolContentBlock[];
+  /** Full assistant content blocks from last response, excluding tool_use. Typed as unknown[] for cross-provider compatibility. */
+  lastAssistantContent: unknown[];
+}
 
-  /**
-   * Full assistant content blocks from the last response, excluding tool_use.
-   * Preserves original order for building correct follow-up messages.
-   * Includes: thinking, text, server_tool_use, web_search_tool_result blocks.
-   * Cleared after being consumed by createToolUseFollowUpMessages().
-   *
-   * Typed as unknown[] because content block types differ across providers:
-   * - Anthropic: ContentBlockParam (thinking, text, server_tool_use, etc.)
-   * - OpenAI: ResponseInputItem (message, function_call, web_search_call, etc.)
-   * Each handler casts to provider-specific types when consuming.
-   */
-  public lastAssistantContent: unknown[] = [];
+/** Create a fresh ServerToolContentState */
+export function createServerToolContentState(): ServerToolContentState {
+  return { contentBlocks: [], lastAssistantContent: [] };
+}
 
-  reset(): void {
-    this.contentBlocks = [];
-    this.lastAssistantContent = [];
-  }
+/** Reset server tool content state to initial values */
+export function resetServerToolContentState(state: ServerToolContentState): void {
+  state.contentBlocks = [];
+  state.lastAssistantContent = [];
 }
 
 // Import todo schemas from single source of truth (eventBus/schemas)
@@ -435,7 +426,7 @@ export class AgentWorkspaceState {
       new MediaAttachmentState(),
       createReasoningCacheState(),
       new FileInteractionState(),
-      new ServerToolContentState(),
+      createServerToolContentState(),
       new TodoState(),
     );
   }
@@ -448,7 +439,7 @@ export class AgentWorkspaceState {
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning, // Plain object - schema already validates
       FileInteractionState.fromSnapshot(parsed.interactions),
-      new ServerToolContentState(), // Ephemeral - not serialized
+      createServerToolContentState(), // Ephemeral - not serialized
       TodoState.fromSnapshot(parsed.todos),
     );
   }
@@ -472,6 +463,6 @@ export class AgentWorkspaceState {
   }
 
   resetServerToolContent(): void {
-    this.serverToolContent.reset();
+    resetServerToolContentState(this.serverToolContent);
   }
 }
