@@ -32,13 +32,63 @@ import {
 // Constants
 // =============================================================================
 
-const AUTH_GITHUB_VERSION = '1.0.0';
+const AUTH_GITHUB_VERSION = '1.0.1';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+/**
+ * Allowed CORS origins for security.
+ * VS Code extensions use opaque origins so we must allow those schemes.
+ * Codespaces uses *.github.dev domains.
+ */
+const ALLOWED_ORIGINS = [
+  // VS Code desktop schemes (opaque origins, sent as null in most browsers)
+  'vscode://',
+  'cursor://',
+  // Codespaces and github.dev
+  /^https:\/\/[a-z0-9-]+\.github\.dev$/,
+  /^https:\/\/[a-z0-9-]+\.app\.github\.dev$/,
+  // TeXRA domains
+  /^https:\/\/([a-z0-9-]+\.)?texra\.ai$/,
+  // localhost for development
+  /^http:\/\/localhost(:\d+)?$/,
+];
+
+/**
+ * Check if origin is allowed for CORS.
+ * Returns the origin if allowed, null otherwise.
+ */
+function getAllowedOrigin(origin: string | null): string | null {
+  if (!origin) {
+    // Null origin (from opaque origins like vscode://) - allow for VS Code extensions
+    return '*';
+  }
+
+  for (const allowed of ALLOWED_ORIGINS) {
+    if (typeof allowed === 'string') {
+      if (origin.startsWith(allowed)) {
+        return origin;
+      }
+    } else if (allowed.test(origin)) {
+      return origin;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get CORS headers for a request.
+ */
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin');
+  const allowedOrigin = getAllowedOrigin(origin);
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || '',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
 
 // Session duration: 1 hour access token, 7 day refresh token
 const ACCESS_TOKEN_EXPIRY_SECONDS = 3600;
@@ -66,7 +116,7 @@ interface GitHubEmail {
 // Helpers
 // =============================================================================
 
-function jsonResponse(body: Record<string, unknown>, status: number): Response {
+function jsonResponse(body: Record<string, unknown>, status: number, corsHeaders: Record<string, string>): Response {
   return new Response(
     JSON.stringify({ _version: AUTH_GITHUB_VERSION, ...body }),
     {
@@ -76,8 +126,8 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
   );
 }
 
-function errorResponse(error: string, status: number): Response {
-  return jsonResponse({ error }, status);
+function errorResponse(error: string, status: number, corsHeaders: Record<string, string>): Response {
+  return jsonResponse({ error }, status, corsHeaders);
 }
 
 /**
@@ -249,18 +299,48 @@ async function findOrCreateGitHubUser(
   }
 
   // Step 2: Check if user exists with this email
-  // Use listUsers with filter instead of fetching all users
-  const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
-    filter: `email.eq.${email}`,
-    perPage: 1,
+  // Use RPC to query auth.users directly (avoids fetching all users via admin API)
+  // Falls back to admin API if RPC doesn't exist (requires manual setup)
+  let existingUser: { id: string; email: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } | undefined;
+
+  // Try RPC function first (must be created in database: see migrations)
+  const { data: rpcUser, error: rpcError } = await supabase.rpc('get_user_by_email', {
+    user_email: email,
   });
 
-  // Fallback: if filter doesn't work, try direct query
-  let existingUser = usersData?.users?.[0];
-  if (listError || !existingUser) {
-    // Some Supabase versions don't support filter, fall back to targeted query
-    const { data: allUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    existingUser = allUsers?.users?.find((u: { email: string }) => u.email === email);
+  if (!rpcError && rpcUser) {
+    existingUser = {
+      id: rpcUser.id,
+      email: rpcUser.email,
+      user_metadata: rpcUser.raw_user_meta_data,
+      app_metadata: rpcUser.raw_app_meta_data,
+    };
+  } else {
+    // RPC not available or failed - fall back to admin API with pagination
+    // This is acceptable for small-medium user bases (< 1000 users)
+    // TODO: For larger scale, add the get_user_by_email RPC function
+    if (rpcError && !rpcError.message?.includes('function') && !rpcError.message?.includes('does not exist')) {
+      console.warn('[AUTH_GITHUB] RPC query failed:', rpcError.message);
+    }
+
+    // Use admin API with smaller page size, iterate until found or exhausted
+    let page = 1;
+    const perPage = 100;
+    const maxPages = 10; // Limit to 1000 users max
+
+    while (!existingUser && page <= maxPages) {
+      const { data: adminData, error: listError } = await supabase.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+
+      if (listError || !adminData?.users?.length) {
+        break;
+      }
+
+      existingUser = adminData.users.find((u: { email: string }) => u.email === email);
+      page++;
+    }
   }
 
   let userId: string;
@@ -398,6 +478,14 @@ if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
 // =============================================================================
 
 Deno.serve(async (req: Request) => {
+  // Get dynamic CORS headers based on request origin
+  const corsHeaders = getCorsHeaders(req);
+
+  // Reject requests from disallowed origins
+  if (!corsHeaders['Access-Control-Allow-Origin']) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -405,12 +493,12 @@ Deno.serve(async (req: Request) => {
 
   // Only accept POST requests
   if (req.method !== 'POST') {
-    return errorResponse('Method not allowed', 405);
+    return errorResponse('Method not allowed', 405, corsHeaders);
   }
 
   // Check environment on each request
   if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
-    return errorResponse('Server configuration error', 500);
+    return errorResponse('Server configuration error', 500, corsHeaders);
   }
 
   try {
@@ -419,12 +507,12 @@ Deno.serve(async (req: Request) => {
     try {
       body = await req.json();
     } catch {
-      return errorResponse('Invalid JSON body', 400);
+      return errorResponse('Invalid JSON body', 400, corsHeaders);
     }
 
     const { github_token } = body as { github_token?: string };
     if (!github_token) {
-      return errorResponse('github_token required', 400);
+      return errorResponse('github_token required', 400, corsHeaders);
     }
 
     // 2. Validate GitHub token and get user info
@@ -433,6 +521,7 @@ Deno.serve(async (req: Request) => {
       return errorResponse(
         'Invalid GitHub token or missing verified email',
         401,
+        corsHeaders,
       );
     }
 
@@ -458,7 +547,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!result.success) {
-      return errorResponse(result.error || 'Failed to authenticate', 500);
+      return errorResponse(result.error || 'Failed to authenticate', 500, corsHeaders);
     }
 
     const { userId, userEmail } = result;
@@ -485,6 +574,7 @@ Deno.serve(async (req: Request) => {
     );
 
     // Store refresh token in sessions table
+    // This is REQUIRED for token refresh to work - fail if storage fails
     const sessionId = crypto.randomUUID();
     const { error: sessionError } = await supabase.from('sessions').insert({
       id: sessionId,
@@ -496,11 +586,13 @@ Deno.serve(async (req: Request) => {
     });
 
     if (sessionError) {
-      // Non-fatal: session storage failed but access token still works
-      console.warn(
-        '[AUTH_GITHUB] Failed to store session:',
+      // Session storage is required - without it, refresh token won't work
+      // and user will be silently logged out after 1 hour
+      console.error(
+        '[AUTH_GITHUB] Failed to store session (refresh will fail):',
         sessionError.message,
       );
+      return errorResponse('Failed to create session. Please try again.', 500, corsHeaders);
     }
 
     // 6. Return session tokens
@@ -523,9 +615,10 @@ Deno.serve(async (req: Request) => {
         },
       },
       200,
+      corsHeaders,
     );
   } catch (error) {
     console.error('[AUTH_GITHUB] Unexpected error:', error);
-    return errorResponse('Internal server error', 500);
+    return errorResponse('Internal server error', 500, corsHeaders);
   }
 });
