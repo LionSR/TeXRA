@@ -49,6 +49,18 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 };
 
 /**
+ * Edge function URL for GitHub token exchange.
+ * Used in VS Code web/Codespaces where standard OAuth callbacks don't work.
+ */
+export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/exchange`;
+
+/**
+ * Edge function URL for custom token refresh.
+ * Used for sessions created via VS Code GitHub auth (not standard Supabase OAuth).
+ */
+export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/refresh`;
+
+/**
  * Check if Supabase is configured.
  * Returns false if using placeholder values.
  */
@@ -235,6 +247,48 @@ export async function getExternalAuthCallbackUri(): Promise<string> {
   );
   const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
   return externalUri.toString();
+}
+
+/**
+ * Result of parsing the external auth callback URI.
+ * In Codespaces, VS Code adds a state parameter that must be preserved
+ * for the callback routing to work.
+ */
+export interface ExternalAuthCallbackInfo {
+  /** Base URL without query params (for Supabase redirectTo) */
+  baseUrl: string;
+  /** VS Code's state parameter (must be passed through OAuth flow) */
+  vscodeState: string | null;
+  /** Full URL with state (for logging/debugging) */
+  fullUrl: string;
+}
+
+/**
+ * Get the external auth callback URI with parsed components.
+ * In Codespaces, VS Code generates a state parameter that MUST be preserved
+ * and passed through the OAuth flow for the callback routing to work.
+ *
+ * Without this, the callback URL gets the state URL-encoded into the path,
+ * breaking VS Code's ability to route it to the extension.
+ */
+export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
+  const baseCallbackUri = vscode.Uri.parse(
+    getAuthCallbackUri(vscode.env.uriScheme),
+  );
+  const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
+
+  // Parse VS Code's state parameter if present (added in Codespaces/web)
+  const queryParams = new URLSearchParams(externalUri.query);
+  const vscodeState = queryParams.get('state');
+
+  // Build base URL without query params
+  const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
+
+  return {
+    baseUrl,
+    vscodeState,
+    fullUrl: externalUri.toString(),
+  };
 }
 
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */
