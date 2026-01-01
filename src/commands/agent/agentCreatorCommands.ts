@@ -10,7 +10,7 @@ import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
 import { promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
-import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
+import { ANTHROPIC_MODELS } from '@model/ModelRegistry';
 import { AbsoluteFS } from '@utils/files';
 
 // Type imports
