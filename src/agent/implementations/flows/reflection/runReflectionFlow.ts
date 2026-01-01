@@ -29,7 +29,8 @@ import {
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { type FlowRecord } from '@agent/node/persisted-flow';
+import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
@@ -178,13 +179,6 @@ export async function runReflectionFlow<C = unknown>(
     // Register context for interrupt handling
     callbacks?.onContextReady?.(storageKey, flowContext);
 
-    // Always start from round 0, even on resume.
-    // Completed rounds are "replayed" via initializeOutputAndPrefill()
-    // which reads existing output files instead of calling the model.
-    const roundStage = await executionContext.logger.stage('r0', {
-      parent: runStage,
-    });
-
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
       executionContext.executionId,
@@ -244,21 +238,31 @@ export async function runReflectionFlow<C = unknown>(
       shared.lastRetryError = restoredRetryError;
     }
 
-    // Create PersistedFlow with the start node
+    // Create RoundPersistedFlow with the start node
+    // Round stage management is now handled by the flow, not by nodes
     const startNode = createReflectionFlow<C>().start;
-    const pf = new PersistedFlow<
+    const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
       ReflectionServices<C>
-    >(startNode, kv);
+    >(startNode, kv, {
+      parentStage: runStage,
+      hooks: {
+        // Create round stages (r0, r1, r2, ...)
+        createRoundStage: async (roundIndex, parent) => {
+          return await executionContext.logger.stage(`r${roundIndex}`, {
+            parent,
+          });
+        },
+      },
+    });
 
-    // Build services with runStage and roundStage (never persisted - runtime dependencies)
-    // roundStage is mutable - RoundCompleteNode updates it when transitioning rounds
+    // Build services without roundStage (managed by RoundPersistedFlow)
     // Keep reference to services for finally block access
     services = {
       ...flowContext.services,
       runStage,
-      roundStage, // Initial round stage (r0)
+      roundStage: null, // No longer managed here - RoundPersistedFlow handles it
     };
     pf.setServices(services);
 
@@ -269,19 +273,18 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Run the persisted flow - errors throw directly
+    // RoundPersistedFlow automatically manages round stages
     await pf.run(shared);
 
     // Get final shared state with all mutations (including roundOutputs)
-    shared = pf.getShared();
+    shared = await pf.getShared();
 
     status = END_GROUP_STATUS.STOPPED;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Finalize round stage (from services - runtime only, not persisted)
-    // Note: roundStage may have been updated by RoundCompleteNode during execution
-    services?.roundStage?.end(status);
+    // Round stages are finalized by RoundPersistedFlow - no need to end them here
 
     // Finalize run stage if we created it internally.
     // Prefer services.runStage (may have been updated) but fall back to runStage
