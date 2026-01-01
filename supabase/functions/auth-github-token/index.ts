@@ -300,50 +300,12 @@ async function findOrCreateGitHubUser(
     };
   }
 
-  // Step 2: Check if user exists with this email
-  // Use RPC to query auth.users directly (avoids fetching all users via admin API)
-  // Falls back to admin API if RPC doesn't exist (requires manual setup)
+  // Step 2: Check if user exists with this email via admin API
+  // For small-medium user bases this is fine. For larger scale, add an RPC function.
   let existingUser: { id: string; email: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } | undefined;
 
-  // Try RPC function first (must be created in database: see migrations)
-  const { data: rpcUser, error: rpcError } = await supabase.rpc('get_user_by_email', {
-    user_email: email,
-  });
-
-  if (!rpcError && rpcUser) {
-    existingUser = {
-      id: rpcUser.id,
-      email: rpcUser.email,
-      user_metadata: rpcUser.raw_user_meta_data,
-      app_metadata: rpcUser.raw_app_meta_data,
-    };
-  } else {
-    // RPC not available or failed - fall back to admin API with pagination
-    // This is acceptable for small-medium user bases (< 1000 users)
-    // TODO: For larger scale, add the get_user_by_email RPC function
-    if (rpcError && !rpcError.message?.includes('function') && !rpcError.message?.includes('does not exist')) {
-      console.warn('[AUTH_GITHUB] RPC query failed:', rpcError.message);
-    }
-
-    // Use admin API with smaller page size, iterate until found or exhausted
-    let page = 1;
-    const perPage = 100;
-    const maxPages = 10; // Limit to 1000 users max
-
-    while (!existingUser && page <= maxPages) {
-      const { data: adminData, error: listError } = await supabase.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-
-      if (listError || !adminData?.users?.length) {
-        break;
-      }
-
-      existingUser = adminData.users.find((u: { email: string }) => u.email === email);
-      page++;
-    }
-  }
+  const { data: adminData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  existingUser = adminData?.users?.find((u: { email: string }) => u.email === email);
 
   let userId: string;
 
