@@ -2,20 +2,23 @@
  * RoundCompleteNode - Handles round completion and continuation logic.
  *
  * Responsibilities:
- * - Increment round counter
- * - Check if more rounds should run
- * - Route to next round or finalization
+ * - Check if more rounds should run (bounds, interruption, flags)
+ * - Signal intent to RoundPersistedFlow (CONTINUE_NEXT_ROUND or FINALIZE)
+ *
+ * Note: RoundPersistedFlow OWNS the round increment. This node only signals
+ * intent, and the flow handles all round lifecycle (increment, stages, reset).
  *
  * PocketFlow pattern:
  * - prep(): Extract current state
  * - exec(): Determine next action (pure logic)
- * - post(): Update state and route
+ * - post(): Route based on decision
  *
  * Services accessed via native `this.services`:
- * - logger, checkInterruption, runStage
+ * - logger, checkInterruption
  */
 
 import { Node } from '@agent/node';
+import { isRoundAtOrBeyondLimit } from '@agent/node/round-bounds';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -89,8 +92,8 @@ export class RoundCompleteNode<C = unknown> extends Node<
       return { kind: 'finalize', reason: 'continue_false' };
     }
 
-    // Check if we've completed all rounds
-    if (nextRound >= totalRounds) {
+    // Check if we've completed all rounds (single source of truth for bounds)
+    if (isRoundAtOrBeyondLimit(nextRound, totalRounds)) {
       logger.debug(`Completed all ${totalRounds} rounds - finalizing`);
       return { kind: 'finalize', reason: 'all_rounds_complete' };
     }
@@ -107,32 +110,29 @@ export class RoundCompleteNode<C = unknown> extends Node<
   }
 
   /**
-   * Update state and route appropriately.
+   * Route based on decision.
    *
-   * Note: Round transitions are managed by RoundPersistedFlow:
+   * RoundPersistedFlow OWNS all round lifecycle:
+   * - Incrementing currentRound (single source of truth)
    * - Stage lifecycle (end old stage, create new stage)
    * - Workspace reset (via resetForNextRound hook)
    *
-   * This node only increments the round counter, which RoundPersistedFlow
-   * detects to trigger the transition.
+   * This node only signals intent via FlowTransitions.
    */
   async post(
-    shared: ReflectionFlowShared,
+    _shared: ReflectionFlowShared,
     _prepRes: RoundCompletePrepInput,
     execRes: RoundCompleteExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'finalize') {
-      return FlowTransition.DEFAULT; // Flow ends gracefully
+      return FlowTransition.FINALIZE;
     }
 
-    // === ROUND TRANSITION ===
-    // Increment round counter - RoundPersistedFlow detects this change and:
-    // 1. Ends old round stage
-    // 2. Calls resetForNextRound hook (workspace reset)
-    // 3. Creates new round stage
-    shared.currentRound = shared.currentRound + 1;
-
-    // Loop back to PrepareContextNode (start of round pipeline)
-    return FlowTransition.CONTINUE;
+    // Signal intent to continue - RoundPersistedFlow will:
+    // 1. Increment currentRound (single source of truth)
+    // 2. End old round stage
+    // 3. Call resetForNextRound hook (workspace reset)
+    // 4. Create new round stage
+    return FlowTransition.CONTINUE_NEXT_ROUND;
   }
 }
