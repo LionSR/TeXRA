@@ -32,13 +32,18 @@ import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 import type { FileInteractionStateSnapshot } from './AgentWorkspaceState';
 
 // Import and re-export from single source of truth
-import type { ToolUseCycleOptions } from './flows/CycleServices';
+import type {
+  ToolUseCycleOptions,
+  RoundFinalizedCallback,
+} from './flows/CycleServices';
 export type { ToolUseCycleOptions };
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
+  /** Optional callback invoked when round completes. */
+  onRoundFinalized?: RoundFinalizedCallback;
 }
 
 export interface ToolUseCycleResult {
@@ -94,8 +99,14 @@ export async function runToolUseCycle<C = unknown>(
 
   const flow = createToolUseCycleFlow<C>();
   // Inject immutable services directly (PocketFlow pattern)
-  // Options are spread directly into services (flattened structure)
-  flow.setServices({ ...input.options, store: input.store });
+  // Options are spread with state slices (no store wrapper)
+  flow.setServices({
+    ...input.options,
+    round: store.round,
+    run: store.run,
+    workspace: store.workspace,
+    onRoundFinalized: input.onRoundFinalized,
+  });
 
   try {
     await flow.run(shared);

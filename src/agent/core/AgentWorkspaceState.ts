@@ -38,7 +38,9 @@ export const ResponseAssemblyStateSchema = z.object({
 });
 
 /** Response assembly state - plain object type derived from schema */
-export type ResponseAssemblyState = z.output<typeof ResponseAssemblyStateSchema>;
+export type ResponseAssemblyState = z.output<
+  typeof ResponseAssemblyStateSchema
+>;
 
 /** Create a fresh ResponseAssemblyState */
 export function createResponseAssemblyState(): ResponseAssemblyState {
@@ -298,7 +300,6 @@ export class ServerToolContentState {
     this.lastAssistantContent = [];
   }
 }
-
 
 // Import todo schemas from single source of truth (eventBus/schemas)
 import { TodoItemSchema, type TodoItem } from '@eventBus/schemas';
