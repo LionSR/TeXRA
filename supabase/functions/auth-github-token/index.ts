@@ -304,24 +304,23 @@ async function findOrCreateGitHubUser(
   }
 
   // Step 2: Check if user exists with this email
-  // Try RPC first (O(1) lookup), fall back to admin API if RPC not available
+  // Query auth.users directly with service role (O(1) indexed lookup)
   let existingUser: { id: string; email: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } | undefined;
 
-  const { data: rpcUser, error: rpcError } = await supabase.rpc('get_user_by_email', {
-    user_email: email,
-  });
+  const { data: authUser, error: authError } = await supabase
+    .schema('auth')
+    .from('users')
+    .select('id, email, raw_user_meta_data, raw_app_meta_data')
+    .eq('email', email)
+    .maybeSingle();
 
-  if (!rpcError && rpcUser) {
+  if (!authError && authUser) {
     existingUser = {
-      id: rpcUser.id,
-      email: rpcUser.email,
-      user_metadata: rpcUser.raw_user_meta_data,
-      app_metadata: rpcUser.raw_app_meta_data,
+      id: authUser.id,
+      email: authUser.email,
+      user_metadata: authUser.raw_user_meta_data,
+      app_metadata: authUser.raw_app_meta_data,
     };
-  } else if (rpcError?.message?.includes('does not exist')) {
-    // RPC function not created yet - fall back to admin API
-    const { data: adminData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    existingUser = adminData?.users?.find((u: { email: string }) => u.email === email);
   }
 
   let userId: string;
