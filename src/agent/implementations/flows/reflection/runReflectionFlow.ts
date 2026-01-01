@@ -247,6 +247,9 @@ export async function runReflectionFlow<C = unknown>(
     // Create RoundPersistedFlow with the start node
     // Round stage management is now handled by the flow, not by nodes
     const startNode = createReflectionFlow<C>().start;
+    // Track flow completion status from onFlowEnd hook
+    // Use object wrapper to avoid TypeScript narrowing issues with closure mutation
+    const flowResult = { status: 'completed' as 'completed' | 'interrupted' | 'error' };
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
@@ -266,6 +269,10 @@ export async function runReflectionFlow<C = unknown>(
         },
         // Check for interruption (for status detection)
         checkInterruption,
+        // Capture flow completion status
+        onFlowEnd: (_shared, flowEndStatus) => {
+          flowResult.status = flowEndStatus;
+        },
       },
     });
 
@@ -290,7 +297,12 @@ export async function runReflectionFlow<C = unknown>(
     // Get final shared state with all mutations (including roundOutputs)
     shared = await pf.getShared();
 
-    status = END_GROUP_STATUS.STOPPED;
+    // Map flow status to EndGroupStatus
+    // 'interrupted' maps to ERROR to show red status in UI
+    status =
+      flowResult.status === 'interrupted'
+        ? END_GROUP_STATUS.ERROR
+        : END_GROUP_STATUS.STOPPED;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;

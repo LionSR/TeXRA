@@ -151,7 +151,11 @@ export async function runToolUseFlow<C = unknown>(
     // Run the persisted flow - errors throw directly
     await pf.run(shared);
 
-    status = END_GROUP_STATUS.STOPPED;
+    // Check if flow was interrupted (user pressed stop)
+    // Map to ERROR status to show red status in UI
+    status = input.checkInterruption()
+      ? END_GROUP_STATUS.ERROR
+      : END_GROUP_STATUS.STOPPED;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
