@@ -32,6 +32,11 @@ import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import { normalizeRunId } from '@common/constants/runIds';
+import {
+  EXECUTION_STATUS,
+  executionToEndStatus,
+  type ExecutionStatus,
+} from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
@@ -249,7 +254,7 @@ export async function runReflectionFlow<C = unknown>(
     const startNode = createReflectionFlow<C>().start;
     // Track flow completion status from onFlowEnd hook
     // Use object wrapper to avoid TypeScript narrowing issues with closure mutation
-    const flowResult = { status: 'completed' as 'completed' | 'interrupted' | 'error' };
+    const flowResult = { status: EXECUTION_STATUS.COMPLETED as ExecutionStatus };
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,
@@ -297,12 +302,8 @@ export async function runReflectionFlow<C = unknown>(
     // Get final shared state with all mutations (including roundOutputs)
     shared = await pf.getShared();
 
-    // Map flow status to EndGroupStatus
-    // 'interrupted' maps to ERROR to show red status in UI
-    status =
-      flowResult.status === 'interrupted'
-        ? END_GROUP_STATUS.ERROR
-        : END_GROUP_STATUS.STOPPED;
+    // Map ExecutionStatus to EndGroupStatus using transformation function
+    status = executionToEndStatus(flowResult.status) as EndGroupStatus;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
