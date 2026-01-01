@@ -326,9 +326,11 @@ export class RoundPersistedFlow<
         currentShared.currentRound + 1,
         currentShared.totalRounds,
       );
+      // Only mark as interrupted if we didn't complete all rounds
+      // (either user interrupted or continueRounds was set to false)
       const wasInterrupted =
-        hooks?.checkInterruption?.() ||
-        (!currentShared.continueRounds && !completedAllRounds);
+        !completedAllRounds &&
+        (hooks?.checkInterruption?.() || !currentShared.continueRounds);
       if (wasInterrupted) {
         status = EXECUTION_STATUS.INTERRUPTED;
       }
