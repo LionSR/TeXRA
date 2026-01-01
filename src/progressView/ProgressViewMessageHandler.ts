@@ -20,6 +20,7 @@ import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import { normalizeRunId } from '@common/constants/runIds';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,
@@ -29,19 +30,18 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
+import { pathToLocation } from '@utils/files';
+import { isNonEmptyString } from '@utils/core';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import {
+  buildFileContextFromTaskState,
+  polishTextWithAI,
+} from '@utils/text/textEnhancementUtils';
 import {
   PolishFollowUpMessageSchema,
   InfoMessageSchema,
   ApprovalActionMessageSchema,
 } from '@webview/types/messages';
-import { pathToLocation } from '@utils/files';
-import { isNonEmptyString } from '@utils/core';
-import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import {
-  buildFileContextFromTaskState,
-  polishTextWithAI,
-} from '@utils/text/textEnhancementUtils';
 
 // Type imports
 import type { ProgressViewProvider } from './ProgressViewProvider';

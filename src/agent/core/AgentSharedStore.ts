@@ -70,6 +70,7 @@ export class AgentSharedStore {
   private readonly workspaceState: AgentWorkspaceState;
   private readonly userChannels: UserVariableChannels;
   private _onRoundFinalized?: AgentRoundFinalizedCallback;
+  private _roundFinalized = false;
 
   constructor(config: AgentSharedStoreOptions) {
     this.roundState = config.round;
@@ -137,6 +138,12 @@ export class AgentSharedStore {
   }
 
   async finalizeRound(): Promise<void> {
+    // Guard against double finalization (can happen from error paths + finally blocks)
+    if (this._roundFinalized) {
+      return;
+    }
+    this._roundFinalized = true;
+
     this.runState.recordRound(this.roundState);
     if (this._onRoundFinalized) {
       await this._onRoundFinalized({

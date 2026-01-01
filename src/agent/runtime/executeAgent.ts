@@ -16,19 +16,18 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - flows (primary execution path)
-import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
+
+// Local imports - agent components (types only - no agent class instantiation)
+import type { IModelHandler } from '@agent/modelHandlers';
+import { resolveAgent, isRemoteAgent } from '@agent/index';
+import type { ResolvedAgent } from '@agent/index';
+import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   runToolUseFlow,
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-
-// Local imports - agent components (types only - no agent class instantiation)
-import type { IModelHandler } from '@agent/modelHandlers';
-import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
-import { TaskRunFileService } from '@utils/files';
-import { resolveAgent, isRemoteAgent } from '@agent/index';
-import type { ResolvedAgent } from '@agent/index';
+import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -62,6 +61,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';

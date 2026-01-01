@@ -15,10 +15,10 @@ import * as difflib from 'difflib';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { toolResult, type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
