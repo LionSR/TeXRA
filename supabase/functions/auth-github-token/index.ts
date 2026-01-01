@@ -234,14 +234,16 @@ async function createAccessToken(
 // User Management
 // =============================================================================
 
-interface FindOrCreateResult {
-  success: true;
-  userId: string;
-  userEmail: string;
-} | {
-  success: false;
-  error: string;
-}
+type FindOrCreateResult =
+  | {
+      success: true;
+      userId: string;
+      userEmail: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
 
 /**
  * Find or create a user with GitHub identity.
