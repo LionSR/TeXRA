@@ -26,8 +26,7 @@ import {
   NODE_NO_WAIT,
   buildBaseCycleOptions,
 } from '@agent/implementations/flows/common';
-import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -37,6 +36,7 @@ import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import {
   finalizeRound,
+  type CycleStateSlices,
   type ResponseCycleOptions,
   type ResponseCycleParams,
 } from '@agent/core/flows/CycleServices';
@@ -60,16 +60,12 @@ import type {
 // ============================================================================
 
 /**
- * State slices for cycle execution.
- * Using slices directly instead of AgentSharedStore wrapper.
+ * Core state slices for cycle prep input.
+ * Uses CycleStateSlices from CycleServices (single source of truth).
  */
-interface CycleStateSlices {
-  round: ConversationRoundState;
-  run: AgentRunState;
-  workspace: AgentWorkspaceState;
-}
+type CoreStateSlices = Pick<CycleStateSlices, 'round' | 'run' | 'workspace'>;
 
-interface CyclePrepInput extends CycleStateSlices {
+interface CyclePrepInput extends CoreStateSlices {
   context: RoundContext;
   currentRound: number;
   outputLocation: AgentFileLocation;
@@ -82,7 +78,7 @@ type CycleExecResult =
       failedWithError: boolean;
       errorMessage?: string;
       userCancelled: boolean;
-    } & CycleStateSlices)
+    } & CoreStateSlices)
   | { kind: 'error'; error: Error };
 
 // ============================================================================
