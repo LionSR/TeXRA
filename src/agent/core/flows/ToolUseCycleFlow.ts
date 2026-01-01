@@ -11,12 +11,10 @@ import {
   resetCycleState,
   CycleDebugContext,
   CycleDebugFileOptions,
-  SkippableNodeResult,
   createDebugContext,
   createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -604,8 +602,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       state.shouldStop = true;
       state.endTurn = true; // Normal completion (model said end_turn)
       state.stopReason = execRes.stopReason;
-      // Reset round for next cycle
-      services.round = new ConversationRoundState(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
 
