@@ -150,6 +150,7 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 2. In the **Redirect URLs** section, add these URLs:
 
    **Desktop IDE schemes** (custom protocols):
+
    ```
    vscode://texra-ai.texra/auth-callback
    vscode-insiders://texra-ai.texra/auth-callback
@@ -158,6 +159,7 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
    ```
 
    **Web/Remote environments** (HTTPS - use wildcards):
+
    ```
    https://*.github.dev/**
    https://*.gitpod.io/**
@@ -168,6 +170,7 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 3. Click "Save"
 
 **Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to the IDE. The extension uses `vscode.env.asExternalUri()` which returns:
+
 - Custom URI schemes for desktop (e.g., `cursor://...`)
 - HTTPS URLs for web environments (e.g., `https://abc.github.dev/...`)
 
