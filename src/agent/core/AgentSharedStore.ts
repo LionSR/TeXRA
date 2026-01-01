@@ -48,6 +48,17 @@ export type AgentSharedStoreSnapshot = z.output<
  *
  * This is a pure data holder for snapshot serialization. Round finalization logic
  * lives in CycleServices.finalizeRound() as the single source of truth.
+ *
+ * ## Legacy Pattern Note
+ *
+ * This class is used by ToolUseFlow for state management with the snapshot pattern.
+ * ReflectionFlow has been migrated to use state slices directly (no wrapper class)
+ * with lazy serialization. See:
+ * - ReflectionFlowState.ts: Uses class instances in shared state
+ * - reflectionFlowSerializationHooks: Converts at persistence boundaries
+ *
+ * ToolUseFlow migration to the slices pattern is planned for consolidation Phase 3.
+ * See docs/architecture/CONSOLIDATION_PROPOSAL.md for details.
  */
 export class AgentSharedStore {
   private roundState: ConversationRoundState;

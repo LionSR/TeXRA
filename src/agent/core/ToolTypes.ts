@@ -100,50 +100,17 @@ export interface IToolRegistry {
 }
 
 /**
- * Simple implementation of IToolRegistry backed by a Map or Record.
- *
- * Use createToolRegistry() to wrap an existing Record<string, ITool>.
- */
-export class MapToolRegistry implements IToolRegistry {
-  private readonly tools: Map<string, ITool>;
-
-  constructor(tools: Map<string, ITool> | Record<string, ITool>) {
-    this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
-  }
-
-  get size(): number {
-    return this.tools.size;
-  }
-
-  get(name: string): ITool | undefined {
-    return this.tools.get(name);
-  }
-
-  has(name: string): boolean {
-    return this.tools.has(name);
-  }
-
-  keys(): IterableIterator<string> {
-    return this.tools.keys();
-  }
-
-  values(): IterableIterator<ITool> {
-    return this.tools.values();
-  }
-
-  entries(): IterableIterator<[string, ITool]> {
-    return this.tools.entries();
-  }
-}
-
-/**
  * Create an IToolRegistry from a Record of tools.
  *
+ * Map<string, ITool> structurally satisfies IToolRegistry, so we use it
+ * directly without a wrapper class. This eliminates the MapToolRegistry
+ * pure delegation class.
+ *
  * @param tools - Record mapping tool names to ITool implementations
- * @returns An IToolRegistry wrapping the tools
+ * @returns An IToolRegistry (actually a Map) wrapping the tools
  */
 export function createToolRegistry(
   tools: Record<string, ITool>,
 ): IToolRegistry {
-  return new MapToolRegistry(tools);
+  return new Map(Object.entries(tools));
 }

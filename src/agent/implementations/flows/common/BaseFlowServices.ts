@@ -151,6 +151,13 @@ export function buildBaseFlowServices<C>(
  *
  * This helper enables inheritance-based option building instead of manual field copying.
  *
+ * ## Consolidation Note
+ *
+ * This function exists because service and cycle option interfaces use different
+ * field names for the same concepts (e.g., `setting` vs `agentSetting`). Once field
+ * names are unified across interfaces, this mapping function becomes unnecessary.
+ * See docs/architecture/CONSOLIDATION_PROPOSAL.md Phase 5 for details.
+ *
  * @param services - Flow services or initialization config
  * @returns Base cycle options ready for extension
  */
