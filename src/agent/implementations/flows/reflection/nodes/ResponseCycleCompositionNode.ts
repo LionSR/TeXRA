@@ -41,6 +41,7 @@ import type {
   ResponseCycleOptions,
   ResponseCycleParams,
 } from '@agent/core/flows/CycleServices';
+import { safelyFinalizeRound } from '@agent/core/flows/CommonCycleTypes';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -237,11 +238,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       };
     } finally {
       // Ensure round finalization even on error paths (usage tracking, statistics)
-      // Uses same guard pattern as safelyFinalizeRound in ResponseCycleFlow
-      if (!cycleShared.state.roundFinalized) {
-        cycleShared.state.roundFinalized = true;
-        await prepRes.store.finalizeRound();
-      }
+      await safelyFinalizeRound(cycleShared.state, prepRes.store);
     }
   }
 
