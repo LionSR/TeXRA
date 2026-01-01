@@ -18,12 +18,12 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { toErrorMessage } from '@common/errors';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
@@ -34,6 +34,10 @@ import {
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
+import {
+  handleDegradedResult,
+  type DegradableResult,
+} from '../nodeUtils';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -52,9 +56,7 @@ interface MediaPrepInput {
   context: RoundContext | null;
 }
 
-type MediaExecResult =
-  | { kind: 'success'; mediaFiles: FileLocation[] }
-  | { kind: 'degraded'; mediaFiles: FileLocation[]; warning: string };
+type MediaExecResult = DegradableResult<{ mediaFiles: FileLocation[] }>;
 
 // ============================================================================
 // Node Implementation
@@ -119,7 +121,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
     // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       logger.debug('Media extraction skipped: no vision support or no files');
-      return { kind: 'success', mediaFiles: [] };
+      return { kind: 'success', value: { mediaFiles: [] } };
     }
 
     try {
@@ -146,11 +148,11 @@ export class MediaPreparationNode<C = unknown> extends Node<
       logger.debug(
         `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
       );
-      return { kind: 'success', mediaFiles };
+      return { kind: 'success', value: { mediaFiles } };
     } catch (error) {
       return {
         kind: 'degraded',
-        mediaFiles: [],
+        value: { mediaFiles: [] },
         warning: `Media extraction failed: ${toErrorMessage(error)}`,
       };
     }
@@ -165,7 +167,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   ): Promise<MediaExecResult> {
     return {
       kind: 'degraded',
-      mediaFiles: [],
+      value: { mediaFiles: [] },
       warning: `Media extraction failed: ${error.message}`,
     };
   }
@@ -186,19 +188,17 @@ export class MediaPreparationNode<C = unknown> extends Node<
     // update the snapshot to persist those changes
     updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
-    // Log warning if degraded
-    if (execRes.kind === 'degraded') {
-      logger.warn(execRes.warning);
-    }
+    // Handle degraded result and extract value
+    const result = handleDegradedResult(execRes, logger);
 
     // Add media to messages if we have files and context
-    if (execRes.mediaFiles.length > 0 && shared.context) {
+    if (result.mediaFiles.length > 0 && shared.context) {
       await modelHandler.addMediaToUserMessage(
         shared.context.messages,
-        execRes.mediaFiles,
+        result.mediaFiles,
       );
       logger.debug(
-        `${execRes.mediaFiles.length} media files added to user message`,
+        `${result.mediaFiles.length} media files added to user message`,
       );
     }
 

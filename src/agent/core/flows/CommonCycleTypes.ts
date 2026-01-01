@@ -224,3 +224,24 @@ export function createDebugFileOptions(
     outputFile,
   };
 }
+
+// ============================================================================
+// Round Finalization Utility
+// ============================================================================
+
+/**
+ * Safely finalize a round, ensuring it's only done once.
+ * Guard pattern prevents double-finalization from multiple exit paths.
+ *
+ * @param state - State object with roundFinalized flag
+ * @param store - Store object with finalizeRound method
+ */
+export async function safelyFinalizeRound(
+  state: { roundFinalized?: boolean },
+  store: { finalizeRound(): Promise<void> },
+): Promise<void> {
+  if (!state.roundFinalized) {
+    state.roundFinalized = true;
+    await store.finalizeRound();
+  }
+}

@@ -160,8 +160,46 @@ export function createInitialReflectionState(
 // ============================================================================
 
 /**
- * Reconstruct AgentWorkspaceState from snapshot.
- * Use this when nodes need to mutate workspace state.
+ * Reconstruct AgentWorkspaceState from snapshot for mutation.
+ *
+ * ## When to use this helper vs direct access
+ *
+ * - **Use this helper** when you need to mutate workspace state (e.g., adding media files,
+ *   modifying workspace data). The reconstructed class instance provides methods for
+ *   manipulation.
+ * - **Use direct access** (`shared.workspaceSnapshot`) when you only need to read
+ *   immutable snapshot data or pass the snapshot to other functions.
+ *
+ * ## Pattern: Reconstruct → Mutate → Update Snapshot
+ *
+ * This helper is step 1 of the standard mutation pattern:
+ *
+ * ```typescript
+ * // 1. Reconstruct class instance from snapshot
+ * const workspaceState = getWorkspaceState(shared);
+ *
+ * // 2. Mutate the instance (e.g., in latexMediaManager.processInputFiles)
+ * await latexMediaManager.processInputFiles(files, workspaceState, ...);
+ *
+ * // 3. Update snapshot to persist changes
+ * updateWorkspaceSnapshot(shared, workspaceState);
+ * ```
+ *
+ * ## Why these helpers exist
+ *
+ * Following the koala-code-reader pattern, shared state stores **snapshots** (plain JSON)
+ * instead of class instances to ensure `structuredClone()` works correctly in PersistedFlow.
+ * These helpers maintain snapshot consistency while allowing nodes to work with rich
+ * class instances that provide mutation methods.
+ *
+ * @param shared - The reflection flow shared state containing the workspace snapshot
+ * @returns Reconstructed AgentWorkspaceState instance with mutation methods
+ *
+ * @example
+ * // In MediaPreparationNode.prep()
+ * const workspaceState = getWorkspaceState(shared);
+ * // ... pass to latexMediaManager for mutation ...
+ * // ... in post(), call updateWorkspaceSnapshot() to persist changes
  */
 export function getWorkspaceState(
   shared: ReflectionFlowShared,
@@ -170,8 +208,33 @@ export function getWorkspaceState(
 }
 
 /**
- * Update workspace snapshot after mutation.
- * Call this after modifying the workspace state.
+ * Update workspace snapshot after mutation to persist changes.
+ *
+ * This is step 3 of the standard mutation pattern - call this after modifying
+ * a workspace state instance to save changes back to the shared state snapshot.
+ *
+ * ## Pattern: Reconstruct → Mutate → Update Snapshot
+ *
+ * ```typescript
+ * // 1. Reconstruct
+ * const workspaceState = getWorkspaceState(shared);
+ *
+ * // 2. Mutate (e.g., adding media files)
+ * await latexMediaManager.processInputFiles(files, workspaceState, ...);
+ *
+ * // 3. Update snapshot (THIS FUNCTION)
+ * updateWorkspaceSnapshot(shared, workspaceState);
+ * ```
+ *
+ * **CRITICAL**: Always call this after mutations or changes will be lost.
+ * The snapshot is what gets persisted and restored across flow executions.
+ *
+ * @param shared - The reflection flow shared state to update
+ * @param workspaceState - The mutated workspace state instance
+ *
+ * @example
+ * // In MediaPreparationNode.post() - CRITICAL step
+ * updateWorkspaceSnapshot(shared, prepRes.workspaceState);
  */
 export function updateWorkspaceSnapshot(
   shared: ReflectionFlowShared,
@@ -181,16 +244,79 @@ export function updateWorkspaceSnapshot(
 }
 
 /**
- * Reconstruct AgentRunState from snapshot.
- * Use this when nodes need to access or mutate run state.
+ * Reconstruct AgentRunState from snapshot for access or mutation.
+ *
+ * ## When to use this helper vs direct access
+ *
+ * - **Use this helper** when you need to access run state properties or mutate run state
+ *   (e.g., creating AgentSharedStore which requires an AgentRunState instance).
+ * - **Use direct access** (`shared.runStateSnapshot`) when you only need to read
+ *   immutable snapshot data or pass the snapshot to other functions.
+ *
+ * ## Pattern: Reconstruct → Mutate → Update Snapshot
+ *
+ * This helper is step 1 of the standard mutation pattern:
+ *
+ * ```typescript
+ * // 1. Reconstruct class instance from snapshot
+ * const runState = getRunState(shared);
+ *
+ * // 2. Use/mutate the instance (e.g., in AgentSharedStore creation)
+ * const store = new AgentSharedStore({ run: runState, ... });
+ *
+ * // 3. Update snapshot to persist changes (after store mutations)
+ * updateRunStateSnapshot(shared, store.run);
+ * ```
+ *
+ * ## Why these helpers exist
+ *
+ * Following the koala-code-reader pattern, shared state stores **snapshots** (plain JSON)
+ * instead of class instances to ensure `structuredClone()` works correctly in PersistedFlow.
+ * These helpers maintain snapshot consistency while allowing nodes to work with rich
+ * class instances that provide methods and properties.
+ *
+ * @param shared - The reflection flow shared state containing the run state snapshot
+ * @returns Reconstructed AgentRunState instance
+ *
+ * @example
+ * // In ResponseCycleCompositionNode.prep()
+ * const runState = getRunState(shared);
+ * const store = new AgentSharedStore({ run: runState, ... });
+ * // ... in post(), call updateRunStateSnapshot() to persist changes
  */
 export function getRunState(shared: ReflectionFlowShared): AgentRunState {
   return AgentRunState.fromSnapshot(shared.runStateSnapshot);
 }
 
 /**
- * Update run state snapshot after mutation.
- * Call this after modifying the run state.
+ * Update run state snapshot after mutations to persist changes.
+ *
+ * This is step 3 of the standard mutation pattern - call this after modifying
+ * a run state instance to save changes back to the shared state snapshot.
+ *
+ * ## Pattern: Reconstruct → Mutate → Update Snapshot
+ *
+ * ```typescript
+ * // 1. Reconstruct
+ * const runState = getRunState(shared);
+ *
+ * // 2. Mutate (e.g., via AgentSharedStore)
+ * const store = new AgentSharedStore({ run: runState, ... });
+ * // ... store operations mutate runState ...
+ *
+ * // 3. Update snapshot (THIS FUNCTION)
+ * updateRunStateSnapshot(shared, store.run);
+ * ```
+ *
+ * **CRITICAL**: Always call this after mutations or changes will be lost.
+ * The snapshot is what gets persisted and restored across flow executions.
+ *
+ * @param shared - The reflection flow shared state to update
+ * @param runState - The mutated run state instance
+ *
+ * @example
+ * // In ResponseCycleCompositionNode.post()
+ * updateRunStateSnapshot(shared, execRes.store.run);
  */
 export function updateRunStateSnapshot(
   shared: ReflectionFlowShared,
@@ -201,6 +327,15 @@ export function updateRunStateSnapshot(
 
 /**
  * Create fresh workspace snapshot for a new round.
+ *
+ * Used when transitioning between rounds to reset workspace state.
+ * Each round starts with a clean workspace to avoid state pollution.
+ *
+ * @returns Fresh AgentWorkspaceSnapshot for a new round
+ *
+ * @example
+ * // In RoundCompleteNode.post() - transitioning to next round
+ * shared.workspaceSnapshot = createFreshWorkspaceSnapshot();
  */
 export function createFreshWorkspaceSnapshot(): AgentWorkspaceSnapshot {
   return AgentWorkspaceState.create().toSnapshot();
