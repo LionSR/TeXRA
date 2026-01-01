@@ -104,12 +104,14 @@ export interface ResponseCycleOptions<
 /**
  * Options for tool-use cycle execution.
  * Used by interactive flows for session-based execution.
+ *
+ * Note: Workspace state is passed via CycleStateSlices.workspace,
+ * not duplicated here.
  */
 export interface ToolUseCycleOptions<
   C = unknown,
 > extends AgentCycleBaseOptions<C> {
   toolRegistry: IToolRegistry;
-  workspaceState: AgentWorkspaceState;
   modelName?: string;
   agentName?: string;
 }
