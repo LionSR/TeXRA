@@ -163,17 +163,11 @@ describe('BashTool', () => {
         userRequest: '',
       } satisfies AgentPrompt,
       userVars: {},
-      userVarChannels: {
-        input: Object.freeze({}) as Readonly<Record<string, any>>,
-        transient: {},
-        output: {},
-      },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
       toolRegistry: createToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
-      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'bash-tool' as StreamTabId,
@@ -184,7 +178,10 @@ describe('BashTool', () => {
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
       workspace: workspaceState,
-      user: options.userVarChannels,
+      user: {
+        input: Object.freeze({}) as Readonly<Record<string, any>>,
+        transient: {},
+      },
     });
 
     const messages: ProviderMessage[] = [];

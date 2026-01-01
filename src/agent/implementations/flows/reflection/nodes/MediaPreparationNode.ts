@@ -23,13 +23,16 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
-import type {
-  ReflectionFlowShared,
-  RoundContext,
+import {
+  getWorkspaceState,
+  updateWorkspaceSnapshot,
+  type ReflectionFlowShared,
+  type RoundContext,
 } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -49,9 +52,9 @@ interface MediaPrepInput {
   context: RoundContext | null;
 }
 
-type MediaExecResult =
-  | { kind: 'success'; mediaFiles: FileLocation[] }
-  | { kind: 'degraded'; mediaFiles: FileLocation[]; warning: string };
+interface MediaExecResult {
+  mediaFiles: FileLocation[];
+}
 
 // ============================================================================
 // Node Implementation
@@ -71,8 +74,10 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, workspaceState, context } =
-      shared.state;
+    const { currentRound, roundOutputs, context } = shared;
+
+    // Reconstruct workspace state from snapshot
+    const workspaceState = getWorkspaceState(shared);
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -106,7 +111,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   /**
    * Extract media from files.
    * Mutates workspaceState via latexMediaManager to collect media files.
-   * This can fail gracefully - media extraction failures shouldn't stop the flow.
+   * Throws on error - execFallback() handles graceful degradation.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
     const { latexMediaManager, config, logger } = this.services;
@@ -114,77 +119,66 @@ export class MediaPreparationNode<C = unknown> extends Node<
     // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       logger.debug('Media extraction skipped: no vision support or no files');
-      return { kind: 'success', mediaFiles: [] };
+      return { mediaFiles: [] };
     }
 
-    try {
-      // Different processing for first round vs subsequent rounds
-      if (prepRes.currentRound === 0) {
-        await latexMediaManager.processInputFiles(
-          prepRes.files,
-          prepRes.workspaceState,
-          config.toolConfig,
-          true,
-          prepRes.extraMediaFiles,
-        );
-      } else {
-        await latexMediaManager.processOutputFiles(
-          prepRes.files,
-          prepRes.workspaceState,
-          config.toolConfig,
-          true,
-        );
-      }
-
-      // Collect media files from workspaceState
-      const mediaFiles = prepRes.workspaceState.media.files;
-      logger.debug(
-        `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
+    // Different processing for first round vs subsequent rounds
+    if (prepRes.currentRound === 0) {
+      await latexMediaManager.processInputFiles(
+        prepRes.files,
+        prepRes.workspaceState,
+        config.toolConfig,
+        true,
+        prepRes.extraMediaFiles,
       );
-      return { kind: 'success', mediaFiles };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return {
-        kind: 'degraded',
-        mediaFiles: [],
-        warning: `Media extraction failed: ${message}`,
-      };
+    } else {
+      await latexMediaManager.processOutputFiles(
+        prepRes.files,
+        prepRes.workspaceState,
+        config.toolConfig,
+        true,
+      );
     }
+
+    // Collect media files from workspaceState
+    const mediaFiles = prepRes.workspaceState.media.files;
+    logger.debug(
+      `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
+    );
+    return { mediaFiles };
   }
 
   /**
-   * Handle total failure - continue without media.
+   * Handle total failure - log warning and continue without media.
    */
   async execFallback(
     _prepRes: MediaPrepInput,
     error: Error,
   ): Promise<MediaExecResult> {
-    return {
-      kind: 'degraded',
-      mediaFiles: [],
-      warning: `Media extraction failed: ${error.message}`,
-    };
+    this.services.logger.warn(`Media extraction failed: ${error.message}`);
+    return { mediaFiles: [] };
   }
 
   /**
    * Add media to messages via modelHandler and continue.
+   * CRITICAL: Update workspace snapshot after mutations from exec().
    */
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: MediaPrepInput,
+    prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // Log warning if degraded
-    if (execRes.kind === 'degraded') {
-      logger.warn(execRes.warning);
-    }
+    // CRITICAL: Save mutated workspace state back to snapshot
+    // The latexMediaManager mutated workspaceState in exec(), so we must
+    // update the snapshot to persist those changes
+    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
     // Add media to messages if we have files and context
-    if (execRes.mediaFiles.length > 0 && shared.state.context) {
+    if (execRes.mediaFiles.length > 0 && shared.context) {
       await modelHandler.addMediaToUserMessage(
-        shared.state.context.messages,
+        shared.context.messages,
         execRes.mediaFiles,
       );
       logger.debug(

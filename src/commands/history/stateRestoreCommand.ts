@@ -3,10 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
-import type { TaskState } from '@logger/TaskState';
 import { setPendingState } from '@common/state';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import * as logger from '@logger/logUtils';
+import type { TaskState } from '@logger/TaskState';
 // Type imports
 
 const CHANNEL = 'stateRestoreCommand';

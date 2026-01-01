@@ -4,7 +4,8 @@
  * Tool-use cycle execution for interactive agents.
  *
  * Operates on messages in-place and continues until user follow-up is required.
- * Used by BaseToolUseAgent for reactive, session-based execution.
+ * Supports reactive, session-based execution where the agent can call tools
+ * and wait for user input.
  *
  * @see ResponseCycle for workflow-based cycle execution
  */
@@ -27,16 +28,22 @@ import {
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState } from './flows/RetryState';
+import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 import type { FileInteractionStateSnapshot } from './AgentWorkspaceState';
 
 // Import and re-export from single source of truth
-import type { ToolUseCycleOptions } from './flows/CycleServices';
+import type {
+  ToolUseCycleOptions,
+  RoundFinalizedCallback,
+} from './flows/CycleServices';
 export type { ToolUseCycleOptions };
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
+  /** Optional callback invoked when round completes. */
+  onRoundFinalized?: RoundFinalizedCallback;
 }
 
 export interface ToolUseCycleResult {
@@ -53,9 +60,6 @@ export interface ToolUseCycleResult {
  *
  * Tool-use cycles operate on messages in-place and continue until
  * user follow-up is required or an error/cancellation occurs.
- *
- * This is used by BaseToolUseAgent for reactive, session-based execution
- * where the agent responds to tools and waits for user input.
  *
  * @param input - Cycle input with options, messages, and store
  * @returns Result with failedWithError and userCancelled flags
@@ -94,9 +98,14 @@ export async function runToolUseCycle<C = unknown>(
   };
 
   const flow = createToolUseCycleFlow<C>();
-  // Inject immutable services via params (PocketFlow pattern)
-  flow.setParams({
-    services: { options: input.options, store: input.store },
+  // Inject immutable services directly (PocketFlow pattern)
+  // Options are spread with state slices (no store wrapper)
+  flow.setServices({
+    ...input.options,
+    round: store.round,
+    run: store.run,
+    workspace: store.workspace,
+    onRoundFinalized: input.onRoundFinalized,
   });
 
   try {
@@ -110,23 +119,8 @@ export async function runToolUseCycle<C = unknown>(
   // Emit edited files to the progress view
   emitEditedFiles(input);
 
-  // Determine if the cycle failed due to an error (not user cancellation).
-  // User cancellation in retryPrompt does not record an error, so:
-  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
-  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
-  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
-  const failedWithError =
-    shared.state.shouldStop && !!shared.retryState.lastError;
-  const userCancelled =
-    shared.state.shouldStop &&
-    !shared.retryState.lastError &&
-    !shared.state.endTurn;
-
-  return {
-    failedWithError,
-    errorMessage: shared.retryState.lastError?.message,
-    userCancelled,
-  };
+  // Interpret cycle completion - shared logic with ResponseCycle
+  return interpretCycleCompletion(shared.state, shared.retryState);
 }
 
 /**

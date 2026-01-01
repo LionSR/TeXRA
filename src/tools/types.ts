@@ -29,11 +29,7 @@ export interface TextEditorToolParams extends BetaToolUnionParam {
 }
 
 // Re-export schema-derived types from TextEditorTool (single source of truth)
-export {
-  EditorCommand,
-  TextEditorInput,
-  TextEditorInput as ToolCallInput, // Alias for backward compatibility
-} from './TextEditorTool';
+export { EditorCommand, TextEditorInput } from './TextEditorTool';
 
 /**
  * Interface for file history entries

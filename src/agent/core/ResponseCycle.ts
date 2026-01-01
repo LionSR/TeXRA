@@ -4,7 +4,7 @@
  * Response cycle execution for workflow agents.
  *
  * Returns a result indicating whether the round should end.
- * Used by BaseReflectionAgent for proactive, turn-based execution.
+ * Supports proactive, turn-based execution for structured output generation.
  *
  * @see ToolUseCycle for interactive cycle execution
  */
@@ -14,16 +14,20 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
-import { AgentSharedStore } from './AgentSharedStore';
+import type { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 import { createRetryState } from './flows/RetryState';
+import { interpretCycleCompletion } from './flows/CommonCycleTypes';
 
 // Import and re-export from single source of truth
-import type { ResponseCycleOptions } from './flows/CycleServices';
+import type {
+  ResponseCycleOptions,
+  RoundFinalizedCallback,
+} from './flows/CycleServices';
 export type { ResponseCycleOptions };
 
 export interface ResponseCycleInput<C = unknown> {
@@ -32,6 +36,8 @@ export interface ResponseCycleInput<C = unknown> {
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation: AgentFileLocation;
   store: AgentSharedStore;
+  /** Optional callback invoked when round completes. */
+  onRoundFinalized?: RoundFinalizedCallback;
 }
 
 export interface ResponseCycleResult {
@@ -48,15 +54,15 @@ export interface ResponseCycleResult {
 /**
  * Executes a response cycle for workflow agents.
  *
- * Response cycles return a result indicating whether the turn should end.
- * This is used by workflow agents (BaseReflectionAgent) to determine round continuation.
+ * Response cycles return a result indicating whether the turn should end,
+ * used by workflow flows to determine round continuation.
  *
  * Unlike tool-use cycles which continue until user input, response cycles
  * complete when the model generates a full response or hits a stopping condition.
  *
  * @param input - Cycle input with options, messages, output location, and store
  * @returns Result with endTurn flag and updated store
- * @see runToolUseCycle for interactive cycle execution that doesn't return control flags
+ * @see runToolUseCycle for interactive cycle execution
  */
 export async function runResponseCycle<C = unknown>(
   input: ResponseCycleInput<C>,
@@ -71,40 +77,34 @@ export async function runResponseCycle<C = unknown>(
       shouldStop: false,
       outputExists: false,
       systemPrompt: undefined,
-      debugContext: undefined,
-      debugFileOptions: undefined,
-      startTime: undefined,
+      debug: undefined,
       responseObject: undefined,
       responseTimeMs: undefined,
       stopReason: undefined,
       processedResponse: undefined,
-      roundFinalized: false,
     } satisfies ResponseCycleState,
     retryState: createRetryState(),
   };
 
   const flow = createResponseCycleFlow<C>();
-  // Inject immutable services via params (PocketFlow pattern)
-  flow.setParams({ services: { options: input.options, store: input.store } });
+  // Inject immutable services directly (PocketFlow pattern)
+  // Options are spread with state slices (no store wrapper)
+  const { store, onRoundFinalized } = input;
+  flow.setServices({
+    ...input.options,
+    round: store.round,
+    run: store.run,
+    workspace: store.workspace,
+    onRoundFinalized,
+  });
   await flow.run(shared);
 
-  // Determine if the cycle failed due to an error (not user cancellation).
-  // User cancellation in retryPrompt does not record an error, so:
-  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
-  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
-  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
-  const failedWithError =
-    shared.state.shouldStop && !!shared.retryState.lastError;
-  const userCancelled =
-    shared.state.shouldStop &&
-    !shared.retryState.lastError &&
-    !shared.state.endTurn;
+  // Interpret cycle completion - shared logic with ToolUseCycle
+  const completion = interpretCycleCompletion(shared.state, shared.retryState);
 
   return {
     store: input.store,
     endTurn: shared.state.endTurn,
-    failedWithError,
-    errorMessage: shared.retryState.lastError?.message,
-    userCancelled,
+    ...completion,
   };
 }

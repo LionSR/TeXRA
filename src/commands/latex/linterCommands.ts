@@ -10,11 +10,11 @@ import {
   getSeverityString,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
 
 // Local imports - core
 

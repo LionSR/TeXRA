@@ -24,63 +24,27 @@ export const ThinkingBlockSchema = z.object({
  */
 export type ThinkingBlock = z.infer<typeof ThinkingBlockSchema>;
 
-/** Schema for ResponseAssemblyState serialization */
-export const ResponseAssemblyStateSnapshotSchema = z.object({
+// ============================================================================
+// ResponseAssemblyState - Plain object with schema (no class needed)
+// ============================================================================
+
+/**
+ * Schema for response assembly state.
+ * Tracks model's textual output for mid-conversation resumption.
+ */
+export const ResponseAssemblyStateSchema = z.object({
   lastResponse: z.string().prefault(''),
   accumulatedOutput: z.string().prefault(''),
 });
-export type ResponseAssemblyStateSnapshot = z.output<
-  typeof ResponseAssemblyStateSnapshotSchema
+
+/** Response assembly state - plain object type derived from schema */
+export type ResponseAssemblyState = z.output<
+  typeof ResponseAssemblyStateSchema
 >;
 
-/**
- * Workspace assembly state keeps track of the model's textual output so the
- * agent can resume mid-conversation without rebuilding strings from scratch.
- */
-export class ResponseAssemblyState {
-  private _lastResponse = '';
-  private _accumulatedOutput = '';
-
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): ResponseAssemblyState {
-    const parsed = ResponseAssemblyStateSnapshotSchema.parse(snapshot);
-    const state = new ResponseAssemblyState();
-    state._lastResponse = parsed.lastResponse;
-    state._accumulatedOutput = parsed.accumulatedOutput;
-    return state;
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): ResponseAssemblyStateSnapshot {
-    return {
-      lastResponse: this._lastResponse,
-      accumulatedOutput: this._accumulatedOutput,
-    };
-  }
-
-  get lastResponse(): string {
-    return this._lastResponse;
-  }
-
-  set lastResponse(value: string) {
-    this._lastResponse = value;
-  }
-
-  get accumulatedOutput(): string {
-    return this._accumulatedOutput;
-  }
-
-  set accumulatedOutput(value: string) {
-    this._accumulatedOutput = value;
-  }
-
-  updateLastResponse(response: string): void {
-    this._lastResponse = response;
-  }
-
-  updateAccumulatedOutput(output: string): void {
-    this._accumulatedOutput = output;
-  }
+/** Create a fresh ResponseAssemblyState */
+export function createResponseAssemblyState(): ResponseAssemblyState {
+  return { lastResponse: '', accumulatedOutput: '' };
 }
 
 /** Schema for FileInteractionState serialization */
@@ -263,45 +227,43 @@ export class MediaAttachmentState {
   }
 }
 
-/** Schema for ReasoningCacheState serialization */
-export const ReasoningCacheStateSnapshotSchema = z.object({
+// ============================================================================
+// ReasoningCacheState - Plain object with schema (no class needed)
+// ============================================================================
+
+/**
+ * Schema for reasoning cache state.
+ * Tracks thinking blocks from reasoning models like Claude Sonnet 4.
+ */
+export const ReasoningCacheStateSchema = z.object({
   thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
   thinkingAdded: z.boolean().prefault(false),
 });
-export type ReasoningCacheStateSnapshot = z.output<
-  typeof ReasoningCacheStateSnapshotSchema
->;
 
-export class ReasoningCacheState {
-  public thinkingBlocks: ThinkingBlock[] = [];
-  public thinkingAdded = false;
+/** Reasoning cache state - plain object type derived from schema */
+export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): ReasoningCacheState {
-    const parsed = ReasoningCacheStateSnapshotSchema.parse(snapshot);
-    const state = new ReasoningCacheState();
-    state.thinkingBlocks = [...parsed.thinkingBlocks];
-    state.thinkingAdded = parsed.thinkingAdded;
-    return state;
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): ReasoningCacheStateSnapshot {
-    return {
-      thinkingBlocks: [...this.thinkingBlocks],
-      thinkingAdded: this.thinkingAdded,
-    };
-  }
-
-  get primaryBlock(): ThinkingBlock | null {
-    return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
-  }
-
-  reset(): void {
-    this.thinkingBlocks = [];
-    this.thinkingAdded = false;
-  }
+/** Create a fresh ReasoningCacheState */
+export function createReasoningCacheState(): ReasoningCacheState {
+  return { thinkingBlocks: [], thinkingAdded: false };
 }
+
+/** Get the primary thinking block, or null if none */
+export function getReasoningPrimaryBlock(
+  state: ReasoningCacheState,
+): ThinkingBlock | null {
+  return state.thinkingBlocks.length > 0 ? state.thinkingBlocks[0] : null;
+}
+
+/** Reset reasoning cache state to initial values */
+export function resetReasoningCacheState(state: ReasoningCacheState): void {
+  state.thinkingBlocks = [];
+  state.thinkingAdded = false;
+}
+
+// ============================================================================
+// ServerToolContentState - Plain object (no class needed)
+// ============================================================================
 
 /**
  * Cache for server tool content blocks (e.g., web_search results from Anthropic).
@@ -310,66 +272,26 @@ export class ReasoningCacheState {
  * **EPHEMERAL STATE**: This state is intentionally NOT serialized to snapshots.
  * Server tool content is only relevant within a single tool use cycle and is automatically
  * cleared after being consumed by `createToolUseFollowUpMessages()` or when the end-turn
- * branch is taken. It does not need to survive state restoration since:
- * 1. The response object containing the content is not persisted
- * 2. Upon restoration, the model will generate fresh server tool content if needed
- * 3. Stale content would cause duplicate blocks in conversation history
+ * branch is taken.
  */
-export class ServerToolContentState {
-  /**
-   * Server tool content blocks extracted from the model response.
-   * These include server_tool_use, web_search_tool_result (Anthropic),
-   * and web_search_call (OpenAI) blocks.
-   * Cleared after being consumed by createToolUseFollowUpMessages().
-   */
-  public contentBlocks: ServerToolContentBlock[] = [];
-
-  /**
-   * Full assistant content blocks from the last response, excluding tool_use.
-   * Preserves original order for building correct follow-up messages.
-   * Includes: thinking, text, server_tool_use, web_search_tool_result blocks.
-   * Cleared after being consumed by createToolUseFollowUpMessages().
-   *
-   * Typed as unknown[] because content block types differ across providers:
-   * - Anthropic: ContentBlockParam (thinking, text, server_tool_use, etc.)
-   * - OpenAI: ResponseInputItem (message, function_call, web_search_call, etc.)
-   * Each handler casts to provider-specific types when consuming.
-   */
-  public lastAssistantContent: unknown[] = [];
-
-  reset(): void {
-    this.contentBlocks = [];
-    this.lastAssistantContent = [];
-  }
+export interface ServerToolContentState {
+  /** Server tool content blocks from model response (server_tool_use, web_search_tool_result, etc.) */
+  contentBlocks: ServerToolContentBlock[];
+  /** Full assistant content blocks from last response, excluding tool_use. Typed as unknown[] for cross-provider compatibility. */
+  lastAssistantContent: unknown[];
 }
 
-/** Schema for DocumentStatsState serialization */
-export const DocumentStatsStateSnapshotSchema = z.object({
-  texcountStats: z.string().nullable().prefault(null),
-});
-export type DocumentStatsStateSnapshot = z.output<
-  typeof DocumentStatsStateSnapshotSchema
->;
+/** Create a fresh ServerToolContentState */
+export function createServerToolContentState(): ServerToolContentState {
+  return { contentBlocks: [], lastAssistantContent: [] };
+}
 
-export class DocumentStatsState {
-  public texcountStats: string | null = null;
-
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): DocumentStatsState {
-    const parsed = DocumentStatsStateSnapshotSchema.parse(snapshot);
-    const state = new DocumentStatsState();
-    state.texcountStats = parsed.texcountStats;
-    return state;
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): DocumentStatsStateSnapshot {
-    return { texcountStats: this.texcountStats };
-  }
-
-  updateTeXCountStats(stats: string | null): void {
-    this.texcountStats = stats;
-  }
+/** Reset server tool content state to initial values */
+export function resetServerToolContentState(
+  state: ServerToolContentState,
+): void {
+  state.contentBlocks = [];
+  state.lastAssistantContent = [];
 }
 
 // Import todo schemas from single source of truth (eventBus/schemas)
@@ -449,16 +371,15 @@ export class TodoState {
  * with legacy workspace snapshots that may contain removed or renamed fields.
  */
 export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSnapshotSchema.prefault({
+  assembly: ResponseAssemblyStateSchema.prefault({
     lastResponse: '',
     accumulatedOutput: '',
   }),
   media: MediaAttachmentStateSnapshotSchema.prefault({ files: [] }),
-  reasoning: ReasoningCacheStateSnapshotSchema.prefault({
+  reasoning: ReasoningCacheStateSchema.prefault({
     thinkingBlocks: [],
     thinkingAdded: false,
   }),
-  document: DocumentStatsStateSnapshotSchema.prefault({ texcountStats: null }),
   interactions: FileInteractionStateSnapshotSchema.prefault({
     readFiles: [],
     edits: [],
@@ -475,10 +396,11 @@ export type AgentWorkspaceSnapshot = z.output<
 >;
 
 export class AgentWorkspaceState {
+  /** Plain object - use direct property assignment */
   public readonly assembly: ResponseAssemblyState;
   public readonly media: MediaAttachmentState;
+  /** Plain object - use direct property assignment */
   public readonly reasoning: ReasoningCacheState;
-  public readonly document: DocumentStatsState;
   public readonly interactions: FileInteractionState;
   public readonly serverToolContent: ServerToolContentState;
   public readonly todos: TodoState;
@@ -487,7 +409,6 @@ export class AgentWorkspaceState {
     assembly: ResponseAssemblyState,
     media: MediaAttachmentState,
     reasoning: ReasoningCacheState,
-    document: DocumentStatsState,
     interactions: FileInteractionState,
     serverToolContent: ServerToolContentState,
     todos: TodoState,
@@ -495,7 +416,6 @@ export class AgentWorkspaceState {
     this.assembly = assembly;
     this.media = media;
     this.reasoning = reasoning;
-    this.document = document;
     this.interactions = interactions;
     this.serverToolContent = serverToolContent;
     this.todos = todos;
@@ -504,12 +424,11 @@ export class AgentWorkspaceState {
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(
-      new ResponseAssemblyState(),
+      createResponseAssemblyState(),
       new MediaAttachmentState(),
-      new ReasoningCacheState(),
-      new DocumentStatsState(),
+      createReasoningCacheState(),
       new FileInteractionState(),
-      new ServerToolContentState(),
+      createServerToolContentState(),
       new TodoState(),
     );
   }
@@ -518,12 +437,11 @@ export class AgentWorkspaceState {
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return new AgentWorkspaceState(
-      ResponseAssemblyState.fromSnapshot(parsed.assembly),
+      parsed.assembly, // Plain object - schema already validates
       MediaAttachmentState.fromSnapshot(parsed.media),
-      ReasoningCacheState.fromSnapshot(parsed.reasoning),
-      DocumentStatsState.fromSnapshot(parsed.document),
+      parsed.reasoning, // Plain object - schema already validates
       FileInteractionState.fromSnapshot(parsed.interactions),
-      new ServerToolContentState(), // Ephemeral - not serialized
+      createServerToolContentState(), // Ephemeral - not serialized
       TodoState.fromSnapshot(parsed.todos),
     );
   }
@@ -531,20 +449,22 @@ export class AgentWorkspaceState {
   /** Serialize to a snapshot. */
   toSnapshot(): AgentWorkspaceSnapshot {
     return {
-      assembly: this.assembly.toSnapshot(),
+      assembly: { ...this.assembly },
       media: this.media.toSnapshot(),
-      reasoning: this.reasoning.toSnapshot(),
-      document: this.document.toSnapshot(),
+      reasoning: {
+        ...this.reasoning,
+        thinkingBlocks: [...this.reasoning.thinkingBlocks],
+      },
       interactions: this.interactions.toSnapshot(),
       todos: this.todos.toSnapshot(),
     };
   }
 
   resetReasoning(): void {
-    this.reasoning.reset();
+    resetReasoningCacheState(this.reasoning);
   }
 
   resetServerToolContent(): void {
-    this.serverToolContent.reset();
+    resetServerToolContentState(this.serverToolContent);
   }
 }

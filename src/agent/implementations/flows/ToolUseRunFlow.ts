@@ -17,13 +17,24 @@
 // Local imports - core flow primitives
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentRunState } from '@agent/core/AgentState';
+import {
+  AgentSharedStore,
+  createSharedStore,
+  type AgentSharedStoreSnapshot,
+} from '@agent/core/AgentSharedStore';
+import {
+  createToolUseCycleFlow,
+  type ToolUseCycleShared,
+  type ToolUseCycleState,
+} from '@agent/core/flows/ToolUseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
+import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import type { ToolUseCycleParams } from '@agent/core/flows/CycleServices';
 
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
+import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 
 // Internal imports
 import {
@@ -41,13 +52,22 @@ import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 
 /**
  * Runtime state for tool-use agent runs.
+ *
+ * Following koala-code-reader pattern: stores **snapshots** (plain JSON objects)
+ * instead of class instances. This ensures structuredClone() works correctly
+ * when PersistedFlow serializes the state.
+ *
+ * - storeSnapshot: AgentSharedStoreSnapshot (not AgentSharedStore class)
+ * - Nodes reconstruct class instances from snapshots when needed
+ *
+ * IMPORTANT: cycleOptions is NOT stored here because it contains non-serializable
+ * objects (modelHandler, client, logger, functions). It's rebuilt each cycle from services.
  */
-export interface ToolUseRunState<C = unknown> {
+export interface ToolUseRunState {
   conversation: ProviderMessage[];
-  cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
-  store: AgentSharedStore | null;
-  runState: AgentRunState;
+  /** Store snapshot (natively serializable) - reconstruct via createSharedStore() */
+  storeSnapshot: AgentSharedStoreSnapshot | null;
 }
 
 /**
@@ -56,13 +76,11 @@ export interface ToolUseRunState<C = unknown> {
  * Factory function for consistency with ReflectionFlow pattern
  * (which uses createInitialReflectionState).
  */
-export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
+export function createInitialToolUseState(): ToolUseRunState {
   return {
     conversation: [],
-    cycleOptions: null,
     shouldSkipCycle: false,
-    store: null,
-    runState: new AgentRunState(),
+    storeSnapshot: null,
   };
 }
 
@@ -75,8 +93,10 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
  * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
  * Work nodes use services from this.services, throw errors on failure.
  */
-export interface ToolUseRunShared<C = unknown> {
-  state: ToolUseRunState<C>;
+export interface ToolUseRunShared {
+  state: ToolUseRunState;
+  /** Index signature for PersistedFlow serialization compatibility */
+  [key: string]: unknown;
 }
 
 // ============================================================================
@@ -85,13 +105,14 @@ export interface ToolUseRunShared<C = unknown> {
 
 /**
  * Result of prepare execution.
+ * Note: cycleOptions is only used within the same node (exec → post),
+ * NOT persisted to state (non-serializable).
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
   store: AgentSharedStore;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
-  runState: AgentRunState;
 }
 
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
@@ -137,20 +158,19 @@ interface WaitNodePrepResult {
 // State Guards
 // ============================================================================
 
-/** Prepared state type with non-null cycleOptions and store. */
-type PreparedState<C> = ToolUseRunState<C> & {
-  cycleOptions: ToolUseCycleOptions<C>;
-  store: AgentSharedStore;
+/** Prepared state type with non-null storeSnapshot. */
+type PreparedState = ToolUseRunState & {
+  storeSnapshot: AgentSharedStoreSnapshot;
 };
 
 /**
- * Asserts that state has been prepared (cycleOptions and store are non-null).
+ * Asserts that state has been prepared (storeSnapshot is non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  */
-function assertPreparedState<C>(
-  state: ToolUseRunState<C>,
-): asserts state is PreparedState<C> {
-  if (state.cycleOptions === null || state.store === null) {
+function assertPreparedState(
+  state: ToolUseRunState,
+): asserts state is PreparedState {
+  if (state.storeSnapshot === null) {
     throw new Error(
       'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
@@ -166,10 +186,12 @@ function assertPreparedState<C>(
  *
  * Uses native services pattern:
  * - this.services.prepareState() instead of shared.hooks.prepareState()
- * - this.services.buildCycleOptions() instead of shared.hooks.buildCycleOptions()
+ *
+ * Note: cycleOptions is NOT stored in state (non-serializable). It's rebuilt
+ * by CycleNode using this.services.buildCycleOptions().
  */
 class ToolUsePrepareNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -177,7 +199,7 @@ class ToolUsePrepareNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(_shared: ToolUseRunShared<C>): Promise<void> {
+  async prep(_shared: ToolUseRunShared): Promise<void> {
     // No prep needed - services accessed via this.services
   }
 
@@ -204,7 +226,7 @@ class ToolUsePrepareNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     _prepRes: void,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
@@ -215,13 +237,12 @@ class ToolUsePrepareNode<C> extends Node<
         : new Error(String(execRes.error));
     }
 
-    const { messages, store, shouldSkipCycle, cycleOptions, runState } =
-      execRes.result;
+    const { messages, store, shouldSkipCycle } = execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
-    shared.state.cycleOptions = cycleOptions;
-    shared.state.store = store;
-    shared.state.runState = runState;
+    // Store snapshot instead of class instance (for PersistedFlow serialization)
+    // cycleOptions is NOT stored - it's rebuilt from services in CycleNode
+    shared.state.storeSnapshot = store.toSnapshot();
 
     return FlowTransition.DEFAULT; // Follow next() → CycleNode
   }
@@ -230,28 +251,38 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Uses native services pattern:
- * - this.services.runCycle() instead of shared.hooks.runCycle()
- * - this.services.persistCheckpoint() instead of shared.hooks.persistCheckpoint()
+ * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleCompositionNode).
+ * This eliminates the circular reference through services.runCycle().
+ *
+ * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
 class ToolUseCycleNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
+  private cycleFlow: Flow<ToolUseCycleShared, ToolUseCycleParams<C>>;
+
   constructor() {
     super(NODE_NO_RETRY, NODE_NO_WAIT);
+    this.cycleFlow = createToolUseCycleFlow<C>();
   }
 
-  async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
+  async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
+    // Reconstruct store from snapshot (koala-code-reader pattern)
+    const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
+
+    // Rebuild cycleOptions from services (NOT stored in state - non-serializable)
+    const cycleOptions = this.services.buildCycleOptions(store);
+
     return {
       shouldSkip: shared.state.shouldSkipCycle,
-      cycleOptions: shared.state.cycleOptions,
+      cycleOptions,
       conversation: shared.state.conversation,
-      store: shared.state.store,
+      store,
     };
   }
 
@@ -261,20 +292,57 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Use native services pattern
-    const result = await this.services.runCycle(
-      prepRes.cycleOptions,
-      prepRes.conversation,
-      prepRes.store,
-    );
+    // Create cycle shared state (like ResponseCycleCompositionNode)
+    const cycleShared: ToolUseCycleShared = {
+      state: {
+        messages: prepRes.conversation,
+        shouldStop: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        stopReason: undefined,
+        endTurn: false,
+      } satisfies ToolUseCycleState,
+      retryState: createRetryState(),
+    };
 
-    if (result.failedWithError) {
-      return { kind: 'failed', message: result.errorMessage ?? 'Cycle failed' };
+    // Inject services directly and run sub-flow (like ResponseCycleCompositionNode)
+    // Options are spread with state slices (no store wrapper)
+    const onRoundFinalized = this.services.getUsageRecorder();
+    this.cycleFlow.setServices({
+      ...prepRes.cycleOptions,
+      round: prepRes.store.round,
+      run: prepRes.store.run,
+      workspace: prepRes.store.workspace,
+      onRoundFinalized,
+    });
+
+    try {
+      await this.cycleFlow.run(cycleShared);
+
+      // Interpret cycle completion using shared helper
+      const completion = interpretCycleCompletion(
+        cycleShared.state,
+        cycleShared.retryState,
+      );
+
+      if (completion.failedWithError) {
+        return {
+          kind: 'failed',
+          message: completion.errorMessage ?? 'Cycle failed',
+        };
+      }
+      if (completion.userCancelled) {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'success' };
+    } catch (error) {
+      return {
+        kind: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
-    if (result.userCancelled) {
-      return { kind: 'cancelled' };
-    }
-    return { kind: 'success' };
   }
 
   async execFallback(
@@ -285,7 +353,7 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     prepRes: CycleNodePrepResult<C>,
     execRes: CycleExecResult,
   ): Promise<string | undefined> {
@@ -294,16 +362,14 @@ class ToolUseCycleNode<C> extends Node<
       shared.state.shouldSkipCycle = false;
     }
 
+    // Update store snapshot after cycle (cycle mutates the store)
+    // This ensures workspace state changes (todos, interactions, etc.) are persisted
+    shared.state.storeSnapshot = prepRes.store.toSnapshot();
+
     switch (execRes.kind) {
       case 'success':
-        // Persist checkpoint via services (side effect belongs in post)
-        await this.services.persistCheckpoint(
-          shared.state.conversation,
-          prepRes.store,
-        );
-        return FlowTransition.DEFAULT; // Follow next() → WaitNode
-
       case 'skipped':
+        // PersistedFlow handles checkpoint persistence automatically after each node
         return FlowTransition.DEFAULT; // Follow next() → WaitNode
 
       case 'failed':
@@ -326,7 +392,7 @@ class ToolUseCycleNode<C> extends Node<
  * - Session operations via this.services.session
  */
 class ToolUseWaitNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -334,7 +400,7 @@ class ToolUseWaitNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
+  async prep(shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
     const session = this.services.session;
     return {
       conversation: shared.state.conversation,
@@ -344,18 +410,17 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    const { conversation, hasQueuedFollowUp, session } = prepRes;
+    const { hasQueuedFollowUp, session } = prepRes;
 
     // Check interruption first
     if (this.services.checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    // Handle waiting state (I/O in exec where errors are caught)
-    if (hasQueuedFollowUp) {
-      await session.clearPersistedSnapshot();
-    } else {
-      await session.enterWaitingState(conversation);
+    // Enter waiting state if no queued follow-up
+    // PersistedFlow handles state persistence automatically
+    if (!hasQueuedFollowUp) {
+      await session.enterWaitingState();
     }
 
     // Wait for follow-up (blocking I/O)
@@ -381,7 +446,7 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     _prepRes: WaitNodePrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
@@ -393,7 +458,6 @@ class ToolUseWaitNode<C> extends Node<
     // Apply follow-up via services
     const session = this.services.session;
     await session.markRunning();
-    await session.clearPersistedSnapshot();
     shared.state.conversation = await this.services.applyFollowUpMessage(
       execRes.followUp,
       shared.state.conversation,
@@ -424,7 +488,7 @@ class ToolUseWaitNode<C> extends Node<
  * ```
  */
 export function createToolUseRunFlow<C = unknown>(): Flow<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -439,7 +503,7 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
   cycleNode.next(waitNode);
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
 
-  return new Flow<ToolUseRunShared<C>, ToolUseFlowParams, ToolUseServices<C>>(
+  return new Flow<ToolUseRunShared, ToolUseFlowParams, ToolUseServices<C>>(
     prepareNode,
   );
 }

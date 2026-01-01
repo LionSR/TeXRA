@@ -12,13 +12,13 @@ import {
   showLoggedMessage,
   toErrorMessage,
 } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getIncludedExtensions,
   ExtensionCategory,
 } from '@common/files/fileTypeUtils';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { selectFiles } from '@frontend/ui/dialogs';
 import { fileLister } from '@frontend/files';
+import { selectFiles } from '@frontend/ui/dialogs';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';

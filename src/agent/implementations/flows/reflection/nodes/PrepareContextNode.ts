@@ -11,7 +11,7 @@
  * PocketFlow pattern:
  * - prep(): Extract data needed for context preparation
  * - exec(): Build prompts and base messages
- * - post(): Store context in shared, handle skip
+ * - post(): Store context in shared
  *
  * Services accessed via native `this.services`:
  * - promptBuilder, modelHandler, logger
@@ -44,9 +44,7 @@ interface ContextPrepInput {
   conversation: ProviderMessage[];
 }
 
-type ContextExecResult =
-  | { kind: 'ready'; context: RoundContext }
-  | { kind: 'skip' };
+type ContextExecResult = { kind: 'ready'; context: RoundContext };
 
 // ============================================================================
 // Node Implementation
@@ -66,8 +64,8 @@ export class PrepareContextNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<ContextPrepInput> {
     return {
-      currentRound: shared.state.currentRound,
-      conversation: shared.state.conversation,
+      currentRound: shared.currentRound,
+      conversation: shared.conversation,
     };
   }
 
@@ -103,17 +101,15 @@ export class PrepareContextNode<C = unknown> extends Node<
 
       return {
         kind: 'ready',
-        context: { messages, prefill: prefill ?? '', stateRound },
+        context: {
+          messages,
+          prefill: prefill ?? '',
+          stateRoundSnapshot: stateRound.toSnapshot(),
+        },
       };
     } else {
       // Subsequent rounds: build user request only
       const userRequest = await promptBuilder.buildUserRequest(currentRound);
-
-      // Check for skip (no content)
-      if (!userRequest?.trim()) {
-        logger.debug(`Skipping round ${currentRound} - no user content`);
-        return { kind: 'skip' };
-      }
 
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
@@ -131,33 +127,25 @@ export class PrepareContextNode<C = unknown> extends Node<
 
       return {
         kind: 'ready',
-        context: { messages, prefill: prefill ?? '', stateRound },
+        context: {
+          messages,
+          prefill: prefill ?? '',
+          stateRoundSnapshot: stateRound.toSnapshot(),
+        },
       };
     }
   }
 
   /**
-   * Store context in shared or handle skip.
+   * Store context in shared and continue.
    */
   async post(
     shared: ReflectionFlowShared,
     _prepRes: ContextPrepInput,
     execRes: ContextExecResult,
   ): Promise<string | undefined> {
-    if (execRes.kind === 'skip') {
-      // Increment round and loop back to start of flow
-      shared.state.currentRound += 1;
-
-      // Bounds check to prevent infinite loop when all remaining rounds are empty
-      if (shared.state.currentRound >= shared.state.totalRounds) {
-        return FlowTransition.DEFAULT; // Exit flow - no more rounds
-      }
-
-      return FlowTransition.CONTINUE;
-    }
-
     // Store context for subsequent nodes to enrich
-    shared.state.context = execRes.context;
+    shared.context = execRes.context;
 
     // Continue to TeXCountNode
     return FlowTransition.DEFAULT;
