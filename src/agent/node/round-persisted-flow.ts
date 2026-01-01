@@ -59,6 +59,10 @@ import { PersistedFlow, type FlowStore } from './persisted-flow';
  *
  * Flows using RoundPersistedFlow must have shared state that includes these fields.
  * This ensures the flow can track round progression and control continuation.
+ *
+ * Note: This interface is intentionally minimal. Domain-specific fields like
+ * `endTurn` belong in flow-specific state types (e.g., ReflectionFlowShared),
+ * not here. RoundPersistedFlow only needs these core orchestration fields.
  */
 export interface RoundAwareState extends Record<string, unknown> {
   /** Current round index (0-based) */
@@ -69,9 +73,6 @@ export interface RoundAwareState extends Record<string, unknown> {
 
   /** Whether to continue to next round (can be set false by nodes) */
   continueRounds: boolean;
-
-  /** Whether the current turn ended (model said stop) */
-  endTurn: boolean;
 }
 
 // ============================================================================
