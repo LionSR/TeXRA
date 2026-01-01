@@ -271,6 +271,9 @@ export async function runReflectionFlow<C = unknown>(
     // Run the persisted flow - errors throw directly
     await pf.run(shared);
 
+    // Get final shared state with all mutations (including roundOutputs)
+    shared = pf.getShared();
+
     status = END_GROUP_STATUS.STOPPED;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
