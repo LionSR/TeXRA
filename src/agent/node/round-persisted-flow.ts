@@ -417,14 +417,4 @@ export class RoundPersistedFlow<
       roundStage: this.currentRoundStage,
     };
   }
-
-  /**
-   * Get the current round stage.
-   *
-   * Useful for nodes that need to access the current stage without
-   * going through services.
-   */
-  getRoundStage(): AgentLogStage | null {
-    return this.currentRoundStage;
-  }
 }

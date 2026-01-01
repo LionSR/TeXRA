@@ -73,28 +73,6 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 // ============================================================================
 
 /**
- * Convert ExecutionStatus to StreamStatus for UI display.
- *
- * Transformation rules:
- * - `completed` → `stopped` (green, task finished normally)
- * - `interrupted` → `error` (red, user/system stopped before completion)
- * - `error` → `error` (red, task failed with error)
- *
- * Note: `interrupted` maps to `error` because UI should show red status
- * when agent didn't complete its intended work, regardless of cause.
- */
-export function executionToStreamStatus(status: ExecutionStatus): StreamStatus {
-  switch (status) {
-    case EXECUTION_STATUS.COMPLETED:
-      return STREAM_STATUS.STOPPED;
-    case EXECUTION_STATUS.INTERRUPTED:
-      return STREAM_STATUS.ERROR;
-    case EXECUTION_STATUS.ERROR:
-      return STREAM_STATUS.ERROR;
-  }
-}
-
-/**
  * Convert ExecutionStatus to terminal status string for logger.
  *
  * Returns 'error' | 'stopped' - the EndGroupStatus values.
