@@ -14,6 +14,7 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
@@ -84,6 +85,12 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
     message: string,
     conversation: ProviderMessage[],
   ) => Promise<ProviderMessage[]>;
+
+  /**
+   * Get usage recorder callback for tracking round statistics.
+   * Returns a callback that will be invoked when a round finalizes.
+   */
+  readonly getUsageRecorder: () => RoundFinalizedCallback;
 }
 
 /**
