@@ -30,6 +30,7 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
@@ -129,6 +130,31 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
   } = input;
 
+  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+  let shared: ReflectionFlowShared | undefined;
+  let services: ReflectionServices<C> | undefined;
+  let createdRunStage = false;
+
+  // Create or use provided run stage FIRST - we need its ID for storage key
+  const runStage =
+    parentStage ??
+    (await executionContext.logger.stage(`Run: ${config.agent}`, {
+      skip: false,
+    }));
+
+  // Track if we created the stage internally
+  createdRunStage = !parentStage;
+
+  // For new runs, update storage key to match the run stage ID.
+  // This ensures output files, usage, and other storage operations use
+  // the same key as the task group that the frontend uses for filtering.
+  // For resumed runs where a parent stage is provided, we trust the existing
+  // storage key since the parent stage ID should already match.
+  if (createdRunStage && runStage.id && executionContext.hasInitialStorageKey()) {
+    const runStorageKey = normalizeRunId(runStage.id);
+    executionContext.updateStorageKey(runStorageKey);
+  }
+
   const storageKey = executionContext.storageKey;
 
   // Create ready-to-use flow context (handles setActiveRun)
@@ -148,24 +174,9 @@ export async function runReflectionFlow<C = unknown>(
     storageKey,
   );
 
-  let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
-  let shared: ReflectionFlowShared | undefined;
-  let services: ReflectionServices<C> | undefined;
-  let createdRunStage = false;
-
   try {
     // Register context for interrupt handling
     callbacks?.onContextReady?.(storageKey, flowContext);
-
-    // Create or use provided run stage
-    const runStage =
-      parentStage ??
-      (await executionContext.logger.stage(`Run: ${config.agent}`, {
-        skip: false,
-      }));
-
-    // Track if we created the stage internally
-    createdRunStage = !parentStage;
 
     // Always start from round 0, even on resume.
     // Completed rounds are "replayed" via initializeOutputAndPrefill()
@@ -269,9 +280,11 @@ export async function runReflectionFlow<C = unknown>(
     // Note: roundStage may have been updated by RoundCompleteNode during execution
     services?.roundStage?.end(status);
 
-    // Finalize run stage if we created it internally
+    // Finalize run stage if we created it internally.
+    // Prefer services.runStage (may have been updated) but fall back to runStage
+    // if services wasn't assigned (error before services creation).
     if (createdRunStage) {
-      services?.runStage?.end(status);
+      (services?.runStage ?? runStage)?.end(status);
     }
 
     // Clean up context resources
