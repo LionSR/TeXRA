@@ -309,12 +309,13 @@ class ToolUseCycleNode<C> extends Node<
 
     // Inject services directly and run sub-flow (like ResponseCycleCompositionNode)
     // Options are spread with state slices (no store wrapper)
+    const onRoundFinalized = this.services.getUsageRecorder();
     this.cycleFlow.setServices({
       ...prepRes.cycleOptions,
       round: prepRes.store.round,
       run: prepRes.store.run,
       workspace: prepRes.store.workspace,
-      // Note: onRoundFinalized is handled internally by ToolUseCycleFlow
+      onRoundFinalized,
     });
 
     try {
