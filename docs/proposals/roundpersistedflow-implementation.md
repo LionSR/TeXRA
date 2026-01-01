@@ -41,7 +41,10 @@ RoundPersistedFlow (adds round iteration in run())
 - [x] Simplify RoundCompleteNode (removed stage management)
 
 ### Phase 3: Cleanup
-- [x] Remove mutable roundStage from services (now null, managed by flow)
+- [x] Remove mutable roundStage from services (field removed entirely)
+- [x] Implement resetForNextRound hook (was declared but never called)
+- [x] Move workspace reset from RoundCompleteNode to hook
+- [x] Fix 'interrupted' status detection in RoundPersistedFlow
 - [ ] Update tests
 - [ ] Documentation
 
@@ -92,15 +95,15 @@ Files modified:
    - End final stage when graph completes
 
 2. **RoundCompleteNode.post()** simplified:
-   - Still increments currentRound (this triggers stage transition detection)
-   - Still resets workspace snapshot
-   - Removed: stage end/create code, services.roundStage mutation
+   - Only increments currentRound (this triggers stage transition detection)
+   - Removed: stage end/create code, workspace reset (moved to hook)
 
 3. **runReflectionFlow.ts** updated:
    - Use RoundPersistedFlow instead of PersistedFlow
    - Configure createRoundStage hook
-   - Set roundStage: null in services (no longer managed there)
-   - Removed roundStage end from finally block
+   - Configure resetForNextRound hook (workspace reset)
+   - Configure checkInterruption hook (status detection)
+   - Removed roundStage from services entirely
 
 **Before/After comparison:**
 
@@ -109,7 +112,36 @@ Files modified:
 | Stage creation (r0) | runReflectionFlow.ts:184 | RoundPersistedFlow.run() |
 | Stage creation (r1+) | RoundCompleteNode.ts:137 | RoundPersistedFlow.handleRoundTransition() |
 | Stage end | RoundCompleteNode + finally block | RoundPersistedFlow.handleRoundTransition() + finally |
-| services.roundStage | Mutable, updated by nodes | null, managed internally by flow |
-| RoundCompleteNode lines | 150 | ~130 (removed stage code) |
+| Workspace reset | RoundCompleteNode.post() | resetForNextRound hook |
+| services.roundStage | Mutable field, always null | Field removed entirely |
+| Interrupted status | Never detected | checkInterruption hook |
+| RoundCompleteNode lines | 150 | ~140 (removed stage + workspace code) |
+
+---
+
+### Entry 4: Code Review Cleanup
+**Status**: Complete
+**Date**: 2026-01-01
+
+Code review revealed dead code and incomplete patterns. Fixed:
+
+1. **Removed dead `roundStage` field** from ReflectionServices
+   - Was always null, never read by any node
+   - Removed from ReflectionServices.ts, ReflectionFlowContext.ts, runReflectionFlow.ts
+
+2. **Implemented `resetForNextRound` hook**
+   - Was declared in RoundLifecycleHooks but never called
+   - Now called in handleRoundTransition() before creating new stage
+
+3. **Moved workspace reset to flow level**
+   - Was: RoundCompleteNode.post() called createFreshWorkspaceSnapshot()
+   - Now: resetForNextRound hook in runReflectionFlow.ts handles it
+   - RoundCompleteNode only increments currentRound (pure signaling)
+
+4. **Fixed 'interrupted' status detection**
+   - Was: status always 'completed' or 'error'
+   - Now: detects interruption via checkInterruption hook or continueRounds flag
+
+**Result**: Round logic is now truly invisible to nodes. RoundCompleteNode is pure domain logic (decide continue vs finalize, increment counter).
 
 ---
