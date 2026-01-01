@@ -31,7 +31,9 @@ import type { LatexMediaManager } from '@latex';
  * - runStage: Parent logging stage for round stages (runtime-only)
  * - Configuration-driven behavior delegates
  */
-export interface ReflectionServices<C = unknown> extends BaseFlowContextInit<C> {
+export interface ReflectionServices<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Logger for debugging and progress */
   readonly logger: AgentLogger;
 
