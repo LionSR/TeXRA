@@ -1,18 +1,24 @@
 /**
- * RoundPersistedFlow - Flow-level round stage management with persistence.
+ * RoundPersistedFlow - Flow-level round management with persistence.
  *
  * ## Design Philosophy
  *
- * Round STAGE LIFECYCLE is a FLOW-level concern. This class extends PersistedFlow
- * to add automatic stage management at round boundaries, removing the need for
- * nodes to mutate services.roundStage.
+ * Round lifecycle is a FLOW-level concern. This class extends PersistedFlow
+ * to centrally manage round transitions, including:
+ * - Round counter increment (single source of truth)
+ * - Round stage creation/ending
+ * - Workspace reset between rounds
  *
- * ## Key Insight
+ * ## Command-Based Round Transitions
  *
- * The existing node graph already handles round iteration via internal looping
- * (RoundCompleteNode → PrepareContextNode via CONTINUE action). This class
- * doesn't change that - it just detects round transitions by watching
- * shared.currentRound and manages stages accordingly.
+ * Nodes signal their intent via FlowTransitions, not by mutating state:
+ * - `CONTINUE_NEXT_ROUND`: Round completed successfully, continue to next
+ * - `FINALIZE`: All rounds complete or interrupted, exit flow
+ *
+ * RoundPersistedFlow reads these signals and OWNS the increment:
+ * - Increments currentRound centrally (single source of truth)
+ * - Triggers lifecycle hooks (stages, workspace reset)
+ * - Checks bounds before incrementing
  *
  * ## Inheritance Pattern
  *
@@ -21,34 +27,29 @@
  *   ↓ extends
  * PersistedFlow (adds node-level persistence via step())
  *   ↓ extends
- * RoundPersistedFlow (adds round stage management)
+ * RoundPersistedFlow (adds round management)
  * ```
  *
- * ## What Moves to Flow Level
+ * ## What Flow Owns
  *
- * - Round stage creation/end (was split across RoundCompleteNode + runReflectionFlow)
- * - The mutable services.roundStage field (now managed internally)
+ * - Round counter increment (currentRound)
+ * - Round stage creation/end
+ * - Workspace reset between rounds
+ * - Bounds checking (single source of truth)
  *
- * ## What Nodes Keep
+ * ## What Nodes Do
  *
- * - Round counter increment (RoundCompleteNode.post())
- * - Continuation logic (RoundCompleteNode.exec())
- * - Workspace reset (RoundCompleteNode.post())
+ * - Signal intent (CONTINUE_NEXT_ROUND or FINALIZE)
  * - Pure domain logic (prepare context, run model, process output)
- *
- * ## How It Works
- *
- * 1. Creates initial round stage (r0) before execution
- * 2. Runs nodes via inherited step() - graph loops internally
- * 3. After each node, checks if shared.currentRound changed
- * 4. On round transition: ends old stage, creates new stage
- * 5. Ends final stage when graph completes
+ * - Set flags like continueRounds=false to request interruption
  */
 
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import { PersistedFlow, type FlowStore } from './persisted-flow';
+import { PersistedFlow, type FlowRecord, type FlowStore } from './persisted-flow';
+import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
 // Round-Aware State Interface
@@ -189,12 +190,16 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
 // ============================================================================
 
 /**
- * A PersistedFlow that manages round stage lifecycle automatically.
+ * A PersistedFlow that manages round lifecycle automatically.
  *
- * Extends PersistedFlow to detect round transitions and manage stages.
- * The node graph still handles round iteration via internal looping
- * (RoundCompleteNode returns CONTINUE to loop back). This class just
- * watches for round transitions and creates/ends stages accordingly.
+ * Extends PersistedFlow with command-based round transitions.
+ * Nodes signal intent via FlowTransitions (CONTINUE_NEXT_ROUND or FINALIZE),
+ * and this class handles all round management:
+ *
+ * - Incrementing currentRound (single source of truth)
+ * - Creating/ending round stages
+ * - Resetting workspace between rounds
+ * - Checking bounds to prevent over-iteration
  *
  * ## Usage
  *
@@ -203,6 +208,9 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
  *   hooks: {
  *     createRoundStage: async (idx, parent) => {
  *       return await logger.stage(`r${idx}`, { parent });
+ *     },
+ *     resetForNextRound: (shared) => {
+ *       shared.workspaceSnapshot = createFreshWorkspaceSnapshot();
  *     },
  *   },
  *   parentStage: runStage,
@@ -222,7 +230,6 @@ export class RoundPersistedFlow<
 > extends PersistedFlow<S, P, Svc> {
   private readonly config: RoundFlowConfig<S, Svc>;
   private currentRoundStage: AgentLogStage | null = null;
-  private lastKnownRound: number = 0;
 
   constructor(
     start: BaseNode<any, any>,
@@ -235,13 +242,13 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Run the flow with automatic round stage management.
+   * Run the flow with automatic round management.
    *
    * Overrides PersistedFlow.run() to:
    * 1. Create initial round stage (r0)
-   * 2. Run nodes via inherited step() - graph loops internally
-   * 3. Detect round transitions via shared.currentRound changes
-   * 4. On transition: end old stage, create new stage
+   * 2. Run nodes via inherited step()
+   * 3. Read node actions and handle round transitions
+   * 4. Increment currentRound centrally (single source of truth)
    * 5. End final stage when graph completes
    */
   async run(shared: S): Promise<string | undefined> {
@@ -251,14 +258,11 @@ export class RoundPersistedFlow<
     // Initialize flow record
     await this.init(shared);
 
-    // Track the current round
-    this.lastKnownRound = shared.currentRound;
-
     try {
       // Create initial round stage (r0)
       if (hooks?.createRoundStage) {
         this.currentRoundStage = await hooks.createRoundStage(
-          this.lastKnownRound,
+          shared.currentRound,
           this.config.parentStage ?? null,
         );
       }
@@ -272,18 +276,26 @@ export class RoundPersistedFlow<
       }
 
       // Execute nodes via inherited step()
-      // The graph loops internally via RoundCompleteNode → PrepareContextNode
       while (await this.step()) {
-        // Reload shared state to detect round transitions
-        const updatedShared = await this.getShared();
-        if (updatedShared) {
-          // Check if round changed (RoundCompleteNode incremented currentRound)
-          if (updatedShared.currentRound !== this.lastKnownRound) {
-            // Round transition detected!
-            await this.handleRoundTransition(updatedShared);
+        // Read the last action to determine if we need to handle a round transition
+        const lastAction = await this.getLastNodeAction();
+
+        // Handle round transition signal
+        if (lastAction === FlowTransition.CONTINUE_NEXT_ROUND) {
+          // Reload shared state to get current values
+          const updatedShared = await this.getShared();
+          if (updatedShared) {
+            // RoundPersistedFlow OWNS the increment (single source of truth)
+            await this.handleContinueToNextRound(updatedShared);
+            // Update local reference
+            Object.assign(shared, updatedShared);
           }
-          // Update local reference
-          Object.assign(shared, updatedShared);
+        } else {
+          // For other actions, just sync shared state
+          const updatedShared = await this.getShared();
+          if (updatedShared) {
+            Object.assign(shared, updatedShared);
+          }
         }
       }
 
@@ -296,10 +308,13 @@ export class RoundPersistedFlow<
       }
 
       // Determine final status: interrupted if stopped before completing all rounds
-      // RoundCompleteNode sets continueRounds=false or checkInterruption returns true
+      const completedAllRounds = isRoundAtOrBeyondLimit(
+        shared.currentRound + 1,
+        shared.totalRounds,
+      );
       const wasInterrupted =
         hooks?.checkInterruption?.() ||
-        (!shared.continueRounds && shared.currentRound < shared.totalRounds - 1);
+        (!shared.continueRounds && !completedAllRounds);
       if (wasInterrupted) {
         status = 'interrupted';
       }
@@ -321,19 +336,28 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Handle a round transition.
-   *
-   * Called when shared.currentRound changes (detected after step()).
-   * Ends old stage, fires hooks, creates new stage.
+   * Get the last node action from the flow record.
    */
-  private async handleRoundTransition(shared: S): Promise<void> {
+  private async getLastNodeAction(): Promise<string | undefined> {
+    const key = `flow:${this.runId}`;
+    const flow = await this.kv.read<FlowRecord>(key);
+    return flow?.nodes.at(-1)?.action as string | undefined;
+  }
+
+  /**
+   * Handle continuation to next round.
+   *
+   * Called when a node returns CONTINUE_NEXT_ROUND.
+   * This is the SINGLE SOURCE OF TRUTH for round increment.
+   */
+  private async handleContinueToNextRound(shared: S): Promise<void> {
     const { hooks } = this.config;
-    const newRound = shared.currentRound;
+    const oldRound = shared.currentRound;
 
     // Hook: Previous round end
     if (hooks?.onRoundEnd) {
       await hooks.onRoundEnd(
-        this.createHookContext(shared, this.lastKnownRound),
+        this.createHookContext(shared, oldRound),
         this._services as Svc,
       );
     }
@@ -342,30 +366,44 @@ export class RoundPersistedFlow<
     this.currentRoundStage?.end();
     this.currentRoundStage = null;
 
-    // Update tracking
-    this.lastKnownRound = newRound;
+    // === SINGLE SOURCE OF TRUTH: Flow owns the increment ===
+    shared.currentRound += 1;
+    const newRound = shared.currentRound;
+
+    // Persist the increment immediately
+    await this.persistSharedState(shared);
 
     // Reset state for next round (workspace, etc.)
-    // This is called BEFORE stage creation so the new round starts fresh
     if (hooks?.resetForNextRound) {
       hooks.resetForNextRound(shared);
     }
 
-    // Create new round stage
-    if (hooks?.createRoundStage) {
-      this.currentRoundStage = await hooks.createRoundStage(
-        newRound,
-        this.config.parentStage ?? null,
-      );
-    }
+    // Check bounds - if we've exceeded, the step() loop will end naturally
+    // because nodes will return FINALIZE when they see currentRound >= totalRounds
+    if (!isRoundAtOrBeyondLimit(newRound, shared.totalRounds)) {
+      // Create new round stage only if we're still in bounds
+      if (hooks?.createRoundStage) {
+        this.currentRoundStage = await hooks.createRoundStage(
+          newRound,
+          this.config.parentStage ?? null,
+        );
+      }
 
-    // Hook: New round start
-    if (hooks?.onRoundStart) {
-      await hooks.onRoundStart(
-        this.createHookContext(shared),
-        this._services as Svc,
-      );
+      // Hook: New round start
+      if (hooks?.onRoundStart) {
+        await hooks.onRoundStart(
+          this.createHookContext(shared),
+          this._services as Svc,
+        );
+      }
     }
+  }
+
+  /**
+   * Persist shared state to storage.
+   */
+  private async persistSharedState(shared: S): Promise<void> {
+    await this.setShared(shared);
   }
 
   /**
@@ -376,7 +414,7 @@ export class RoundPersistedFlow<
     roundOverride?: number,
   ): RoundHookContext<S> {
     return {
-      roundIndex: roundOverride ?? this.lastKnownRound,
+      roundIndex: roundOverride ?? shared.currentRound,
       totalRounds: shared.totalRounds,
       shared,
       roundStage: this.currentRoundStage,
