@@ -9,7 +9,6 @@ export type {
   ToolUseServices,
   ToolUseFlowParams,
   PrepareStateResult,
-  RunCycleResult,
 } from './ToolUseServices';
 
 export {
