@@ -29,7 +29,6 @@ import type {
   FileInteractionState,
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 
@@ -609,8 +608,8 @@ class ToolUseProcessNode<C> extends BaseNode<
     state.toolCalls = execRes.toolCalls;
     state.text = execRes.text;
     state.stopReason = execRes.stopReason;
-    // Reset round for next cycle
-    services.round = new ConversationRoundState(nextRoundIndex);
+    // Reset round for next cycle - mutate existing object to preserve store reference
+    services.round.reset(nextRoundIndex);
 
     return FlowTransition.DEFAULT;
   }
