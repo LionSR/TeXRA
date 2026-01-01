@@ -161,7 +161,10 @@ export function isModelAllowedForTier(
 // =============================================================================
 
 /** Get pricing breakdown by tier (useful for debugging) */
-export function getTierBreakdown(): Record<MinTier, { count: number; models: string[] }> {
+export function getTierBreakdown(): Record<
+  MinTier,
+  { count: number; models: string[] }
+> {
   return {
     free: {
       count: FREE_TIER_MODELS.length,
@@ -169,15 +172,15 @@ export function getTierBreakdown(): Record<MinTier, { count: number; models: str
     },
     Max: {
       count: MAX_TIER_MODELS.length - FREE_TIER_MODELS.length,
-      models: MAX_TIER_MODELS
-        .filter((m) => m.minTier === 'Max')
-        .map((m) => `${m.shortName} ($${m.inputPrice})`),
+      models: MAX_TIER_MODELS.filter((m) => m.minTier === 'Max').map(
+        (m) => `${m.shortName} ($${m.inputPrice})`,
+      ),
     },
     Ultra: {
       count: RELAY_MODELS.length - MAX_TIER_MODELS.length,
-      models: RELAY_MODELS
-        .filter((m) => m.minTier === 'Ultra')
-        .map((m) => `${m.shortName} ($${m.inputPrice})`),
+      models: RELAY_MODELS.filter((m) => m.minTier === 'Ultra').map(
+        (m) => `${m.shortName} ($${m.inputPrice})`,
+      ),
     },
   };
 }
