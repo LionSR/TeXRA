@@ -12,7 +12,7 @@
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
-import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import { PersistedFlow } from '@agent/node/persisted-flow';
 import {
   EXECUTION_STATUS,
   executionToEndStatus,
@@ -114,23 +114,7 @@ export async function runToolUseFlow<C = unknown>(
       input.executionContext.executionId,
     );
 
-    // Try to restore from persisted flow (resume scenario)
-    let isResume = false;
-    try {
-      const flowRecord = await kv.read<FlowRecord>(
-        `flow:${input.executionContext.executionId}`,
-      );
-      if (flowRecord?.shared) {
-        isResume = true;
-        input.executionContext.logger.debug(
-          'Resuming tool-use flow from persistence',
-        );
-      }
-    } catch {
-      // No persisted flow - fresh start
-    }
-
-    // Create shared state
+    // Create shared state - PersistedFlow handles resume automatically
     const shared: ToolUseRunShared = {
       state: createInitialToolUseState(),
     };
@@ -146,13 +130,8 @@ export async function runToolUseFlow<C = unknown>(
     // Inject services (never persisted - runtime dependencies)
     pf.setServices(flowContext.services);
 
-    if (isResume) {
-      input.executionContext.logger.debug(
-        'PersistedFlow will resume from last node',
-      );
-    }
-
-    // Run the persisted flow - errors throw directly
+    // Run the persisted flow - PersistedFlow handles resume automatically
+    // via FlowRecord when a prior run exists
     await pf.run(shared);
 
     // Determine ExecutionStatus and map to EndGroupStatus
