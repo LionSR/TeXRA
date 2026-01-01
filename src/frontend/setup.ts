@@ -11,9 +11,9 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { getConfig, updateConfig } from '@utils/config';
 
 /**

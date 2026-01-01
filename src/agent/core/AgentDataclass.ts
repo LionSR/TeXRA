@@ -26,12 +26,45 @@ export enum AgentCategory {
   ToolUse = 'toolUse',
 }
 
-/** Agent types within each category. */
+/**
+ * Agent types within each category.
+ *
+ * ## Workflow Agent Types
+ *
+ * **CoT (Chain-of-Thought)**: Multi-round reflection with iterative refinement.
+ * - Default: 2+ rounds (max of configured rounds and userRequest length)
+ * - Default: Always enforces XML structure for reasoning
+ * - Best for: Complex tasks requiring step-by-step reasoning and revision
+ * - Override with: `maxRounds` and `xmlStructureMode` in YAML
+ *
+ * **Direct**: Single-pass execution with minimal overhead.
+ * - Default: 1 round (single-pass processing)
+ * - Default: XML structure only when scratchpad prefill is used
+ * - Best for: Simple corrections, quick transformations, merge operations
+ * - Override with: `maxRounds` and `xmlStructureMode` in YAML
+ *
+ * ## Tool-Use Agent Types
+ *
+ * **ToolUse**: Interactive session with tool-calling capabilities.
+ * - Continues until user follow-up or interruption
+ * - Manages persistent sessions with checkpointing
+ */
 export enum AgentType {
-  // Workflow types
+  /**
+   * Chain-of-Thought: Multi-round reflection agent.
+   * Implies: xmlStructureMode='always', maxRounds=max(rounds, requests)
+   */
   CoT = 'CoT',
+
+  /**
+   * Direct: Single-round fast execution agent.
+   * Implies: xmlStructureMode='scratchpadOnly', maxRounds=1
+   */
   Direct = 'direct',
-  // Tool-use types
+
+  /**
+   * ToolUse: Interactive agent with tool-calling capabilities.
+   */
   ToolUse = 'toolUse',
 }
 
@@ -100,6 +133,14 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
+/** XML structure enforcement modes for workflow agents. */
+export const XmlStructureMode = z.enum([
+  'never', // Never ensure XML structure (default)
+  'scratchpadOnly', // Only when useScratchpad is true
+  'always', // Always ensure XML structure
+]);
+export type XmlStructureMode = z.infer<typeof XmlStructureMode>;
+
 /** Workflow agents: CoT or Direct patterns with workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
@@ -111,6 +152,25 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
+
+  // === Flow-first behavior configuration ===
+  // These replace subclass polymorphism with explicit configuration
+
+  /**
+   * Maximum rounds to execute. When set, overrides the default calculation.
+   * - undefined: Use max(rounds, userRequest.length) (default)
+   * - 1: Single-pass processing
+   * - N: Fixed number of rounds
+   */
+  maxRounds: z.number().optional(),
+
+  /**
+   * XML structure enforcement mode.
+   * - 'never': Don't ensure XML structure (default)
+   * - 'scratchpadOnly': Only when prefills include scratchpad
+   * - 'always': Always ensure XML structure
+   */
+  xmlStructureMode: XmlStructureMode.optional(),
 });
 
 /** Tool-use agents: interactive agents with tool-calling capabilities. */

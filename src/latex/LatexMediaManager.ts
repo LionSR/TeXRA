@@ -17,7 +17,6 @@ import {
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { tikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
-import { getTeXCountStats } from './texcount';
 
 /**
  * Flexible input type that accepts either a string path or FileLocation.
@@ -84,18 +83,6 @@ export class LatexMediaManager {
     });
 
     await Promise.all(tasks);
-  }
-
-  private async attachTeXCount(
-    files: FileLocation[],
-    workspaceState: AgentWorkspaceState,
-    cfg: ToolConfig,
-  ): Promise<void> {
-    if (cfg.attachTeXCount && files.length > 0) {
-      workspaceState.document.texcountStats = await getTeXCountStats(
-        files.map((f) => f.absolutePath),
-      );
-    }
   }
 
   /**
@@ -282,8 +269,6 @@ export class LatexMediaManager {
     if (existingFiles.length === 0) {
       return;
     }
-
-    await this.attachTeXCount(existingFiles, workspaceState, cfg);
 
     if (!supportsVision) {
       return;

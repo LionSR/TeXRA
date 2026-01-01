@@ -35,52 +35,75 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentLogger } from '@logger/AgentLogger';
 
-/**
- * Base services shared by all agent flows.
- *
- * These are the core immutable dependencies that every flow needs:
- * - Model interaction (modelHandler, getClient)
- * - Configuration (config, setting, prompt)
- * - Runtime context (context, logger, userVarChannels)
- * - Control (checkInterruption, setAbortController)
- *
- * Flow-specific interfaces extend this with additional services:
- * - ReflectionServices: outputHandler, promptBuilder, latexMediaManager, etc.
- * - ToolUseServices: toolRegistry, session, cycle operations, etc.
- */
-export interface BaseFlowServices<C = unknown> {
-  /** Model handler for API calls and message formatting */
-  readonly modelHandler: IModelHandler<any, any, any, any, C>;
+// ============================================================================
+// Context Initialization
+// ============================================================================
 
-  /** Logger for debugging and progress */
-  readonly logger: AgentLogger;
+/**
+ * Base initialization config shared by all flow contexts.
+ *
+ * Flow-specific contexts extend this with additional fields:
+ * - ToolUseFlowContextInit adds: streamTabId, toolRegistry, resumeSnapshot
+ * - ReflectionFlowContextInit adds: getUsageRecorder (required)
+ */
+export interface BaseFlowContextInit<C = unknown> {
+  /** Model handler for API calls and message formatting */
+  modelHandler: IModelHandler<any, any, any, any, C>;
 
   /** Agent configuration (input files, model, etc.) */
-  readonly config: AgentConfig;
+  config: AgentConfig;
 
   /** Agent settings (AgentWorkflowSetting or AgentToolUseSetting) */
-  readonly setting: AgentSetting;
+  setting: AgentSetting;
 
   /** Agent prompt templates */
-  readonly prompt: AgentPrompt;
+  prompt: AgentPrompt;
 
   /** Execution context (IDs, storage key, etc.) */
-  readonly context: AgentExecutionContext;
+  executionContext: AgentExecutionContext;
 
   /** User variable channels for template rendering */
-  readonly userVarChannels: UserVariableChannels;
+  userVarChannels: UserVariableChannels;
 
   /** Check if user requested interruption (synchronous) */
-  readonly checkInterruption: () => boolean;
+  checkInterruption: () => boolean;
 
   /** Set abort controller for cancellation */
-  readonly setAbortController: (ctrl: AbortController | null) => void;
+  setAbortController: (ctrl: AbortController | null) => void;
 
   /** Get the API client instance */
-  readonly getClient: () => C;
+  getClient: () => C;
+
+  /** Callback invoked when interrupt() is called on the flow context */
+  onInterrupt?: () => void;
 }
+
+// ============================================================================
+// Service Interfaces
+// ============================================================================
+
+/**
+ * Convenience accessors added to services.
+ *
+ * These are convenience aliases that simplify access patterns:
+ * - logger: Direct access to executionContext.logger
+ * - context: Alias for executionContext (used by cycle options)
+ *
+ * Child service interfaces (ReflectionServices, ToolUseServices) extend
+ * BaseFlowContextInit and include these accessors directly.
+ *
+ * @deprecated Use BaseFlowContextInit directly. Child services now define
+ * logger and context fields inline. This type is kept for backward compatibility.
+ */
+export type BaseFlowServices<C = unknown> = BaseFlowContextInit<C> & {
+  /** Logger for debugging and progress (convenience accessor) */
+  readonly logger: AgentLogger;
+  /** Alias for executionContext (used by AgentCycleOptions) */
+  readonly context: AgentExecutionContext;
+};
 
 /**
  * Base flow params type.
@@ -91,4 +114,60 @@ export interface BaseFlowServices<C = unknown> {
  */
 export interface FlowParams {
   [key: string]: unknown;
+}
+
+// ============================================================================
+// Service Factory
+// ============================================================================
+
+/**
+ * Build base flow services from initialization config.
+ *
+ * Spreads init and adds convenience accessors (logger, context alias).
+ */
+export function buildBaseFlowServices<C>(
+  init: BaseFlowContextInit<C>,
+): BaseFlowServices<C> {
+  return {
+    ...init,
+    logger: init.executionContext.logger,
+    context: init.executionContext,
+  };
+}
+
+// ============================================================================
+// Cycle Options Builder
+// ============================================================================
+
+/**
+ * Build AgentCycleBaseOptions from BaseFlowServices or BaseFlowContextInit.
+ *
+ * Eliminates manual field copying by mapping service fields to cycle option fields:
+ * - setting -> agentSetting
+ * - prompt -> agentPrompt
+ * - userVarChannels.transient -> userVars
+ * - executionContext -> context (via services.context if available)
+ * - getClient() -> client
+ *
+ * This helper enables inheritance-based option building instead of manual field copying.
+ *
+ * @param services - Flow services or initialization config
+ * @returns Base cycle options ready for extension
+ */
+export function buildBaseCycleOptions<C>(
+  services: BaseFlowServices<C> | BaseFlowContextInit<C>,
+): AgentCycleBaseOptions<C> {
+  return {
+    modelHandler: services.modelHandler,
+    agentSetting: services.setting,
+    agentPrompt: services.prompt,
+    userVars: services.userVarChannels.transient,
+    logger:
+      'logger' in services ? services.logger : services.executionContext.logger,
+    context:
+      'context' in services ? services.context : services.executionContext,
+    client: services.getClient(),
+    checkInterruption: services.checkInterruption,
+    setAbortController: services.setAbortController,
+  };
 }

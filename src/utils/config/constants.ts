@@ -1,6 +1,6 @@
 // Local imports - config utils
-import { getConfig } from './configUtils';
 import * as logger from '@logger/logUtils';
+import { getConfig } from './configUtils';
 
 const CHANNEL = 'config';
 
