@@ -204,6 +204,7 @@ export async function runReflectionFlow<C = unknown>(
         };
         if (persistedShared.workspaceSnapshot) {
           // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
+          // Round-trip through class normalizes/validates the snapshot structure
           initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
             persistedShared.workspaceSnapshot,
           ).toSnapshot();
@@ -301,8 +302,8 @@ export async function runReflectionFlow<C = unknown>(
       (services?.runStage ?? runStage)?.end(status);
     }
 
-    // Clean up context resources
-    flowContext.dispose();
+    // Clean up context resources (defensive check in case of early failure)
+    flowContext?.dispose();
 
     // Unregister from interrupt registry
     callbacks?.onFlowComplete?.(storageKey);
