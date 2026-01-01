@@ -527,7 +527,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         }
         data = parsed.data;
       } catch (parseError) {
-        if (parseError instanceof Error && parseError.message.includes('Invalid response')) {
+        if (
+          parseError instanceof Error &&
+          parseError.message.includes('Invalid response')
+        ) {
           throw parseError;
         }
         throw new Error('Invalid response format from authentication server');
@@ -605,7 +608,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       // Build OAuth options - pass base URL without state to prevent double-encoding
       // If VS Code provided a state (Codespaces), pass it through queryParams
-      const oauthOptions: { redirectTo: string; queryParams?: Record<string, string> } = {
+      const oauthOptions: {
+        redirectTo: string;
+        queryParams?: Record<string, string>;
+      } = {
         redirectTo: callbackInfo.baseUrl,
       };
 
@@ -910,7 +916,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         JSON.stringify(refreshed),
       );
 
-      logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
+      logger.info(
+        'SupabaseAuthProvider',
+        'Token refreshed via custom endpoint',
+      );
       return refreshed;
     } catch (error) {
       logger.error(

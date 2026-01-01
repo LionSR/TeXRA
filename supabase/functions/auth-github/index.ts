@@ -82,12 +82,18 @@ app.use('*', async (c, next) => {
 // Initialize Supabase client
 app.use('*', async (c, next) => {
   if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
-    return c.json({ error: 'Server configuration error', _version: VERSION }, 500);
+    return c.json(
+      { error: 'Server configuration error', _version: VERSION },
+      500,
+    );
   }
 
-  c.set('supabase', createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  }));
+  c.set(
+    'supabase',
+    createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    }),
+  );
 
   await next();
 });
@@ -96,11 +102,17 @@ app.use('*', async (c, next) => {
 // Helpers
 // =============================================================================
 
-function jsonResponse(c: Parameters<Parameters<typeof app.post>[1]>[0], body: Record<string, unknown>, status: number) {
+function jsonResponse(
+  c: Parameters<Parameters<typeof app.post>[1]>[0],
+  body: Record<string, unknown>,
+  status: number,
+) {
   return c.json({ _version: VERSION, ...body }, status, c.get('corsHeaders'));
 }
 
-async function validateGitHubToken(token: string): Promise<{ user: GitHubUser; email: string } | null> {
+async function validateGitHubToken(
+  token: string,
+): Promise<{ user: GitHubUser; email: string } | null> {
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -113,10 +125,15 @@ async function validateGitHubToken(token: string): Promise<{ user: GitHubUser; e
   const user: GitHubUser = await userRes.json();
   let primaryEmail = user.email;
 
-  const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
+  const emailsRes = await fetch('https://api.github.com/user/emails', {
+    headers,
+  });
   if (emailsRes.ok) {
     const emails = await emailsRes.json();
-    const primary = emails.find((e: { primary: boolean; verified: boolean; email: string }) => e.primary && e.verified);
+    const primary = emails.find(
+      (e: { primary: boolean; verified: boolean; email: string }) =>
+        e.primary && e.verified,
+    );
     if (primary) primaryEmail = primary.email;
   }
 
@@ -176,7 +193,11 @@ app.post('/exchange', async (c) => {
 
     const githubData = await validateGitHubToken(body.github_token);
     if (!githubData) {
-      return jsonResponse(c, { error: 'Invalid GitHub token or missing verified email' }, 401);
+      return jsonResponse(
+        c,
+        { error: 'Invalid GitHub token or missing verified email' },
+        401,
+      );
     }
 
     const { user: githubUser, email } = githubData;
@@ -239,27 +260,43 @@ app.post('/exchange', async (c) => {
       }
 
       // Link identity
-      await supabase.schema('auth').from('identities').insert({
-        id: crypto.randomUUID(),
-        user_id: userId,
-        provider: 'github',
-        provider_id: githubProviderId,
-        identity_data: { sub: githubProviderId, email, avatar_url: githubUser.avatar_url, user_name: githubUser.login },
-        last_sign_in_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).catch(() => {}); // Ignore duplicate
+      await supabase
+        .schema('auth')
+        .from('identities')
+        .insert({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          provider: 'github',
+          provider_id: githubProviderId,
+          identity_data: {
+            sub: githubProviderId,
+            email,
+            avatar_url: githubUser.avatar_url,
+            user_name: githubUser.login,
+          },
+          last_sign_in_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .catch(() => {}); // Ignore duplicate
     }
 
     // Generate tokens
     const accessToken = await createJWT(
       userId,
       userEmail,
-      { avatar_url: githubUser.avatar_url, user_name: githubUser.login, email: userEmail, email_verified: true },
+      {
+        avatar_url: githubUser.avatar_url,
+        user_name: githubUser.login,
+        email: userEmail,
+        email_verified: true,
+      },
       { provider: 'github', providers: ['github'] },
     );
 
-    const refreshToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    const refreshToken =
+      crypto.randomUUID().replace(/-/g, '') +
+      crypto.randomUUID().replace(/-/g, '');
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + ACCESS_TOKEN_EXPIRY_SECONDS;
 
@@ -270,7 +307,9 @@ app.post('/exchange', async (c) => {
       refresh_token: refreshToken,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      not_after: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      not_after: new Date(
+        Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     });
 
     if (sessionError) {
@@ -280,14 +319,25 @@ app.post('/exchange', async (c) => {
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
 
-    return jsonResponse(c, {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_at: expiresAt,
-      expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
-      token_type: 'bearer',
-      user: { id: userId, email: userEmail, user_metadata: { avatar_url: githubUser.avatar_url, user_name: githubUser.login } },
-    }, 200);
+    return jsonResponse(
+      c,
+      {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
+        expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
+        token_type: 'bearer',
+        user: {
+          id: userId,
+          email: userEmail,
+          user_metadata: {
+            avatar_url: githubUser.avatar_url,
+            user_name: githubUser.login,
+          },
+        },
+      },
+      200,
+    );
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
     return jsonResponse(c, { error: 'Internal server error' }, 500);
@@ -323,7 +373,8 @@ app.post('/refresh', async (c) => {
     }
 
     // Get user
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(session.user_id);
+    const { data: userData, error: userError } =
+      await supabase.auth.admin.getUserById(session.user_id);
     if (userError || !userData?.user) {
       return jsonResponse(c, { error: 'User not found' }, 401);
     }
@@ -337,18 +388,32 @@ app.post('/refresh', async (c) => {
     );
 
     const now = Math.floor(Date.now() / 1000);
-    await supabase.from('sessions').update({ updated_at: new Date().toISOString() }).eq('id', session.id);
+    await supabase
+      .from('sessions')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', session.id);
 
     console.log(`[AUTH] Refresh successful for user ${user.id}`);
 
-    return jsonResponse(c, {
-      access_token: accessToken,
-      refresh_token: body.refresh_token,
-      expires_at: now + ACCESS_TOKEN_EXPIRY_SECONDS,
-      expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
-      token_type: 'bearer',
-      user: { id: user.id, email: user.email, user_metadata: { avatar_url: user.user_metadata?.avatar_url, user_name: user.user_metadata?.user_name } },
-    }, 200);
+    return jsonResponse(
+      c,
+      {
+        access_token: accessToken,
+        refresh_token: body.refresh_token,
+        expires_at: now + ACCESS_TOKEN_EXPIRY_SECONDS,
+        expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
+        token_type: 'bearer',
+        user: {
+          id: user.id,
+          email: user.email,
+          user_metadata: {
+            avatar_url: user.user_metadata?.avatar_url,
+            user_name: user.user_metadata?.user_name,
+          },
+        },
+      },
+      200,
+    );
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
     return jsonResponse(c, { error: 'Internal server error' }, 500);
