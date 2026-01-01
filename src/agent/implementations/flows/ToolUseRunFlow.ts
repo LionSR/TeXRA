@@ -16,6 +16,7 @@
 
 // Local imports - core flow primitives
 import { Node, Flow } from '@agent/node';
+import type { SerializationHooks } from '@agent/node/persisted-flow';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   AgentSharedStore,
@@ -53,12 +54,14 @@ import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 /**
  * Runtime state for tool-use agent runs.
  *
- * Following koala-code-reader pattern: stores **snapshots** (plain JSON objects)
- * instead of class instances. This ensures structuredClone() works correctly
- * when PersistedFlow serializes the state.
+ * ## Live Instance Pattern
  *
- * - storeSnapshot: AgentSharedStoreSnapshot (not AgentSharedStore class)
- * - Nodes reconstruct class instances from snapshots when needed
+ * Following the reflection flow pattern: stores **live class instances**
+ * that nodes mutate directly. Serialization happens ONLY at persistence
+ * boundaries via toolUseSerializationHooks.
+ *
+ * - store: AgentSharedStore instance (NOT snapshot)
+ * - Nodes access shared.state.store directly without conversion
  *
  * IMPORTANT: cycleOptions is NOT stored here because it contains non-serializable
  * objects (modelHandler, client, logger, functions). It's rebuilt each cycle from services.
@@ -66,8 +69,8 @@ import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 export interface ToolUseRunState {
   conversation: ProviderMessage[];
   shouldSkipCycle: boolean;
-  /** Store snapshot (natively serializable) - reconstruct via createSharedStore() */
-  storeSnapshot: AgentSharedStoreSnapshot | null;
+  /** Live store instance - mutate directly, serialization hooks handle persistence */
+  store: AgentSharedStore | null;
 }
 
 /**
@@ -80,7 +83,7 @@ export function createInitialToolUseState(): ToolUseRunState {
   return {
     conversation: [],
     shouldSkipCycle: false,
-    storeSnapshot: null,
+    store: null,
   };
 }
 
@@ -155,22 +158,66 @@ interface WaitNodePrepResult {
 }
 
 // ============================================================================
+// Serialization Hooks
+// ============================================================================
+
+/**
+ * Serialized format for ToolUseRunShared (what gets persisted).
+ */
+interface ToolUseSerializedState {
+  state: {
+    conversation: ProviderMessage[];
+    shouldSkipCycle: boolean;
+    storeSnapshot: AgentSharedStoreSnapshot | null;
+  };
+}
+
+/**
+ * Serialization hooks for ToolUseRunShared.
+ *
+ * Converts between live state (with AgentSharedStore instance) and serialized
+ * state (with plain JSON snapshot) at persistence boundaries.
+ */
+export const toolUseSerializationHooks: SerializationHooks<ToolUseRunShared> = {
+  serialize: (shared: ToolUseRunShared): Record<string, unknown> => ({
+    state: {
+      conversation: shared.state.conversation,
+      shouldSkipCycle: shared.state.shouldSkipCycle,
+      storeSnapshot: shared.state.store?.toSnapshot() ?? null,
+    },
+  }),
+
+  deserialize: (data: Record<string, unknown>): ToolUseRunShared => {
+    const serialized = data as unknown as ToolUseSerializedState;
+    return {
+      state: {
+        conversation: serialized.state.conversation,
+        shouldSkipCycle: serialized.state.shouldSkipCycle,
+        store: serialized.state.storeSnapshot
+          ? createSharedStore({ snapshot: serialized.state.storeSnapshot })
+          : null,
+      },
+    };
+  },
+};
+
+// ============================================================================
 // State Guards
 // ============================================================================
 
-/** Prepared state type with non-null storeSnapshot. */
+/** Prepared state type with non-null store. */
 type PreparedState = ToolUseRunState & {
-  storeSnapshot: AgentSharedStoreSnapshot;
+  store: AgentSharedStore;
 };
 
 /**
- * Asserts that state has been prepared (storeSnapshot is non-null).
+ * Asserts that state has been prepared (store is non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  */
 function assertPreparedState(
   state: ToolUseRunState,
 ): asserts state is PreparedState {
-  if (state.storeSnapshot === null) {
+  if (state.store === null) {
     throw new Error(
       'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
@@ -240,9 +287,9 @@ class ToolUsePrepareNode<C> extends Node<
     const { messages, store, shouldSkipCycle } = execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
-    // Store snapshot instead of class instance (for PersistedFlow serialization)
+    // Store live instance - serialization hooks handle persistence
     // cycleOptions is NOT stored - it's rebuilt from services in CycleNode
-    shared.state.storeSnapshot = store.toSnapshot();
+    shared.state.store = store;
 
     return FlowTransition.DEFAULT; // Follow next() → CycleNode
   }
@@ -272,8 +319,8 @@ class ToolUseCycleNode<C> extends Node<
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
-    // Reconstruct store from snapshot (koala-code-reader pattern)
-    const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
+    // Use live store instance directly - no conversion needed
+    const store = shared.state.store;
 
     // Rebuild cycleOptions from services (NOT stored in state - non-serializable)
     const cycleOptions = this.services.buildCycleOptions(store);
@@ -362,9 +409,8 @@ class ToolUseCycleNode<C> extends Node<
       shared.state.shouldSkipCycle = false;
     }
 
-    // Update store snapshot after cycle (cycle mutates the store)
-    // This ensures workspace state changes (todos, interactions, etc.) are persisted
-    shared.state.storeSnapshot = prepRes.store.toSnapshot();
+    // Store is a live instance - mutations persist automatically via serialization hooks
+    // No snapshot conversion needed here
 
     switch (execRes.kind) {
       case 'success':

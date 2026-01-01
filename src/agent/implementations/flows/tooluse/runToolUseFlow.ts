@@ -22,6 +22,7 @@ import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import {
   createToolUseRunFlow,
   createInitialToolUseState,
+  toolUseSerializationHooks,
   type ToolUseRunShared,
 } from '../ToolUseRunFlow';
 import {
@@ -119,13 +120,14 @@ export async function runToolUseFlow<C = unknown>(
       state: createInitialToolUseState(),
     };
 
-    // Create PersistedFlow with the start node
+    // Create PersistedFlow with the start node and serialization hooks
+    // Hooks convert live AgentSharedStore ↔ snapshot at persistence boundaries
     const startNode = createToolUseRunFlow<C>().start;
     const pf = new PersistedFlow<
       ToolUseRunShared,
       Record<string, unknown>,
       ToolUseServices<C>
-    >(startNode, kv);
+    >(startNode, kv, undefined, { serialization: toolUseSerializationHooks });
 
     // Inject services (never persisted - runtime dependencies)
     pf.setServices(flowContext.services);
