@@ -11,12 +11,14 @@
  * - Prompt building and output handling
  * - Interrupt handling and cleanup
  *
- * ## Koala-code-reader Pattern
+ * ## Live State with Serialization Hooks
  *
- * Following koala's approach:
- * - shared state is natively serializable (snapshots, not class instances)
- * - services contain runtime dependencies (runStage, logger, etc.)
- * - PersistedFlow handles persistence transparently
+ * Shared state contains class instances (AgentWorkspaceState, AgentRunState)
+ * that nodes can mutate directly. Serialization to/from JSON happens ONLY
+ * at persistence boundaries via reflectionFlowSerializationHooks.
+ *
+ * This eliminates the reconstruct-mutate-update pattern that was previously
+ * required in every node.
  */
 
 import type { RoundOutput } from '@agent/output';
@@ -24,10 +26,7 @@ import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 
-import {
-  AgentWorkspaceState,
-  type AgentWorkspaceSnapshot,
-} from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
@@ -45,8 +44,9 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlow';
 import {
-  createFreshWorkspaceSnapshot,
+  createFreshWorkspace,
   createInitialReflectionState,
+  reflectionFlowSerializationHooks,
 } from './ReflectionFlowState';
 import {
   createReflectionFlowContext,
@@ -195,7 +195,8 @@ export async function runReflectionFlow<C = unknown>(
     );
 
     // Try to restore state from persisted flow (resume scenario)
-    let initialWorkspaceSnapshot: AgentWorkspaceSnapshot;
+    // Note: The serialization hooks handle conversion from snapshots to instances
+    let initialWorkspace: AgentWorkspaceState | undefined;
     let restoredRetryError: RetryErrorInfo | undefined;
     let isResume = false;
 
@@ -204,47 +205,31 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
-        // Flat structure: shared.workspaceSnapshot, shared.lastRetryError
         const persistedShared = flowRecord.shared as {
           workspaceSnapshot?: unknown;
           lastRetryError?: RetryErrorInfo;
         };
         if (persistedShared.workspaceSnapshot) {
-          // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
-          // Round-trip through class normalizes/validates the snapshot structure
-          initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
+          // Restore workspace instance from persisted snapshot
+          initialWorkspace = AgentWorkspaceState.fromSnapshot(
             persistedShared.workspaceSnapshot,
-          ).toSnapshot();
-          isResume = true;
-          executionContext.logger.debug(
-            'Restored workspace snapshot from persisted flow',
           );
-        } else {
-          initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+          isResume = true;
+          executionContext.logger.debug('Restored workspace from persisted flow');
         }
-
-        // Restore retry error if present (for proper error classification on resume)
         if (persistedShared.lastRetryError) {
           restoredRetryError = persistedShared.lastRetryError;
           executionContext.logger.debug(
-            `Restored lastRetryError from persisted flow: ${restoredRetryError.message}`,
+            `Restored lastRetryError: ${restoredRetryError.message}`,
           );
         }
-      } else {
-        initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
       }
     } catch {
       // No persisted flow - fresh start
-      initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
     }
 
-    // Create shared state for the flow (natively serializable, flat structure)
-    shared = createInitialReflectionState(
-      flowContext.totalRounds,
-      initialWorkspaceSnapshot,
-    );
-
-    // Restore retry error if present
+    // Create shared state with live instances (serialization hooks handle persistence)
+    shared = createInitialReflectionState(flowContext.totalRounds, initialWorkspace);
     if (restoredRetryError) {
       shared.lastRetryError = restoredRetryError;
     }
@@ -263,20 +248,19 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(startNode, kv, {
       parentStage: runStage,
+      // Serialization hooks convert live instances ↔ snapshots at persistence boundaries
+      serialization: reflectionFlowSerializationHooks,
       hooks: {
-        // Create round stages (r0, r1, r2, ...)
         createRoundStage: async (roundIndex, parent) => {
           return await executionContext.logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
         },
-        // Reset workspace state for new round (managed at flow level, not node level)
+        // Reset workspace instance for new round
         resetForNextRound: (s) => {
-          s.workspaceSnapshot = createFreshWorkspaceSnapshot();
+          s.workspace = createFreshWorkspace();
         },
-        // Check for interruption (for status detection)
         checkInterruption,
-        // Capture flow completion status
         onFlowEnd: (_shared, flowEndStatus) => {
           flowResult.status = flowEndStatus;
         },

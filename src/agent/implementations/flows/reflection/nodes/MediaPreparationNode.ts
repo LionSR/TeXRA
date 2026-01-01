@@ -6,11 +6,12 @@
  *
  * PocketFlow pattern:
  * - prep(): Determine files using shared helper, get context
- * - exec(): Extract media (mutates workspaceState via latexMediaManager)
- * - post(): Add media to messages via modelHandler, log warnings if degraded
+ * - exec(): Extract media (mutates shared.workspace directly)
+ * - post(): Add media to messages via modelHandler
  *
- * Note: latexMediaManager mutates workspaceState in place for media extraction,
+ * Note: latexMediaManager mutates shared.workspace in place for media extraction,
  * then we add the extracted files to messages via modelHandler.
+ * Serialization hooks handle persistence - no manual snapshot updates needed.
  *
  * Services accessed via native `this.services`:
  * - latexMediaManager, config, fileService, modelHandler, logger
@@ -22,18 +23,10 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
-
-import {
-  getWorkspaceState,
-  updateWorkspaceSnapshot,
-  type ReflectionFlowShared,
-  type RoundContext,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -48,8 +41,9 @@ interface MediaPrepInput {
   currentRound: number;
   supportsVision: boolean;
   extraMediaFiles: FileLocation[];
-  workspaceState: AgentWorkspaceState;
   context: RoundContext | null;
+  /** Live workspace instance - mutations persist automatically */
+  workspace: import('@agent/core/AgentWorkspaceState').AgentWorkspaceState;
 }
 
 interface MediaExecResult {
@@ -74,18 +68,9 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, context } = shared;
+    const { currentRound, roundOutputs, context, workspace } = shared;
 
-    // Reconstruct workspace state from snapshot
-    const workspaceState = getWorkspaceState(shared);
-
-    // Use shared helper for file determination (DRY)
-    const files = getFilesForRound(
-      currentRound,
-      roundOutputs,
-      config,
-      fileService,
-    );
+    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
 
     // Collect extra media files for first round
     const extraMediaFiles: FileLocation[] = [];
@@ -103,30 +88,28 @@ export class MediaPreparationNode<C = unknown> extends Node<
       currentRound,
       supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,
-      workspaceState,
       context,
+      workspace, // Live instance - mutations persist automatically
     };
   }
 
   /**
    * Extract media from files.
-   * Mutates workspaceState via latexMediaManager to collect media files.
-   * Throws on error - execFallback() handles graceful degradation.
+   * Mutates prepRes.workspace - it's a live instance, mutations persist automatically.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
     const { latexMediaManager, config, logger } = this.services;
 
-    // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       logger.debug('Media extraction skipped: no vision support or no files');
       return { mediaFiles: [] };
     }
 
-    // Different processing for first round vs subsequent rounds
+    // Mutate workspace directly - it's a live instance from shared
     if (prepRes.currentRound === 0) {
       await latexMediaManager.processInputFiles(
         prepRes.files,
-        prepRes.workspaceState,
+        prepRes.workspace,
         config.toolConfig,
         true,
         prepRes.extraMediaFiles,
@@ -134,14 +117,13 @@ export class MediaPreparationNode<C = unknown> extends Node<
     } else {
       await latexMediaManager.processOutputFiles(
         prepRes.files,
-        prepRes.workspaceState,
+        prepRes.workspace,
         config.toolConfig,
         true,
       );
     }
 
-    // Collect media files from workspaceState
-    const mediaFiles = prepRes.workspaceState.media.files;
+    const mediaFiles = prepRes.workspace.media.files;
     logger.debug(
       `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
     );
@@ -161,21 +143,15 @@ export class MediaPreparationNode<C = unknown> extends Node<
 
   /**
    * Add media to messages via modelHandler and continue.
-   * CRITICAL: Update workspace snapshot after mutations from exec().
+   * No need to update snapshots - workspace is a live instance.
    */
   async post(
     shared: ReflectionFlowShared,
-    prepRes: MediaPrepInput,
+    _prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // CRITICAL: Save mutated workspace state back to snapshot
-    // The latexMediaManager mutated workspaceState in exec(), so we must
-    // update the snapshot to persist those changes
-    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
-
-    // Add media to messages if we have files and context
     if (execRes.mediaFiles.length > 0 && shared.context) {
       await modelHandler.addMediaToUserMessage(
         shared.context.messages,
@@ -186,7 +162,6 @@ export class MediaPreparationNode<C = unknown> extends Node<
       );
     }
 
-    // Continue to next node
     return FlowTransition.DEFAULT;
   }
 }

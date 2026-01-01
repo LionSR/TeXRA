@@ -111,10 +111,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
 }
 
 // Re-export types for convenience
-export type {
-  ReflectionFlowShared,
-  ReflectionFlowState,
-} from './ReflectionFlowState';
+export type { ReflectionFlowShared } from './ReflectionFlowState';
 export type {
   ReflectionServices,
   ReflectionFlowParams,

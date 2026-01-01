@@ -29,7 +29,6 @@
 export {
   createReflectionFlow,
   type ReflectionFlowShared,
-  type ReflectionFlowState,
   type ReflectionServices,
   type ReflectionFlowParams,
 } from './ReflectionFlow';
@@ -52,7 +51,8 @@ export {
 export {
   type RoundContext,
   createInitialReflectionState,
-  ReflectionFlowStateSchema,
+  reflectionFlowSerializationHooks,
+  ReflectionFlowSerializedStateSchema,
   RoundContextSchema,
 } from './ReflectionFlowState';
 
