@@ -15,8 +15,9 @@ export {
 
 export type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 
-// Import enums for local schema use
+// Import for local use
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 
 // ============================================================================
 // Zod v4 Schemas - Local (avoids moduleResolution issues with subpath imports)
@@ -69,5 +70,19 @@ export const ModelConfigSchema = z.object({
 export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
 
 // Type alias for registry
-import type { ModelConfig } from 'llm-zoo';
 export type ModelRegistry = Record<string, ModelConfig>;
+
+// ============================================================================
+// Compile-time assertions - ensure schemas stay synchronized with llm-zoo types
+// ============================================================================
+
+type SchemaModelConfig = z.infer<typeof ModelConfigSchema>;
+type SchemaModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
+
+// These will fail at compile time if local schemas diverge from llm-zoo types
+const _assertModelConfig: SchemaModelConfig = {} as ModelConfig;
+const _assertModelCapabilities: SchemaModelCapabilities = {} as ModelCapabilities;
+
+// Suppress unused variable warnings
+void _assertModelConfig;
+void _assertModelCapabilities;
