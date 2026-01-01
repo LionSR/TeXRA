@@ -254,7 +254,9 @@ export async function runReflectionFlow<C = unknown>(
     const startNode = createReflectionFlow<C>().start;
     // Track flow completion status from onFlowEnd hook
     // Use object wrapper to avoid TypeScript narrowing issues with closure mutation
-    const flowResult = { status: EXECUTION_STATUS.COMPLETED as ExecutionStatus };
+    const flowResult = {
+      status: EXECUTION_STATUS.COMPLETED as ExecutionStatus,
+    };
     const pf = new RoundPersistedFlow<
       ReflectionFlowShared,
       Record<string, unknown>,

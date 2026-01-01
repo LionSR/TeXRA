@@ -287,7 +287,9 @@ export function createServerToolContentState(): ServerToolContentState {
 }
 
 /** Reset server tool content state to initial values */
-export function resetServerToolContentState(state: ServerToolContentState): void {
+export function resetServerToolContentState(
+  state: ServerToolContentState,
+): void {
   state.contentBlocks = [];
   state.lastAssistantContent = [];
 }

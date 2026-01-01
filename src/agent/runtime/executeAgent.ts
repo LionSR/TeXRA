@@ -550,7 +550,9 @@ export async function executeAgent(
         if (currentStatus !== STREAM_STATUS.WAITING) {
           StreamStatusService.set(
             streamTabId,
-            flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+            flowStatus === 'error'
+              ? STREAM_STATUS.ERROR
+              : STREAM_STATUS.STOPPED,
           );
         }
         logger.debug(`Task completed with status: ${flowStatus}`);
