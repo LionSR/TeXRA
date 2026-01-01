@@ -48,7 +48,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import { PersistedFlow, type FlowRecord, type FlowStore } from './persisted-flow';
+import { PersistedFlow, type FlowStore } from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
@@ -217,6 +217,8 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
  * });
  *
  * await flow.run(shared);
+ * // After run, use getShared() to get final state
+ * const finalState = await flow.getShared();
  * ```
  *
  * @template S - Shared state type (must extend RoundAwareState)
@@ -244,25 +246,27 @@ export class RoundPersistedFlow<
   /**
    * Run the flow with automatic round management.
    *
-   * Overrides PersistedFlow.run() to:
-   * 1. Create initial round stage (r0)
-   * 2. Run nodes via inherited step()
-   * 3. Read node actions and handle round transitions
-   * 4. Increment currentRound centrally (single source of truth)
-   * 5. End final stage when graph completes
+   * Uses stepWithResult() to efficiently get both action and shared state
+   * in a single storage read per step (no redundant reads).
+   *
+   * Note: The passed `shared` parameter is used for initialization only.
+   * After run() completes, use getShared() to get the final state.
    */
   async run(shared: S): Promise<string | undefined> {
     const { hooks } = this.config;
     let status: 'completed' | 'interrupted' | 'error' = 'completed';
 
-    // Initialize flow record
+    // Initialize flow record with initial shared state
     await this.init(shared);
+
+    // Current shared state reference (updated from stepWithResult)
+    let currentShared = shared;
 
     try {
       // Create initial round stage (r0)
       if (hooks?.createRoundStage) {
         this.currentRoundStage = await hooks.createRoundStage(
-          shared.currentRound,
+          currentShared.currentRound,
           this.config.parentStage ?? null,
         );
       }
@@ -270,51 +274,45 @@ export class RoundPersistedFlow<
       // Hook: Initial round start
       if (hooks?.onRoundStart) {
         await hooks.onRoundStart(
-          this.createHookContext(shared),
+          this.createHookContext(currentShared),
           this._services as Svc,
         );
       }
 
-      // Execute nodes via inherited step()
-      while (await this.step()) {
-        // Read the last action to determine if we need to handle a round transition
-        const lastAction = await this.getLastNodeAction();
+      // Execute nodes via stepWithResult() - single read per step
+      let stepResult = await this.stepWithResult();
+      while (stepResult.hasMore) {
+        // Use the shared state returned by stepWithResult (authoritative)
+        currentShared = stepResult.shared;
 
-        // Handle round transition signal
-        if (lastAction === FlowTransition.CONTINUE_NEXT_ROUND) {
-          // Reload shared state to get current values
-          const updatedShared = await this.getShared();
-          if (updatedShared) {
-            // RoundPersistedFlow OWNS the increment (single source of truth)
-            await this.handleContinueToNextRound(updatedShared);
-            // Update local reference
-            Object.assign(shared, updatedShared);
-          }
-        } else {
-          // For other actions, just sync shared state
-          const updatedShared = await this.getShared();
-          if (updatedShared) {
-            Object.assign(shared, updatedShared);
-          }
+        // Handle round transition if signaled
+        if (stepResult.action === FlowTransition.CONTINUE_NEXT_ROUND) {
+          await this.handleContinueToNextRound(currentShared);
         }
+
+        // Execute next step
+        stepResult = await this.stepWithResult();
       }
+
+      // Get final shared state from last step
+      currentShared = stepResult.shared;
 
       // Hook: Final round end
       if (hooks?.onRoundEnd) {
         await hooks.onRoundEnd(
-          this.createHookContext(shared),
+          this.createHookContext(currentShared),
           this._services as Svc,
         );
       }
 
       // Determine final status: interrupted if stopped before completing all rounds
       const completedAllRounds = isRoundAtOrBeyondLimit(
-        shared.currentRound + 1,
-        shared.totalRounds,
+        currentShared.currentRound + 1,
+        currentShared.totalRounds,
       );
       const wasInterrupted =
         hooks?.checkInterruption?.() ||
-        (!shared.continueRounds && !completedAllRounds);
+        (!currentShared.continueRounds && !completedAllRounds);
       if (wasInterrupted) {
         status = 'interrupted';
       }
@@ -328,7 +326,7 @@ export class RoundPersistedFlow<
 
       // Hook: Flow end
       if (hooks?.onFlowEnd) {
-        await hooks.onFlowEnd(shared, status, this._services as Svc);
+        await hooks.onFlowEnd(currentShared, status, this._services as Svc);
       }
     }
 
@@ -336,19 +334,13 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Get the last node action from the flow record.
-   */
-  private async getLastNodeAction(): Promise<string | undefined> {
-    const key = `flow:${this.runId}`;
-    const flow = await this.kv.read<FlowRecord>(key);
-    return flow?.nodes.at(-1)?.action as string | undefined;
-  }
-
-  /**
    * Handle continuation to next round.
    *
    * Called when a node returns CONTINUE_NEXT_ROUND.
    * This is the SINGLE SOURCE OF TRUTH for round increment.
+   *
+   * The increment is persisted atomically with the next step() call,
+   * avoiding double-write race conditions.
    */
   private async handleContinueToNextRound(shared: S): Promise<void> {
     const { hooks } = this.config;
@@ -370,13 +362,13 @@ export class RoundPersistedFlow<
     shared.currentRound += 1;
     const newRound = shared.currentRound;
 
-    // Persist the increment immediately
-    await this.persistSharedState(shared);
-
     // Reset state for next round (workspace, etc.)
     if (hooks?.resetForNextRound) {
       hooks.resetForNextRound(shared);
     }
+
+    // Persist the updated state (increment + reset) atomically
+    await this.setShared(shared);
 
     // Check bounds - if we've exceeded, the step() loop will end naturally
     // because nodes will return FINALIZE when they see currentRound >= totalRounds
@@ -397,13 +389,6 @@ export class RoundPersistedFlow<
         );
       }
     }
-  }
-
-  /**
-   * Persist shared state to storage.
-   */
-  private async persistSharedState(shared: S): Promise<void> {
-    await this.setShared(shared);
   }
 
   /**
