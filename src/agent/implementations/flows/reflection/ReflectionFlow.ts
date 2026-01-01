@@ -113,7 +113,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
 // Re-export types for convenience
 export type {
   ReflectionFlowShared,
-  ReflectionFlowState,
+  ReflectionFlowStatePersisted,
 } from './ReflectionFlowState';
 export type {
   ReflectionServices,

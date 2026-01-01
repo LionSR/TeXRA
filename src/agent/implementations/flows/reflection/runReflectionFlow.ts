@@ -11,12 +11,12 @@
  * - Prompt building and output handling
  * - Interrupt handling and cleanup
  *
- * ## Koala-code-reader Pattern
+ * ## Lazy Persistence Pattern
  *
- * Following koala's approach:
- * - shared state is natively serializable (snapshots, not class instances)
- * - services contain runtime dependencies (runStage, logger, etc.)
- * - PersistedFlow handles persistence transparently
+ * Using lazy persistence for optimal performance:
+ * - shared state uses class instances directly (AgentWorkspaceState, AgentRunState)
+ * - serialization only happens at round boundaries, not per-node
+ * - custom serialization hooks convert class instances ↔ snapshots
  */
 
 import type { RoundOutput } from '@agent/output';
@@ -24,10 +24,7 @@ import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 
-import {
-  AgentWorkspaceState,
-  type AgentWorkspaceSnapshot,
-} from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
@@ -45,8 +42,9 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlow';
 import {
-  createFreshWorkspaceSnapshot,
   createInitialReflectionState,
+  reflectionFlowSerializationHooks,
+  resetWorkspaceForNextRound,
 } from './ReflectionFlowState';
 import {
   createReflectionFlowContext,
@@ -195,7 +193,7 @@ export async function runReflectionFlow<C = unknown>(
     );
 
     // Try to restore state from persisted flow (resume scenario)
-    let initialWorkspaceSnapshot: AgentWorkspaceSnapshot;
+    let initialWorkspace: AgentWorkspaceState | undefined;
     let restoredRetryError: RetryErrorInfo | undefined;
     let isResume = false;
 
@@ -211,16 +209,13 @@ export async function runReflectionFlow<C = unknown>(
         };
         if (persistedShared.workspaceSnapshot) {
           // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
-          // Round-trip through class normalizes/validates the snapshot structure
-          initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
+          initialWorkspace = AgentWorkspaceState.fromSnapshot(
             persistedShared.workspaceSnapshot,
-          ).toSnapshot();
+          );
           isResume = true;
           executionContext.logger.debug(
-            'Restored workspace snapshot from persisted flow',
+            'Restored workspace from persisted flow',
           );
-        } else {
-          initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         }
 
         // Restore retry error if present (for proper error classification on resume)
@@ -230,18 +225,15 @@ export async function runReflectionFlow<C = unknown>(
             `Restored lastRetryError from persisted flow: ${restoredRetryError.message}`,
           );
         }
-      } else {
-        initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
       }
     } catch {
       // No persisted flow - fresh start
-      initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
     }
 
-    // Create shared state for the flow (natively serializable, flat structure)
+    // Create shared state for the flow (uses class instances directly)
     shared = createInitialReflectionState(
       flowContext.totalRounds,
-      initialWorkspaceSnapshot,
+      initialWorkspace,
     );
 
     // Restore retry error if present
@@ -263,6 +255,8 @@ export async function runReflectionFlow<C = unknown>(
       ReflectionServices<C>
     >(startNode, kv, {
       parentStage: runStage,
+      // Serialization hooks for class instance ↔ snapshot conversion
+      serialization: reflectionFlowSerializationHooks,
       hooks: {
         // Create round stages (r0, r1, r2, ...)
         createRoundStage: async (roundIndex, parent) => {
@@ -271,9 +265,7 @@ export async function runReflectionFlow<C = unknown>(
           });
         },
         // Reset workspace state for new round (managed at flow level, not node level)
-        resetForNextRound: (s) => {
-          s.workspaceSnapshot = createFreshWorkspaceSnapshot();
-        },
+        resetForNextRound: resetWorkspaceForNextRound,
         // Check for interruption (for status detection)
         checkInterruption,
         // Capture flow completion status

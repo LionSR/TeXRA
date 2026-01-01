@@ -29,7 +29,7 @@
 export {
   createReflectionFlow,
   type ReflectionFlowShared,
-  type ReflectionFlowState,
+  type ReflectionFlowStatePersisted,
   type ReflectionServices,
   type ReflectionFlowParams,
 } from './ReflectionFlow';

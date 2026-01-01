@@ -28,12 +28,7 @@ import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
-import {
-  getWorkspaceState,
-  updateWorkspaceSnapshot,
-  type ReflectionFlowShared,
-  type RoundContext,
-} from '../ReflectionFlowState';
+import { type ReflectionFlowShared, type RoundContext } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -74,10 +69,10 @@ export class MediaPreparationNode<C = unknown> extends Node<
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, context } = shared;
+    const { currentRound, roundOutputs, context, workspace } = shared;
 
-    // Reconstruct workspace state from snapshot
-    const workspaceState = getWorkspaceState(shared);
+    // Access workspace directly (class instance in shared state)
+    const workspaceState = workspace;
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -161,7 +156,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
 
   /**
    * Add media to messages via modelHandler and continue.
-   * CRITICAL: Update workspace snapshot after mutations from exec().
+   * Note: Workspace is mutated in-place, no snapshot update needed.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -170,10 +165,8 @@ export class MediaPreparationNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // CRITICAL: Save mutated workspace state back to snapshot
-    // The latexMediaManager mutated workspaceState in exec(), so we must
-    // update the snapshot to persist those changes
-    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
+    // Workspace was mutated in-place in exec() via latexMediaManager.
+    // With lazy persistence, changes persist automatically at round boundaries.
 
     // Add media to messages if we have files and context
     if (execRes.mediaFiles.length > 0 && shared.context) {

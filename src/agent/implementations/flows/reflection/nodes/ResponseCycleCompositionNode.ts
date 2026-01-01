@@ -43,10 +43,6 @@ import {
 import type { AgentFileLocation } from '@utils/files';
 
 import {
-  getWorkspaceState,
-  getRunState,
-  updateRunStateSnapshot,
-  updateWorkspaceSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
@@ -112,7 +108,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       userVarChannels,
       getOutputFileLocation,
     } = this.services;
-    const { currentRound, context } = shared;
+    const { currentRound, context, workspace, runState } = shared;
 
     if (!context) {
       throw new Error(
@@ -120,10 +116,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       );
     }
 
-    // Reconstruct state instances from snapshots
+    // Access state directly (class instances in shared state)
     // Use slices directly - no wrapper needed
-    const workspace = getWorkspaceState(shared);
-    const run = getRunState(shared);
+    const run = runState;
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
     );
@@ -309,9 +304,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // Success - clear any previous error
     shared.lastRetryError = undefined;
 
-    // Update state from slices - convert to snapshot
-    updateRunStateSnapshot(shared, execRes.run);
-    updateWorkspaceSnapshot(shared, execRes.workspace);
+    // State was mutated in-place during cycle execution.
+    // With lazy persistence, changes persist automatically at round boundaries.
+    // Note: execRes contains the same references as shared.workspace/runState
     shared.endTurn = execRes.endTurn;
     shared.outputLocation = prepRes.outputLocation;
 
