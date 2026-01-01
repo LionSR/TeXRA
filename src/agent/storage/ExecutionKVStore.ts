@@ -6,9 +6,8 @@
  *
  * Architecture:
  * - ExecutionKVStore: Consumer-facing interface, auto-scoped to execution
- * - ExecutionStorageRegistry: Factory and lifecycle manager
- * - StorageFSKVStore: VS Code storage backend
- * - InMemoryKVStore: Testing backend
+ * - ExecutionStorageRegistry: Internal factory and lifecycle manager
+ * - StorageFSKVStore: VS Code storage backend implementation
  */
 
 import * as path from 'path';
@@ -161,55 +160,6 @@ class StorageFSKVStore implements ExecutionKVStore {
 }
 
 /**
- * In-memory implementation of ExecutionKVStore for testing.
- * No VS Code dependencies, pure Node.js.
- */
-export class InMemoryKVStore implements ExecutionKVStore {
-  private readonly store = new Map<string, unknown>();
-
-  constructor(private readonly executionId: ExecutionId) {}
-
-  async read<T = unknown>(key: string): Promise<T | undefined> {
-    const value = this.store.get(key);
-    if (value === undefined) return undefined;
-    // Use structuredClone to simulate serialization round-trip
-    return structuredClone(value) as T;
-  }
-
-  async write<T = unknown>(key: string, value: T): Promise<void> {
-    // Use structuredClone to simulate serialization
-    this.store.set(key, structuredClone(value));
-  }
-
-  async delete(key: string): Promise<void> {
-    this.store.delete(key);
-  }
-
-  async exists(key: string): Promise<boolean> {
-    return this.store.has(key);
-  }
-
-  async listKeys(prefix?: string): Promise<string[]> {
-    return Array.from(this.store.keys()).filter(
-      (k) => !prefix || k.startsWith(prefix),
-    );
-  }
-
-  async clear(): Promise<void> {
-    this.store.clear();
-  }
-
-  getExecutionId(): ExecutionId {
-    return this.executionId;
-  }
-
-  // Test helper: get raw store size
-  get size(): number {
-    return this.store.size;
-  }
-}
-
-/**
  * Default registry implementation using StorageFS.
  */
 class StorageFSRegistry implements ExecutionStorageRegistry {
@@ -299,40 +249,6 @@ class StorageFSRegistry implements ExecutionStorageRegistry {
   }
 }
 
-/**
- * In-memory registry for testing.
- */
-export class InMemoryRegistry implements ExecutionStorageRegistry {
-  private readonly stores = new Map<ExecutionId, InMemoryKVStore>();
-
-  getStore(executionId: ExecutionId): ExecutionKVStore {
-    let store = this.stores.get(executionId);
-    if (!store) {
-      store = new InMemoryKVStore(executionId);
-      this.stores.set(executionId, store);
-    }
-    return store;
-  }
-
-  async deleteExecution(executionId: ExecutionId): Promise<void> {
-    this.stores.delete(executionId);
-  }
-
-  async listExecutions(): Promise<ExecutionId[]> {
-    return Array.from(this.stores.keys());
-  }
-
-  async cleanupExpired(_maxAgeMs: number): Promise<ExecutionId[]> {
-    // In-memory stores don't track creation time, so no cleanup
-    return [];
-  }
-
-  // Test helper: clear all stores
-  clearAll(): void {
-    this.stores.clear();
-  }
-}
-
 // Singleton registry instance
 let registryInstance: ExecutionStorageRegistry | null = null;
 
@@ -340,20 +256,11 @@ let registryInstance: ExecutionStorageRegistry | null = null;
  * Get the global ExecutionStorageRegistry instance.
  * Uses StorageFS backend by default.
  */
-export function getExecutionRegistry(): ExecutionStorageRegistry {
+function getExecutionRegistry(): ExecutionStorageRegistry {
   if (!registryInstance) {
     registryInstance = new StorageFSRegistry();
   }
   return registryInstance;
-}
-
-/**
- * Set a custom registry (for testing).
- */
-export function setExecutionRegistry(
-  registry: ExecutionStorageRegistry | null,
-): void {
-  registryInstance = registry;
 }
 
 /**

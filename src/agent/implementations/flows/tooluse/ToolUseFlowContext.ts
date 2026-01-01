@@ -271,6 +271,7 @@ export function buildToolUseServices<C = unknown>(
       createCycleOptions(init, toolRegistry, resolvedTools, store),
     applyFollowUpMessage: (message, conversation) =>
       applyFollowUpMessage(init, message, conversation),
+    getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
   };
 
   return { services, sessionLifecycle, resolvedTools };
