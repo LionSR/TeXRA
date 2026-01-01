@@ -1,20 +1,19 @@
 /**
- * ResponseCycleCompositionNode - Composes ResponseCycleFlow as a sub-flow.
+ * ResponseCycleCompositionNode - Runs a response cycle as a sub-flow.
  *
- * This node demonstrates the key architectural change:
- * - Instead of calling `runResponseCycle()` function (hybrid pattern)
- * - We compose ResponseCycleFlow directly (pure flow pattern)
+ * This node composes ResponseCycleFlow (pure flow pattern) rather than
+ * calling runResponseCycle() function (hybrid pattern).
  *
  * Responsibilities:
- * - Create AgentSharedStore for the cycle
+ * - Reconstruct state slices from snapshots
  * - Build ResponseCycleOptions from services
  * - Run ResponseCycleFlow as a sub-flow
  * - Extract results back to ReflectionFlowShared
  *
  * PocketFlow pattern:
- * - prep(): Build store and output location
- * - exec(): Run the composed sub-flow
- * - post(): Update shared state with results
+ * - prep(): Reconstruct state slices and output location
+ * - exec(): Run the composed sub-flow with slices
+ * - post(): Update shared state snapshots with results
  *
  * Services accessed via native `this.services`:
  * - modelHandler, logger, setting, prompt, config, context, etc.
@@ -25,27 +24,31 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
+  buildBaseCycleOptions,
 } from '@agent/implementations/flows/common';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { ConversationRoundState } from '@agent/core/AgentState';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
   type ResponseCycleState,
 } from '@agent/core/flows/ResponseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
+import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import {
-  createRetryState,
-  type RetryState,
-} from '@agent/core/flows/RetryState';
-import type {
-  ResponseCycleOptions,
-  ResponseCycleParams,
+  finalizeRound,
+  type ResponseCycleOptions,
+  type ResponseCycleParams,
 } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
-import type {
-  ReflectionFlowShared,
-  RoundContext,
+import {
+  getWorkspaceState,
+  getRunState,
+  updateRunStateSnapshot,
+  updateWorkspaceSnapshot,
+  type ReflectionFlowShared,
+  type RoundContext,
 } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -56,22 +59,30 @@ import type {
 // Types
 // ============================================================================
 
-interface CyclePrepInput {
+/**
+ * State slices for cycle execution.
+ * Using slices directly instead of AgentSharedStore wrapper.
+ */
+interface CycleStateSlices {
+  round: ConversationRoundState;
+  run: AgentRunState;
+  workspace: AgentWorkspaceState;
+}
+
+interface CyclePrepInput extends CycleStateSlices {
   context: RoundContext;
   currentRound: number;
   outputLocation: AgentFileLocation;
-  store: AgentSharedStore;
 }
 
 type CycleExecResult =
-  | {
+  | ({
       kind: 'success';
       endTurn: boolean;
-      store: AgentSharedStore;
       failedWithError: boolean;
       errorMessage?: string;
       userCancelled: boolean;
-    }
+    } & CycleStateSlices)
   | { kind: 'error'; error: Error };
 
 // ============================================================================
@@ -101,7 +112,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       userVarChannels,
       getOutputFileLocation,
     } = this.services;
-    const { currentRound, context, workspaceState, runState } = shared.state;
+    const { currentRound, context } = shared;
 
     if (!context) {
       throw new Error(
@@ -109,14 +120,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       );
     }
 
-    // Create shared store for cycle with usage tracking callback
-    const store = new AgentSharedStore({
-      round: context.stateRound,
-      run: runState,
-      workspace: workspaceState,
-      user: userVarChannels,
-      onRoundFinalized: this.services.getUsageRecorder(),
-    });
+    // Reconstruct state instances from snapshots
+    // Use slices directly - no wrapper needed
+    const workspace = getWorkspaceState(shared);
+    const run = getRunState(shared);
+    const round = ConversationRoundState.fromSnapshot(
+      context.stateRoundSnapshot,
+    );
 
     // Determine output location for this round (delegates to agent for polymorphism)
     const outputLocation = getOutputFileLocation(currentRound);
@@ -125,7 +135,9 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       context,
       currentRound,
       outputLocation,
-      store,
+      round,
+      run,
+      workspace,
     };
   }
 
@@ -143,7 +155,7 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         services.config,
         services.setting,
         prepRes.context.messages,
-        prepRes.store.workspace,
+        prepRes.workspace,
         prepRes.outputLocation,
         prepRes.context.prefill,
       );
@@ -152,31 +164,28 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // This happens on resume when replaying completed rounds - the output file
     // already contains the full response, so we skip the model call.
     // Note: initializeOutputAndPrefill() modifies prepRes.context.messages in-place
-    // (adding the assistant response), so post() will sync this to shared.state.conversation.
+    // (adding the assistant response), so post() will sync this to shared.conversation.
     if (prefillEndsTurn) {
       return {
         kind: 'success',
         endTurn: true,
-        store: prepRes.store,
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
         failedWithError: false,
         userCancelled: false,
       };
     }
 
-    // Build ResponseCycleOptions from our services
+    // Build ResponseCycleOptions from services using helper (eliminates manual field copying)
+    // buildBaseCycleOptions handles all AgentCycleBaseOptions fields
     const cycleOptions: ResponseCycleOptions<C> = {
-      modelHandler: services.modelHandler,
-      logger: services.logger,
-      agentSetting: services.setting,
-      agentPrompt: services.prompt,
-      agentConfig: services.config,
-      context: services.context,
-      client: services.getClient(),
+      ...buildBaseCycleOptions(services),
+      // Override userVars with merged input + transient
       userVars: this.getUserVars(),
-      userVarChannels: services.userVarChannels,
+      // ResponseCycleOptions specific fields
+      agentConfig: services.config,
       fileService: services.fileService,
-      checkInterruption: services.checkInterruption,
-      setAbortController: services.setAbortController,
     };
 
     // Create cycle shared state with initialized messages
@@ -188,42 +197,54 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
         shouldStop: false,
         outputExists: false,
         systemPrompt: undefined,
-        debugContext: undefined,
-        debugFileOptions: undefined,
-        startTime: undefined,
+        debug: undefined,
         responseObject: undefined,
         responseTimeMs: undefined,
         stopReason: undefined,
         processedResponse: undefined,
-        roundFinalized: false,
       } satisfies ResponseCycleState,
       retryState: createRetryState(),
     };
 
+    // Get the finalization callback for this round
+    const onRoundFinalized = this.services.getUsageRecorder();
+
     try {
-      // Inject services and run sub-flow
-      this.cycleFlow.setParams({
-        services: { options: cycleOptions, store: prepRes.store },
+      // Inject services directly and run sub-flow
+      // Use slices directly - no AgentSharedStore wrapper
+      this.cycleFlow.setServices({
+        ...cycleOptions,
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+        onRoundFinalized, // Pass callback so FinalizeNode can invoke it
       });
       await this.cycleFlow.run(cycleShared);
 
-      // Extract results from cycle shared state
-      const failedWithError =
-        cycleShared.state.shouldStop && !!cycleShared.retryState.lastError;
-      const userCancelled =
-        cycleShared.state.shouldStop &&
-        !cycleShared.retryState.lastError &&
-        !cycleShared.state.endTurn;
+      // Success: FinalizeNode has already called finalizeRound()
+      // Use shared interpretation logic (single source of truth)
+      const completion = interpretCycleCompletion(
+        cycleShared.state,
+        cycleShared.retryState,
+      );
 
       return {
         kind: 'success',
         endTurn: cycleShared.state.endTurn,
-        store: prepRes.store,
-        failedWithError,
-        errorMessage: cycleShared.retryState.lastError?.message,
-        userCancelled,
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+        ...completion,
       };
     } catch (error) {
+      // Error path: FinalizeNode may not have run, so finalize here
+      // Use helper function directly (single source of truth for finalization logic)
+      await finalizeRound({
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+        onRoundFinalized,
+      });
       return {
         kind: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
@@ -255,35 +276,51 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
+      // Store error in shared state for persistence (enables proper resume behavior)
+      shared.lastRetryError = {
+        message: execRes.error.message,
+        retryable: false,
+      };
       throw execRes.error;
     }
 
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
-      shared.state.continueRounds = false;
+      shared.continueRounds = false;
       // Clear stale state to prevent OutputNode from processing previous round's data
-      shared.state.endTurn = false;
-      shared.state.outputLocation = prepRes.outputLocation;
+      shared.endTurn = false;
+      shared.outputLocation = prepRes.outputLocation;
+      // Clear any previous error - user cancellation is not an error
+      shared.lastRetryError = undefined;
       // User cancellation is not an error - just stop gracefully
       return FlowTransition.DEFAULT;
     }
 
     if (execRes.failedWithError) {
       logger.error(`Response cycle failed: ${execRes.errorMessage}`);
+      // Store error in shared state for persistence
+      shared.lastRetryError = {
+        message: execRes.errorMessage ?? 'Unknown error',
+        retryable: false,
+      };
       throw new Error(execRes.errorMessage ?? 'Unknown error');
     }
 
-    // Update state from store
-    shared.state.runState = execRes.store.run;
-    shared.state.endTurn = execRes.endTurn;
-    shared.state.outputLocation = prepRes.outputLocation;
+    // Success - clear any previous error
+    shared.lastRetryError = undefined;
+
+    // Update state from slices - convert to snapshot
+    updateRunStateSnapshot(shared, execRes.run);
+    updateWorkspaceSnapshot(shared, execRes.workspace);
+    shared.endTurn = execRes.endTurn;
+    shared.outputLocation = prepRes.outputLocation;
 
     // Sync conversation state - messages are modified in-place during cycle
     // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
-    shared.state.conversation = prepRes.context.messages;
+    shared.conversation = prepRes.context.messages;
 
-    // Store round state for later
-    shared.state.roundStates.push(prepRes.context.stateRound);
+    // Store round state snapshot for later (already a snapshot, just push directly)
+    shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;
@@ -291,13 +328,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
   /**
    * Get user variables for prompt rendering.
+   * Merges input (frozen base) with transient (runtime modifications).
    */
   private getUserVars(): Record<string, any> {
     const channels = this.services.userVarChannels;
     return {
       ...channels.input,
       ...channels.transient,
-      ...channels.output,
     };
   }
 }

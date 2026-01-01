@@ -47,15 +47,25 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type {
-  ResponseCycleParams,
-  ResponseCycleServices,
+import {
+  finalizeRound,
+  type ResponseCycleParams,
+  type ResponseCycleServices,
 } from './CycleServices';
 
 /** Input state for response cycles. */
 interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation: AgentFileLocation;
+}
+
+/**
+ * Debug options for cycle - consolidated from separate context/fileOptions fields.
+ * Always set/checked together, so merged into single optional field.
+ */
+interface CycleDebugOptions {
+  context: CycleDebugContext;
+  fileOptions: CycleDebugFileOptions;
 }
 
 /** Runtime state for response cycles. */
@@ -76,14 +86,12 @@ interface ResponseCycleRuntimeState extends BaseCycleState {
   endTurn: boolean;
   outputExists: boolean;
   systemPrompt?: string;
-  debugContext?: CycleDebugContext;
-  debugFileOptions?: CycleDebugFileOptions;
-  startTime?: number;
+  /** Consolidated debug options (context + fileOptions always used together) */
+  debug?: CycleDebugOptions;
   responseObject?: unknown;
   processedResponse?: string;
   /** Agent output location - always workspace or runStorage (never external) */
   outputLocation?: AgentFileLocation;
-  roundFinalized: boolean;
 }
 
 export type ResponseCycleState = ResponseCycleInputState &
@@ -93,7 +101,6 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   resetCycleState(cycle, ['responseObject', 'processedResponse']);
   // Boolean fields set directly to avoid undefined intermediate state
   cycle.endTurn = false;
-  cycle.roundFinalized = false;
 }
 
 /**
@@ -115,53 +122,52 @@ export type ResponseCycleShared = BaseCycleShared<ResponseCycleState>;
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
  *
- * Services accessed via `_params.services`: options, store
+ * Services accessed via `_params.services` (options flattened into services).
  */
 class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<{
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
-    debugContext?: CycleDebugContext;
-    debugFileOptions?: CycleDebugFileOptions;
+    debug?: CycleDebugOptions;
     outputLocation: AgentFileLocation;
   }> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const { agentPrompt, userVars, logger, agentConfig, round } = services;
     const { state } = shared;
-    const { agentPrompt, userVars, logger, agentConfig } = options;
-    const interrupted = Boolean(await options.checkInterruption());
+    const interrupted = Boolean(await services.checkInterruption());
     const outputLocation = state.outputLocation;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
 
-    const debugContext: CycleDebugContext | undefined = interrupted
+    // Consolidated debug options (always used together)
+    const debug: CycleDebugOptions | undefined = interrupted
       ? undefined
-      : createDebugContext({
-          logger,
-          modelName: agentConfig.model,
-          executionId: options.context.executionId,
-          isRemote: isRemoteAgent(agentConfig.agent),
-        });
-
-    const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
-      ? undefined
-      : createDebugFileOptions(
-          store.round.continuationCount,
-          'response',
-          state.outputLocation.relativePath,
-        );
+      : {
+          context: createDebugContext({
+            logger,
+            modelName: agentConfig.model,
+            executionId: services.context.executionId,
+            isRemote: isRemoteAgent(agentConfig.agent),
+          }),
+          fileOptions: createDebugFileOptions(
+            round.continuationCount,
+            'response',
+            state.outputLocation.relativePath,
+          ),
+        };
 
     return {
       interrupted,
       exists,
       systemPrompt,
-      debugContext,
-      debugFileOptions,
+      debug,
       outputLocation,
     };
   }
@@ -172,8 +178,7 @@ class ResponsePrepNode<C> extends BaseNode<
       interrupted: boolean;
       exists: boolean;
       systemPrompt?: string;
-      debugContext?: CycleDebugContext;
-      debugFileOptions?: CycleDebugFileOptions;
+      debug?: CycleDebugOptions;
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
@@ -187,18 +192,16 @@ class ResponsePrepNode<C> extends BaseNode<
 
     state.outputExists = prepRes.exists;
     state.systemPrompt = prepRes.systemPrompt;
-    state.debugContext = prepRes.debugContext;
-    state.debugFileOptions = prepRes.debugFileOptions;
+    state.debug = prepRes.debug;
     state.outputLocation = prepRes.outputLocation;
-    state.startTime = Date.now();
     resetResponseCycleState(state);
 
-    if (state.debugContext && state.debugFileOptions) {
+    if (state.debug) {
       await maybeSaveDebugObject({
         object: state.messages,
         objectType: 'messages',
-        context: state.debugContext,
-        fileOptions: state.debugFileOptions,
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
       });
     }
 
@@ -232,18 +235,15 @@ type InvocationExecResult = InvocationResult<BaseInvocationSuccessData>;
  * - default: Continue to next node on success
  * - COMPLETE: All retries exhausted, non-retryable error, or user cancelled
  *
- * Services accessed via `_params.services`: options
+ * Services accessed via `_params.services` (options flattened into services).
  */
 class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
 > {
   protected getOperationName(): string {
     return 'Model invocation';
-  }
-
-  protected getServices(): ResponseCycleServices<C> {
-    return this._params.services;
   }
 
   /**
@@ -260,34 +260,32 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   }
 
   async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
-    const { options } = this._params.services;
+    const services = this.services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
 
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
-    options.setAbortController(abortController);
-    options.modelHandler.setOutputStreaming(false);
+    services.modelHandler.setOutputStreaming(false);
 
-    const stage = await options.logger.stage('Model invocation', {
+    const stage = await services.logger.stage('Model invocation', {
       skip: true,
     });
 
     const start = Date.now();
-    try {
+
+    // Use base class helper for abort controller lifecycle
+    return this.withAbortController(async (signal) => {
       const { response, responseTimeMs } = await stage.run(async () => {
-        const modelResponse = await options.modelHandler.createResponse({
-          client: options.client,
+        const modelResponse = await services.modelHandler.createResponse({
+          client: services.client,
           messages: prepRes.messages,
-          temperature: options.agentSetting.temperature || 0.0,
+          temperature: services.agentSetting.temperature || 0.0,
           systemPrompt: prepRes.systemPrompt,
-          endTag: options.agentSetting.endTag,
-          signal: abortController.signal,
-          tools: options.modelHandler.capabilities.supportsFunctionCalling
-            ? options.agentSetting.tools
+          endTag: services.agentSetting.endTag,
+          signal,
+          tools: services.modelHandler.capabilities.supportsFunctionCalling
+            ? services.agentSetting.tools
             : undefined,
         });
 
@@ -297,9 +295,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       });
 
       return { kind: 'success', response, responseTimeMs };
-    } finally {
-      options.setAbortController(null);
-    }
+    });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
@@ -320,12 +316,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { options } = this._params.services;
+    const { logger } = this.services;
     const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
     const successRes = handleInvocationResult(execRes, state, retryState, {
-      logger: options.logger,
+      logger,
       operationName: this.getOperationName(),
     });
 
@@ -337,12 +333,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     state.responseObject = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    if (state.debugContext && state.debugFileOptions) {
+    if (state.debug) {
       await maybeSaveDebugObject({
         object: successRes.response,
         objectType: 'response',
-        context: state.debugContext,
-        fileOptions: state.debugFileOptions,
+        context: state.debug.context,
+        fileOptions: state.debug.fileOptions,
       });
     }
 
@@ -415,14 +411,15 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * - exec() performs pure computation, no side effects
  * - post() applies all side effects (store updates)
  *
- * Services accessed via `_params.services`: options, store
+ * Services accessed via `_params.services` (options flattened into services).
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
-    const { store } = this._params.services;
+    const { workspace } = this.services;
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
@@ -431,20 +428,20 @@ class ResponseProcessNode<C> extends BaseNode<
       messages: state.messages,
       outputLocation: state.outputLocation!,
       outputExists: state.outputExists,
-      // Read store values before they're updated (for connector calculation)
-      lastResponse: store.workspace.assembly.lastResponse,
-      accumulatedOutput: store.workspace.assembly.accumulatedOutput,
+      // Read workspace values before they're updated (for connector calculation)
+      lastResponse: workspace.assembly.lastResponse,
+      accumulatedOutput: workspace.assembly.accumulatedOutput,
     };
   }
 
   async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
-    const { options, store } = this._params.services;
+    const { workspace, logger, modelHandler, agentSetting } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
     }
 
-    const stage = await options.logger.stage('Process response', {
+    const stage = await logger.stage('Process response', {
       skip: true,
     });
 
@@ -453,34 +450,34 @@ class ResponseProcessNode<C> extends BaseNode<
         response: newResponse,
         usage: responseUsage,
         stopReason,
-      } = options.modelHandler.extractResponse(
+      } = modelHandler.extractResponse(
         prepRes.responseObject,
-        options.agentSetting.endTag,
+        agentSetting.endTag,
       );
 
       if (newResponse) {
-        options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+        logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       }
 
       if (prepRes.responseTimeMs !== undefined) {
-        options.logger.debug(
+        logger.debug(
           `Response time: ${(prepRes.responseTimeMs / 1000).toFixed(2)}s`,
         );
       }
 
-      options.logger.debug(`Stop reason: ${stopReason}`);
-      options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
+      logger.debug(`Stop reason: ${stopReason}`);
+      logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
-      const thinkingContent = options.modelHandler.processThinkingBlock(
+      const thinkingContent = modelHandler.processThinkingBlock(
         prepRes.responseObject,
-        store.workspace,
+        workspace,
       );
-      const useStreaming = options.modelHandler.getStreamingConfig();
+      const useStreaming = modelHandler.getStreamingConfig();
 
       // For non-streaming mode, emit thinking to progress view
       // (streaming mode already shows it progressively via streams)
       if (thinkingContent && !useStreaming) {
-        options.logger.info(thinkingContent, {
+        logger.info(thinkingContent, {
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
@@ -491,13 +488,13 @@ class ResponseProcessNode<C> extends BaseNode<
         'scratchpad',
       );
       if (scratchpad) {
-        options.logger.info(scratchpad, {
+        logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
         });
       }
 
       // Normalize usage once - this is the single source of truth
-      const normalizedUsage = options.modelHandler.normalizeUsage(
+      const normalizedUsage = modelHandler.normalizeUsage(
         responseUsage,
         prepRes.responseTimeMs ?? 0,
       );
@@ -508,14 +505,12 @@ class ResponseProcessNode<C> extends BaseNode<
       );
 
       if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        options.logger.error(
+        logger.error(
           `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
         );
-        options.logger.error(
-          'Massive repetition detected - skipping this response',
-        );
-        options.logger.error('Message structure when repetition detected:');
-        options.logger.error(
+        logger.error('Massive repetition detected - skipping this response');
+        logger.error('Message structure when repetition detected:');
+        logger.error(
           JSON.stringify(messageToSkeleton(prepRes.messages), null, 2),
         );
       }
@@ -569,15 +564,11 @@ class ResponseProcessNode<C> extends BaseNode<
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const { round, workspace, logger, modelHandler } = this.services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
@@ -586,21 +577,19 @@ class ResponseProcessNode<C> extends BaseNode<
     // Apply side effects that were computed in exec()
     // These updates are now in post() where they belong (PocketFlow compliance)
     if (result.responseTimeMs !== undefined) {
-      store.round.addResponseTime(result.responseTimeMs);
+      round.addResponseTime(result.responseTimeMs);
     }
 
     if (result.normalizedUsage) {
-      store.round.setNormalizedUsage(result.normalizedUsage);
+      round.setNormalizedUsage(result.normalizedUsage);
     }
 
     if (result.updatedLastResponse !== undefined) {
-      store.workspace.assembly.updateLastResponse(result.updatedLastResponse);
+      workspace.assembly.lastResponse = result.updatedLastResponse;
     }
 
     if (result.updatedAccumulatedOutput !== undefined) {
-      store.workspace.assembly.updateAccumulatedOutput(
-        result.updatedAccumulatedOutput,
-      );
+      workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     }
 
     state.stopReason = result.stopReason;
@@ -609,10 +598,6 @@ class ResponseProcessNode<C> extends BaseNode<
     if (result.repetitionDetected) {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
@@ -621,10 +606,6 @@ class ResponseProcessNode<C> extends BaseNode<
     if (!processedResponse) {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
@@ -633,11 +614,11 @@ class ResponseProcessNode<C> extends BaseNode<
     await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
 
     if (!prepRes.outputExists) {
-      options.logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
+      logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
       await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
       state.outputExists = true;
     } else {
-      options.logger.debug(
+      logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
@@ -650,49 +631,79 @@ class ResponseProcessNode<C> extends BaseNode<
     const usageSummary = Object.entries(responseUsage)
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ');
-    options.logger.debug(`Usage summary: ${usageSummary}`);
+    logger.debug(`Usage summary: ${usageSummary}`);
 
-    options.logger.info(`Stop reason: ${result.stopReason}`, {
+    logger.info(`Stop reason: ${result.stopReason}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
-    options.logger.debug(
-      `Normalized usage: ${JSON.stringify(result.normalizedUsage)}`,
-    );
+    logger.debug(`Normalized usage: ${JSON.stringify(result.normalizedUsage)}`);
 
-    options.logger.debug('Response preview:');
-    options.logger.debug(
+    logger.debug('Response preview:');
+    logger.debug(
       `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
     );
-    options.logger.debug(
+    logger.debug(
       `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
     );
 
     const connector = result.bestConnector ?? '';
 
-    if (options.modelHandler.capabilities.supportsAssistantPrefill) {
-      options.modelHandler.updateMessageContentWithPrefill(
+    if (modelHandler.capabilities.supportsAssistantPrefill) {
+      modelHandler.updateMessageContentWithPrefill(
         state.messages,
         connector,
         processedResponse,
-        store.workspace,
+        workspace,
       );
     } else {
-      options.modelHandler.updateMessageContentWithoutPrefill(
+      modelHandler.updateMessageContentWithoutPrefill(
         state.messages,
         connector,
         processedResponse,
-        store.workspace,
+        workspace,
       );
     }
 
     if (result.useStreaming) {
-      options.logger.debug(
+      logger.debug(
         'Using streaming - deferring continuation decision to next stage',
       );
     }
 
     return FlowTransition.DEFAULT;
+  }
+}
+
+/**
+ * Finalizes the response cycle by recording round statistics.
+ * All flow exit paths route through this node to ensure proper cleanup.
+ *
+ * PocketFlow pattern:
+ * - Single finalization point in the flow graph
+ * - No guard flags needed (graph ensures single execution)
+ * - Services accessed via `_params.services`
+ */
+class ResponseCycleFinalizeNode<C> extends BaseNode<
+  ResponseCycleShared,
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
+> {
+  /**
+   * Finalize the round using the shared helper.
+   *
+   * This is the SINGLE finalization point for ResponseCycleFlow.
+   * The parent ResponseCycleCompositionNode must pass onRoundFinalized
+   * to services for this to work correctly.
+   */
+  async exec(): Promise<void> {
+    // Use shared helper for consistent finalization (single source of truth)
+    await finalizeRound(this.services);
+  }
+
+  async post(): Promise<string | undefined> {
+    // Flow ends here
+    return undefined;
   }
 }
 
@@ -709,14 +720,15 @@ class ResponseProcessNode<C> extends BaseNode<
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleParams<C>
+  ResponseCycleParams<C>,
+  ResponseCycleServices<C>
 > {
   /**
    * Extract data and check interruption.
    * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    const { options } = this._params.services;
+    const { checkInterruption } = this.services;
     const { state } = shared;
 
     // Check skip conditions in prep
@@ -724,8 +736,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       state.shouldStop || !state.stopReason || !state.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
-    const interrupted =
-      !shouldSkip && Boolean(await options.checkInterruption());
+    const interrupted = shouldSkip ? false : Boolean(await checkInterruption());
 
     return {
       shouldSkip,
@@ -741,7 +752,7 @@ class ResponseContinuationNode<C> extends BaseNode<
    * PocketFlow compliance: Pure computation, no side effects.
    */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
-    const { options, store } = this._params.services;
+    const { round, run, modelHandler, agentSetting } = this.services;
 
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -762,18 +773,18 @@ class ResponseContinuationNode<C> extends BaseNode<
     const processedResponse = prepRes.processedResponse!;
 
     const { endTurn: shouldEndTurn, shouldStop } =
-      options.modelHandler.checkStopConditions(
+      modelHandler.checkStopConditions(
         stopReason,
         processedResponse,
-        store.round,
-        store.run,
-        options.agentSetting,
+        round,
+        run,
+        agentSetting,
       );
 
-    const shouldContinue = options.modelHandler.shouldContinue(
+    const shouldContinue = modelHandler.shouldContinue(
       stopReason,
       processedResponse,
-      options.agentSetting,
+      agentSetting,
     );
 
     return {
@@ -787,16 +798,19 @@ class ResponseContinuationNode<C> extends BaseNode<
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const {
+      round,
+      workspace,
+      logger,
+      modelHandler,
+      agentSetting,
+      agentConfig,
+    } = this.services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
@@ -806,10 +820,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     state.shouldStop = shouldStop;
 
     if (shouldStop) {
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
@@ -817,45 +827,39 @@ class ResponseContinuationNode<C> extends BaseNode<
     const willContinue = shouldContinue || reachedTokenLimit;
 
     if (!willContinue) {
-      if (!state.roundFinalized) {
-        state.roundFinalized = true;
-        await store.finalizeRound();
-      }
       return FlowTransition.COMPLETE;
     }
 
-    store.round.incrementContinuation();
-    options.logger.info(
-      `Starting continuation #${store.round.continuationCount}`,
-      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
-    );
+    round.incrementContinuation();
+    logger.info(`Starting continuation #${round.continuationCount}`, {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
 
     if (reachedTokenLimit) {
-      options.logger.info('Continuing after hitting the model token limit', {
+      logger.info('Continuing after hitting the model token limit', {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
     }
 
-    options.logger.info(
-      '🧵 Added continuation prompt from partial XML output',
-      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
-    );
+    logger.info('🧵 Added continuation prompt from partial XML output', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
 
-    if (options.modelHandler.capabilities.supportsAssistantPrefill) {
-      options.modelHandler.addContinueMessageWithPrefill(
+    if (modelHandler.capabilities.supportsAssistantPrefill) {
+      modelHandler.addContinueMessageWithPrefill(
         state.messages,
-        store.round,
-        store.workspace,
-        options.agentSetting,
-        options.agentConfig,
+        round,
+        workspace,
+        agentSetting,
+        agentConfig,
       );
     } else {
-      options.modelHandler.addContinueMessageWithoutPrefill(
+      modelHandler.addContinueMessageWithoutPrefill(
         state.messages,
-        store.round,
-        store.workspace,
-        options.agentSetting,
-        options.agentConfig,
+        round,
+        workspace,
+        agentSetting,
+        agentConfig,
       );
     }
 
@@ -864,16 +868,16 @@ class ResponseContinuationNode<C> extends BaseNode<
 }
 
 /**
- * Creates a response cycle flow with services injected via params.
+ * Creates a response cycle flow with services injected directly.
  *
  * The returned flow uses the services pattern:
- * - Services (options, store) are passed via `setParams({ services })`
+ * - Services are passed via `setServices()` (options flattened)
  * - Only mutable state flows through the shared context
  *
  * @example
  * ```typescript
  * const flow = createResponseCycleFlow<MyContext>();
- * flow.setParams({ services: { options, store } });
+ * flow.setServices({ ...options, store });
  * await flow.run(sharedState);
  * ```
  */
@@ -885,6 +889,7 @@ export function createResponseCycleFlow<C>(): Flow<
   const invokeNode = new ResponseModelInvocationNode<C>();
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();
+  const finalizeNode = new ResponseCycleFinalizeNode<C>();
 
   // Main flow: prep → invoke → process → continuation
   // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
@@ -892,6 +897,12 @@ export function createResponseCycleFlow<C>(): Flow<
   prepNode.next(invokeNode);
   invokeNode.next(processNode);
   processNode.next(continuationNode);
+
+  // All completion paths route through finalize node (PocketFlow-native pattern)
+  prepNode.on(FlowTransition.COMPLETE, finalizeNode);
+  invokeNode.on(FlowTransition.COMPLETE, finalizeNode);
+  processNode.on(FlowTransition.COMPLETE, finalizeNode);
+  continuationNode.on(FlowTransition.COMPLETE, finalizeNode);
 
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);

@@ -12,18 +12,6 @@ import {
   RunUsageAccumulatorJSONSchema,
 } from './RunUsageAccumulator';
 
-// Type imports
-import type {
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
-} from './ResponseUsage';
-
-export type NativeResponseUsage =
-  | ExtendedCompletionUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
-
 /** Default values for ConversationRoundState */
 const ROUND_STATE_DEFAULTS = {
   continuationCount: 0,
@@ -107,6 +95,20 @@ export class ConversationRoundState {
 
   clearUsage(): void {
     this.normalizedUsage = null;
+  }
+
+  /**
+   * Reset this round state for a new round.
+   * Mutates the existing object to preserve references held by store and services.
+   *
+   * @param newRoundIndex - The new round index
+   */
+  reset(newRoundIndex: number): void {
+    this.roundIndex = newRoundIndex;
+    this.continuationCount = ROUND_STATE_DEFAULTS.continuationCount;
+    this.responseTimeMs = ROUND_STATE_DEFAULTS.responseTimeMs;
+    this.outputFile = ROUND_STATE_DEFAULTS.outputFile;
+    this.normalizedUsage = ROUND_STATE_DEFAULTS.normalizedUsage;
   }
 }
 

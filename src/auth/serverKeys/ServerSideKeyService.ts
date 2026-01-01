@@ -15,6 +15,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
   ULTRA_TIER,
@@ -23,7 +24,6 @@ import {
 } from '../config';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ServerSideKeyService';
 
