@@ -11,14 +11,10 @@
  * PocketFlow pattern:
  * - prep(): Extract data needed for context preparation
  * - exec(): Build prompts and base messages
- * - post(): Store context in shared, handle skip
+ * - post(): Store context in shared
  *
  * Services accessed via native `this.services`:
  * - promptBuilder, modelHandler, logger
- *
- * State access pattern:
- * - Uses direct state fields (currentRound, conversation, totalRounds, context)
- * - No snapshot helpers needed (doesn't access workspaceState, runState, or roundStates)
  */
 
 import { Node } from '@agent/node';
@@ -48,9 +44,7 @@ interface ContextPrepInput {
   conversation: ProviderMessage[];
 }
 
-type ContextExecResult =
-  | { kind: 'ready'; context: RoundContext }
-  | { kind: 'skip' };
+type ContextExecResult = { kind: 'ready'; context: RoundContext };
 
 // ============================================================================
 // Node Implementation
@@ -117,12 +111,6 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Subsequent rounds: build user request only
       const userRequest = await promptBuilder.buildUserRequest(currentRound);
 
-      // Check for skip (no content)
-      if (!userRequest?.trim()) {
-        logger.debug(`Skipping round ${currentRound} - no user content`);
-        return { kind: 'skip' };
-      }
-
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
 
@@ -149,25 +137,13 @@ export class PrepareContextNode<C = unknown> extends Node<
   }
 
   /**
-   * Store context in shared or handle skip.
+   * Store context in shared and continue.
    */
   async post(
     shared: ReflectionFlowShared,
     _prepRes: ContextPrepInput,
     execRes: ContextExecResult,
   ): Promise<string | undefined> {
-    if (execRes.kind === 'skip') {
-      // Increment round and loop back to start of flow
-      shared.currentRound += 1;
-
-      // Bounds check to prevent infinite loop when all remaining rounds are empty
-      if (shared.currentRound >= shared.totalRounds) {
-        return FlowTransition.DEFAULT; // Exit flow - no more rounds
-      }
-
-      return FlowTransition.CONTINUE;
-    }
-
     // Store context for subsequent nodes to enrich
     shared.context = execRes.context;
 
