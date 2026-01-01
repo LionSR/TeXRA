@@ -15,16 +15,16 @@ import {
 } from '@common/webview';
 
 // Local imports - auth
+import {
+  SelectAgentMessageSchema,
+  SetApiAccessModeMessageSchema,
+} from '@webview/types/messages';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 import { ULTRA_TIER, MAX_TIER } from '@/auth/config';
 import { getServerSideKeyService } from '@/auth/serverKeys';
 
 // Message schemas
-import {
-  SelectAgentMessageSchema,
-  SetApiAccessModeMessageSchema,
-} from '@webview/types/messages';
 
 /** Schema for remote agent data sent to webview (used for type inference only) */
 const RemoteAgentPayloadSchema = z.object({

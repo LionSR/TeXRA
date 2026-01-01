@@ -15,11 +15,11 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { toErrorMessage } from '@common/errors';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
+import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
@@ -44,9 +44,7 @@ interface TeXCountPrepInput {
   context: RoundContext | null;
 }
 
-type TeXCountExecResult =
-  | { kind: 'success'; stats: string | null }
-  | { kind: 'degraded'; stats: null; warning: string };
+type TeXCountExecResult = string | null;
 
 // ============================================================================
 // Node Implementation
@@ -85,7 +83,7 @@ export class TeXCountNode<C = unknown> extends Node<
 
   /**
    * Run TeXCount.
-   * This can fail gracefully - missing texcount shouldn't stop the flow.
+   * Throws on error - execFallback() handles graceful degradation.
    */
   async exec(prepRes: TeXCountPrepInput): Promise<TeXCountExecResult> {
     const { logger } = this.services;
@@ -93,36 +91,25 @@ export class TeXCountNode<C = unknown> extends Node<
     // Skip if not enabled or no files
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
       logger.debug('TeXCount skipped: not enabled or no files');
-      return { kind: 'success', stats: null };
+      return null;
     }
 
-    try {
-      const stats = await getTeXCountStats(
-        prepRes.files.map((f) => f.absolutePath),
-      );
-      logger.debug(`TeXCount computed for ${prepRes.files.length} files`);
-      return { kind: 'success', stats: stats ?? null };
-    } catch (error) {
-      return {
-        kind: 'degraded',
-        stats: null,
-        warning: `TeXCount failed: ${toErrorMessage(error)}`,
-      };
-    }
+    const stats = await getTeXCountStats(
+      prepRes.files.map((f) => f.absolutePath),
+    );
+    logger.debug(`TeXCount computed for ${prepRes.files.length} files`);
+    return stats ?? null;
   }
 
   /**
-   * Handle total failure - continue without stats.
+   * Handle total failure - log warning and continue without stats.
    */
   async execFallback(
     _prepRes: TeXCountPrepInput,
     error: Error,
   ): Promise<TeXCountExecResult> {
-    return {
-      kind: 'degraded',
-      stats: null,
-      warning: `TeXCount failed: ${error.message}`,
-    };
+    this.services.logger.warn(`TeXCount failed: ${error.message}`);
+    return null;
   }
 
   /**
@@ -135,17 +122,9 @@ export class TeXCountNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // Log warning if degraded
-    if (execRes.kind === 'degraded') {
-      logger.warn(execRes.warning);
-    }
-
     // Prepend stats to messages if we have stats and context
-    if (execRes.stats && shared.context) {
-      modelHandler.prependTextToUserMessage(
-        shared.context.messages,
-        execRes.stats,
-      );
+    if (execRes && shared.context) {
+      modelHandler.prependTextToUserMessage(shared.context.messages, execRes);
       logger.debug('TeXCount stats prepended to user message');
     }
 

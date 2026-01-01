@@ -13,8 +13,8 @@ import * as vscode from 'vscode';
 // Local imports
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports

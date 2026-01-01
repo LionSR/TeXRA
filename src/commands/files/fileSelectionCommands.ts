@@ -6,9 +6,9 @@ import { showLoggedErrorMessage } from '@common/errors';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
 import { showInfoMessage } from '@frontend/ui/messageUtils';
+import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
