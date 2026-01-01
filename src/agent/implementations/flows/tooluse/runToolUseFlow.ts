@@ -13,6 +13,10 @@ import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+import {
+  EXECUTION_STATUS,
+  executionToEndStatus,
+} from '@common/constants/streamStatus';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
 import {
@@ -151,11 +155,12 @@ export async function runToolUseFlow<C = unknown>(
     // Run the persisted flow - errors throw directly
     await pf.run(shared);
 
-    // Check if flow was interrupted (user pressed stop)
-    // Map to ERROR status to show red status in UI
-    status = input.checkInterruption()
-      ? END_GROUP_STATUS.ERROR
-      : END_GROUP_STATUS.STOPPED;
+    // Determine ExecutionStatus and map to EndGroupStatus
+    // Interrupted means user stopped early → show red in UI
+    const executionStatus = input.checkInterruption()
+      ? EXECUTION_STATUS.INTERRUPTED
+      : EXECUTION_STATUS.COMPLETED;
+    status = executionToEndStatus(executionStatus) as EndGroupStatus;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
