@@ -206,8 +206,14 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
 
     try {
       // Inject services directly and run sub-flow
-      // Options are spread directly into services (flattened structure)
-      this.cycleFlow.setServices({ ...cycleOptions, store: prepRes.store });
+      // Options are spread with state slices (no store wrapper)
+      this.cycleFlow.setServices({
+        ...cycleOptions,
+        round: prepRes.store.round,
+        run: prepRes.store.run,
+        workspace: prepRes.store.workspace,
+        // onRoundFinalized is handled via store callback set during store creation
+      });
       await this.cycleFlow.run(cycleShared);
 
       // Extract results from cycle shared state

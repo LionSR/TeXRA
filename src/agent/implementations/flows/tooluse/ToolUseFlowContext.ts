@@ -198,13 +198,13 @@ function createCycleOptions<C>(
 
   // Build base cycle options using helper (eliminates manual field copying)
   // Then extend with tool-use specific fields
+  // Note: workspace is passed via CycleStateSlices, not duplicated in options
   return {
     ...buildBaseCycleOptions(init),
     // Override with resolved setting (includes pre-resolved tools)
     agentSetting: resolvedSetting,
     // ToolUseCycleOptions specific fields
     toolRegistry: toolRegistry,
-    workspaceState: store.workspace,
     modelName: init.config.model,
     agentName: init.config.agent,
   };
