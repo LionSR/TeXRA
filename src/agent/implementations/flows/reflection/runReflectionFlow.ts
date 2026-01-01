@@ -22,7 +22,7 @@
 import type { RoundOutput } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 
 import {
   AgentWorkspaceState,
@@ -44,7 +44,7 @@ import {
   createInitialReflectionState,
 } from './ReflectionFlowState';
 import {
-  createReadyReflectionContext,
+  createReflectionFlowContext,
   ReflectionFlowContext,
   type ReflectionFlowContextInit,
 } from './ReflectionFlowContext';
@@ -64,7 +64,7 @@ export interface RunReflectionFlowInput<C = unknown> extends Omit<
   /**
    * Usage recorder callback. If not provided, usage is not tracked.
    */
-  getUsageRecorder?: () => AgentRoundFinalizedCallback;
+  getUsageRecorder?: () => RoundFinalizedCallback;
 
   /**
    * Optional: Parent log stage for creating round stages.
@@ -165,22 +165,20 @@ export async function runReflectionFlow<C = unknown>(
 
   const storageKey = executionContext.storageKey;
 
-  // Create ready-to-use flow context (handles setActiveRun)
-  const flowContext = createReadyReflectionContext(
-    {
-      modelHandler,
-      config,
-      setting,
-      prompt,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      getClient,
-      getUsageRecorder,
-    },
-    storageKey,
-  );
+  // Create flow context and set active run for output handler
+  const flowContext = createReflectionFlowContext({
+    modelHandler,
+    config,
+    setting,
+    prompt,
+    executionContext,
+    userVarChannels,
+    checkInterruption,
+    setAbortController,
+    getClient,
+    getUsageRecorder,
+  });
+  flowContext.setActiveRun(storageKey);
 
   try {
     // Register context for interrupt handling

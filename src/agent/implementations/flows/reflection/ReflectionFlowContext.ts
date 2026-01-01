@@ -18,7 +18,7 @@ import type {
   AgentPrompt,
   AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
@@ -51,7 +51,7 @@ export interface ReflectionFlowContextInit<
   setting: AgentWorkflowSetting;
 
   /** Usage tracking callback (required for reflection flows) */
-  getUsageRecorder: () => AgentRoundFinalizedCallback;
+  getUsageRecorder: () => RoundFinalizedCallback;
 
   /**
    * Optional custom output file location getter.
@@ -305,19 +305,4 @@ export function createReflectionFlowContext<C = unknown>(
       retryCoordinator.clearRequest(init.executionContext.streamId);
     },
   };
-}
-
-/**
- * Creates a ReflectionFlowContext ready for execution.
- *
- * Encapsulates lifecycle setup:
- * - setActiveRun(storageKey) - configures output handler for this run
- */
-export function createReadyReflectionContext<C = unknown>(
-  init: ReflectionFlowContextInit<C>,
-  storageKey: StorageKey,
-): ReflectionFlowContext<C> {
-  const context = createReflectionFlowContext(init);
-  context.setActiveRun(storageKey);
-  return context;
 }
