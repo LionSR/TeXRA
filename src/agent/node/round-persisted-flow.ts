@@ -48,7 +48,11 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import { PersistedFlow, type FlowStore } from './persisted-flow';
+import {
+  PersistedFlow,
+  type FlowStore,
+  type SerializationHooks,
+} from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
@@ -82,14 +86,13 @@ export interface RoundAwareState extends Record<string, unknown> {
 
 /**
  * Context passed to lifecycle hooks.
+ *
+ * Access round info via shared state (no duplication):
+ * - context.shared.currentRound (0-based index)
+ * - context.shared.totalRounds
+ * - context.shared.continueRounds
  */
 export interface RoundHookContext<S extends RoundAwareState> {
-  /** Current round index (0-based) */
-  roundIndex: number;
-
-  /** Total rounds configured */
-  totalRounds: number;
-
   /** Current shared state (readonly in hooks) */
   shared: Readonly<S>;
 
@@ -183,6 +186,12 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
 
   /** Parent stage for round stages (optional) */
   parentStage?: AgentLogStage | null;
+
+  /**
+   * Custom serialization hooks for shared state.
+   * If not provided, uses structuredClone (requires plain JSON state).
+   */
+  serialization?: SerializationHooks<S>;
 }
 
 // ============================================================================
@@ -239,7 +248,10 @@ export class RoundPersistedFlow<
     config?: RoundFlowConfig<S, Svc>,
     runId?: string,
   ) {
-    super(start, kv, runId);
+    // Pass serialization hooks to parent PersistedFlow
+    super(start, kv, runId, {
+      serialization: config?.serialization,
+    });
     this.config = config ?? {};
   }
 
@@ -344,12 +356,11 @@ export class RoundPersistedFlow<
    */
   private async handleContinueToNextRound(shared: S): Promise<void> {
     const { hooks } = this.config;
-    const oldRound = shared.currentRound;
 
-    // Hook: Previous round end
+    // Hook: Previous round end (called before increment, so shared.currentRound is still old value)
     if (hooks?.onRoundEnd) {
       await hooks.onRoundEnd(
-        this.createHookContext(shared, oldRound),
+        this.createHookContext(shared),
         this._services as Svc,
       );
     }
@@ -394,13 +405,8 @@ export class RoundPersistedFlow<
   /**
    * Create hook context from current state.
    */
-  private createHookContext(
-    shared: S,
-    roundOverride?: number,
-  ): RoundHookContext<S> {
+  private createHookContext(shared: S): RoundHookContext<S> {
     return {
-      roundIndex: roundOverride ?? shared.currentRound,
-      totalRounds: shared.totalRounds,
       shared,
       roundStage: this.currentRoundStage,
     };
