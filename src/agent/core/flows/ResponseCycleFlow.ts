@@ -47,9 +47,10 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type {
-  ResponseCycleParams,
-  ResponseCycleServices,
+import {
+  finalizeRound,
+  type ResponseCycleParams,
+  type ResponseCycleServices,
 } from './CycleServices';
 
 /** Input state for response cycles. */
@@ -689,17 +690,15 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   /**
-   * Finalization is handled by the parent node's finally block via store.finalizeRound().
-   * This node exists only to ensure proper flow graph termination.
+   * Finalize the round using the shared helper.
    *
-   * IMPORTANT: Do NOT call run.recordRound() or onRoundFinalized() here.
-   * The ResponseCycleCompositionNode.exec() finally block handles this via
-   * store.finalizeRound(), which is guarded against double execution.
-   * Calling them here would cause duplicate usage recording.
+   * This is the SINGLE finalization point for ResponseCycleFlow.
+   * The parent ResponseCycleCompositionNode must pass onRoundFinalized
+   * to services for this to work correctly.
    */
   async exec(): Promise<void> {
-    // Intentionally empty - finalization handled by store.finalizeRound()
-    // in the parent composition node's finally block
+    // Use shared helper for consistent finalization (single source of truth)
+    await finalizeRound(this.services);
   }
 
   async post(): Promise<string | undefined> {
