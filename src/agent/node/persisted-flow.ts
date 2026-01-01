@@ -38,6 +38,19 @@ export interface FlowRecord {
 }
 
 /**
+ * Result from a step execution.
+ * Used by stepWithResult() for subclasses that need action and shared state.
+ */
+export interface StepResult<S> {
+  /** Whether there are more nodes to execute */
+  hasMore: boolean;
+  /** The action returned by the node (for routing) */
+  action: string | undefined;
+  /** The shared state after node execution (mutated in-place) */
+  shared: S;
+}
+
+/**
  * A Flow that persists its execution state to a KVStore after each node.
  *
  * This enables:
@@ -88,7 +101,26 @@ export class PersistedFlow<
     return flow?.nodes.at(-1)?.action as Action | undefined;
   }
 
+  /**
+   * Execute a single step (one node).
+   * Returns true if there are more nodes to execute.
+   */
   async step(): Promise<boolean> {
+    const result = await this.stepWithResult();
+    return result.hasMore;
+  }
+
+  /**
+   * Execute a single step and return full result including action and shared state.
+   *
+   * This is the preferred method for subclasses that need to:
+   * - Inspect the action returned by the node (for routing decisions)
+   * - Access the mutated shared state without re-reading from storage
+   *
+   * The returned shared reference is the same object that was mutated by the node,
+   * so callers can use it directly without Object.assign.
+   */
+  protected async stepWithResult(): Promise<StepResult<S>> {
     const key = `flow:${this.runId}`;
     const flow = (await this.kv.read<FlowRecord>(key))!;
 
@@ -100,7 +132,15 @@ export class PersistedFlow<
     let cursor: BaseNode<any, any> | undefined = this.start;
     for (const n of flow.nodes)
       cursor = cursor?.getNextNode(n.action as Action);
-    if (!cursor) return false;
+
+    // No more nodes to execute
+    if (!cursor) {
+      return {
+        hasMore: false,
+        action: flow.nodes.at(-1)?.action,
+        shared: flow.shared as S,
+      };
+    }
 
     const params = flow.params as P;
     const shared = flow.shared as S;
@@ -125,7 +165,12 @@ export class PersistedFlow<
     flow.nodes.push({ action });
     flow.shared = shared;
     await this.kv.write(key, flow);
-    return true;
+
+    return {
+      hasMore: true,
+      action,
+      shared,
+    };
   }
 
   /**
