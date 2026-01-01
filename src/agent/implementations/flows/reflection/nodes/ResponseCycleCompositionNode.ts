@@ -38,9 +38,10 @@ import {
   createRetryState,
   type RetryState,
 } from '@agent/core/flows/RetryState';
-import type {
-  ResponseCycleOptions,
-  ResponseCycleParams,
+import {
+  finalizeRound,
+  type ResponseCycleOptions,
+  type ResponseCycleParams,
 } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -121,13 +122,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       context.stateRoundSnapshot,
     );
 
-    // Create shared store for cycle with usage tracking callback
+    // Create shared store for cycle (pure data holder)
+    // Note: onRoundFinalized is passed to flow services separately, not stored here
     const store = new AgentSharedStore({
       round: roundState,
       run: runState,
       workspace: workspaceState,
       user: userVarChannels,
-      onRoundFinalized: this.services.getUsageRecorder(),
     });
 
     // Determine output location for this round (delegates to agent for polymorphism)
@@ -238,8 +239,13 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       };
     } catch (error) {
       // Error path: FinalizeNode may not have run, so finalize here
-      // Use store's finalizeRound which has a guard against double execution
-      await prepRes.store.finalizeRound();
+      // Use helper function directly (single source of truth for finalization logic)
+      await finalizeRound({
+        round: prepRes.store.round,
+        run: prepRes.store.run,
+        workspace: prepRes.store.workspace,
+        onRoundFinalized,
+      });
       return {
         kind: 'error',
         error: error instanceof Error ? error : new Error(String(error)),

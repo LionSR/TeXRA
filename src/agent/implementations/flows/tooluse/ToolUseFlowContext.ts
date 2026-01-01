@@ -135,10 +135,8 @@ async function prepareInitialState<C>(
     logger.debug('Resuming tool-use session from saved state.');
 
     const messages = snapshot.messages;
-    const store = createSharedStore({
-      snapshot: snapshot.store,
-      onRoundFinalized,
-    });
+    // Store is a pure data holder; onRoundFinalized is passed to flow services separately
+    const store = createSharedStore({ snapshot: snapshot.store });
 
     sessionLifecycle.setStore(store);
 
@@ -163,12 +161,12 @@ async function prepareInitialState<C>(
     systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
   );
 
+  // Store is a pure data holder; onRoundFinalized is passed to flow services separately
   const store = createSharedStore({
     roundIndex: currentRunState.totalRounds,
     runState: currentRunState,
     workspaceState: AgentWorkspaceState.create(),
     userChannels: userVarChannels,
-    onRoundFinalized,
   });
 
   sessionLifecycle.setStore(store);
