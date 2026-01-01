@@ -81,7 +81,8 @@ type SchemaModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 
 // These will fail at compile time if local schemas diverge from llm-zoo types
 const _assertModelConfig: SchemaModelConfig = {} as ModelConfig;
-const _assertModelCapabilities: SchemaModelCapabilities = {} as ModelCapabilities;
+const _assertModelCapabilities: SchemaModelCapabilities =
+  {} as ModelCapabilities;
 
 // Suppress unused variable warnings
 void _assertModelConfig;
