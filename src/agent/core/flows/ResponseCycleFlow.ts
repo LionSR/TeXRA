@@ -17,6 +17,7 @@ import {
   SkippableNodeResult,
   createDebugContext,
   createDebugFileOptions,
+  safelyFinalizeRound,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -47,6 +48,10 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+import {
+  checkInterruptionSafely,
+  saveDebugIfAvailable,
+} from './NodeUtils';
 import type {
   ResponseCycleParams,
   ResponseCycleServices,
@@ -105,20 +110,6 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 }
 
 /**
- * Safely finalize a round, ensuring it's only done once.
- * Guard pattern prevents double-finalization from multiple exit paths.
- */
-async function safelyFinalizeRound(
-  state: ResponseCycleRuntimeState,
-  store: { finalizeRound(): Promise<void> },
-): Promise<void> {
-  if (!state.roundFinalized) {
-    state.roundFinalized = true;
-    await store.finalizeRound();
-  }
-}
-
-/**
  * Shared state for response cycle flows.
  * Uses BaseCycleShared with ResponseCycleState for type safety.
  *
@@ -154,7 +145,9 @@ class ResponsePrepNode<C> extends BaseNode<
     const services = this.services;
     const { agentPrompt, userVars, logger, agentConfig, store } = services;
     const { state } = shared;
-    const interrupted = Boolean(await services.checkInterruption());
+    const interrupted = await checkInterruptionSafely(() =>
+      services.checkInterruption(),
+    );
     const outputLocation = state.outputLocation;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
@@ -211,14 +204,7 @@ class ResponsePrepNode<C> extends BaseNode<
     state.outputLocation = prepRes.outputLocation;
     resetResponseCycleState(state);
 
-    if (state.debug) {
-      await maybeSaveDebugObject({
-        object: state.messages,
-        objectType: 'messages',
-        context: state.debug.context,
-        fileOptions: state.debug.fileOptions,
-      });
-    }
+    await saveDebugIfAvailable(state.messages, 'messages', state.debug);
 
     return FlowTransition.DEFAULT;
   }
@@ -348,14 +334,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     state.responseObject = successRes.response;
     state.responseTimeMs = successRes.responseTimeMs;
 
-    if (state.debug) {
-      await maybeSaveDebugObject({
-        object: successRes.response,
-        objectType: 'response',
-        context: state.debug.context,
-        fileOptions: state.debug.fileOptions,
-      });
-    }
+    await saveDebugIfAvailable(successRes.response, 'response', state.debug);
 
     return FlowTransition.DEFAULT;
   }
@@ -723,7 +702,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       state.shouldStop || !state.stopReason || !state.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
-    const interrupted = !shouldSkip && Boolean(await checkInterruption());
+    const interrupted = await checkInterruptionSafely(checkInterruption, shouldSkip);
 
     return {
       shouldSkip,
