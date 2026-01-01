@@ -59,8 +59,8 @@ export class PersistedFlow<
   P extends Record<string, unknown> = Record<string, unknown>,
   Svc = unknown,
 > extends Flow<S, P, Svc> {
-  private readonly runId: string;
-  private readonly kv: FlowStore;
+  protected readonly runId: string;
+  protected readonly kv: FlowStore;
 
   /**
    * Create a new PersistedFlow.
