@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
@@ -17,22 +18,25 @@ import {
 import { getServerSideKeyService } from './serverKeys';
 import type { SupabaseUriHandler } from './UriHandler';
 
-/** Response from GitHub token exchange Edge Function. */
-interface GitHubTokenExchangeResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_at?: number;
-  expires_in?: number;
-  token_type: string;
-  user: {
-    id: string;
-    email?: string;
-    user_metadata?: {
-      avatar_url?: string;
-      user_name?: string;
-    };
-  };
-}
+/** Response schema for GitHub token exchange Edge Function. */
+const GitHubTokenExchangeSchema = z.object({
+  access_token: z.string(),
+  refresh_token: z.string(),
+  expires_at: z.number().optional(),
+  expires_in: z.number().optional(),
+  token_type: z.string(),
+  user: z.object({
+    id: z.string(),
+    email: z.string().optional(),
+    user_metadata: z
+      .object({
+        avatar_url: z.string().optional(),
+        user_name: z.string().optional(),
+      })
+      .optional(),
+  }),
+});
+type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
@@ -502,17 +506,24 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         );
       }
 
-      // Parse and validate response
+      // Parse and validate response with Zod schema
       let data: GitHubTokenExchangeResponse;
       try {
-        data = await response.json();
-      } catch {
+        const rawData = await response.json();
+        const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
+        if (!parsed.success) {
+          logger.error(
+            'SupabaseAuthProvider',
+            `Token exchange response validation failed: ${parsed.error.message}`,
+          );
+          throw new Error('Invalid response format from authentication server');
+        }
+        data = parsed.data;
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message.includes('Invalid response')) {
+          throw parseError;
+        }
         throw new Error('Invalid response format from authentication server');
-      }
-
-      // Validate required fields
-      if (!data.access_token || !data.refresh_token || !data.user?.id) {
-        throw new Error('Incomplete response from authentication server');
       }
 
       // Create session in same format as Supabase OAuth
