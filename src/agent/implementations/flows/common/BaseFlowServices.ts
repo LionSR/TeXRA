@@ -86,23 +86,24 @@ export interface BaseFlowContextInit<C = unknown> {
 // ============================================================================
 
 /**
- * Base services shared by all agent flows.
+ * Convenience accessors added to services.
  *
- * Extends BaseFlowContextInit with convenience accessors:
+ * These are convenience aliases that simplify access patterns:
  * - logger: Direct access to executionContext.logger
  * - context: Alias for executionContext (used by cycle options)
  *
- * Flow-specific interfaces extend this with additional services:
- * - ReflectionServices: outputHandler, promptBuilder, latexMediaManager, etc.
- * - ToolUseServices: toolRegistry, session, cycle operations, etc.
+ * Child service interfaces (ReflectionServices, ToolUseServices) extend
+ * BaseFlowContextInit and include these accessors directly.
+ *
+ * @deprecated Use BaseFlowContextInit directly. Child services now define
+ * logger and context fields inline. This type is kept for backward compatibility.
  */
-export interface BaseFlowServices<C = unknown> extends BaseFlowContextInit<C> {
+export type BaseFlowServices<C = unknown> = BaseFlowContextInit<C> & {
   /** Logger for debugging and progress (convenience accessor) */
   readonly logger: AgentLogger;
-
   /** Alias for executionContext (used by AgentCycleOptions) */
   readonly context: AgentExecutionContext;
-}
+};
 
 /**
  * Base flow params type.
