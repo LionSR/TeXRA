@@ -20,7 +20,10 @@ export class SupabaseUriHandler implements vscode.UriHandler {
     // Check if this is an auth callback (both desktop and web/Codespaces paths)
     // In Codespaces, the state param may be URL-encoded into the path (e.g., /extension-auth-callback?state=xxx)
     const basePath = uri.path.split('?')[0];
-    if (basePath === '/auth-callback' || basePath === '/extension-auth-callback') {
+    if (
+      basePath === '/auth-callback' ||
+      basePath === '/extension-auth-callback'
+    ) {
       // Fire event so the auth provider can handle it
       this._onDidReceiveCallback.fire(uri);
     }
