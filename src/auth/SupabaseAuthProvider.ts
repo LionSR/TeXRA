@@ -13,6 +13,7 @@ import {
   DEFAULT_SESSION_EXPIRY_MS,
   SUPABASE_SESSION_KEY,
   GITHUB_TOKEN_EXCHANGE_URL,
+  GITHUB_TOKEN_REFRESH_URL,
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
@@ -51,6 +52,12 @@ interface SupabaseSession {
     label: string; // email or user ID
   };
   expiresAt: number; // timestamp
+  /**
+   * If true, use custom refresh endpoint instead of Supabase's auth.refreshSession().
+   * Sessions created via VS Code GitHub auth use custom refresh tokens stored in
+   * our sessions table, not Supabase's internal auth tables.
+   */
+  useCustomRefresh?: boolean;
 }
 
 /** Result of parsing auth callback URI */
@@ -539,6 +546,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         expiresAt: data.expires_at
           ? data.expires_at * 1000
           : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+        // Use custom refresh since our tokens are stored in sessions table,
+        // not Supabase's internal auth tables
+        useCustomRefresh: true,
       };
 
       // Store session
@@ -783,6 +793,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     try {
+      // Use custom refresh for sessions created via VS Code GitHub auth
+      if (session.useCustomRefresh) {
+        return this._refreshSessionViaCustomEndpoint(session);
+      }
+
+      // Standard Supabase refresh for OAuth-created sessions
       const { data, error } =
         await SupabaseClient.getClient().auth.refreshSession({
           refresh_token: session.refreshToken,
@@ -816,6 +832,90 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       logger.error(
         'SupabaseAuthProvider',
         `Error refreshing session: ${toErrorMessage(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Refresh session using our custom Edge Function.
+   * Used for sessions created via VS Code GitHub auth where tokens
+   * are stored in our sessions table, not Supabase's internal auth.
+   */
+  private async _refreshSessionViaCustomEndpoint(
+    session: SupabaseSession,
+  ): Promise<SupabaseSession | null> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        EDGE_FUNCTION_TIMEOUT_MS,
+      );
+
+      let response: Response;
+      try {
+        response = await fetch(GITHUB_TOKEN_REFRESH_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: session.refreshToken }),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          logger.warn('SupabaseAuthProvider', 'Token refresh timeout');
+          return null;
+        }
+        throw fetchError;
+      }
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        logger.warn(
+          'SupabaseAuthProvider',
+          `Token refresh failed: ${response.status}`,
+        );
+        return null;
+      }
+
+      // Parse and validate response (same schema as token exchange)
+      const rawData = await response.json();
+      const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
+      if (!parsed.success) {
+        logger.error(
+          'SupabaseAuthProvider',
+          `Token refresh response validation failed: ${parsed.error.message}`,
+        );
+        return null;
+      }
+
+      const data = parsed.data;
+      const refreshed: SupabaseSession = {
+        id: data.user.id,
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        account: {
+          id: data.user.id,
+          label: data.user.email || session.account.label,
+        },
+        expiresAt: data.expires_at
+          ? data.expires_at * 1000
+          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+        useCustomRefresh: true, // Preserve flag
+      };
+
+      // Update stored session
+      await this.context.secrets.store(
+        SUPABASE_SESSION_KEY,
+        JSON.stringify(refreshed),
+      );
+
+      logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
+      return refreshed;
+    } catch (error) {
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error refreshing via custom endpoint: ${toErrorMessage(error)}`,
       );
       return null;
     }

@@ -55,6 +55,12 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github-token`;
 
 /**
+ * Edge function URL for custom token refresh.
+ * Used for sessions created via VS Code GitHub auth (not standard Supabase OAuth).
+ */
+export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-refresh-token`;
+
+/**
  * Check if Supabase is configured.
  * Returns false if using placeholder values.
  */
