@@ -15,6 +15,8 @@ import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import type { AgentSharedStore } from './AgentSharedStore';
+import type { AgentWorkspaceState } from './AgentWorkspaceState';
+import type { AgentRunState, ConversationRoundState } from './AgentState';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -29,6 +31,85 @@ import type {
   RoundFinalizedCallback,
 } from './flows/CycleServices';
 export type { ResponseCycleOptions };
+
+// ============================================================================
+// Core Execution (shared by both entry points)
+// ============================================================================
+
+/**
+ * Core response cycle result (without store wrapper).
+ */
+export interface ResponseCycleCoreResult {
+  endTurn: boolean;
+  failedWithError: boolean;
+  errorMessage?: string;
+  userCancelled: boolean;
+}
+
+/**
+ * Core input for response cycle execution with state slices.
+ * Used internally and by ResponseCycleCompositionNode.
+ */
+export interface ResponseCycleCoreInput<C = unknown> {
+  options: ResponseCycleOptions<C>;
+  messages: ProviderMessage[];
+  outputLocation: AgentFileLocation;
+  round: ConversationRoundState;
+  run: AgentRunState;
+  workspace: AgentWorkspaceState;
+  onRoundFinalized?: RoundFinalizedCallback;
+}
+
+/**
+ * Execute response cycle with state slices (no store wrapper).
+ *
+ * This is the core execution function used by both:
+ * - runResponseCycle() (standalone function with store)
+ * - ResponseCycleCompositionNode (flow node with slices)
+ *
+ * @internal
+ */
+export async function executeResponseCycleCore<C = unknown>(
+  input: ResponseCycleCoreInput<C>,
+): Promise<ResponseCycleCoreResult> {
+  const shared: ResponseCycleShared = {
+    state: {
+      messages: input.messages,
+      outputLocation: input.outputLocation,
+      endTurn: false,
+      shouldStop: false,
+      outputExists: false,
+      systemPrompt: undefined,
+      debug: undefined,
+      responseObject: undefined,
+      responseTimeMs: undefined,
+      stopReason: undefined,
+      processedResponse: undefined,
+    } satisfies ResponseCycleState,
+    retryState: createRetryState(),
+  };
+
+  const flow = createResponseCycleFlow<C>();
+  flow.setServices({
+    ...input.options,
+    round: input.round,
+    run: input.run,
+    workspace: input.workspace,
+    onRoundFinalized: input.onRoundFinalized,
+  });
+  await flow.run(shared);
+
+  const completion = interpretCycleCompletion(shared.state, shared.retryState);
+
+  return {
+    endTurn: shared.state.endTurn,
+    ...completion,
+  };
+}
+
+// ============================================================================
+// Public API (with store wrapper)
+// ============================================================================
 
 export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
@@ -67,44 +148,20 @@ export interface ResponseCycleResult {
 export async function runResponseCycle<C = unknown>(
   input: ResponseCycleInput<C>,
 ): Promise<ResponseCycleResult> {
-  // Shared state contains only mutable data that flows through nodes.
-  // Services (options, store) are injected via setParams().
-  const shared: ResponseCycleShared = {
-    state: {
-      messages: input.messages,
-      outputLocation: input.outputLocation,
-      endTurn: false,
-      shouldStop: false,
-      outputExists: false,
-      systemPrompt: undefined,
-      debug: undefined,
-      responseObject: undefined,
-      responseTimeMs: undefined,
-      stopReason: undefined,
-      processedResponse: undefined,
-    } satisfies ResponseCycleState,
-    retryState: createRetryState(),
-  };
-
-  const flow = createResponseCycleFlow<C>();
-  // Inject immutable services directly (PocketFlow pattern)
-  // Options are spread with state slices (no store wrapper)
   const { store, onRoundFinalized } = input;
-  flow.setServices({
-    ...input.options,
+
+  const result = await executeResponseCycleCore({
+    options: input.options,
+    messages: input.messages,
+    outputLocation: input.outputLocation,
     round: store.round,
     run: store.run,
     workspace: store.workspace,
     onRoundFinalized,
   });
-  await flow.run(shared);
-
-  // Interpret cycle completion - shared logic with ToolUseCycle
-  const completion = interpretCycleCompletion(shared.state, shared.retryState);
 
   return {
     store: input.store,
-    endTurn: shared.state.endTurn,
-    ...completion,
+    ...result,
   };
 }
