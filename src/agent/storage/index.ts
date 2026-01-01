@@ -4,12 +4,4 @@
  * Provides unified key-value storage for all execution-scoped data.
  */
 
-export {
-  type ExecutionKVStore,
-  type ExecutionStorageRegistry,
-  InMemoryKVStore,
-  InMemoryRegistry,
-  getExecutionRegistry,
-  getExecutionStore,
-  setExecutionRegistry,
-} from './ExecutionKVStore';
+export { type ExecutionKVStore, getExecutionStore } from './ExecutionKVStore';
