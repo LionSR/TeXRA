@@ -223,7 +223,7 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
  *       return await logger.stage(`r${idx}`, { parent });
  *     },
  *     resetForNextRound: (shared) => {
- *       shared.workspaceSnapshot = createFreshWorkspaceSnapshot();
+ *       shared.workspace = createFreshWorkspace();
  *     },
  *   },
  *   parentStage: runStage,
