@@ -1,32 +1,30 @@
 /**
- * Zod schemas for runtime validation of model configurations.
- * @packageDocumentation
+ * Zod v4 validation schemas for llm-zoo types.
+ * Requires zod ^4.0.0 as peer dependency.
+ *
+ * @example
+ * ```typescript
+ * import { ModelConfigSchema } from 'llm-zoo/schemas';
+ *
+ * const result = ModelConfigSchema.safeParse(myConfig);
+ * if (!result.success) {
+ *   console.error(result.error);
+ * }
+ * ```
  */
 
 import { z } from 'zod';
+import { ModelProvider, ReasoningEffort } from './ModelConfig';
 
 // ============================================================================
-// Enums
+// Zod v4 Schemas
 // ============================================================================
 
-export const ReasoningEffortSchema = z.enum(['xhigh', 'high', 'medium', 'low', 'none']);
+export const ReasoningEffortSchema = z.nativeEnum(ReasoningEffort);
 
-export const ModelProviderSchema = z.enum([
-  'anthropic',
-  'openai',
-  'google',
-  'deepseek',
-  'xai',
-  'moonshot',
-  'dashscope',
-  'copilot',
-  'others',
-]);
+export const ModelProviderSchema = z.nativeEnum(ModelProvider);
 
-// ============================================================================
-// Capabilities
-// ============================================================================
-
+/** Feature flags defining model's supported capabilities and behaviors. */
 export const ModelCapabilitiesSchema = z.object({
   supportsFunctionCalling: z.boolean(),
   supportsNativeMCPServer: z.boolean(),
@@ -34,50 +32,41 @@ export const ModelCapabilitiesSchema = z.object({
   supportsNativeCodeExecution: z.boolean(),
   supportsPromptCaching: z.boolean(),
   supportsAutoPromptCaching: z.boolean(),
-  cacheDiscountFactor: z.number().min(0).max(1),
+  cacheDiscountFactor: z.number(),
   supportsReasoning: z.boolean(),
   supportsInterleavedThinking: z.boolean(),
-  supportsReasoningEffort: z.boolean(),
   reasoningEffort: ReasoningEffortSchema,
   supportsVision: z.boolean(),
   supportsNativePdf: z.boolean(),
-  supportsNativeAudio: z.boolean(),
   supportsAssistantPrefill: z.boolean(),
   supportsPredictiveOutput: z.boolean(),
   supportsTokenCounting: z.boolean(),
   supportsSystemPrompt: z.boolean(),
   supportsIntermDevMsgs: z.boolean(),
+  supportsReasoningEffort: z.boolean(),
+  supportsNativeAudio: z.boolean(),
 });
 
-// ============================================================================
-// Model Config
-// ============================================================================
-
+/** Complete configuration for a language model instance. */
 export const ModelConfigSchema = z.object({
   name: z.string(),
   fullName: z.string(),
   provider: ModelProviderSchema,
-  maxOutputTokens: z.number().positive(),
-  inputPrice: z.number().min(0),
-  outputPrice: z.number().min(0),
-  contextWindow: z.number().positive(),
+  maxOutputTokens: z.number(),
+  inputPrice: z.number(),
+  outputPrice: z.number(),
+  contextWindow: z.number(),
   capabilities: ModelCapabilitiesSchema,
   openRouterOnly: z.boolean(),
   openrouterFullName: z.string().optional(),
-  baseUrl: z.string().url().optional(),
+  baseUrl: z.string().optional(),
   requiresResponsesAPI: z.boolean().optional(),
 });
 
-// ============================================================================
-// Registry
-// ============================================================================
-
+/** Registry of all model configurations. */
 export const ModelRegistrySchema = z.record(z.string(), ModelConfigSchema);
 
-// ============================================================================
-// Inferred Types (for reference)
-// ============================================================================
-
-export type ModelCapabilitiesZ = z.infer<typeof ModelCapabilitiesSchema>;
-export type ModelConfigZ = z.infer<typeof ModelConfigSchema>;
-export type ModelRegistryZ = z.infer<typeof ModelRegistrySchema>;
+// Export inferred types for convenience
+export type ModelCapabilitiesSchemaType = z.infer<typeof ModelCapabilitiesSchema>;
+export type ModelConfigSchemaType = z.infer<typeof ModelConfigSchema>;
+export type ModelRegistrySchemaType = z.infer<typeof ModelRegistrySchema>;
