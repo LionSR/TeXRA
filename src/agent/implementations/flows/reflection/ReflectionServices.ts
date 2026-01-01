@@ -48,15 +48,12 @@ export interface ReflectionServices<C = unknown> extends BaseFlowServices<C> {
   /**
    * Parent logging stage for round stages (r0, r1, r2...).
    * Runtime-only - NOT persisted (services are never serialized).
+   *
+   * Note: Individual round stages (r0, r1, r2...) are managed by
+   * RoundPersistedFlow, not by services. This keeps round lifecycle
+   * as a flow-level concern, invisible to individual nodes.
    */
   readonly runStage: AgentLogStage;
-
-  /**
-   * Current round's logging stage (r0, r1, r2...).
-   * Mutable - updated at start of each round by flow runner.
-   * Runtime-only - NOT persisted (services are never serialized).
-   */
-  roundStage: AgentLogStage | null;
 
   // =========================================================================
   // Agent method delegates

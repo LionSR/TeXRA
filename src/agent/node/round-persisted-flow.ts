@@ -293,6 +293,15 @@ export class RoundPersistedFlow<
           this._services as Svc,
         );
       }
+
+      // Determine final status: interrupted if stopped before completing all rounds
+      // RoundCompleteNode sets continueRounds=false or checkInterruption returns true
+      const wasInterrupted =
+        hooks?.checkInterruption?.() ||
+        (!shared.continueRounds && shared.currentRound < shared.totalRounds - 1);
+      if (wasInterrupted) {
+        status = 'interrupted';
+      }
     } catch (error) {
       status = 'error';
       throw error;
@@ -334,6 +343,12 @@ export class RoundPersistedFlow<
 
     // Update tracking
     this.lastKnownRound = newRound;
+
+    // Reset state for next round (workspace, etc.)
+    // This is called BEFORE stage creation so the new round starts fresh
+    if (hooks?.resetForNextRound) {
+      hooks.resetForNextRound(shared);
+    }
 
     // Create new round stage
     if (hooks?.createRoundStage) {

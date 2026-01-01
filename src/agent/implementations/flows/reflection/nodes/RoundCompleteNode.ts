@@ -22,10 +22,7 @@ import {
 } from '@agent/implementations/flows/common';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
-import {
-  createFreshWorkspaceSnapshot,
-  type ReflectionFlowShared,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
   ReflectionServices,
@@ -112,8 +109,12 @@ export class RoundCompleteNode<C = unknown> extends Node<
   /**
    * Update state and route appropriately.
    *
-   * Note: Round stage transitions are now handled by RoundPersistedFlow.
-   * This node just updates shared state and returns the routing action.
+   * Note: Round transitions are managed by RoundPersistedFlow:
+   * - Stage lifecycle (end old stage, create new stage)
+   * - Workspace reset (via resetForNextRound hook)
+   *
+   * This node only increments the round counter, which RoundPersistedFlow
+   * detects to trigger the transition.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -125,13 +126,11 @@ export class RoundCompleteNode<C = unknown> extends Node<
     }
 
     // === ROUND TRANSITION ===
-    // Increment round for next iteration
-    // Note: RoundPersistedFlow detects this change and manages stages
-    const nextRound = shared.currentRound + 1;
-    shared.currentRound = nextRound;
-
-    // Create fresh workspace snapshot for new round
-    shared.workspaceSnapshot = createFreshWorkspaceSnapshot();
+    // Increment round counter - RoundPersistedFlow detects this change and:
+    // 1. Ends old round stage
+    // 2. Calls resetForNextRound hook (workspace reset)
+    // 3. Creates new round stage
+    shared.currentRound = shared.currentRound + 1;
 
     // Loop back to PrepareContextNode (start of round pipeline)
     return FlowTransition.CONTINUE;

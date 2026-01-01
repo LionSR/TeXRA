@@ -247,6 +247,8 @@ export function buildReflectionServices<C = unknown>(
   const baseServices = buildBaseFlowServices(init);
 
   // Return complete services object
+  // Note: runStage is set by runReflectionFlow
+  // Round stages (r0, r1...) are managed by RoundPersistedFlow, not by services
   return {
     ...baseServices,
     setting,
@@ -257,9 +259,7 @@ export function buildReflectionServices<C = unknown>(
     getOutputFileLocation,
     shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
     getUsageRecorder,
-    // Runtime-only fields (will be set by runReflectionFlow)
     runStage: null as any, // Set by runReflectionFlow
-    roundStage: null,
   };
 }
 

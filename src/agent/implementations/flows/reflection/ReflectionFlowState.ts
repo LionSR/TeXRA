@@ -88,9 +88,11 @@ export type RoundContext = z.infer<typeof RoundContextSchema>;
  * store snapshots back after mutation. This ensures structuredClone()
  * works without any special handling.
  *
- * ## Runtime-Only Fields
+ * ## Round Stage Management
  *
- * - roundStage: Moved to services (ReflectionServices.roundStage)
+ * Round stages (r0, r1, r2...) are managed by RoundPersistedFlow, not by
+ * shared state or services. This keeps round lifecycle as a flow-level
+ * concern, invisible to individual nodes.
  */
 export const ReflectionFlowStateSchema = z.object({
   // Round tracking
