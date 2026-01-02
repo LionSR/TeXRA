@@ -238,7 +238,10 @@ export function createToolUseFlowContext<C = unknown>(
       createCycleOptions(init, toolRegistry, resolvedTools, store),
     applyFollowUpMessage: async (message, conversation) => {
       init.executionContext.logger.userMessage(message);
-      return init.modelHandler.createUserFollowUpMessages(conversation, message);
+      return init.modelHandler.createUserFollowUpMessages(
+        conversation,
+        message,
+      );
     },
     getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
   };
