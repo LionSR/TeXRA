@@ -8,6 +8,7 @@ import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
+import { stringifyForDisplay } from './normalizers.js';
 
 /**
  * Build a tool-use section HTML block
@@ -137,3 +138,148 @@ export const buildDetailItem = (iconClass, content, options = {}) => {
     : '';
   return `<li class="detail-item"${runAttr}><i class="codicon ${iconClass}"${titleAttr}></i> ${content}</li>`;
 };
+
+/**
+ * Build edited files section for tool use display
+ * @param {Array} files - Array of file info objects with path, name, linesAdded, linesRemoved
+ * @returns {string} HTML string for edited files section
+ */
+export const buildEditedFilesSection = (files) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return '';
+  }
+
+  const items = files
+    .map((file) => {
+      const pathEscaped = encodeHtml(file.path);
+      const nameEscaped = encodeHtml(file.name);
+      const stats = buildLineStats(file.linesAdded, file.linesRemoved);
+
+      return `<li class="detail-item edited-file-item" title="${pathEscaped}">
+        <i class="codicon codicon-file"></i>
+        <span class="file-link clickable-link" data-file="${pathEscaped}">${nameEscaped}</span>
+        ${stats}
+      </li>`;
+    })
+    .join('');
+
+  const summary =
+    files.length === 1 ? '1 file edited' : `${files.length} files edited`;
+
+  return `
+    <div class="tool-files-section">
+      <span class="tool-files-summary">${summary}</span>
+      <ul class="detail-list edited-files-list">${items}</ul>
+    </div>
+  `;
+};
+
+/**
+ * Build line statistics display (+X/-Y)
+ * @param {number|undefined} added - Lines added
+ * @param {number|undefined} removed - Lines removed
+ * @returns {string} HTML string for line stats
+ */
+const buildLineStats = (added, removed) => {
+  const hasAdded = typeof added === 'number' && added > 0;
+  const hasRemoved = typeof removed === 'number' && removed > 0;
+
+  if (!hasAdded && !hasRemoved) {
+    return '';
+  }
+
+  const parts = [];
+  if (hasAdded) {
+    parts.push(`<span class="line-stat line-stat-added">+${added}</span>`);
+  }
+  if (hasRemoved) {
+    parts.push(`<span class="line-stat line-stat-removed">-${removed}</span>`);
+  }
+
+  return `<span class="line-stats">${parts.join(' ')}</span>`;
+};
+
+/**
+ * Build truncated output with expand/collapse functionality
+ * @param {string} text - Full text content
+ * @param {number} maxLength - Maximum characters before truncation
+ * @param {string} [className] - Optional CSS class for pre element
+ * @returns {string} HTML string with truncation controls
+ */
+export const buildTruncatedOutput = (text, maxLength, className = '') => {
+  if (!text || text.length <= maxLength) {
+    return wrapInPre(text || '', className);
+  }
+
+  const truncated = text.slice(0, maxLength);
+  const classAttr = className ? ` class="${className}"` : '';
+
+  return `
+    <div class="truncated-output">
+      <pre${classAttr} data-truncated="true">${encodeHtml(truncated)}</pre>
+      <pre${classAttr} data-full="true" style="display: none;">${encodeHtml(text)}</pre>
+      <button class="truncation-toggle" data-state="truncated">
+        <i class="codicon codicon-chevron-down"></i>
+        <span>Show more (${formatBytes(text.length - maxLength)} hidden)</span>
+      </button>
+    </div>
+  `;
+};
+
+/**
+ * Format byte count to human readable string
+ * @param {number} chars - Character count
+ * @returns {string} Formatted string
+ */
+const formatBytes = (chars) => {
+  if (chars < 1000) return `${chars} chars`;
+  return `${(chars / 1000).toFixed(1)}k chars`;
+};
+
+/**
+ * Build compact input display
+ * @param {*} input - Input value (object or string)
+ * @param {number} maxLength - Maximum display length
+ * @returns {string} HTML string for compact input
+ */
+export const buildCompactInput = (input, maxLength) => {
+  if (input === undefined || input === null) {
+    return '';
+  }
+
+  // Handle string inputs
+  if (typeof input === 'string') {
+    if (input.length <= maxLength) {
+      return wrapInPre(input);
+    }
+    return buildTruncatedOutput(input, maxLength);
+  }
+
+  // Handle object inputs - show key=value pairs inline when possible
+  if (typeof input === 'object') {
+    const entries = Object.entries(input);
+    if (entries.length <= 3) {
+      const compact = entries
+        .map(([k, v]) => {
+          const valStr =
+            typeof v === 'string'
+              ? v.length > 50
+                ? v.slice(0, 47) + '...'
+                : v
+              : JSON.stringify(v);
+          return `<span class="input-param"><span class="input-key">${encodeHtml(k)}</span>: ${encodeHtml(valStr)}</span>`;
+        })
+        .join(' · ');
+
+      return `<div class="compact-input">${compact}</div>`;
+    }
+  }
+
+  // Fall back to YAML display with truncation
+  const yaml = stringifyForDisplay(input);
+  if (yaml.length <= maxLength) {
+    return wrapInPre(yaml);
+  }
+  return buildTruncatedOutput(yaml, maxLength);
+};
+

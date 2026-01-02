@@ -188,6 +188,9 @@ export const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  // Extract edited files if present
+  const editedFiles = extractEditedFiles(parsed, outputDetails);
+
   return {
     parsed,
     toolName,
@@ -195,10 +198,69 @@ export const normalizeToolUseLog = (structured) => {
     errorText,
     outputText,
     input: parsed.input,
+    editedFiles,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
     headerSummary: summaryText || errorText,
+  };
+};
+
+/**
+ * Extract edited files from tool output
+ * @param {object} parsed - Parsed tool data
+ * @param {object} outputDetails - Output details object
+ * @returns {Array} Array of file info objects
+ */
+const extractEditedFiles = (parsed, outputDetails) => {
+  // Check for files in parsed.files (from ToolUseCycleFlow)
+  if (Array.isArray(parsed.files) && parsed.files.length > 0) {
+    return parsed.files.map(normalizeFileEntry);
+  }
+
+  // Check for edits in output details (from tool result)
+  if (Array.isArray(outputDetails.edits) && outputDetails.edits.length > 0) {
+    return outputDetails.edits.map(normalizeEditEntry);
+  }
+
+  // Check for files in output details
+  if (Array.isArray(outputDetails.files) && outputDetails.files.length > 0) {
+    return outputDetails.files.map(normalizeFileEntry);
+  }
+
+  return [];
+};
+
+/**
+ * Normalize a file entry from files array
+ * @param {object|string} entry - File entry
+ * @returns {object} Normalized file info
+ */
+const normalizeFileEntry = (entry) => {
+  if (typeof entry === 'string') {
+    return { path: entry, name: getBasename(entry) };
+  }
+  const path = entry.path || entry.file || '';
+  return {
+    path,
+    name: getBasename(path),
+    linesAdded: entry.linesAdded,
+    linesRemoved: entry.linesRemoved,
+  };
+};
+
+/**
+ * Normalize an edit entry from edits array
+ * @param {object} entry - Edit entry with path and line stats
+ * @returns {object} Normalized file info
+ */
+const normalizeEditEntry = (entry) => {
+  const path = entry.path || entry.file || '';
+  return {
+    path,
+    name: getBasename(path),
+    linesAdded: entry.linesAdded,
+    linesRemoved: entry.linesRemoved,
   };
 };
 

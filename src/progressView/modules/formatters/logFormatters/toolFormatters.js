@@ -9,9 +9,34 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
+  buildEditedFilesSection,
+  buildTruncatedOutput,
+  buildCompactInput,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
+import {
+  QUERY_PREVIEW_MAX_LENGTH,
+  TOOL_ICONS,
+  OUTPUT_TRUNCATE_LENGTH,
+  INPUT_COMPACT_THRESHOLD,
+} from '../constants.js';
+
+/**
+ * Get the appropriate icon class for a tool
+ * @param {string} toolName - The tool name
+ * @returns {string} The codicon class
+ */
+const getToolIcon = (toolName) => {
+  if (!toolName) return TOOL_ICONS.default;
+
+  // Normalize tool name (convert CamelCase to snake_case, remove 'Tool' suffix)
+  const normalized = toolName
+    .replace(/Tool$/, '')
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .toLowerCase();
+
+  return TOOL_ICONS[normalized] || TOOL_ICONS.default;
+};
 
 /**
  * Create and initialize a tool-style element from template
@@ -47,22 +72,6 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @returns {HTMLElement|null} Tool use element or null
  */
 export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
-  const toolElement = createToolElement(
-    logId,
-    groupId,
-    timestamp,
-    'codicon-wrench',
-  );
-  if (!toolElement) return null;
-
-  const { element, headerLabel, iconElem, contentElem } = toolElement;
-
-  if (headerLabel) headerLabel.textContent = 'Tool Use';
-
-  if (!contentElem) {
-    return element;
-  }
-
   const { structured } = normalizedPayload || {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
@@ -70,36 +79,71 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, summaryText, errorText, outputText, input } =
-    normalizedToolLog;
+  const {
+    parsed,
+    toolName,
+    summaryText,
+    errorText,
+    outputText,
+    input,
+    editedFiles,
+  } = normalizedToolLog;
 
-  const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
-  const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
+  // Get tool-specific icon
+  const toolIcon = normalizedToolLog.isError
+    ? 'codicon-error'
+    : getToolIcon(toolName);
+
+  const toolElement = createToolElement(logId, groupId, timestamp, toolIcon);
+  if (!toolElement) return null;
+
+  const { element, headerLabel, iconElem, contentElem } = toolElement;
+
+  // Build title with tool name and summary
+  const titlePrefix = normalizedToolLog.isError ? 'Error' : '';
+  const titleBase = toolName || 'Tool Use';
   const titleText = normalizedToolLog.headerSummary
-    ? `${titleBase} — ${normalizedToolLog.headerSummary}`
-    : titleBase;
+    ? `${titlePrefix ? titlePrefix + ': ' : ''}${titleBase} — ${normalizedToolLog.headerSummary}`
+    : `${titlePrefix ? titlePrefix + ': ' : ''}${titleBase}`;
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
-    iconElem.className = normalizedToolLog.isError
-      ? 'codicon codicon-error'
-      : 'codicon codicon-wrench';
+    iconElem.className = `codicon ${toolIcon}`;
   }
   element.classList.toggle('tool-use-error', normalizedToolLog.isError);
 
-  const sections = [];
-
-  if (input !== undefined) {
-    const inputValue = stringifyForDisplay(input);
-    sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+  if (!contentElem) {
+    return element;
   }
 
+  const sections = [];
+
+  // Input section - use compact display for small inputs
+  if (input !== undefined) {
+    const inputHtml = buildCompactInput(input, INPUT_COMPACT_THRESHOLD);
+    if (inputHtml) {
+      sections.push(buildToolUseSection('Input:', inputHtml));
+    }
+  }
+
+  // Error or output section - with truncation for long outputs
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
-    sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+    const outputHtml = buildTruncatedOutput(
+      outputText,
+      OUTPUT_TRUNCATE_LENGTH,
+      'tool-output-full',
     );
+    sections.push(buildToolUseSection('Output:', outputHtml));
+  }
+
+  // Edited files section - clickable links with line stats
+  if (editedFiles && editedFiles.length > 0) {
+    const filesHtml = buildEditedFilesSection(editedFiles);
+    if (filesHtml) {
+      sections.push(filesHtml);
+    }
   }
 
   const fallbackYaml = stringifyForDisplay(parsed);

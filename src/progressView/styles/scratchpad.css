@@ -67,3 +67,121 @@
   max-height: var(--height-large);
   overflow: auto;
 }
+
+/* Edited files section */
+.tool-files-section {
+  margin: var(--spacing-small) 0;
+  padding: var(--spacing-small);
+  background: var(--vscode-editor-background);
+  border-radius: var(--border-radius-small);
+}
+
+.tool-files-summary {
+  font-size: var(--font-size-sm);
+  color: var(--vscode-foreground);
+  opacity: 0.8;
+  margin-bottom: var(--spacing-tiny);
+  display: block;
+}
+
+.edited-files-list {
+  margin: var(--spacing-tiny) 0 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.edited-file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  padding: var(--spacing-tiny) 0;
+}
+
+.edited-file-item .codicon {
+  opacity: 0.7;
+}
+
+/* Line statistics */
+.line-stats {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-mono);
+}
+
+.line-stat {
+  padding: 0 var(--spacing-tiny);
+}
+
+.line-stat-added {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
+}
+
+.line-stat-removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f14c4c);
+}
+
+/* Truncated output */
+.truncated-output {
+  position: relative;
+}
+
+.truncation-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  margin-top: var(--spacing-tiny);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: var(--border-radius-small);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  transition: background-color 0.1s ease;
+}
+
+.truncation-toggle:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.truncation-toggle .codicon {
+  font-size: var(--font-size-sm);
+  transition: transform 0.2s ease;
+}
+
+.truncation-toggle[data-state="expanded"] .codicon {
+  transform: rotate(180deg);
+}
+
+/* Compact input display */
+.compact-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  background: var(--vscode-textCodeBlock-background);
+  border-radius: var(--border-radius-small);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.input-param {
+  display: inline-flex;
+  gap: var(--spacing-tiny);
+}
+
+.input-key {
+  color: var(--vscode-symbolIcon-fieldForeground, #75beff);
+  font-weight: 500;
+}
+
+/* Clickable file links */
+.file-link.clickable-link {
+  color: var(--color-text-link);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.file-link.clickable-link:hover {
+  text-decoration: underline;
+}

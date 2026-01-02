@@ -39,3 +39,44 @@ export const TIME_FORMAT_OPTIONS = {
   second: '2-digit',
   hour12: false,
 };
+
+/**
+ * Tool-specific icons for better visual distinction.
+ * Maps tool names to VS Code codicon classes.
+ */
+export const TOOL_ICONS = {
+  // File operations
+  read: 'codicon-file',
+  write: 'codicon-new-file',
+  edit: 'codicon-edit',
+  // Search operations
+  grep: 'codicon-search',
+  glob: 'codicon-file-directory',
+  ls: 'codicon-list-tree',
+  // Shell operations
+  bash: 'codicon-terminal',
+  // Web operations
+  web_search: 'codicon-globe',
+  web_fetch: 'codicon-cloud-download',
+  // LaTeX tools
+  extract_bibliography: 'codicon-book',
+  extract_figures: 'codicon-file-media',
+  extract_tikz_figures: 'codicon-symbol-misc',
+  format_latex: 'codicon-symbol-file',
+  compile_latex: 'codicon-play',
+  // Research tools
+  arxiv_search: 'codicon-library',
+  arxiv_metadata: 'codicon-info',
+  crossref_search: 'codicon-references',
+  crossref_doi: 'codicon-link-external',
+  // Diagnostics
+  diagnostics: 'codicon-debug-console',
+  // Default
+  default: 'codicon-wrench',
+};
+
+/** Maximum output length before truncation (characters) */
+export const OUTPUT_TRUNCATE_LENGTH = 1500;
+
+/** Maximum input display length before compacting */
+export const INPUT_COMPACT_THRESHOLD = 200;
