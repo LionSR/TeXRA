@@ -43,7 +43,10 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import { RetryErrorInfoSchema, type RetryErrorInfo } from '@agent/core/flows/RetryState';
+import {
+  RetryErrorInfoSchema,
+  type RetryErrorInfo,
+} from '@agent/core/flows/RetryState';
 import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
 
 // ============================================================================
