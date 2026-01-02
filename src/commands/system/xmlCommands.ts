@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - core
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -86,7 +86,7 @@ export async function handleValidateAndFixXml(
 
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
 
-    const agentConfig = parseAgentConfig({
+    const agentConfig = AgentConfigSchema.parse({
       agent: 'xml_validator',
       model: 'claude-3-7-sonnet-latest',
       inputFile: filePath,
