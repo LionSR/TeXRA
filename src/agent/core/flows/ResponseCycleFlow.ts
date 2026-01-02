@@ -7,15 +7,13 @@ import { BaseNode, Flow } from '@agent/node';
 // Internal imports
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
-  BaseCycleState,
-  BaseCycleShared,
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
-  resetCycleState,
   type CycleDebugContext,
   type CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
+import type { RetryErrorInfo } from './RetryState';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -51,12 +49,6 @@ import {
   type ResponseCycleServices,
 } from './CycleServices';
 
-/** Input state for response cycles. */
-interface ResponseCycleInputState {
-  /** Agent output location - always workspace or runStorage (never external) */
-  outputLocation: AgentFileLocation;
-}
-
 /**
  * Debug options for cycle - consolidated from separate context/fileOptions fields.
  * Always set/checked together, so merged into single optional field.
@@ -66,15 +58,31 @@ interface CycleDebugOptions {
   fileOptions: CycleDebugFileOptions;
 }
 
-/** Runtime state for response cycles. */
-interface ResponseCycleRuntimeState extends BaseCycleState {
+/**
+ * Shared state for response cycle flows (FLAT structure).
+ *
+ * All fields are at the top level - no nested `state` or `retryState`.
+ * This enables native flow nesting where cycle nodes can be wired
+ * directly into outer flows that use the same shared type.
+ *
+ * ## Architecture
+ * - Mutable state: `shared` (this interface) - all fields flat
+ * - Immutable services: `_params.services` (ResponseCycleServices)
+ */
+export interface ResponseCycleShared {
+  // === Base cycle fields ===
+  /** Messages being processed in this cycle */
+  messages: ProviderMessage[];
+  /** Whether the cycle should stop processing */
+  shouldStop: boolean;
+  /** Time taken for response in milliseconds */
+  responseTimeMs?: number;
+  /** Reason the model stopped generating */
+  stopReason?: ProviderStopReason;
+
+  // === Response-specific fields ===
   /**
    * Whether the last cycle ended normally (model said end_turn).
-   *
-   * Lifecycle:
-   * - Initialized to `false` when shared state is created
-   * - Set to `true` when model's stop_reason is 'end_turn'
-   * - Set to `false` on failures, cancellations, or empty responses
    *
    * Used by callers to distinguish between:
    * - Normal completion: shouldStop=true, endTurn=true
@@ -82,34 +90,36 @@ interface ResponseCycleRuntimeState extends BaseCycleState {
    * - Failure: shouldStop=true, endTurn=false, lastError defined
    */
   endTurn: boolean;
+  /** Whether output file exists */
   outputExists: boolean;
+  /** Agent output location */
+  outputLocation: AgentFileLocation;
+  /** System prompt for model */
   systemPrompt?: string;
-  /** Consolidated debug options (context + fileOptions always used together) */
+  /** Consolidated debug options */
   debug?: CycleDebugOptions;
+  /** Raw response from model */
   responseObject?: unknown;
+  /** Processed response text */
   processedResponse?: string;
-  /** Agent output location - always workspace or runStorage (never external) */
-  outputLocation?: AgentFileLocation;
-}
 
-export type ResponseCycleState = ResponseCycleInputState &
-  ResponseCycleRuntimeState;
-
-function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
-  resetCycleState(cycle, ['responseObject', 'processedResponse']);
-  // Boolean fields set directly to avoid undefined intermediate state
-  cycle.endTurn = false;
+  // === Retry state (flattened) ===
+  /** Last error info for retry handling */
+  lastError?: RetryErrorInfo;
 }
 
 /**
- * Shared state for response cycle flows.
- * Uses BaseCycleShared with ResponseCycleState for type safety.
- *
- * ## Architecture
- * - Mutable state: `shared` (this interface)
- * - Immutable services: `_params.services` (ResponseCycleServices)
+ * Reset cycle state for a new iteration.
+ * Called at the start of each cycle to clear transient fields.
  */
-export type ResponseCycleShared = BaseCycleShared<ResponseCycleState>;
+function resetResponseCycleShared(shared: ResponseCycleShared): void {
+  shared.shouldStop = false;
+  shared.responseTimeMs = undefined;
+  shared.stopReason = undefined;
+  shared.responseObject = undefined;
+  shared.processedResponse = undefined;
+  shared.endTurn = false;
+}
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -136,9 +146,8 @@ class ResponsePrepNode<C> extends BaseNode<
   }> {
     const services = this.services;
     const { agentPrompt, userVars, logger, agentConfig, round } = services;
-    const { state } = shared;
     const interrupted = Boolean(await services.checkInterruption());
-    const outputLocation = state.outputLocation;
+    const outputLocation = shared.outputLocation;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
@@ -157,7 +166,7 @@ class ResponsePrepNode<C> extends BaseNode<
           fileOptions: {
             continuationCount: round.continuationCount,
             baseName: 'response',
-            outputFile: state.outputLocation.relativePath,
+            outputFile: shared.outputLocation.relativePath,
           },
         };
 
@@ -180,26 +189,24 @@ class ResponsePrepNode<C> extends BaseNode<
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
-    const { state } = shared;
-
     if (prepRes.interrupted) {
-      resetResponseCycleState(state);
-      state.shouldStop = true;
+      resetResponseCycleShared(shared);
+      shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    state.outputExists = prepRes.exists;
-    state.systemPrompt = prepRes.systemPrompt;
-    state.debug = prepRes.debug;
-    state.outputLocation = prepRes.outputLocation;
-    resetResponseCycleState(state);
+    shared.outputExists = prepRes.exists;
+    shared.systemPrompt = prepRes.systemPrompt;
+    shared.debug = prepRes.debug;
+    shared.outputLocation = prepRes.outputLocation;
+    resetResponseCycleShared(shared);
 
-    if (state.debug) {
+    if (shared.debug) {
       await maybeSaveDebugObject({
-        object: state.messages,
+        object: shared.messages,
         objectType: 'messages',
-        context: state.debug.context,
-        fileOptions: state.debug.fileOptions,
+        context: shared.debug.context,
+        fileOptions: shared.debug.fileOptions,
       });
     }
 
@@ -257,11 +264,10 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
   async prep(shared: ResponseCycleShared): Promise<InvocationPrepResult> {
-    const { state } = shared;
     return {
-      shouldStop: state.shouldStop,
-      messages: state.messages,
-      systemPrompt: state.systemPrompt,
+      shouldStop: shared.shouldStop,
+      messages: shared.messages,
+      systemPrompt: shared.systemPrompt,
     };
   }
 
@@ -323,10 +329,10 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
     const { logger } = this.services;
-    const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
-    const successRes = handleInvocationResult(execRes, state, retryState, {
+    // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
+    const successRes = handleInvocationResult(execRes, shared, shared, {
       logger,
       operationName: this.getOperationName(),
     });
@@ -336,15 +342,15 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     }
 
     // Apply success-specific side effects
-    state.responseObject = successRes.response;
-    state.responseTimeMs = successRes.responseTimeMs;
+    shared.responseObject = successRes.response;
+    shared.responseTimeMs = successRes.responseTimeMs;
 
-    if (state.debug) {
+    if (shared.debug) {
       await maybeSaveDebugObject({
         object: successRes.response,
         objectType: 'response',
-        context: state.debug.context,
-        fileOptions: state.debug.fileOptions,
+        context: shared.debug.context,
+        fileOptions: shared.debug.fileOptions,
       });
     }
 
@@ -426,14 +432,13 @@ class ResponseProcessNode<C> extends BaseNode<
 > {
   async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { workspace } = this.services;
-    const { state } = shared;
     return {
-      shouldStop: state.shouldStop,
-      responseObject: state.responseObject,
-      responseTimeMs: state.responseTimeMs,
-      messages: state.messages,
-      outputLocation: state.outputLocation!,
-      outputExists: state.outputExists,
+      shouldStop: shared.shouldStop,
+      responseObject: shared.responseObject,
+      responseTimeMs: shared.responseTimeMs,
+      messages: shared.messages,
+      outputLocation: shared.outputLocation,
+      outputExists: shared.outputExists,
       // Read workspace values before they're updated (for connector calculation)
       lastResponse: workspace.assembly.lastResponse,
       accumulatedOutput: workspace.assembly.accumulatedOutput,
@@ -568,10 +573,9 @@ class ResponseProcessNode<C> extends BaseNode<
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
     const { round, workspace, logger, modelHandler } = this.services;
-    const { state } = shared;
 
     if (execRes.kind === 'skipped') {
-      state.endTurn = false;
+      shared.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
@@ -595,20 +599,20 @@ class ResponseProcessNode<C> extends BaseNode<
       workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     }
 
-    state.stopReason = result.stopReason;
-    state.processedResponse = result.processedResponse;
+    shared.stopReason = result.stopReason;
+    shared.processedResponse = result.processedResponse;
 
     if (result.repetitionDetected) {
-      state.endTurn = false;
-      state.shouldStop = true;
+      shared.endTurn = false;
+      shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
     const processedResponse = result.processedResponse;
 
     if (!processedResponse) {
-      state.endTurn = false;
-      state.shouldStop = true;
+      shared.endTurn = false;
+      shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
@@ -619,7 +623,7 @@ class ResponseProcessNode<C> extends BaseNode<
     if (!prepRes.outputExists) {
       logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
       await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
-      state.outputExists = true;
+      shared.outputExists = true;
     } else {
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
@@ -654,14 +658,14 @@ class ResponseProcessNode<C> extends BaseNode<
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.updateMessageContentWithPrefill(
-        state.messages,
+        shared.messages,
         connector,
         processedResponse,
         workspace,
       );
     } else {
       modelHandler.updateMessageContentWithoutPrefill(
-        state.messages,
+        shared.messages,
         connector,
         processedResponse,
         workspace,
@@ -755,11 +759,10 @@ class ResponseContinuationNode<C> extends BaseNode<
    */
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
     const { checkInterruption } = this.services;
-    const { state } = shared;
 
     // Check skip conditions in prep
     const shouldSkip =
-      state.shouldStop || !state.stopReason || !state.processedResponse;
+      shared.shouldStop || !shared.stopReason || !shared.processedResponse;
 
     // Check interruption only if not already skipping (avoid unnecessary I/O)
     const interrupted = shouldSkip ? false : Boolean(await checkInterruption());
@@ -767,9 +770,9 @@ class ResponseContinuationNode<C> extends BaseNode<
     return {
       shouldSkip,
       interrupted,
-      stopReason: state.stopReason,
-      processedResponse: state.processedResponse,
-      messages: state.messages,
+      stopReason: shared.stopReason,
+      processedResponse: shared.processedResponse,
+      messages: shared.messages,
     };
   }
 
@@ -832,18 +835,17 @@ class ResponseContinuationNode<C> extends BaseNode<
       agentSetting,
       agentConfig,
     } = this.services;
-    const { state } = shared;
 
     if (execRes.kind === 'skipped') {
-      state.endTurn = false;
-      state.shouldStop = true;
+      shared.endTurn = false;
+      shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
     const { shouldEndTurn, shouldStop, shouldContinue } = execRes.value;
 
-    state.endTurn = shouldEndTurn;
-    state.shouldStop = shouldStop;
+    shared.endTurn = shouldEndTurn;
+    shared.shouldStop = shouldStop;
 
     if (shouldStop) {
       return FlowTransition.COMPLETE;
@@ -873,7 +875,7 @@ class ResponseContinuationNode<C> extends BaseNode<
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
       modelHandler.addContinueMessageWithPrefill(
-        state.messages,
+        shared.messages,
         round,
         workspace,
         agentSetting,
@@ -881,7 +883,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
-        state.messages,
+        shared.messages,
         round,
         workspace,
         agentSetting,
