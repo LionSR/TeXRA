@@ -19,8 +19,8 @@ import {
 } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
-import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
+import { uncapitalize } from '@utils/text/stringUtils';
 import { WorkspaceFS } from '@utils/files';
 import { BaseWebviewManager } from './BaseWebviewManager';
 

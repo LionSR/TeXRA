@@ -5,37 +5,36 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import * as messageUtils from '@frontend/ui/messageUtils';
 import {
   getActiveEditorWithGuards,
   type ActiveFileGuardResult,
 } from '@frontend/editor/activeFileGuards';
 
-// Mock messageUtils before importing it
+// Track messages for assertions
 let warningMessages: string[] = [];
 let errorMessages: string[] = [];
 
 describe('Active File Guards', () => {
   let originalActiveTextEditor: vscode.TextEditor | undefined;
   let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
-  let originalShowWarningMessage: typeof messageUtils.showWarningMessage;
-  let originalShowErrorMessage: typeof messageUtils.showErrorMessage;
+  let originalShowWarningMessage: typeof vscode.window.showWarningMessage;
+  let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
 
   beforeEach(() => {
     originalActiveTextEditor = vscode.window.activeTextEditor;
     originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-    originalShowWarningMessage = messageUtils.showWarningMessage;
-    originalShowErrorMessage = messageUtils.showErrorMessage;
+    originalShowWarningMessage = vscode.window.showWarningMessage;
+    originalShowErrorMessage = vscode.window.showErrorMessage;
     warningMessages = [];
     errorMessages = [];
 
-    // Mock the messageUtils exports
-    (messageUtils as any).showWarningMessage = (message: string) => {
+    // Mock the vscode.window message functions
+    (vscode.window as any).showWarningMessage = (message: string) => {
       warningMessages.push(message);
       return Promise.resolve(undefined);
     };
 
-    (messageUtils as any).showErrorMessage = (message: string) => {
+    (vscode.window as any).showErrorMessage = (message: string) => {
       errorMessages.push(message);
       return Promise.resolve(undefined);
     };
@@ -50,8 +49,8 @@ describe('Active File Guards', () => {
   afterEach(() => {
     (vscode.window as any).activeTextEditor = originalActiveTextEditor;
     (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
-    (messageUtils as any).showWarningMessage = originalShowWarningMessage;
-    (messageUtils as any).showErrorMessage = originalShowErrorMessage;
+    (vscode.window as any).showWarningMessage = originalShowWarningMessage;
+    (vscode.window as any).showErrorMessage = originalShowErrorMessage;
   });
 
   it('returns noEditor when there is no active editor', async () => {
