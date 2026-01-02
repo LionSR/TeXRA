@@ -55,7 +55,6 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
   unregisterInterruptible,
-  type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -300,17 +299,13 @@ function createToolUseCallbacks(
  * DRY helper for the register/unregister pattern used when running reflection flows.
  * Uses the captured streamTabId from the closure rather than the storageKey callback
  * parameter, since registerInterruptible expects a StreamTabId.
- *
- * Note: The cast to IInterruptible is safe because ReflectionFlowContext implements
- * the interrupt() method required by IInterruptible.
  */
 function createReflectionCallbacks(
   streamTabId: StreamTabId,
 ): RunReflectionFlowCallbacks {
   return {
     onContextReady: (_storageKey, context) => {
-      // Cast is safe: ReflectionFlowContext has interrupt() method
-      registerInterruptible(streamTabId, context as IInterruptible);
+      registerInterruptible(streamTabId, context);
     },
     onFlowComplete: (_storageKey) => {
       unregisterInterruptible(streamTabId);
