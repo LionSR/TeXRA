@@ -479,7 +479,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       logger.info(
         'SupabaseAuthProvider',
-        `Got VS Code GitHub session for ${githubSession.account.label}`,
+        `Got VS Code GitHub session for ${githubSession.account.label} (scopes: ${githubSession.scopes.join(', ') || 'default'})`,
+      );
+      logger.debug(
+        'SupabaseAuthProvider',
+        `GitHub token preview: ${githubSession.accessToken.substring(0, 10)}...`,
       );
 
       // Exchange GitHub token for Supabase session via Edge Function
@@ -509,9 +513,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Token exchange failed: ${response.status}`,
+        const errorMsg =
+          errorData.error || `Token exchange failed: ${response.status}`;
+        logger.error(
+          'SupabaseAuthProvider',
+          `GitHub token exchange failed (${response.status}): ${errorMsg}`,
         );
+        throw new Error(errorMsg);
       }
 
       // Parse and validate response with Zod schema
