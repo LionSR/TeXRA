@@ -2,20 +2,41 @@
 
 ## ✅ Completed Refactoring
 
-The following issues have been **FIXED** in commit `bbd9b7a`:
+The following issues have been **FIXED**:
 
-| Issue | Status | Changes Made |
+| Issue | Commit | Changes Made |
 |-------|--------|--------------|
-| #1 `AgentRunState.totalRounds` | ✅ FIXED | Removed field, added `getCompletedCycles()` derived from usageAccumulator |
-| #3 AgentSharedStore unused round | ✅ FIXED | Created `ToolUseStore` without round field for tool-use flows |
+| #1 `AgentRunState.totalRounds` | `bbd9b7a` | Removed field, added `getCompletedCycles()` derived from usageAccumulator |
+| #3 AgentSharedStore unused round | `fd6bf00` | Made round optional in single class (DRY approach) |
 
 **Files Changed:**
 - `AgentState.ts` - Removed `totalRounds` and `incrementRounds()`
 - `RunUsageAccumulator.ts` - Added `getCompletedCycles()`
-- `AgentSharedStore.ts` - Added `ToolUseStore`, `ToolUseStoreSnapshot`, `createToolUseStore()`
+- `AgentSharedStore.ts` - Made round optional, `ToolUseStore` is type alias, `createToolUseStore()` creates with `round=null`
 - `ToolUseCycleFlow.ts` - Removed `run.incrementRounds()` call
 - `ToolUseRunFlow.ts` - Uses `ToolUseStore` and `getCompletedCycles()`
 - Tool-use flow files updated to use `ToolUseStore`
+
+### DRY Architecture for Store
+
+```typescript
+// Single class supports both modes:
+export class AgentSharedStore {
+  private roundState: ConversationRoundState | null;
+  // ... other fields
+
+  hasRound(): boolean { return this.roundState !== null; }
+}
+
+// Type alias (not duplicate class)
+export type ToolUseStore = AgentSharedStore;
+
+// Factory for tool-use (round=null)
+export function createToolUseStore(args): AgentSharedStore { ... }
+
+// Factory for reflection (round provided)
+export function createSharedStore(args): AgentSharedStore { ... }
+```
 
 ---
 
@@ -40,7 +61,7 @@ After deep analysis of the agent state management system, I've identified **crit
 
 ---
 
-## Current State Architecture Diagram
+## Current State Architecture Diagram (After Fix)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -50,9 +71,9 @@ After deep analysis of the agent state management system, I've identified **crit
 │  ┌──────────────────────────────────────┐                                  │
 │  │         AgentRunState                │  ← Aggregate run statistics      │
 │  ├──────────────────────────────────────┤                                  │
-│  │ • totalRounds: number        ⚠️       │  ← CONFUSING: only tool-use uses │
 │  │ • totalResponseTimeMs: number        │                                  │
 │  │ • usageAccumulator: RunUsageAccum    │                                  │
+│  │ • getCompletedCycles() ✅            │  ← Derived from accumulator      │
 │  └──────────────────────────────────────┘                                  │
 │                    │                                                        │
 │     ┌──────────────┴──────────────┐                                        │
@@ -69,7 +90,7 @@ After deep analysis of the agent state management system, I've identified **crit
 │  │ └─ workspaceSnapshot│    │                            │        │        │
 │  │                     │    │                            ▼        │        │
 │  │         ⬇️           │    │              AgentSharedStore       │        │
-│  │                     │    │              ├─ round (unused!) ⚠️   │        │
+│  │                     │    │              ├─ round: null ✅       │        │
 │  │ ConversationRound   │    │              ├─ run                 │        │
 │  │ State (via services)│    │              ├─ workspace           │        │
 │  │ ├─ roundIndex       │    │              └─ user                │        │
@@ -79,6 +100,9 @@ After deep analysis of the agent state management system, I've identified **crit
 │  │                     │    │ ├─ cycleResponseTimeMs ≈ responseMs │        │
 │  │                     │    │ └─ cycleNormalizedUsage ≈ normUsage │        │
 │  └─────────────────────┘    └─────────────────────────────────────┘        │
+│                                                                             │
+│  ✅ FIXED: AgentSharedStore now has optional round (null for tool-use)     │
+│  ✅ FIXED: AgentRunState.totalRounds removed, use getCompletedCycles()     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
