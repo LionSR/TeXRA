@@ -9,7 +9,6 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
-  buildEditedFilesList,
   getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
@@ -56,8 +55,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, errorText, outputText, input, edits } =
-    normalizedToolLog;
+  const { parsed, toolName, errorText, outputText, input } = normalizedToolLog;
 
   // Use tool-specific icon
   const iconClass = getToolIconClass(toolName, normalizedToolLog.isError);
@@ -97,11 +95,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     }
   }
 
-  // Show edited files with clickable links
-  if (edits && edits.length > 0) {
-    const filesHtml = buildEditedFilesList(edits);
-    sections.push(buildToolUseSection('Files:', filesHtml));
-  }
+  // Note: File path is already in headerSummary, so we skip the Files section
 
   // Show error or output
   if (errorText) {
