@@ -5,7 +5,7 @@
  * - Non-blocking: Never delays the main execution flow
  * - Failure-tolerant: Errors are logged but never thrown to callers
  * - Batched: Collects events and flushes periodically to reduce requests
- * - Fire-and-forget: If it fails, it fails - no retries
+ * - Retry on failure: Failed entries are re-queued (bounded by MAX_QUEUE_SIZE)
  *
  * Usage data includes:
  * - Token counts (input, output, cached, reasoning)
@@ -133,6 +133,9 @@ class UsageLogServiceImpl {
     // Set flushing flag BEFORE any async operations to prevent concurrent flushes
     this.isFlushing = true;
 
+    // Declare outside try block so it's accessible in catch for re-queuing
+    let entries: UsageLogEntry[] = [];
+
     try {
       // Get auth token
       const token = await SupabaseClient.getAccessToken();
@@ -142,7 +145,7 @@ class UsageLogServiceImpl {
       }
 
       // Take current queue and reset atomically
-      const entries = this.queue;
+      entries = this.queue;
       this.queue = [];
 
       const batch: UsageLogBatch = {
@@ -157,12 +160,25 @@ class UsageLogServiceImpl {
 
       const response = await this.sendBatch(batch, token);
       if (response.success) {
-        logger.debug(
-          CHANNEL,
-          `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-        );
+        if (response.accepted < entries.length) {
+          // Some entries were rejected (validation failure on server)
+          logger.warn(
+            CHANNEL,
+            `Batch ${batch.batchId}: only ${response.accepted}/${entries.length} entries accepted (some may be invalid)`,
+          );
+        } else {
+          logger.debug(
+            CHANNEL,
+            `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
+          );
+        }
       } else {
-        logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
+        // Server returned success: false - this indicates a request-level error
+        // (shouldn't happen with 200 OK, but handle defensively)
+        logger.warn(
+          CHANNEL,
+          `Batch rejected: ${response.error} (dropping ${entries.length} entries)`,
+        );
       }
     } catch (error) {
       // Log error but don't re-throw - this is fire-and-forget
@@ -170,7 +186,20 @@ class UsageLogServiceImpl {
         CHANNEL,
         `Failed to send usage batch: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      // Don't re-queue failed entries to avoid infinite loops
+
+      // Only retry on transient errors (network failures, 5xx server errors)
+      // Don't retry 4xx client errors (bad request, unauthorized) - they're permanent
+      const status = (error as Error & { status?: number }).status;
+      const isRetryable = !status || status >= 500;
+
+      if (isRetryable) {
+        this.requeue(entries);
+      } else {
+        logger.warn(
+          CHANNEL,
+          `Dropping ${entries.length} entries due to permanent error (HTTP ${status})`,
+        );
+      }
     } finally {
       this.isFlushing = false;
     }
@@ -198,7 +227,10 @@ class UsageLogServiceImpl {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Include status in error for retry logic
+        const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        (error as Error & { status?: number }).status = response.status;
+        throw error;
       }
 
       const data = await response.json();
@@ -209,6 +241,38 @@ class UsageLogServiceImpl {
       }).parse(data);
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Re-queue entries for retry, respecting MAX_QUEUE_SIZE.
+   * Drops oldest entries if adding would exceed the limit.
+   */
+  private requeue(entries: UsageLogEntry[]): void {
+    if (entries.length === 0) {
+      return;
+    }
+
+    // Calculate how many entries we can add
+    const availableSpace = MAX_QUEUE_SIZE - this.queue.length;
+    if (availableSpace <= 0) {
+      logger.warn(
+        CHANNEL,
+        `Queue full, dropping ${entries.length} entries that failed to send`,
+      );
+      return;
+    }
+
+    if (entries.length > availableSpace) {
+      // Only re-queue as many as we have space for (most recent first)
+      const toRequeue = entries.slice(-availableSpace);
+      logger.warn(
+        CHANNEL,
+        `Queue nearly full, dropping ${entries.length - availableSpace} oldest failed entries`,
+      );
+      this.queue.unshift(...toRequeue);
+    } else {
+      this.queue.unshift(...entries);
     }
   }
 
