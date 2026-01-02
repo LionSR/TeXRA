@@ -112,7 +112,7 @@ function jsonResponse(
 
 async function validateGitHubToken(
   token: string,
-): Promise<{ user: GitHubUser; email: string } | null> {
+): Promise<{ user: GitHubUser; email: string } | { error: string }> {
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -120,7 +120,13 @@ async function validateGitHubToken(
   };
 
   const userRes = await fetch('https://api.github.com/user', { headers });
-  if (!userRes.ok) return null;
+  if (!userRes.ok) {
+    const errorText = await userRes.text().catch(() => 'unknown');
+    console.error(
+      `[AUTH] GitHub /user API failed: ${userRes.status} - ${errorText}`,
+    );
+    return { error: `GitHub API rejected token (${userRes.status})` };
+  }
 
   const user: GitHubUser = await userRes.json();
   let primaryEmail = user.email;
@@ -135,9 +141,19 @@ async function validateGitHubToken(
         e.primary && e.verified,
     );
     if (primary) primaryEmail = primary.email;
+  } else {
+    console.warn(
+      `[AUTH] GitHub /user/emails API failed: ${emailsRes.status}, using profile email`,
+    );
   }
 
-  if (!primaryEmail) return null;
+  if (!primaryEmail) {
+    console.error(
+      `[AUTH] No verified email for GitHub user ${user.login} (id: ${user.id})`,
+    );
+    return { error: 'No verified email on GitHub account' };
+  }
+
   return { user, email: primaryEmail };
 }
 
@@ -191,16 +207,12 @@ app.post('/exchange', async (c) => {
       return jsonResponse(c, { error: 'github_token required' }, 400);
     }
 
-    const githubData = await validateGitHubToken(body.github_token);
-    if (!githubData) {
-      return jsonResponse(
-        c,
-        { error: 'Invalid GitHub token or missing verified email' },
-        401,
-      );
+    const githubResult = await validateGitHubToken(body.github_token);
+    if ('error' in githubResult) {
+      return jsonResponse(c, { error: githubResult.error }, 401);
     }
 
-    const { user: githubUser, email } = githubData;
+    const { user: githubUser, email } = githubResult;
     const githubProviderId = githubUser.id.toString();
     const supabase = c.get('supabase');
 
