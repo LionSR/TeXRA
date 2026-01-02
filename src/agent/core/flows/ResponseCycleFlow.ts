@@ -1,6 +1,8 @@
 // Standard library imports
 import * as path from 'path';
 
+import { z } from 'zod';
+
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
@@ -13,9 +15,12 @@ import {
   type CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { RetryErrorInfo } from './RetryState';
+import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 // Type imports
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import {
+  ProviderMessageSchema,
+  type ProviderMessage,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - utilities
@@ -30,7 +35,7 @@ import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUti
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { getSystemPromptWithRules } from '@utils/prompt';
-import type { AgentFileLocation } from '@utils/files';
+import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -53,70 +58,39 @@ import {
  * Debug options for cycle - consolidated from separate context/fileOptions fields.
  * Always set/checked together, so merged into single optional field.
  */
-interface CycleDebugOptions {
+export interface CycleDebugOptions {
   context: CycleDebugContext;
   fileOptions: CycleDebugFileOptions;
 }
 
-/**
- * Constraint interface for types that can be used with cycle nodes.
- *
- * Both ResponseCycleShared and ReflectionFlowShared satisfy this constraint,
- * enabling cycle nodes to work with either shared type for native nesting.
- *
- * Note: Some fields are optional/nullable to accommodate the outer flow's
- * shared type which may not have all fields populated at all times.
- */
-export interface CycleSharedConstraint {
-  // Required cycle fields
-  messages: ProviderMessage[];
-  shouldStop: boolean;
-  endTurn: boolean;
-  outputExists: boolean;
-  outputLocation: AgentFileLocation | null;
-
-  // Optional cycle fields
-  responseTimeMs?: number;
-  stopReason?: ProviderStopReason;
-  systemPrompt?: string;
-  debug?: CycleDebugOptions;
-  responseObject?: unknown;
-  processedResponse?: string;
-  lastError?: RetryErrorInfo;
-
-  // Index signature for compatibility with flow shared types
-  [key: string]: unknown;
-}
+// ============================================================================
+// Cycle Fields Schema (Single Source of Truth)
+// ============================================================================
 
 /**
- * Shared state for response cycle flows (FLAT structure).
+ * Schema for serializable cycle fields.
  *
- * All fields are at the top level - no nested `state` or `retryState`.
- * This enables native flow nesting where cycle nodes can be wired
- * directly into outer flows that use the same shared type.
+ * This is the SINGLE SOURCE OF TRUTH for cycle field definitions.
+ * Both ResponseCycleShared and ReflectionFlowShared derive from this.
  *
- * ## Type Compatibility
+ * ## Field Categories
  *
- * Fields use nullable/optional types to be compatible with ReflectionFlowShared,
- * enabling cycle nodes to work directly with the outer flow's shared type.
- * Cycle nodes use non-null assertions where values are guaranteed to be set.
+ * Required fields (must be initialized before cycle runs):
+ * - messages, shouldStop, endTurn, outputExists, outputLocation
  *
- * ## Architecture
- * - Mutable state: `shared` (this interface) - all fields flat
- * - Immutable services: `_params.services` (ResponseCycleServices)
+ * Optional fields (populated during/after cycle execution):
+ * - responseTimeMs, stopReason, processedResponse, lastError
+ *
+ * ## Serialization
+ *
+ * All fields here are natively serializable (structuredClone compatible).
+ * Non-serializable fields (debug, responseObject) are in CycleTransientFields.
  */
-export interface ResponseCycleShared {
-  // === Base cycle fields ===
+export const CycleFieldsSchema = z.object({
   /** Messages being processed in this cycle */
-  messages: ProviderMessage[];
+  messages: z.array(ProviderMessageSchema),
   /** Whether the cycle should stop processing */
-  shouldStop: boolean;
-  /** Time taken for response in milliseconds */
-  responseTimeMs?: number;
-  /** Reason the model stopped generating */
-  stopReason?: ProviderStopReason;
-
-  // === Response-specific fields ===
+  shouldStop: z.boolean(),
   /**
    * Whether the last cycle ended normally (model said end_turn).
    *
@@ -125,24 +99,50 @@ export interface ResponseCycleShared {
    * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
    * - Failure: shouldStop=true, endTurn=false, lastError defined
    */
-  endTurn: boolean;
+  endTurn: z.boolean(),
   /** Whether output file exists */
-  outputExists: boolean;
-  /** Agent output location (nullable for compatibility with ReflectionFlowShared) */
-  outputLocation: AgentFileLocation | null;
-  /** System prompt for model */
-  systemPrompt?: string;
-  /** Consolidated debug options */
-  debug?: CycleDebugOptions;
-  /** Raw response from model */
-  responseObject?: unknown;
+  outputExists: z.boolean(),
+  /** Agent output location (nullable for native nesting compatibility) */
+  outputLocation: AgentFileLocationSchema.nullable(),
+  /** Time taken for response in milliseconds */
+  responseTimeMs: z.number().optional(),
+  /** Reason the model stopped generating (nullable to match ProviderStopReason) */
+  stopReason: z.string().nullable().optional(),
   /** Processed response text */
-  processedResponse?: string;
-
-  // === Retry state (flattened) ===
+  processedResponse: z.string().optional(),
   /** Last error info for retry handling */
-  lastError?: RetryErrorInfo;
+  lastError: RetryErrorInfoSchema.optional(),
+});
+
+/** Serializable cycle fields derived from schema */
+export type CycleFields = z.infer<typeof CycleFieldsSchema>;
+
+/**
+ * Transient cycle fields that are NOT serialized.
+ *
+ * These contain non-serializable data (logger, unknown response objects)
+ * and are regenerated each cycle execution.
+ */
+export interface CycleTransientFields {
+  /** System prompt for model (regenerated from agent prompt each cycle) */
+  systemPrompt?: string;
+  /** Debug options containing logger (non-serializable) */
+  debug?: CycleDebugOptions;
+  /** Raw response from model (type unknown, not serialized) */
+  responseObject?: unknown;
 }
+
+/**
+ * Full cycle shared type combining serializable and transient fields.
+ *
+ * This is what cycle nodes operate on. For native nesting, the outer
+ * flow's shared type (e.g., ReflectionFlowShared) must be compatible
+ * with this type.
+ *
+ * Index signature enables compatibility with flow shared types.
+ */
+export type ResponseCycleShared = CycleFields &
+  CycleTransientFields & { [key: string]: unknown };
 
 /**
  * Reset cycle state for a new iteration.
