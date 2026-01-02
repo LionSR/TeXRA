@@ -154,7 +154,10 @@ async function prepareFlowExecution(
   executionId?: ExecutionId,
 ): Promise<FlowExecutionContext> {
   // 1. Resolve agent definition
-  const fullConfig = AgentConfigSchema.parse({ agent: agentName, ...configPayload });
+  const fullConfig = AgentConfigSchema.parse({
+    agent: agentName,
+    ...configPayload,
+  });
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
