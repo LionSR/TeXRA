@@ -5,7 +5,6 @@ import { strict as assert } from 'assert';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -15,19 +14,13 @@ import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
-  const workspace = AgentWorkspaceState.create();
-  const store = createSharedStore({
-    roundIndex: 0,
-    runState: new AgentRunState(),
-    workspaceState: workspace,
-    userChannels: {
-      input: Object.freeze({}) as Readonly<Record<string, unknown>>,
-      transient: {},
-    },
-  });
+
+  // Create state snapshots directly (no store wrapper needed)
+  const runState = new AgentRunState();
+  const workspaceState = AgentWorkspaceState.create();
 
   const snapshot: ToolUseSessionSnapshot = {
-    version: 1,
+    version: 2,
     executionId: 'exec-1',
     streamId,
     agentConfig: parseAgentConfig({
@@ -36,7 +29,13 @@ describe('ToolUseFollowUp', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    store: store.toSnapshot(),
+    // State slices stored directly (v2 schema)
+    run: runState.toSnapshot(),
+    workspace: workspaceState.toSnapshot(),
+    user: {
+      input: {},
+      transient: {},
+    },
     lastUpdated: Date.now(),
   };
 
@@ -63,10 +62,13 @@ describe('ToolUseFollowUp', () => {
 
   it('creates valid snapshot structure', () => {
     // Test that snapshot structure is valid (used for resume operations)
-    assert.equal(snapshot.version, 1);
+    assert.equal(snapshot.version, 2);
     assert.equal(snapshot.streamId, streamId);
     assert.equal(snapshot.executionId, 'exec-1');
     assert.ok(snapshot.agentConfig);
-    assert.ok(snapshot.store);
+    // State slices stored directly (v2 schema)
+    assert.ok(snapshot.run);
+    assert.ok(snapshot.workspace);
+    assert.ok(snapshot.user);
   });
 });

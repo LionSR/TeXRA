@@ -4,7 +4,6 @@
  * Provides follow-up queue management and stream status updates.
  */
 
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
@@ -18,11 +17,12 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
  *
  * Note: Persistence is handled automatically by PersistedFlow.
  * This interface focuses on session-specific operations (follow-ups, status).
+ *
+ * State slices (run, workspace, user channels) are passed directly through
+ * the flow without a store wrapper - this interface handles only session
+ * lifecycle operations.
  */
 export interface IToolUseSession {
-  /** Set the shared store for session state management. */
-  setStore(store: AgentSharedStore | null): void;
-
   /** Append a follow-up message to the session queue. */
   appendFollowUp(text: string): void;
 
@@ -44,21 +44,15 @@ export interface IToolUseSession {
  *
  * Provides unified session management for flow-first execution.
  * Only requires streamTabId - other context is accessed via services.
+ *
+ * State slices (run, workspace, user channels) are passed directly through
+ * the flow - this class only handles follow-up queue and stream status.
  */
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
-  private store: AgentSharedStore | null = null;
 
   constructor(private readonly streamTabId: StreamTabId) {
     this.followUps = ToolUseFollowUpQueue.acquire(streamTabId);
-  }
-
-  setStore(store: AgentSharedStore | null): void {
-    this.store = store;
-  }
-
-  getStore(): AgentSharedStore | null {
-    return this.store;
   }
 
   appendFollowUp(text: string): void {
@@ -101,7 +95,6 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
    * Dispose resources when context is cleaned up.
    */
   dispose(): void {
-    this.setStore(null);
     ToolUseFollowUpQueue.release(this.streamTabId);
     // PersistedFlow handles state cleanup automatically.
   }
