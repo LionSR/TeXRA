@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent metadata
-import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
+import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
 // Type imports
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -38,7 +38,7 @@ export class AgentHistoryManager {
     executionId: ExecutionId,
     config: AgentConfig,
   ): Promise<void> {
-    const normalizedConfig = parseAgentConfig(config);
+    const normalizedConfig = AgentConfigSchema.parse(config);
     if (!normalizedConfig.session) {
       throw new Error(
         'Agent history cannot store configs without session metadata.',
@@ -122,7 +122,7 @@ export class AgentHistoryManager {
 
       let normalizedConfig: AgentConfig;
       try {
-        normalizedConfig = parseAgentConfig(rawConfig);
+        normalizedConfig = AgentConfigSchema.parse(rawConfig);
       } catch (error) {
         mutated = true;
         logger.warn(CHANNEL, 'Discarding malformed agent history entry', {

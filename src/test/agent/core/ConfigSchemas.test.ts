@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ToolConfigSchema } from '@agent/core/ToolConfig';
 
@@ -29,7 +29,7 @@ describe('ToolConfigSchema', () => {
 
 describe('AgentConfigSchema', () => {
   it('strips unknown properties for backward compatibility', () => {
-    const parsed = parseAgentConfig({
+    const parsed = AgentConfigSchema.parse({
       legacyFlag: 'remove-me',
       toolConfig: {
         reflect: true,
@@ -50,7 +50,7 @@ describe('AgentConfigSchema', () => {
   });
 
   it('derives workflow metadata when session is omitted', () => {
-    const parsed = parseAgentConfig({});
+    const parsed = AgentConfigSchema.parse({});
 
     assert.ok(parsed.session);
     assert.strictEqual(parsed.session?.agentCategory, AgentCategory.Workflow);
