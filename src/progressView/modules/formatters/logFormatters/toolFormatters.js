@@ -9,6 +9,10 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
+  buildLineChangesBadge,
+  buildEditedFilesList,
+  formatToolInput,
+  getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
@@ -47,22 +51,6 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @returns {HTMLElement|null} Tool use element or null
  */
 export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
-  const toolElement = createToolElement(
-    logId,
-    groupId,
-    timestamp,
-    'codicon-wrench',
-  );
-  if (!toolElement) return null;
-
-  const { element, headerLabel, iconElem, contentElem } = toolElement;
-
-  if (headerLabel) headerLabel.textContent = 'Tool Use';
-
-  if (!contentElem) {
-    return element;
-  }
-
   const { structured } = normalizedPayload || {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
@@ -70,35 +58,90 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, summaryText, errorText, outputText, input } =
-    normalizedToolLog;
+  const {
+    parsed,
+    toolName,
+    summaryText,
+    errorText,
+    outputText,
+    input,
+    edits,
+    lineChanges,
+  } = normalizedToolLog;
 
+  // Use tool-specific icon
+  const iconClass = getToolIconClass(toolName, normalizedToolLog.isError);
+
+  const toolElement = createToolElement(logId, groupId, timestamp, iconClass);
+  if (!toolElement) return null;
+
+  const { element, headerLabel, iconElem, contentElem } = toolElement;
+
+  // Build title with optional line changes badge
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-  const titleText = normalizedToolLog.headerSummary
+  let titleText = normalizedToolLog.headerSummary
     ? `${titleBase} — ${normalizedToolLog.headerSummary}`
     : titleBase;
 
-  if (headerLabel) headerLabel.textContent = titleText;
+  if (headerLabel) {
+    headerLabel.textContent = titleText;
+    // Add line changes badge to header if available
+    if (lineChanges && (lineChanges.added > 0 || lineChanges.removed > 0)) {
+      const badge = document.createElement('span');
+      badge.innerHTML = buildLineChangesBadge(lineChanges);
+      headerLabel.appendChild(badge.firstChild);
+    }
+  }
+
   if (iconElem) {
-    iconElem.className = normalizedToolLog.isError
-      ? 'codicon codicon-error'
-      : 'codicon codicon-wrench';
+    iconElem.className = `codicon ${iconClass}`;
   }
   element.classList.toggle('tool-use-error', normalizedToolLog.isError);
 
-  const sections = [];
-
-  if (input !== undefined) {
-    const inputValue = stringifyForDisplay(input);
-    sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+  if (!contentElem) {
+    return element;
   }
 
+  const sections = [];
+
+  // Smart input display: use condensed format when possible
+  if (input !== undefined) {
+    const { display: condensedInput, isCondensed } = formatToolInput(
+      toolName,
+      input,
+    );
+
+    if (isCondensed && condensedInput) {
+      // Show condensed input inline
+      sections.push(
+        buildToolUseSection(
+          'Input:',
+          `<code class="tool-input-condensed">${encodeHtml(condensedInput)}</code>`,
+        ),
+      );
+    } else {
+      // Fall back to full YAML display
+      const inputValue = stringifyForDisplay(input);
+      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
+    }
+  }
+
+  // Show edited files with clickable links
+  if (edits && edits.length > 0) {
+    const filesHtml = buildEditedFilesList(edits);
+    sections.push(buildToolUseSection('Files:', filesHtml));
+  }
+
+  // Show error or output
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
+    // Check if output is very long - if so, collapse it initially
+    const isLongOutput = outputText.length > 500 || outputText.split('\n').length > 15;
+    const outputClass = isLongOutput ? 'tool-output-full tool-output-collapsed' : 'tool-output-full';
     sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      buildToolUseSection('Output:', wrapInPre(outputText, outputClass)),
     );
   }
 
