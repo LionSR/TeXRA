@@ -38,9 +38,6 @@ export class FileList {
       return;
     }
 
-    // Show the collapsible when there are files
-    setVisibilityState(collapsible, true);
-
     const rounds = Object.keys(filesByRound)
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
@@ -100,6 +97,9 @@ export class FileList {
     if (!showRoundHeaders && flatGroup && hasFiles) {
       container.appendChild(flatGroup);
     }
+
+    // Show/hide collapsible based on whether files were actually rendered
+    setVisibilityState(collapsible, hasFiles);
   }
 
   /**
