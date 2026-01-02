@@ -61,11 +61,5 @@ summing native payloads to compute total cost.
 - **Tool-use flows** pass state slices through `shared.state.stateSlices` as
   individual snapshots, reconstructing class instances only when needed.
 
-## Legacy compatibility
-
-The `AgentSharedStoreSnapshotSchema` is retained for backwards compatibility
-when resuming old sessions that stored bundled state. New code should use
-individual state slices directly.
-
 By passing state slices directly (without wrapper classes), flows align with the
 PocketFlow design while eliminating unnecessary abstraction overhead.

@@ -97,15 +97,13 @@ export async function prepareInitialState<C>(
   if (snapshot) {
     logger.debug('Resuming tool-use session from saved state.');
 
-    // Reconstruct state slices directly from snapshot (no store wrapper)
-    const runState = AgentRunState.fromSnapshot(snapshot.store.run);
-    const workspaceState = AgentWorkspaceState.fromSnapshot(
-      snapshot.store.workspace,
-    );
+    // Reconstruct state slices directly from snapshot (v2 schema - no wrapper)
+    const runState = AgentRunState.fromSnapshot(snapshot.run);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(snapshot.workspace);
     // User channels from snapshot with frozen input
     const userChannels = {
-      input: Object.freeze({ ...snapshot.store.user.input }),
-      transient: { ...snapshot.store.user.transient },
+      input: Object.freeze({ ...snapshot.user.input }),
+      transient: { ...snapshot.user.transient },
     };
 
     return {
