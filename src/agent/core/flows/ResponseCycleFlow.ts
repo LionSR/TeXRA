@@ -13,6 +13,7 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   getDebugContext,
+  resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
@@ -151,15 +152,10 @@ export function assertCycleFieldsPopulated<T extends object>(
 /**
  * Reset cycle state for a new iteration.
  * Called at the start of each cycle to clear transient fields.
+ * Reuses resetCycleState for base fields, adds response-specific fields.
  */
 function resetResponseCycleShared(shared: ResponseCycleShared): void {
-  shared.shouldStop = false;
-  shared.responseTimeMs = undefined;
-  shared.stopReason = undefined;
-  shared.responseObject = undefined;
-  shared.processedResponse = undefined;
-  shared.endTurn = false;
-  shared.lastError = undefined;
+  resetCycleState(shared, ['responseObject', 'processedResponse']);
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle

@@ -236,21 +236,12 @@ export interface CycleCompletionResult {
 }
 
 /**
- * State needed to interpret cycle completion.
- * This is the minimal interface from shared state that we need.
- *
- * For flat shared types, pass the same object for both state and retryState params.
+ * State needed to interpret cycle completion (flat pattern).
+ * All cycle flows now use flat shared state with these fields at top level.
  */
-interface CycleCompletionState {
+interface CycleCompletionInput {
   shouldStop: boolean;
   endTurn?: boolean;
-}
-
-/**
- * Retry state for completion interpretation.
- * For flat shared types, this is the same object as CycleCompletionState.
- */
-interface CycleRetryState {
   lastError?: { message: string };
 }
 
@@ -262,28 +253,22 @@ interface CycleRetryState {
  * - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
  * - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
  *
- * @param state - The cycle state with shouldStop and optional endTurn
- * @param retryState - The retry state with optional lastError (can be same object as state for flat pattern)
+ * @param shared - The flat shared state with shouldStop, endTurn, and lastError
  * @returns Interpreted completion result
  *
  * @example
- * // Nested pattern (ToolUseCycleFlow before flattening):
- * interpretCycleCompletion(shared.state, shared.retryState)
- *
- * // Flat pattern (ResponseCycleFlow, flattened ToolUseCycleFlow):
- * interpretCycleCompletion(shared, { lastError: shared.lastError })
+ * const completion = interpretCycleCompletion(shared);
  */
 export function interpretCycleCompletion(
-  state: CycleCompletionState,
-  retryState: CycleRetryState,
+  shared: CycleCompletionInput,
 ): CycleCompletionResult {
-  const failedWithError = state.shouldStop && !!retryState.lastError;
+  const failedWithError = shared.shouldStop && !!shared.lastError;
   const userCancelled =
-    state.shouldStop && !retryState.lastError && !state.endTurn;
+    shared.shouldStop && !shared.lastError && !shared.endTurn;
 
   return {
     failedWithError,
-    errorMessage: retryState.lastError?.message,
+    errorMessage: shared.lastError?.message,
     userCancelled,
   };
 }
