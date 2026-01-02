@@ -677,55 +677,6 @@ type ToolUseDispatchExecResult =
   | { kind: 'success'; execResults: ToolExecutionResult[]; assistantText: string };
 
 /**
- * Finalizes the tool-use cycle.
- * All flow exit paths route through this node to ensure proper cleanup.
- *
- * PocketFlow pattern:
- * - Single finalization point in the flow graph
- * - No guard flags needed (graph ensures single execution)
- * - Services accessed via `this.services`
- *
- * Note: Unlike ResponseCycleFinalizeNode, tool-use finalization is handled
- * inline in ToolUseProcessNode for successful cycles. This node provides
- * a consistent exit point for error/interrupt paths.
- */
-class ToolUseCycleFinalizeNode<C> extends BaseNode<
-  ToolUseCycleShared,
-  ToolUseCycleParams<C>,
-  ToolUseCycleServices<C>
-> {
-  /**
-   * No preparation needed - this node just exits the flow.
-   * PocketFlow compliance: prep() extracts data for exec().
-   */
-  async prep(_shared: ToolUseCycleShared): Promise<void> {
-    // No prep needed for finalize
-  }
-
-  /**
-   * No computation needed - finalization already happened in ProcessNode.
-   * PocketFlow compliance: exec() receives prepRes, returns compute result.
-   */
-  async exec(_prepRes: void): Promise<void> {
-    // No-op: finalization for successful cycles happens in ProcessNode
-    // This node just provides a consistent exit point for error/interrupt paths
-  }
-
-  /**
-   * Flow ends here.
-   * PocketFlow compliance: post() applies side effects and returns action.
-   */
-  async post(
-    _shared: ToolUseCycleShared,
-    _prepRes: void,
-    _execRes: void,
-  ): Promise<string | undefined> {
-    // Flow ends here
-    return undefined;
-  }
-}
-
-/**
  * Dispatches tool calls and processes their results.
  *
  * For Google handlers with multiple parallel calls, this node batches all
@@ -1054,7 +1005,6 @@ export function createToolUseCycleFlow<C>(): Flow<
   const callNode = new ToolUseCallNode<C>();
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
-  const finalizeNode = new ToolUseCycleFinalizeNode<C>();
 
   // Main flow: prep → call → process → dispatch
   // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
@@ -1063,15 +1013,14 @@ export function createToolUseCycleFlow<C>(): Flow<
   callNode.next(processNode);
   processNode.next(dispatchNode);
 
-  // All completion paths route through finalize node (PocketFlow-native pattern)
-  // This ensures consistent exit behavior regardless of which node triggers completion
-  prepNode.on(FlowTransition.COMPLETE, finalizeNode);
-  callNode.on(FlowTransition.COMPLETE, finalizeNode);
-  processNode.on(FlowTransition.COMPLETE, finalizeNode);
-  dispatchNode.on(FlowTransition.COMPLETE, finalizeNode);
-
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
+
+  // COMPLETE transitions exit directly (no finalize node needed).
+  // Unlike ResponseCycleFlow which needs finalizeRound() for stats recording,
+  // ToolUseCycleFlow handles finalization inline in ProcessNode.post() for
+  // successful cycles. Error/interrupt paths don't need finalization since
+  // there's nothing to record.
 
   return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }
