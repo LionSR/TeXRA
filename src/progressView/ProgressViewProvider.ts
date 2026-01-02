@@ -88,8 +88,10 @@ export class ProgressViewProvider
         showRetryRequest: this.showRetryRequest.bind(this),
         resolveRetryRequest: this.resolveRetryRequest.bind(this),
         showToolEditApprovalPrompt: this.showToolEditApprovalPrompt.bind(this),
-        resolveToolEditApprovalPrompt: this.resolveToolEditApprovalPrompt.bind(this),
-        updateToolEditApprovalBypassState: this.updateToolEditApprovalBypassState.bind(this),
+        resolveToolEditApprovalPrompt:
+          this.resolveToolEditApprovalPrompt.bind(this),
+        updateToolEditApprovalBypassState:
+          this.updateToolEditApprovalBypassState.bind(this),
       },
     );
 
