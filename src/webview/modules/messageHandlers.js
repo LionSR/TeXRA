@@ -1041,8 +1041,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
-    // TaskState.session is the canonical source of truth for session metadata
-    const canonicalSession = state.session || config.session;
+    // config.session is the single source of truth for session metadata
+    const canonicalSession = config.session;
 
     // Block saves during restoration - _setAgentValue dispatches change events
     // which trigger save(), and we don't want to capture incomplete DOM state
