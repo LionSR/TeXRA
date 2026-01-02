@@ -48,7 +48,7 @@ import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -906,7 +906,7 @@ export class ModelHandlerOpenAI<
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await xmlUtils.extractScratchpad(
+    const scratchpad = await extractScratchpad(
       fileContent,
       'scratchpad',
     );

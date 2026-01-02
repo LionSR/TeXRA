@@ -47,7 +47,7 @@ import {
   WorkspaceFS,
   createWorkspaceLocation,
 } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
+import * as xmlUtils from '@utils/text/xmlUtils';
 import * as latex from '@latex';
 
 // Third-party types

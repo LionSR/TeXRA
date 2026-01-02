@@ -36,7 +36,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import xmlUtils from '@utils/text/xmlUtils';
+import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -477,7 +477,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     );
     const useStreaming = services.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
-      const formatted = await xmlUtils.formatContent(thinking);
+      const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
         services.logger.info(formatted, {
           groupId,
@@ -521,7 +521,7 @@ class ToolUseProcessNode<C> extends BaseNode<
         groupId,
       });
       if (!useStreaming) {
-        const formatted = await xmlUtils.formatContent(text);
+        const formatted = await formatContent(text);
         services.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
