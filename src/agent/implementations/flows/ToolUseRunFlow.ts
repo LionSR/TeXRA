@@ -181,15 +181,13 @@ interface CycleNodePrepResult<C> {
 
 /**
  * Prep result for ToolUseWaitNode.
- * PocketFlow compliance: prep() does I/O (waiting for follow-up), exec() makes decision.
+ * PocketFlow compliance: prep() extracts state, exec() does blocking I/O.
  *
  * Note: session is NOT passed through prepRes - access via this.services instead.
  */
 interface WaitNodePrepResult {
   conversation: ProviderMessage[];
-  /** Result of waiting for follow-up - null if interrupted or no follow-up */
-  followUp: string | null;
-  /** Whether the wait was interrupted */
+  /** Whether the wait was interrupted before it started */
   interrupted: boolean;
 }
 
@@ -495,18 +493,10 @@ class ToolUseWaitNode<C> extends Node<
 
     // Check interruption first - if interrupted, skip exec entirely
     if (checkInterruption()) {
-      return {
-        conversation: shared.state.conversation,
-        followUp: null,
-        interrupted: true,
-      };
+      return { conversation: shared.state.conversation, interrupted: true };
     }
 
-    return {
-      conversation: shared.state.conversation,
-      followUp: null,
-      interrupted: false,
-    };
+    return { conversation: shared.state.conversation, interrupted: false };
   }
 
   /**
