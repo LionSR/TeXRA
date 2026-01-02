@@ -3,10 +3,8 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports
-import type { FileOpResult } from '@agent/types/ResultTypes';
-import { showLoggedMessage } from '@common/errors';
+import { showLoggedMessage, showFileOperationResult } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import { getStreamTabId } from '@/logger/streamUtils';
@@ -63,38 +61,6 @@ function formatZodError(error: z.ZodError): string {
     .join(', ');
 }
 
-function showPackResult(result: FileOpResult, inputFile: string): void {
-  switch (result.status) {
-    case 'success': {
-      const folder = result.outputFolder;
-      if (folder) {
-        vscode.window
-          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-          .then((sel) => {
-            if (sel === 'Open Folder') {
-              void vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(WorkspaceFS.fullPath(folder)),
-              );
-            }
-          });
-      }
-      break;
-    }
-    case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to pack for ${inputFile}`,
-      );
-      break;
-    case 'missingParams':
-      vscode.window.showErrorMessage('Missing required parameters for pack');
-      break;
-    case 'error':
-      vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
-      break;
-  }
-}
-
 // --- Handlers ---
 
 async function handlePack(config: unknown) {
@@ -130,7 +96,12 @@ async function handlePack(config: unknown) {
     agent,
     useMultipleOutputs ? outputFiles : [],
   );
-  showPackResult(result, inputFile);
+  await showFileOperationResult(result, {
+    channel: CHANNEL,
+    operationName: 'pack',
+    inputFile,
+    showOpenFolder: true,
+  });
 
   if (!skipProgressViewClear) {
     bus.emit(
@@ -157,7 +128,12 @@ async function handlePackSingle(
 
   const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
-  showPackResult(result, data.inputFile);
+  await showFileOperationResult(result, {
+    channel: CHANNEL,
+    operationName: 'pack',
+    inputFile: data.inputFile,
+    showOpenFolder: true,
+  });
   bus.emit(
     'clearMissingOutputs',
     getStreamTabId(data.agent, data.model, data.inputFile, {
@@ -193,7 +169,12 @@ async function handlePackMultiple(
     data.agent,
     data.outputFiles,
   );
-  showPackResult(result, data.inputFile);
+  await showFileOperationResult(result, {
+    channel: CHANNEL,
+    operationName: 'pack',
+    inputFile: data.inputFile,
+    showOpenFolder: true,
+  });
   bus.emit(
     'clearMissingOutputs',
     getStreamTabId(data.agent, data.model, data.inputFile, {
