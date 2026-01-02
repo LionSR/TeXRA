@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { extractAgentSuffix } from '@agent/utils';
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
 import {
@@ -115,10 +115,7 @@ async function handleCompare(
       `Opened diff comparison between ${baseFileName} and ${editedFileName}`,
     );
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error comparing files: ${toErrorMessage(err)}`,
-    );
-    logger.error(CHANNEL, `Error in handleCompare: ${toErrorMessage(err)}`);
+    await showLoggedErrorMessage(CHANNEL, 'Error comparing files', err);
   }
 }
 
@@ -205,13 +202,7 @@ async function handleAcceptEdited(
     vscode.window.showInformationMessage(successMessage);
     logger.info(CHANNEL, successMessage);
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error accepting changes: ${toErrorMessage(err)}`,
-    );
-    logger.error(
-      CHANNEL,
-      `Error in handleAcceptEdited: ${toErrorMessage(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);
   }
 }
 
