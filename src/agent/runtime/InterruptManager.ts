@@ -16,37 +16,34 @@
  * Manages interrupt state for a single flow execution.
  *
  * Created per-execution in executeAgent and passed to flow runners.
- * Provides callbacks compatible with BaseFlowContextInit interface.
+ * Arrow function properties are used for callbacks to automatically bind `this`.
  */
 export class InterruptManager {
   private _isInterrupted = false;
   private _abortController: AbortController | null = null;
 
-  /**
-   * Check if interruption has been requested.
-   * Used by cycles to check whether to stop.
-   */
-  isInterrupted(): boolean {
-    return this._isInterrupted;
-  }
+  // =========================================================================
+  // Callbacks - Arrow properties for BaseFlowContextInit compatibility
+  // =========================================================================
 
-  /**
-   * Request interruption.
-   * Called when user stops the agent or context.interrupt() is invoked.
-   */
-  requestInterrupt(): void {
+  /** Check if interruption has been requested. */
+  checkInterruption = (): boolean => this._isInterrupted;
+
+  /** Set the current abort controller for cancellation. */
+  setAbortController = (controller: AbortController | null): void => {
+    this._abortController = controller;
+  };
+
+  /** Request interruption - called when user stops the agent. */
+  onInterrupt = (): void => {
     if (this._isInterrupted) return;
     this._isInterrupted = true;
     this._abortController?.abort();
-  }
+  };
 
-  /**
-   * Set the current abort controller.
-   * Called by cycles when starting API requests.
-   */
-  setAbortController(controller: AbortController | null): void {
-    this._abortController = controller;
-  }
+  // =========================================================================
+  // Additional accessors (not passed to flows)
+  // =========================================================================
 
   /**
    * Get the current abort controller.
@@ -54,33 +51,5 @@ export class InterruptManager {
    */
   getAbortController(): AbortController | null {
     return this._abortController;
-  }
-
-  // =========================================================================
-  // Callback Factories - For BaseFlowContextInit compatibility
-  // =========================================================================
-
-  /**
-   * Create checkInterruption callback for flow context.
-   * Returns a bound function that checks this manager's state.
-   */
-  createCheckInterruption(): () => boolean {
-    return () => this._isInterrupted;
-  }
-
-  /**
-   * Create setAbortController callback for flow context.
-   * Returns a bound function that updates this manager.
-   */
-  createSetAbortController(): (ctrl: AbortController | null) => void {
-    return (ctrl) => this.setAbortController(ctrl);
-  }
-
-  /**
-   * Create onInterrupt callback for flow context.
-   * Returns a bound function that requests interruption on this manager.
-   */
-  createOnInterrupt(): () => void {
-    return () => this.requestInterrupt();
   }
 }
