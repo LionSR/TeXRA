@@ -7,7 +7,7 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
-  getExternalAuthCallbackInfo,
+  getAuthCallbackUri,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
   DEFAULT_SESSION_EXPIRY_MS,
@@ -597,32 +597,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     try {
       const supabase = SupabaseClient.getClient();
 
-      // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
-      // In Codespaces, VS Code adds a state parameter that must be preserved for routing
-      const callbackInfo = await getExternalAuthCallbackInfo();
+      // Use simple callback URI like 0.35.1 (avoids asExternalUri complexity)
+      const redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
 
       logger.info(
         'SupabaseAuthProvider',
-        `OAuth callback URI: ${callbackInfo.fullUrl} (scheme: ${vscode.env.uriScheme}, vscodeState: ${callbackInfo.vscodeState ? 'present' : 'none'})`,
+        `OAuth callback URI: ${redirectTo} (scheme: ${vscode.env.uriScheme})`,
       );
-
-      // Build OAuth options - pass base URL without state to prevent double-encoding
-      // If VS Code provided a state (Codespaces), pass it through queryParams
-      const oauthOptions: {
-        redirectTo: string;
-        queryParams?: Record<string, string>;
-      } = {
-        redirectTo: callbackInfo.baseUrl,
-      };
-
-      if (callbackInfo.vscodeState) {
-        // Preserve VS Code's state for callback routing in Codespaces
-        oauthOptions.queryParams = { state: callbackInfo.vscodeState };
-      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: oauthOptions,
+        options: { redirectTo },
       });
 
       if (error || !data.url) {
