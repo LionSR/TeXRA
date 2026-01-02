@@ -2,11 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import {
-  showLoggedErrorMessage,
-  showLoggedInfoMessage,
-  showLoggedMessage,
-} from '@common/errors';
+import { showLoggedErrorMessage, showLoggedInfoMessage } from '@common/errors';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
@@ -92,7 +88,7 @@ async function handleIndentCurrentTeX(): Promise<void> {
             'LaTeX file indented successfully',
           );
         } else {
-          await showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
+          vscode.window.showErrorMessage('Failed to indent LaTeX file');
         }
       },
     );
@@ -179,7 +175,7 @@ async function handleGetTeXCount(): Promise<void> {
               const message =
                 errors[0] ??
                 'Failed to get tex count. Please verify the file path.';
-              await showLoggedMessage(CHANNEL, message);
+              vscode.window.showErrorMessage(message);
             }
           },
         );
