@@ -21,6 +21,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
+  TaskStateSchema,
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
@@ -53,22 +54,37 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
  * Composes focused manager classes and provides a clean interface
  * for state operations while hiding implementation details.
  */
+/**
+ * Deep clones a TaskState to prevent shared-state mutations.
+ * Clones nested objects (session, toolConfig) that could cause bugs if mutated.
+ */
 const cloneTaskState = (state: TaskState): TaskState => {
+  // Deep clone agentConfig including nested objects
+  const clonedAgentConfig = {
+    ...state.agentConfig,
+    session: { ...state.agentConfig.session },
+    toolConfig: { ...state.agentConfig.toolConfig },
+    // Clone arrays to prevent mutation
+    inputFiles: [...state.agentConfig.inputFiles],
+    referenceFiles: [...state.agentConfig.referenceFiles],
+    auxiliaryFiles: [...state.agentConfig.auxiliaryFiles],
+    mediaFiles: [...state.agentConfig.mediaFiles],
+    outputFiles: [...state.agentConfig.outputFiles],
+  };
+
   if (isWorkflowTaskState(state)) {
     return {
-      ...state,
-      agentConfig: { ...state.agentConfig },
+      agentConfig: clonedAgentConfig,
       activeFiles: { ...state.activeFiles },
-    };
+    } as TaskState;
   }
 
   return {
-    ...state,
-    agentConfig: { ...state.agentConfig },
+    agentConfig: clonedAgentConfig,
     toolSessionState: state.toolSessionState
       ? { ...state.toolSessionState }
       : undefined,
-  };
+  } as TaskState;
 };
 
 export class ProgressViewState {
@@ -658,20 +674,18 @@ export class ProgressViewState {
           continue;
         }
 
-        const raw = rawState as Record<string, unknown>;
-        const agentConfig = raw.agentConfig as Record<string, unknown>;
-        if (!agentConfig || typeof agentConfig !== 'object') {
-          continue;
-        }
-
-        // Skip entries without session metadata
-        if (!agentConfig.session) {
+        // Validate against TaskState schema to catch corrupted/malformed state
+        const parseResult = TaskStateSchema.safeParse(rawState);
+        if (!parseResult.success) {
+          this.logger.debug(
+            `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
+          );
           continue;
         }
 
         this.taskStates.set(
           stream as StreamTabId,
-          cloneTaskState(raw as unknown as TaskState),
+          cloneTaskState(parseResult.data),
         );
         loaded += 1;
       }
