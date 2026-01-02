@@ -140,57 +140,6 @@ export const buildDetailItem = (iconClass, content, options = {}) => {
 };
 
 /**
- * Build line changes badge HTML
- * @param {{added: number, removed: number}} lineChanges - Line change statistics
- * @returns {string} HTML string for line changes badge
- */
-export const buildLineChangesBadge = (lineChanges) => {
-  if (!lineChanges) return '';
-
-  const { added = 0, removed = 0 } = lineChanges;
-  if (added === 0 && removed === 0) return '';
-
-  const parts = [];
-  if (added > 0) {
-    parts.push(`<span class="line-change-added">+${added}</span>`);
-  }
-  if (removed > 0) {
-    parts.push(`<span class="line-change-removed">−${removed}</span>`);
-  }
-
-  return `<span class="line-changes-badge">${parts.join(' ')}</span>`;
-};
-
-/**
- * Build edited files list HTML with clickable links and line changes
- * @param {Array} edits - Array of edit records {path, lineChanges}
- * @returns {string} HTML string for files list
- */
-export const buildEditedFilesList = (edits) => {
-  if (!Array.isArray(edits) || edits.length === 0) return '';
-
-  const items = edits
-    .filter((edit) => edit && typeof edit === 'object' && edit.path)
-    .map((edit) => {
-      const path = edit.path;
-      const fileName = path.split('/').pop() || path;
-      const pathEscaped = encodeHtml(path);
-      const fileNameEscaped = encodeHtml(fileName);
-      const lineChangesBadge = buildLineChangesBadge(edit.lineChanges);
-
-      return `<li class="detail-item" title="${pathEscaped}">
-        <i class="codicon codicon-file"></i>
-        <span class="file-link clickable-link" data-file="${pathEscaped}">${fileNameEscaped}</span>
-        ${lineChangesBadge}
-      </li>`;
-    })
-    .join('');
-
-  if (!items) return '';
-  return `<ul class="detail-list edited-files-list">${items}</ul>`;
-};
-
-/**
  * Get appropriate icon class for a tool
  * @param {string} toolName - Name of the tool
  * @param {boolean} isError - Whether the tool execution errored
