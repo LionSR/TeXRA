@@ -188,6 +188,14 @@ export const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  // Extract edit records with file paths and line changes
+  const edits = Array.isArray(parsed.edits) ? parsed.edits : [];
+  const files = Array.isArray(parsed.files) ? parsed.files : [];
+
+  // Get aggregate line changes from edits or top-level lineChanges
+  const lineChanges = parsed.lineChanges ||
+    (edits.length > 0 ? aggregateLineChanges(edits) : null);
+
   return {
     parsed,
     toolName,
@@ -199,7 +207,31 @@ export const normalizeToolUseLog = (structured) => {
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
     headerSummary: summaryText || errorText,
+    edits,
+    files,
+    lineChanges,
   };
+};
+
+/**
+ * Aggregate line changes from multiple edit records
+ * @param {Array} edits - Array of edit records
+ * @returns {{added: number, removed: number}|null} Aggregated line changes
+ */
+const aggregateLineChanges = (edits) => {
+  let added = 0;
+  let removed = 0;
+  let hasChanges = false;
+
+  for (const edit of edits) {
+    if (edit.lineChanges) {
+      added += edit.lineChanges.added || 0;
+      removed += edit.lineChanges.removed || 0;
+      hasChanges = true;
+    }
+  }
+
+  return hasChanges ? { added, removed } : null;
 };
 
 /**
