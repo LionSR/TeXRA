@@ -180,19 +180,24 @@
             id="logContent"
             class="log-container"
           ></vscode-scrollable>
-          <div id="generatedFiles" class="files-container"></div>
-          <div
-            id="todoListContainer"
-            class="todo-list-container"
+          <vscode-collapsible
+            id="generatedFilesCollapsible"
+            title="Generated Files"
+            class="progress-collapsible files-collapsible"
+            open
             hidden
-            aria-hidden="true"
           >
-            <div class="todo-list__header">
-              <i class="codicon codicon-tasklist"></i>
-              <span>Task Progress</span>
-            </div>
+            <div id="generatedFiles" class="files-container"></div>
+          </vscode-collapsible>
+          <vscode-collapsible
+            id="todoListContainer"
+            title="Task Progress"
+            class="progress-collapsible todo-collapsible"
+            open
+            hidden
+          >
             <div id="todoList" class="todo-list"></div>
-          </div>
+          </vscode-collapsible>
           <div class="usage-summary-footer" hidden>
             <span id="runSummary" class="run-summary"></span>
           </div>

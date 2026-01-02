@@ -2,7 +2,7 @@
 import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - shared helpers
-import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 import { TODO_STATUS } from '@common/constants/todoStatus';
 
 /**
@@ -25,7 +25,7 @@ const STATUS_CLASSES = {
 
 /**
  * Manages the todo list display in the progress view.
- * Shows task progress for tool-use agents.
+ * Shows task progress for tool-use agents using native VS Code collapsible.
  */
 export class TodoList {
   constructor() {
@@ -112,7 +112,7 @@ export class TodoList {
   }
 
   /**
-   * Show the todo list container.
+   * Show the todo list container (vscode-collapsible).
    */
   show() {
     const elements = this._getElements();
@@ -120,11 +120,11 @@ export class TodoList {
       return;
     }
 
-    setVisibilityState(elements.container, true);
+    elements.container.hidden = false;
   }
 
   /**
-   * Hide the todo list container.
+   * Hide the todo list container (vscode-collapsible).
    */
   hide() {
     const elements = this._getElements();
@@ -132,7 +132,7 @@ export class TodoList {
       return;
     }
 
-    setVisibilityState(elements.container, false);
+    elements.container.hidden = true;
   }
 
   /**
