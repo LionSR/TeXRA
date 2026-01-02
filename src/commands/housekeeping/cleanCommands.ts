@@ -1,8 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Internal imports
-import { showLoggedMessage, showFileOperationResult } from '@common/errors';
+// Local imports
+import type { FileOpResult } from '@agent/types/ResultTypes';
+import { showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -15,6 +16,25 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
+
+function showCleanResult(result: FileOpResult, inputFile: string): void {
+  switch (result.status) {
+    case 'success':
+      vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
+      break;
+    case 'noFiles':
+      vscode.window.showInformationMessage(
+        `No files found to clean for ${inputFile}`,
+      );
+      break;
+    case 'missingParams':
+      vscode.window.showErrorMessage('Missing required parameters for clean');
+      break;
+    case 'error':
+      vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
+      break;
+  }
+}
 
 /** Validates and logs required parameters, returns false if any are missing */
 async function validateParams(
@@ -62,11 +82,7 @@ async function handleCleanSingle(
   }
 
   const result = await runCleanSingle(model, inputFile, agent);
-  await showFileOperationResult(result, {
-    channel: CHANNEL,
-    operationName: 'cleanup',
-    inputFile,
-  });
+  showCleanResult(result, inputFile);
 
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: false,
@@ -86,11 +102,7 @@ async function handleCleanMultiple(
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
-  await showFileOperationResult(result, {
-    channel: CHANNEL,
-    operationName: 'cleanup',
-    inputFile,
-  });
+  showCleanResult(result, inputFile);
 
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: true,
@@ -132,11 +144,7 @@ export async function handleClean(config: {
       config.agent,
       outputFiles,
     );
-    await showFileOperationResult(result, {
-      channel: CHANNEL,
-      operationName: 'cleanup',
-      inputFile: config.inputFile,
-    });
+    showCleanResult(result, config.inputFile);
   } else {
     logger.info(CHANNEL, `Running clean single`);
     const result = await runCleanSingle(
@@ -144,11 +152,7 @@ export async function handleClean(config: {
       config.inputFile,
       config.agent,
     );
-    await showFileOperationResult(result, {
-      channel: CHANNEL,
-      operationName: 'cleanup',
-      inputFile: config.inputFile,
-    });
+    showCleanResult(result, config.inputFile);
   }
 
   const streamId =
