@@ -62,7 +62,7 @@ import type { FileLocation } from '@utils/files';
 // Local constant
 import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -1055,7 +1055,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await xmlUtils.extractScratchpad(
+    const scratchpad = await extractScratchpad(
       fileContent,
       'scratchpad',
     );
