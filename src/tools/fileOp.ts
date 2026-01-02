@@ -86,6 +86,11 @@ export class FileOpTool extends defineTool({
           originalContent,
           finalContent,
         );
+
+        // Record file as "read" after writing so subsequent edits don't require
+        // an explicit read - especially important for newly created files.
+        recordToolFileRead(path);
+
         const userDiffNote = formatUnifiedApprovalUserDiff(
           path,
           finalContent,
@@ -150,6 +155,11 @@ export class FileOpTool extends defineTool({
         if (appendedSegment.length > 0) {
           await WorkspaceFS.appendFile(path, appendedSegment);
         }
+
+        // Record file as "read" after appending so subsequent edits don't require
+        // an explicit read - especially important for newly created files.
+        recordToolFileRead(path);
+
         // Report the actual applied content after append
         const appliedContent = await WorkspaceFS.read(path);
         const userDiffNote = formatUnifiedApprovalUserDiff(

@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, ToolResult } from '@tools/result';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
+import {
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -104,6 +107,10 @@ export class EditFileTool extends defineTool({
       currentContent,
       finalContent,
     );
+
+    // Record file as "read" after editing so subsequent edits don't require
+    // an explicit read again.
+    recordToolFileRead(targetPath);
 
     const replacementSummary =
       replace_all === true
