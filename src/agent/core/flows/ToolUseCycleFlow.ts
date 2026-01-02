@@ -611,7 +611,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       responseTimeMs: state.cycleResponseTimeMs,
       normalizedUsage: state.cycleNormalizedUsage ?? null,
       run,
-      workspace,
       onRoundFinalized,
     });
     run.incrementRounds();
