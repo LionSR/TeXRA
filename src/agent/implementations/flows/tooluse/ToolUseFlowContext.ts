@@ -6,14 +6,12 @@
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
@@ -85,32 +83,41 @@ export interface ToolUseFlowContext<C = unknown> {
 // Helper Functions (called directly by nodes, no closure wrappers)
 // ============================================================================
 
-/** Prepare initial state for tool-use session (new or resumed from snapshot). */
+/**
+ * Prepare initial state for tool-use session (new or resumed from snapshot).
+ *
+ * Returns individual state slices directly instead of wrapping in AgentSharedStore.
+ * This eliminates the convert→pass→convert overhead pattern.
+ */
 export async function prepareInitialState<C>(
   services: ToolUseServices<C>,
 ): Promise<PrepareStateResult> {
-  const { modelHandler, prompt, userVarChannels, logger, snapshot, session } =
-    services;
+  const { modelHandler, prompt, userVarChannels, logger, snapshot } = services;
 
   if (snapshot) {
     logger.debug('Resuming tool-use session from saved state.');
 
-    const messages = snapshot.messages;
-    // Store is a pure data holder; onRoundFinalized is passed to flow services separately
-    const store = createSharedStore({ snapshot: snapshot.store });
-
-    session.setStore(store);
+    // Reconstruct state slices directly from snapshot (v2 schema - no wrapper)
+    const runState = AgentRunState.fromSnapshot(snapshot.run);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(snapshot.workspace);
+    // User channels from snapshot with frozen input
+    const userChannels = {
+      input: Object.freeze({ ...snapshot.user.input }),
+      transient: { ...snapshot.user.transient },
+    };
 
     return {
-      messages,
-      store,
+      messages: snapshot.messages,
+      runState,
+      workspaceState,
+      userChannels,
       shouldSkipCycle: true,
-      runState: store.run,
     };
   }
 
-  // Create a fresh run state for new sessions
-  const currentRunState = new AgentRunState();
+  // Create fresh state for new sessions
+  const runState = new AgentRunState();
+  const workspaceState = AgentWorkspaceState.create();
 
   const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
     await buildInitialToolUsePrompts(prompt, userVarChannels.transient, logger);
@@ -122,28 +129,23 @@ export async function prepareInitialState<C>(
     systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
   );
 
-  // Store is a pure data holder; onRoundFinalized is passed to flow services separately
-  const store = createSharedStore({
-    roundIndex: currentRunState.totalRounds,
-    runState: currentRunState,
-    workspaceState: AgentWorkspaceState.create(),
-    userChannels: userVarChannels,
-  });
-
-  session.setStore(store);
-
   return {
     messages,
-    store,
+    runState,
+    workspaceState,
+    userChannels: userVarChannels,
     shouldSkipCycle: false,
-    runState: currentRunState,
   };
 }
 
-/** Build cycle options for tool-use execution. */
+/**
+ * Build cycle options for tool-use execution.
+ *
+ * Note: Previous signature took `store: AgentSharedStore` but that parameter
+ * was never used. Removed to eliminate abstraction overhead.
+ */
 export async function buildCycleOptions<C>(
   services: ToolUseServices<C>,
-  store: AgentSharedStore,
 ): Promise<ToolUseCycleOptions<C>> {
   const { setting, toolRegistry, resolvedTools, config } = services;
   const resolvedSetting = { ...setting, tools: resolvedTools };
@@ -223,7 +225,6 @@ export function createToolUseFlowContext<C = unknown>(
       init.onInterrupt?.();
       retryCoordinator.clearRequest(streamTabId);
       sessionLifecycle.interrupt();
-      sessionLifecycle.setStore(null);
     },
 
     dispose(): void {
