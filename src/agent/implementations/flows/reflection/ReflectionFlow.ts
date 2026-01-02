@@ -19,7 +19,7 @@
  * - FlowTransition.FINALIZE ends the flow gracefully (no error)
  *
  * Flow structure:
- *   PrepareContextNode → TeXCountNode → MediaPreparationNode
+ *   PrepareContextNode → TeXCountNode → MediaExtractionNode
  *        ↑                                        ↓
  *        │                                ResponseCycleNode
  *        │                                        ↓
@@ -44,7 +44,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 import {
   TeXCountNode,
-  MediaPreparationNode,
+  MediaExtractionNode,
   PrepareContextNode,
   ResponseCycleNode,
   OutputNode,
@@ -83,7 +83,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
   // Create work nodes only (no init/finalize - agent owns lifecycle)
   const prepContextNode = new PrepareContextNode<C>();
   const texCountNode = new TeXCountNode<C>();
-  const mediaNode = new MediaPreparationNode<C>();
+  const mediaNode = new MediaExtractionNode<C>();
   const responseCycleNode = new ResponseCycleNode<C>();
   const outputNode = new OutputNode<C>();
   const roundCompleteNode = new RoundCompleteNode<C>();
