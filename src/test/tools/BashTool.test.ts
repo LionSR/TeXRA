@@ -17,7 +17,7 @@ import {
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { createRetryState } from '@agent/core/flows/RetryState';
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
