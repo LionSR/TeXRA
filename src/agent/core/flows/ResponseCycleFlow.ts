@@ -245,6 +245,14 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
   }
 
   /**
+   * Check if background mode is active via the model handler.
+   * This enables the base class to enforce minimum retry count for background jobs.
+   */
+  protected override isBackgroundModeActive(): boolean {
+    return this.services.modelHandler.isBackgroundModeActive();
+  }
+
+  /**
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
