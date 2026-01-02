@@ -55,7 +55,7 @@ export abstract class BaseTool<T> implements ITool {
           error: 'Invalid input',
           isError: true,
           diagnostics: err.issues,
-        });
+        };
       }
       const message = toErrorMessage(err);
       const diagnostics =
@@ -64,7 +64,7 @@ export abstract class BaseTool<T> implements ITool {
         error: message,
         isError: true,
         diagnostics,
-      });
+      };
     }
   }
 

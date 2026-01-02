@@ -112,6 +112,6 @@ export class DiagnosticsTool extends defineTool({
       summary: args.summary,
       output: JSON.stringify(payload, null, 2),
       diagnostics: payload,
-    });
+    };
   }
 }

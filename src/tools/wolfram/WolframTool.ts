@@ -29,7 +29,7 @@ export class WolframTool extends defineTool({
       return {
         summary: 'Executed Wolfram code',
         output: result.output ?? '',
-      });
+      };
     }
     throw new ToolError(
       `Wolfram execution failed: ${result.error ?? 'No error details available'}`,

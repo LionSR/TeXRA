@@ -45,14 +45,14 @@ export class FileOpTool extends defineTool({
         return {
           summary: `Read ${path}`,
           output: data,
-        });
+        };
       }
       case 'write': {
         if (content == null) {
           return {
             error: 'content parameter is required for write',
             isError: true,
-          });
+          };
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -97,14 +97,14 @@ export class FileOpTool extends defineTool({
           output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
           userPatch: approval.userPatch,
           edits: [{ path, lineChanges: approval.lineChanges }],
-        });
+        };
       }
       case 'append': {
         if (content == null) {
           return {
             error: 'content parameter is required for append',
             isError: true,
-          });
+          };
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -163,7 +163,7 @@ export class FileOpTool extends defineTool({
           output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
           userPatch: approval.userPatch,
           edits: [{ path, lineChanges: approval.lineChanges }],
-        });
+        };
       }
       default:
         throw new ToolError(

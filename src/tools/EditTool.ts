@@ -130,6 +130,6 @@ export class EditFileTool extends defineTool({
       output,
       userPatch: approval.userPatch,
       edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }
