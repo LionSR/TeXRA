@@ -32,7 +32,7 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { sleepWithAbort } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -1093,7 +1093,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
-    const scratchpad = await xmlUtils.extractScratchpad(
+    const scratchpad = await extractScratchpad(
       fileContent,
       'scratchpad',
     );
