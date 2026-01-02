@@ -7,20 +7,19 @@
  * NOTE: The in-memory cache manager (ToolUseSessionManager) and disk persistence
  * (ToolUseSnapshotStore, ToolUseSessionPersistence) have been removed.
  * PersistedFlow now handles all persistence automatically.
+ *
+ * State architecture note: The snapshot schema still uses AgentSharedStoreSnapshotSchema
+ * for backwards compatibility with existing persisted data. However, runtime code now
+ * passes state slices directly without the AgentSharedStore wrapper class.
  */
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports - agent
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-
-// Type imports
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // ============================================================================
 // Snapshot Schema & Types
@@ -31,6 +30,11 @@ export const TOOL_USE_SNAPSHOT_VERSION = 1;
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy snapshots that may contain removed or renamed fields.
+ *
+ * Note: The `store` field uses AgentSharedStoreSnapshotSchema for backwards
+ * compatibility with existing persisted snapshots. Runtime code now passes
+ * individual state slices directly, reconstructing from snapshot.store.run,
+ * snapshot.store.workspace, etc. as needed.
  */
 export const ToolUseSessionSnapshotSchema = z.object({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
@@ -46,21 +50,3 @@ export const ToolUseSessionSnapshotSchema = z.object({
 export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema
 >;
-
-/**
- * Input payload for saving a tool-use session snapshot.
- *
- * NOTE: This is a manual interface (not schema-derived) because `store` is an
- * AgentSharedStore class instance with methods (e.g., toSnapshot()), not a plain
- * data structure. Zod schemas cannot validate class instances with private fields.
- * The store is serialized to AgentSharedStoreSnapshot during the save operation.
- *
- * @see ToolUseSessionSnapshotSchema - SSOT for the serialized snapshot format
- */
-export interface SaveToolUseSnapshotPayload {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
-  agentConfig: AgentConfig;
-  messages: ProviderMessage[];
-  store: AgentSharedStore;
-}
