@@ -31,6 +31,13 @@ import { bus } from '@eventBus/ProgressEventBus';
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
 const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Minimum manual retries for background mode.
+ * Background jobs can take longer and may fail due to timeout, so we ensure
+ * users have at least 3 opportunities to retry before giving up.
+ */
+export const BACKGROUND_MODE_MIN_MANUAL_RETRIES = 3;
+
 // ============================================================================
 // Schemas (Single Source of Truth)
 // ============================================================================
