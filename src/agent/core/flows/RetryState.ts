@@ -31,6 +31,14 @@ import { bus } from '@eventBus/ProgressEventBus';
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
 const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Minimum retry count for background mode.
+ * This is the minimum value for maxRetries (total attempts = 1 initial + N-1 retries).
+ * Background jobs can take longer and may fail due to timeout, so we ensure
+ * at least 3 total attempts before surfacing the manual retry UI.
+ */
+export const BACKGROUND_MODE_MIN_RETRIES = 3;
+
 // ============================================================================
 // Schemas (Single Source of Truth)
 // ============================================================================
@@ -293,6 +301,16 @@ export abstract class RetryableInvocationNode<
   }
 
   /**
+   * Check if background mode is active for this node.
+   * Override in subclasses that have access to model handler.
+   *
+   * @returns false by default, subclasses can override to check modelHandler
+   */
+  protected isBackgroundModeActive(): boolean {
+    return false;
+  }
+
+  /**
    * Read fresh retry config before starting the retry loop.
    *
    * This enables config changes (e.g., user adjusting retry settings)
@@ -306,10 +324,22 @@ export abstract class RetryableInvocationNode<
    *
    * The mutation pattern is intentional: it allows dynamic config while
    * keeping the Node API simple (maxRetries/wait are base class fields).
+   *
+   * ## Background mode minimum retries
+   * When background mode is active, we enforce a minimum retry count
+   * (BACKGROUND_MODE_MIN_RETRIES) to give users more chances to recover
+   * from transient failures common in long-running background jobs.
    */
   async _exec(prepRes: unknown): Promise<unknown> {
     const config = getNodeRetryConfig();
-    this.maxRetries = config.maxRetries;
+    let maxRetries = config.maxRetries;
+
+    // Enforce minimum retries for background mode
+    if (this.isBackgroundModeActive()) {
+      maxRetries = Math.max(maxRetries, BACKGROUND_MODE_MIN_RETRIES);
+    }
+
+    this.maxRetries = maxRetries;
     this.wait = config.wait;
     return super._exec(prepRes);
   }
