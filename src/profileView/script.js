@@ -12,11 +12,11 @@ profileViewState.initialize();
 messageHandler.setup();
 
 document.addEventListener('DOMContentLoaded', () => {
-  profileViewDomHandler.events.setupEventListeners();
+  profileViewDomHandler.events.setup();
   vscode.postMessage({ command: PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA });
 });
 
 window.addEventListener('beforeunload', () => {
   profileViewDomHandler.events.dispose();
-  messageHandler.cleanup();
+  messageHandler.dispose();
 });
