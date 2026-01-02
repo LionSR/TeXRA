@@ -7,30 +7,35 @@
  * NOTE: The in-memory cache manager (ToolUseSessionManager) and disk persistence
  * (ToolUseSnapshotStore, ToolUseSessionPersistence) have been removed.
  * PersistedFlow now handles all persistence automatically.
+ *
+ * Schema architecture: Individual state slices are stored directly (no wrapper).
+ * This eliminates the AgentSharedStore abstraction overhead.
  */
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports - agent
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
+import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-
-// Type imports
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // ============================================================================
 // Snapshot Schema & Types
 // ============================================================================
 
-export const TOOL_USE_SNAPSHOT_VERSION = 1;
+export const TOOL_USE_SNAPSHOT_VERSION = 2;
 
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy snapshots that may contain removed or renamed fields.
+ *
+ * Version 2: State slices stored directly (no wrapper object).
+ * - run: AgentRunStateSnapshot
+ * - workspace: AgentWorkspaceSnapshot
+ * - user: UserVariableChannels
  */
 export const ToolUseSessionSnapshotSchema = z.object({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
@@ -38,7 +43,10 @@ export const ToolUseSessionSnapshotSchema = z.object({
   streamId: z.string(),
   agentConfig: AgentConfigSchema,
   messages: z.array(ProviderMessageSchema),
-  store: AgentSharedStoreSnapshotSchema,
+  // State slices stored directly (no wrapper)
+  run: AgentRunStateSnapshotSchema,
+  workspace: AgentWorkspaceStateSnapshotSchema,
+  user: UserVariableChannelsSchema,
   lastUpdated: z.number(),
 });
 
@@ -46,21 +54,3 @@ export const ToolUseSessionSnapshotSchema = z.object({
 export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema
 >;
-
-/**
- * Input payload for saving a tool-use session snapshot.
- *
- * NOTE: This is a manual interface (not schema-derived) because `store` is an
- * AgentSharedStore class instance with methods (e.g., toSnapshot()), not a plain
- * data structure. Zod schemas cannot validate class instances with private fields.
- * The store is serialized to AgentSharedStoreSnapshot during the save operation.
- *
- * @see ToolUseSessionSnapshotSchema - SSOT for the serialized snapshot format
- */
-export interface SaveToolUseSnapshotPayload {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
-  agentConfig: AgentConfig;
-  messages: ProviderMessage[];
-  store: AgentSharedStore;
-}
