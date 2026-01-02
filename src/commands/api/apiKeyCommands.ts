@@ -2,9 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { showLoggedErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
+
+const CHANNEL = 'ApiKeyCommands';
 
 export const PROVIDER_URLS: Record<ApiProvider, string> = {
   openai: 'https://platform.openai.com/api-keys',
@@ -72,7 +75,11 @@ async function setApiKeyForProvider(
       command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
     });
   } catch (err) {
-    vscode.window.showErrorMessage(`Failed to set ${provider} API key: ${err}`);
+    await showLoggedErrorMessage(
+      CHANNEL,
+      `Failed to set ${provider} API key`,
+      err,
+    );
   }
 }
 
@@ -135,8 +142,10 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
             : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
         });
       } catch (err) {
-        vscode.window.showErrorMessage(
-          `Failed to remove ${provider} API key: ${err}`,
+        await showLoggedErrorMessage(
+          CHANNEL,
+          `Failed to remove ${provider} API key`,
+          err,
         );
       }
     },
