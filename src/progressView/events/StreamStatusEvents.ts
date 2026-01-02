@@ -128,7 +128,7 @@ export function createStreamStatusEvents(
         `Received setTaskState for ${streamTabId} but no state was stored`,
       );
     } else {
-      const sessionKind = normalizedState.session.agentCategory;
+      const sessionKind = normalizedState.agentConfig.session.agentCategory;
       const currentFilter = state.agentTypeFilter;
       const activeStream = state.activeStream;
 
