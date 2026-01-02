@@ -141,7 +141,7 @@ export { gitCommands } from '@commands/git/gitCommands';
 export { packCommands } from '@commands/housekeeping';
 export {
   mergeCommands,
-  executeCommand,
+  runExecuteCommand,
   agentCreatorCommands,
 } from '@commands/agent';
 export {
