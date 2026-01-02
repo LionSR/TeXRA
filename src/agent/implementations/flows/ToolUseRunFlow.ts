@@ -31,7 +31,7 @@ import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 
