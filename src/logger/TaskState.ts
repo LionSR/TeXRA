@@ -12,14 +12,15 @@ import type { FileType } from '@utils/config';
 /** Shared properties for all task state variants. */
 interface BaseTaskState {
   agentConfig: AgentConfig;
-  session: AgentSessionDescriptor;
 }
 
 /**
  * Workflow task state stores file visibility information for toolbar actions.
  */
 export interface WorkflowTaskState extends BaseTaskState {
-  session: AgentSessionDescriptor & { agentCategory: AgentCategory.Workflow };
+  agentConfig: AgentConfig & {
+    session: AgentSessionDescriptor & { agentCategory: AgentCategory.Workflow };
+  };
   activeFiles: Record<FileType, boolean>;
 }
 
@@ -31,7 +32,9 @@ export interface ToolSessionState {
 }
 
 export interface ToolUseTaskState extends BaseTaskState {
-  session: AgentSessionDescriptor & { agentCategory: AgentCategory.ToolUse };
+  agentConfig: AgentConfig & {
+    session: AgentSessionDescriptor & { agentCategory: AgentCategory.ToolUse };
+  };
   toolSessionState?: ToolSessionState;
 }
 
@@ -40,11 +43,11 @@ export type TaskState = WorkflowTaskState | ToolUseTaskState;
 export function isWorkflowTaskState(
   taskState: TaskState,
 ): taskState is WorkflowTaskState {
-  return taskState.session.agentCategory === AgentCategory.Workflow;
+  return taskState.agentConfig.session.agentCategory === AgentCategory.Workflow;
 }
 
 export function isToolUseTaskState(
   taskState: TaskState,
 ): taskState is ToolUseTaskState {
-  return taskState.session.agentCategory === AgentCategory.ToolUse;
+  return taskState.agentConfig.session.agentCategory === AgentCategory.ToolUse;
 }

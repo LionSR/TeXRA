@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -23,7 +23,7 @@ describe('ToolUseFollowUp', () => {
     version: 2,
     executionId: 'exec-1',
     streamId,
-    agentConfig: parseAgentConfig({
+    agentConfig: AgentConfigSchema.parse({
       model: 'demo-model',
       agent: 'demo-agent',
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
