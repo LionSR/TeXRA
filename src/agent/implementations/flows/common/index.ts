@@ -1,12 +1,9 @@
 /**
  * Common agent flow infrastructure.
  *
- * Exports:
- * - NODE_NO_RETRY, NODE_NO_WAIT: Node configuration constants
- * - BaseFlowContextInit: Base initialization config for all flows
- * - FlowServiceAccessors: Convenience accessors (logger, context) added by child services
- * - FlowParams: Base flow params type (aliased by flow-specific types)
- * - buildBaseCycleOptions: Helper to build cycle options from services
+ * Re-exports from:
+ * - AgentRunFlowRunner: Flow runner utilities
+ * - BaseFlowServices: Base types, accessors, and cycle options builder
  */
 
 export * from './AgentRunFlowRunner';
