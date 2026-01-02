@@ -2,7 +2,7 @@
  * Helper functions for generating replacement patterns
  */
 // Local imports
-import { capitalize } from '@frontend/ui/messageUtils';
+import { capitalize } from '@utils/text/stringUtils';
 
 // Re-export commonly used constants
 export {
