@@ -9,7 +9,6 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
-  buildFileListRender,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
@@ -71,7 +70,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, summaryText, errorText, outputText, input, files } =
+  const { parsed, toolName, summaryText, errorText, outputText, input } =
     normalizedToolLog;
 
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
@@ -93,17 +92,6 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   if (input !== undefined) {
     const inputValue = stringifyForDisplay(input);
     sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
-  }
-
-  if (files && files.length > 0) {
-    const renderData = buildFileListRender(files);
-    if (renderData?.items) {
-      const fileContent = `
-        <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
-        <ul class="detail-list">${renderData.items}</ul>
-      `;
-      sections.push(buildToolUseSection('Edited files:', fileContent));
-    }
   }
 
   if (errorText) {
