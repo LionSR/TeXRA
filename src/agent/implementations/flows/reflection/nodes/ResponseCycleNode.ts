@@ -205,10 +205,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
       await flow.run(cycleShared);
 
       // Interpret completion from flow state (flat structure)
-      const completion = interpretCycleCompletion(
-        cycleShared,
-        { lastError: cycleShared.lastError },
-      );
+      const completion = interpretCycleCompletion(cycleShared, {
+        lastError: cycleShared.lastError,
+      });
 
       return {
         kind: 'success',
