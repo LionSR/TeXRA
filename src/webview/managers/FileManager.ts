@@ -57,10 +57,6 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleFileSelection(message: FileSelectionMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const singleFileType = message.command.replace('select', '');
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
@@ -69,7 +65,7 @@ export class FileManager extends BaseWebviewManager {
     );
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: `${uncapitalize(singleFileType)}Selected`,
         filePath: file,
       });
@@ -77,15 +73,11 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleEditedFileSelection(): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const editedFile = await vscode.commands.executeCommand<string>(
       'texra.selectEditedFile',
     );
     if (editedFile) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
         filePath: editedFile,
       });
@@ -93,10 +85,6 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleInputFileSelected(message: FileSelectedMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const baseFileNameForInput = path.basename(
       message.filePath,
       path.extname(message.filePath),
@@ -113,17 +101,13 @@ export class FileManager extends BaseWebviewManager {
   async handleRequestInputFile(
     message: RequestInputFileMessage,
   ): Promise<void> {
-    if (!this.getWebview()) {
-      return;
-    }
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
       )) ?? [];
-    await this.postFileUpdate('Input', refreshedInputFiles, {
+    this.postFileUpdate('Input', refreshedInputFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
-
     this.updateGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
@@ -141,7 +125,7 @@ export class FileManager extends BaseWebviewManager {
           return [];
       }
     })();
-    await this.postFileUpdate(fileType, files, {
+    this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
@@ -157,33 +141,28 @@ export class FileManager extends BaseWebviewManager {
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
-    await this.postFileUpdate('Edited', allEditedFiles, {
+    this.postFileUpdate('Edited', allEditedFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
-    await this.postFileUpdate('Base', files, {
+    this.postFileUpdate('Base', files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
       additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
     });
-
     this.updateGettingStartedBanner(files.length === 0);
   }
 
   async handleRequestDefaultOutputFiles(
     message: RequestDefaultOutputFilesMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const agentIdentifier = message.agent;
     if (!agentIdentifier) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
       });
@@ -193,7 +172,7 @@ export class FileManager extends BaseWebviewManager {
     try {
       const entry = getAgent(agentIdentifier);
       const files = entry?.defaultOutputFiles ?? [];
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files,
       });
@@ -202,7 +181,7 @@ export class FileManager extends BaseWebviewManager {
         CHANNEL,
         `Error requesting default output files: ${toErrorMessage(err)}`,
       );
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
       });
@@ -210,12 +189,8 @@ export class FileManager extends BaseWebviewManager {
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     if (message.files && message.files.length > 0) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: message.command,
         files: message.files,
       });
@@ -225,10 +200,6 @@ export class FileManager extends BaseWebviewManager {
   async handleSelectMultipleFiles(
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const fileType = message.fileType;
     let selectedFiles: string[] | null = null;
 
@@ -252,7 +223,7 @@ export class FileManager extends BaseWebviewManager {
       }
 
       if (selectedFiles) {
-        webviewView.webview.postMessage({
+        this.postMessage({
           command: `set${fileType}`,
           files: selectedFiles,
         });
@@ -267,11 +238,6 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleRefreshAllFiles(): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
-
     const refreshedFiles = {
       input: await fileLister.list('input'),
       reference: await fileLister.list('reference'),
@@ -282,7 +248,7 @@ export class FileManager extends BaseWebviewManager {
     // Send all single file updates in a single batch message
     // This allows the webview to wrap all updates in a single blockSave()
     // preventing race conditions where change events fire between updates
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_ALL_SINGLE_FILES,
       inputFiles: refreshedFiles.input,
       referenceFiles: refreshedFiles.reference,
@@ -291,15 +257,10 @@ export class FileManager extends BaseWebviewManager {
     });
 
     await this.updateBaseFileSelect();
-
     this.updateGettingStartedBanner(refreshedFiles.input.length === 0);
   }
 
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const fileType = message.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
       'texra.getCurrentFile',
@@ -318,7 +279,7 @@ export class FileManager extends BaseWebviewManager {
             currentFileName.startsWith(baseFileName) &&
             currentFileName !== baseFileName
           ) {
-            webviewView.webview.postMessage({
+            this.postMessage({
               command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
               filePath: currentOpenFile,
               fileType,
@@ -359,7 +320,7 @@ export class FileManager extends BaseWebviewManager {
           }
         }
 
-        webviewView.webview.postMessage({
+        this.postMessage({
           command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
           filePath: filePathToSelect,
           fileType,
@@ -379,10 +340,6 @@ export class FileManager extends BaseWebviewManager {
   private async _maybeSelectCommitFromDiffFile(
     filePath: string,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const fileName = path.basename(filePath);
     const latexDiffMetadata = this._parseLatexDiffMetadata(filePath);
     if (!latexDiffMetadata) {
@@ -396,7 +353,7 @@ export class FileManager extends BaseWebviewManager {
     );
 
     if (commitLabel) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT,
         commitHash,
         commitLabel,
@@ -413,10 +370,6 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleAddOpenedFiles(fileType: string): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const openedFiles = await this.getOpenedFiles();
 
     // Filter files by allowed extensions for the target file type
@@ -433,7 +386,7 @@ export class FileManager extends BaseWebviewManager {
           })
         : openedFiles;
 
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
       files: filteredFiles,
       fileType,
@@ -442,16 +395,12 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const command = message.command;
     const fileType = command.replace('update', '');
     const files = message.files ?? [];
 
     logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
-    webviewView.webview.postMessage({ command: `set${fileType}`, files });
+    this.postMessage({ command: `set${fileType}`, files });
   }
 
   private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
@@ -510,23 +459,18 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  private async postFileUpdate(
+  private postFileUpdate(
     fileType: string,
     files: string[],
     options: FileUpdateOptions = {},
-  ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
+  ): void {
     if (options.notifyWhenEmpty && files.length === 0) {
       logger.debug(
         CHANNEL,
         `No ${fileType.toLowerCase()} files were found during refresh.`,
       );
     }
-
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: `set${fileType}File`,
       files,
       ...(options.additionalPayload ?? {}),
@@ -534,12 +478,8 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private async updateBaseFileSelect(): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const baseFiles = await fileLister.list('input');
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
       files: baseFiles,
       preserveBaseFile: true,
@@ -547,11 +487,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private updateGettingStartedBanner(isEmpty: boolean): void {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: isEmpty
         ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
         : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,

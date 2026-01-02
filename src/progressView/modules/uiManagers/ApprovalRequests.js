@@ -42,8 +42,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
   }
 
   /** @override */
-  cleanup() {
-    super.cleanup();
+  dispose() {
+    super.dispose();
     this.isBypassActive = false;
   }
 

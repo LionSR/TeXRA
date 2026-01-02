@@ -44,32 +44,17 @@ export class ProfileViewProvider
    * Create and show the webview panel (for command palette activation)
    */
   public async showProfileView() {
-    // If we already have a panel, show it and refresh data
-    if (this._view && 'reveal' in this._view) {
-      this._view.reveal(vscode.ViewColumn.One);
-      // Send fresh data to existing panel - no need to reset HTML
+    const isNew = this.createOrShowPanel({
+      viewType: ProfileViewProvider.viewType,
+      title: 'TeXRA Profile',
+      viewPath: 'profileView',
+    });
+
+    // Send fresh data when revealing existing panel
+    if (!isNew && this._view) {
       await this.messageHandler.sendProfileData(this._view.webview);
-      return;
     }
-
-    // Otherwise, create a new panel
-    this._view = vscode.window.createWebviewPanel(
-      ProfileViewProvider.viewType,
-      'TeXRA Profile',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: getSharedLocalResourceRoots(
-          this.context,
-          'profileView',
-        ),
-      },
-    );
-
-    // Base class handles disposal via resolveWebviewViewInternal -> cleanupView()
-    super.resolveWebviewViewInternal(this._view);
-    // HTML content is set by resolveWebviewViewInternal
+    // For new panels: HTML is set by createOrShowPanel -> resolveWebviewViewInternal
     // Webview will request data via GET_PROFILE_DATA on DOMContentLoaded
   }
 }

@@ -2,8 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import { BaseWebviewProvider } from '@common/webview';
-import { getSharedLocalResourceRoots } from '@common/webview';
+import {
+  BaseWebviewProvider,
+  getSharedLocalResourceRoots,
+} from '@common/webview';
 
 // Local imports - history view components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
@@ -42,49 +44,17 @@ export class HistoryViewProvider
    * Create and show the webview panel (for command palette activation)
    */
   public async showHistoryView() {
-    // If we already have a panel, show it
-    if (this._view && 'reveal' in this._view) {
-      this._view.reveal(vscode.ViewColumn.One);
-      return;
+    const isNew = this.createOrShowPanel({
+      viewType: HistoryViewProvider.viewType,
+      title: 'TeXRA History',
+      viewPath: 'historyView',
+    });
+
+    // Send fresh data when revealing existing panel
+    if (!isNew && this._view) {
+      await this.messageHandler.sendHistoryData(this._view.webview);
     }
-
-    // Otherwise, create a new panel
-    this._view = vscode.window.createWebviewPanel(
-      HistoryViewProvider.viewType,
-      'TeXRA History',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: getSharedLocalResourceRoots(
-          this.context,
-          'historyView',
-        ),
-      },
-    );
-
-    super.resolveWebviewViewInternal(this._view);
-    await this.updateWebviewContent();
-  }
-
-  // No additional logic needed here; all message handling is delegated
-  // to HistoryViewMessageHandler
-
-  /**
-   * Update the content of the webview
-   */
-  private async updateWebviewContent() {
-    if (this._view) {
-      // Set the HTML content first
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
-      // Then send the history data after a short delay
-      setTimeout(() => {
-        if (this._view) {
-          this.messageHandler.sendHistoryData(this._view.webview);
-        }
-      }, 100);
-    }
+    // For new panels: HTML is set by createOrShowPanel -> resolveWebviewViewInternal
+    // Webview will request data via GET_HISTORY_DATA on DOMContentLoaded
   }
 }
