@@ -28,7 +28,7 @@ import {
   type IToolUseSession,
 } from '@agent/implementations/flows/tooluse';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
@@ -150,7 +150,7 @@ async function prepareFlowExecution(
   executionId?: ExecutionId,
 ): Promise<FlowExecutionContext> {
   // 1. Resolve agent definition
-  const fullConfig = parseAgentConfig({ agent: agentName, ...configPayload });
+  const fullConfig = AgentConfigSchema.parse({ agent: agentName, ...configPayload });
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
