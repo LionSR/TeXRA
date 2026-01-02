@@ -95,7 +95,8 @@ export class ProgressEventHandler {
     });
     this.taskGroupEvents = createTaskGroupEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'TaskGroupEvents'),
-      initializeStreamForTaskGroup: this.initializeStreamForTaskGroup.bind(this),
+      initializeStreamForTaskGroup:
+        this.initializeStreamForTaskGroup.bind(this),
       debugLog: this.logger.debug.bind(this.logger),
     });
     this.todoEvents = createTodoEvents({
