@@ -292,6 +292,7 @@ class ToolUseCycleNode<C> extends Node<
 
     // Create cycle shared state (like ResponseCycleNode)
     // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    // cycleIndex starts from run.totalRounds to maintain continuity across user follow-ups
     const cycleShared: ToolUseCycleShared = {
       state: {
         messages: prepRes.conversation,
@@ -301,7 +302,7 @@ class ToolUseCycleNode<C> extends Node<
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
-        cycleIndex: 0,
+        cycleIndex: prepRes.store.run.totalRounds,
         cycleResponseTimeMs: 0,
         cycleNormalizedUsage: undefined,
         endTurn: false,
