@@ -124,7 +124,11 @@ export async function handleCountLinterMessages(): Promise<void> {
     const message = `Linter issues: ${counts.errors} errors, ${counts.warnings} warnings, ${counts.info} info, ${counts.hints} hints`;
     vscode.window.showInformationMessage(message);
   } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error counting linter messages', err);
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Error counting linter messages',
+      err,
+    );
   }
 }
 
