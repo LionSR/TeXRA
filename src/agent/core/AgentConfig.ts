@@ -84,10 +84,3 @@ export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
 export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
-
-/**
- * Parse arbitrary input into a canonical {@link AgentConfig} instance.
- */
-export function parseAgentConfig(input: unknown): AgentConfig {
-  return AgentConfigSchema.parse(input);
-}

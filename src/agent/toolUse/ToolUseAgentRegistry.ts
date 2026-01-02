@@ -14,9 +14,20 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
  * Common interface for anything that can be interrupted.
  * Implemented by:
  * - ToolUseFlowContext (via sessionLifecycle.interrupt())
+ * - ReflectionFlowContext (via onInterrupt callback and retry coordinator)
  * - BaseAgent (via isInterrupted flag)
  */
 export interface IInterruptible {
+  /**
+   * Request interruption of the execution.
+   *
+   * Implementations should:
+   * - Invoke any onInterrupt callbacks to signal the interrupt manager
+   * - Clear pending retry requests from the retry coordinator
+   * - Cancel any pending follow-up waits (for tool-use sessions)
+   *
+   * This method may be called from the UI thread when the user stops a task.
+   */
   interrupt(): void;
 }
 

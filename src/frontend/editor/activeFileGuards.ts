@@ -128,3 +128,59 @@ export function logGuardFailure(
     }
   }
 }
+
+export interface LaTeXGuardOptions {
+  /** The logging channel to use */
+  channel: string;
+  /** Description of the action being performed (e.g., "apply replacements", "indent document") */
+  action: string;
+  /** Whether to save the document before proceeding (default: false) */
+  saveDocument?: boolean;
+}
+
+/**
+ * Execute an operation with LaTeX file guards.
+ *
+ * This wrapper eliminates the repeated guard pattern across LaTeX commands. It automatically:
+ * - Checks for an active editor
+ * - Validates the .tex extension
+ * - Optionally saves the document
+ * - Logs guard failures with standardized messages
+ * - Returns early on guard failure
+ *
+ * @param options - Guard configuration (channel, action, saveDocument)
+ * @param operation - Function to run if guards pass, receives the validated guard result
+ * @returns Result of the operation, or undefined if guards failed
+ *
+ * @example
+ * ```typescript
+ * await withLaTeXGuard(
+ *   { channel: CHANNEL, action: 'indent LaTeX document', saveDocument: true },
+ *   async (guardResult) => {
+ *     const { relativePath, editor } = guardResult;
+ *     // Perform LaTeX operation
+ *   }
+ * );
+ * ```
+ */
+export async function withLaTeXGuard<T>(
+  options: LaTeXGuardOptions,
+  operation: (
+    guardResult: Extract<ActiveFileGuardResult, { status: 'ok' }>,
+  ) => Promise<T>,
+): Promise<T | undefined> {
+  const { channel, action, saveDocument = false } = options;
+
+  const guardResult = await getActiveEditorWithGuards({
+    allowedExtensions: ['.tex'],
+    resourceName: 'LaTeX',
+    saveDocument,
+  });
+
+  if (guardResult.status !== 'ok') {
+    logGuardFailure(channel, action, guardResult.status, 'LaTeX');
+    return undefined;
+  }
+
+  return operation(guardResult);
+}
