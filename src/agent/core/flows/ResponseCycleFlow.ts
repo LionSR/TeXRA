@@ -685,7 +685,12 @@ class ResponseProcessNode<C> extends BaseNode<
  * PocketFlow pattern:
  * - Single finalization point in the flow graph
  * - No guard flags needed (graph ensures single execution)
- * - Services accessed via `_params.services`
+ * - Services accessed via `this.services`
+ *
+ * PocketFlow compliance:
+ * - prep(): Extracts data for exec() (none needed for finalization)
+ * - exec(): Pure computation using prepRes (finalization is side-effect-free)
+ * - post(): Applies side effects and returns action
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -693,18 +698,36 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   /**
+   * No preparation needed - this node just finalizes.
+   * PocketFlow compliance: prep() extracts data for exec().
+   */
+  async prep(_shared: ResponseCycleShared): Promise<void> {
+    // No prep needed for finalize
+  }
+
+  /**
    * Finalize the round using the shared helper.
    *
    * This is the SINGLE finalization point for ResponseCycleFlow.
    * The parent ResponseCycleNode must pass onRoundFinalized
    * to services for this to work correctly.
+   *
+   * PocketFlow compliance: exec() receives prepRes, returns compute result.
    */
-  async exec(): Promise<void> {
+  async exec(_prepRes: void): Promise<void> {
     // Use shared helper for consistent finalization (single source of truth)
     await finalizeRound(this.services);
   }
 
-  async post(): Promise<string | undefined> {
+  /**
+   * Flow ends here.
+   * PocketFlow compliance: post() applies side effects and returns action.
+   */
+  async post(
+    _shared: ResponseCycleShared,
+    _prepRes: void,
+    _execRes: void,
+  ): Promise<string | undefined> {
     // Flow ends here
     return undefined;
   }
