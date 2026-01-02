@@ -37,8 +37,6 @@ import type { AgentFileLocation } from '@utils/files';
 
 import {
   getWorkspaceState,
-  getRunState,
-  updateRunStateSnapshot,
   updateWorkspaceSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
@@ -113,7 +111,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     // Reconstruct state instances from snapshots
     // Use slices directly - no wrapper needed
     const workspace = getWorkspaceState(shared);
-    const run = getRunState(shared);
+    const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
     );
@@ -169,9 +167,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Build ResponseCycleOptions from services using helper
+    const { userVarChannels } = services;
     const cycleOptions = {
       ...buildBaseCycleOptions(services),
-      userVars: this.getUserVars(),
+      userVars: { ...userVarChannels.input, ...userVarChannels.transient },
       agentConfig: services.config,
       fileService: services.fileService,
     };
@@ -295,7 +294,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.lastRetryError = undefined;
 
     // Update state from slices - convert to snapshot
-    updateRunStateSnapshot(shared, execRes.run);
+    shared.runStateSnapshot = execRes.run.toSnapshot();
     updateWorkspaceSnapshot(shared, execRes.workspace);
     shared.endTurn = execRes.endTurn;
     shared.outputLocation = prepRes.outputLocation;
@@ -309,17 +308,5 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     // Continue to OutputNode
     return FlowTransition.DEFAULT;
-  }
-
-  /**
-   * Get user variables for prompt rendering.
-   * Merges input (frozen base) with transient (runtime modifications).
-   */
-  private getUserVars(): Record<string, any> {
-    const channels = this.services.userVarChannels;
-    return {
-      ...channels.input,
-      ...channels.transient,
-    };
   }
 }
