@@ -1,18 +1,15 @@
 /**
- * ResponseCycleCompositionNode - Runs a response cycle via shared core function.
- *
- * This node delegates to executeResponseCycleCore() which is the single source
- * of truth for response cycle execution, eliminating duplicate flow creation.
+ * ResponseCycleNode - Runs a response cycle flow.
  *
  * Responsibilities:
  * - Reconstruct state slices from snapshots
- * - Build ResponseCycleOptions from services
- * - Delegate to executeResponseCycleCore()
+ * - Build cycle options from services
+ * - Create and run ResponseCycleFlow
  * - Extract results back to ReflectionFlowShared
  *
  * PocketFlow pattern:
  * - prep(): Reconstruct state slices and output location
- * - exec(): Call executeResponseCycleCore() (no sub-flow)
+ * - exec(): Create and run ResponseCycleFlow directly
  * - post(): Update shared state snapshots with results
  *
  * Services accessed via native `this.services`:
@@ -85,7 +82,7 @@ type CycleExecResult =
 // Node Implementation
 // ============================================================================
 
-export class ResponseCycleCompositionNode<C = unknown> extends Node<
+export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>
