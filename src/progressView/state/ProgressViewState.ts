@@ -664,28 +664,35 @@ export class ProgressViewState {
           continue;
         }
 
-        const state = rawState as TaskState;
+        const raw = rawState as Record<string, unknown>;
+        const agentConfig = raw.agentConfig as Record<string, unknown>;
+        if (!agentConfig || typeof agentConfig !== 'object') {
+          continue;
+        }
 
-        if (!state.session) {
-          const agentConfig = (state as { agentConfig?: any }).agentConfig;
-          if (!agentConfig || typeof agentConfig !== 'object') {
-            continue;
+        // Migrate legacy data: ensure agentConfig.session exists
+        if (!agentConfig.session) {
+          // Check for legacy top-level session
+          const legacySession = raw.session as Record<string, unknown>;
+          if (legacySession && typeof legacySession === 'object') {
+            agentConfig.session = legacySession;
+          } else {
+            // Resolve from agentType/agentCategory
+            agentConfig.session = resolveAgentSessionDescriptor(
+              agentConfig.agentType as AgentType | undefined,
+              agentConfig.agentCategory as AgentCategory | undefined,
+            );
           }
-
-          const session = resolveAgentSessionDescriptor(
-            agentConfig.agentType as AgentType | undefined,
-            agentConfig.agentCategory as AgentCategory | undefined,
-          );
-
-          state.session = session;
-          state.agentConfig = { ...agentConfig, session };
-          migratedLegacyState = true;
-        } else if (!state.agentConfig.session) {
-          state.agentConfig = { ...state.agentConfig, session: state.session };
           migratedLegacyState = true;
         }
 
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(state));
+        // Remove legacy top-level session if present
+        if ('session' in raw) {
+          delete raw.session;
+          migratedLegacyState = true;
+        }
+
+        this.taskStates.set(stream as StreamTabId, cloneTaskState(raw as TaskState));
         loaded += 1;
       }
     }
