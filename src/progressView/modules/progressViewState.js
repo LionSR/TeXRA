@@ -287,7 +287,7 @@ export class ProgressViewState {
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
-    this.toggleStates = new ToggleStateStore(() => this.saveToggleStates());
+    this.toggleStates = new ToggleStateStore(this.saveToggleStates.bind(this));
     this.streamStatuses = new StreamStatuses();
     this.executionIdAvailability = new ExecutionIdAvailability();
   }

@@ -90,7 +90,7 @@ export class WatcherManager {
             this.validationHandles.push(handle);
           }
         });
-        watcher.onDidDelete(() => this.triggerRefresh());
+        watcher.onDidDelete(this.triggerRefresh);
 
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
@@ -100,7 +100,7 @@ export class WatcherManager {
             }
           });
         } else {
-          watcher.onDidChange(() => this.triggerRefresh());
+          watcher.onDidChange(this.triggerRefresh);
         }
       }
 
