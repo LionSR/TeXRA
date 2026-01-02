@@ -12,10 +12,10 @@ const CHANNEL = 'openFileCommands';
 // Local imports - utilities
 import { fileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { resolveFilePath, WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 export async function openFile(file: string): Promise<void> {
-  const uri = vscode.Uri.file(resolveFilePath(file));
+  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
   await vscode.commands.executeCommand('vscode.open', uri);
 }
 
@@ -33,7 +33,7 @@ export async function openLabel(label: string): Promise<void> {
       const match = content.match(pattern);
       if (match && match.index !== undefined) {
         const doc = await vscode.workspace.openTextDocument(
-          resolveFilePath(file),
+          WorkspaceFS.toAbsolute(file),
         );
         const pos = doc.positionAt(match.index);
         const editor = await vscode.window.showTextDocument(doc, {

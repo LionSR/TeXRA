@@ -3,7 +3,7 @@ import { safeGetElementById } from './domUtils.js';
 
 /**
  * Base class for DOM handlers and UI managers.
- * Stores manager instances and cleans up event listeners and managers.
+ * Stores manager instances and disposes event listeners and managers.
  */
 export class BaseDomHandler {
   constructor(managers = {}) {
@@ -54,17 +54,17 @@ export class BaseDomHandler {
   }
 
   /**
-   * Remove all registered listeners and call cleanup on managers.
+   * Remove all registered listeners and dispose managers.
    */
-  cleanup() {
+  dispose() {
     this._listeners.forEach(({ element, event, handler }) => {
       element.removeEventListener(event, handler);
     });
     this._listeners = [];
 
     Object.values(this._managers).forEach((mgr) => {
-      if (mgr && typeof mgr.cleanup === 'function') {
-        mgr.cleanup();
+      if (mgr && typeof mgr.dispose === 'function') {
+        mgr.dispose();
       }
     });
   }

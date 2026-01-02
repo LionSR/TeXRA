@@ -437,10 +437,10 @@ export class SettingsButtonManager extends BaseUIManager {
     this._setupDependencyBanner();
   }
 
-  cleanup() {
+  dispose() {
     this._disposeDependencyInstallListeners();
     this._disconnectMenuObservers();
-    super.cleanup();
+    super.dispose();
   }
 
   _handleAgentSelection(selectElement) {
