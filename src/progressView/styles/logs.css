@@ -259,10 +259,9 @@
   animation: pulse-scale 1.5s infinite;
 }
 
-/* Generated files list */
+/* Generated files list - inside vscode-collapsible body */
 .files-container {
   padding: var(--spacing-small);
-  border-top: 1px solid var(--color-border);
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
   max-height: var(--height-large);
@@ -277,6 +276,10 @@
   justify-content: flex-end;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+.usage-summary-footer[hidden] {
+  display: none;
 }
 
 .usage-summary-footer .run-summary {
