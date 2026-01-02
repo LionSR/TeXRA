@@ -1,32 +1,22 @@
 /**
  * Todo list styles for the ProgressView
- * Displays task progress for tool-use agents
+ * Uses native VS Code collapsible component
  */
 
-.todo-list-container {
-  display: none;
+/* Collapsible container styling */
+.todo-collapsible {
+  margin: var(--spacing-small) 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
-  background-color: transparent;
+}
+
+/* Override vscode-collapsible header padding */
+.todo-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
 }
 
-.todo-list-container.is-visible {
-  display: block;
-}
-
-.todo-list__header {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-small);
-}
-
-.todo-list__header .codicon {
-  font-size: var(--font-size-icon);
-  line-height: 1;
+.todo-collapsible::part(body) {
+  padding: 0 var(--spacing-medium) var(--spacing-small);
 }
 
 .todo-list {

@@ -25,7 +25,7 @@ const STATUS_CLASSES = {
 
 /**
  * Manages the todo list display in the progress view.
- * Shows task progress for tool-use agents.
+ * Shows task progress for tool-use agents using native VS Code collapsible.
  */
 export class TodoList {
   constructor() {
@@ -112,7 +112,7 @@ export class TodoList {
   }
 
   /**
-   * Show the todo list container.
+   * Show the todo list container (vscode-collapsible).
    */
   show() {
     const elements = this._getElements();
@@ -124,7 +124,7 @@ export class TodoList {
   }
 
   /**
-   * Hide the todo list container.
+   * Hide the todo list container (vscode-collapsible).
    */
   hide() {
     const elements = this._getElements();
