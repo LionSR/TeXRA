@@ -145,6 +145,39 @@ export type ResponseCycleShared = CycleFields &
   CycleTransientFields & { [key: string]: unknown };
 
 /**
+ * Assert that a shared object has all required cycle fields populated.
+ *
+ * Use this before running a cycle flow on an outer flow's shared state
+ * to get type-safe access without `as unknown as` double cast.
+ *
+ * @throws Error if required cycle fields are missing
+ */
+export function assertCycleFieldsPopulated(shared: {
+  [key: string]: unknown;
+}): asserts shared is ResponseCycleShared {
+  // Required fields that must be defined (not undefined)
+  const requiredDefined = [
+    'messages',
+    'shouldStop',
+    'endTurn',
+    'outputExists',
+  ] as const;
+  for (const field of requiredDefined) {
+    if (shared[field] === undefined) {
+      throw new Error(
+        `Cycle field '${field}' must be populated before running cycle flow`,
+      );
+    }
+  }
+  // outputLocation must be present in shared (can be null, but not undefined)
+  if (!('outputLocation' in shared)) {
+    throw new Error(
+      `Cycle field 'outputLocation' must be populated before running cycle flow`,
+    );
+  }
+}
+
+/**
  * Reset cycle state for a new iteration.
  * Called at the start of each cycle to clear transient fields.
  */
@@ -155,6 +188,7 @@ function resetResponseCycleShared(shared: ResponseCycleShared): void {
   shared.responseObject = undefined;
   shared.processedResponse = undefined;
   shared.endTurn = false;
+  shared.lastError = undefined;
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle
