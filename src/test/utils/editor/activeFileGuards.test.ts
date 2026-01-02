@@ -11,7 +11,7 @@ import {
   type ActiveFileGuardResult,
 } from '@frontend/editor/activeFileGuards';
 
-// Mock messageUtils before importing it
+// Track messages for assertions
 let warningMessages: string[] = [];
 let errorMessages: string[] = [];
 
