@@ -52,11 +52,7 @@ import {
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 import { BaseNode } from './index';
-import {
-  PersistedFlow,
-  type FlowStore,
-  type SerializationHooks,
-} from './persisted-flow';
+import { PersistedFlow, type FlowStore } from './persisted-flow';
 import { isRoundAtOrBeyondLimit } from './round-bounds';
 
 // ============================================================================
@@ -190,12 +186,6 @@ export interface RoundFlowConfig<S extends RoundAwareState, Svc = unknown> {
 
   /** Parent stage for round stages (optional) */
   parentStage?: AgentLogStage | null;
-
-  /**
-   * Custom serialization hooks for shared state.
-   * If not provided, uses structuredClone (requires plain JSON state).
-   */
-  serialization?: SerializationHooks<S>;
 }
 
 // ============================================================================
@@ -252,10 +242,7 @@ export class RoundPersistedFlow<
     config?: RoundFlowConfig<S, Svc>,
     runId?: string,
   ) {
-    // Pass serialization hooks to parent PersistedFlow
-    super(start, kv, runId, {
-      serialization: config?.serialization,
-    });
+    super(start, kv, runId);
     this.config = config ?? {};
   }
 
