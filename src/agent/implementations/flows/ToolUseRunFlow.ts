@@ -11,6 +11,10 @@
  * - Flow propagates services to all nodes automatically
  * - Nodes access via this.services getter
  *
+ * Refactored (no closure wrappers):
+ * - Nodes call helper functions directly with services context
+ * - Eliminates closure indirection for cleaner call stacks
+ *
  * This follows the same pattern as ReflectionFlow for consistency.
  */
 
@@ -44,8 +48,14 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 
-// Service types
-import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
+// Service types and helper functions (direct calls, no closures)
+import {
+  prepareInitialState,
+  buildCycleOptions,
+  applyFollowUpMessage,
+  type ToolUseServices,
+  type ToolUseFlowParams,
+} from './tooluse';
 
 // ============================================================================
 // State Types
@@ -185,11 +195,11 @@ function assertPreparedState(
 /**
  * Prepares state for tool-use cycle.
  *
- * Uses native services pattern:
- * - this.services.prepareState() instead of shared.hooks.prepareState()
+ * Calls helper functions directly with services context (no closure wrappers).
+ * This eliminates closure indirection for cleaner call stacks.
  *
  * Note: cycleOptions is NOT stored in state (non-serializable). It's rebuilt
- * by CycleNode using this.services.buildCycleOptions().
+ * by CycleNode using buildCycleOptions().
  */
 class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
@@ -207,9 +217,9 @@ class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
-    // Use native services pattern
-    const prepared = await this.services.prepareState();
-    const cycleOptions = this.services.buildCycleOptions(prepared.store);
+    // Call helper functions directly (no closure wrappers)
+    const prepared = await prepareInitialState(this.services);
+    const cycleOptions = buildCycleOptions(this.services, prepared.store);
     return {
       kind: 'success',
       result: {
@@ -273,8 +283,8 @@ class ToolUseCycleNode<C> extends Node<
     // Reconstruct store from snapshot (koala-code-reader pattern)
     const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
 
-    // Rebuild cycleOptions from services (NOT stored in state - non-serializable)
-    const cycleOptions = this.services.buildCycleOptions(store);
+    // Rebuild cycleOptions directly (no closure wrapper)
+    const cycleOptions = buildCycleOptions(this.services, store);
 
     return {
       shouldSkip: shared.state.shouldSkipCycle,
@@ -404,9 +414,8 @@ class ToolUseCycleNode<C> extends Node<
 /**
  * Waits for user follow-up message between cycles.
  *
- * Uses native services pattern:
- * - this.services.applyFollowUpMessage() instead of shared.agent.applyFollowUpMessage()
- * - Session operations via this.services.session
+ * Calls helper functions directly with services context (no closure wrappers).
+ * Session operations via this.services.session.
  */
 class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
@@ -472,10 +481,11 @@ class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
-    // Apply follow-up via services
+    // Apply follow-up directly (no closure wrapper)
     const session = this.services.session;
     await session.markRunning();
-    shared.state.conversation = await this.services.applyFollowUpMessage(
+    shared.state.conversation = await applyFollowUpMessage(
+      this.services,
       execRes.followUp,
       shared.state.conversation,
     );
@@ -524,6 +534,3 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
     prepareNode,
   );
 }
-
-// Re-export types for convenience
-export type { ToolUseServices, ToolUseFlowParams } from './tooluse';
