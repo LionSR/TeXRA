@@ -1,6 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - test
 import {
   toGoogleTools,
@@ -33,6 +36,35 @@ describe('toOpenAIResponseTools', () => {
     assert.equal(tool.type, 'function');
     assert.equal(tool.name, 'echo');
     assert.deepEqual(tool.parameters, defs[0].parameters);
+  });
+
+  it('uses zod schemas as the single source of truth when provided', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'echo',
+        description: 'Echo value',
+        zodSchema: z.strictObject({
+          value: z.string(),
+          count: z.number().int().optional(),
+        }),
+      },
+    ];
+
+    const tools = toOpenAIResponseTools(defs);
+    assert.equal(tools.length, 1);
+    const tool = tools[0] as FunctionTool;
+    assert.equal(tool.type, 'function');
+    assert.ok(tool.parameters);
+    const parameters = tool.parameters as Record<string, unknown>;
+    assert.equal((parameters as { type: string }).type, 'object');
+    assert.deepEqual((parameters as { required: string[] }).required, [
+      'value',
+    ]);
+    const props = (
+      parameters as { properties: Record<string, Record<string, string>> }
+    ).properties;
+    assert.equal(props.value.type, 'string');
+    assert.equal(props.count.type, 'integer');
   });
 
   it('sets parameters to null when omitted', () => {

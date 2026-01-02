@@ -1,9 +1,9 @@
 // Third-party imports
 import { toJSONSchema } from 'zod';
-import { zodFunction } from 'openai/helpers/zod';
+import { zodFunction, zodResponsesFunction } from 'openai/helpers/zod';
 
 // Type imports
-import type { ToolDefinition } from '@model';
+import { hasZodSchema, type ToolDefinition } from '@model';
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -27,17 +27,32 @@ import type {
 // Shared Tool Conversion Utilities
 // ============================================================================
 
+type JsonSchemaOptions = Parameters<typeof toJSONSchema>[1];
+
 /**
- * Converts a Zod schema to JSON Schema, or returns the pre-converted parameters.
- * Shared utility used by all provider tool converters.
+ * Converts the canonical Zod schema to JSON Schema when required by a provider.
+ * Falls back to legacy parameters when no Zod schema is attached.
  */
 function convertToolSchema(
   def: ToolDefinition,
+  options?: JsonSchemaOptions,
 ): Record<string, unknown> | null {
-  if (def.zodSchema) {
-    return toJSONSchema(def.zodSchema) as Record<string, unknown>;
+  if (hasZodSchema(def)) {
+    return toJSONSchema(def.zodSchema, options) as Record<string, unknown>;
   }
   return (def.parameters ?? null) as Record<string, unknown> | null;
+}
+
+/**
+ * Returns the canonical Zod schema when present, otherwise null. This keeps Zod
+ * as the single source of truth while still allowing JSON Schema fallbacks for
+ * providers that don't yet accept Zod inputs.
+ */
+function getZodSchema(def: ToolDefinition) {
+  if (hasZodSchema(def)) {
+    return def.zodSchema;
+  }
+  return null;
 }
 
 // Map local tool names to Anthropic remote tool types
@@ -51,12 +66,9 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
  *
- * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which:
- * - Converts Zod schema to JSON Schema using SDK's optimized conversion
- * - Enables strict mode for better type safety
- *
- * Note: zodFunction() may throw for invalid schemas - this is intentional fail-fast
- * behavior since invalid tool schemas are programming errors caught during development.
+ * When a tool has a zodSchema, uses OpenAI's native zodFunction() helper which keeps
+ * Zod as the source of truth and lets the SDK handle schema conversion. Invalid Zod
+ * schemas will throw - this is intentional fail-fast behavior.
  */
 export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   return defs.map((d) => {
@@ -79,7 +91,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
       function: {
         name: d.name,
         description: d.description,
-        parameters: d.parameters,
+        parameters: convertToolSchema(d) ?? undefined,
       },
     } as ChatCompletionFunctionTool;
   });
@@ -98,9 +110,9 @@ export interface OpenAIResponseToolOptions {
 /**
  * Convert generic ToolDefinition objects to OpenAI Responses API tool format.
  *
- * NOTE: We intentionally don't use zodResponsesFunction() here because it enables
- * strict mode, which requires all parameters to be required. Tools like Wolfram
- * have optional fields, so we must use strict: false for the Responses API.
+ * Prefers native Zod helpers when available so the Zod schema remains the single
+ * source of truth. Falls back to JSON Schema with strict: false for legacy tools
+ * or providers that don't accept Zod inputs directly.
  */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
@@ -120,6 +132,18 @@ export function toOpenAIResponseTools(
     // Deep research models only support native tools (web_search, code_interpreter,
     // file_search, mcp) and do NOT support function calling
     if (!supportsFunctionCalling) {
+      continue;
+    }
+
+    const zodSchema = getZodSchema(d);
+    if (zodSchema) {
+      tools.push(
+        zodResponsesFunction({
+          name: d.name,
+          description: d.description,
+          parameters: zodSchema,
+        }) as OpenAIResponseTool,
+      );
       continue;
     }
 
@@ -160,11 +184,9 @@ export function toAnthropicTools(
     }
 
     // Use Zod schema with ref support for complex types, else fallback
-    const params = d.zodSchema
-      ? (toJSONSchema(d.zodSchema, {
-          reused: 'ref',
-        }) as AnthropicTool['input_schema'])
-      : (d.parameters as AnthropicTool['input_schema'] | undefined);
+    const params = convertToolSchema(d, {
+      reused: 'ref',
+    }) as AnthropicTool['input_schema'] | undefined;
 
     return {
       name: d.name,
@@ -190,7 +212,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parameters: convertToolSchema(d) as Schema | undefined,
+    parameters: (convertToolSchema(d) ?? undefined) as Schema | undefined,
   }));
 
   return [{ functionDeclarations: declarations }];
