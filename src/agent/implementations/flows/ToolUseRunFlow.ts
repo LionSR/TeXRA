@@ -251,7 +251,7 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleCompositionNode).
+ * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleNode).
  * This eliminates the circular reference through services.runCycle().
  *
  * Note: PersistedFlow handles checkpoint persistence automatically after each node.
@@ -292,7 +292,7 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Create cycle shared state (like ResponseCycleCompositionNode)
+    // Create cycle shared state (like ResponseCycleNode)
     const cycleShared: ToolUseCycleShared = {
       state: {
         messages: prepRes.conversation,
@@ -307,7 +307,7 @@ class ToolUseCycleNode<C> extends Node<
       retryState: createRetryState(),
     };
 
-    // Inject services directly and run sub-flow (like ResponseCycleCompositionNode)
+    // Inject services directly and run sub-flow (like ResponseCycleNode)
     // Options are spread with state slices (no store wrapper)
     const onRoundFinalized = this.services.getUsageRecorder();
     this.cycleFlow.setServices({

@@ -693,7 +693,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
    * Finalize the round using the shared helper.
    *
    * This is the SINGLE finalization point for ResponseCycleFlow.
-   * The parent ResponseCycleCompositionNode must pass onRoundFinalized
+   * The parent ResponseCycleNode must pass onRoundFinalized
    * to services for this to work correctly.
    */
   async exec(): Promise<void> {

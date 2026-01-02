@@ -46,7 +46,7 @@ import {
   TeXCountNode,
   MediaPreparationNode,
   PrepareContextNode,
-  ResponseCycleCompositionNode,
+  ResponseCycleNode,
   OutputNode,
   RoundCompleteNode,
 } from './nodes';
@@ -84,7 +84,7 @@ export function createReflectionFlow<C = unknown>(): Flow<
   const prepContextNode = new PrepareContextNode<C>();
   const texCountNode = new TeXCountNode<C>();
   const mediaNode = new MediaPreparationNode<C>();
-  const responseCycleNode = new ResponseCycleCompositionNode<C>();
+  const responseCycleNode = new ResponseCycleNode<C>();
   const outputNode = new OutputNode<C>();
   const roundCompleteNode = new RoundCompleteNode<C>();
 
