@@ -61,118 +61,6 @@ export interface ReflectionFlowContextInit<
 }
 
 // ============================================================================
-// Behavior Computation
-// ============================================================================
-
-/**
- * Compute whether XML structure should be ensured based on configuration.
- *
- * Priority order:
- * 1. `setting.xmlStructureMode` - explicit YAML configuration
- * 2. `agentType: 'CoT'` - implies always ensure XML structure
- * 3. `agentType: 'direct'` - implies scratchpadOnly mode
- * 4. Default: false (no XML structure enforcement)
- */
-function computeShouldEnsureXmlStructure(
-  setting: AgentWorkflowSetting,
-): boolean {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-
-  // 1. Explicit xmlStructureMode takes highest precedence
-  if (setting.xmlStructureMode !== undefined) {
-    switch (setting.xmlStructureMode) {
-      case 'always':
-        return true;
-      case 'scratchpadOnly':
-        return useScratchpad;
-      case 'never':
-      default:
-        return false;
-    }
-  }
-
-  // 2. agentType-driven: 'CoT' implies always ensure XML structure
-  if (setting.agentType === 'CoT') {
-    return true;
-  }
-
-  // 3. agentType-driven: 'direct' implies scratchpadOnly mode
-  if (setting.agentType === 'direct') {
-    return useScratchpad;
-  }
-
-  // 4. Default behavior (no explicit type or config)
-  return false;
-}
-
-/**
- * Compute total rounds based on configuration.
- *
- * Priority order:
- * 1. `setting.maxRounds` - explicit YAML configuration
- * 2. `agentType: 'direct'` - implies single-round execution (maxRounds=1)
- * 3. Default calculation - max(configured rounds, userRequest array length)
- */
-function computeTotalRounds(
-  setting: AgentWorkflowSetting,
-  prompt: AgentPrompt,
-): number {
-  // 1. Explicit maxRounds config takes highest precedence
-  if (setting.maxRounds !== undefined) {
-    return setting.maxRounds;
-  }
-
-  // 2. agentType-driven: 'direct' implies single-round execution
-  if (setting.agentType === 'direct') {
-    return 1;
-  }
-
-  // 3. Default behavior for CoT and other types
-  const requestArray = Array.isArray(prompt.userRequest)
-    ? prompt.userRequest
-    : prompt.userRequest
-      ? [prompt.userRequest]
-      : [];
-  return Math.max(setting.rounds ?? 2, requestArray.length);
-}
-
-/**
- * Compute output file location for a given round.
- *
- * This replaces the polymorphic getOutputFileLocation() method.
- * MergeAgent has special logic that would need a separate strategy.
- */
-function createOutputFileLocationGetter(
-  config: AgentConfig,
-  setting: AgentWorkflowSetting,
-  modelHandler: IModelHandler<any, any, any, any, any>,
-  fileService: TaskRunFileService,
-): (round: number) => AgentFileLocation {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-
-  return (currRound: number): AgentFileLocation => {
-    const baseOutputFile = config.inputFile;
-    const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
-
-    const fileName = getOutputFileName(
-      baseOutputFile,
-      config.agent,
-      modelHandler.config.name,
-      fileExtension,
-      currRound,
-      config.editedFile || undefined,
-    );
-
-    // Route raw XML to isolated storage, direct outputs respect user preference
-    return (
-      useScratchpad
-        ? fileService.createRawOutputLocation(fileName)
-        : fileService.createLocation(fileName)
-    ) as AgentFileLocation;
-  };
-}
-
-// ============================================================================
 // Context Object (simple object, not a class)
 // ============================================================================
 
@@ -249,14 +137,55 @@ export function createReflectionFlowContext<C = unknown>(
     fileService,
   );
 
-  // Compute behavior from configuration
-  const shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(setting);
-  const totalRounds = computeTotalRounds(setting, prompt);
+  // Compute shouldEnsureXmlStructure from configuration
+  // Priority: xmlStructureMode > agentType > default (false)
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+  let shouldEnsureXmlStructure = false;
+  if (setting.xmlStructureMode !== undefined) {
+    shouldEnsureXmlStructure =
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
+  } else if (setting.agentType === 'CoT') {
+    shouldEnsureXmlStructure = true;
+  } else if (setting.agentType === 'direct') {
+    shouldEnsureXmlStructure = useScratchpad;
+  }
 
-  // Use custom getter if provided, otherwise create default
+  // Compute totalRounds from configuration
+  // Priority: maxRounds > agentType=direct (1) > max(rounds, userRequest length)
+  let totalRounds: number;
+  if (setting.maxRounds !== undefined) {
+    totalRounds = setting.maxRounds;
+  } else if (setting.agentType === 'direct') {
+    totalRounds = 1;
+  } else {
+    const requestArray = Array.isArray(prompt.userRequest)
+      ? prompt.userRequest
+      : prompt.userRequest
+        ? [prompt.userRequest]
+        : [];
+    totalRounds = Math.max(setting.rounds ?? 2, requestArray.length);
+  }
+
+  // Use custom getter if provided, otherwise create default output file location getter
   const getOutputFileLocation =
     init.getOutputFileLocation ??
-    createOutputFileLocationGetter(config, setting, modelHandler, fileService);
+    ((currRound: number): AgentFileLocation => {
+      const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
+      const fileName = getOutputFileName(
+        config.inputFile,
+        config.agent,
+        modelHandler.config.name,
+        fileExtension,
+        currRound,
+        config.editedFile || undefined,
+      );
+      return (
+        useScratchpad
+          ? fileService.createRawOutputLocation(fileName)
+          : fileService.createLocation(fileName)
+      ) as AgentFileLocation;
+    });
 
   // Build partial services (missing runStage - added by runReflectionFlow)
   const services: ReflectionServicesPartial<C> = {
@@ -269,7 +198,7 @@ export function createReflectionFlowContext<C = unknown>(
     promptBuilder,
     fileService,
     getOutputFileLocation,
-    shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
+    shouldEnsureXmlStructure,
     getUsageRecorder,
   };
 
