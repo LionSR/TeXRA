@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/utils';
 import { executeCommand } from '@utils/system/execUtils';
@@ -134,7 +134,7 @@ export class GrepTool extends defineTool({
       ? `Matches for "${input.pattern}" in ${display}`
       : `No matches for "${input.pattern}" in ${display}`;
 
-    return toolResult({
+    return {
       summary,
       output: outputText,
     });
