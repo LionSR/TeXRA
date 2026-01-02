@@ -42,8 +42,9 @@ import {
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import { RetryErrorInfoSchema } from '@agent/core/flows/RetryState';
-import { AgentFileLocationSchema } from '@utils/files';
+import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import { RetryErrorInfoSchema, type RetryErrorInfo } from '@agent/core/flows/RetryState';
+import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
 
 // ============================================================================
 // Schemas (Single Source of Truth)
@@ -116,21 +117,69 @@ export const ReflectionFlowStateSchema = z.object({
   continueRounds: z.boolean(),
   endTurn: z.boolean(),
 
+  // === Cycle fields (for native nesting of cycle nodes) ===
+  // These enable cycle nodes to work directly with ReflectionFlowShared
+  /** Current cycle's messages (distinct from conversation - cycle modifies these) */
+  messages: z.array(ProviderMessageSchema).optional(),
+  /** Whether the current cycle should stop processing */
+  shouldStop: z.boolean().optional(),
+  /** Whether output file exists for current cycle */
+  outputExists: z.boolean().optional(),
+  /** Time taken for response in milliseconds */
+  responseTimeMs: z.number().optional(),
+  /** Reason the model stopped generating (stored as string for serialization) */
+  stopReason: z.string().optional(),
+  /** Processed response text from current cycle */
+  processedResponse: z.string().optional(),
+
   // Retry state (flattened - was separate RetryState object)
   /** Last error from model invocation, if any. Used to distinguish failure from cancellation. */
   lastRetryError: RetryErrorInfoSchema.optional(),
+  /** Alias for lastRetryError - cycle nodes use this name */
+  lastError: RetryErrorInfoSchema.optional(),
 });
 
-/** Derived type from schema */
+/** Derived type from schema (serializable fields only) */
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
+
+/**
+ * Transient cycle fields that are NOT serialized.
+ * These contain non-serializable data (logger, unknown objects) and are
+ * only used during cycle execution, not persisted across checkpoints.
+ */
+export interface CycleTransientFields {
+  /** System prompt for model (regenerated each cycle) */
+  systemPrompt?: string;
+  /** Debug options containing logger (non-serializable) */
+  debug?: {
+    context: {
+      logger: unknown;
+      modelName?: string;
+      executionId?: string;
+      isRemote?: boolean;
+    };
+    fileOptions: {
+      continuationCount: number;
+      outputFile?: string;
+      baseName?: string;
+    };
+  };
+  /** Raw response from model (type unknown, not serialized) */
+  responseObject?: unknown;
+}
 
 /**
  * Shared context passed through the flow.
  *
- * This is now a type alias - ReflectionFlowState IS the shared state.
- * No more nested `shared.state.X` - access directly as `shared.X`.
+ * Combines serializable state (ReflectionFlowState) with transient cycle
+ * fields (CycleTransientFields) for native flow nesting.
+ *
+ * - Serializable fields are persisted by PersistedFlow
+ * - Transient fields are cleared between checkpoints
+ * - Index signature required by RoundAwareState constraint
  */
-export type ReflectionFlowShared = ReflectionFlowState;
+export type ReflectionFlowShared = ReflectionFlowState &
+  CycleTransientFields & { [key: string]: unknown };
 
 /**
  * Create initial state for a reflection flow run.
