@@ -146,10 +146,10 @@ export function assertCycleFieldsPopulated<T extends object>(
       );
     }
   }
-  // outputLocation must be present in shared (can be null, but not undefined)
-  if (!('outputLocation' in shared)) {
+  // outputLocation must be non-null (downstream code uses it directly)
+  if (obj['outputLocation'] === undefined || obj['outputLocation'] === null) {
     throw new Error(
-      `Cycle field 'outputLocation' must be populated before running cycle flow`,
+      `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
     );
   }
 }
