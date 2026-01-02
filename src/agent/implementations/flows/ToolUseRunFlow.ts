@@ -277,8 +277,13 @@ class ToolUsePrepareNode<C> extends Node<
         : new Error(String(execRes.error));
     }
 
-    const { messages, runState, workspaceState, userChannels, shouldSkipCycle } =
-      execRes.result;
+    const {
+      messages,
+      runState,
+      workspaceState,
+      userChannels,
+      shouldSkipCycle,
+    } = execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
     // Store individual snapshots instead of bundled AgentSharedStoreSnapshot
