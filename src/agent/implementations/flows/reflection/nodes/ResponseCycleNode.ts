@@ -1,25 +1,22 @@
 /**
- * ResponseCycleCompositionNode - Runs a response cycle as a sub-flow.
- *
- * This node composes ResponseCycleFlow (pure flow pattern) rather than
- * calling runResponseCycle() function (hybrid pattern).
+ * ResponseCycleNode - Runs a response cycle flow.
  *
  * Responsibilities:
  * - Reconstruct state slices from snapshots
- * - Build ResponseCycleOptions from services
- * - Run ResponseCycleFlow as a sub-flow
+ * - Build cycle options from services
+ * - Create and run ResponseCycleFlow
  * - Extract results back to ReflectionFlowShared
  *
  * PocketFlow pattern:
  * - prep(): Reconstruct state slices and output location
- * - exec(): Run the composed sub-flow with slices
+ * - exec(): Create and run ResponseCycleFlow directly
  * - post(): Update shared state snapshots with results
  *
  * Services accessed via native `this.services`:
  * - modelHandler, logger, setting, prompt, config, context, etc.
  */
 
-import { Node, Flow } from '@agent/node';
+import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
@@ -35,11 +32,7 @@ import {
 } from '@agent/core/flows/ResponseCycleFlow';
 import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import {
-  finalizeRound,
-  type ResponseCycleOptions,
-  type ResponseCycleParams,
-} from '@agent/core/flows/CycleServices';
+import { finalizeRound } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -89,16 +82,13 @@ type CycleExecResult =
 // Node Implementation
 // ============================================================================
 
-export class ResponseCycleCompositionNode<C = unknown> extends Node<
+export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>
 > {
-  private cycleFlow: Flow<ResponseCycleShared, ResponseCycleParams<C>>;
-
   constructor() {
     super(NODE_NO_RETRY, NODE_NO_WAIT);
-    this.cycleFlow = createResponseCycleFlow<C>();
   }
 
   /**
@@ -142,7 +132,10 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
   }
 
   /**
-   * Run ResponseCycleFlow as a sub-flow.
+   * Execute response cycle directly (no wrapper function).
+   *
+   * Creates and runs ResponseCycleFlow inline, eliminating the
+   * executeResponseCycleCore() wrapper layer.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const services = this.services;
@@ -163,8 +156,6 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     // If prefill already completes the response, return success with endTurn=true
     // This happens on resume when replaying completed rounds - the output file
     // already contains the full response, so we skip the model call.
-    // Note: initializeOutputAndPrefill() modifies prepRes.context.messages in-place
-    // (adding the assistant response), so post() will sync this to shared.conversation.
     if (prefillEndsTurn) {
       return {
         kind: 'success',
@@ -177,68 +168,59 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
       };
     }
 
-    // Build ResponseCycleOptions from services using helper (eliminates manual field copying)
-    // buildBaseCycleOptions handles all AgentCycleBaseOptions fields
-    const cycleOptions: ResponseCycleOptions<C> = {
+    // Build ResponseCycleOptions from services using helper
+    const cycleOptions = {
       ...buildBaseCycleOptions(services),
-      // Override userVars with merged input + transient
       userVars: this.getUserVars(),
-      // ResponseCycleOptions specific fields
       agentConfig: services.config,
       fileService: services.fileService,
     };
 
-    // Create cycle shared state with initialized messages
-    const cycleShared: ResponseCycleShared = {
-      state: {
-        messages: initializedMessages,
-        outputLocation: prepRes.outputLocation,
-        endTurn: false,
-        shouldStop: false,
-        outputExists: false,
-        systemPrompt: undefined,
-        debug: undefined,
-        responseObject: undefined,
-        responseTimeMs: undefined,
-        stopReason: undefined,
-        processedResponse: undefined,
-      } satisfies ResponseCycleState,
-      retryState: createRetryState(),
-    };
-
-    // Get the finalization callback for this round
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // Inject services directly and run sub-flow
-      // Use slices directly - no AgentSharedStore wrapper
-      this.cycleFlow.setServices({
+      // Create shared state for the cycle flow
+      const shared: ResponseCycleShared = {
+        state: {
+          messages: initializedMessages,
+          outputLocation: prepRes.outputLocation,
+          endTurn: false,
+          shouldStop: false,
+          outputExists: false,
+          systemPrompt: undefined,
+          debug: undefined,
+          responseObject: undefined,
+          responseTimeMs: undefined,
+          stopReason: undefined,
+          processedResponse: undefined,
+        } satisfies ResponseCycleState,
+        retryState: createRetryState(),
+      };
+
+      // Create and run the flow directly
+      const flow = createResponseCycleFlow<C>();
+      flow.setServices({
         ...cycleOptions,
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        onRoundFinalized, // Pass callback so FinalizeNode can invoke it
+        onRoundFinalized,
       });
-      await this.cycleFlow.run(cycleShared);
+      await flow.run(shared);
 
-      // Success: FinalizeNode has already called finalizeRound()
-      // Use shared interpretation logic (single source of truth)
-      const completion = interpretCycleCompletion(
-        cycleShared.state,
-        cycleShared.retryState,
-      );
+      // Interpret completion from flow state
+      const completion = interpretCycleCompletion(shared.state, shared.retryState);
 
       return {
         kind: 'success',
-        endTurn: cycleShared.state.endTurn,
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
+        endTurn: shared.state.endTurn,
         ...completion,
       };
     } catch (error) {
-      // Error path: FinalizeNode may not have run, so finalize here
-      // Use helper function directly (single source of truth for finalization logic)
+      // Error path: finalize round on unexpected errors
       await finalizeRound({
         round: prepRes.round,
         run: prepRes.run,
