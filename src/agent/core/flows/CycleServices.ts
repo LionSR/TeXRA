@@ -81,7 +81,6 @@ export interface CycleStateSlices extends BaseCycleStateSlices {
   round: ConversationRoundState;
 }
 
-
 // ============================================================================
 // CYCLE OPTIONS (single source of truth)
 // ============================================================================
@@ -192,7 +191,9 @@ export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
 export interface ToolUseCycleFinalizeInput {
   cycleIndex: number;
   responseTimeMs: number;
-  normalizedUsage: import('@agent/types/NormalizedUsage').NormalizedUsage | null;
+  normalizedUsage:
+    | import('@agent/types/NormalizedUsage').NormalizedUsage
+    | null;
   run: BaseCycleStateSlices['run'];
   onRoundFinalized?: RoundFinalizedCallback;
 }
