@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -124,7 +124,11 @@ export async function handleCountLinterMessages(): Promise<void> {
     const message = `Linter issues: ${counts.errors} errors, ${counts.warnings} warnings, ${counts.info} info, ${counts.hints} hints`;
     vscode.window.showInformationMessage(message);
   } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error counting linter messages', err);
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Error counting linter messages',
+      err,
+    );
   }
 }
 
@@ -169,7 +173,7 @@ export async function handleFixLinterIssues(
       `Found ${issues.length} linter issues in ${relativePath}`,
     );
 
-    const agentConfig = parseAgentConfig({
+    const agentConfig = AgentConfigSchema.parse({
       agent: 'tex_linter_fix',
       model: 'claude-4-5-sonnet-4-5-latest',
       inputFile: relativePath,

@@ -68,7 +68,7 @@ export function buildStreamInfos(
     const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
     const agentName = getCleanAgentName(rawAgentName);
     let sessionCategory =
-      taskState?.session?.agentCategory ?? hints.sessionCategory;
+      taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
 
     // Filter logic: streams without category only show when filter is "all"
     if (!sessionCategory) {
@@ -82,7 +82,8 @@ export function buildStreamInfos(
     }
 
     const agentType =
-      taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
+      taskState?.agentConfig.session?.agentType ??
+      taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
     // and isRemoteAgent can reliably determine the source. When taskState is null,

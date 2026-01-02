@@ -8,6 +8,7 @@ import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
+import { TOOL_ICON_MAP } from './constants.js';
 
 /**
  * Build a tool-use section HTML block
@@ -136,4 +137,15 @@ export const buildDetailItem = (iconClass, content, options = {}) => {
     ? ` data-run-id="${encodeHtml(options.runId)}"`
     : '';
   return `<li class="detail-item"${runAttr}><i class="codicon ${iconClass}"${titleAttr}></i> ${content}</li>`;
+};
+
+/**
+ * Get appropriate icon class for a tool
+ * @param {string} toolName - Name of the tool
+ * @param {boolean} isError - Whether the tool execution errored
+ * @returns {string} Codicon class name
+ */
+export const getToolIconClass = (toolName, isError = false) => {
+  if (isError) return 'codicon-error';
+  return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
 };

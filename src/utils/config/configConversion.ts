@@ -1,15 +1,13 @@
-// (none needed)
-
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
-import {
-  AgentCategory,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
-import { type TaskState } from '@logger/TaskState';
+import {
+  type TaskState,
+  type ToolUseTaskState,
+  type WorkflowTaskState,
+} from '@logger/TaskState';
 
 // Local file imports
 import { FILE_TYPES, type FileType } from './constants';
@@ -34,43 +32,32 @@ function createActiveFilesFromArrays(
 }
 
 /**
- * Converts an AgentConfig object to a TaskState object
+ * Converts an AgentConfig object to a TaskState object.
+ * Session metadata comes from config.session (single source of truth).
  *
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  const session = config.session;
+  const { session } = config;
   if (!session) {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
-  const sanitizedConfig: AgentConfig = { ...config };
-
-  if (session.agentCategory === AgentCategory.ToolUse) {
-    const toolUseSession: AgentSessionDescriptor & {
-      agentCategory: AgentCategory.ToolUse;
-    } = {
-      ...session,
-      agentCategory: AgentCategory.ToolUse,
-    };
-    return {
-      agentConfig: sanitizedConfig,
-      session: toolUseSession,
-      toolSessionState: {},
-    };
+  switch (session.agentCategory) {
+    case AgentCategory.ToolUse:
+      return {
+        agentConfig: config as ToolUseTaskState['agentConfig'],
+        toolSessionState: {},
+      };
+    case AgentCategory.Workflow:
+      return {
+        agentConfig: config as WorkflowTaskState['agentConfig'],
+        activeFiles: createActiveFilesFromArrays(config),
+      };
+    default: {
+      const _exhaustive: never = session.agentCategory;
+      throw new Error(`Unknown agent category: ${_exhaustive}`);
+    }
   }
-
-  const workflowSession: AgentSessionDescriptor & {
-    agentCategory: AgentCategory.Workflow;
-  } = {
-    ...session,
-    agentCategory: AgentCategory.Workflow,
-  };
-
-  return {
-    agentConfig: sanitizedConfig,
-    session: workflowSession,
-    activeFiles: createActiveFilesFromArrays(config),
-  };
 }

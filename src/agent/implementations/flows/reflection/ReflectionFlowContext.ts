@@ -23,6 +23,7 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import type { IInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { AgentFileLocation } from '@utils/files';
 
 import { PromptBuilder } from '@utils/prompt';
@@ -67,8 +68,10 @@ export interface ReflectionFlowContextInit<
 /**
  * Reflection flow context returned by factory function.
  * Contains services and lifecycle methods.
+ *
+ * Extends IInterruptible to allow registration with the interrupt registry.
  */
-export interface ReflectionFlowContext<C = unknown> {
+export interface ReflectionFlowContext<C = unknown> extends IInterruptible {
   /** Services for flow execution (missing runStage - set by runReflectionFlow) */
   services: ReflectionServicesPartial<C>;
 
@@ -77,9 +80,6 @@ export interface ReflectionFlowContext<C = unknown> {
 
   /** Set the active run storage key on the output handler */
   setActiveRun(storageKey: StorageKey): void;
-
-  /** Interrupt the flow execution */
-  interrupt(): void;
 
   /** Dispose context resources */
   dispose(): void;
