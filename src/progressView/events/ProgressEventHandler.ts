@@ -98,7 +98,6 @@ export class ProgressEventHandler {
       withErrorBoundary: createErrorBoundary(this.logger, 'TaskGroupEvents'),
       initializeStreamForTaskGroup: (stream) =>
         this.initializeStreamForTaskGroup(stream),
-      activateExistingStream: (stream) => this.activateExistingStream(stream),
       debugLog: (message) => this.logger.debug(message),
     });
     this.todoEvents = createTodoEvents({
@@ -403,31 +402,6 @@ export class ProgressEventHandler {
         forceRebuild: true,
       });
       this.sendInstructionUpdate(stream);
-    }
-  }
-
-  /**
-   * Activate an existing stream when a new root group is added.
-   * This is a lighter-weight version of initializeStreamForTaskGroup that
-   * only sets activeStream and sends UPDATE_STREAMS to the frontend.
-   *
-   * This is needed because root groups (like Init) may arrive before
-   * setActiveStream event, and the frontend would otherwise ignore
-   * ADD_TASK_GROUP messages for non-active streams.
-   */
-  private activateExistingStream(stream: string): void {
-    // Set activeStream on backend state
-    this.state.activeStream = stream;
-
-    // Set status to RUNNING if not already set
-    const existingStatus = this._streamStatus.get(stream);
-    if (!existingStatus) {
-      this._streamStatus.set(stream, STREAM_STATUS.RUNNING);
-    }
-
-    // Send UPDATE_STREAMS to frontend so it knows which stream is active
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateAll(this.state, this._streamStatus);
     }
   }
 
