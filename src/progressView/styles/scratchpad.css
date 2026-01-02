@@ -120,39 +120,6 @@
   color: var(--vscode-gitDecoration-deletedResourceForeground, #f14c4c);
 }
 
-/* Truncated output */
-.truncated-output {
-  position: relative;
-}
-
-.truncation-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  margin-top: var(--spacing-tiny);
-  padding: var(--spacing-tiny) var(--spacing-small);
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: var(--border-radius-small);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  transition: background-color 0.1s ease;
-}
-
-.truncation-toggle:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
-}
-
-.truncation-toggle .codicon {
-  font-size: var(--font-size-sm);
-  transition: transform 0.2s ease;
-}
-
-.truncation-toggle[data-state="expanded"] .codicon {
-  transform: rotate(180deg);
-}
-
 /* Compact input display */
 .compact-input {
   display: flex;

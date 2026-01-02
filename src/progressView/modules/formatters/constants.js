@@ -80,3 +80,9 @@ export const OUTPUT_TRUNCATE_LENGTH = 1500;
 
 /** Maximum input display length before compacting */
 export const INPUT_COMPACT_THRESHOLD = 200;
+
+/** Maximum entries before falling back to YAML for compact input */
+export const INPUT_COMPACT_ENTRIES_THRESHOLD = 3;
+
+/** Maximum value length in compact input display */
+export const COMPACT_VALUE_MAX_LENGTH = 50;

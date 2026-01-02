@@ -227,47 +227,5 @@ export class EventsManager {
       }
     });
 
-    // Handle truncation toggle buttons
-    document.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const toggleBtn = e.target.closest('.truncation-toggle');
-      if (!toggleBtn) {
-        return;
-      }
-
-      const container = toggleBtn.closest('.truncated-output');
-      if (!container) {
-        return;
-      }
-
-      const truncatedPre = container.querySelector('pre[data-truncated]');
-      const fullPre = container.querySelector('pre[data-full]');
-      if (!truncatedPre || !fullPre) {
-        return;
-      }
-
-      const isExpanded = toggleBtn.dataset.state === 'expanded';
-      if (isExpanded) {
-        // Collapse: show truncated, hide full
-        truncatedPre.style.display = '';
-        fullPre.style.display = 'none';
-        toggleBtn.dataset.state = 'truncated';
-        const span = toggleBtn.querySelector('span');
-        if (span) {
-          span.textContent = span.textContent.replace('Show less', 'Show more');
-        }
-      } else {
-        // Expand: hide truncated, show full
-        truncatedPre.style.display = 'none';
-        fullPre.style.display = '';
-        toggleBtn.dataset.state = 'expanded';
-        const span = toggleBtn.querySelector('span');
-        if (span) {
-          span.textContent = 'Show less';
-        }
-      }
-    });
   }
 }

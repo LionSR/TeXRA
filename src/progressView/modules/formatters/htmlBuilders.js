@@ -9,6 +9,10 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { stringifyForDisplay } from './normalizers.js';
+import {
+  INPUT_COMPACT_ENTRIES_THRESHOLD,
+  COMPACT_VALUE_MAX_LENGTH,
+} from './constants.js';
 
 /**
  * Build a tool-use section HTML block
@@ -200,71 +204,31 @@ const buildLineStats = (added, removed) => {
 };
 
 /**
- * Build truncated output with expand/collapse functionality
- * @param {string} text - Full text content
- * @param {number} maxLength - Maximum characters before truncation
- * @param {string} [className] - Optional CSS class for pre element
- * @returns {string} HTML string with truncation controls
- */
-export const buildTruncatedOutput = (text, maxLength, className = '') => {
-  if (!text || text.length <= maxLength) {
-    return wrapInPre(text || '', className);
-  }
-
-  const truncated = text.slice(0, maxLength);
-  const classAttr = className ? ` class="${className}"` : '';
-
-  return `
-    <div class="truncated-output">
-      <pre${classAttr} data-truncated="true">${encodeHtml(truncated)}</pre>
-      <pre${classAttr} data-full="true" style="display: none;">${encodeHtml(text)}</pre>
-      <button class="truncation-toggle" data-state="truncated">
-        <i class="codicon codicon-chevron-down"></i>
-        <span>Show more (${formatBytes(text.length - maxLength)} hidden)</span>
-      </button>
-    </div>
-  `;
-};
-
-/**
- * Format byte count to human readable string
- * @param {number} chars - Character count
- * @returns {string} Formatted string
- */
-const formatBytes = (chars) => {
-  if (chars < 1000) return `${chars} chars`;
-  return `${(chars / 1000).toFixed(1)}k chars`;
-};
-
-/**
- * Build compact input display
+ * Build compact input display for tool parameters.
+ * Shows key=value pairs inline for small inputs, falls back to YAML for larger ones.
  * @param {*} input - Input value (object or string)
- * @param {number} maxLength - Maximum display length
  * @returns {string} HTML string for compact input
  */
-export const buildCompactInput = (input, maxLength) => {
+export const buildCompactInput = (input) => {
   if (input === undefined || input === null) {
     return '';
   }
 
-  // Handle string inputs
+  // Handle string inputs directly
   if (typeof input === 'string') {
-    if (input.length <= maxLength) {
-      return wrapInPre(input);
-    }
-    return buildTruncatedOutput(input, maxLength);
+    return wrapInPre(input);
   }
 
   // Handle object inputs - show key=value pairs inline when possible
   if (typeof input === 'object') {
     const entries = Object.entries(input);
-    if (entries.length <= 3) {
+    if (entries.length <= INPUT_COMPACT_ENTRIES_THRESHOLD) {
       const compact = entries
         .map(([k, v]) => {
           const valStr =
             typeof v === 'string'
-              ? v.length > 50
-                ? v.slice(0, 47) + '...'
+              ? v.length > COMPACT_VALUE_MAX_LENGTH
+                ? v.slice(0, COMPACT_VALUE_MAX_LENGTH - 3) + '...'
                 : v
               : JSON.stringify(v);
           return `<span class="input-param"><span class="input-key">${encodeHtml(k)}</span>: ${encodeHtml(valStr)}</span>`;
@@ -275,11 +239,8 @@ export const buildCompactInput = (input, maxLength) => {
     }
   }
 
-  // Fall back to YAML display with truncation
+  // Fall back to YAML display
   const yaml = stringifyForDisplay(input);
-  if (yaml.length <= maxLength) {
-    return wrapInPre(yaml);
-  }
-  return buildTruncatedOutput(yaml, maxLength);
+  return wrapInPre(yaml);
 };
 

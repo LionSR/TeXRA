@@ -10,16 +10,10 @@ import {
   buildToolUseSection,
   wrapInPre,
   buildEditedFilesSection,
-  buildTruncatedOutput,
   buildCompactInput,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
-import {
-  QUERY_PREVIEW_MAX_LENGTH,
-  TOOL_ICONS,
-  OUTPUT_TRUNCATE_LENGTH,
-  INPUT_COMPACT_THRESHOLD,
-} from '../constants.js';
+import { QUERY_PREVIEW_MAX_LENGTH, TOOL_ICONS } from '../constants.js';
 
 /**
  * Get the appropriate icon class for a tool
@@ -120,22 +114,19 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
 
   // Input section - use compact display for small inputs
   if (input !== undefined) {
-    const inputHtml = buildCompactInput(input, INPUT_COMPACT_THRESHOLD);
+    const inputHtml = buildCompactInput(input);
     if (inputHtml) {
       sections.push(buildToolUseSection('Input:', inputHtml));
     }
   }
 
-  // Error or output section - with truncation for long outputs
+  // Error or output section
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
-    const outputHtml = buildTruncatedOutput(
-      outputText,
-      OUTPUT_TRUNCATE_LENGTH,
-      'tool-output-full',
+    sections.push(
+      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
     );
-    sections.push(buildToolUseSection('Output:', outputHtml));
   }
 
   // Edited files section - clickable links with line stats
