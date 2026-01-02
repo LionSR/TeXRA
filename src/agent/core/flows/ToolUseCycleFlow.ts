@@ -291,19 +291,14 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(
-    shared: ToolUseCycleShared,
-  ): Promise<BaseInvocationPrepResult & { cycleIndex: number }> {
+  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
-      cycleIndex: shared.cycleIndex,
     };
   }
 
-  async exec(
-    prepRes: BaseInvocationPrepResult & { cycleIndex: number },
-  ): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
