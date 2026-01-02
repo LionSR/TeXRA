@@ -57,13 +57,15 @@
 }
 
 /* Pre-wrapped text content */
-.banner-content--error .error-details,
-.tool-output-full {
+.banner-content--error .error-details {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .tool-output-full {
+  white-space: pre-wrap;
+  word-break: break-word;
   max-height: var(--height-large);
   overflow: auto;
 }
+
