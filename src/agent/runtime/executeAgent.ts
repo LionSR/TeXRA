@@ -274,18 +274,34 @@ function createUsageRecorder(
 }
 
 /**
+ * Options for createToolUseCallbacks helper.
+ */
+interface ToolUseCallbackOptions {
+  /**
+   * Optional setup callback invoked after registration.
+   * Used by resumeToolUseFromSnapshot to configure the session before flow starts.
+   */
+  onSetup?: (context: { session: IToolUseSession }) => void;
+}
+
+/**
  * Create standardized interruptible callbacks for tool-use flows.
  *
  * DRY helper for the register/unregister pattern used when running tool-use flows.
  * Uses the captured streamTabId from the closure rather than callback parameters
  * to ensure consistent stream ID usage throughout the flow lifecycle.
+ *
+ * @param streamTabId - Stream ID to use for registration
+ * @param options - Optional callbacks for additional setup
  */
 function createToolUseCallbacks(
   streamTabId: StreamTabId,
+  options?: ToolUseCallbackOptions,
 ): RunToolUseFlowCallbacks {
   return {
     onContextReady: (_callbackStreamId, context) => {
       registerInterruptible(streamTabId, context);
+      options?.onSetup?.(context);
     },
     onFlowComplete: (_callbackStreamId) => {
       unregisterInterruptible(streamTabId);
@@ -314,6 +330,23 @@ function createReflectionCallbacks(
 }
 
 /**
+ * Common flow input fields shared by all flow types.
+ * Returned by buildBaseFlowInput helper.
+ */
+interface BaseFlowInputFields {
+  modelHandler: FlowExecutionContext['modelHandler'];
+  config: FlowExecutionContext['agentConfig'];
+  prompt: FlowExecutionContext['agentPrompt'];
+  executionContext: FlowExecutionContext['executionContext'];
+  userVarChannels: FlowExecutionContext['userVarChannels'];
+  checkInterruption: InterruptManager['checkInterruption'];
+  setAbortController: InterruptManager['setAbortController'];
+  onInterrupt: InterruptManager['onInterrupt'];
+  getClient: () => ReturnType<FlowExecutionContext['modelHandler']['getClient']>;
+  getUsageRecorder: () => RoundFinalizedCallback;
+}
+
+/**
  * Build the common flow input fields shared by all flow types.
  *
  * DRY helper: Both tool-use and reflection flows share these fields.
@@ -323,7 +356,7 @@ function buildBaseFlowInput(
   ctx: FlowExecutionContext,
   interruptManager: InterruptManager,
   runKind: 'workflow' | 'tool-use',
-) {
+): BaseFlowInputFields {
   return {
     modelHandler: ctx.modelHandler,
     config: ctx.agentConfig,
@@ -637,7 +670,11 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, executionContext } = ctx;
+  const { streamTabId, executionContext, agentConfig } = ctx;
+
+  if (!agentConfig.session) {
+    throw new Error('Merge agent configuration is missing session metadata.');
+  }
 
   // Check if already running
   const currentStatus = StreamStatusService.get(streamTabId);
@@ -706,13 +743,17 @@ export async function resumeToolUseFromSnapshot(
 
   // Prepare flow execution context
   const ctx = await prepareFlowExecution(config.agent, config, executionId);
-  const { agentSetting, executionContext } = ctx;
+  const { agentSetting, executionContext, agentConfig } = ctx;
 
-  // Validate agent type
+  // Validate agent type and session
   if (agentSetting.agentType !== 'toolUse') {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
+  }
+
+  if (!agentConfig.session) {
+    throw new Error('Resume agent configuration is missing session metadata.');
   }
 
   const interruptManager = new InterruptManager();
@@ -722,7 +763,6 @@ export async function resumeToolUseFromSnapshot(
     setupFlowUIState(ctx, streamTabId);
 
     // Run the flow with resume snapshot
-    // Note: Custom callbacks needed here because setupSession must run in onContextReady
     const result = await runToolUseFlow(
       {
         ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
@@ -730,16 +770,11 @@ export async function resumeToolUseFromSnapshot(
         streamTabId,
         resumeSnapshot: snapshot,
       },
-      {
-        onContextReady: (_streamId, context) => {
-          registerInterruptible(streamTabId, context);
-          // Allow caller to configure session (e.g., append follow-ups)
-          setupSession?.(context.session);
-        },
-        onFlowComplete: () => {
-          unregisterInterruptible(streamTabId);
-        },
-      },
+      createToolUseCallbacks(streamTabId, {
+        onSetup: setupSession
+          ? (context) => setupSession(context.session)
+          : undefined,
+      }),
     );
 
     updateFlowStatus(streamTabId, result.status);
