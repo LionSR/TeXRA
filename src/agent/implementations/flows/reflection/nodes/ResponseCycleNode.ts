@@ -167,9 +167,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Build ResponseCycleOptions from services using helper
+    // Await to get fresh client with refreshed auth tokens for each response round
     const { userVarChannels } = services;
     const cycleOptions = {
-      ...buildBaseCycleOptions(services),
+      ...(await buildBaseCycleOptions(services)),
       userVars: { ...userVarChannels.input, ...userVarChannels.transient },
       agentConfig: services.config,
       fileService: services.fileService,

@@ -74,8 +74,8 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Set abort controller for cancellation */
   setAbortController: (ctrl: AbortController | null) => void;
 
-  /** Get the API client instance */
-  getClient: () => C;
+  /** Get the API client instance (async to allow auth token refresh) */
+  getClient: () => Promise<C>;
 
   /** Callback invoked when interrupt() is called on the flow context */
   onInterrupt?: () => void;
@@ -120,7 +120,7 @@ export interface FlowServiceAccessors {
  * - prompt -> agentPrompt
  * - userVarChannels.transient -> userVars
  * - executionContext -> context (via services.context if available)
- * - getClient() -> client
+ * - getClient() -> client (awaited to get fresh auth tokens)
  *
  * Accepts either:
  * - BaseFlowContextInit (raw config, uses executionContext.logger)
@@ -129,9 +129,9 @@ export interface FlowServiceAccessors {
  * @param services - Flow services or initialization config
  * @returns Base cycle options ready for extension
  */
-export function buildBaseCycleOptions<C>(
+export async function buildBaseCycleOptions<C>(
   services: BaseFlowContextInit<C> & Partial<FlowServiceAccessors>,
-): AgentCycleBaseOptions<C> {
+): Promise<AgentCycleBaseOptions<C>> {
   return {
     modelHandler: services.modelHandler,
     agentSetting: services.setting,
@@ -139,7 +139,7 @@ export function buildBaseCycleOptions<C>(
     userVars: services.userVarChannels.transient,
     logger: services.logger ?? services.executionContext.logger,
     context: services.context ?? services.executionContext,
-    client: services.getClient(),
+    client: await services.getClient(),
     checkInterruption: services.checkInterruption,
     setAbortController: services.setAbortController,
   };
