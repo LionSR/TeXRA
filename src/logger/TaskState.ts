@@ -59,29 +59,42 @@ export const TaskStateSchema = z.union([
 ]);
 
 // -----------------------------------------------------------------------------
-// Types - Derived from Schemas
+// Types - Derived from Schemas (Single Source of Truth)
 // -----------------------------------------------------------------------------
 
-export interface ToolSessionState {
-  lastFollowUpAt?: number;
-}
-
+export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 export type WorkflowTaskState = z.infer<typeof WorkflowTaskStateSchema>;
 export type ToolUseTaskState = z.infer<typeof ToolUseTaskStateSchema>;
 export type TaskState = z.infer<typeof TaskStateSchema>;
 
 // -----------------------------------------------------------------------------
-// Type Guards
+// Type Guards - Shared predicates for category narrowing
 // -----------------------------------------------------------------------------
 
+/** Check if agentCategory is ToolUse (works on any object with session) */
+export function isToolUseCategory(obj: {
+  session?: { agentCategory?: AgentCategory };
+}): boolean {
+  return obj.session?.agentCategory === AgentCategory.ToolUse;
+}
+
+/** Check if agentCategory is Workflow (works on any object with session) */
+export function isWorkflowCategory(obj: {
+  session?: { agentCategory?: AgentCategory };
+}): boolean {
+  return obj.session?.agentCategory === AgentCategory.Workflow;
+}
+
+/** Type guard for TaskState narrowing to WorkflowTaskState */
 export function isWorkflowTaskState(
   taskState: TaskState,
 ): taskState is WorkflowTaskState {
-  return taskState.agentConfig.session.agentCategory === AgentCategory.Workflow;
+  return isWorkflowCategory(taskState.agentConfig);
 }
 
+/** Type guard for TaskState narrowing to ToolUseTaskState */
 export function isToolUseTaskState(
   taskState: TaskState,
 ): taskState is ToolUseTaskState {
-  return taskState.agentConfig.session.agentCategory === AgentCategory.ToolUse;
+  return isToolUseCategory(taskState.agentConfig);
 }
