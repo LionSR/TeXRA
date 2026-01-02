@@ -7,14 +7,14 @@
  * - ResponseCycleFlow is created and run directly by ResponseCycleNode
  *
  * Node flow:
- * TeXCountNode → MediaPreparationNode → PrepareContextNode
+ * TeXCountNode → MediaExtractionNode → PrepareContextNode
  *   → ResponseCycleNode → OutputNode → RoundCompleteNode
  *
  * TeXCountNode is the first node in each round - it creates workspace state.
  */
 
 export { TeXCountNode } from './TeXCountNode';
-export { MediaPreparationNode } from './MediaPreparationNode';
+export { MediaExtractionNode } from './MediaExtractionNode';
 export { PrepareContextNode } from './PrepareContextNode';
 export { ResponseCycleNode } from './ResponseCycleNode';
 export { OutputNode } from './OutputNode';
