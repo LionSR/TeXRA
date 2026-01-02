@@ -191,7 +191,6 @@ export const normalizeToolUseLog = (structured) => {
   return {
     parsed,
     toolName,
-    summaryText,
     errorText,
     outputText,
     input: parsed.input,
