@@ -4,7 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import { AgentRunState } from '@agent/core/AgentState';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -18,7 +18,6 @@ describe('ToolUseFollowUp', () => {
   // Create state snapshots directly (no store wrapper needed)
   const runState = new AgentRunState();
   const workspaceState = AgentWorkspaceState.create();
-  const roundState = new ConversationRoundState(0);
 
   const snapshot: ToolUseSessionSnapshot = {
     version: 2,
@@ -30,8 +29,7 @@ describe('ToolUseFollowUp', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    // State slices stored directly (v2 schema - no wrapper)
-    round: roundState.toSnapshot(),
+    // State slices stored directly (v2 schema)
     run: runState.toSnapshot(),
     workspace: workspaceState.toSnapshot(),
     user: {

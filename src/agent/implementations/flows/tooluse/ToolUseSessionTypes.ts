@@ -10,9 +10,6 @@
  *
  * Schema architecture: Individual state slices are stored directly (no wrapper).
  * This eliminates the AgentSharedStore abstraction overhead.
- *
- * Future improvement note: Consider extracting common state slice schemas into
- * a reusable composition pattern for other flow types that need similar state.
  */
 
 // Third-party imports
@@ -20,10 +17,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import {
-  AgentRunStateSnapshotSchema,
-  ConversationRoundStateSnapshotSchema,
-} from '@agent/core/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
 import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
 import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
@@ -39,7 +33,6 @@ export const TOOL_USE_SNAPSHOT_VERSION = 2;
  * with legacy snapshots that may contain removed or renamed fields.
  *
  * Version 2: State slices stored directly (no wrapper object).
- * - round: ConversationRoundStateSnapshot
  * - run: AgentRunStateSnapshot
  * - workspace: AgentWorkspaceSnapshot
  * - user: UserVariableChannels
@@ -51,7 +44,6 @@ export const ToolUseSessionSnapshotSchema = z.object({
   agentConfig: AgentConfigSchema,
   messages: z.array(ProviderMessageSchema),
   // State slices stored directly (no wrapper)
-  round: ConversationRoundStateSnapshotSchema,
   run: AgentRunStateSnapshotSchema,
   workspace: AgentWorkspaceStateSnapshotSchema,
   user: UserVariableChannelsSchema,
