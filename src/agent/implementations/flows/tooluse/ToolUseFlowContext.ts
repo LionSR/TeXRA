@@ -90,28 +90,6 @@ export interface ToolUseFlowContext<C = unknown> {
 // ============================================================================
 
 /**
- * Resolves tool definitions from setting at construction time.
- * This is computed once and cached to avoid repeated registry lookups.
- */
-function resolveToolsFromSetting(
-  setting: AgentToolUseSetting,
-  toolRegistry: IToolRegistry,
-  logger: any,
-): ToolDefinition[] {
-  const cfg = Array.isArray(setting.tools) ? setting.tools : [];
-  const tools: ToolDefinition[] = [];
-  for (const t of cfg) {
-    const def = typeof t === 'string' ? { name: t } : t;
-    if (!toolRegistry.has(def.name)) {
-      logger.warn(`Tool "${def.name}" not found in registry`);
-      continue;
-    }
-    tools.push(def);
-  }
-  return tools;
-}
-
-/**
  * Prepare initial state for the tool-use session.
  * Handles both new sessions and resumed sessions from snapshots.
  */
@@ -207,18 +185,6 @@ function createCycleOptions<C>(
   };
 }
 
-/**
- * Apply a follow-up message to the conversation.
- */
-async function applyFollowUpMessage<C>(
-  init: ToolUseFlowContextInit<C>,
-  followUp: string,
-  messages: ProviderMessage[],
-): Promise<ProviderMessage[]> {
-  init.executionContext.logger.userMessage(followUp);
-  return await init.modelHandler.createUserFollowUpMessages(messages, followUp);
-}
-
 // ============================================================================
 // Factory Function
 // ============================================================================
@@ -242,13 +208,19 @@ export function createToolUseFlowContext<C = unknown>(
   // Create services eagerly (no lazy initialization)
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
+  const logger = init.executionContext.logger;
 
   // Resolve tools once at construction time instead of on every cycle
-  const resolvedTools = resolveToolsFromSetting(
-    setting,
-    toolRegistry,
-    init.executionContext.logger,
-  );
+  const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
+  const resolvedTools: ToolDefinition[] = [];
+  for (const t of toolConfigs) {
+    const def = typeof t === 'string' ? { name: t } : t;
+    if (!toolRegistry.has(def.name)) {
+      logger.warn(`Tool "${def.name}" not found in registry`);
+      continue;
+    }
+    resolvedTools.push(def);
+  }
 
   // Capture snapshot in closure for prepareState
   const snapshot = resumeSnapshot ?? null;
@@ -264,8 +236,10 @@ export function createToolUseFlowContext<C = unknown>(
     prepareState: () => prepareInitialState(init, sessionLifecycle, snapshot),
     buildCycleOptions: (store) =>
       createCycleOptions(init, toolRegistry, resolvedTools, store),
-    applyFollowUpMessage: (message, conversation) =>
-      applyFollowUpMessage(init, message, conversation),
+    applyFollowUpMessage: async (message, conversation) => {
+      init.executionContext.logger.userMessage(message);
+      return init.modelHandler.createUserFollowUpMessages(conversation, message);
+    },
     getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
   };
 
