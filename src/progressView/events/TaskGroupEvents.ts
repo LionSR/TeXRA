@@ -24,7 +24,6 @@ import type {
  */
 interface TaskGroupEventsShared extends BaseEventShared {
   initializeStreamForTaskGroup(stream: string): Promise<void>;
-  activateExistingStream(stream: string): void;
   debugLog(message: string): void;
 }
 
@@ -84,20 +83,13 @@ export function createTaskGroupEvents(
         // Initialize stream after group is in state. This sends UPDATE_LOGS
         // with forceRebuild: true, which will include the new group.
         await shared.initializeStreamForTaskGroup(stream);
-      } else if (!parentGroupId) {
-        // For root groups in existing streams, we need to activate the stream
-        // so the frontend's activeStream is set correctly before ADD_TASK_GROUP
-        // arrives. Without this, the frontend would ignore ADD_TASK_GROUP because
-        // message.stream !== state.activeStream.
-        debugLog(`Activating existing stream for new run: ${stream}`);
-        shared.activateExistingStream(stream);
       }
 
       // Send ADD_TASK_GROUP to frontend for immediate rendering.
-      // The frontend will process this correctly because:
-      // - For new streams: initializeStreamForTaskGroup sent UPDATE_STREAMS first
-      // - For existing streams with root groups: activateExistingStream sent UPDATE_STREAMS first
-      // - For child groups: the parent's stream should already be active
+      // Always send when updater is available - the frontend will handle
+      // the message correctly once activeStream is set by UPDATE_STREAMS.
+      // This fixes a race condition where setActiveStream creates the stream
+      // but hasn't set activeStream yet when addTaskGroup is processed.
       if (updater.isAvailable()) {
         updater.addTaskGroup(stream, group);
       }
