@@ -297,14 +297,39 @@ Some nodes have trivial prep/post phases:
 
 ## Summary
 
-| Finding | Type | Action |
-|---------|------|--------|
-| AgentSharedStore | OVERHEAD | **REMOVE** - pass state slices directly |
-| Unnecessary spreads in toSnapshot() | OVERHEAD | Optimize when removing store |
-| buildBaseCycleOptions() | DRY | Keep - called 3x |
-| RetryableInvocationNode | DRY | Keep - eliminates duplication |
-| Context factories | JUSTIFIED | Keep - contain real logic |
-| Snapshot pattern | REQUIRED | Keep - PersistedFlow needs it |
-| buildCycleOptions() | MINOR | Optional inline (low priority) |
+| Finding | Type | Action | Status |
+|---------|------|--------|--------|
+| AgentSharedStore | OVERHEAD | **REMOVE** - pass state slices directly | ✅ FIXED |
+| Unnecessary spreads in toSnapshot() | OVERHEAD | Optimized with store removal | ✅ FIXED |
+| buildCycleOptions() store param | OVERHEAD | Removed unused parameter | ✅ FIXED |
+| buildBaseCycleOptions() | DRY | Keep - called 3x | N/A |
+| RetryableInvocationNode | DRY | Keep - eliminates duplication | N/A |
+| Context factories | JUSTIFIED | Keep - contain real logic | N/A |
+| Snapshot pattern | REQUIRED | Keep - PersistedFlow needs it | N/A |
 
-The codebase shows evidence of active optimization (recent commits removing closure wrappers, flattening two-layer factories). The remaining overhead is **AgentSharedStore** which should be the next refactoring target.
+---
+
+## Refactoring Applied
+
+The AgentSharedStore overhead has been eliminated:
+
+1. **Removed unused `store` parameter** from `buildCycleOptions()` - it was never used
+2. **`prepareInitialState()`** now returns individual state slices directly:
+   - `runState: AgentRunState`
+   - `workspaceState: AgentWorkspaceState`
+   - `userChannels: UserVariableChannels`
+3. **`ToolUseRunState`** now stores individual snapshots:
+   - `stateSlices: { runStateSnapshot, workspaceSnapshot, userChannels }`
+4. **`ToolUseCycleNode`** reconstructs states directly from snapshots:
+   - `AgentRunState.fromSnapshot(stateSlices.runStateSnapshot)`
+   - `AgentWorkspaceState.fromSnapshot(stateSlices.workspaceSnapshot)`
+5. **`ToolUseSessionLifecycle`** no longer holds store reference - removed `setStore()`/`getStore()`
+6. **Backwards compatibility** preserved in snapshot schema for resume operations
+
+**Files changed:**
+- `src/agent/implementations/flows/ToolUseRunFlow.ts`
+- `src/agent/implementations/flows/tooluse/ToolUseFlowContext.ts`
+- `src/agent/implementations/flows/tooluse/ToolUseServices.ts`
+- `src/agent/implementations/flows/tooluse/ToolUseSessionLifecycle.ts`
+- `src/agent/implementations/flows/tooluse/ToolUseSessionTypes.ts`
+- `src/test/agent/toolUse/ToolUseFollowUp.test.ts`
