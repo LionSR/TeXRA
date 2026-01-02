@@ -335,7 +335,9 @@ interface BaseFlowInputFields {
   checkInterruption: InterruptManager['checkInterruption'];
   setAbortController: InterruptManager['setAbortController'];
   onInterrupt: InterruptManager['onInterrupt'];
-  getClient: () => ReturnType<FlowExecutionContext['modelHandler']['getClient']>;
+  getClient: () => ReturnType<
+    FlowExecutionContext['modelHandler']['getClient']
+  >;
   getUsageRecorder: () => RoundFinalizedCallback;
 }
 
