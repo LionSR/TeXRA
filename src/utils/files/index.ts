@@ -4,7 +4,6 @@ export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';
 export * from './pastedImageUtils';
 export * from './fileMappingUtils';
-export * from './pathUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './flexibleFS';

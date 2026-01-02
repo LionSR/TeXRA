@@ -12,7 +12,7 @@ export class HistoryEventsManager {
     this.handlers = [];
   }
 
-  setupEventListeners() {
+  setup() {
     const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
     const searchHandler = debounce((e) => {
       const term = e.target.value.trim();
