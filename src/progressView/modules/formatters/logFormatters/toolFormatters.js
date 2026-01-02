@@ -9,7 +9,6 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
-  buildLineChangesBadge,
   buildEditedFilesList,
   formatToolInput,
   getToolIconClass,
@@ -58,16 +57,8 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const {
-    parsed,
-    toolName,
-    summaryText,
-    errorText,
-    outputText,
-    input,
-    edits,
-    lineChanges,
-  } = normalizedToolLog;
+  const { parsed, toolName, errorText, outputText, input, edits } =
+    normalizedToolLog;
 
   // Use tool-specific icon
   const iconClass = getToolIconClass(toolName, normalizedToolLog.isError);
@@ -77,21 +68,15 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
 
   const { element, headerLabel, iconElem, contentElem } = toolElement;
 
-  // Build title with optional line changes badge
+  // Build title
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-  let titleText = normalizedToolLog.headerSummary
+  const titleText = normalizedToolLog.headerSummary
     ? `${titleBase} — ${normalizedToolLog.headerSummary}`
     : titleBase;
 
   if (headerLabel) {
     headerLabel.textContent = titleText;
-    // Add line changes badge to header if available
-    if (lineChanges && (lineChanges.added > 0 || lineChanges.removed > 0)) {
-      const badge = document.createElement('span');
-      badge.innerHTML = buildLineChangesBadge(lineChanges);
-      headerLabel.appendChild(badge.firstChild);
-    }
   }
 
   if (iconElem) {
