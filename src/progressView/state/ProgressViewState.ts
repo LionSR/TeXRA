@@ -54,39 +54,6 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
  * Composes focused manager classes and provides a clean interface
  * for state operations while hiding implementation details.
  */
-/**
- * Deep clones a TaskState to prevent shared-state mutations.
- * Clones nested objects (session, toolConfig) that could cause bugs if mutated.
- */
-const cloneTaskState = (state: TaskState): TaskState => {
-  // Deep clone agentConfig including nested objects
-  const clonedAgentConfig = {
-    ...state.agentConfig,
-    session: { ...state.agentConfig.session },
-    toolConfig: { ...state.agentConfig.toolConfig },
-    // Clone arrays to prevent mutation
-    inputFiles: [...state.agentConfig.inputFiles],
-    referenceFiles: [...state.agentConfig.referenceFiles],
-    auxiliaryFiles: [...state.agentConfig.auxiliaryFiles],
-    mediaFiles: [...state.agentConfig.mediaFiles],
-    outputFiles: [...state.agentConfig.outputFiles],
-  };
-
-  if (isWorkflowTaskState(state)) {
-    return {
-      agentConfig: clonedAgentConfig,
-      activeFiles: { ...state.activeFiles },
-    } as TaskState;
-  }
-
-  return {
-    agentConfig: clonedAgentConfig,
-    toolSessionState: state.toolSessionState
-      ? { ...state.toolSessionState }
-      : undefined,
-  } as TaskState;
-};
-
 export class ProgressViewState {
   private _streamTabs: StreamTabsManager;
   private _taskGroups: TaskGroupManager;
@@ -482,15 +449,14 @@ export class ProgressViewState {
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this.taskStates.set(streamTabId, cloneTaskState(taskState));
+    this.taskStates.set(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
 
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    const stored = this.taskStates.get(streamTabId);
-    return stored ? cloneTaskState(stored) : undefined;
+    return this.taskStates.get(streamTabId);
   }
 
   clearTaskState(streamTabId: StreamTabId): void {
@@ -503,12 +469,7 @@ export class ProgressViewState {
   }
 
   getAllTaskStates(): Map<StreamTabId, TaskState> {
-    return new Map(
-      Array.from(this.taskStates.entries(), ([stream, state]) => [
-        stream,
-        cloneTaskState(state),
-      ]),
-    );
+    return new Map(this.taskStates);
   }
 
   /**
@@ -683,10 +644,7 @@ export class ProgressViewState {
           continue;
         }
 
-        this.taskStates.set(
-          stream as StreamTabId,
-          cloneTaskState(parseResult.data),
-        );
+        this.taskStates.set(stream as StreamTabId, parseResult.data);
         loaded += 1;
       }
     }
@@ -772,13 +730,7 @@ export class ProgressViewState {
    * Save task states to persistence
    */
   private saveTaskStates(): void {
-    const serialized = Object.fromEntries(
-      Array.from(this.taskStates.entries(), ([stream, state]) => [
-        stream,
-        cloneTaskState(state),
-      ]),
-    );
-
+    const serialized = Object.fromEntries(this.taskStates);
     void this.storage.update(WorkspaceStateKey.TASK_STATES, serialized);
   }
 
