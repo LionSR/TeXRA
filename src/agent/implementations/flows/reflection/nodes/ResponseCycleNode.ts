@@ -207,10 +207,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
       assertCycleFieldsPopulated(shared);
       await flow.run(shared);
 
-      // Interpret completion from shared (results are already there)
-      const completion = interpretCycleCompletion(shared, {
-        lastError: shared.lastError,
-      });
+      // Interpret completion from shared
+      const completion = interpretCycleCompletion(shared);
 
       return {
         kind: 'success',
