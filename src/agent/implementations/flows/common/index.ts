@@ -1,11 +1,9 @@
 /**
  * Common agent flow infrastructure.
  *
- * Exports:
- * - NODE_NO_RETRY, NODE_NO_WAIT: Node configuration constants
- * - NodeExecResult: Shared result type for nodes
- * - BaseFlowServices: Base service interface for all flows
- * - FlowParams: Base flow params type (aliased by flow-specific types)
+ * Re-exports from:
+ * - AgentRunFlowRunner: Flow runner utilities
+ * - BaseFlowServices: Base types, accessors, and cycle options builder
  */
 
 export * from './AgentRunFlowRunner';
