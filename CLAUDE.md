@@ -103,6 +103,7 @@ This project uses **Zod v4**. See AGENTS.md for idiomatic Zod v4 patterns includ
 When refactoring, eliminate unnecessary wrapper functions and indirection layers:
 
 **Anti-pattern (too many layers):**
+
 ```
 Node.exec()
   → wrapperFunction()
@@ -112,6 +113,7 @@ Node.exec()
 ```
 
 **Preferred (direct execution):**
+
 ```
 Node.exec()
   → createFlow()
@@ -119,6 +121,7 @@ Node.exec()
 ```
 
 **Guidelines:**
+
 - Nodes should create and run flows directly in `exec()`, not delegate to wrapper functions
 - If a wrapper only creates state + runs flow + interprets results, inline it
 - Delete wrapper files entirely when they become unused (don't leave empty re-exports)
@@ -126,6 +129,7 @@ Node.exec()
 - Update imports to point to the source of truth (e.g., `CycleServices` not re-exporting files)
 
 **Example refactoring impact:**
+
 - `ResponseCycle.ts` deleted → `ResponseCycleNode` creates flow directly
 - `ToolUseCycle.ts` deleted → `ToolUseCycleNode` creates flow directly
 - Tests updated to use `createResponseCycleFlow()` / `createToolUseCycleFlow()` directly
