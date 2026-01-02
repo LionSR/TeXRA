@@ -12,8 +12,9 @@
  * - Eliminates closure indirection for cleaner call stacks
  */
 
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -28,12 +29,16 @@ import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 /**
  * Result of preparing initial state for a tool-use session.
+ *
+ * Returns individual state slices directly instead of wrapping in AgentSharedStore.
+ * This eliminates the convert→pass→convert overhead pattern.
  */
 export interface PrepareStateResult {
   messages: ProviderMessage[];
-  store: AgentSharedStore;
-  shouldSkipCycle: boolean;
   runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
+  shouldSkipCycle: boolean;
 }
 
 /**

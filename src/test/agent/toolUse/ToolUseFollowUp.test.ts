@@ -4,8 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { AgentRunState } from '@agent/core/AgentState';
-import { createSharedStore } from '@agent/core/AgentSharedStore';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -15,16 +14,11 @@ import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
-  const workspace = AgentWorkspaceState.create();
-  const store = createSharedStore({
-    roundIndex: 0,
-    runState: new AgentRunState(),
-    workspaceState: workspace,
-    userChannels: {
-      input: Object.freeze({}) as Readonly<Record<string, unknown>>,
-      transient: {},
-    },
-  });
+
+  // Create state snapshots directly (no store wrapper needed)
+  const runState = new AgentRunState();
+  const workspaceState = AgentWorkspaceState.create();
+  const roundState = new ConversationRoundState(0);
 
   const snapshot: ToolUseSessionSnapshot = {
     version: 1,
@@ -36,7 +30,16 @@ describe('ToolUseFollowUp', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    store: store.toSnapshot(),
+    // Store snapshot for backwards compatibility with existing persisted data
+    store: {
+      round: roundState.toSnapshot(),
+      run: runState.toSnapshot(),
+      workspace: workspaceState.toSnapshot(),
+      user: {
+        input: {},
+        transient: {},
+      },
+    },
     lastUpdated: Date.now(),
   };
 
