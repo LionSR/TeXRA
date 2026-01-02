@@ -194,33 +194,3 @@ export function interpretCycleCompletion(
   };
 }
 
-// ============================================================================
-// Debug Context Factory
-// ============================================================================
-
-/**
- * Creates a debug context for cycle operations.
- *
- * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
- * to avoid circular dependency issues.
- */
-export function createDebugContext(
-  options: CycleDebugContext,
-): CycleDebugContext {
-  return { ...options };
-}
-
-/**
- * Creates debug file options for a cycle.
- */
-export function createDebugFileOptions(
-  roundIndex: number,
-  baseName: string,
-  outputFile?: string,
-): CycleDebugFileOptions {
-  return {
-    continuationCount: roundIndex,
-    baseName,
-    outputFile,
-  };
-}
