@@ -278,15 +278,17 @@ function createUsageRecorder(
  * Create standardized interruptible callbacks for tool-use flows.
  *
  * DRY helper for the register/unregister pattern used when running tool-use flows.
+ * Uses the captured streamTabId from the closure rather than callback parameters
+ * to ensure consistent stream ID usage throughout the flow lifecycle.
  */
 function createToolUseCallbacks(
   streamTabId: StreamTabId,
 ): RunToolUseFlowCallbacks {
   return {
-    onContextReady: (_streamId, context) => {
+    onContextReady: (_callbackStreamId, context) => {
       registerInterruptible(streamTabId, context);
     },
-    onFlowComplete: () => {
+    onFlowComplete: (_callbackStreamId) => {
       unregisterInterruptible(streamTabId);
     },
   };
@@ -296,15 +298,21 @@ function createToolUseCallbacks(
  * Create standardized interruptible callbacks for reflection flows.
  *
  * DRY helper for the register/unregister pattern used when running reflection flows.
+ * Uses the captured streamTabId from the closure rather than the storageKey callback
+ * parameter, since registerInterruptible expects a StreamTabId.
+ *
+ * Note: The cast to IInterruptible is safe because ReflectionFlowContext implements
+ * the interrupt() method required by IInterruptible.
  */
 function createReflectionCallbacks(
   streamTabId: StreamTabId,
 ): RunReflectionFlowCallbacks {
   return {
     onContextReady: (_storageKey, context) => {
+      // Cast is safe: ReflectionFlowContext has interrupt() method
       registerInterruptible(streamTabId, context as IInterruptible);
     },
-    onFlowComplete: () => {
+    onFlowComplete: (_storageKey) => {
       unregisterInterruptible(streamTabId);
     },
   };
@@ -341,15 +349,24 @@ function buildBaseFlowInput(
  *
  * DRY helper: All three flow execution functions call setActiveStream
  * and set stream status to RUNNING.
+ *
+ * @param ctx - Flow execution context
+ * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
+ *                              where the snapshot's stream ID should be used instead of
+ *                              the regenerated one from ctx)
  */
-function setupFlowUIState(ctx: FlowExecutionContext): void {
+function setupFlowUIState(
+  ctx: FlowExecutionContext,
+  streamTabIdOverride?: StreamTabId,
+): void {
+  const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
   bus.emit('setActiveStream', {
-    stream: ctx.streamTabId,
+    stream: streamTabId,
     session: ctx.agentConfig.session!,
     isRemote: isRemoteAgent(ctx.agentConfig.agent),
     hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
   });
-  StreamStatusService.set(ctx.streamTabId, STREAM_STATUS.RUNNING);
+  StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
 /**
@@ -706,7 +723,8 @@ export async function resumeToolUseFromSnapshot(
   const interruptManager = new InterruptManager();
 
   try {
-    setupFlowUIState(ctx);
+    // Use snapshot's stream ID for UI state to maintain consistency
+    setupFlowUIState(ctx, streamTabId);
 
     // Run the flow with resume snapshot
     // Note: Custom callbacks needed here because setupSession must run in onContextReady
