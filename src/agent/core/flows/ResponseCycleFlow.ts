@@ -9,6 +9,7 @@ import { BaseNode, Flow } from '@agent/node';
 // Internal imports
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
+  BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   type CycleDebugContext,
@@ -17,10 +18,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 // Type imports
-import {
-  ProviderMessageSchema,
-  type ProviderMessage,
-} from '@agent/modelHandlers/types/ProviderMessage';
+import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - utilities
@@ -64,54 +62,35 @@ export interface CycleDebugOptions {
 }
 
 // ============================================================================
-// Cycle Fields Schema (Single Source of Truth)
+// Cycle Fields Schema (Extends Base)
 // ============================================================================
 
 /**
- * Schema for serializable cycle fields.
+ * Schema for serializable response cycle fields.
  *
- * This is the SINGLE SOURCE OF TRUTH for cycle field definitions.
- * Both ResponseCycleShared and ReflectionFlowShared derive from this.
+ * Extends BaseCycleFieldsSchema with response-specific fields for output tracking.
+ * ReflectionFlowShared uses this (or derives from it) for native nesting.
  *
  * ## Field Categories
  *
- * Required fields (must be initialized before cycle runs):
- * - messages, shouldStop, endTurn, outputExists, outputLocation
+ * From BaseCycleFieldsSchema (shared with ToolUseCycleFlow):
+ * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
  *
- * Optional fields (populated during/after cycle execution):
- * - responseTimeMs, stopReason, processedResponse, lastError
+ * Response-specific fields:
+ * - outputExists, outputLocation, processedResponse
  *
  * ## Serialization
  *
  * All fields here are natively serializable (structuredClone compatible).
  * Non-serializable fields (debug, responseObject) are in CycleTransientFields.
  */
-export const CycleFieldsSchema = z.object({
-  /** Messages being processed in this cycle */
-  messages: z.array(ProviderMessageSchema),
-  /** Whether the cycle should stop processing */
-  shouldStop: z.boolean(),
-  /**
-   * Whether the last cycle ended normally (model said end_turn).
-   *
-   * Used by callers to distinguish between:
-   * - Normal completion: shouldStop=true, endTurn=true
-   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
-   * - Failure: shouldStop=true, endTurn=false, lastError defined
-   */
-  endTurn: z.boolean(),
+export const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Whether output file exists */
   outputExists: z.boolean(),
   /** Agent output location (nullable for native nesting compatibility) */
   outputLocation: AgentFileLocationSchema.nullable(),
-  /** Time taken for response in milliseconds */
-  responseTimeMs: z.number().optional(),
-  /** Reason the model stopped generating (nullable to match ProviderStopReason) */
-  stopReason: z.string().nullable().optional(),
   /** Processed response text */
   processedResponse: z.string().optional(),
-  /** Last error info for retry handling */
-  lastError: RetryErrorInfoSchema.optional(),
 });
 
 /** Serializable cycle fields derived from schema */
