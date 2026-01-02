@@ -6,7 +6,7 @@ This document catalogs violations of PocketFlow philosophy and Ousterhout's soft
 
 | Category                          | Severity | Status           | Primary Files           |
 | --------------------------------- | -------- | ---------------- | ----------------------- |
-| Node Lifecycle (exec() mutations) | CRITICAL | **FIXED**        | MediaPreparationNode.ts |
+| Node Lifecycle (exec() mutations) | CRITICAL | **FIXED**        | MediaExtractionNode.ts |
 | State Slice Exposure in Services  | HIGH     | Re-evaluated: OK | CycleServices.ts        |
 | Snapshot Pattern Complexity       | MEDIUM   | Documented       | ReflectionFlowState.ts  |
 | Services Interface Size           | MEDIUM   | Documented       | BaseFlowServices.ts     |
@@ -17,7 +17,7 @@ This document catalogs violations of PocketFlow philosophy and Ousterhout's soft
 
 ### 1. exec() Mutates State via latexMediaManager ✅ FIXED
 
-**File**: `src/agent/implementations/flows/reflection/nodes/MediaPreparationNode.ts`
+**File**: `src/agent/implementations/flows/reflection/nodes/MediaExtractionNode.ts`
 
 **Original Problem**: `exec()` mutated `workspaceState` via `latexMediaManager.processInputFiles()`, violating PocketFlow's principle that `exec()` should be compute-only.
 
@@ -123,4 +123,4 @@ shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
 ## Changelog
 
-- **2025-01-01**: Fixed CRITICAL issue in MediaPreparationNode. Re-evaluated state slice exposure as acceptable pattern.
+- **2025-01-01**: Fixed CRITICAL issue in MediaExtractionNode. Re-evaluated state slice exposure as acceptable pattern.
