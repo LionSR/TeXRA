@@ -12,8 +12,8 @@ import {
   BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
-  type CycleDebugContext,
   type CycleDebugFileOptions,
+  getDebugContext,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
@@ -52,14 +52,8 @@ import {
   type ResponseCycleServices,
 } from './CycleServices';
 
-/**
- * Debug options for cycle - consolidated from separate context/fileOptions fields.
- * Always set/checked together, so merged into single optional field.
- */
-export interface CycleDebugOptions {
-  context: CycleDebugContext;
-  fileOptions: CycleDebugFileOptions;
-}
+// Debug context is now derived from services at call sites using getDebugContext().
+// CycleDebugFileOptions is imported from CommonCycleTypes where needed.
 
 // ============================================================================
 // Cycle Fields Schema (Extends Base)
@@ -99,14 +93,18 @@ export type CycleFields = z.infer<typeof CycleFieldsSchema>;
 /**
  * Transient cycle fields that are NOT serialized.
  *
- * These contain non-serializable data (logger, unknown response objects)
+ * These contain non-serializable data (unknown response objects)
  * and are regenerated each cycle execution.
+ *
+ * NOTE: Debug context (logger, executionId) is derived from services at each
+ * `maybeSaveDebugObject` call site using `getDebugContext()`. Only file options
+ * are stored in shared since they vary by cycle state.
  */
 export interface CycleTransientFields {
   /** System prompt for model (regenerated from agent prompt each cycle) */
   systemPrompt?: string;
-  /** Debug options containing logger (non-serializable) */
-  debug?: CycleDebugOptions;
+  /** Debug file options (context derived from services at call sites) */
+  debugFileOptions?: CycleDebugFileOptions;
   /** Raw response from model (type unknown, not serialized) */
   responseObject?: unknown;
 }
@@ -188,11 +186,11 @@ class ResponsePrepNode<C> extends BaseNode<
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
-    debug?: CycleDebugOptions;
+    debugFileOptions?: CycleDebugFileOptions;
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { agentPrompt, userVars, logger, agentConfig, round } = services;
+    const { agentPrompt, userVars, round } = services;
     const interrupted = Boolean(await services.checkInterruption());
     // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
@@ -201,28 +199,20 @@ class ResponsePrepNode<C> extends BaseNode<
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
 
-    // Consolidated debug options (always used together)
-    const debug: CycleDebugOptions | undefined = interrupted
+    // Only file options are stored - context is derived from services at call sites
+    const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
       ? undefined
       : {
-          context: {
-            logger,
-            modelName: agentConfig.model,
-            executionId: services.context.executionId,
-            isRemote: isRemoteAgent(agentConfig.agent),
-          },
-          fileOptions: {
-            continuationCount: round.continuationCount,
-            baseName: 'response',
-            outputFile: outputLocation.relativePath,
-          },
+          continuationCount: round.continuationCount,
+          baseName: 'response',
+          outputFile: outputLocation.relativePath,
         };
 
     return {
       interrupted,
       exists,
       systemPrompt,
-      debug,
+      debugFileOptions,
       outputLocation,
     };
   }
@@ -233,7 +223,7 @@ class ResponsePrepNode<C> extends BaseNode<
       interrupted: boolean;
       exists: boolean;
       systemPrompt?: string;
-      debug?: CycleDebugOptions;
+      debugFileOptions?: CycleDebugFileOptions;
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
@@ -243,18 +233,22 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
+    const { agentConfig } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
-    shared.debug = prepRes.debug;
+    shared.debugFileOptions = prepRes.debugFileOptions;
     shared.outputLocation = prepRes.outputLocation;
     resetResponseCycleShared(shared);
 
-    if (shared.debug) {
+    if (shared.debugFileOptions) {
       await maybeSaveDebugObject({
         object: shared.messages,
         objectType: 'messages',
-        context: shared.debug.context,
-        fileOptions: shared.debug.fileOptions,
+        context: getDebugContext(this.services, {
+          modelName: agentConfig.model,
+          isRemote: isRemoteAgent(agentConfig.agent),
+        }),
+        fileOptions: shared.debugFileOptions,
       });
     }
 
@@ -376,7 +370,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { logger } = this.services;
+    const { logger, agentConfig } = this.services;
 
     // Handle non-success cases (returns null) or get narrowed success result
     // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
@@ -393,12 +387,15 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     shared.responseObject = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
-    if (shared.debug) {
+    if (shared.debugFileOptions) {
       await maybeSaveDebugObject({
         object: successRes.response,
         objectType: 'response',
-        context: shared.debug.context,
-        fileOptions: shared.debug.fileOptions,
+        context: getDebugContext(this.services, {
+          modelName: agentConfig.model,
+          isRemote: isRemoteAgent(agentConfig.agent),
+        }),
+        fileOptions: shared.debugFileOptions,
       });
     }
 
