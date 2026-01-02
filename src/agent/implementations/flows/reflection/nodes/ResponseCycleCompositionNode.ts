@@ -28,7 +28,13 @@ import {
 } from '@agent/implementations/flows/common';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { executeResponseCycleCore } from '@agent/core/ResponseCycle';
+import {
+  createResponseCycleFlow,
+  type ResponseCycleShared,
+  type ResponseCycleState,
+} from '@agent/core/flows/ResponseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
+import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import { finalizeRound } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -129,10 +135,10 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
   }
 
   /**
-   * Execute response cycle via shared core function.
+   * Execute response cycle directly (no wrapper function).
    *
-   * Delegates to executeResponseCycleCore() which is the single entry point
-   * for response cycle execution.
+   * Creates and runs ResponseCycleFlow inline, eliminating the
+   * executeResponseCycleCore() wrapper layer.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const services = this.services;
@@ -176,23 +182,45 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // Execute via shared core function (single source of truth)
-      const result = await executeResponseCycleCore({
-        options: cycleOptions,
-        messages: initializedMessages,
-        outputLocation: prepRes.outputLocation,
+      // Create shared state for the cycle flow
+      const shared: ResponseCycleShared = {
+        state: {
+          messages: initializedMessages,
+          outputLocation: prepRes.outputLocation,
+          endTurn: false,
+          shouldStop: false,
+          outputExists: false,
+          systemPrompt: undefined,
+          debug: undefined,
+          responseObject: undefined,
+          responseTimeMs: undefined,
+          stopReason: undefined,
+          processedResponse: undefined,
+        } satisfies ResponseCycleState,
+        retryState: createRetryState(),
+      };
+
+      // Create and run the flow directly
+      const flow = createResponseCycleFlow<C>();
+      flow.setServices({
+        ...cycleOptions,
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
         onRoundFinalized,
       });
+      await flow.run(shared);
+
+      // Interpret completion from flow state
+      const completion = interpretCycleCompletion(shared.state, shared.retryState);
 
       return {
         kind: 'success',
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        ...result,
+        endTurn: shared.state.endTurn,
+        ...completion,
       };
     } catch (error) {
       // Error path: finalize round on unexpected errors
