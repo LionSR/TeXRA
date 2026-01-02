@@ -1,5 +1,5 @@
 /**
- * XML utilities - barrel export for backward compatibility.
+ * XML utilities - barrel export.
  *
  * This module re-exports from focused submodules:
  * - xmlCdata: CDATA section handling
@@ -7,28 +7,8 @@
  * - xmlConversion: Format conversion (Pandoc, Turndown)
  * - xmlExtraction: Content extraction from XML/LaTeX
  *
- * New code should import directly from the specific module when possible.
+ * Import directly from the specific module when possible for better tree-shaking.
  */
-
-// Import for default export object
-import {
-  removeCDATA,
-  addCdataToTags,
-  addCdataToTagsMultiple,
-} from './xmlCdata';
-import { formatContent } from './xmlConversion';
-import {
-  extractTextFromTag,
-  extractLatexFromMarkdown,
-  extractLatexBetweenDocumentClass,
-  extractMultipleTextFromTag,
-  filterTagsFromText,
-  extractContentFromXMLbyTag,
-  extractContentFromXMLbyTagMultiple,
-  extractScratchpad,
-  extractDocument,
-  extractDocuments,
-} from './xmlExtraction';
 
 // Re-export from CDATA module
 export {
@@ -69,23 +49,3 @@ export {
   type ExtractionResult,
   type MultipleExtractionResult,
 } from './xmlExtraction';
-
-// Default export for backward compatibility
-export const xmlUtils = {
-  removeCDATA,
-  addCdataToTags,
-  addCdataToTagsMultiple,
-  extractTextFromTag,
-  extractLatexFromMarkdown,
-  extractLatexBetweenDocumentClass,
-  extractMultipleTextFromTag,
-  filterTagsFromText,
-  extractContentFromXMLbyTag,
-  extractContentFromXMLbyTagMultiple,
-  formatContent,
-  extractScratchpad,
-  extractDocument,
-  extractDocuments,
-};
-
-export default xmlUtils;
