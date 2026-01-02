@@ -197,6 +197,7 @@ const TOOL_ICON_MAP = {
   edit_file: 'codicon-edit',
   file_op: 'codicon-file-code',
   str_replace_editor: 'codicon-edit',
+  apply_path: 'codicon-diff',
 
   // Search/find
   glob: 'codicon-search',
