@@ -40,11 +40,11 @@ export class MainViewProvider
 
   // Debounced refresh methods using perfect-debounce
   private debouncedRefreshAgentOptions = debounce(
-    () => this.refreshAgentOptions(),
+    this.refreshAgentOptions.bind(this),
     DEBOUNCE_OPTIONS_MS,
   );
   private debouncedRefreshModelOptions = debounce(
-    () => this.refreshModelOptions(),
+    this.refreshModelOptions.bind(this),
     DEBOUNCE_OPTIONS_MS,
   );
 
@@ -83,17 +83,13 @@ export class MainViewProvider
 
   private setupConfigurationWatcher() {
     // Watch for agent configuration changes - only refresh agent options
-    watchConfig(this.context, ['texra.agents', 'texra.toolUseAgents'], () =>
-      this.debouncedRefreshAgentOptions(),
-    );
+    watchConfig(this.context, ['texra.agents', 'texra.toolUseAgents'], this.debouncedRefreshAgentOptions);
 
     // Watch for model configuration changes - only refresh model options
-    watchConfig(this.context, ['texra.models'], () =>
-      this.debouncedRefreshModelOptions(),
-    );
+    watchConfig(this.context, ['texra.models'], this.debouncedRefreshModelOptions);
 
     // Watch for file configuration changes - only refresh file list
-    watchConfig(this.context, ['texra.files'], () => this.refreshFiles());
+    watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
   }
 
   private setupAuthListener() {
@@ -175,8 +171,8 @@ export class MainViewProvider
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
 
     // Handle file changes
-    this.fileWatcher.onDidCreate(() => this.refreshFiles());
-    this.fileWatcher.onDidDelete(() => this.refreshFiles());
+    this.fileWatcher.onDidCreate(this.refreshFiles.bind(this));
+    this.fileWatcher.onDidDelete(this.refreshFiles.bind(this));
 
     // Dispose watcher when extension is deactivated
     this.context.subscriptions.push(this.fileWatcher);
