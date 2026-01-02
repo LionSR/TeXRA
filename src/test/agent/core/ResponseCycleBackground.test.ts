@@ -13,8 +13,12 @@ import {
   AgentType,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { runResponseCycle } from '@agent/core/ResponseCycle';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import {
+  createResponseCycleFlow,
+  type ResponseCycleShared,
+  type ResponseCycleState,
+} from '@agent/core/flows/ResponseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 // Type imports
@@ -321,43 +325,54 @@ describe('ResponseCycle background reasoning logs', () => {
     });
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new ConversationRoundState(1);
-    const stateGlobal = new AgentRunState();
-    const workspaceState = AgentWorkspaceState.create();
-    const userVarChannels = {
-      input: Object.freeze({}),
-      transient: {} as Record<string, any>,
-    };
-    const store = new AgentSharedStore({
-      round: stateRound,
-      run: stateGlobal,
-      workspace: workspaceState,
-      user: userVarChannels,
-    });
+    const round = new ConversationRoundState(1);
+    const run = new AgentRunState();
+    const workspace = AgentWorkspaceState.create();
+    const userVars = {} as Record<string, any>;
+    const outputLocation = createWorkspaceLocation(
+      WorkspaceFS.fullPath('output.txt'),
+      'output.txt',
+    );
 
-    await runResponseCycle({
-      options: {
-        modelHandler: handler,
-        agentSetting,
-        agentConfig,
-        agentPrompt,
-        userVars: userVarChannels.transient,
-        logger: loggerStub,
-        client: {} as OpenAI,
-        checkInterruption: () => false,
-        setAbortController: () => {},
-        context: new AgentExecutionContext({
-          streamId: 'test-stream' as StreamTabId,
-        }),
-        fileService: new TaskRunFileService(),
-      },
-      messages,
-      outputLocation: createWorkspaceLocation(
-        WorkspaceFS.fullPath('output.txt'),
-        'output.txt',
-      ),
-      store,
+    // Create shared state for the cycle flow
+    const shared: ResponseCycleShared = {
+      state: {
+        messages,
+        outputLocation,
+        endTurn: false,
+        shouldStop: false,
+        outputExists: false,
+        systemPrompt: undefined,
+        debug: undefined,
+        responseObject: undefined,
+        responseTimeMs: undefined,
+        stopReason: undefined,
+        processedResponse: undefined,
+      } satisfies ResponseCycleState,
+      retryState: createRetryState(),
+    };
+
+    // Create and run the flow directly
+    const flow = createResponseCycleFlow();
+    flow.setServices({
+      modelHandler: handler,
+      agentSetting,
+      agentConfig,
+      agentPrompt,
+      userVars,
+      logger: loggerStub,
+      client: {} as OpenAI,
+      checkInterruption: () => false,
+      setAbortController: () => {},
+      context: new AgentExecutionContext({
+        streamId: 'test-stream' as StreamTabId,
+      }),
+      fileService: new TaskRunFileService(),
+      round,
+      run,
+      workspace,
     });
+    await flow.run(shared);
 
     const thinkingLogs = loggedEvents.filter(
       (event) =>

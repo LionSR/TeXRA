@@ -29,12 +29,13 @@ import {
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import type { ToolUseCycleParams } from '@agent/core/flows/CycleServices';
 
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
+import type { TodoItem } from '@eventBus/schemas';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Internal imports
 import {
@@ -251,8 +252,8 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleCompositionNode).
- * This eliminates the circular reference through services.runCycle().
+ * Creates and runs ToolUseCycleFlow directly in exec() (like ResponseCycleNode).
+ * Flow is created fresh each execution to avoid stale state.
  *
  * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
@@ -261,11 +262,8 @@ class ToolUseCycleNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  private cycleFlow: Flow<ToolUseCycleShared, ToolUseCycleParams<C>>;
-
   constructor() {
     super(NODE_NO_RETRY, NODE_NO_WAIT);
-    this.cycleFlow = createToolUseCycleFlow<C>();
   }
 
   async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
@@ -292,7 +290,9 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Create cycle shared state (like ResponseCycleCompositionNode)
+    // Create cycle shared state (like ResponseCycleNode)
+    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    // cycleIndex starts from run.totalRounds to maintain continuity across user follow-ups
     const cycleShared: ToolUseCycleShared = {
       state: {
         messages: prepRes.conversation,
@@ -302,24 +302,38 @@ class ToolUseCycleNode<C> extends Node<
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
+        cycleIndex: prepRes.store.run.totalRounds,
+        cycleResponseTimeMs: 0,
+        cycleNormalizedUsage: undefined,
         endTurn: false,
       } satisfies ToolUseCycleState,
       retryState: createRetryState(),
     };
 
-    // Inject services directly and run sub-flow (like ResponseCycleCompositionNode)
-    // Options are spread with state slices (no store wrapper)
+    // Create and run the flow directly (like ResponseCycleNode)
+    // Note: Tool-use cycles track metrics in flow state (cycleIndex, etc.)
+    // instead of a round object, so we only pass run/workspace/onRoundFinalized.
+    const flow = createToolUseCycleFlow<C>();
     const onRoundFinalized = this.services.getUsageRecorder();
-    this.cycleFlow.setServices({
+    flow.setServices({
       ...prepRes.cycleOptions,
-      round: prepRes.store.round,
       run: prepRes.store.run,
       workspace: prepRes.store.workspace,
       onRoundFinalized,
     });
 
+    // Set up todo update callback to emit changes to the progress view
+    const { context } = this.services;
+    prepRes.store.workspace.todos.setOnUpdate((todos: TodoItem[]) => {
+      bus.emit('updateTodos', {
+        stream: context.streamId,
+        executionId: context.executionId,
+        todos,
+      });
+    });
+
     try {
-      await this.cycleFlow.run(cycleShared);
+      await flow.run(cycleShared);
 
       // Interpret cycle completion using shared helper
       const completion = interpretCycleCompletion(
@@ -342,6 +356,9 @@ class ToolUseCycleNode<C> extends Node<
         kind: 'failed',
         message: error instanceof Error ? error.message : String(error),
       };
+    } finally {
+      // Clear the todo update callback to prevent memory leaks
+      prepRes.store.workspace.todos.clearOnUpdate();
     }
   }
 
