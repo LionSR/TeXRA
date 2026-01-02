@@ -50,8 +50,4 @@ export class WorkspaceFS extends RelativeFS {
   }
 }
 
-/** @deprecated Use WorkspaceFS.toAbsolute() instead */
-export const resolveFilePath = (filePath: string): string =>
-  WorkspaceFS.toAbsolute(filePath);
-
 export default WorkspaceFS;
