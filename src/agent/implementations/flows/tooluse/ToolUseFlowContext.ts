@@ -220,22 +220,18 @@ async function applyFollowUpMessage<C>(
 }
 
 // ============================================================================
-// Factory Functions
+// Factory Function
 // ============================================================================
 
 /**
- * Build tool-use flow services from initialization config.
+ * Creates a ToolUseFlowContext with all services and behaviors configured.
  *
- * This is the PocketFlow-native way: simple factory function that creates
- * all services eagerly and returns them as a plain object.
+ * This is the primary entry point for setting up flow execution.
+ * Returns a simple object with services and lifecycle methods.
  */
-export function buildToolUseServices<C = unknown>(
+export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
-): {
-  services: ToolUseServices<C>;
-  sessionLifecycle: ToolUseSessionLifecycle;
-  resolvedTools: ToolDefinition[];
-} {
+): ToolUseFlowContext<C> {
   const {
     setting,
     streamTabId,
@@ -257,14 +253,11 @@ export function buildToolUseServices<C = unknown>(
   // Capture snapshot in closure for prepareState
   const snapshot = resumeSnapshot ?? null;
 
-  // Return complete services object
+  // Build complete services object
   const services: ToolUseServices<C> = {
-    // Spread base init fields
     ...init,
-    // Add convenience accessors
     logger: init.executionContext.logger,
     context: init.executionContext,
-    // Override with narrowed setting type
     setting,
     toolRegistry,
     session: sessionLifecycle,
@@ -276,33 +269,14 @@ export function buildToolUseServices<C = unknown>(
     getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
   };
 
-  return { services, sessionLifecycle, resolvedTools };
-}
-
-/**
- * Creates a ToolUseFlowContext with all services and behaviors configured.
- *
- * This is the primary entry point for setting up flow execution.
- * Returns a simple object with services and lifecycle methods.
- */
-export function createToolUseFlowContext<C = unknown>(
-  init: ToolUseFlowContextInit<C>,
-): ToolUseFlowContext<C> {
-  const { services, sessionLifecycle } = buildToolUseServices(init);
-
   return {
     services,
-    streamTabId: init.streamTabId,
+    streamTabId,
     session: sessionLifecycle,
 
     interrupt(): void {
-      // Notify runtime layer to update interrupt state
       init.onInterrupt?.();
-
-      // Clear any pending retry request to avoid memory leaks
-      retryCoordinator.clearRequest(init.streamTabId);
-
-      // Clean up session lifecycle (PersistedFlow handles state cleanup)
+      retryCoordinator.clearRequest(streamTabId);
       sessionLifecycle.interrupt();
       sessionLifecycle.setStore(null);
     },
