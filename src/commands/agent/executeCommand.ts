@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentHistoryManager } from '@common/history';
@@ -19,7 +19,7 @@ const CHANNEL = 'ExecuteCommand';
 /**
  * Explicit wrapper format: { config, executionId?, resume? }
  *
- * Note: `config` is z.unknown() because validation is handled by parseAgentConfig(),
+ * Note: `config` is z.unknown() because validation is handled by AgentConfigSchema.parse(),
  * which owns AgentConfigSchema. Errors will surface as ZodError in the catch block.
  */
 const ExplicitWrapperSchema = z.object({
@@ -60,7 +60,7 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     const { config, executionId, resume } = parseExecuteInput(input);
-    const normalizedConfig = parseAgentConfig(config);
+    const normalizedConfig = AgentConfigSchema.parse(config);
 
     if (resume && executionId) {
       await executeAgent(normalizedConfig, executionId, { resume: true });

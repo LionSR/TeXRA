@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent components
-import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentType,
@@ -38,7 +38,7 @@ const basePrompt: AgentPrompt = {
   userRequest: '',
 };
 
-const baseConfig: AgentConfig = parseAgentConfig({
+const baseConfig: AgentConfig = AgentConfigSchema.parse({
   model: 'test',
   agent: 'agent',
   instruction: '',
