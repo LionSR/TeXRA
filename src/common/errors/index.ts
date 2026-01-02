@@ -7,6 +7,7 @@ export {
   logErrorMessage,
   showLoggedErrorMessage,
   showLoggedMessage,
+  showLoggedInfoMessage,
   showLoggedMessageWithDocs,
 } from './errorHandlingUtils';
 export {
