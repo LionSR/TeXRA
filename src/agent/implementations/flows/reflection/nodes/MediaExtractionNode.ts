@@ -1,16 +1,16 @@
 /**
- * MediaPreparationNode - Extracts media files (figures, TikZ, PDFs) and adds to messages.
+ * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
  *
- * Single responsibility: Extract media and add to user message.
+ * Single responsibility: Extract media from input/output files and add to user message.
  * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine files using shared helper, get context
- * - exec(): Extract media (mutates workspaceState via latexMediaManager)
- * - post(): Add media to messages via modelHandler, log warnings if degraded
+ * - prep(): Determine files, reconstruct workspace from snapshot
+ * - exec(): Extract media via latexMediaManager (mutates workspace)
+ * - post(): Update snapshot, add media to messages
  *
- * Note: latexMediaManager mutates workspaceState in place for media extraction,
- * then we add the extracted files to messages via modelHandler.
+ * Note: exec() mutates workspaceState via latexMediaManager. This is acceptable
+ * because NODE_NO_RETRY means no retries, so no duplicate mutations possible.
  *
  * Services accessed via native `this.services`:
  * - latexMediaManager, config, fileService, modelHandler, logger
@@ -23,7 +23,6 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
@@ -60,7 +59,7 @@ interface MediaExecResult {
 // Node Implementation
 // ============================================================================
 
-export class MediaPreparationNode<C = unknown> extends Node<
+export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>
@@ -70,7 +69,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   }
 
   /**
-   * Determine files using shared helper and collect extra media.
+   * Determine files and reconstruct workspace from snapshot.
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
@@ -111,7 +110,6 @@ export class MediaPreparationNode<C = unknown> extends Node<
   /**
    * Extract media from files.
    * Mutates workspaceState via latexMediaManager to collect media files.
-   * Throws on error - execFallback() handles graceful degradation.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
     const { latexMediaManager, config, logger } = this.services;
@@ -160,8 +158,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   }
 
   /**
-   * Add media to messages via modelHandler and continue.
-   * CRITICAL: Update workspace snapshot after mutations from exec().
+   * Update snapshot and add media to messages.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -170,9 +167,7 @@ export class MediaPreparationNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // CRITICAL: Save mutated workspace state back to snapshot
-    // The latexMediaManager mutated workspaceState in exec(), so we must
-    // update the snapshot to persist those changes
+    // Update workspace snapshot (exec mutated workspaceState)
     updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
     // Add media to messages if we have files and context

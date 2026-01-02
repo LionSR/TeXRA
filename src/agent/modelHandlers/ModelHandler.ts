@@ -817,7 +817,7 @@ export abstract class ModelHandler<
 
   /**
    * Add media files to the last user message in the conversation.
-   * Used by MediaPreparationNode to add figures/PDFs after message building.
+   * Used by MediaExtractionNode to add figures/PDFs after message building.
    *
    * @param messages - Existing messages array (mutated in place)
    * @param mediaFiles - Media files to add
