@@ -12,11 +12,9 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  CycleDebugContext,
-  CycleDebugFileOptions,
+  type CycleDebugContext,
+  type CycleDebugFileOptions,
   SkippableNodeResult,
-  createDebugContext,
-  createDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -150,17 +148,17 @@ class ResponsePrepNode<C> extends BaseNode<
     const debug: CycleDebugOptions | undefined = interrupted
       ? undefined
       : {
-          context: createDebugContext({
+          context: {
             logger,
             modelName: agentConfig.model,
             executionId: services.context.executionId,
             isRemote: isRemoteAgent(agentConfig.agent),
-          }),
-          fileOptions: createDebugFileOptions(
-            round.continuationCount,
-            'response',
-            state.outputLocation.relativePath,
-          ),
+          },
+          fileOptions: {
+            continuationCount: round.continuationCount,
+            baseName: 'response',
+            outputFile: state.outputLocation.relativePath,
+          },
         };
 
     return {

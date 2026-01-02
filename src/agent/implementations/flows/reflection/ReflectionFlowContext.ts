@@ -198,21 +198,21 @@ export interface ReflectionFlowContext<C = unknown> {
 }
 
 // ============================================================================
-// Factory Functions
+// Factory Function
 // ============================================================================
 
 /**
- * Build reflection flow services from initialization config.
+ * Creates a ReflectionFlowContext with all services and behaviors configured.
  *
- * This is the PocketFlow-native way: simple factory function that creates
- * all services eagerly and returns them as a plain object.
+ * This is the primary entry point for setting up flow execution.
+ * Returns a simple object with services and lifecycle methods.
  *
  * Note: Returns partial services (missing runStage). The runStage is added
  * by runReflectionFlow after the run stage is created/provided.
  */
-export function buildReflectionServices<C = unknown>(
+export function createReflectionFlowContext<C = unknown>(
   init: ReflectionFlowContextInit<C>,
-): ReflectionServicesPartial<C> {
+): ReflectionFlowContext<C> {
   const {
     config,
     setting,
@@ -251,21 +251,18 @@ export function buildReflectionServices<C = unknown>(
 
   // Compute behavior from configuration
   const shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(setting);
+  const totalRounds = computeTotalRounds(setting, prompt);
 
   // Use custom getter if provided, otherwise create default
   const getOutputFileLocation =
     init.getOutputFileLocation ??
     createOutputFileLocationGetter(config, setting, modelHandler, fileService);
 
-  // Return partial services (missing runStage - added by runReflectionFlow)
-  // Round stages (r0, r1...) are managed by RoundPersistedFlow, not by services
-  return {
-    // Spread base init fields
+  // Build partial services (missing runStage - added by runReflectionFlow)
+  const services: ReflectionServicesPartial<C> = {
     ...init,
-    // Add convenience accessors
     logger: executionContext.logger,
     context: executionContext,
-    // Override with narrowed setting type
     setting,
     outputHandler,
     latexMediaManager,
@@ -275,35 +272,22 @@ export function buildReflectionServices<C = unknown>(
     shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
     getUsageRecorder,
   };
-}
-
-/**
- * Creates a ReflectionFlowContext with all services and behaviors configured.
- *
- * This is the primary entry point for setting up flow execution.
- * Returns a simple object with services and lifecycle methods.
- */
-export function createReflectionFlowContext<C = unknown>(
-  init: ReflectionFlowContextInit<C>,
-): ReflectionFlowContext<C> {
-  const services = buildReflectionServices(init);
-  const totalRounds = computeTotalRounds(init.setting, init.prompt);
 
   return {
     services,
     totalRounds,
 
     setActiveRun(storageKey: StorageKey): void {
-      services.outputHandler.setActiveRun(storageKey);
+      outputHandler.setActiveRun(storageKey);
     },
 
     interrupt(): void {
       init.onInterrupt?.();
-      retryCoordinator.clearRequest(init.executionContext.streamId);
+      retryCoordinator.clearRequest(executionContext.streamId);
     },
 
     dispose(): void {
-      retryCoordinator.clearRequest(init.executionContext.streamId);
+      retryCoordinator.clearRequest(executionContext.streamId);
     },
   };
 }
