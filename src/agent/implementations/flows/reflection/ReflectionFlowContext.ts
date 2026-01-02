@@ -269,7 +269,7 @@ export function createReflectionFlowContext<C = unknown>(
     promptBuilder,
     fileService,
     getOutputFileLocation,
-    shouldEnsureXmlStructure: () => shouldEnsureXmlStructure,
+    shouldEnsureXmlStructure,
     getUsageRecorder,
   };
 
