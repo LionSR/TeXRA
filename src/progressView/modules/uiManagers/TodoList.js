@@ -2,7 +2,7 @@
 import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - shared helpers
-import { safeGetElementById } from '@common/domUtils.js';
+import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
 import { TODO_STATUS } from '@common/constants/todoStatus';
 
 /**
@@ -120,7 +120,7 @@ export class TodoList {
       return;
     }
 
-    elements.container.hidden = false;
+    setVisibilityState(elements.container, true);
   }
 
   /**
@@ -132,7 +132,7 @@ export class TodoList {
       return;
     }
 
-    elements.container.hidden = true;
+    setVisibilityState(elements.container, false);
   }
 
   /**
