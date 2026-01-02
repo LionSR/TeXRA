@@ -2,6 +2,7 @@
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { createFromTemplate } from '@common/templateUtils.js';
+import { setVisibilityState } from '@common/domUtils.js';
 
 /**
  * Manages file list rendering.
@@ -33,16 +34,12 @@ export class FileList {
 
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
       // Hide the collapsible when there are no files
-      if (collapsible) {
-        collapsible.hidden = true;
-      }
+      setVisibilityState(collapsible, false);
       return;
     }
 
     // Show the collapsible when there are files
-    if (collapsible) {
-      collapsible.hidden = false;
-    }
+    setVisibilityState(collapsible, true);
 
     const rounds = Object.keys(filesByRound)
       .map((r) => parseInt(r, 10))
@@ -254,8 +251,6 @@ export class FileList {
     if (container) {
       container.innerHTML = '';
     }
-    if (collapsible) {
-      collapsible.hidden = true;
-    }
+    setVisibilityState(collapsible, false);
   }
 }
