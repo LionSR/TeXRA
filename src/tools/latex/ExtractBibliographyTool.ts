@@ -78,16 +78,15 @@ export class ExtractBibliographyTool extends defineTool({
 
     if (citationKeys.length === 0) {
       const summary = `No citation commands found in ${display}.`;
-      const result = {
+      return {
         summary,
         output: formatToolOutput(`BibTeX entries in ${display}`, null),
+        ...(missingBibliographyFiles.length > 0 && {
+          userInstruction: `Missing bibliography files: ${missingBibliographyFiles
+            .map((file) => resolveAndFormat(file).display)
+            .join(', ')}.`,
+        }),
       };
-      if (missingBibliographyFiles.length > 0) {
-        result.userInstruction = `Missing bibliography files: ${missingBibliographyFiles
-          .map((file) => resolveAndFormat(file).display)
-          .join(', ')}.`;
-      }
-      return result;
     }
 
     const { entries, missingKeys } = await loadBibliographyEntries(
@@ -119,11 +118,6 @@ export class ExtractBibliographyTool extends defineTool({
             citationCount === 1 ? '' : 's'
           } in ${display}.`;
 
-    const result = {
-      summary,
-      output,
-    };
-
     const instructions: string[] = [];
     if (missingBibliographyFiles.length > 0) {
       instructions.push(
@@ -143,10 +137,10 @@ export class ExtractBibliographyTool extends defineTool({
       instructions.push(`Limited output to ${DEFAULT_MAX_ENTRIES} entries.`);
     }
 
-    if (instructions.length > 0) {
-      result.userInstruction = instructions.join(' ');
-    }
-
-    return result;
+    return {
+      summary,
+      output,
+      ...(instructions.length > 0 && { userInstruction: instructions.join(' ') }),
+    };
   }
 }

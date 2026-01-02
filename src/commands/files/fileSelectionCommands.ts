@@ -171,9 +171,7 @@ async function selectOutputFiles(
     }
 
     logger.info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
-    vscode.window.showInformationMessage(
-      `Selected output files: ${relativePaths.join(', ')}`,
-    );
+    showInfoMessage(`Selected output files: ${relativePaths.join(', ')}`);
     return relativePaths;
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);

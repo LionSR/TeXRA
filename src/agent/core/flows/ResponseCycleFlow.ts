@@ -35,7 +35,7 @@ import { getSystemPromptWithRules } from '@utils/prompt';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
 // Local file imports
@@ -481,7 +481,7 @@ class ResponseProcessNode<C> extends BaseNode<
       }
 
       // Scratchpad is always extracted from final response, not streamed
-      const scratchpad = await xmlUtils.extractScratchpad(
+      const scratchpad = await extractScratchpad(
         newResponse,
         'scratchpad',
       );
