@@ -7,6 +7,7 @@ import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   OAUTH_PROVIDERS,
+  getAuthCallbackUri,
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   TOKEN_REFRESH_THRESHOLD_MS,
@@ -597,27 +598,40 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     try {
       const supabase = SupabaseClient.getClient();
 
-      // Get environment-appropriate callback URI (handles Codespaces, Remote SSH, etc.)
-      // In Codespaces, VS Code adds a state parameter that must be preserved for routing
-      const callbackInfo = await getExternalAuthCallbackInfo();
+      // For web environments (Codespaces), use asExternalUri to get proper callback URL
+      // For desktop, use simple callback URI (avoids issues with asExternalUri adding params)
+      const isWeb = this.isWebEnvironment();
 
-      logger.info(
-        'SupabaseAuthProvider',
-        `OAuth callback URI: ${callbackInfo.fullUrl} (scheme: ${vscode.env.uriScheme}, vscodeState: ${callbackInfo.vscodeState ? 'present' : 'none'})`,
-      );
-
-      // Build OAuth options - pass base URL without state to prevent double-encoding
-      // If VS Code provided a state (Codespaces), pass it through queryParams
-      const oauthOptions: {
+      let redirectTo: string;
+      let oauthOptions: {
         redirectTo: string;
         queryParams?: Record<string, string>;
-      } = {
-        redirectTo: callbackInfo.baseUrl,
       };
 
-      if (callbackInfo.vscodeState) {
-        // Preserve VS Code's state for callback routing in Codespaces
-        oauthOptions.queryParams = { state: callbackInfo.vscodeState };
+      if (isWeb) {
+        // Web environment: use asExternalUri for proper Codespaces callback URL
+        const callbackInfo = await getExternalAuthCallbackInfo();
+        redirectTo = callbackInfo.baseUrl;
+        oauthOptions = { redirectTo };
+
+        if (callbackInfo.vscodeState) {
+          // Preserve VS Code's state for callback routing in Codespaces
+          oauthOptions.queryParams = { state: callbackInfo.vscodeState };
+        }
+
+        logger.info(
+          'SupabaseAuthProvider',
+          `OAuth callback URI (web): ${callbackInfo.fullUrl} (vscodeState: ${callbackInfo.vscodeState ? 'present' : 'none'})`,
+        );
+      } else {
+        // Desktop: use simple callback URI like 0.35.1
+        redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
+        oauthOptions = { redirectTo };
+
+        logger.info(
+          'SupabaseAuthProvider',
+          `OAuth callback URI (desktop): ${redirectTo} (scheme: ${vscode.env.uriScheme})`,
+        );
       }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
