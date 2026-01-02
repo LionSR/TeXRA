@@ -55,7 +55,7 @@ export abstract class BaseWebviewProvider {
       webviewView.webview.onDidReceiveMessage((message) =>
         this.messageHandler.handleMessage(message, webviewView),
       ),
-      webviewView.onDidDispose(() => this.cleanupView()),
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
   }
 

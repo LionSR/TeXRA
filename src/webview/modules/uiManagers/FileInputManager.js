@@ -71,7 +71,7 @@ export class FileInputManager extends BaseUIManager {
       if (element) {
         const sortable = new Sortable(element, {
           animation: 150,
-          onEnd: () => this.state.save(),
+          onEnd: this.state.save.bind(this.state),
         });
         this._sortables.push(sortable);
       }
@@ -343,11 +343,11 @@ export class FileInputManager extends BaseUIManager {
         return; // handled by SettingsButtonManager
       }
       if (id !== 'instruction') {
-        this.addListener(id, 'change', () => this.state.save());
+        this.addListener(id, 'change', this.state.save.bind(this.state));
       }
     });
     // Debounce instruction input to avoid saving on every keystroke
-    const debouncedSave = debounce(() => this.state.save(), 500);
+    const debouncedSave = debounce(this.state.save.bind(this.state), 500);
     this.addListener('instruction', 'input', debouncedSave);
   }
 
