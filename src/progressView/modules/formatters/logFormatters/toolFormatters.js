@@ -76,9 +76,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     headerLabel.textContent = titleText;
   }
 
-  if (iconElem) {
-    iconElem.className = `codicon ${iconClass}`;
-  }
+  // Icon already set in createToolElement; just toggle error state
   element.classList.toggle('tool-use-error', normalizedToolLog.isError);
 
   if (!contentElem) {
