@@ -179,13 +179,37 @@ export class AgentRunState {
     this.totalResponseTimeMs += durationMs;
   }
 
-  recordRound(roundState: ConversationRoundState): void {
-    if (roundState.normalizedUsage) {
-      this.usageAccumulator.recordNormalizedUsage(
-        roundState.roundIndex,
-        roundState.normalizedUsage,
-      );
+  /**
+   * Record cycle metrics directly (single source of truth).
+   *
+   * This is the core implementation used by both reflection and tool-use flows.
+   * - Reflection flows call `recordRound()` which delegates here
+   * - Tool-use flows call this directly with accumulated cycle values
+   *
+   * @param cycleIndex - The round/cycle index for usage tracking
+   * @param responseTimeMs - Total response time for this cycle
+   * @param normalizedUsage - Optional normalized usage data
+   */
+  recordCycleMetrics(
+    cycleIndex: number,
+    responseTimeMs: number,
+    normalizedUsage: NormalizedUsage | null,
+  ): void {
+    if (normalizedUsage) {
+      this.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
     }
-    this.addResponseTime(roundState.responseTimeMs);
+    this.addResponseTime(responseTimeMs);
+  }
+
+  /**
+   * Record round metrics from a ConversationRoundState object.
+   * Delegates to recordCycleMetrics() for the actual work.
+   */
+  recordRound(roundState: ConversationRoundState): void {
+    this.recordCycleMetrics(
+      roundState.roundIndex,
+      roundState.responseTimeMs,
+      roundState.normalizedUsage,
+    );
   }
 }
