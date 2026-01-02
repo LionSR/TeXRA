@@ -42,12 +42,15 @@ import {
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import {
   RetryErrorInfoSchema,
   type RetryErrorInfo,
 } from '@agent/core/flows/RetryState';
-import { AgentFileLocationSchema, type AgentFileLocation } from '@utils/files';
+import {
+  CycleFieldsSchema,
+  type CycleTransientFields,
+} from '@agent/core/flows/ResponseCycleFlow';
+import { AgentFileLocationSchema } from '@utils/files';
 
 // ============================================================================
 // Schemas (Single Source of Truth)
@@ -74,6 +77,18 @@ export const RoundContextSchema = z.object({
 export type RoundContext = z.infer<typeof RoundContextSchema>;
 
 /**
+ * Optional cycle fields for native nesting.
+ *
+ * These are derived from CycleFieldsSchema but made optional since they're
+ * only populated when running a cycle. Fields already in the base schema
+ * (endTurn, outputLocation) are omitted to avoid conflicts.
+ */
+const OptionalCycleFieldsSchema = CycleFieldsSchema.partial().omit({
+  endTurn: true,
+  outputLocation: true,
+});
+
+/**
  * Shared state for reflection flow (flat structure).
  *
  * This flows through all nodes and gets updated in post() methods.
@@ -92,84 +107,49 @@ export type RoundContext = z.infer<typeof RoundContextSchema>;
  * store snapshots back after mutation. This ensures structuredClone()
  * works without any special handling.
  *
+ * ## Native Nesting
+ *
+ * Includes optional cycle fields (via OptionalCycleFieldsSchema) to enable
+ * cycle nodes to run directly on this shared type. See CycleFieldsSchema
+ * in ResponseCycleFlow.ts for the single source of truth.
+ *
  * ## Round Stage Management
  *
  * Round stages (r0, r1, r2...) are managed by RoundPersistedFlow, not by
  * shared state or services. This keeps round lifecycle as a flow-level
  * concern, invisible to individual nodes.
  */
-export const ReflectionFlowStateSchema = z.object({
-  // Round tracking
-  currentRound: z.number(),
-  totalRounds: z.number(),
+export const ReflectionFlowStateSchema = z
+  .object({
+    // Round tracking
+    currentRound: z.number(),
+    totalRounds: z.number(),
 
-  // Per-round state (natively serializable)
-  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  context: RoundContextSchema.nullable(),
-  outputLocation: AgentFileLocationSchema.nullable(),
+    // Per-round state (natively serializable)
+    workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+    context: RoundContextSchema.nullable(),
+    outputLocation: AgentFileLocationSchema.nullable(),
 
-  // Accumulated state (natively serializable)
-  conversation: z.array(ProviderMessageSchema),
-  runStateSnapshot: AgentRunStateSnapshotSchema,
+    // Accumulated state (natively serializable)
+    conversation: z.array(ProviderMessageSchema),
+    runStateSnapshot: AgentRunStateSnapshotSchema,
 
-  // Results (natively serializable)
-  roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
-  roundOutputs: z.array(RoundOutputSchema),
+    // Results (natively serializable)
+    roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
+    roundOutputs: z.array(RoundOutputSchema),
 
-  // Control flags
-  continueRounds: z.boolean(),
-  endTurn: z.boolean(),
+    // Control flags
+    continueRounds: z.boolean(),
+    endTurn: z.boolean(),
 
-  // === Cycle fields (for native nesting of cycle nodes) ===
-  // These enable cycle nodes to work directly with ReflectionFlowShared
-  /** Current cycle's messages (distinct from conversation - cycle modifies these) */
-  messages: z.array(ProviderMessageSchema).optional(),
-  /** Whether the current cycle should stop processing */
-  shouldStop: z.boolean().optional(),
-  /** Whether output file exists for current cycle */
-  outputExists: z.boolean().optional(),
-  /** Time taken for response in milliseconds */
-  responseTimeMs: z.number().optional(),
-  /** Reason the model stopped generating (stored as string for serialization) */
-  stopReason: z.string().optional(),
-  /** Processed response text from current cycle */
-  processedResponse: z.string().optional(),
-
-  // Retry state (flattened - was separate RetryState object)
-  /** Last error from model invocation, if any. Used to distinguish failure from cancellation. */
-  lastRetryError: RetryErrorInfoSchema.optional(),
-  /** Alias for lastRetryError - cycle nodes use this name */
-  lastError: RetryErrorInfoSchema.optional(),
-});
+    // Retry state (reflection flow's name for error tracking)
+    /** Last error from model invocation. Used to distinguish failure from cancellation. */
+    lastRetryError: RetryErrorInfoSchema.optional(),
+  })
+  .merge(OptionalCycleFieldsSchema);
 
 /** Derived type from schema (serializable fields only) */
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
-
-/**
- * Transient cycle fields that are NOT serialized.
- * These contain non-serializable data (logger, unknown objects) and are
- * only used during cycle execution, not persisted across checkpoints.
- */
-export interface CycleTransientFields {
-  /** System prompt for model (regenerated each cycle) */
-  systemPrompt?: string;
-  /** Debug options containing logger (non-serializable) */
-  debug?: {
-    context: {
-      logger: unknown;
-      modelName?: string;
-      executionId?: string;
-      isRemote?: boolean;
-    };
-    fileOptions: {
-      continuationCount: number;
-      outputFile?: string;
-      baseName?: string;
-    };
-  };
-  /** Raw response from model (type unknown, not serialized) */
-  responseObject?: unknown;
-}
 
 /**
  * Shared context passed through the flow.
@@ -180,6 +160,8 @@ export interface CycleTransientFields {
  * - Serializable fields are persisted by PersistedFlow
  * - Transient fields are cleared between checkpoints
  * - Index signature required by RoundAwareState constraint
+ *
+ * CycleTransientFields is imported from ResponseCycleFlow.ts (single source of truth).
  */
 export type ReflectionFlowShared = ReflectionFlowState &
   CycleTransientFields & { [key: string]: unknown };
