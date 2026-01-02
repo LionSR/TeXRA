@@ -8,6 +8,7 @@ import {
   CHEVRON_RIGHT_CLASS,
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
+import { TOOL_ICON_MAP } from './constants.js';
 
 /**
  * Build a tool-use section HTML block
@@ -187,49 +188,6 @@ export const buildEditedFilesList = (edits) => {
 
   if (!items) return '';
   return `<ul class="detail-list edited-files-list">${items}</ul>`;
-};
-
-/**
- * Tool icon mapping for different tool types.
- */
-const TOOL_ICON_MAP = {
-  // File operations
-  read_file: 'codicon-file',
-  write_file: 'codicon-new-file',
-  edit_file: 'codicon-edit',
-  file_op: 'codicon-file-code',
-  str_replace_editor: 'codicon-edit',
-  apply_path: 'codicon-diff',
-
-  // Search/find
-  glob: 'codicon-search',
-  grep: 'codicon-search',
-  ls: 'codicon-folder-opened',
-
-  // Shell
-  bash: 'codicon-terminal',
-  wolfram: 'codicon-symbol-operator',
-
-  // Web/research
-  web_fetch: 'codicon-globe',
-  web_search: 'codicon-globe',
-  arxiv_search: 'codicon-book',
-  arxiv_metadata: 'codicon-book',
-  download_arxiv_source: 'codicon-cloud-download',
-  crossref_search: 'codicon-references',
-  crossref_doi: 'codicon-references',
-
-  // LaTeX
-  texcount: 'codicon-symbol-numeric',
-  extract_figures: 'codicon-file-media',
-  extract_tikz_figures: 'codicon-file-media',
-  extract_bib_entries: 'codicon-library',
-
-  // Diagnostics
-  diagnostics: 'codicon-checklist',
-
-  // Task management
-  todo_write: 'codicon-tasklist',
 };
 
 /**
