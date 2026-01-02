@@ -136,7 +136,7 @@ export interface ToolUseCycleState extends BaseCycleState {
    * Current cycle index (0-based).
    *
    * Used for debug file naming and usage tracking. Incremented after each
-   * successful cycle in ContinuationNode.post().
+   * successful cycle in ToolUseProcessNode.post().
    *
    * This replaces the need for ConversationRoundState.roundIndex in tool-use
    * agents, simplifying the service dependencies.
