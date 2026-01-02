@@ -26,8 +26,12 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import {
   runToolUseFlow,
   type IToolUseSession,
+  type RunToolUseFlowCallbacks,
 } from '@agent/implementations/flows/tooluse';
-import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
+import {
+  runReflectionFlow,
+  type RunReflectionFlowCallbacks,
+} from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -51,6 +55,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
   unregisterInterruptible,
+  type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -269,6 +274,103 @@ function createUsageRecorder(
   };
 }
 
+/**
+ * Create standardized interruptible callbacks for tool-use flows.
+ *
+ * DRY helper for the register/unregister pattern used when running tool-use flows.
+ */
+function createToolUseCallbacks(
+  streamTabId: StreamTabId,
+): RunToolUseFlowCallbacks {
+  return {
+    onContextReady: (_streamId, context) => {
+      registerInterruptible(streamTabId, context);
+    },
+    onFlowComplete: () => {
+      unregisterInterruptible(streamTabId);
+    },
+  };
+}
+
+/**
+ * Create standardized interruptible callbacks for reflection flows.
+ *
+ * DRY helper for the register/unregister pattern used when running reflection flows.
+ */
+function createReflectionCallbacks(
+  streamTabId: StreamTabId,
+): RunReflectionFlowCallbacks {
+  return {
+    onContextReady: (_storageKey, context) => {
+      registerInterruptible(streamTabId, context as IInterruptible);
+    },
+    onFlowComplete: () => {
+      unregisterInterruptible(streamTabId);
+    },
+  };
+}
+
+/**
+ * Build the common flow input fields shared by all flow types.
+ *
+ * DRY helper: Both tool-use and reflection flows share these fields.
+ * This extracts the common pattern instead of duplicating it 4+ times.
+ */
+function buildBaseFlowInput(
+  ctx: FlowExecutionContext,
+  interruptManager: InterruptManager,
+  runKind: 'workflow' | 'tool-use',
+) {
+  return {
+    modelHandler: ctx.modelHandler,
+    config: ctx.agentConfig,
+    prompt: ctx.agentPrompt,
+    executionContext: ctx.executionContext,
+    userVarChannels: ctx.userVarChannels,
+    checkInterruption: interruptManager.checkInterruption,
+    setAbortController: interruptManager.setAbortController,
+    onInterrupt: interruptManager.onInterrupt,
+    // Get fresh client each response round to ensure auth keys are refreshed
+    getClient: () => ctx.modelHandler.getClient(),
+    getUsageRecorder: createUsageRecorder(ctx.usageMonitor, runKind),
+  };
+}
+
+/**
+ * Setup UI state for flow execution.
+ *
+ * DRY helper: All three flow execution functions call setActiveStream
+ * and set stream status to RUNNING.
+ */
+function setupFlowUIState(ctx: FlowExecutionContext): void {
+  bus.emit('setActiveStream', {
+    stream: ctx.streamTabId,
+    session: ctx.agentConfig.session!,
+    isRemote: isRemoteAgent(ctx.agentConfig.agent),
+    hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
+  });
+  StreamStatusService.set(ctx.streamTabId, STREAM_STATUS.RUNNING);
+}
+
+/**
+ * Update stream status based on flow result.
+ *
+ * DRY helper: All flow completions need to update status, but must
+ * preserve WAITING state for tool-use flows awaiting follow-up.
+ */
+function updateFlowStatus(
+  streamTabId: StreamTabId,
+  flowStatus: 'error' | 'stopped',
+): void {
+  const currentStatus = StreamStatusService.get(streamTabId);
+  if (currentStatus !== STREAM_STATUS.WAITING) {
+    StreamStatusService.set(
+      streamTabId,
+      flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+    );
+  }
+}
+
 // ============================================================================
 // UI and Error Handling
 // ============================================================================
@@ -424,13 +526,7 @@ export async function executeAgent(
     const runStorage = getRunStorageService();
 
     // Setup UI state
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: config.session,
-      isRemote: isRemoteAgent(config.agent),
-      hasMultipleOutputs: config.useMultipleOutputs,
-    });
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+    setupFlowUIState(ctx);
 
     if (!isResume) {
       logger.info(`Starting task execution for ${streamTabId}`);
@@ -474,85 +570,33 @@ export async function executeAgent(
       async () => {
         logger.info(`Executing ${agentName} with model ${config.model}`);
 
-        // Create interrupt manager (replaces mutable interruptState object)
         const interruptManager = new InterruptManager();
-
         let flowStatus: 'error' | 'stopped';
 
         if (agentSetting.agentType === 'toolUse') {
           // Tool-use flow execution
           const result = await runToolUseFlow(
             {
-              modelHandler: ctx.modelHandler,
-              config: ctx.agentConfig,
+              ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
               setting: ctx.agentSetting as AgentToolUseSetting,
-              prompt: ctx.agentPrompt,
-              executionContext: ctx.executionContext,
-              userVarChannels: ctx.userVarChannels,
               streamTabId: ctx.streamTabId,
-              checkInterruption: interruptManager.checkInterruption,
-              setAbortController: interruptManager.setAbortController,
-              // Get fresh client each response round to ensure auth keys are refreshed
-              getClient: () => ctx.modelHandler.getClient(),
-              getUsageRecorder: createUsageRecorder(
-                ctx.usageMonitor,
-                'tool-use',
-              ),
-              onInterrupt: interruptManager.onInterrupt,
             },
-            {
-              onContextReady: (streamId, context) => {
-                registerInterruptible(streamId, context);
-              },
-              onFlowComplete: (streamId) => {
-                unregisterInterruptible(streamId);
-              },
-            },
+            createToolUseCallbacks(streamTabId),
           );
           flowStatus = result.status;
         } else {
           // Reflection flow execution (direct/CoT/workflow)
           const result = await runReflectionFlow(
             {
-              modelHandler: ctx.modelHandler,
-              config: ctx.agentConfig,
+              ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
               setting: ctx.agentSetting as AgentWorkflowSetting,
-              prompt: ctx.agentPrompt,
-              executionContext: ctx.executionContext,
-              userVarChannels: ctx.userVarChannels,
-              checkInterruption: interruptManager.checkInterruption,
-              setAbortController: interruptManager.setAbortController,
-              // Get fresh client each response round to ensure auth keys are refreshed
-              getClient: () => ctx.modelHandler.getClient(),
-              getUsageRecorder: createUsageRecorder(
-                ctx.usageMonitor,
-                'workflow',
-              ),
-              onInterrupt: interruptManager.onInterrupt,
             },
-            {
-              onContextReady: (_storageKey, context) => {
-                registerInterruptible(streamTabId, context);
-              },
-              onFlowComplete: () => {
-                unregisterInterruptible(streamTabId);
-              },
-            },
+            createReflectionCallbacks(streamTabId),
           );
           flowStatus = result.status;
         }
 
-        // Update stream status based on flow result
-        // Tool-use flows can pause in WAITING state - don't override that
-        const currentStatus = StreamStatusService.get(streamTabId);
-        if (currentStatus !== STREAM_STATUS.WAITING) {
-          StreamStatusService.set(
-            streamTabId,
-            flowStatus === 'error'
-              ? STREAM_STATUS.ERROR
-              : STREAM_STATUS.STOPPED,
-          );
-        }
+        updateFlowStatus(streamTabId, flowStatus);
         logger.debug(`Task completed with status: ${flowStatus}`);
       },
       { skip: isResume },
@@ -592,25 +636,15 @@ export async function executeMergeAgent(
   }
 
   try {
-    // Setup UI state
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: ctx.agentConfig.session!,
-      isRemote: isRemoteAgent(ctx.agentConfig.agent),
-      hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
-    });
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+    setupFlowUIState(ctx);
 
     await logger.withScope(`Task: merge@${model}`, async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      // Create interrupt manager
       const interruptManager = new InterruptManager();
 
-      // Create file service for merge-specific output location
-      const fileService = new TaskRunFileService(executionContext.executionId);
-
       // Create merge-specific output file location getter
+      const fileService = new TaskRunFileService(executionContext.executionId);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
         inputFile,
         editedFile,
@@ -620,35 +654,15 @@ export async function executeMergeAgent(
       // Run reflection flow with custom file naming
       const result = await runReflectionFlow(
         {
-          modelHandler: ctx.modelHandler,
-          config: ctx.agentConfig,
+          ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
           setting: ctx.agentSetting as AgentWorkflowSetting,
-          prompt: ctx.agentPrompt,
-          executionContext: ctx.executionContext,
-          userVarChannels: ctx.userVarChannels,
-          checkInterruption: interruptManager.checkInterruption,
-          setAbortController: interruptManager.setAbortController,
-          // Get fresh client each response round to ensure auth keys are refreshed
-          getClient: () => ctx.modelHandler.getClient(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
           getOutputFileLocation,
-          onInterrupt: interruptManager.onInterrupt,
         },
-        {
-          onContextReady: (_storageKey, context) => {
-            registerInterruptible(streamTabId, context);
-          },
-          onFlowComplete: () => {
-            unregisterInterruptible(streamTabId);
-          },
-        },
+        createReflectionCallbacks(streamTabId),
       );
 
       logger.debug(`Task completed successfully`);
-      StreamStatusService.set(
-        streamTabId,
-        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-      );
+      updateFlowStatus(streamTabId, result.status);
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
@@ -680,15 +694,7 @@ export async function resumeToolUseFromSnapshot(
 
   // Prepare flow execution context
   const ctx = await prepareFlowExecution(config.agent, config, executionId);
-  const {
-    modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
-    executionContext,
-    userVarChannels,
-    usageMonitor,
-  } = ctx;
+  const { agentSetting, executionContext } = ctx;
 
   // Validate agent type
   if (agentSetting.agentType !== 'toolUse') {
@@ -697,60 +703,33 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  // Create interrupt manager
   const interruptManager = new InterruptManager();
 
   try {
-    // Setup UI state for resume
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: agentConfig.session!,
-      isRemote: isRemoteAgent(agentConfig.agent),
-      hasMultipleOutputs: agentConfig.useMultipleOutputs,
-    });
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+    setupFlowUIState(ctx);
 
     // Run the flow with resume snapshot
+    // Note: Custom callbacks needed here because setupSession must run in onContextReady
     const result = await runToolUseFlow(
       {
-        modelHandler,
-        config: agentConfig,
+        ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
         setting: agentSetting as AgentToolUseSetting,
-        prompt: agentPrompt,
-        executionContext,
-        userVarChannels,
         streamTabId,
-        checkInterruption: interruptManager.checkInterruption,
-        setAbortController: interruptManager.setAbortController,
-        // Get fresh client each response round to ensure auth keys are refreshed
-        getClient: () => modelHandler.getClient(),
-        getUsageRecorder: createUsageRecorder(usageMonitor, 'tool-use'),
         resumeSnapshot: snapshot,
-        onInterrupt: interruptManager.onInterrupt,
       },
       {
-        onContextReady: (streamId, context) => {
-          registerInterruptible(streamId, context);
-
+        onContextReady: (_streamId, context) => {
+          registerInterruptible(streamTabId, context);
           // Allow caller to configure session (e.g., append follow-ups)
-          if (setupSession) {
-            setupSession(context.session);
-          }
+          setupSession?.(context.session);
         },
-        onFlowComplete: (streamId) => {
-          unregisterInterruptible(streamId);
+        onFlowComplete: () => {
+          unregisterInterruptible(streamTabId);
         },
       },
     );
 
-    // Only set status if flow actually completed (not paused waiting for follow-up)
-    const finalStatus = StreamStatusService.get(streamTabId);
-    if (finalStatus !== STREAM_STATUS.WAITING) {
-      StreamStatusService.set(
-        streamTabId,
-        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-      );
-    }
+    updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(error, config.agent, streamTabId, executionContext);
