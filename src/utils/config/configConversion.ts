@@ -1,13 +1,12 @@
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
 import {
   type TaskState,
   type ToolUseTaskState,
   type WorkflowTaskState,
-  isToolUseCategory,
-  isWorkflowCategory,
 } from '@logger/TaskState';
 
 // Local file imports
@@ -36,30 +35,29 @@ function createActiveFilesFromArrays(
  * Converts an AgentConfig object to a TaskState object.
  * Session metadata comes from config.session (single source of truth).
  *
- * Uses shared category predicates from TaskState for DRY code.
- *
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  if (!config.session) {
+  const { session } = config;
+  if (!session) {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
-  if (isToolUseCategory(config)) {
-    return {
-      agentConfig: config as ToolUseTaskState['agentConfig'],
-      toolSessionState: {},
-    };
+  switch (session.agentCategory) {
+    case AgentCategory.ToolUse:
+      return {
+        agentConfig: config as ToolUseTaskState['agentConfig'],
+        toolSessionState: {},
+      };
+    case AgentCategory.Workflow:
+      return {
+        agentConfig: config as WorkflowTaskState['agentConfig'],
+        activeFiles: createActiveFilesFromArrays(config),
+      };
+    default: {
+      const _exhaustive: never = session.agentCategory;
+      throw new Error(`Unknown agent category: ${_exhaustive}`);
+    }
   }
-
-  if (isWorkflowCategory(config)) {
-    return {
-      agentConfig: config as WorkflowTaskState['agentConfig'],
-      activeFiles: createActiveFilesFromArrays(config),
-    };
-  }
-
-  // Should be unreachable - all AgentCategory values are handled
-  throw new Error(`Unknown agent category: ${config.session.agentCategory}`);
 }
