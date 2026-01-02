@@ -279,6 +279,10 @@
   color: var(--color-text-secondary);
 }
 
+.usage-summary-footer[hidden] {
+  display: none;
+}
+
 .usage-summary-footer .run-summary {
   margin-left: auto;
 }
