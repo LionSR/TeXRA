@@ -2,6 +2,12 @@
  * Common types shared across different flow cycles to reduce duplication
  * and provide consistent interfaces.
  *
+ * ## Schema-First Pattern
+ *
+ * This module provides `BaseCycleFieldsSchema` as the single source of truth
+ * for fields common to all cycle flows (ResponseCycleFlow, ToolUseCycleFlow).
+ * Specific flows extend this schema with their own fields.
+ *
  * ## Architectural Note: PocketFlow Separation of Concerns
  *
  * Flow nodes follow PocketFlow's separation pattern:
@@ -18,26 +24,77 @@
  * which is the PocketFlow pattern for immutable configuration.
  */
 
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import { z } from 'zod';
+
+import {
+  ProviderMessageSchema,
+  type ProviderMessage,
+} from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { RetryState } from './RetryState';
+import { RetryErrorInfoSchema } from './RetryState';
+
+// ============================================================================
+// Base Cycle Schema (Single Source of Truth)
+// ============================================================================
 
 /**
- * Base state interface shared by all cycle flows.
- * Contains common fields for message handling and flow control.
+ * Base schema for fields common to ALL cycle flows.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for shared cycle field definitions.
+ * Both ResponseCycleFlow and ToolUseCycleFlow extend this schema.
+ *
+ * ## Field Categories
+ *
+ * Required fields (must be initialized before cycle runs):
+ * - messages, shouldStop, endTurn
+ *
+ * Optional fields (populated during/after cycle execution):
+ * - responseTimeMs, stopReason, lastError
+ *
+ * ## Usage
+ *
+ * Specific flows extend this with their own fields:
+ * ```typescript
+ * // ResponseCycleFlow adds output tracking:
+ * const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
+ *   outputExists: z.boolean(),
+ *   outputLocation: AgentFileLocationSchema.nullable(),
+ *   processedResponse: z.string().optional(),
+ * });
+ *
+ * // ToolUseCycleFlow adds tool tracking:
+ * const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
+ *   toolCalls: z.array(SdkToolCallSchema).optional(),
+ *   text: z.string().optional(),
+ *   cycleIndex: z.number(),
+ * });
+ * ```
  */
-export interface BaseCycleState {
+export const BaseCycleFieldsSchema = z.object({
   /** Messages being processed in this cycle */
-  messages: ProviderMessage[];
+  messages: z.array(ProviderMessageSchema),
   /** Whether the cycle should stop processing */
-  shouldStop: boolean;
+  shouldStop: z.boolean(),
+  /**
+   * Whether the last cycle ended normally (model said end_turn).
+   *
+   * Used by callers to distinguish between:
+   * - Normal completion: shouldStop=true, endTurn=true
+   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
+   * - Failure: shouldStop=true, endTurn=false, lastError defined
+   */
+  endTurn: z.boolean(),
   /** Time taken for response in milliseconds */
-  responseTimeMs?: number;
-  /** Reason the model stopped generating */
-  stopReason?: ProviderStopReason;
-}
+  responseTimeMs: z.number().optional(),
+  /** Reason the model stopped generating (nullable to match ProviderStopReason) */
+  stopReason: z.string().nullable().optional(),
+  /** Last error info for retry handling */
+  lastError: RetryErrorInfoSchema.optional(),
+});
+
+/** Base cycle fields derived from schema */
+export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /**
  * Unified debug context used across all cycle flows.
@@ -77,17 +134,19 @@ export type SkippableNodeResult<T> =
  * - Do NOT pass boolean fields like 'endTurn'
  *   (these should be reset to false separately, not undefined)
  *
- * @param state - The state object to reset
+ * @param state - The state object to reset (must extend BaseCycleFields)
  * @param additionalFields - Field names to reset to undefined (typically optional object fields)
  */
-export function resetCycleState<T extends BaseCycleState>(
+export function resetCycleState<T extends BaseCycleFields>(
   state: T,
   additionalFields: (keyof T)[],
 ): void {
   // Reset base cycle state fields
   state.shouldStop = false;
+  state.endTurn = false;
   state.responseTimeMs = undefined;
   state.stopReason = undefined;
+  state.lastError = undefined;
 
   // Reset additional optional fields to undefined
   for (const field of additionalFields) {
@@ -96,23 +155,6 @@ export function resetCycleState<T extends BaseCycleState>(
       state[field] = undefined as T[typeof field];
     }
   }
-}
-
-// ============================================================================
-// Shared Flow Container Types
-// ============================================================================
-
-/**
- * Generic shared state wrapper for cycle flows.
- * Combines mutable runtime state with retry tracking.
- *
- * @template TState - The specific cycle state type (must extend BaseCycleState)
- */
-export interface BaseCycleShared<TState extends BaseCycleState> {
-  /** Runtime state for this cycle */
-  state: TState;
-  /** Retry state for model invocation errors */
-  retryState: RetryState;
 }
 
 // ============================================================================
@@ -161,10 +203,20 @@ export interface CycleCompletionResult {
 /**
  * State needed to interpret cycle completion.
  * This is the minimal interface from shared state that we need.
+ *
+ * For flat shared types, pass the same object for both state and retryState params.
  */
 interface CycleCompletionState {
   shouldStop: boolean;
   endTurn?: boolean;
+}
+
+/**
+ * Retry state for completion interpretation.
+ * For flat shared types, this is the same object as CycleCompletionState.
+ */
+interface CycleRetryState {
+  lastError?: { message: string };
 }
 
 /**
@@ -176,12 +228,19 @@ interface CycleCompletionState {
  * - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
  *
  * @param state - The cycle state with shouldStop and optional endTurn
- * @param retryState - The retry state with optional lastError
+ * @param retryState - The retry state with optional lastError (can be same object as state for flat pattern)
  * @returns Interpreted completion result
+ *
+ * @example
+ * // Nested pattern (ToolUseCycleFlow before flattening):
+ * interpretCycleCompletion(shared.state, shared.retryState)
+ *
+ * // Flat pattern (ResponseCycleFlow, flattened ToolUseCycleFlow):
+ * interpretCycleCompletion(shared, { lastError: shared.lastError })
  */
 export function interpretCycleCompletion(
   state: CycleCompletionState,
-  retryState: RetryState,
+  retryState: CycleRetryState,
 ): CycleCompletionResult {
   const failedWithError = state.shouldStop && !!retryState.lastError;
   const userCancelled =

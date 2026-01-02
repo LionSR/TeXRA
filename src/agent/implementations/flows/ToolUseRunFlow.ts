@@ -33,9 +33,7 @@ import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
-  type ToolUseCycleState,
 } from '@agent/core/flows/ToolUseCycleFlow';
-import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 
 // Type imports
@@ -359,24 +357,22 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Create cycle shared state (like ResponseCycleNode)
-    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    // Create cycle shared state (flat pattern like ResponseCycleFlow)
+    // Tool-use cycles track metrics in shared (cycleIndex, etc.) instead of round object
     // cycleIndex starts from run.totalRounds to maintain continuity across user follow-ups
     const cycleShared: ToolUseCycleShared = {
-      state: {
-        messages: prepRes.conversation,
-        shouldStop: false,
-        response: undefined,
-        responseTimeMs: undefined,
-        toolCalls: undefined,
-        text: undefined,
-        stopReason: undefined,
-        cycleIndex: prepRes.runState.totalRounds,
-        cycleResponseTimeMs: 0,
-        cycleNormalizedUsage: undefined,
-        endTurn: false,
-      } satisfies ToolUseCycleState,
-      retryState: createRetryState(),
+      messages: prepRes.conversation,
+      shouldStop: false,
+      endTurn: false,
+      response: undefined,
+      responseTimeMs: undefined,
+      stopReason: undefined,
+      lastError: undefined,
+      toolCalls: undefined,
+      text: undefined,
+      cycleIndex: prepRes.runState.totalRounds,
+      cycleResponseTimeMs: 0,
+      cycleNormalizedUsage: undefined,
     };
 
     // Create and run the flow directly (like ResponseCycleNode)
@@ -404,11 +400,10 @@ class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      // Interpret cycle completion using shared helper
-      const completion = interpretCycleCompletion(
-        cycleShared.state,
-        cycleShared.retryState,
-      );
+      // Interpret cycle completion using shared helper (flat pattern)
+      const completion = interpretCycleCompletion(cycleShared, {
+        lastError: cycleShared.lastError,
+      });
 
       if (completion.failedWithError) {
         return {
