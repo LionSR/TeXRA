@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { showLoggedErrorMessage } from '@common/errors';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
+import { showInfoMessage } from '@frontend/ui/messageUtils';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -46,7 +47,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
       const message = Array.isArray(result)
         ? `Selected files: ${result.join(', ')}`
         : `Selected file: ${result}`;
-      vscode.window.showInformationMessage(message);
+      showInfoMessage(message);
       logger.info(CHANNEL, message);
       return result as PickerResult<Many>;
     } catch (err) {
@@ -170,9 +171,7 @@ async function selectOutputFiles(
     }
 
     logger.info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
-    vscode.window.showInformationMessage(
-      `Selected output files: ${relativePaths.join(', ')}`,
-    );
+    showInfoMessage(`Selected output files: ${relativePaths.join(', ')}`);
     return relativePaths;
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error selecting output files', err);
@@ -186,7 +185,7 @@ async function selectEditedFile(): Promise<string | null> {
     filters: {},
   });
   if (result) {
-    vscode.window.showInformationMessage(`Selected edited file: ${result}`);
+    showInfoMessage(`Selected edited file: ${result}`);
     logger.info(CHANNEL, `Selected edited file: ${result}`);
   }
   return result;
