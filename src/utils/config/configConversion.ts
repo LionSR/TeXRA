@@ -33,6 +33,23 @@ function createActiveFilesFromArrays(
 }
 
 /**
+ * Type predicates for AgentConfig category narrowing.
+ * TypeScript's control flow analysis doesn't narrow nested properties,
+ * so we use these predicates to enable proper type narrowing without casts.
+ */
+function isToolUseAgentConfig(
+  config: AgentConfig,
+): config is ToolUseTaskState['agentConfig'] {
+  return config.session?.agentCategory === AgentCategory.ToolUse;
+}
+
+function isWorkflowAgentConfig(
+  config: AgentConfig,
+): config is WorkflowTaskState['agentConfig'] {
+  return config.session?.agentCategory === AgentCategory.Workflow;
+}
+
+/**
  * Converts an AgentConfig object to a TaskState object.
  * Session metadata comes from config.session (single source of truth).
  *
@@ -40,20 +57,26 @@ function createActiveFilesFromArrays(
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  const session = config.session;
-  if (!session) {
+  if (!config.session) {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
-  if (session.agentCategory === AgentCategory.ToolUse) {
+  if (isToolUseAgentConfig(config)) {
     return {
-      agentConfig: config as ToolUseTaskState['agentConfig'],
+      agentConfig: config,
       toolSessionState: {},
     };
   }
 
-  return {
-    agentConfig: config as WorkflowTaskState['agentConfig'],
-    activeFiles: createActiveFilesFromArrays(config),
-  };
+  if (isWorkflowAgentConfig(config)) {
+    return {
+      agentConfig: config,
+      activeFiles: createActiveFilesFromArrays(config),
+    };
+  }
+
+  // Should be unreachable - all AgentCategory values are handled
+  throw new Error(
+    `Unknown agent category: ${(config.session as { agentCategory: string }).agentCategory}`,
+  );
 }
