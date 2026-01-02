@@ -122,11 +122,8 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
-    // Check if output is very long - if so, collapse it initially
-    const isLongOutput = outputText.length > 500 || outputText.split('\n').length > 15;
-    const outputClass = isLongOutput ? 'tool-output-full tool-output-collapsed' : 'tool-output-full';
     sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, outputClass)),
+      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
     );
   }
 

@@ -190,7 +190,6 @@ export const normalizeToolUseLog = (structured) => {
 
   // Extract edit records with file paths and line changes
   const edits = Array.isArray(parsed.edits) ? parsed.edits : [];
-  const files = Array.isArray(parsed.files) ? parsed.files : [];
 
   return {
     parsed,
@@ -204,7 +203,6 @@ export const normalizeToolUseLog = (structured) => {
     ),
     headerSummary: summaryText || errorText,
     edits,
-    files,
   };
 };
 
