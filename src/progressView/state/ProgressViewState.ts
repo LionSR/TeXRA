@@ -3,12 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent metadata
-import {
-  AgentCategory,
-  resolveAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
-// Type imports
-import type { AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
@@ -26,6 +21,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
+  TaskStateSchema,
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
@@ -58,24 +54,6 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
  * Composes focused manager classes and provides a clean interface
  * for state operations while hiding implementation details.
  */
-const cloneTaskState = (state: TaskState): TaskState => {
-  if (isWorkflowTaskState(state)) {
-    return {
-      ...state,
-      agentConfig: { ...state.agentConfig },
-      activeFiles: { ...state.activeFiles },
-    };
-  }
-
-  return {
-    ...state,
-    agentConfig: { ...state.agentConfig },
-    toolSessionState: state.toolSessionState
-      ? { ...state.toolSessionState }
-      : undefined,
-  };
-};
-
 export class ProgressViewState {
   private _streamTabs: StreamTabsManager;
   private _taskGroups: TaskGroupManager;
@@ -471,15 +449,14 @@ export class ProgressViewState {
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    this.taskStates.set(streamTabId, cloneTaskState(taskState));
+    this.taskStates.set(streamTabId, taskState);
     this.clearStreamHints(streamTabId);
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
 
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    const stored = this.taskStates.get(streamTabId);
-    return stored ? cloneTaskState(stored) : undefined;
+    return this.taskStates.get(streamTabId);
   }
 
   clearTaskState(streamTabId: StreamTabId): void {
@@ -492,12 +469,7 @@ export class ProgressViewState {
   }
 
   getAllTaskStates(): Map<StreamTabId, TaskState> {
-    return new Map(
-      Array.from(this.taskStates.entries(), ([stream, state]) => [
-        stream,
-        cloneTaskState(state),
-      ]),
-    );
+    return new Map(this.taskStates);
   }
 
   /**
@@ -655,7 +627,6 @@ export class ProgressViewState {
       buckets.push(container);
     }
 
-    let migratedLegacyState = false;
     let loaded = 0;
 
     for (const record of buckets) {
@@ -664,38 +635,22 @@ export class ProgressViewState {
           continue;
         }
 
-        const state = rawState as TaskState;
-
-        if (!state.session) {
-          const agentConfig = (state as { agentConfig?: any }).agentConfig;
-          if (!agentConfig || typeof agentConfig !== 'object') {
-            continue;
-          }
-
-          const session = resolveAgentSessionDescriptor(
-            agentConfig.agentType as AgentType | undefined,
-            agentConfig.agentCategory as AgentCategory | undefined,
+        // Validate against TaskState schema to catch corrupted/malformed state
+        const parseResult = TaskStateSchema.safeParse(rawState);
+        if (!parseResult.success) {
+          this.logger.debug(
+            `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
           );
-
-          state.session = session;
-          state.agentConfig = { ...agentConfig, session };
-          migratedLegacyState = true;
-        } else if (!state.agentConfig.session) {
-          state.agentConfig = { ...state.agentConfig, session: state.session };
-          migratedLegacyState = true;
+          continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(state));
+        this.taskStates.set(stream as StreamTabId, parseResult.data);
         loaded += 1;
       }
     }
 
     if (loaded > 0) {
       this.logger.debug(`Loaded task states for ${loaded} streams`);
-    }
-
-    if (migratedLegacyState) {
-      this.saveTaskStates();
     }
 
     this.cleanupToolUseAgentRegistry();
@@ -775,13 +730,7 @@ export class ProgressViewState {
    * Save task states to persistence
    */
   private saveTaskStates(): void {
-    const serialized = Object.fromEntries(
-      Array.from(this.taskStates.entries(), ([stream, state]) => [
-        stream,
-        cloneTaskState(state),
-      ]),
-    );
-
+    const serialized = Object.fromEntries(this.taskStates);
     void this.storage.update(WorkspaceStateKey.TASK_STATES, serialized);
   }
 

@@ -368,15 +368,19 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _createStateHandlers() {
     return {
       [MAIN_VIEW_COMMANDS.STATE_RESTORE]: this.handleRestoreState.bind(this),
-      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]: this.handleCheckRestoredBaseFile.bind(this),
+      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]:
+        this.handleCheckRestoredBaseFile.bind(this),
     };
   }
 
   _createInstructionHandlers() {
     return {
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: this.handleInstructionTextPolished.bind(this),
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: this.handleInstructionTextPolishError.bind(this),
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: this.handleInstructionTextTranscribed.bind(this),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]:
+        this.handleInstructionTextPolished.bind(this),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]:
+        this.handleInstructionTextPolishError.bind(this),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]:
+        this.handleInstructionTextTranscribed.bind(this),
     };
   }
 
@@ -1041,8 +1045,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
-    // TaskState.session is the canonical source of truth for session metadata
-    const canonicalSession = state.session || config.session;
+    // config.session is the single source of truth for session metadata
+    const canonicalSession = config.session;
 
     // Block saves during restoration - _setAgentValue dispatches change events
     // which trigger save(), and we don't want to capture incomplete DOM state
