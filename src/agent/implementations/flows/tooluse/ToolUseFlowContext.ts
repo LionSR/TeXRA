@@ -28,7 +28,7 @@ import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 
-import { buildBaseFlowServices, buildBaseCycleOptions } from '../common';
+import { buildBaseCycleOptions } from '../common';
 import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
@@ -257,12 +257,14 @@ export function buildToolUseServices<C = unknown>(
   // Capture snapshot in closure for prepareState
   const snapshot = resumeSnapshot ?? null;
 
-  // Build base services
-  const baseServices = buildBaseFlowServices(init);
-
   // Return complete services object
   const services: ToolUseServices<C> = {
-    ...baseServices,
+    // Spread base init fields
+    ...init,
+    // Add convenience accessors
+    logger: init.executionContext.logger,
+    context: init.executionContext,
+    // Override with narrowed setting type
     setting,
     toolRegistry,
     session: sessionLifecycle,
