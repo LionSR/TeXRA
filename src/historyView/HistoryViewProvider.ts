@@ -42,29 +42,15 @@ export class HistoryViewProvider
    * Create and show the webview panel (for command palette activation)
    */
   public async showHistoryView() {
-    // If we already have a panel, show it
-    if (this._view && 'reveal' in this._view) {
-      this._view.reveal(vscode.ViewColumn.One);
-      return;
+    const isNew = this.createOrShowPanel({
+      viewType: HistoryViewProvider.viewType,
+      title: 'TeXRA History',
+      viewPath: 'historyView',
+    });
+
+    if (isNew) {
+      await this.updateWebviewContent();
     }
-
-    // Otherwise, create a new panel
-    this._view = vscode.window.createWebviewPanel(
-      HistoryViewProvider.viewType,
-      'TeXRA History',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: getSharedLocalResourceRoots(
-          this.context,
-          'historyView',
-        ),
-      },
-    );
-
-    super.resolveWebviewViewInternal(this._view);
-    await this.updateWebviewContent();
   }
 
   // No additional logic needed here; all message handling is delegated
