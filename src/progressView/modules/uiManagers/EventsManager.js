@@ -34,7 +34,7 @@ export class EventsManager {
   /**
    * Sets up all event listeners for the UI
    */
-  setupEventListeners() {
+  setup() {
     // Stream tab click handler
     addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
       const tabButton = e.target.closest('.tab');
