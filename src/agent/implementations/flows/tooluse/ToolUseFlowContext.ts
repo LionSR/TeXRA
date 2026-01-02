@@ -185,18 +185,6 @@ function createCycleOptions<C>(
   };
 }
 
-/**
- * Apply a follow-up message to the conversation.
- */
-async function applyFollowUpMessage<C>(
-  init: ToolUseFlowContextInit<C>,
-  followUp: string,
-  messages: ProviderMessage[],
-): Promise<ProviderMessage[]> {
-  init.executionContext.logger.userMessage(followUp);
-  return await init.modelHandler.createUserFollowUpMessages(messages, followUp);
-}
-
 // ============================================================================
 // Factory Function
 // ============================================================================
@@ -248,8 +236,10 @@ export function createToolUseFlowContext<C = unknown>(
     prepareState: () => prepareInitialState(init, sessionLifecycle, snapshot),
     buildCycleOptions: (store) =>
       createCycleOptions(init, toolRegistry, resolvedTools, store),
-    applyFollowUpMessage: (message, conversation) =>
-      applyFollowUpMessage(init, message, conversation),
+    applyFollowUpMessage: async (message, conversation) => {
+      init.executionContext.logger.userMessage(message);
+      return init.modelHandler.createUserFollowUpMessages(conversation, message);
+    },
     getUsageRecorder: init.getUsageRecorder ?? (() => async () => {}),
   };
 
