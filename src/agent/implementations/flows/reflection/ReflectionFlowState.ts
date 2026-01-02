@@ -173,12 +173,10 @@ export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
  *
  * - Serializable fields are persisted by PersistedFlow
  * - Transient fields are cleared between checkpoints
- * - Index signature required by RoundAwareState constraint
  *
  * CycleTransientFields is imported from ResponseCycleFlow.ts (single source of truth).
  */
-export type ReflectionFlowShared = ReflectionFlowState &
-  CycleTransientFields & { [key: string]: unknown };
+export type ReflectionFlowShared = ReflectionFlowState & CycleTransientFields;
 
 /**
  * Create initial state for a reflection flow run.

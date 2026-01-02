@@ -69,7 +69,7 @@ import { isRoundAtOrBeyondLimit } from './round-bounds';
  * `endTurn` belong in flow-specific state types (e.g., ReflectionFlowShared),
  * not here. RoundPersistedFlow only needs these core orchestration fields.
  */
-export interface RoundAwareState extends Record<string, unknown> {
+export interface RoundAwareState {
   /** Current round index (0-based) */
   currentRound: number;
 
