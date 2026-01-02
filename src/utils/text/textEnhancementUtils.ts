@@ -318,10 +318,7 @@ ${text}`;
     }
 
     // Extract the corrected text using the utility function
-    const correctedText = extractTextFromTag(
-      responseText,
-      'corrected_text',
-    );
+    const correctedText = extractTextFromTag(responseText, 'corrected_text');
 
     // Trim leading and trailing newlines from the text
     const trimmedText = correctedText

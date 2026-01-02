@@ -1093,10 +1093,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
-    const scratchpad = await extractScratchpad(
-      fileContent,
-      'scratchpad',
-    );
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
       this.logger.logScratchpad(scratchpad);
     }
