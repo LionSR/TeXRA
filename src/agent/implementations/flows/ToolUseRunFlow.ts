@@ -289,6 +289,7 @@ class ToolUseCycleNode<C> extends Node<
     }
 
     // Create cycle shared state (like ResponseCycleNode)
+    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
     const cycleShared: ToolUseCycleShared = {
       state: {
         messages: prepRes.conversation,
@@ -298,17 +299,21 @@ class ToolUseCycleNode<C> extends Node<
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
+        cycleIndex: 0,
+        cycleResponseTimeMs: 0,
+        cycleNormalizedUsage: undefined,
         endTurn: false,
       } satisfies ToolUseCycleState,
       retryState: createRetryState(),
     };
 
     // Create and run the flow directly (like ResponseCycleNode)
+    // Note: Tool-use cycles track metrics in flow state (cycleIndex, etc.)
+    // instead of a round object, so we only pass run/workspace/onRoundFinalized.
     const flow = createToolUseCycleFlow<C>();
     const onRoundFinalized = this.services.getUsageRecorder();
     flow.setServices({
       ...prepRes.cycleOptions,
-      round: prepRes.store.round,
       run: prepRes.store.run,
       workspace: prepRes.store.workspace,
       onRoundFinalized,
