@@ -9,8 +9,8 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  type CycleDebugContext,
   type CycleDebugFileOptions,
+  getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
 import { createRetryState, type RetryState } from './RetryState';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
@@ -206,9 +206,10 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
 }
 
 /**
- * Prepares a tool-use cycle by checking interruptions and setting up debug context.
+ * Prepares a tool-use cycle by checking interruptions and setting up debug file options.
  *
- * Services accessed via `this.services` (ToolUseCycleServices)
+ * Services accessed via `this.services` (ToolUseCycleServices).
+ * Debug context is derived from services at call sites (no redundant storage).
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
@@ -217,29 +218,21 @@ class ToolUsePrepNode<C> extends BaseNode<
 > {
   async prep(shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
-    debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
     const services = this.services;
     const interrupted = Boolean(await services.checkInterruption());
-    const debugContext: CycleDebugContext = {
-      logger: services.logger,
-      modelName: services.modelName,
-      executionId: services.context.executionId,
-      isRemote: isRemoteAgent(services.agentName),
-    };
     const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: shared.cycleIndex,
       baseName: 'tooluse',
     };
-    return { interrupted, debugContext, debugFileOptions };
+    return { interrupted, debugFileOptions };
   }
 
   async post(
     shared: ToolUseCycleShared,
     prepRes: {
       interrupted: boolean;
-      debugContext: CycleDebugContext;
       debugFileOptions: CycleDebugFileOptions;
     },
   ): Promise<string | undefined> {
@@ -253,10 +246,14 @@ class ToolUsePrepNode<C> extends BaseNode<
     // runtime state before enriching it with model responses.
     resetToolUseState(shared);
 
+    const { modelName, agentName } = this.services;
     await maybeSaveDebugObject({
       object: shared.messages,
       objectType: 'messages',
-      context: prepRes.debugContext,
+      context: getDebugContext(this.services, {
+        modelName,
+        isRemote: isRemoteAgent(agentName),
+      }),
       fileOptions: prepRes.debugFileOptions,
     });
 
@@ -266,10 +263,10 @@ class ToolUsePrepNode<C> extends BaseNode<
 
 /**
  * Success data for tool-use call.
- * Extends base with debug context for message saving.
+ * Extends base with debug file options for message saving.
+ * Debug context is derived from services at call site.
  */
 interface ToolUseCallSuccessData extends BaseInvocationSuccessData {
-  debugContext: CycleDebugContext;
   debugFileOptions: CycleDebugFileOptions;
 }
 
@@ -325,12 +322,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    const debugContext: CycleDebugContext = {
-      logger: services.logger,
-      modelName: services.modelName,
-      executionId: services.context.executionId,
-      isRemote: isRemoteAgent(services.agentName),
-    };
+    // Only file options vary by cycle - context is derived from services at call site
     const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: prepRes.cycleIndex,
       baseName: 'tooluse_response',
@@ -355,7 +347,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         kind: 'success',
         response,
         responseTimeMs,
-        debugContext,
         debugFileOptions,
       };
     });
@@ -401,10 +392,14 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     shared.response = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
+    const { modelName, agentName } = services;
     await maybeSaveDebugObject({
       object: successRes.response,
       objectType: 'response',
-      context: successRes.debugContext,
+      context: getDebugContext(services, {
+        modelName,
+        isRemote: isRemoteAgent(agentName),
+      }),
       fileOptions: successRes.debugFileOptions,
     });
 
