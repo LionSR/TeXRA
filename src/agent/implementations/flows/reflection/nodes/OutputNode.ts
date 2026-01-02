@@ -86,7 +86,7 @@ export class OutputNode<C = unknown> extends Node<
     const baseFiles = createBaseFileLocations(config);
 
     // Determine if we should ensure XML structure (based on xmlStructureMode config)
-    const ensureXmlStructure = this.services.shouldEnsureXmlStructure();
+    const ensureXmlStructure = this.services.shouldEnsureXmlStructure;
 
     return {
       currentRound,
