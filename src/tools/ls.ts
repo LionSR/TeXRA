@@ -87,7 +87,7 @@ export class LsTool extends defineTool({
             null,
             '(no entries after applying ignore filters)',
           ),
-        });
+        };
       }
       return {
         summary,
@@ -95,7 +95,7 @@ export class LsTool extends defineTool({
           `Listing for ${display}`,
           formatEntry(display, vscode.FileType.File),
         ),
-      });
+      };
     }
 
     if (relative !== '.' && gitignore.ignores(relative)) {
@@ -106,7 +106,7 @@ export class LsTool extends defineTool({
           null,
           '(no entries after applying ignore filters)',
         ),
-      });
+      };
     }
 
     const entries = await WorkspaceFS.readDir(relative);
@@ -132,6 +132,6 @@ export class LsTool extends defineTool({
     return {
       summary,
       output: formatToolOutput(`Listing for ${display}`, formatted),
-    });
+    };
   }
 }

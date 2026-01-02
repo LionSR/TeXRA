@@ -122,7 +122,7 @@ export class ReadFileTool extends defineTool({
     return {
       summary,
       output: segments.join('\n'),
-    });
+    };
   }
 
   private formatWithLineNumbers(
@@ -229,7 +229,7 @@ export class ReadFileTool extends defineTool({
       summary: summaryParts.join(' '),
       output: outputParts.join(' '),
       files: [attachment],
-    });
+    };
   }
 }
 

@@ -98,6 +98,6 @@ export class GlobTool extends defineTool({
     return {
       summary: `glob "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
-    });
+    };
   }
 }

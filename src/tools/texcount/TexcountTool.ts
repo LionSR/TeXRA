@@ -55,7 +55,7 @@ export class TexcountTool extends defineTool({
       return {
         error: errorMessage,
         isError: true,
-      });
+      };
     }
 
     const summary = `texcount analysis for ${files.length} file${
@@ -65,6 +65,6 @@ export class TexcountTool extends defineTool({
     return {
       summary,
       output: formatOutput(output, input.format),
-    });
+    };
   }
 }

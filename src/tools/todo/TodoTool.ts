@@ -95,7 +95,7 @@ Best practices:
         diagnostics: {
           warning: 'No active todo context - todos may not persist',
         },
-      });
+      };
     }
 
     // Update the todos in workspace state
@@ -119,7 +119,7 @@ Best practices:
     return {
       summary,
       output,
-    });
+    };
   }
 
   /**

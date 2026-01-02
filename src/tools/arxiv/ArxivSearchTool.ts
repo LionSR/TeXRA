@@ -154,6 +154,6 @@ export class ArxivSearchTool extends defineTool({
     return {
       summary: `Found ${results.length} arXiv result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
-    });
+    };
   }
 }
