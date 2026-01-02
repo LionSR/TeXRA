@@ -34,6 +34,8 @@ import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
+import type { TodoItem } from '@eventBus/schemas';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Internal imports
 import {
@@ -319,6 +321,16 @@ class ToolUseCycleNode<C> extends Node<
       onRoundFinalized,
     });
 
+    // Set up todo update callback to emit changes to the progress view
+    const { context } = this.services;
+    prepRes.store.workspace.todos.setOnUpdate((todos: TodoItem[]) => {
+      bus.emit('updateTodos', {
+        stream: context.streamId,
+        executionId: context.executionId,
+        todos,
+      });
+    });
+
     try {
       await flow.run(cycleShared);
 
@@ -343,6 +355,9 @@ class ToolUseCycleNode<C> extends Node<
         kind: 'failed',
         message: error instanceof Error ? error.message : String(error),
       };
+    } finally {
+      // Clear the todo update callback to prevent memory leaks
+      prepRes.store.workspace.todos.clearOnUpdate();
     }
   }
 
