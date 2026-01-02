@@ -13,7 +13,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ToolUseStore } from '@agent/core/AgentSharedStore';
+import type { AgentSharedStore, ToolUseStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';

@@ -17,164 +17,90 @@ import {
   type UserVariableChannels,
 } from './AgentCycleOptions';
 
-export interface AgentSharedStoreSlices {
+// ============================================================================
+// Store Slices
+// ============================================================================
+
+/**
+ * Required slices for all stores.
+ */
+export interface BaseStoreSlices {
+  run: AgentRunState;
+  workspace: AgentWorkspaceState;
+  user: UserVariableChannels;
+}
+
+/**
+ * Full store slices including round (for reflection agents).
+ */
+export interface AgentSharedStoreSlices extends BaseStoreSlices {
   round: ConversationRoundState;
-  run: AgentRunState;
-  workspace: AgentWorkspaceState;
-  user: UserVariableChannels;
 }
 
 // ============================================================================
-// ToolUseStore - Simplified store for tool-use agents (no round tracking)
+// Snapshot Schemas
 // ============================================================================
 
 /**
- * Store slices for tool-use agents.
- * Unlike AgentSharedStoreSlices, this doesn't include round since tool-use
- * agents track cycle metrics directly in flow state, not via round objects.
+ * Base snapshot schema without round.
+ * Used by tool-use agents which don't track rounds.
  */
-export interface ToolUseStoreSlices {
-  run: AgentRunState;
-  workspace: AgentWorkspaceState;
-  user: UserVariableChannels;
-}
+export const BaseStoreSnapshotSchema = z.object({
+  run: AgentRunStateSnapshotSchema,
+  workspace: AgentWorkspaceStateSnapshotSchema,
+  user: UserVariableChannelsSchema,
+});
 
 /**
- * Snapshot schema for ToolUseStore.
+ * Full snapshot schema with optional round.
  * Uses z.object() for backward compatibility with legacy snapshots.
+ * Round is optional to support both reflection (with round) and tool-use (without).
  */
-export const ToolUseStoreSnapshotSchema = z.object({
-  run: AgentRunStateSnapshotSchema,
-  workspace: AgentWorkspaceStateSnapshotSchema,
-  user: UserVariableChannelsSchema,
+export const AgentSharedStoreSnapshotSchema = BaseStoreSnapshotSchema.extend({
+  round: ConversationRoundStateSnapshotSchema.optional(),
 });
 
 /**
- * Output type for ToolUseStore serialization.
+ * Output type for store serialization (without round).
  */
-export type ToolUseStoreSnapshot = z.output<typeof ToolUseStoreSnapshotSchema>;
+export type BaseStoreSnapshot = z.output<typeof BaseStoreSnapshotSchema>;
 
 /**
- * Simplified store for tool-use agents.
- *
- * Unlike AgentSharedStore, this doesn't include a round object since tool-use
- * agents track cycle metrics (cycleIndex, cycleResponseTimeMs, etc.) directly
- * in ToolUseCycleState, not via ConversationRoundState.
- */
-export class ToolUseStore {
-  private readonly runState: AgentRunState;
-  private readonly workspaceState: AgentWorkspaceState;
-  private readonly userChannels: UserVariableChannels;
-
-  constructor(config: ToolUseStoreSlices) {
-    this.runState = config.run;
-    this.workspaceState = config.workspace;
-    this.userChannels = config.user;
-  }
-
-  /** Deserialize from a snapshot. Validates and applies schema defaults. */
-  static fromSnapshot(snapshot: unknown): ToolUseStore {
-    const parsed = ToolUseStoreSnapshotSchema.parse(snapshot);
-    return new ToolUseStore({
-      run: AgentRunState.fromSnapshot(parsed.run),
-      workspace: AgentWorkspaceState.fromSnapshot(parsed.workspace),
-      user: {
-        input: Object.freeze({ ...parsed.user.input }),
-        transient: { ...parsed.user.transient },
-      },
-    });
-  }
-
-  /** Serialize to a snapshot. */
-  toSnapshot(): ToolUseStoreSnapshot {
-    return {
-      run: this.runState.toSnapshot(),
-      workspace: this.workspaceState.toSnapshot(),
-      user: {
-        input: { ...this.userChannels.input },
-        transient: { ...this.userChannels.transient },
-      },
-    };
-  }
-
-  get run(): AgentRunState {
-    return this.runState;
-  }
-
-  get workspace(): AgentWorkspaceState {
-    return this.workspaceState;
-  }
-
-  get user(): UserVariableChannels {
-    return this.userChannels;
-  }
-}
-
-/**
- * Factory params for creating a new ToolUseStore.
- */
-interface ToolUseStoreFactoryParams {
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  userChannels: UserVariableChannels;
-}
-
-/**
- * Factory args - either create from params or restore from snapshot.
- */
-type ToolUseStoreFactoryArgs =
-  | (ToolUseStoreFactoryParams & { snapshot?: undefined })
-  | { snapshot: ToolUseStoreSnapshot };
-
-/**
- * Create a ToolUseStore from params or snapshot.
- */
-export function createToolUseStore(args: ToolUseStoreFactoryArgs): ToolUseStore {
-  if ('snapshot' in args && args.snapshot) {
-    return ToolUseStore.fromSnapshot(args.snapshot);
-  }
-
-  const params = args as ToolUseStoreFactoryParams;
-  return new ToolUseStore({
-    run: params.runState,
-    workspace: params.workspaceState,
-    user: params.userChannels,
-  });
-}
-
-/**
- * We use z.object() instead of z.strictObject() to remain backward compatible
- * with legacy store snapshots that may contain removed or renamed fields.
- */
-export const AgentSharedStoreSnapshotSchema = z.object({
-  round: ConversationRoundStateSnapshotSchema,
-  run: AgentRunStateSnapshotSchema,
-  workspace: AgentWorkspaceStateSnapshotSchema,
-  user: UserVariableChannelsSchema,
-});
-
-/**
- * Output type for AgentSharedStore serialization.
- * Uses z.output<> to get the type after parsing (all fields required).
+ * Output type for AgentSharedStore serialization (with optional round).
  */
 export type AgentSharedStoreSnapshot = z.output<
   typeof AgentSharedStoreSnapshotSchema
 >;
 
+// Alias for tool-use compatibility (same as BaseStoreSnapshot)
+export type ToolUseStoreSnapshot = BaseStoreSnapshot;
+export const ToolUseStoreSnapshotSchema = BaseStoreSnapshotSchema;
+
+// ============================================================================
+// Store Class
+// ============================================================================
+
 /**
- * Central store wiring agent run, round, workspace, and user-variable slices together.
+ * Central store wiring agent run, workspace, user, and optionally round slices.
  *
  * This is a pure data holder for snapshot serialization. Round finalization logic
  * lives in CycleServices.finalizeRound() as the single source of truth.
+ *
+ * ## Usage Modes
+ *
+ * - **Reflection agents**: Use with round for multi-turn tracking
+ * - **Tool-use agents**: Use without round (metrics tracked in flow state)
  */
 export class AgentSharedStore {
-  private roundState: ConversationRoundState;
+  private roundState: ConversationRoundState | null;
   private readonly runState: AgentRunState;
   private readonly workspaceState: AgentWorkspaceState;
   private readonly userChannels: UserVariableChannels;
 
-  constructor(config: AgentSharedStoreSlices) {
-    this.roundState = config.round;
+  constructor(
+    config: BaseStoreSlices & { round?: ConversationRoundState | null },
+  ) {
+    this.roundState = config.round ?? null;
     this.runState = config.run;
     this.workspaceState = config.workspace;
     this.userChannels = config.user;
@@ -184,7 +110,9 @@ export class AgentSharedStore {
   static fromSnapshot(snapshot: unknown): AgentSharedStore {
     const parsed = AgentSharedStoreSnapshotSchema.parse(snapshot);
     return new AgentSharedStore({
-      round: ConversationRoundState.fromSnapshot(parsed.round),
+      round: parsed.round
+        ? ConversationRoundState.fromSnapshot(parsed.round)
+        : null,
       run: AgentRunState.fromSnapshot(parsed.run),
       workspace: AgentWorkspaceState.fromSnapshot(parsed.workspace),
       user: {
@@ -194,10 +122,9 @@ export class AgentSharedStore {
     });
   }
 
-  /** Serialize to a snapshot. */
+  /** Serialize to a snapshot. Includes round only if present. */
   toSnapshot(): AgentSharedStoreSnapshot {
-    return {
-      round: this.roundState.toSnapshot(),
+    const base: BaseStoreSnapshot = {
       run: this.runState.toSnapshot(),
       workspace: this.workspaceState.toSnapshot(),
       user: {
@@ -205,10 +132,28 @@ export class AgentSharedStore {
         transient: { ...this.userChannels.transient },
       },
     };
+
+    if (this.roundState) {
+      return {
+        ...base,
+        round: this.roundState.toSnapshot(),
+      };
+    }
+
+    return base;
   }
 
-  get round(): ConversationRoundState {
+  /**
+   * Get round state. Returns null for tool-use agents.
+   * For reflection agents, use hasRound() to check before accessing.
+   */
+  get round(): ConversationRoundState | null {
     return this.roundState;
+  }
+
+  /** Check if this store has a round (reflection agent). */
+  hasRound(): boolean {
+    return this.roundState !== null;
   }
 
   get run(): AgentRunState {
@@ -224,10 +169,17 @@ export class AgentSharedStore {
   }
 }
 
+// Type alias for tool-use compatibility
+export type ToolUseStore = AgentSharedStore;
+
+// ============================================================================
+// Factory Functions
+// ============================================================================
+
 /**
- * Factory params for creating a new store from scratch.
+ * Factory params for creating a new store with round (reflection agents).
  */
-interface SharedStoreFactoryParams {
+interface SharedStoreWithRoundParams {
   roundIndex: number;
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
@@ -236,17 +188,23 @@ interface SharedStoreFactoryParams {
 }
 
 /**
+ * Factory params for creating a new store without round (tool-use agents).
+ */
+interface SharedStoreWithoutRoundParams {
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
+}
+
+/**
  * Factory args - either create from params or restore from snapshot.
  */
 type SharedStoreFactoryArgs =
-  | (SharedStoreFactoryParams & { snapshot?: undefined })
+  | (SharedStoreWithRoundParams & { snapshot?: undefined })
   | { snapshot: AgentSharedStoreSnapshot };
 
 /**
- * Create an AgentSharedStore from params or snapshot.
- *
- * This is the preferred way to create stores as it handles both
- * fresh creation and snapshot restoration.
+ * Create an AgentSharedStore with round support (for reflection agents).
  */
 export function createSharedStore(
   args: SharedStoreFactoryArgs,
@@ -255,12 +213,38 @@ export function createSharedStore(
     return AgentSharedStore.fromSnapshot(args.snapshot);
   }
 
-  // Type narrowing: must be SharedStoreFactoryParams
-  const params = args as SharedStoreFactoryParams;
+  const params = args as SharedStoreWithRoundParams;
   const initialRound =
     params.roundState ?? new ConversationRoundState(params.roundIndex);
   return new AgentSharedStore({
     round: initialRound,
+    run: params.runState,
+    workspace: params.workspaceState,
+    user: params.userChannels,
+  });
+}
+
+/**
+ * Factory args for tool-use store.
+ */
+type ToolUseStoreFactoryArgs =
+  | (SharedStoreWithoutRoundParams & { snapshot?: undefined })
+  | { snapshot: BaseStoreSnapshot };
+
+/**
+ * Create an AgentSharedStore without round (for tool-use agents).
+ * This is a convenience function that creates a store with round=null.
+ */
+export function createToolUseStore(
+  args: ToolUseStoreFactoryArgs,
+): AgentSharedStore {
+  if ('snapshot' in args && args.snapshot) {
+    return AgentSharedStore.fromSnapshot(args.snapshot);
+  }
+
+  const params = args as SharedStoreWithoutRoundParams;
+  return new AgentSharedStore({
+    round: null,
     run: params.runState,
     workspace: params.workspaceState,
     user: params.userChannels,

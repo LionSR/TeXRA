@@ -1,13 +1,42 @@
 # State Management Architecture Analysis
 
+## ✅ Completed Refactoring
+
+The following issues have been **FIXED** in commit `bbd9b7a`:
+
+| Issue | Status | Changes Made |
+|-------|--------|--------------|
+| #1 `AgentRunState.totalRounds` | ✅ FIXED | Removed field, added `getCompletedCycles()` derived from usageAccumulator |
+| #3 AgentSharedStore unused round | ✅ FIXED | Created `ToolUseStore` without round field for tool-use flows |
+
+**Files Changed:**
+- `AgentState.ts` - Removed `totalRounds` and `incrementRounds()`
+- `RunUsageAccumulator.ts` - Added `getCompletedCycles()`
+- `AgentSharedStore.ts` - Added `ToolUseStore`, `ToolUseStoreSnapshot`, `createToolUseStore()`
+- `ToolUseCycleFlow.ts` - Removed `run.incrementRounds()` call
+- `ToolUseRunFlow.ts` - Uses `ToolUseStore` and `getCompletedCycles()`
+- Tool-use flow files updated to use `ToolUseStore`
+
+---
+
+## Remaining Issues (Not Yet Fixed)
+
+The following issues are documented but not yet addressed:
+
+1. **Parallel metrics tracking systems** - Tool-use still duplicates `ConversationRoundState` fields in `ToolUseCycleState`
+2. **Two finalization paths** - `finalizeRound()` vs `finalizeToolUseCycle()` still exist
+3. **Factory function overhead** - Pass-through wrappers not yet inlined
+
+---
+
 ## Executive Summary
 
 After deep analysis of the agent state management system, I've identified **critical architectural issues** that lead to code duplication, confusion, and unnecessary complexity. The core problems are:
 
-1. **`AgentRunState.totalRounds` naming/usage confusion** - It's called "totalRounds" but tracks "completed cycles" and is ONLY used by tool-use agents
+1. ~~**`AgentRunState.totalRounds` naming/usage confusion**~~ ✅ FIXED
 2. **Parallel metrics tracking systems** - Tool-use duplicates what reflection already has with `ConversationRoundState`
-3. **Two finalization paths** that do nearly identical work
-4. **`AgentSharedStore` is used inconsistently** - reflection flows don't use it, tool-use flows do
+3. ~~**`AgentSharedStore` is used inconsistently**~~ ✅ FIXED - Created separate `ToolUseStore`
+4. **Two finalization paths** that do nearly identical work
 
 ---
 
