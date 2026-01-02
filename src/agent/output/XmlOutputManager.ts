@@ -64,11 +64,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): string | null {
     const filename = path.basename(this.agentConfig.inputFile);
-    const result = extractDocument(
-      outputContent,
-      documentTag,
-      filename,
-    );
+    const result = extractDocument(outputContent, documentTag, filename);
 
     if (result.content) {
       const methodMessages: Record<string, string> = {
@@ -151,10 +147,7 @@ export class XmlOutputManager {
       });
       const root = parser.parse(outputContent);
 
-      const latexDocument = extractContentFromXMLbyTag(
-        root,
-        documentTag,
-      );
+      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
         await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
         return texLocation;
@@ -231,10 +224,7 @@ export class XmlOutputManager {
       });
       const root = parser.parse(outputContent);
 
-      const documents = extractContentFromXMLbyTagMultiple(
-        root,
-        documentTag,
-      );
+      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (documents) {
         this.warnPartialExtraction(
           outputLocation,

@@ -481,10 +481,7 @@ class ResponseProcessNode<C> extends BaseNode<
       }
 
       // Scratchpad is always extracted from final response, not streamed
-      const scratchpad = await extractScratchpad(
-        newResponse,
-        'scratchpad',
-      );
+      const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
       if (scratchpad) {
         logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,

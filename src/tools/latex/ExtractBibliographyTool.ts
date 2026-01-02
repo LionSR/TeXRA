@@ -140,7 +140,9 @@ export class ExtractBibliographyTool extends defineTool({
     return {
       summary,
       output,
-      ...(instructions.length > 0 && { userInstruction: instructions.join(' ') }),
+      ...(instructions.length > 0 && {
+        userInstruction: instructions.join(' '),
+      }),
     };
   }
 }
