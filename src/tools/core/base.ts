@@ -5,7 +5,6 @@ import { ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
 import type { ITool, ToolDefinition, ToolResult } from '@agent/core/ToolTypes';
-import { toolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
 /**
@@ -52,20 +51,20 @@ export abstract class BaseTool<T> implements ITool {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
-        return toolResult({
+        return {
           error: 'Invalid input',
           isError: true,
           diagnostics: err.issues,
-        });
+        };
       }
       const message = toErrorMessage(err);
       const diagnostics =
         err instanceof Error ? { name: err.name, stack: err.stack } : undefined;
-      return toolResult({
+      return {
         error: message,
         isError: true,
         diagnostics,
-      });
+      };
     }
   }
 

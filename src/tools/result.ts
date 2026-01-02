@@ -118,12 +118,6 @@ export const ToolResultSchema = z.looseObject({
 });
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
-export function toolResult(result: ToolResult): ToolResult {
-  return result;
-}
-
-export const cliResult = toolResult;
-
 export class ToolError extends Error {
   constructor(message: string) {
     super(message);

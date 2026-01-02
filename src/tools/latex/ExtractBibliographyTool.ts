@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
@@ -70,18 +70,18 @@ export class ExtractBibliographyTool extends defineTool({
       missingBibliographyFiles.length === 0
     ) {
       const summary = `No citations or bibliography directives found in ${display}.`;
-      return toolResult({
+      return {
         summary,
         output: formatToolOutput(`BibTeX entries in ${display}`, null),
-      });
+      };
     }
 
     if (citationKeys.length === 0) {
       const summary = `No citation commands found in ${display}.`;
-      const result = toolResult({
+      const result = {
         summary,
         output: formatToolOutput(`BibTeX entries in ${display}`, null),
-      });
+      };
       if (missingBibliographyFiles.length > 0) {
         result.userInstruction = `Missing bibliography files: ${missingBibliographyFiles
           .map((file) => resolveAndFormat(file).display)
@@ -119,10 +119,10 @@ export class ExtractBibliographyTool extends defineTool({
             citationCount === 1 ? '' : 's'
           } in ${display}.`;
 
-    const result = toolResult({
+    const result = {
       summary,
       output,
-    });
+    };
 
     const instructions: string[] = [];
     if (missingBibliographyFiles.length > 0) {

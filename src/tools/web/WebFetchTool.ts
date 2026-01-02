@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const WebFetchInputSchema = z.strictObject({
@@ -142,9 +142,9 @@ export class WebFetchTool extends defineTool({
       sections.push('No readable content was extracted from the provided URL.');
     }
 
-    return toolResult({
+    return {
       summary: `Fetched ${url}`,
       output: sections.join('\n\n'),
-    });
+    };
   }
 }

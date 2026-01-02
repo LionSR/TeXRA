@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolResult, ToolError, toolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -29,10 +29,10 @@ export class BashTool extends defineTool({
         input.command.length > 60
           ? `${input.command.slice(0, 57)}…`
           : input.command;
-      return toolResult({
+      return {
         summary: `Ran bash: ${commandPreview}`,
         output: result.stdout || '',
-      });
+      };
     }
     throw new ToolError(
       `Bash command failed: ${result.stderr || 'No error output available'}`,
