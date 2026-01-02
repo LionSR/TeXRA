@@ -21,7 +21,7 @@ import {
 /**
  * Determine which files to process for a given round.
  *
- * Used by TeXCountNode and MediaPreparationNode to avoid duplicating
+ * Used by TeXCountNode and MediaExtractionNode to avoid duplicating
  * the file determination logic.
  *
  * @param currentRound - Current round index (0-based)
