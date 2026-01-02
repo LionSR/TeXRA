@@ -78,7 +78,7 @@ export class OutputNode<C = unknown> extends Node<
 
     if (!outputLocation) {
       throw new Error(
-        'Output location not set - ResponseCycleCompositionNode must run first',
+        'Output location not set - ResponseCycleNode must run first',
       );
     }
 
