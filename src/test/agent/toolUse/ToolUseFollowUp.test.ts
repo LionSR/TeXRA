@@ -21,7 +21,7 @@ describe('ToolUseFollowUp', () => {
   const roundState = new ConversationRoundState(0);
 
   const snapshot: ToolUseSessionSnapshot = {
-    version: 1,
+    version: 2,
     executionId: 'exec-1',
     streamId,
     agentConfig: parseAgentConfig({
@@ -30,15 +30,13 @@ describe('ToolUseFollowUp', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    // Store snapshot for backwards compatibility with existing persisted data
-    store: {
-      round: roundState.toSnapshot(),
-      run: runState.toSnapshot(),
-      workspace: workspaceState.toSnapshot(),
-      user: {
-        input: {},
-        transient: {},
-      },
+    // State slices stored directly (v2 schema - no wrapper)
+    round: roundState.toSnapshot(),
+    run: runState.toSnapshot(),
+    workspace: workspaceState.toSnapshot(),
+    user: {
+      input: {},
+      transient: {},
     },
     lastUpdated: Date.now(),
   };
@@ -66,10 +64,13 @@ describe('ToolUseFollowUp', () => {
 
   it('creates valid snapshot structure', () => {
     // Test that snapshot structure is valid (used for resume operations)
-    assert.equal(snapshot.version, 1);
+    assert.equal(snapshot.version, 2);
     assert.equal(snapshot.streamId, streamId);
     assert.equal(snapshot.executionId, 'exec-1');
     assert.ok(snapshot.agentConfig);
-    assert.ok(snapshot.store);
+    // State slices stored directly (v2 schema)
+    assert.ok(snapshot.run);
+    assert.ok(snapshot.workspace);
+    assert.ok(snapshot.user);
   });
 });

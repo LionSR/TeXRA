@@ -311,7 +311,7 @@ Some nodes have trivial prep/post phases:
 
 ## Refactoring Applied
 
-The AgentSharedStore overhead has been eliminated:
+The AgentSharedStore overhead has been completely eliminated:
 
 1. **Removed unused `store` parameter** from `buildCycleOptions()` - it was never used
 2. **`prepareInitialState()`** now returns individual state slices directly:
@@ -324,7 +324,8 @@ The AgentSharedStore overhead has been eliminated:
    - `AgentRunState.fromSnapshot(stateSlices.runStateSnapshot)`
    - `AgentWorkspaceState.fromSnapshot(stateSlices.workspaceSnapshot)`
 5. **`ToolUseSessionLifecycle`** no longer holds store reference - removed `setStore()`/`getStore()`
-6. **Backwards compatibility** preserved in snapshot schema for resume operations
+6. **Snapshot schema v2** - state slices stored directly at top level (no `store` wrapper)
+7. **`AgentSharedStore.ts` deleted** - no longer needed
 
 **Files changed:**
 - `src/agent/implementations/flows/ToolUseRunFlow.ts`
@@ -333,3 +334,6 @@ The AgentSharedStore overhead has been eliminated:
 - `src/agent/implementations/flows/tooluse/ToolUseSessionLifecycle.ts`
 - `src/agent/implementations/flows/tooluse/ToolUseSessionTypes.ts`
 - `src/test/agent/toolUse/ToolUseFollowUp.test.ts`
+
+**Files deleted:**
+- `src/agent/core/AgentSharedStore.ts`
