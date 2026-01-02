@@ -114,8 +114,8 @@ export class OutputHandler implements IOutputHandler {
       channel: this.channel,
       logger: this.logger,
       xmlManager: this.xmlManager,
-      setRoundOutputs: (round, outputs) => this.setRoundOutputs(round, outputs),
-      ensureRoundData: (round) => this.ensureRoundData(round),
+      setRoundOutputs: this.setRoundOutputs.bind(this),
+      ensureRoundData: this.ensureRoundData.bind(this),
     });
   }
 
