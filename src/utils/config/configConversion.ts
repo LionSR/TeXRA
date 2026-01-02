@@ -1,10 +1,13 @@
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
-// Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
-import { type TaskState } from '@logger/TaskState';
+import {
+  type TaskState,
+  type ToolUseTaskState,
+  type WorkflowTaskState,
+} from '@logger/TaskState';
 
 // Local file imports
 import { FILE_TYPES, type FileType } from './constants';
@@ -36,20 +39,25 @@ function createActiveFilesFromArrays(
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  const session = config.session;
+  const { session } = config;
   if (!session) {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
-  if (session.agentCategory === AgentCategory.ToolUse) {
-    return {
-      agentConfig: config as TaskState['agentConfig'],
-      toolSessionState: {},
-    };
+  switch (session.agentCategory) {
+    case AgentCategory.ToolUse:
+      return {
+        agentConfig: config as ToolUseTaskState['agentConfig'],
+        toolSessionState: {},
+      };
+    case AgentCategory.Workflow:
+      return {
+        agentConfig: config as WorkflowTaskState['agentConfig'],
+        activeFiles: createActiveFilesFromArrays(config),
+      };
+    default: {
+      const _exhaustive: never = session.agentCategory;
+      throw new Error(`Unknown agent category: ${_exhaustive}`);
+    }
   }
-
-  return {
-    agentConfig: config as TaskState['agentConfig'],
-    activeFiles: createActiveFilesFromArrays(config),
-  };
 }
