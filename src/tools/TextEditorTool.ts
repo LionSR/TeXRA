@@ -242,7 +242,7 @@ export class TextEditorTool extends defineTool({
         return {
           summary: `View directory ${filePath}`,
           output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
-        });
+        };
       }
 
       // Read file contents
@@ -305,7 +305,7 @@ export class TextEditorTool extends defineTool({
           ? `View ${filePath} (${rangeSummary})`
           : `View ${filePath}`,
         output: this.makeOutput(fileContent, filePath, initLine),
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -367,7 +367,7 @@ export class TextEditorTool extends defineTool({
         output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${error}`);
     }
@@ -489,7 +489,7 @@ export class TextEditorTool extends defineTool({
         output: successMsg,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -608,7 +608,7 @@ export class TextEditorTool extends defineTool({
         output: successMsg,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -684,7 +684,7 @@ export class TextEditorTool extends defineTool({
         output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;

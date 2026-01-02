@@ -137,6 +137,6 @@ export class GrepTool extends defineTool({
     return {
       summary,
       output: outputText,
-    });
+    };
   }
 }

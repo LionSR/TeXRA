@@ -82,6 +82,6 @@ export class WriteFileTool extends defineTool({
       output,
       userPatch: approval.userPatch,
       edits: [{ path: input.path, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }

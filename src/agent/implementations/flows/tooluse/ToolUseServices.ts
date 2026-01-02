@@ -47,8 +47,7 @@ export interface PrepareStateResult {
  * Persistence is handled automatically by PersistedFlow after each node.
  */
 export interface ToolUseServices<C = unknown>
-  extends BaseFlowContextInit<C>,
-    FlowServiceAccessors {
+  extends BaseFlowContextInit<C>, FlowServiceAccessors {
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 
