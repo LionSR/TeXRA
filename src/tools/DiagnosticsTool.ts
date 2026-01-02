@@ -11,12 +11,7 @@ import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import {
-  type DiagnosticsPayload,
-  ToolResult,
-  ToolError,
-  toolResult,
-} from './result';
+import { type DiagnosticsPayload, ToolResult, ToolError } from './result';
 
 // Type imports
 import type { Diagnostic } from 'vscode';
@@ -113,10 +108,10 @@ export class DiagnosticsTool extends defineTool({
       ...('messages' in args ? { messages: args.messages } : {}),
     };
 
-    return toolResult({
+    return {
       summary: args.summary,
       output: JSON.stringify(payload, null, 2),
       diagnostics: payload,
-    });
+    };
   }
 }

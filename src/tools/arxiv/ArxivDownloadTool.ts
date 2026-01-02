@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
 import { LsTool } from '@tools/ls';
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import { formatToolOutput } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { toPosixPath } from '@utils/core';
@@ -72,9 +72,9 @@ export class ArxivDownloadTool extends defineTool({
       formatToolOutput(`Directory listing for ${displayPath}`, listingOutput),
     ].join('\n');
 
-    return toolResult({
+    return {
       summary,
       output,
-    });
+    };
   }
 }

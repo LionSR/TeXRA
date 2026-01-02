@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { toolResult, type ToolFileAttachment } from '@tools/result';
+import { type ToolFileAttachment } from '@tools/result';
 import { formatToolOutput } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
@@ -41,10 +41,10 @@ export class ExtractTikzFiguresTool extends defineTool({
     );
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
-      return toolResult({
+      return {
         summary,
         output: formatToolOutput('TikZ figures', null),
-      });
+      };
     }
 
     const formattedEntries = tikzFigures.map(([label, pictures]) => {
@@ -105,10 +105,10 @@ export class ExtractTikzFiguresTool extends defineTool({
       }
     }
 
-    return toolResult({
+    return {
       summary: summaryParts.join(' '),
       output: outputs.join('\n'),
       files: attachments,
-    });
+    };
   }
 }

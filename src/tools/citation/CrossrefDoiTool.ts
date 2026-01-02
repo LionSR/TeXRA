@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - metadata
 import { toErrorMessage } from '@common/errors';
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
@@ -62,9 +62,9 @@ export class CrossrefDoiTool extends defineTool({
       licenses: work.license ?? [],
     };
 
-    return toolResult({
+    return {
       summary: `Retrieved Crossref metadata for DOI ${metadata.doi}`,
       output: JSON.stringify(metadata, null, 2),
-    });
+    };
   }
 }
