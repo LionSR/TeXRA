@@ -6,9 +6,8 @@
  * - Nodes access services via this.services
  * - shared contains mutable runtime state only
  *
- * ToolUseServices extends BaseFlowContextInit with tool-use specific
- * dependencies (tool registry, session, cycle operations), plus
- * convenience accessors (logger, context) defined inline.
+ * ToolUseServices extends BaseFlowContextInit and FlowServiceAccessors
+ * with tool-use specific dependencies (tool registry, session, cycle operations).
  */
 
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
@@ -18,9 +17,10 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import type { AgentLogger } from '@logger/AgentLogger';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type {
+  BaseFlowContextInit,
+  FlowServiceAccessors,
+} from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 
 // Note: RunCycleResult was removed - ToolUseCycleNode now directly runs ToolUseCycleFlow
@@ -46,12 +46,9 @@ export interface PrepareStateResult {
  * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
  * Persistence is handled automatically by PersistedFlow after each node.
  */
-export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
-  /** Logger for debugging and progress */
-  readonly logger: AgentLogger;
-
-  /** Execution context (IDs, storage key, etc.) */
-  readonly context: AgentExecutionContext;
+export interface ToolUseServices<C = unknown>
+  extends BaseFlowContextInit<C>,
+    FlowServiceAccessors {
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 
