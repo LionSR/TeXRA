@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
@@ -95,9 +95,9 @@ export class GlobTool extends defineTool({
 
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
-    return toolResult({
+    return {
       summary: `glob "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
-    });
+    };
   }
 }

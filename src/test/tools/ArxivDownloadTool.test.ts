@@ -3,7 +3,7 @@ import * as assert from 'assert';
 
 // Local imports - tools
 import { LsTool } from '@tools/ls';
-import { toolResult } from '@tools/result';
+import type { ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import * as arxivModule from '@latex/arxivProcessor';
 import { ArxivDownloadTool } from '@/tools/arxiv/ArxivDownloadTool';
@@ -82,11 +82,10 @@ describe('ArxivDownloadTool', () => {
       LsTool.prototype as unknown as {
         call: typeof originalLsCall;
       }
-    ).call = async () =>
-      toolResult({
-        summary: 'Listing for sample',
-        output: 'dir src\nfile main.tex',
-      });
+    ).call = async (): Promise<ToolResult> => ({
+      summary: 'Listing for sample',
+      output: 'dir src\nfile main.tex',
+    });
 
     const tool = new ArxivDownloadTool();
     const result = await tool.call({ id: '2401.12345v2', autoIndent: false });

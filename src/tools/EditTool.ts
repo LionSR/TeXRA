@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
@@ -125,11 +125,11 @@ export class EditFileTool extends defineTool({
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
 
-    return toolResult({
+    return {
       summary,
       output,
       userPatch: approval.userPatch,
       edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }

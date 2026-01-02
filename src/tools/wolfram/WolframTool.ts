@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
-import { ToolResult, ToolError, toolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
@@ -26,10 +26,10 @@ export class WolframTool extends defineTool({
       showErrorsToUser: false,
     });
     if (result.success) {
-      return toolResult({
+      return {
         summary: 'Executed Wolfram code',
         output: result.output ?? '',
-      });
+      };
     }
     throw new ToolError(
       `Wolfram execution failed: ${result.error ?? 'No error details available'}`,

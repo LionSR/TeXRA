@@ -1,7 +1,7 @@
 // Local imports - agent
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 // Local imports - tools
-import { toolResult, type ToolResult } from '@tools/result';
+import { type ToolResult } from '@tools/result';
 
 export function recordToolFileRead(path: string): void {
   const context = getCurrentToolFileInteractionContext();
@@ -22,11 +22,11 @@ export function requireFileReadForEdit(
     return null;
   }
 
-  return toolResult({
+  return {
     summary: `Read ${path} before editing`,
     output:
       'Edits to existing files require a prior read in this session. Please call read_file first or write a new file instead.',
     isError: true,
     diagnostics: { reason: 'unread-file', path },
-  });
+  };
 }

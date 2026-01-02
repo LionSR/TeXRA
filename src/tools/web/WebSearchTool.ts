@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
-import { ToolResult, ToolError, toolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const WebSearchInputSchema = z.strictObject({
@@ -95,15 +95,15 @@ export class WebSearchTool extends defineTool({
     }
 
     if (results.length === 0) {
-      return toolResult({
+      return {
         summary: `Search "${query}" (no results)`,
         output:
           'No results found. Note: This search uses DuckDuckGo Instant Answers API which works best for factual/entity queries. For general web searches, try rephrasing the query or use more specific terms.',
-      });
+      };
     }
-    return toolResult({
+    return {
       summary: `Search "${query}"`,
       output: results.slice(0, max_results).join('\n\n'),
-    });
+    };
   }
 }
