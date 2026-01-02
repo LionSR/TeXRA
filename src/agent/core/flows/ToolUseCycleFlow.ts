@@ -50,7 +50,7 @@ import {
   handleInvocationResult,
 } from './RetryState';
 import {
-  finalizeRound,
+  finalizeToolUseCycle,
   type ToolUseCycleOptions,
   type ToolUseCycleServices,
   type ToolUseCycleParams,
@@ -133,6 +133,26 @@ export interface ToolUseCycleState extends BaseCycleState {
   toolCalls?: SdkToolCall[];
   text?: string;
   /**
+   * Current cycle index (0-based).
+   *
+   * Used for debug file naming and usage tracking. Incremented after each
+   * successful cycle in ContinuationNode.post().
+   *
+   * This replaces the need for ConversationRoundState.roundIndex in tool-use
+   * agents, simplifying the service dependencies.
+   */
+  cycleIndex: number;
+  /**
+   * Accumulated response time for current cycle (milliseconds).
+   * Reset after finalization when continuing to next cycle.
+   */
+  cycleResponseTimeMs: number;
+  /**
+   * Normalized usage for current cycle.
+   * Reset after finalization when continuing to next cycle.
+   */
+  cycleNormalizedUsage?: import('@agent/types/NormalizedUsage').NormalizedUsage;
+  /**
    * Whether the last cycle ended normally (model said end_turn).
    *
    * Lifecycle:
@@ -154,6 +174,10 @@ function resetToolUseState(state: ToolUseCycleState): void {
   state.response = undefined;
   state.toolCalls = undefined;
   state.text = undefined;
+  // Reset cycle metrics for next cycle
+  state.cycleResponseTimeMs = 0;
+  state.cycleNormalizedUsage = undefined;
+  // Note: cycleIndex is incremented, not reset
   // Note: endTurn is NOT reset here - it tracks whether the LAST cycle
   // ended normally, which is needed for caller detection of user cancellation.
 }
@@ -178,13 +202,12 @@ class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(_shared: ToolUseCycleShared): Promise<{
+  async prep(shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
     const services = this.services;
-    const { round } = services;
     const interrupted = Boolean(await services.checkInterruption());
     const debugContext = createDebugContext({
       logger: services.logger,
@@ -192,8 +215,9 @@ class ToolUsePrepNode<C> extends BaseNode<
       executionId: services.context.executionId,
       isRemote: isRemoteAgent(services.agentName),
     });
+    // Use cycleIndex from state instead of round.roundIndex
     const debugFileOptions = createDebugFileOptions(
-      round.roundIndex,
+      shared.state.cycleIndex,
       'tooluse',
     );
     return { interrupted, debugContext, debugFileOptions };
@@ -272,17 +296,21 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
+  async prep(
+    shared: ToolUseCycleShared,
+  ): Promise<BaseInvocationPrepResult & { cycleIndex: number }> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
       messages: state.messages,
+      cycleIndex: state.cycleIndex,
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
+  async exec(
+    prepRes: BaseInvocationPrepResult & { cycleIndex: number },
+  ): Promise<ToolUseCallResult> {
     const services = this.services;
-    const { round } = services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
@@ -294,8 +322,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       executionId: services.context.executionId,
       isRemote: isRemoteAgent(services.agentName),
     });
+    // Use cycleIndex from prepRes instead of round.roundIndex
     const debugFileOptions = createDebugFileOptions(
-      round.roundIndex,
+      prepRes.cycleIndex,
       'tooluse_response',
     );
 
@@ -555,11 +584,10 @@ class ToolUseProcessNode<C> extends BaseNode<
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const { round, run, workspace, onRoundFinalized } = services;
+    const { run, workspace, onRoundFinalized } = services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
-      round.clearUsage();
       return FlowTransition.COMPLETE;
     }
 
@@ -569,22 +597,24 @@ class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    // Apply side effects: response time
+    // Accumulate cycle metrics in state (not round object)
     if (execRes.responseTimeMs !== undefined) {
-      round.addResponseTime(execRes.responseTimeMs);
+      state.cycleResponseTimeMs += execRes.responseTimeMs;
     }
-
-    // Apply side effects: usage
     if (execRes.normalizedUsage) {
-      round.setNormalizedUsage(execRes.normalizedUsage);
-    } else {
-      round.clearUsage();
+      state.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    // Finalize round using shared helper (single source of truth)
-    await finalizeRound(services);
+    // Finalize cycle using direct values (no round object needed)
+    await finalizeToolUseCycle({
+      cycleIndex: state.cycleIndex,
+      responseTimeMs: state.cycleResponseTimeMs,
+      normalizedUsage: state.cycleNormalizedUsage ?? null,
+      run,
+      workspace,
+      onRoundFinalized,
+    });
     run.incrementRounds();
-    const nextRoundIndex = round.roundIndex + 1;
 
     if (execRes.endTurn) {
       // Apply side effects for end turn
@@ -608,8 +638,10 @@ class ToolUseProcessNode<C> extends BaseNode<
     state.toolCalls = execRes.toolCalls;
     state.text = execRes.text;
     state.stopReason = execRes.stopReason;
-    // Reset round for next cycle - mutate existing object to preserve store reference
-    services.round.reset(nextRoundIndex);
+    // Increment cycle index and reset metrics for next cycle
+    state.cycleIndex += 1;
+    state.cycleResponseTimeMs = 0;
+    state.cycleNormalizedUsage = undefined;
 
     return FlowTransition.DEFAULT;
   }
