@@ -281,7 +281,7 @@ export function updateWorkspaceSnapshot(
  * @returns Reconstructed AgentRunState instance
  *
  * @example
- * // In ResponseCycleCompositionNode.prep()
+ * // In ResponseCycleNode.prep()
  * const runState = getRunState(shared);
  * const store = new AgentSharedStore({ run: runState, ... });
  * // ... in post(), call updateRunStateSnapshot() to persist changes
@@ -317,8 +317,8 @@ export function getRunState(shared: ReflectionFlowShared): AgentRunState {
  * @param runState - The mutated run state instance
  *
  * @example
- * // In ResponseCycleCompositionNode.post()
- * updateRunStateSnapshot(shared, execRes.store.run);
+ * // In ResponseCycleNode.post()
+ * updateRunStateSnapshot(shared, execRes.run);
  */
 export function updateRunStateSnapshot(
   shared: ReflectionFlowShared,
