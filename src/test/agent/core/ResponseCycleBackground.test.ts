@@ -13,8 +13,7 @@ import {
   AgentType,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { runResponseCycle } from '@agent/core/ResponseCycle';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { executeResponseCycleCore } from '@agent/core/ResponseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 // Type imports
@@ -321,27 +320,18 @@ describe('ResponseCycle background reasoning logs', () => {
     });
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new ConversationRoundState(1);
-    const stateGlobal = new AgentRunState();
-    const workspaceState = AgentWorkspaceState.create();
-    const userVarChannels = {
-      input: Object.freeze({}),
-      transient: {} as Record<string, any>,
-    };
-    const store = new AgentSharedStore({
-      round: stateRound,
-      run: stateGlobal,
-      workspace: workspaceState,
-      user: userVarChannels,
-    });
+    const round = new ConversationRoundState(1);
+    const run = new AgentRunState();
+    const workspace = AgentWorkspaceState.create();
+    const userVars = {} as Record<string, any>;
 
-    await runResponseCycle({
+    await executeResponseCycleCore({
       options: {
         modelHandler: handler,
         agentSetting,
         agentConfig,
         agentPrompt,
-        userVars: userVarChannels.transient,
+        userVars,
         logger: loggerStub,
         client: {} as OpenAI,
         checkInterruption: () => false,
@@ -356,7 +346,9 @@ describe('ResponseCycle background reasoning logs', () => {
         WorkspaceFS.fullPath('output.txt'),
         'output.txt',
       ),
-      store,
+      round,
+      run,
+      workspace,
     });
 
     const thinkingLogs = loggedEvents.filter(
