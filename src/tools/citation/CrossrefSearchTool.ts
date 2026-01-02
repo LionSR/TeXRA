@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 // Local imports - metadata
 import { toErrorMessage } from '@common/errors';
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
@@ -116,7 +116,7 @@ export class CrossrefSearchTool extends defineTool({
       results,
     };
 
-    return toolResult({
+    return {
       summary: `Found ${results.length} Crossref result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
     });

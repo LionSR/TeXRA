@@ -24,7 +24,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { ToolResult, ToolError, cliResult, toolResult } from './result';
+import { ToolResult, ToolError } from './result';
 
 // Local imports - approval helpers
 
@@ -239,7 +239,7 @@ export class TextEditorTool extends defineTool({
           })
           .join('\n');
 
-        return cliResult({
+        return {
           summary: `View directory ${filePath}`,
           output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
         });
@@ -300,7 +300,7 @@ export class TextEditorTool extends defineTool({
         rangeSummary = `${startLine}-${endLine === -1 ? 'end' : endLine}`;
       }
 
-      return cliResult({
+      return {
         summary: rangeSummary
           ? `View ${filePath} (${rangeSummary})`
           : `View ${filePath}`,
@@ -362,7 +362,7 @@ export class TextEditorTool extends defineTool({
         ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
         : `File created successfully at: ${filePath}`;
 
-      return toolResult({
+      return {
         summary: `Created file ${filePath}`,
         output,
         userPatch: approval.userPatch,
@@ -484,7 +484,7 @@ export class TextEditorTool extends defineTool({
         ? `${successIntro} ${snippetOutput}${reviewMessage}\n\n${userDiffNote}`
         : `${successIntro} ${snippetOutput}${reviewMessage}`;
 
-      return cliResult({
+      return {
         summary: `Updated ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
@@ -603,7 +603,7 @@ export class TextEditorTool extends defineTool({
             startLine,
           )}${reviewNote}`;
 
-      return cliResult({
+      return {
         summary: `Inserted text into ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
@@ -679,7 +679,7 @@ export class TextEditorTool extends defineTool({
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;
 
-      return cliResult({
+      return {
         summary: `Undid edit on ${filePath}`,
         output,
         userPatch: approval.userPatch,

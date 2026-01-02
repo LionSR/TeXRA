@@ -28,7 +28,6 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
-import { toolResult } from '@agent/core/ToolTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -755,10 +754,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
 
     if (!tool) {
-      result = toolResult({
+      result = {
         error: `Unknown tool ${call.name}`,
         isError: true,
-      });
+      };
     } else {
       try {
         result = await withToolFileInteractionContext(
@@ -781,11 +780,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(call.name, err);
-        result = toolResult({
+        result = {
           error: message,
           isError: true,
           diagnostics,
-        });
+        };
       }
     }
 

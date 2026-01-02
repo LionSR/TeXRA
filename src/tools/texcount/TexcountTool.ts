@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex utilities
-import { ToolError, toolResult, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import {
   formatTeXCountStats,
@@ -52,7 +52,7 @@ export class TexcountTool extends defineTool({
       const errorMessage =
         errors.join('\n') ||
         'texcount did not return any output. Ensure the files exist.';
-      return toolResult({
+      return {
         error: errorMessage,
         isError: true,
       });
@@ -62,7 +62,7 @@ export class TexcountTool extends defineTool({
       files.length === 1 ? '' : 's'
     }`;
 
-    return toolResult({
+    return {
       summary,
       output: formatOutput(output, input.format),
     });
