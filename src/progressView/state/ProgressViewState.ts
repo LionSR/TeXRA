@@ -644,7 +644,12 @@ export class ProgressViewState {
           continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, parseResult.data);
+        // Cast is safe: schema uses passthrough() for efficiency but data
+        // originated from a validated TaskState with full AgentConfig
+        this.taskStates.set(
+          stream as StreamTabId,
+          parseResult.data as TaskState,
+        );
         loaded += 1;
       }
     }
