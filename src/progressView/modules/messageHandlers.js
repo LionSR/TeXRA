@@ -327,6 +327,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._refreshInstructionForActiveRun();
     this._refreshUsageForActiveRun();
+    this._refreshOutputsForActiveRun();
   }
 
   handleUpdateLogs(message) {
