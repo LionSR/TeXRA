@@ -67,3 +67,77 @@
   max-height: var(--height-large);
   overflow: auto;
 }
+
+/* Collapsed output state for very long outputs */
+.tool-output-collapsed {
+  max-height: 200px;
+  position: relative;
+}
+
+.tool-output-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(
+    transparent,
+    var(--vscode-editor-background, #1e1e1e)
+  );
+  pointer-events: none;
+}
+
+/* Condensed input display */
+.tool-input-condensed {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--font-size-sm);
+  padding: 2px 6px;
+  background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.05));
+  border-radius: var(--border-radius-small);
+  word-break: break-all;
+}
+
+/* Line changes badge */
+.line-changes-badge {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.line-change-added {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #89d185);
+}
+
+.line-change-removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f48771);
+}
+
+/* Edited files list styling */
+.edited-files-list {
+  margin: var(--spacing-tiny) 0;
+  padding-left: 0;
+}
+
+.edited-files-list .detail-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.edited-files-list .file-link {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edited-files-list .line-changes-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+}
