@@ -5,7 +5,7 @@ import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages file list rendering.
- * Updated to use new OutputFileInfo structure (no duplicate path fields).
+ * Uses native VS Code collapsible for the container.
  */
 export class FileList {
   /**
@@ -18,6 +18,9 @@ export class FileList {
   update(filesByRound, options = {}) {
     const { showRoundHeaders = true } = options;
     const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+    const collapsible = document.getElementById(
+      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
+    );
     if (!container) return;
 
     container.innerHTML = '';
@@ -29,8 +32,16 @@ export class FileList {
     }
 
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
-      container.textContent = 'No generated files';
+      // Hide the collapsible when there are no files
+      if (collapsible) {
+        collapsible.hidden = true;
+      }
       return;
+    }
+
+    // Show the collapsible when there are files
+    if (collapsible) {
+      collapsible.hidden = false;
     }
 
     const rounds = Object.keys(filesByRound)
@@ -229,6 +240,22 @@ export class FileList {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
       filePathSpan.dataset.file = file.location.absolutePath;
+    }
+  }
+
+  /**
+   * Clear the file list and hide the collapsible container.
+   */
+  clear() {
+    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+    const collapsible = document.getElementById(
+      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
+    );
+    if (container) {
+      container.innerHTML = '';
+    }
+    if (collapsible) {
+      collapsible.hidden = true;
     }
   }
 }
