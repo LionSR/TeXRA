@@ -13,9 +13,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
-  type ToolUseCycleState,
 } from '@agent/core/flows/ToolUseCycleFlow';
-import { createRetryState } from '@agent/core/flows/RetryState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 
@@ -182,23 +180,21 @@ describe('BashTool', () => {
 
     const messages: ProviderMessage[] = [];
 
-    // Create shared state for the cycle flow
-    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    // Create shared state for the cycle flow (flat pattern)
+    // Tool-use cycles track metrics in shared (cycleIndex, etc.) instead of round object
     const shared: ToolUseCycleShared = {
-      state: {
-        messages,
-        shouldStop: false,
-        response: undefined,
-        responseTimeMs: undefined,
-        toolCalls: undefined,
-        text: undefined,
-        stopReason: undefined,
-        cycleIndex: 0,
-        cycleResponseTimeMs: 0,
-        cycleNormalizedUsage: undefined,
-        endTurn: false,
-      } satisfies ToolUseCycleState,
-      retryState: createRetryState(),
+      messages,
+      shouldStop: false,
+      endTurn: false,
+      response: undefined,
+      responseTimeMs: undefined,
+      stopReason: undefined,
+      lastError: undefined,
+      toolCalls: undefined,
+      text: undefined,
+      cycleIndex: 0,
+      cycleResponseTimeMs: 0,
+      cycleNormalizedUsage: undefined,
     };
 
     // Create and run the flow directly
