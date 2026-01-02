@@ -20,6 +20,9 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
  * This interface focuses on session-specific operations (follow-ups, status).
  */
 export interface IToolUseSession {
+  /** Set the shared store for session state management. */
+  setStore(store: AgentSharedStore | null): void;
+
   /** Append a follow-up message to the session queue. */
   appendFollowUp(text: string): void;
 
