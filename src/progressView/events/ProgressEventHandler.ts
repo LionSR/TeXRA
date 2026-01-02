@@ -176,7 +176,8 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const { sessionCategory: sessionKindHint } =
       this.state.getStreamHints(stream);
-    const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
+    const sessionKind =
+      taskState?.agentConfig?.session?.agentCategory ?? sessionKindHint;
     const runId =
       runIdHint === undefined
         ? this.state.resolveRunId(stream, undefined, {
