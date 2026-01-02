@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 // Local imports - latex
 import { toErrorMessage } from '@common/errors';
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import {
   type ArxivSearchResult,
   createArxivClient,
@@ -151,9 +151,9 @@ export class ArxivSearchTool extends defineTool({
     };
 
     const fieldLabel = searchField !== 'all' ? ` (${searchField})` : '';
-    return toolResult({
+    return {
       summary: `Found ${results.length} arXiv result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
-    });
+    };
   }
 }

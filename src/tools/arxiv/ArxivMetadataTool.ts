@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - latex
 import { toErrorMessage } from '@common/errors';
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -81,9 +81,9 @@ export class ArxivMetadataTool extends defineTool({
       ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
     };
 
-    return toolResult({
+    return {
       summary: `Retrieved metadata for arXiv ID ${metadata.id}`,
       output: JSON.stringify(metadata, null, 2),
-    });
+    };
   }
 }

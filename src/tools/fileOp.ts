@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult, ToolError, toolResult } from '@tools/result';
+import { ToolResult, ToolError } from '@tools/result';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -42,17 +42,17 @@ export class FileOpTool extends defineTool({
       case 'read': {
         const data = await WorkspaceFS.read(path);
         recordToolFileRead(path);
-        return toolResult({
+        return {
           summary: `Read ${path}`,
           output: data,
-        });
+        };
       }
       case 'write': {
         if (content == null) {
-          return toolResult({
+          return {
             error: 'content parameter is required for write',
             isError: true,
-          });
+          };
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -92,19 +92,19 @@ export class FileOpTool extends defineTool({
           appliedContent,
         );
 
-        return toolResult({
+        return {
           summary: `Wrote ${path}`,
           output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
           userPatch: approval.userPatch,
           edits: [{ path, lineChanges: approval.lineChanges }],
-        });
+        };
       }
       case 'append': {
         if (content == null) {
-          return toolResult({
+          return {
             error: 'content parameter is required for append',
             isError: true,
-          });
+          };
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -158,12 +158,12 @@ export class FileOpTool extends defineTool({
           appliedContent,
         );
 
-        return toolResult({
+        return {
           summary: `Appended to ${path}`,
           output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
           userPatch: approval.userPatch,
           edits: [{ path, lineChanges: approval.lineChanges }],
-        });
+        };
       }
       default:
         throw new ToolError(

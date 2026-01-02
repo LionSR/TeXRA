@@ -25,7 +25,7 @@ export type {
   DiagnosticsPayload,
   ToolFileAttachment,
 } from '@tools/result';
-export { toolResult, cliResult, ToolError } from '@tools/result';
+export { ToolError } from '@tools/result';
 
 // Re-export ToolDefinition from model
 export type { ToolDefinition } from '@model/ToolDefinition';

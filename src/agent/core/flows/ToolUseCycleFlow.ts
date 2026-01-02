@@ -28,14 +28,12 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
-import { toolResult } from '@agent/core/ToolTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -755,10 +753,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
 
     if (!tool) {
-      result = toolResult({
+      result = {
         error: `Unknown tool ${call.name}`,
         isError: true,
-      });
+      };
     } else {
       try {
         result = await withToolFileInteractionContext(
@@ -769,23 +767,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
             executionId: options.context.executionId,
             toolCallId: call.callId,
           },
-          () =>
-            withToolEditApprovalContext(
-              {
-                streamId: options.logger.channelId,
-                executionId: options.context.executionId,
-                toolCallId: call.callId,
-              },
-              () => tool.call(parsedInput),
-            ),
+          () => tool.call(parsedInput),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(call.name, err);
-        result = toolResult({
+        result = {
           error: message,
           isError: true,
           diagnostics,
-        });
+        };
       }
     }
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult, toolResult } from '@tools/result';
+import { ToolResult } from '@tools/result';
 import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
@@ -77,11 +77,11 @@ export class WriteFileTool extends defineTool({
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
-    return toolResult({
+    return {
       summary: `Wrote ${input.path}`,
       output,
       userPatch: approval.userPatch,
       edits: [{ path: input.path, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }
