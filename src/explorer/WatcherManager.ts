@@ -90,7 +90,9 @@ export class WatcherManager {
             this.validationHandles.push(handle);
           }
         });
-        watcher.onDidDelete(() => this.triggerRefresh());
+        // triggerRefresh can be passed directly because it's a debounced closure
+        // that already captures `this` in its constructor initialization
+        watcher.onDidDelete(this.triggerRefresh);
 
         if (path.resolve(watchPath) === path.resolve(customAgentsPath ?? '')) {
           watcher.onDidChange(async (uri) => {
@@ -100,7 +102,7 @@ export class WatcherManager {
             }
           });
         } else {
-          watcher.onDidChange(() => this.triggerRefresh());
+          watcher.onDidChange(this.triggerRefresh);
         }
       }
 

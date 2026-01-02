@@ -8,13 +8,17 @@ import type { AgentLogger } from '@logger/AgentLogger';
 import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
 /**
- * We use z.object() instead of z.strictObject() to remain backward compatible
- * with legacy user variable channels that may contain removed or renamed fields.
+ * User variable channels for template rendering.
+ *
+ * Two-channel design:
+ * - input: Frozen base variables (readonly, set at initialization)
+ * - transient: Runtime modifications (mutable copy of base)
+ *
+ * Note: The former 'output' channel was removed as it was never populated.
  */
 export const UserVariableChannelsSchema = z.object({
   input: z.record(z.string(), z.unknown()).readonly(),
   transient: z.record(z.string(), z.unknown()),
-  output: z.record(z.string(), z.unknown()),
 });
 
 /** Derived from UserVariableChannelsSchema - single source of truth */
@@ -24,8 +28,8 @@ export interface AgentCycleBaseOptions<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;
   agentSetting: AgentSetting;
   agentPrompt: AgentPrompt;
+  /** User variables for template rendering (merged from channels) */
   userVars: Record<string, any>;
-  userVarChannels: UserVariableChannels;
   logger: AgentLogger;
   context: AgentExecutionContext;
   client: C;

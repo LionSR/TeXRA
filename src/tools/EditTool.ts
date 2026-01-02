@@ -2,8 +2,11 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, ToolResult, toolResult } from '@tools/result';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
+import { ToolError, ToolResult } from '@tools/result';
+import {
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -105,6 +108,10 @@ export class EditFileTool extends defineTool({
       finalContent,
     );
 
+    // Record file as "read" after editing so subsequent edits don't require
+    // an explicit read again.
+    recordToolFileRead(targetPath);
+
     const replacementSummary =
       replace_all === true
         ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
@@ -125,11 +132,11 @@ export class EditFileTool extends defineTool({
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
 
-    return toolResult({
+    return {
       summary,
       output,
       userPatch: approval.userPatch,
       edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }

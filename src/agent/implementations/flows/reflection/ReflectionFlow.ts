@@ -6,6 +6,7 @@
  * - Flow = Execution Engine (all logic lives here)
  * - Nodes = Discrete Operations (use this.services natively)
  * - Agent owns lifecycle (init before flow, finalize in agent.run() finally)
+ * - RoundPersistedFlow owns round lifecycle (increment, stages, workspace reset)
  *
  * Service injection:
  * - Services are set via flow.setServices() (not params)
@@ -17,15 +18,20 @@
  * - agent.run() catches errors and handles cleanup in finally block
  * - FlowTransition.FINALIZE ends the flow gracefully (no error)
  *
- * Flow structure (Option 3: PrepareContext first):
- *   PrepareContextNode → TeXCountNode → MediaPreparationNode
+ * Flow structure:
+ *   PrepareContextNode → TeXCountNode → MediaExtractionNode
  *        ↑                                        ↓
  *        │                                ResponseCycleNode
  *        │                                        ↓
  *        │                        OutputNode → RoundCompleteNode
  *        │                                        ↓
- *        └─────────────────────────── CONTINUE (next round)
- *                                     FINALIZE (done, flow ends)
+ *        └───────────────────────── CONTINUE_NEXT_ROUND (next round)
+ *                                   FINALIZE (done, flow ends)
+ *
+ * Round management:
+ * - RoundCompleteNode signals intent (CONTINUE_NEXT_ROUND or FINALIZE)
+ * - RoundPersistedFlow OWNS increment and lifecycle hooks
+ * - Nodes never mutate currentRound directly
  *
  * Each node enriches the context:
  * - PrepareContext: builds base messages
@@ -38,9 +44,9 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 import {
   TeXCountNode,
-  MediaPreparationNode,
+  MediaExtractionNode,
   PrepareContextNode,
-  ResponseCycleCompositionNode,
+  ResponseCycleNode,
   OutputNode,
   RoundCompleteNode,
 } from './nodes';
@@ -77,8 +83,8 @@ export function createReflectionFlow<C = unknown>(): Flow<
   // Create work nodes only (no init/finalize - agent owns lifecycle)
   const prepContextNode = new PrepareContextNode<C>();
   const texCountNode = new TeXCountNode<C>();
-  const mediaNode = new MediaPreparationNode<C>();
-  const responseCycleNode = new ResponseCycleCompositionNode<C>();
+  const mediaNode = new MediaExtractionNode<C>();
+  const responseCycleNode = new ResponseCycleNode<C>();
   const outputNode = new OutputNode<C>();
   const roundCompleteNode = new RoundCompleteNode<C>();
 
@@ -91,9 +97,10 @@ export function createReflectionFlow<C = unknown>(): Flow<
   responseCycleNode.next(outputNode);
   outputNode.next(roundCompleteNode);
 
-  // Wire branches
-  prepContextNode.on(FlowTransition.CONTINUE, prepContextNode); // Skip round (loops back)
-  roundCompleteNode.on(FlowTransition.CONTINUE, prepContextNode); // Next round
+  // Wire round continuation
+  // RoundCompleteNode signals CONTINUE_NEXT_ROUND when round completes successfully
+  // RoundPersistedFlow intercepts this to increment currentRound, then routes here
+  roundCompleteNode.on(FlowTransition.CONTINUE_NEXT_ROUND, prepContextNode);
   // FlowTransition.FINALIZE has no target - flow ends gracefully
 
   return new Flow<
@@ -105,7 +112,6 @@ export function createReflectionFlow<C = unknown>(): Flow<
 
 // Re-export types for convenience
 export type {
-  IReflectionFlowAgent,
   ReflectionFlowShared,
   ReflectionFlowState,
 } from './ReflectionFlowState';

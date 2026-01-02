@@ -21,9 +21,16 @@ export class WorkspaceFS extends RelativeFS {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
 
+  /**
+   * Convert an absolute path to a workspace-relative path.
+   * Uses VS Code's asRelativePath which properly handles symlinks.
+   * Returns the original path if no workspace is open.
+   */
   public static relativePath(filePath: string): string {
-    const base = this.getPath();
-    return base ? path.relative(base, filePath) : filePath;
+    if (!this.getPath()) {
+      return filePath;
+    }
+    return vscode.workspace.asRelativePath(filePath, false);
   }
 
   public static async existsAndNonTrivial(target: string): Promise<boolean> {
@@ -32,6 +39,14 @@ export class WorkspaceFS extends RelativeFS {
 
   public static async readFileBytes(target: string): Promise<Buffer> {
     return AbsoluteFS.readBytes(this.fullPath(target));
+  }
+
+  /**
+   * Convert a file path to an absolute path.
+   * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
+   */
+  public static toAbsolute(filePath: string): string {
+    return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
   }
 }
 

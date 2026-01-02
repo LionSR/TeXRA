@@ -19,7 +19,15 @@ import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import xmlUtils, { DOCUMENT_NAME_REGEX } from '@utils/text/xmlUtils';
+import {
+  DOCUMENT_NAME_REGEX,
+  addCdataToTags,
+  addCdataToTagsMultiple,
+  extractContentFromXMLbyTag,
+  extractContentFromXMLbyTagMultiple,
+  extractDocument,
+  extractDocuments,
+} from '@utils/text/xmlUtils';
 
 // Local file imports
 import { getFileDirectory } from './displayUtils';
@@ -56,11 +64,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): string | null {
     const filename = path.basename(this.agentConfig.inputFile);
-    const result = xmlUtils.extractDocument(
-      outputContent,
-      documentTag,
-      filename,
-    );
+    const result = extractDocument(outputContent, documentTag, filename);
 
     if (result.content) {
       const methodMessages: Record<string, string> = {
@@ -86,7 +90,7 @@ export class XmlOutputManager {
     outputContent: string,
     documentTag: string,
   ): Array<{ content: string; name: string }> | null {
-    const result = xmlUtils.extractDocuments(outputContent, documentTag);
+    const result = extractDocuments(outputContent, documentTag);
 
     if (result.documents) {
       this.logger.logInternal(
@@ -120,7 +124,7 @@ export class XmlOutputManager {
 
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const tagsToWrap = [documentTag, thinkingTag];
-    outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
+    outputContent = addCdataToTags(outputContent, tagsToWrap);
 
     // First, try to extract named document matching input file (prioritized)
     const namedDocumentContent = this.extractDocumentbyRegex(
@@ -143,10 +147,7 @@ export class XmlOutputManager {
       });
       const root = parser.parse(outputContent);
 
-      const latexDocument = xmlUtils.extractContentFromXMLbyTag(
-        root,
-        documentTag,
-      );
+      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
         await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
         return texLocation;
@@ -210,7 +211,7 @@ export class XmlOutputManager {
     const expectedDocumentCount = this.countDocumentTags(outputContent);
 
     const tagsToWrap = [thinkingTag, 'document'];
-    outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
+    outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
     try {
       const parser = new XMLParser({
@@ -223,10 +224,7 @@ export class XmlOutputManager {
       });
       const root = parser.parse(outputContent);
 
-      const documents = xmlUtils.extractContentFromXMLbyTagMultiple(
-        root,
-        documentTag,
-      );
+      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (documents) {
         this.warnPartialExtraction(
           outputLocation,

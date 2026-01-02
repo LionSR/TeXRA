@@ -11,7 +11,7 @@ import { fromPath } from 'pdf2pic';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
-import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';
+import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -40,7 +40,7 @@ function ensureTempDir(): void {
 
 /** Try to resolve a file path and return the absolute path when it exists. */
 async function resolveFileIfExists(filePath: string): Promise<string | null> {
-  const absolutePath = resolveFilePath(filePath);
+  const absolutePath = WorkspaceFS.toAbsolute(filePath);
   const exists = await AbsoluteFS.exists(absolutePath);
 
   return exists ? absolutePath : null;

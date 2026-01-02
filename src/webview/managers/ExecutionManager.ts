@@ -10,8 +10,8 @@ import {
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfig } from '@agent/core/ToolConfig';
-import { capitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
+import { capitalize } from '@utils/text/stringUtils';
 import {
   isPastedImage,
   getPastedImageFullPath,

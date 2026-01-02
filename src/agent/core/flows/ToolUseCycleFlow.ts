@@ -9,14 +9,10 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  CycleDebugContext,
-  CycleDebugFileOptions,
-  SkippableNodeResult,
-  createDebugContext,
-  createDebugFileOptions,
+  type CycleDebugContext,
+  type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -32,17 +28,15 @@ import type {
   TodoState,
 } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
-import { toolResult } from '@agent/core/ToolTypes';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import xmlUtils from '@utils/text/xmlUtils';
+import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -51,10 +45,11 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type {
-  ToolUseCycleOptions,
-  ToolUseCycleServices,
-  ToolUseCycleParams,
+import {
+  finalizeToolUseCycle,
+  type ToolUseCycleOptions,
+  type ToolUseCycleServices,
+  type ToolUseCycleParams,
 } from './CycleServices';
 
 interface ToolValidationDiagnostics {
@@ -134,6 +129,26 @@ export interface ToolUseCycleState extends BaseCycleState {
   toolCalls?: SdkToolCall[];
   text?: string;
   /**
+   * Current cycle index (0-based).
+   *
+   * Used for debug file naming and usage tracking. Incremented after each
+   * successful cycle in ToolUseProcessNode.post().
+   *
+   * This replaces the need for ConversationRoundState.roundIndex in tool-use
+   * agents, simplifying the service dependencies.
+   */
+  cycleIndex: number;
+  /**
+   * Accumulated response time for current cycle (milliseconds).
+   * Reset after finalization when continuing to next cycle.
+   */
+  cycleResponseTimeMs: number;
+  /**
+   * Normalized usage for current cycle.
+   * Reset after finalization when continuing to next cycle.
+   */
+  cycleNormalizedUsage?: NormalizedUsage;
+  /**
    * Whether the last cycle ended normally (model said end_turn).
    *
    * Lifecycle:
@@ -155,6 +170,10 @@ function resetToolUseState(state: ToolUseCycleState): void {
   state.response = undefined;
   state.toolCalls = undefined;
   state.text = undefined;
+  // Reset cycle metrics for next cycle
+  state.cycleResponseTimeMs = 0;
+  state.cycleNormalizedUsage = undefined;
+  // Note: cycleIndex is incremented, not reset
   // Note: endTurn is NOT reset here - it tracks whether the LAST cycle
   // ended normally, which is needed for caller detection of user cancellation.
 }
@@ -176,25 +195,26 @@ export type ToolUseCycleShared = BaseCycleShared<ToolUseCycleState>;
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
-  async prep(_shared: ToolUseCycleShared): Promise<{
+  async prep(shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
-    const { options, store } = this._params.services;
-    const interrupted = Boolean(await options.checkInterruption());
-    const debugContext = createDebugContext({
-      logger: options.logger,
-      modelName: options.modelName,
-      executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
-    });
-    const debugFileOptions = createDebugFileOptions(
-      store.round.roundIndex,
-      'tooluse',
-    );
+    const services = this.services;
+    const interrupted = Boolean(await services.checkInterruption());
+    const debugContext: CycleDebugContext = {
+      logger: services.logger,
+      modelName: services.modelName,
+      executionId: services.context.executionId,
+      isRemote: isRemoteAgent(services.agentName),
+    };
+    const debugFileOptions: CycleDebugFileOptions = {
+      continuationCount: shared.state.cycleIndex,
+      baseName: 'tooluse',
+    };
     return { interrupted, debugContext, debugFileOptions };
   }
 
@@ -219,10 +239,10 @@ class ToolUsePrepNode<C> extends BaseNode<
     resetToolUseState(state);
 
     await maybeSaveDebugObject({
-      context: prepRes.debugContext,
-      fileOptions: prepRes.debugFileOptions,
       object: state.messages,
       objectType: 'messages',
+      context: prepRes.debugContext,
+      fileOptions: prepRes.debugFileOptions,
     });
 
     return FlowTransition.DEFAULT;
@@ -260,60 +280,59 @@ type ToolUseCallResult = InvocationResult<ToolUseCallSuccessData>;
  */
 class ToolUseCallNode<C> extends RetryableInvocationNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   protected getOperationName(): string {
     return 'Tool-use call';
-  }
-
-  protected getServices(): ToolUseCycleServices<C> {
-    return this._params.services;
   }
 
   /**
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
+  async prep(
+    shared: ToolUseCycleShared,
+  ): Promise<BaseInvocationPrepResult & { cycleIndex: number }> {
     const { state } = shared;
     return {
       shouldStop: state.shouldStop,
       messages: state.messages,
+      cycleIndex: state.cycleIndex,
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
-    const { options, store } = this._params.services;
+  async exec(
+    prepRes: BaseInvocationPrepResult & { cycleIndex: number },
+  ): Promise<ToolUseCallResult> {
+    const services = this.services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
 
-    const debugContext = createDebugContext({
-      logger: options.logger,
-      modelName: options.modelName,
-      executionId: options.context.executionId,
-      isRemote: isRemoteAgent(options.agentName),
-    });
-    const debugFileOptions = createDebugFileOptions(
-      store.round.roundIndex,
-      'tooluse_response',
-    );
-
-    const abortController = new AbortController();
-    // Set signal on Node so retry loop can detect user cancellation
-    this.signal = abortController.signal;
-    options.setAbortController(abortController);
+    const debugContext: CycleDebugContext = {
+      logger: services.logger,
+      modelName: services.modelName,
+      executionId: services.context.executionId,
+      isRemote: isRemoteAgent(services.agentName),
+    };
+    const debugFileOptions: CycleDebugFileOptions = {
+      continuationCount: prepRes.cycleIndex,
+      baseName: 'tooluse_response',
+    };
 
     const start = Date.now();
-    try {
-      options.modelHandler.setOutputStreaming(true);
-      const response = await options.modelHandler.createResponse({
-        client: options.client,
+
+    // Use base class helper for abort controller lifecycle
+    return this.withAbortController(async (signal) => {
+      services.modelHandler.setOutputStreaming(true);
+      const response = await services.modelHandler.createResponse({
+        client: services.client,
         messages: prepRes.messages,
-        temperature: options.agentSetting.temperature ?? 0,
-        signal: abortController.signal,
-        tools: options.agentSetting.tools as ToolDefinition[] | undefined,
+        temperature: services.agentSetting.temperature ?? 0,
+        signal,
+        tools: services.agentSetting.tools as ToolDefinition[] | undefined,
       });
 
       const responseTimeMs = Date.now() - start;
@@ -325,9 +344,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         debugContext,
         debugFileOptions,
       };
-    } finally {
-      options.setAbortController(null);
-    }
+    });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
   }
@@ -348,12 +365,12 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     _prepRes: BaseInvocationPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
-    const { options } = this._params.services;
+    const services = this.services;
     const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
     const successRes = handleInvocationResult(execRes, state, retryState, {
-      logger: options.logger,
+      logger: services.logger,
       operationName: this.getOperationName(),
     });
 
@@ -366,10 +383,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     state.responseTimeMs = successRes.responseTimeMs;
 
     await maybeSaveDebugObject({
-      context: successRes.debugContext,
-      fileOptions: successRes.debugFileOptions,
       object: successRes.response,
       objectType: 'response',
+      context: successRes.debugContext,
+      fileOptions: successRes.debugFileOptions,
     });
 
     return FlowTransition.DEFAULT;
@@ -421,7 +438,8 @@ type ToolUseProcessExecResult =
  */
 class ToolUseProcessNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   /**
    * Extract data from shared for exec().
@@ -438,7 +456,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
   /**
    * Process response and extract tool calls.
-   * PocketFlow compliance: Pure computation, no side effects on shared/store.
+   * PocketFlow compliance: Pure computation, no side effects on shared state.
    * Logging is allowed as it doesn't affect flow state.
    */
   async exec(
@@ -448,19 +466,20 @@ class ToolUseProcessNode<C> extends BaseNode<
       return { kind: 'skipped', endTurn: false };
     }
 
-    const { options, store } = this._params.services;
-    const groupId = options.logger.withCurrentGroup((id) => id);
+    const services = this.services;
+    const { workspace } = services;
+    const groupId = services.logger.withCurrentGroup((id) => id);
 
     // Process thinking block (logging only, state stored in workspace)
-    const thinking = options.modelHandler.processThinkingBlock(
+    const thinking = services.modelHandler.processThinkingBlock(
       prepRes.response,
-      store.workspace,
+      workspace,
     );
-    const useStreaming = options.modelHandler.getStreamingConfig();
+    const useStreaming = services.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
-      const formatted = await xmlUtils.formatContent(thinking);
+      const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
-        options.logger.info(formatted, {
+        services.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.THINKING,
         });
@@ -468,22 +487,22 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Extract response data
-    const toolCalls = options.modelHandler.extractToolUse(prepRes.response);
+    const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
     const {
       response: text,
       usage,
       stopReason,
-    } = options.modelHandler.extractResponse(prepRes.response, '');
+    } = services.modelHandler.extractResponse(prepRes.response, '');
 
     // Single extraction for all server tool data (single source of truth)
-    const serverToolData = options.modelHandler.extractServerToolData(
+    const serverToolData = services.modelHandler.extractServerToolData(
       prepRes.response,
     );
 
     // Log web search results (logging doesn't affect flow state)
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
-        options.logger.info('', {
+        services.logger.info('', {
           groupId,
           messageType: MESSAGE_TYPES.WEB_SEARCH,
           data: searchResult,
@@ -492,18 +511,18 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Extract assistant content for follow-up messages
-    const lastAssistantContent = options.modelHandler.extractAssistantContent(
+    const lastAssistantContent = services.modelHandler.extractAssistantContent(
       prepRes.response,
     );
 
     // Log response text
     if (text) {
-      options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
+      services.logger.debug(`Model response: ${text.slice(0, 100)}`, {
         groupId,
       });
       if (!useStreaming) {
-        const formatted = await xmlUtils.formatContent(text);
-        options.logger.info(formatted, {
+        const formatted = await formatContent(text);
+        services.logger.info(formatted, {
           groupId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
         });
@@ -513,13 +532,13 @@ class ToolUseProcessNode<C> extends BaseNode<
     // Normalize usage if present
     let normalizedUsage: NormalizedUsage | undefined;
     if (usage) {
-      normalizedUsage = options.modelHandler.normalizeUsage(
+      normalizedUsage = services.modelHandler.normalizeUsage(
         usage,
         prepRes.responseTimeMs ?? 0,
       );
     }
 
-    const endTurn = options.modelHandler.isEndTurnStop(stopReason);
+    const endTurn = services.modelHandler.isEndTurnStop(stopReason);
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       return {
@@ -550,7 +569,7 @@ class ToolUseProcessNode<C> extends BaseNode<
   }
 
   /**
-   * Apply all side effects to shared/store.
+   * Apply all side effects to shared state and slices.
    * PocketFlow compliance: All mutations happen here.
    */
   async post(
@@ -558,54 +577,53 @@ class ToolUseProcessNode<C> extends BaseNode<
     _prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const { run, workspace, onRoundFinalized } = services;
     const { state } = shared;
 
     if (execRes.kind === 'skipped') {
-      store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
 
     // Apply side effects: server tool content
-    store.workspace.serverToolContent.contentBlocks =
+    workspace.serverToolContent.contentBlocks =
       execRes.serverToolContentBlocks ?? [];
-    store.workspace.serverToolContent.lastAssistantContent =
+    workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    // Apply side effects: response time
+    // Accumulate cycle metrics in state (not round object)
     if (execRes.responseTimeMs !== undefined) {
-      store.round.addResponseTime(execRes.responseTimeMs);
+      state.cycleResponseTimeMs += execRes.responseTimeMs;
     }
-
-    // Apply side effects: usage
     if (execRes.normalizedUsage) {
-      store.round.setNormalizedUsage(execRes.normalizedUsage);
-    } else {
-      store.round.clearUsage();
+      state.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    // Finalize round
-    const completedRound = store.round;
-    await store.finalizeRound();
-    store.run.incrementRounds();
-    const nextRoundIndex = completedRound.roundIndex + 1;
+    // Finalize cycle using direct values (no round object needed)
+    await finalizeToolUseCycle({
+      cycleIndex: state.cycleIndex,
+      responseTimeMs: state.cycleResponseTimeMs,
+      normalizedUsage: state.cycleNormalizedUsage ?? null,
+      run,
+      onRoundFinalized,
+    });
+    run.incrementRounds();
 
     if (execRes.endTurn) {
       // Apply side effects for end turn
       state.toolCalls = undefined;
       if (execRes.createAssistantMessage && execRes.text) {
         state.messages.push(
-          options.modelHandler.createAssistantMessage(execRes.text),
+          services.modelHandler.createAssistantMessage(execRes.text),
         );
-        store.workspace.assembly.updateLastResponse(execRes.text);
+        workspace.assembly.lastResponse = execRes.text;
       }
       // Clear ephemeral state
-      store.workspace.resetServerToolContent();
-      store.workspace.resetReasoning();
+      workspace.resetServerToolContent();
+      workspace.resetReasoning();
       state.shouldStop = true;
       state.endTurn = true; // Normal completion (model said end_turn)
       state.stopReason = execRes.stopReason;
-      store.resetRound(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
 
@@ -613,7 +631,10 @@ class ToolUseProcessNode<C> extends BaseNode<
     state.toolCalls = execRes.toolCalls;
     state.text = execRes.text;
     state.stopReason = execRes.stopReason;
-    store.resetRound(nextRoundIndex);
+    // Increment cycle index and reset metrics for next cycle
+    state.cycleIndex += 1;
+    state.cycleResponseTimeMs = 0;
+    state.cycleNormalizedUsage = undefined;
 
     return FlowTransition.DEFAULT;
   }
@@ -671,21 +692,23 @@ type ToolUseDispatchExecResult =
  */
 class ToolUseDispatchNode<C> extends BaseNode<
   ToolUseCycleShared,
-  ToolUseCycleParams<C>
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
 > {
   /**
    * Extract data from shared and check interruption.
    * PocketFlow compliance: I/O (checkInterruption) happens in prep().
    */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
-    const { options } = this._params.services;
+    const services = this.services;
     const { state } = shared;
     const toolCalls = state.toolCalls ?? [];
 
     // Check skip conditions (including interruption) in prep
     const shouldSkip = state.shouldStop || toolCalls.length === 0;
-    const interrupted =
-      !shouldSkip && Boolean(await options.checkInterruption());
+    const interrupted = shouldSkip
+      ? false
+      : Boolean(await services.checkInterruption());
 
     return {
       shouldSkip,
@@ -730,10 +753,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
 
     if (!tool) {
-      result = toolResult({
+      result = {
         error: `Unknown tool ${call.name}`,
         isError: true,
-      });
+      };
     } else {
       try {
         result = await withToolFileInteractionContext(
@@ -744,23 +767,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
             executionId: options.context.executionId,
             toolCallId: call.callId,
           },
-          () =>
-            withToolEditApprovalContext(
-              {
-                streamId: options.logger.channelId,
-                executionId: options.context.executionId,
-                toolCallId: call.callId,
-              },
-              () => tool.call(parsedInput),
-            ),
+          () => tool.call(parsedInput),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(call.name, err);
-        result = toolResult({
+        result = {
           error: message,
           isError: true,
           diagnostics,
-        });
+        };
       }
     }
 
@@ -800,7 +815,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
   private async logAndProcessMediaFiles(
     execResult: ToolExecutionResult,
     options: ToolUseCycleOptions<C>,
-    store: ToolUseCycleServices<C>['store'],
+    workspace: ToolUseCycleServices<C>['workspace'],
     groupId: string | undefined,
   ): Promise<void> {
     const { call, result, parsedInput, sanitizedOutput, editedFiles } =
@@ -841,7 +856,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
       if (toAdd.length > 0) {
         // addMediaFiles handles deduplication (both within toAdd and against existing files)
-        store.workspace.media.addMediaFiles(toAdd);
+        workspace.media.addMediaFiles(toAdd);
       }
     }
   }
@@ -855,9 +870,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
     prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
-    const { options, store } = this._params.services;
+    const services = this.services;
+    const { workspace } = services;
     const { state } = shared;
-    const groupId = options.logger.withCurrentGroup((id) => id);
+    const groupId = services.logger.withCurrentGroup((id) => id);
 
     if (execRes.kind === 'skipped') {
       // Apply interrupted side effect if needed
@@ -869,22 +885,27 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     const { calls } = execRes;
     const assistantText = prepRes.text ?? '';
-    const tracker = store.workspace.interactions;
-    const todoState = store.workspace.todos;
+    const tracker = workspace.interactions;
+    const todoState = workspace.todos;
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
     for (const call of calls) {
       const execResult = await this.executeToolCall(
         call,
-        options,
+        services,
         tracker,
         todoState,
       );
       execResults.push(execResult);
 
       // Log each tool execution as it completes
-      await this.logAndProcessMediaFiles(execResult, options, store, groupId);
+      await this.logAndProcessMediaFiles(
+        execResult,
+        services,
+        workspace,
+        groupId,
+      );
     }
 
     // Step 2: Create follow-up messages
@@ -898,19 +919,19 @@ class ToolUseDispatchNode<C> extends BaseNode<
     // For DeepSeek thinking mode, batching ensures reasoning_content is
     // properly included in the single assistant message with all tool calls.
     const shouldBatch =
-      (options.modelHandler.isGoogle || options.modelHandler.isDeepSeek) &&
+      (services.modelHandler.isGoogle || services.modelHandler.isDeepSeek) &&
       calls.length > 1 &&
-      typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
+      typeof services.modelHandler.createBatchedToolUseFollowUpMessages ===
         'function';
 
     if (shouldBatch) {
       // Batched: All function calls in one model message, all responses in one user message
-      const followUpMsgs = await options.modelHandler
+      const followUpMsgs = await services.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
         extracted.map((e) => e.sanitizedResult),
         extracted.map((e) => e.attachments),
-        store.workspace,
+        workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
       state.messages.push(...followUpMsgs);
@@ -919,12 +940,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
       for (const [index, execResult] of execResults.entries()) {
         const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
-          await options.modelHandler.createToolUseFollowUpMessages(
-            options.client,
+          await services.modelHandler.createToolUseFollowUpMessages(
+            services.client,
             execResult.call,
             sanitizedResult,
             attachments,
-            store.workspace,
+            workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );
         state.messages.push(...followUpMsgs);
@@ -934,7 +955,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     // Step 3: Handle user instructions from tool results
     for (const execResult of execResults) {
       if (isNonEmptyString(execResult.result.userInstruction)) {
-        await options.modelHandler.createUserFollowUpMessages(
+        await services.modelHandler.createUserFollowUpMessages(
           state.messages,
           execResult.result.userInstruction,
         );

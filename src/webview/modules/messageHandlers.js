@@ -367,20 +367,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   _createStateHandlers() {
     return {
-      [MAIN_VIEW_COMMANDS.STATE_RESTORE]: (m) => this.handleRestoreState(m),
-      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]: () =>
-        this.handleCheckRestoredBaseFile(),
+      [MAIN_VIEW_COMMANDS.STATE_RESTORE]: this.handleRestoreState.bind(this),
+      [MAIN_VIEW_COMMANDS.CHECK_RESTORED_BASE_FILE]:
+        this.handleCheckRestoredBaseFile.bind(this),
     };
   }
 
   _createInstructionHandlers() {
     return {
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (m) =>
-        this.handleInstructionTextPolished(m),
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (m) =>
-        this.handleInstructionTextPolishError(m),
-      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (m) =>
-        this.handleInstructionTextTranscribed(m),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]:
+        this.handleInstructionTextPolished.bind(this),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]:
+        this.handleInstructionTextPolishError.bind(this),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]:
+        this.handleInstructionTextTranscribed.bind(this),
     };
   }
 
@@ -953,7 +953,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     });
   }
 
-  cleanup() {
+  dispose() {
     this._isDisposed = true;
     if (this._disposeModelWaiter) {
       this._disposeModelWaiter();
@@ -962,7 +962,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._cleanupAgentWaiters();
 
     this._cleanupTooltipListeners();
-    super.cleanup();
+    super.dispose();
     this._instructionEl = null;
     this._elementCache.clear();
   }
@@ -1351,4 +1351,4 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
 const handler = new MainViewMessageHandler();
 export const setup = handler.setup.bind(handler);
-export const cleanup = handler.cleanup.bind(handler);
+export const dispose = handler.dispose.bind(handler);

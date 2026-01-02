@@ -62,7 +62,7 @@ import type { FileLocation } from '@utils/files';
 // Local constant
 import { K_SLICE } from '@utils/config';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -336,12 +336,29 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   async getClient(): Promise<GoogleGenAI> {
+    // When using server-side relay keys, always create a fresh client to ensure
+    // auth tokens are refreshed (tokens expire and need refresh every 30 mins).
+    // Personal API keys don't expire, so caching is safe for those.
+    if (this.shouldUseServerSideKeys()) {
+      const credential = await this.getApiKey();
+      const baseUrl = this.getBaseUrl();
+      this.logger.debug(
+        `Using Google GenAI Native SDK with relay auth. Base URL: ${baseUrl}`,
+      );
+      return new GoogleGenAI({
+        apiKey: credential,
+        httpOptions: {
+          baseUrl: baseUrl ?? undefined,
+        },
+      });
+    }
+
+    // For personal API keys, cache the client
     if (!this.googleClient) {
       const credential = await this.getApiKey();
       const baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
-      // For relay auth: credential is the user's JWT, SDK sends it via x-goog-api-key header
       this.googleClient = new GoogleGenAI({
         apiKey: credential,
         httpOptions: {
@@ -926,7 +943,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     };
   }
 
-  addContinueMessageWithPrefill(/* ... */): void {
+  addContinueMessageWithPrefill(
+    _messages: Content[],
+    _stateRound: ConversationRoundState,
+    _workspaceState: AgentWorkspaceState,
+    _agentSetting: AgentSetting,
+    _agentConfig: AgentConfig,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill continuation. Using 'WithoutPrefill'.",
     );
@@ -949,7 +972,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  updateMessageContentWithPrefill(/* ... */): void {
+  updateMessageContentWithPrefill(
+    _messages: Content[],
+    _bestConnector: string,
+    _newResponse: string,
+    _workspaceState: AgentWorkspaceState,
+  ): void {
     this.logger.debug(
       "Native Google SDK handler does not support assistant prefill update. Using 'WithoutPrefill'.",
     );
@@ -1018,7 +1046,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
       );
-      workspaceState.assembly.updateAccumulatedOutput(prefill);
+      workspaceState.assembly.accumulatedOutput = prefill;
 
       // Add pseudo-prefill instruction to user message
       // (Google's Chat API requires alternating user/model turns)
@@ -1044,10 +1072,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await xmlUtils.extractScratchpad(
-      fileContent,
-      'scratchpad',
-    );
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
       this.logger.logScratchpad(scratchpad);
     }
@@ -1059,8 +1084,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Update workspace state - critical for multi-round agents on resume
     // so that subsequent rounds have correct context
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
@@ -1330,7 +1355,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: GoogleToolCall,
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (!call.callId) {
@@ -1353,6 +1378,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responsePart);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
+
     return [callMsg, resultMsg];
   }
 
@@ -1371,14 +1403,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * @param calls - Array of tool calls (should preserve original order from model response)
    * @param results - Array of sanitized results (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
-   * @param _workspaceState - Unused, for interface compatibility
+   * @param workspaceState - Workspace state to reset after consumption
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
     results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
@@ -1422,6 +1454,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
     const resultMsg = createUserContent(responseParts);
+
+    // Reset ephemeral state after consumption (matches Anthropic pattern)
+    if (workspaceState) {
+      workspaceState.resetServerToolContent();
+      workspaceState.resetReasoning();
+    }
 
     return [callMsg, resultMsg];
   }

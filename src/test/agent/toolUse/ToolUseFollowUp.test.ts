@@ -5,34 +5,22 @@ import { strict as assert } from 'assert';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import {
-  createSharedStore,
-  type AgentSharedStoreSnapshot,
-} from '@agent/core/AgentSharedStore';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 // Type imports
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
-  const workspace = AgentWorkspaceState.create();
-  const store = createSharedStore({
-    roundIndex: 0,
-    runState: new AgentRunState(),
-    workspaceState: workspace,
-    userChannels: {
-      input: Object.freeze({}) as Readonly<Record<string, unknown>>,
-      transient: {},
-      output: {},
-    },
-  });
+
+  // Create state snapshots directly (no store wrapper needed)
+  const runState = new AgentRunState();
+  const workspaceState = AgentWorkspaceState.create();
 
   const snapshot: ToolUseSessionSnapshot = {
-    version: 1,
+    version: 2,
     executionId: 'exec-1',
     streamId,
     agentConfig: parseAgentConfig({
@@ -41,21 +29,25 @@ describe('ToolUseFollowUp', () => {
       session: { agentType: 'toolUse', agentCategory: 'toolUse' },
     }),
     messages: [],
-    store: store.toSnapshot(),
+    // State slices stored directly (v2 schema)
+    run: runState.toSnapshot(),
+    workspace: workspaceState.toSnapshot(),
+    user: {
+      input: {},
+      transient: {},
+    },
     lastUpdated: Date.now(),
   };
 
-  const originalGetAgent = AgentRegistry.getToolUseAgent;
-  const originalResume = ToolUseSessionPersistence.resumeFromSnapshot;
+  const originalGetFlowContext = AgentRegistry.getToolUseFlowContext;
 
   afterEach(() => {
-    (AgentRegistry as any).getToolUseAgent = originalGetAgent;
-    ToolUseSessionPersistence.resumeFromSnapshot = originalResume;
+    (AgentRegistry as any).getToolUseFlowContext = originalGetFlowContext;
   });
 
-  it('sends follow-ups to active agents', async () => {
+  it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    (AgentRegistry as any).getToolUseAgent = () => ({
+    (AgentRegistry as any).getToolUseFlowContext = () => ({
       session: {
         appendFollowUp: (text: string) => {
           calls.push(text);
@@ -68,18 +60,15 @@ describe('ToolUseFollowUp', () => {
     assert.deepEqual(calls, ['hello']);
   });
 
-  it('resumes from snapshot through session persistence', async () => {
-    ToolUseSessionPersistence.resumeFromSnapshot = async (snap, followUp) => {
-      assert.equal(snap, snapshot);
-      assert.equal(followUp, 'next');
-      return { success: true };
-    };
-
-    const result = await ToolUseSessionPersistence.resumeFromSnapshot(
-      snapshot,
-      'next',
-    );
-
-    assert.deepEqual(result, { success: true });
+  it('creates valid snapshot structure', () => {
+    // Test that snapshot structure is valid (used for resume operations)
+    assert.equal(snapshot.version, 2);
+    assert.equal(snapshot.streamId, streamId);
+    assert.equal(snapshot.executionId, 'exec-1');
+    assert.ok(snapshot.agentConfig);
+    // State slices stored directly (v2 schema)
+    assert.ok(snapshot.run);
+    assert.ok(snapshot.workspace);
+    assert.ok(snapshot.user);
   });
 });

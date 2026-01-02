@@ -78,12 +78,11 @@ export class ProgressEventHandler {
     this.streamStatusEvents = createStreamStatusEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'StreamStatusEvents'),
       streamStatus: this._streamStatus,
-      setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
-      sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
-      refreshStreamSurface: (stream, options) =>
-        this.refreshStreamSurface(stream, options),
-      warnLog: (message) => this.logger.warn(message),
-      debugLog: (message) => this.logger.debug(message),
+      setStreamStatus: this.setStreamStatus.bind(this),
+      sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
+      refreshStreamSurface: this.refreshStreamSurface.bind(this),
+      warnLog: this.logger.warn.bind(this.logger),
+      debugLog: this.logger.debug.bind(this.logger),
     });
     this.outputEvents = createOutputEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'OutputEvents'),
@@ -96,13 +95,13 @@ export class ProgressEventHandler {
     });
     this.taskGroupEvents = createTaskGroupEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'TaskGroupEvents'),
-      initializeStreamForTaskGroup: (stream) =>
-        this.initializeStreamForTaskGroup(stream),
-      debugLog: (message) => this.logger.debug(message),
+      initializeStreamForTaskGroup:
+        this.initializeStreamForTaskGroup.bind(this),
+      debugLog: this.logger.debug.bind(this.logger),
     });
     this.todoEvents = createTodoEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
-      debugLog: (message) => this.logger.debug(message),
+      debugLog: this.logger.debug.bind(this.logger),
     });
     this.retryEvents = createRetryEventsModule({
       withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
@@ -394,7 +393,9 @@ export class ProgressEventHandler {
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
-      // Force rebuild since this is a new stream initialization
+      // Force rebuild to clear any previous stream's content. The new task
+      // group must be added to state BEFORE this call (in TaskGroupEvents)
+      // so UPDATE_LOGS includes it and the frontend renders it correctly.
       this.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: true,

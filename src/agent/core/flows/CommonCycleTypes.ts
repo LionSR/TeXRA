@@ -74,7 +74,7 @@ export type SkippableNodeResult<T> =
  *
  * IMPORTANT: Only pass fields that should be reset to undefined.
  * - Do NOT pass 'messages' (preserved across cycles)
- * - Do NOT pass boolean fields like 'endTurn' or 'roundFinalized'
+ * - Do NOT pass boolean fields like 'endTurn'
  *   (these should be reset to false separately, not undefined)
  *
  * @param state - The state object to reset
@@ -142,32 +142,54 @@ export interface BaseInvocationSuccessData {
 }
 
 // ============================================================================
-// Debug Context Factory
+// Cycle Result Interpretation
 // ============================================================================
 
 /**
- * Creates a debug context for cycle operations.
- *
- * Note: The caller should pass isRemote (computed via isRemoteAgent from @agent/index)
- * to avoid circular dependency issues.
+ * Interpreted result from a cycle's shared state after flow completion.
+ * Determines whether the cycle ended due to error, cancellation, or success.
  */
-export function createDebugContext(
-  options: CycleDebugContext,
-): CycleDebugContext {
-  return { ...options };
+export interface CycleCompletionResult {
+  /** True if the cycle stopped due to an error (not user cancellation). */
+  failedWithError: boolean;
+  /** Error message if failedWithError is true. */
+  errorMessage?: string;
+  /** True if the user cancelled the retry wait (should stop gracefully). */
+  userCancelled: boolean;
 }
 
 /**
- * Creates debug file options for a cycle.
+ * State needed to interpret cycle completion.
+ * This is the minimal interface from shared state that we need.
  */
-export function createDebugFileOptions(
-  roundIndex: number,
-  baseName: string,
-  outputFile?: string,
-): CycleDebugFileOptions {
+interface CycleCompletionState {
+  shouldStop: boolean;
+  endTurn?: boolean;
+}
+
+/**
+ * Interprets cycle completion from shared state after flow execution.
+ *
+ * Determines if the cycle failed due to an error (not user cancellation):
+ * - Error failure: shouldStop=true, lastError exists → failedWithError=true
+ * - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
+ * - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
+ *
+ * @param state - The cycle state with shouldStop and optional endTurn
+ * @param retryState - The retry state with optional lastError
+ * @returns Interpreted completion result
+ */
+export function interpretCycleCompletion(
+  state: CycleCompletionState,
+  retryState: RetryState,
+): CycleCompletionResult {
+  const failedWithError = state.shouldStop && !!retryState.lastError;
+  const userCancelled =
+    state.shouldStop && !retryState.lastError && !state.endTurn;
+
   return {
-    continuationCount: roundIndex,
-    baseName,
-    outputFile,
+    failedWithError,
+    errorMessage: retryState.lastError?.message,
+    userCancelled,
   };
 }

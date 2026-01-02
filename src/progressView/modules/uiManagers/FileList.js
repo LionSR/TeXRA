@@ -2,10 +2,11 @@
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { createFromTemplate } from '@common/templateUtils.js';
+import { setVisibilityState } from '@common/domUtils.js';
 
 /**
  * Manages file list rendering.
- * Updated to use new OutputFileInfo structure (no duplicate path fields).
+ * Uses native VS Code collapsible for the container.
  */
 export class FileList {
   /**
@@ -18,6 +19,9 @@ export class FileList {
   update(filesByRound, options = {}) {
     const { showRoundHeaders = true } = options;
     const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+    const collapsible = document.getElementById(
+      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
+    );
     if (!container) return;
 
     container.innerHTML = '';
@@ -29,7 +33,8 @@ export class FileList {
     }
 
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
-      container.textContent = 'No generated files';
+      // Hide the collapsible when there are no files
+      setVisibilityState(collapsible, false);
       return;
     }
 
@@ -92,6 +97,9 @@ export class FileList {
     if (!showRoundHeaders && flatGroup && hasFiles) {
       container.appendChild(flatGroup);
     }
+
+    // Show/hide collapsible based on whether files were actually rendered
+    setVisibilityState(collapsible, hasFiles);
   }
 
   /**
@@ -230,5 +238,19 @@ export class FileList {
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
       filePathSpan.dataset.file = file.location.absolutePath;
     }
+  }
+
+  /**
+   * Clear the file list and hide the collapsible container.
+   */
+  clear() {
+    const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
+    const collapsible = document.getElementById(
+      ELEMENT_IDS.GENERATED_FILES_COLLAPSIBLE,
+    );
+    if (container) {
+      container.innerHTML = '';
+    }
+    setVisibilityState(collapsible, false);
   }
 }

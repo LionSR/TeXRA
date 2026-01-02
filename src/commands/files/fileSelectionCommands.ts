@@ -5,10 +5,9 @@ import * as vscode from 'vscode';
 import { showLoggedErrorMessage } from '@common/errors';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { fileLister } from '@frontend/files';
-import { showInfoMessage } from '@frontend/ui/messageUtils';
+import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { selectFile, selectFiles } from '@frontend/ui/dialogs';
 
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
@@ -47,7 +46,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
       const message = Array.isArray(result)
         ? `Selected files: ${result.join(', ')}`
         : `Selected file: ${result}`;
-      showInfoMessage(message);
+      vscode.window.showInformationMessage(message);
       logger.info(CHANNEL, message);
       return result as PickerResult<Many>;
     } catch (err) {
@@ -187,7 +186,7 @@ async function selectEditedFile(): Promise<string | null> {
     filters: {},
   });
   if (result) {
-    showInfoMessage(`Selected edited file: ${result}`);
+    vscode.window.showInformationMessage(`Selected edited file: ${result}`);
     logger.info(CHANNEL, `Selected edited file: ${result}`);
   }
   return result;

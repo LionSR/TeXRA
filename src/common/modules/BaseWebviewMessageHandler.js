@@ -3,7 +3,7 @@ import { registerMessageHandlers } from './webviewContext.js';
 
 /**
  * Base class for webview message handlers.
- * Provides default setup and cleanup logic for registering
+ * Provides default setup and dispose logic for registering
  * message handlers with the VS Code webview context.
  *
  * @abstract
@@ -21,12 +21,12 @@ import { registerMessageHandlers } from './webviewContext.js';
 export class BaseWebviewMessageHandler {
   constructor() {
     /**
-     * Cleanup function returned from registerMessageHandlers.
-     * Used to unregister handlers when cleanup() is called.
+     * Dispose function returned from registerMessageHandlers.
+     * Used to unregister handlers when dispose() is called.
      * @type {Function|null}
      * @protected
      */
-    this._cleanupFn = null;
+    this._disposeFn = null;
 
     /**
      * Map of command names to handler functions.
@@ -38,12 +38,12 @@ export class BaseWebviewMessageHandler {
   }
 
   /**
-   * Register message handlers with the webview and store the cleanup function.
+   * Register message handlers with the webview and store the dispose function.
    * Validates that handlers are defined before registration.
    * @throws {Error} If handlers are not properly defined
    */
   setup() {
-    if (!this._cleanupFn) {
+    if (!this._disposeFn) {
       // Validate handlers are defined
       if (!this._handlers || typeof this._handlers !== 'object') {
         throw new Error(
@@ -58,19 +58,19 @@ export class BaseWebviewMessageHandler {
         );
       }
 
-      this._cleanupFn = registerMessageHandlers(this._handlers);
+      this._disposeFn = registerMessageHandlers(this._handlers);
     }
   }
 
   /**
    * Remove previously registered message handlers.
-   * Calls the stored cleanup function and resets internal state.
+   * Calls the stored dispose function and resets internal state.
    * Safe to call multiple times.
    */
-  cleanup() {
-    if (this._cleanupFn) {
-      this._cleanupFn();
-      this._cleanupFn = null;
+  dispose() {
+    if (this._disposeFn) {
+      this._disposeFn();
+      this._disposeFn = null;
     }
   }
 }

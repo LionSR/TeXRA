@@ -4,8 +4,11 @@ import { z } from 'zod';
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult, toolResult } from '@tools/result';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
+import { ToolResult } from '@tools/result';
+import {
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -70,6 +73,12 @@ export class WriteFileTool extends defineTool({
       finalContent,
     );
 
+    // Record the file as "read" after writing so subsequent edits don't require
+    // an explicit read. This is especially important for new files that were
+    // just created - without this, any immediate edit would fail with
+    // "prior read required" even though the user just wrote the file.
+    recordToolFileRead(input.path);
+
     const userDiffNote = formatUnifiedApprovalUserDiff(
       input.path,
       finalContent,
@@ -77,11 +86,11 @@ export class WriteFileTool extends defineTool({
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
-    return toolResult({
+    return {
       summary: `Wrote ${input.path}`,
       output,
       userPatch: approval.userPatch,
       edits: [{ path: input.path, lineChanges: approval.lineChanges }],
-    });
+    };
   }
 }

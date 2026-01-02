@@ -12,6 +12,8 @@
  * - Base class for retryable invocation nodes (single source of truth)
  */
 
+import { z } from 'zod';
+
 import { Node } from '@agent/node';
 import {
   retryCoordinator,
@@ -26,17 +28,29 @@ import { bus } from '@eventBus/ProgressEventBus';
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
 const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Minimum retry count for background mode.
+ * This is the minimum value for maxRetries (total attempts = 1 initial + N-1 retries).
+ * Background jobs can take longer and may fail due to timeout, so we ensure
+ * at least 3 total attempts before surfacing the manual retry UI.
+ */
+export const BACKGROUND_MODE_MIN_RETRIES = 3;
+
 // ============================================================================
-// Types
+// Schemas (Single Source of Truth)
 // ============================================================================
 
 /**
  * Error information for retry handling.
+ * Schema-first: used for persistence validation and type derivation.
  */
-export interface RetryErrorInfo {
-  message: string;
-  retryable: boolean;
-}
+export const RetryErrorInfoSchema = z.object({
+  message: z.string(),
+  retryable: z.boolean(),
+});
+
+/** Derived type from schema */
+export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
 /**
  * Retry state for tracking errors across the retry flow.
@@ -146,12 +160,13 @@ export type InvocationResult<TSuccess> =
 /**
  * Services interface for RetryableInvocationNode.
  * Subclasses return their own service types that conform to this shape.
+ *
+ * Uses flattened structure - options fields are directly on services.
  */
 interface RetryableNodeServices {
-  options: {
-    context: { streamId: string };
-    logger: AgentLogger;
-  };
+  context: { streamId: string };
+  logger: AgentLogger;
+  setAbortController: (ac: AbortController | null) => void;
 }
 
 /**
@@ -191,7 +206,8 @@ type NodeParams = Partial<Record<string, unknown>> & {
 export abstract class RetryableInvocationNode<
   S,
   P extends NodeParams = NodeParams,
-> extends Node<S, P> {
+  Svc extends RetryableNodeServices = RetryableNodeServices,
+> extends Node<S, P, Svc> {
   /**
    * Tracks if user cancelled manual retry (to distinguish from actual failures).
    *
@@ -216,9 +232,11 @@ export abstract class RetryableInvocationNode<
 
   /**
    * Access services containing streamId and logger.
-   * Subclasses implement this to access their specific params structure.
+   * Uses this.services which is typed via the Svc generic parameter.
    */
-  protected abstract getServices(): RetryableNodeServices;
+  protected getServices(): Svc {
+    return this.services;
+  }
 
   /**
    * Reset user-cancelled flag on clone to prevent stale state.
@@ -237,6 +255,59 @@ export abstract class RetryableInvocationNode<
   }
 
   /**
+   * Wraps an async operation with automatic AbortController lifecycle management.
+   *
+   * Provides single source of truth for the abort controller pattern that was
+   * previously duplicated across ResponseModelInvocationNode and ToolUseCallNode.
+   *
+   * Handles:
+   * - Create AbortController and register with Node.signal for retry detection
+   * - Call setAbortController(controller) on services to enable interruption
+   * - Execute the operation with the signal
+   * - Cleanup: call setAbortController(null) in finally block
+   *
+   * @param operation - Async operation that uses the AbortController's signal
+   * @returns Result of the operation
+   *
+   * @example
+   * ```typescript
+   * async exec(prepRes: PrepResult): Promise<Result> {
+   *   if (prepRes.shouldStop) return { kind: 'skipped' };
+   *   return this.withAbortController(async (signal) => {
+   *     const response = await modelHandler.createResponse({ signal });
+   *     return { kind: 'success', response };
+   *   });
+   * }
+   * ```
+   */
+  protected async withAbortController<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const abortController = new AbortController();
+    // Set signal on Node so retry loop can detect user cancellation
+    this.signal = abortController.signal;
+    const services = this.getServices();
+    services.setAbortController(abortController);
+    try {
+      return await operation(abortController.signal);
+    } finally {
+      // Clear both references to allow GC and prevent stale state
+      this.signal = undefined;
+      services.setAbortController(null);
+    }
+  }
+
+  /**
+   * Check if background mode is active for this node.
+   * Override in subclasses that have access to model handler.
+   *
+   * @returns false by default, subclasses can override to check modelHandler
+   */
+  protected isBackgroundModeActive(): boolean {
+    return false;
+  }
+
+  /**
    * Read fresh retry config before starting the retry loop.
    *
    * This enables config changes (e.g., user adjusting retry settings)
@@ -250,10 +321,22 @@ export abstract class RetryableInvocationNode<
    *
    * The mutation pattern is intentional: it allows dynamic config while
    * keeping the Node API simple (maxRetries/wait are base class fields).
+   *
+   * ## Background mode minimum retries
+   * When background mode is active, we enforce a minimum retry count
+   * (BACKGROUND_MODE_MIN_RETRIES) to give users more chances to recover
+   * from transient failures common in long-running background jobs.
    */
   async _exec(prepRes: unknown): Promise<unknown> {
     const config = getNodeRetryConfig();
-    this.maxRetries = config.maxRetries;
+    let maxRetries = config.maxRetries;
+
+    // Enforce minimum retries for background mode
+    if (this.isBackgroundModeActive()) {
+      maxRetries = Math.max(maxRetries, BACKGROUND_MODE_MIN_RETRIES);
+    }
+
+    this.maxRetries = maxRetries;
     this.wait = config.wait;
     return super._exec(prepRes);
   }
@@ -299,8 +382,8 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const services = this.getServices();
     const operationName = this.getOperationName();
-    const streamId = services.options.context.streamId;
-    const logger = services.options.logger;
+    const streamId = services.context.streamId;
+    const logger = services.logger;
 
     // Format error to check if retryable
     const formatted = formatProviderHttpError(error);
@@ -364,7 +447,7 @@ export abstract class RetryableInvocationNode<
     // Log final failure (only for non-retryable errors - retryable ones were logged in retryPrompt)
     if (!formatted.retryable) {
       const services = this.getServices();
-      services.options.logger.logErrorData(
+      services.logger.logErrorData(
         `${this.getOperationName()} failed (not retryable): ${formatted.message}`,
         {
           message: formatted.message,

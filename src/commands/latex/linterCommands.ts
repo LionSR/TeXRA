@@ -4,17 +4,17 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors';
 import {
   getLinterMessages,
   getSeverityString,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
 
 // Local imports - core
 
@@ -78,11 +78,7 @@ export async function handleShowLinterMessages(): Promise<void> {
       `Found ${messages.length} linter issues. Check the log for details.`,
     );
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in showLinterMessages command: ${toErrorMessage(err)}`,
-    );
-    vscode.window.showErrorMessage('Error showing linter messages');
+    await showLoggedErrorMessage(CHANNEL, 'Error showing linter messages', err);
   }
 }
 
@@ -128,11 +124,11 @@ export async function handleCountLinterMessages(): Promise<void> {
     const message = `Linter issues: ${counts.errors} errors, ${counts.warnings} warnings, ${counts.info} info, ${counts.hints} hints`;
     vscode.window.showInformationMessage(message);
   } catch (err) {
-    logger.error(
+    await showLoggedErrorMessage(
       CHANNEL,
-      `Error in countLinterMessages command: ${toErrorMessage(err)}`,
+      'Error counting linter messages',
+      err,
     );
-    vscode.window.showErrorMessage('Error counting linter messages');
   }
 }
 
@@ -185,13 +181,7 @@ export async function handleFixLinterIssues(
 
     await executeAgent(agentConfig);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in fixLinterIssues command: ${toErrorMessage(err)}`,
-    );
-    vscode.window.showErrorMessage(
-      `Error fixing linter issues: ${String(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Error fixing linter issues', err);
   }
 }
 

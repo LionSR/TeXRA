@@ -5,12 +5,12 @@ import * as vscode from 'vscode';
 // Local imports - agent runtime
 import { getBaseName, getMultipleName } from '@agent/index';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
 import { promptToAddAgentToConfig } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
-import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
+import { ANTHROPIC_MODELS } from '@model/ModelRegistry';
 import { AbsoluteFS } from '@utils/files';
 
 // Type imports
@@ -316,9 +316,6 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
     const doc = await vscode.workspace.openTextDocument(filePath);
     await vscode.window.showTextDocument(doc);
   } catch (err) {
-    logger.error(CHANNEL, `Error creating agent: ${toErrorMessage(err)}`);
-    vscode.window.showErrorMessage(
-      `Failed to create agent: ${toErrorMessage(err)}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Failed to create agent', err);
   }
 }

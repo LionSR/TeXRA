@@ -41,7 +41,7 @@ When updating CHANGELOG.md:
 ### Naming conventions
 
 - **Const object naming**:
-  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `StreamStatusService`, `AgentSharedStoreRegistry`)
+  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `StreamStatusService`, `ModelRegistry`)
   - Use **camelCase** for simple command/function namespaces (e.g., `agentCommands`, `latexCommands`)
 - **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `STREAM_STATUS`)
 
@@ -236,7 +236,7 @@ Aim for code that looks like it was designed correctly from the start:
 Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 
 - **Flow types**: `ReflectionFlow` for multi-round reflection agents, `ToolUseRunFlow` for tool-use agents
-- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowServices`.
+- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowContextInit` with convenience accessors (`logger`, `context`) defined inline.
 - **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
 - **Flow transitions** - use named constants instead of magic values:
   - `FlowTransition.DEFAULT` - follow next() successor

@@ -24,7 +24,7 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { ToolResult, ToolError, cliResult, toolResult } from './result';
+import { ToolResult, ToolError } from './result';
 
 // Local imports - approval helpers
 
@@ -239,10 +239,10 @@ export class TextEditorTool extends defineTool({
           })
           .join('\n');
 
-        return cliResult({
+        return {
           summary: `View directory ${filePath}`,
           output: `Here's the files and directories in ${filePath}:\n${formattedContents}`,
-        });
+        };
       }
 
       // Read file contents
@@ -300,12 +300,12 @@ export class TextEditorTool extends defineTool({
         rangeSummary = `${startLine}-${endLine === -1 ? 'end' : endLine}`;
       }
 
-      return cliResult({
+      return {
         summary: rangeSummary
           ? `View ${filePath} (${rangeSummary})`
           : `View ${filePath}`,
         output: this.makeOutput(fileContent, filePath, initLine),
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -353,6 +353,10 @@ export class TextEditorTool extends defineTool({
         finalContent,
       );
 
+      // Record file as "read" after creation so subsequent edits don't require
+      // an explicit read - this is essential for newly created files.
+      recordToolFileRead(filePath);
+
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         finalContent,
@@ -362,12 +366,12 @@ export class TextEditorTool extends defineTool({
         ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
         : `File created successfully at: ${filePath}`;
 
-      return toolResult({
+      return {
         summary: `Created file ${filePath}`,
         output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${error}`);
     }
@@ -454,6 +458,10 @@ export class TextEditorTool extends defineTool({
       }
       const finalContent = appliedContent;
 
+      // Record file as "read" after editing so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
+
       // Create a snippet of the edited section
       const textBeforeReplacement =
         expandedFileContent.split(expandedOldStr)[0];
@@ -484,12 +492,12 @@ export class TextEditorTool extends defineTool({
         ? `${successIntro} ${snippetOutput}${reviewMessage}\n\n${userDiffNote}`
         : `${successIntro} ${snippetOutput}${reviewMessage}`;
 
-      return cliResult({
+      return {
         summary: `Updated ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -571,6 +579,10 @@ export class TextEditorTool extends defineTool({
       }
       const finalContent = appliedContent;
 
+      // Record file as "read" after editing so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
+
       // Prepare success message
       const previewLines = finalContent.split('\n');
       const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
@@ -603,12 +615,12 @@ export class TextEditorTool extends defineTool({
             startLine,
           )}${reviewNote}`;
 
-      return cliResult({
+      return {
         summary: `Inserted text into ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;
@@ -664,6 +676,10 @@ export class TextEditorTool extends defineTool({
       history.pop();
       const finalContent = appliedContent;
 
+      // Record file as "read" after undo so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
+
       // If the history is now empty, delete the entry
       if (history.length === 0) {
         this.fileHistory.delete(filePath);
@@ -679,12 +695,12 @@ export class TextEditorTool extends defineTool({
         ? `${baseOutput}\n${userDiffNote}`
         : baseOutput;
 
-      return cliResult({
+      return {
         summary: `Undid edit on ${filePath}`,
         output,
         userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
-      });
+      };
     } catch (error) {
       if (error instanceof ToolError) {
         throw error;

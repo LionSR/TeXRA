@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { toolResult } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
@@ -39,10 +38,10 @@ export class ExtractLatexFiguresTool extends defineTool({
 
     if (uniqueFigures.length === 0) {
       const summary = `No figures found in ${display}.`;
-      return toolResult({
+      return {
         summary,
         output: formatToolOutput('Figures', null),
-      });
+      };
     }
 
     const { attachments, limitedPaths, limitReached } =
@@ -61,16 +60,13 @@ export class ExtractLatexFiguresTool extends defineTool({
       limitedPaths.length === 1 ? '' : 's'
     } in ${display}.`;
 
-    const result = toolResult({
+    return {
       summary,
       output,
       files: attachments,
-    });
-
-    if (limitReached) {
-      result.userInstruction = `Limited attachments to ${attachments.length} files.`;
-    }
-
-    return result;
+      ...(limitReached && {
+        userInstruction: `Limited attachments to ${attachments.length} files.`,
+      }),
+    };
   }
 }

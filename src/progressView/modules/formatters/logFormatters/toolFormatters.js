@@ -9,7 +9,7 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
-  buildFileListRender,
+  getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
@@ -48,22 +48,6 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @returns {HTMLElement|null} Tool use element or null
  */
 export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
-  const toolElement = createToolElement(
-    logId,
-    groupId,
-    timestamp,
-    'codicon-wrench',
-  );
-  if (!toolElement) return null;
-
-  const { element, headerLabel, iconElem, contentElem } = toolElement;
-
-  if (headerLabel) headerLabel.textContent = 'Tool Use';
-
-  if (!contentElem) {
-    return element;
-  }
-
   const { structured } = normalizedPayload || {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
@@ -71,41 +55,47 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, summaryText, errorText, outputText, input, files } =
-    normalizedToolLog;
+  const { parsed, toolName, errorText, outputText, input } = normalizedToolLog;
 
+  // Use tool-specific icon
+  const iconClass = getToolIconClass(toolName, normalizedToolLog.isError);
+
+  const toolElement = createToolElement(logId, groupId, timestamp, iconClass);
+  if (!toolElement) return null;
+
+  const { element, headerLabel, iconElem, contentElem } = toolElement;
+
+  // Build title
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
   const titleText = normalizedToolLog.headerSummary
     ? `${titleBase} — ${normalizedToolLog.headerSummary}`
     : titleBase;
 
-  if (headerLabel) headerLabel.textContent = titleText;
-  if (iconElem) {
-    iconElem.className = normalizedToolLog.isError
-      ? 'codicon codicon-error'
-      : 'codicon codicon-wrench';
+  if (headerLabel) {
+    headerLabel.textContent = titleText;
   }
+
+  // Icon already set in createToolElement; just toggle error state
   element.classList.toggle('tool-use-error', normalizedToolLog.isError);
+
+  if (!contentElem) {
+    return element;
+  }
 
   const sections = [];
 
-  if (input !== undefined) {
+  // Show full input (key info is already in header summary)
+  if (input !== undefined && input !== null) {
     const inputValue = stringifyForDisplay(input);
-    sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
-  }
-
-  if (files && files.length > 0) {
-    const renderData = buildFileListRender(files);
-    if (renderData?.items) {
-      const fileContent = `
-        <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
-        <ul class="detail-list">${renderData.items}</ul>
-      `;
-      sections.push(buildToolUseSection('Edited files:', fileContent));
+    if (inputValue) {
+      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
     }
   }
 
+  // Note: File path is already in headerSummary, so we skip the Files section
+
+  // Show error or output
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {

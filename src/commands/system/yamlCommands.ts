@@ -9,14 +9,14 @@ import * as yaml from 'yaml';
 import { resolveAgent, getWorkflowAgents } from '@agent/index';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
+import * as logger from '@logger/logUtils';
+import { GlobalStorageFS, StorageFS } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -77,14 +77,7 @@ export async function handleTestAgentLoading(
       'Agent loading tests completed. Check Debug Console for results.',
     );
   } catch (err) {
-    const errorMessage = toErrorMessage(err);
-    logger.error(CHANNEL, `Agent loading test failed: ${errorMessage}`);
-    if (err instanceof Error && err.stack) {
-      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
-    }
-    vscode.window.showErrorMessage(
-      `Agent loading test failed: ${errorMessage}`,
-    );
+    await showLoggedErrorMessage(CHANNEL, 'Agent loading test failed', err);
   }
 }
 
@@ -136,12 +129,7 @@ export async function handleLoadSpecificAgent(
       `Successfully loaded agent "${agentName}". Check Debug Console for details.`,
     );
   } catch (err) {
-    const errorMessage = toErrorMessage(err);
-    logger.error(CHANNEL, `Failed to load agent: ${errorMessage}`);
-    if (err instanceof Error && err.stack) {
-      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
-    }
-    vscode.window.showErrorMessage(`Failed to load agent: ${errorMessage}`);
+    await showLoggedErrorMessage(CHANNEL, 'Failed to load agent', err);
   }
 }
 
@@ -174,8 +162,7 @@ export async function handleParseYaml(
         `Parsed structure: ${JSON.stringify(parsedYaml, null, 2)}`,
       );
     } catch (err) {
-      logger.error(CHANNEL, `Failed to parse YAML: ${toErrorMessage(err)}`);
-      vscode.window.showErrorMessage('Failed to parse YAML content');
+      await showLoggedErrorMessage(CHANNEL, 'Failed to parse YAML', err);
       await showInstructionWithSuppress(
         'yamlParseFail',
         'The YAML file contains syntax errors. Please correct them and run the command again.',
@@ -184,8 +171,7 @@ export async function handleParseYaml(
       );
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error in parseYaml command: ${toErrorMessage(err)}`);
-    vscode.window.showErrorMessage('Error parsing YAML');
+    await showLoggedErrorMessage(CHANNEL, 'Error parsing YAML', err);
   }
 }
 
@@ -247,12 +233,7 @@ export async function handleTestYamlBrackets(
       'YAML bracket test completed. Check Debug Console for results.',
     );
   } catch (err) {
-    const errorMessage = toErrorMessage(err);
-    logger.error(CHANNEL, `YAML bracket test failed: ${errorMessage}`);
-    if (err instanceof Error && err.stack) {
-      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
-    }
-    vscode.window.showErrorMessage(`YAML bracket test failed: ${errorMessage}`);
+    await showLoggedErrorMessage(CHANNEL, 'YAML bracket test failed', err);
   }
 }
 

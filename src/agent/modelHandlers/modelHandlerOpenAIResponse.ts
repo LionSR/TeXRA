@@ -33,7 +33,7 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { sleepWithAbort } from '@utils/core';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -1145,10 +1145,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
-    const scratchpad = await xmlUtils.extractScratchpad(
-      fileContent,
-      'scratchpad',
-    );
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
       this.logger.logScratchpad(scratchpad);
     }
@@ -1157,8 +1154,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Update workspace state - critical for multi-round agents on resume
     // so that subsequent rounds have correct context
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(this.createAssistantMessage(fileContent));
 
@@ -1174,7 +1171,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Note: workspace state already updated above (lines 1108-1109)
     // Only need to handle case where prefill needs to be prepended
     if (!fileContent.includes(prefill)) {
-      workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
+      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(
         outputLocation,
         workspaceState.assembly.accumulatedOutput,

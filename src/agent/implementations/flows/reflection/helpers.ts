@@ -5,6 +5,8 @@
  * across multiple nodes, following DRY principles.
  */
 
+import * as path from 'path';
+
 import type { RoundOutput } from '@agent/output';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -19,7 +21,7 @@ import {
 /**
  * Determine which files to process for a given round.
  *
- * Used by TeXCountNode and MediaPreparationNode to avoid duplicating
+ * Used by TeXCountNode and MediaExtractionNode to avoid duplicating
  * the file determination logic.
  *
  * @param currentRound - Current round index (0-based)
@@ -72,5 +74,12 @@ export function createBaseFileLocations(
 ): WorkspaceFileLocation[] {
   const files =
     config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
-  return files.map((f) => createWorkspaceLocation(WorkspaceFS.fullPath(f), f));
+  return files.map((f) => {
+    // Handle absolute paths correctly: path.join() incorrectly concatenates
+    // when the second arg is absolute, so we must check first.
+    // See resolveFilePath in pathUtils.ts for the canonical pattern.
+    const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
+    const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
+    return createWorkspaceLocation(absolutePath, relativePath);
+  });
 }

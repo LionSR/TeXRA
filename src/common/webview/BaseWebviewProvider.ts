@@ -1,6 +1,17 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports
+import { getSharedLocalResourceRoots } from './resourceRoots';
+
+export interface PanelOptions {
+  viewType: string;
+  title: string;
+  viewPath: string;
+  column?: vscode.ViewColumn;
+  retainContextWhenHidden?: boolean;
+}
+
 /**
  * Base class for webview providers.
  * Handles HTML assignment, message routing, and disposable management.
@@ -44,12 +55,43 @@ export abstract class BaseWebviewProvider {
       webviewView.webview.onDidReceiveMessage((message) =>
         this.messageHandler.handleMessage(message, webviewView),
       ),
-      webviewView.onDidDispose(() => this.cleanupView()),
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
   }
 
   protected addViewDisposables(...disposables: vscode.Disposable[]): void {
     this._viewDisposables.push(...disposables);
+  }
+
+  /**
+   * Create or reveal a webview panel.
+   * Common pattern for showing secondary views (History, Profile) as panels.
+   * @returns true if panel was created, false if existing panel was revealed
+   */
+  protected createOrShowPanel(options: PanelOptions): boolean {
+    // If we already have a panel, reveal it
+    if (this._view && 'reveal' in this._view) {
+      this._view.reveal(options.column ?? vscode.ViewColumn.One);
+      return false;
+    }
+
+    // Otherwise, create a new panel
+    this._view = vscode.window.createWebviewPanel(
+      options.viewType,
+      options.title,
+      options.column ?? vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: options.retainContextWhenHidden ?? true,
+        localResourceRoots: getSharedLocalResourceRoots(
+          this.context,
+          options.viewPath,
+        ),
+      },
+    );
+
+    this.resolveWebviewViewInternal(this._view);
+    return true;
   }
 
   protected cleanupView(): void {

@@ -68,7 +68,7 @@ import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -1224,10 +1224,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await xmlUtils.extractScratchpad(
-      fileContent,
-      'scratchpad',
-    );
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
       this.logger.logScratchpad(scratchpad);
     }
@@ -1235,8 +1232,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     await flexibleFS.write(outputLocation, fileContent);
 
     // Update the workspaceState with the actual file content
-    workspaceState.assembly.updateAccumulatedOutput(fileContent);
-    workspaceState.assembly.updateLastResponse(fileContent);
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug(
@@ -1621,8 +1618,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         !this.containCutOffMessage(regularThinkingContent)
       ) {
         // Store SDK thinking blocks in workspace state for conversation continuation
-        workspaceState.reasoning.thinkingBlocks =
-          thinkingBlocks as ThinkingBlock[];
+        // Use spread to create defensive copy, isolating from SDK response object
+        workspaceState.reasoning.thinkingBlocks = [
+          ...thinkingBlocks,
+        ] as ThinkingBlock[];
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(

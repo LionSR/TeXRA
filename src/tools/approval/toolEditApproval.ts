@@ -15,14 +15,14 @@ import * as difflib from 'difflib';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
-import { toolResult, type ToolResult, type LineChanges } from '@tools/result';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -572,7 +572,7 @@ export async function requestToolEditApproval(
     true,
   );
 
-  const context = getCurrentToolEditApprovalContext();
+  const context = getCurrentToolFileInteractionContext();
   const preparedRequest =
     request.streamId || !context?.streamId
       ? request
@@ -765,5 +765,5 @@ export function buildApprovalRejectedResult(
 
   // No file attachments for user notes; treated purely as guidance via fields.
 
-  return toolResult(result);
+  return result;
 }

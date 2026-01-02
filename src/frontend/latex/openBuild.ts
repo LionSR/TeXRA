@@ -8,7 +8,7 @@ import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS, AbsoluteFS, resolveFilePath } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
@@ -38,7 +38,7 @@ export async function openAndBuildIfTex(
       return;
     }
 
-    const fullPath = resolveFilePath(file);
+    const fullPath = WorkspaceFS.toAbsolute(file);
     const uri = vscode.Uri.file(fullPath);
 
     if (isTexFile(file)) {

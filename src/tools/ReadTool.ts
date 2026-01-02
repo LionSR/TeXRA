@@ -5,7 +5,7 @@ import * as path from 'path';
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolResult, toolResult } from '@tools/result';
+import { ToolResult } from '@tools/result';
 import { buildFileAttachment } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';
@@ -119,10 +119,10 @@ export class ReadFileTool extends defineTool({
         input.range?.end != null && input.range.end > totalLines,
     });
 
-    return toolResult({
+    return {
       summary,
       output: segments.join('\n'),
-    });
+    };
   }
 
   private formatWithLineNumbers(
@@ -225,11 +225,11 @@ export class ReadFileTool extends defineTool({
     }
     outputParts.push(attachmentCopy.coreOutput);
 
-    return toolResult({
+    return {
       summary: summaryParts.join(' '),
       output: outputParts.join(' '),
       files: [attachment],
-    });
+    };
   }
 }
 

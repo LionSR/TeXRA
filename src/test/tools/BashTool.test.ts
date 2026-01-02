@@ -8,12 +8,16 @@ import {
   AgentSetting,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import {
+  createToolUseCycleFlow,
+  type ToolUseCycleShared,
+  type ToolUseCycleState,
+} from '@agent/core/flows/ToolUseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
@@ -163,32 +167,49 @@ describe('BashTool', () => {
         userRequest: '',
       } satisfies AgentPrompt,
       userVars: {},
-      userVarChannels: {
-        input: Object.freeze({}) as Readonly<Record<string, any>>,
-        transient: {},
-        output: {},
-      },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
       toolRegistry: createToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
-      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'bash-tool' as StreamTabId,
       }),
     };
 
-    const store = new AgentSharedStore({
-      round: new ConversationRoundState(0),
-      run: new AgentRunState(),
-      workspace: workspaceState,
-      user: options.userVarChannels,
-    });
+    const run = new AgentRunState();
 
     const messages: ProviderMessage[] = [];
-    await runToolUseCycle({ options, messages, store });
+
+    // Create shared state for the cycle flow
+    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    const shared: ToolUseCycleShared = {
+      state: {
+        messages,
+        shouldStop: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        stopReason: undefined,
+        cycleIndex: 0,
+        cycleResponseTimeMs: 0,
+        cycleNormalizedUsage: undefined,
+        endTurn: false,
+      } satisfies ToolUseCycleState,
+      retryState: createRetryState(),
+    };
+
+    // Create and run the flow directly
+    // Note: Tool-use cycles don't need round - metrics tracked in state
+    const flow = createToolUseCycleFlow();
+    flow.setServices({
+      ...options,
+      run,
+      workspace: workspaceState,
+    });
+    await flow.run(shared);
 
     const toolOutputMessage = messages.find(
       (msg) => (msg as any).type === 'function_call_output',

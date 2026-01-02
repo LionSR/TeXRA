@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 // Local imports - metadata
 import { toErrorMessage } from '@common/errors';
-import { ToolError, toolResult } from '@tools/result';
+import { ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local file imports
@@ -23,12 +23,9 @@ const CrossrefSearchInputSchema = z.strictObject({
   offset: z.int().min(0).nullish(),
   sort: z.string().nullish(),
   order: z.enum(['asc', 'desc']).nullish(),
-  filter: z
-    .union([
-      z.string(),
-      z.record(z.string(), z.union([z.string(), z.array(z.string())])),
-    ])
-    .nullish(),
+  // Filter as Crossref filter string format (e.g., "from-pub-date:2023,has-orcid:true")
+  // Object format removed due to OpenAI JSON Schema limitations with z.record()
+  filter: z.string().nullish(),
 });
 
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
@@ -68,16 +65,7 @@ export class CrossrefSearchTool extends defineTool({
       options.order = input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC;
     }
     if (input.filter) {
-      if (typeof input.filter === 'string') {
-        options.filter = input.filter;
-      } else {
-        const segments = Object.entries(input.filter).flatMap(([key, value]) =>
-          Array.isArray(value)
-            ? value.map((entry) => `${key}:${entry}`)
-            : [`${key}:${value}`],
-        );
-        options.filter = segments.join(',');
-      }
+      options.filter = input.filter;
     }
 
     let response: Awaited<ReturnType<typeof crossrefClient.works>>;
@@ -116,9 +104,9 @@ export class CrossrefSearchTool extends defineTool({
       results,
     };
 
-    return toolResult({
+    return {
       summary: `Found ${results.length} Crossref result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
-    });
+    };
   }
 }

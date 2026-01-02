@@ -2,25 +2,56 @@
  * Reflection flow module.
  *
  * Pure PocketFlow implementation for reflection agents.
- * Agent provides services, flow does all execution via nodes.
+ *
+ * ## Flow-First Architecture
+ *
+ * The flow operates independently of the agent:
+ * - Services are injected via ReflectionFlowContext
+ * - Polymorphic behavior uses configuration, not agent subclasses
+ * - No agent reference in flow shared state
+ *
+ * ## Direct Flow Execution
+ *
+ * Use `runReflectionFlow()` to run flows without agent class instances:
+ * ```typescript
+ * const result = await runReflectionFlow({
+ *   modelHandler,
+ *   config: agentConfig,
+ *   setting: agentSetting,
+ *   prompt: agentPrompt,
+ *   executionContext,
+ *   userVarChannels,
+ * });
+ * ```
  */
 
 // Flow factory and types
 export {
   createReflectionFlow,
-  type IReflectionFlowAgent,
   type ReflectionFlowShared,
   type ReflectionFlowState,
   type ReflectionServices,
   type ReflectionFlowParams,
 } from './ReflectionFlow';
 
-// State types
+// Flow context (self-contained, creates own services)
+export {
+  ReflectionFlowContext,
+  createReflectionFlowContext,
+  type ReflectionFlowContextInit,
+} from './ReflectionFlowContext';
+
+// Direct flow execution (bypasses agent classes)
+export {
+  runReflectionFlow,
+  type RunReflectionFlowInput,
+  type RunReflectionFlowResult,
+} from './runReflectionFlow';
+
+// State types and schemas
 export {
   type RoundContext,
   createInitialReflectionState,
-  AgentRunState,
+  ReflectionFlowStateSchema,
+  RoundContextSchema,
 } from './ReflectionFlowState';
-
-// Individual nodes (for testing or extension)
-export * from './nodes';

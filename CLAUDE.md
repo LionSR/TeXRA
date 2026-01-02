@@ -98,6 +98,82 @@ Use Zod schemas as the single source of truth for data structures:
 
 This project uses **Zod v4**. See AGENTS.md for idiomatic Zod v4 patterns including `.prefault()`, `.catch()`, and `.nullish()` for tool schemas.
 
+### Flattening Abstraction Layers
+
+When refactoring, eliminate unnecessary wrapper functions and indirection layers:
+
+**Anti-pattern (too many layers):**
+
+```
+Node.exec()
+  → wrapperFunction()
+    → coreFunction()
+      → createFlow()
+      → flow.run()
+```
+
+**Preferred (direct execution):**
+
+```
+Node.exec()
+  → createFlow()
+  → flow.run()
+```
+
+**Guidelines:**
+
+- Nodes should create and run flows directly in `exec()`, not delegate to wrapper functions
+- If a wrapper only creates state + runs flow + interprets results, inline it
+- Delete wrapper files entirely when they become unused (don't leave empty re-exports)
+- Update tests to use the underlying flow directly rather than through wrappers
+- Update imports to point to the source of truth (e.g., `CycleServices` not re-exporting files)
+
+**Example refactoring impact:**
+
+- `ResponseCycle.ts` deleted → `ResponseCycleNode` creates flow directly
+- `ToolUseCycle.ts` deleted → `ToolUseCycleNode` creates flow directly
+- Tests updated to use `createResponseCycleFlow()` / `createToolUseCycleFlow()` directly
+
+### Discouraged Factory Patterns
+
+Avoid these patterns that add indirection without value:
+
+**Two-layer factories (called once):**
+
+```typescript
+// ❌ Anti-pattern: buildX only called from createX
+export function createContext(init) {
+  const services = buildServices(init);  // ← Extra layer
+  return { services, ... };
+}
+function buildServices(init) { ... }
+
+// ✅ Preferred: Inline if only called once
+export function createContext(init) {
+  const services = { ... };  // ← Direct
+  return { services, ... };
+}
+```
+
+**Trivial identity factories:**
+
+```typescript
+// ❌ Anti-pattern: Just spreads into new object
+function createOptions(options: Options): Options {
+  return { ...options };
+}
+
+// ✅ Preferred: Use object literal directly
+const options: Options = { ... };
+```
+
+**When factories ARE justified:**
+
+- Called from multiple locations (DRY)
+- Contain meaningful logic (validation, defaults, transforms)
+- Create class instances or complex objects
+- Need to capture closures with initialization context
+
 ### Path Aliases
 
 Common aliases (full list in `tsconfig.json`):

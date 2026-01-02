@@ -8,8 +8,8 @@ import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 import { HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager } from '@common/history';
 import { agentConfigToTaskState } from '@utils/config';
-import { executeCommand } from '@commands/agent/executeCommand';
 import { HistoryIdMessageSchema } from '@webview/types/messages';
+import { runExecuteCommand } from '@commands/agent/executeCommand';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -63,7 +63,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
             await vscode.window.showInformationMessage(
               'Rerunning agent from history',
             );
-            await executeCommand.executeCommand(historyItem.agentConfig);
+            await runExecuteCommand(historyItem.agentConfig);
           } else {
             await vscode.window.showErrorMessage('History item not found');
           }

@@ -183,39 +183,39 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   _createHandlers() {
     return {
-      [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
-      [COMMANDS.UPDATE_LOGS]: (m) => this.handleUpdateLogs(m),
-      [COMMANDS.APPEND_LOG]: (m) => this.handleAppendLog(m),
-      [COMMANDS.UPDATE_LOG]: (m) => this.handleUpdateLog(m),
-      [COMMANDS.ADD_TASK_GROUP]: (m) => this.handleAddTaskGroup(m),
-      [COMMANDS.UPDATE_TASK_GROUP]: (m) => this.handleUpdateTaskGroup(m),
-      [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
-      [COMMANDS.UPDATE_STREAM_STATUS]: (m) => this.handleUpdateStreamStatus(m),
-      [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
-      [COMMANDS.UPDATE_RUN_USAGE]: (m) => this.handleUpdateRunUsage(m),
-      [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
-      [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
-        this.handleUpdateMissingOutputs(m),
-      [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: (m) =>
-        this.handleShowToolEditApproval(m),
-      [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (m) =>
-        this.handleResolveToolEditApproval(m),
-      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (m) =>
-        this.handleUpdateToolEditApprovalState(m),
-      [COMMANDS.SHOW_RETRY_REQUEST]: (m) => this.handleShowRetryRequest(m),
-      [COMMANDS.RESOLVE_RETRY_REQUEST]: (m) =>
-        this.handleResolveRetryRequest(m),
-      [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
-      [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
-      [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
-      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (m) =>
-        this.handleFollowUpTextPolished(m),
-      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
-        this.handleFollowUpTextTranscribed(m),
-      [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
-      [COMMANDS.RECORDING_STOPPED]: () => this.handleRecordingStopped(),
-      [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
-      [COMMANDS.UPDATE_TODOS]: (m) => this.handleUpdateTodos(m),
+      [COMMANDS.UPDATE_STREAMS]: this.handleUpdateStreams.bind(this),
+      [COMMANDS.UPDATE_LOGS]: this.handleUpdateLogs.bind(this),
+      [COMMANDS.APPEND_LOG]: this.handleAppendLog.bind(this),
+      [COMMANDS.UPDATE_LOG]: this.handleUpdateLog.bind(this),
+      [COMMANDS.ADD_TASK_GROUP]: this.handleAddTaskGroup.bind(this),
+      [COMMANDS.UPDATE_TASK_GROUP]: this.handleUpdateTaskGroup.bind(this),
+      [COMMANDS.UPDATE_STATUS]: this.handleUpdateStatus.bind(this),
+      [COMMANDS.UPDATE_STREAM_STATUS]: this.handleUpdateStreamStatus.bind(this),
+      [COMMANDS.UPDATE_USAGE]: this.handleUpdateUsage.bind(this),
+      [COMMANDS.UPDATE_RUN_USAGE]: this.handleUpdateRunUsage.bind(this),
+      [COMMANDS.UPDATE_FILES]: this.handleUpdateFiles.bind(this),
+      [COMMANDS.UPDATE_MISSING_OUTPUTS]:
+        this.handleUpdateMissingOutputs.bind(this),
+      [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]:
+        this.handleShowToolEditApproval.bind(this),
+      [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]:
+        this.handleResolveToolEditApproval.bind(this),
+      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]:
+        this.handleUpdateToolEditApprovalState.bind(this),
+      [COMMANDS.SHOW_RETRY_REQUEST]: this.handleShowRetryRequest.bind(this),
+      [COMMANDS.RESOLVE_RETRY_REQUEST]:
+        this.handleResolveRetryRequest.bind(this),
+      [COMMANDS.UPDATE_INSTRUCTION]: this.handleUpdateInstruction.bind(this),
+      [COMMANDS.DELETE_STREAM]: this.handleDeleteStream.bind(this),
+      [COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]:
+        this.handleFollowUpTextPolished.bind(this),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]:
+        this.handleFollowUpTextTranscribed.bind(this),
+      [COMMANDS.RECORDING_STARTED]: this.handleRecordingStarted.bind(this),
+      [COMMANDS.RECORDING_STOPPED]: this.handleRecordingStopped.bind(this),
+      [COMMANDS.RECORDING_ERROR]: this.handleRecordingError.bind(this),
+      [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
     };
   }
 
@@ -311,6 +311,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       dom.todoList.clear();
+      dom.fileList.clear();
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
@@ -326,6 +327,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._refreshInstructionForActiveRun();
     this._refreshUsageForActiveRun();
+    this._refreshOutputsForActiveRun();
   }
 
   handleUpdateLogs(message) {
@@ -877,6 +879,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.instructionPanel.hide();
         dom.runSelector.clear();
         dom.todoList.clear();
+        dom.fileList.clear();
       }
     }
 
@@ -897,6 +900,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearAllTodos();
     dom.runSelector.clear();
     dom.todoList.clear();
+    dom.fileList.clear();
     this._updatePlaceholderVisibility();
   }
 

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
-import { ToolError, toolResult, type ToolResult } from '@tools/result';
+import { ToolError, type ToolResult } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
@@ -33,10 +33,10 @@ export class ApplyPathTool extends defineTool({
       });
 
       if (result.success) {
-        return toolResult({
+        return {
           summary: 'Applied patch',
           output: result.stdout ?? '',
-        });
+        };
       }
 
       throw new ToolError(

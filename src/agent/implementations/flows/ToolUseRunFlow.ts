@@ -11,19 +11,39 @@
  * - Flow propagates services to all nodes automatically
  * - Nodes access via this.services getter
  *
+ * Refactored (no closure wrappers):
+ * - Nodes call helper functions directly with services context
+ * - Eliminates closure indirection for cleaner call stacks
+ *
  * This follows the same pattern as ReflectionFlow for consistency.
  */
 
 // Local imports - core flow primitives
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentRunState } from '@agent/core/AgentState';
+import {
+  AgentRunState,
+  type AgentRunStateSnapshot,
+} from '@agent/core/AgentState';
+import {
+  AgentWorkspaceState,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/AgentWorkspaceState';
+import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import {
+  createToolUseCycleFlow,
+  type ToolUseCycleShared,
+  type ToolUseCycleState,
+} from '@agent/core/flows/ToolUseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
+import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { IToolUseSession } from '@agent/toolUse/ToolUseSessionLifecycle';
+import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
+import type { TodoItem } from '@eventBus/schemas';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Internal imports
 import {
@@ -32,22 +52,53 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 
-// Service types
-import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
+// Service types and helper functions (direct calls, no closures)
+import {
+  prepareInitialState,
+  buildCycleOptions,
+  applyFollowUpMessage,
+  type ToolUseServices,
+  type ToolUseFlowParams,
+} from './tooluse';
 
 // ============================================================================
 // State Types
 // ============================================================================
 
 /**
- * Runtime state for tool-use agent runs.
+ * Snapshot of state slices for persistence.
+ *
+ * Stores individual snapshots instead of bundling in AgentSharedStoreSnapshot.
+ * This eliminates the AgentSharedStore wrapper overhead (convert→pass→convert pattern).
  */
-export interface ToolUseRunState<C = unknown> {
+interface StateSlicesSnapshot {
+  runStateSnapshot: AgentRunStateSnapshot;
+  workspaceSnapshot: AgentWorkspaceSnapshot;
+  userChannels: UserVariableChannels;
+}
+
+/**
+ * Runtime state for tool-use agent runs.
+ *
+ * Following koala-code-reader pattern: stores **snapshots** (plain JSON objects)
+ * instead of class instances. This ensures structuredClone() works correctly
+ * when PersistedFlow serializes the state.
+ *
+ * State slices are stored individually (no AgentSharedStore wrapper):
+ * - runStateSnapshot: Run-level statistics and usage
+ * - workspaceSnapshot: Workspace state (todos, interactions, etc.)
+ * - userChannels: User variable channels
+ *
+ * Nodes reconstruct class instances from snapshots when needed.
+ *
+ * IMPORTANT: cycleOptions is NOT stored here because it contains non-serializable
+ * objects (modelHandler, client, logger, functions). It's rebuilt each cycle from services.
+ */
+export interface ToolUseRunState {
   conversation: ProviderMessage[];
-  cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
-  store: AgentSharedStore | null;
-  runState: AgentRunState;
+  /** State slices (natively serializable) - reconstruct via fromSnapshot() */
+  stateSlices: StateSlicesSnapshot | null;
 }
 
 /**
@@ -56,13 +107,11 @@ export interface ToolUseRunState<C = unknown> {
  * Factory function for consistency with ReflectionFlow pattern
  * (which uses createInitialReflectionState).
  */
-export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
+export function createInitialToolUseState(): ToolUseRunState {
   return {
     conversation: [],
-    cycleOptions: null,
     shouldSkipCycle: false,
-    store: null,
-    runState: new AgentRunState(),
+    stateSlices: null,
   };
 }
 
@@ -75,8 +124,10 @@ export function createInitialToolUseState<C = unknown>(): ToolUseRunState<C> {
  * Note: Agent owns lifecycle (init/finalize in agent.run() try/finally).
  * Work nodes use services from this.services, throw errors on failure.
  */
-export interface ToolUseRunShared<C = unknown> {
-  state: ToolUseRunState<C>;
+export interface ToolUseRunShared {
+  state: ToolUseRunState;
+  /** Index signature for PersistedFlow serialization compatibility */
+  [key: string]: unknown;
 }
 
 // ============================================================================
@@ -85,13 +136,18 @@ export interface ToolUseRunShared<C = unknown> {
 
 /**
  * Result of prepare execution.
+ *
+ * Contains individual state slices directly (no AgentSharedStore wrapper).
+ * cycleOptions is only used within the same node (exec → post),
+ * NOT persisted to state (non-serializable).
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  store: AgentSharedStore;
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
-  runState: AgentRunState;
 }
 
 type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
@@ -115,12 +171,16 @@ type WaitExecResult =
 
 /**
  * Prep result for ToolUseCycleNode.
+ *
+ * Contains individual state slices directly (no AgentSharedStore wrapper).
  */
 interface CycleNodePrepResult<C> {
   shouldSkip: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
   conversation: ProviderMessage[];
-  store: AgentSharedStore;
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
 }
 
 /**
@@ -137,20 +197,19 @@ interface WaitNodePrepResult {
 // State Guards
 // ============================================================================
 
-/** Prepared state type with non-null cycleOptions and store. */
-type PreparedState<C> = ToolUseRunState<C> & {
-  cycleOptions: ToolUseCycleOptions<C>;
-  store: AgentSharedStore;
+/** Prepared state type with non-null stateSlices. */
+type PreparedState = ToolUseRunState & {
+  stateSlices: StateSlicesSnapshot;
 };
 
 /**
- * Asserts that state has been prepared (cycleOptions and store are non-null).
+ * Asserts that state has been prepared (stateSlices is non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  */
-function assertPreparedState<C>(
-  state: ToolUseRunState<C>,
-): asserts state is PreparedState<C> {
-  if (state.cycleOptions === null || state.store === null) {
+function assertPreparedState(
+  state: ToolUseRunState,
+): asserts state is PreparedState {
+  if (state.stateSlices === null) {
     throw new Error(
       'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
@@ -164,12 +223,14 @@ function assertPreparedState<C>(
 /**
  * Prepares state for tool-use cycle.
  *
- * Uses native services pattern:
- * - this.services.prepareState() instead of shared.hooks.prepareState()
- * - this.services.buildCycleOptions() instead of shared.hooks.buildCycleOptions()
+ * Calls helper functions directly with services context (no closure wrappers).
+ * This eliminates closure indirection for cleaner call stacks.
+ *
+ * Note: cycleOptions is NOT stored in state (non-serializable). It's rebuilt
+ * by CycleNode using buildCycleOptions().
  */
 class ToolUsePrepareNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -177,16 +238,17 @@ class ToolUsePrepareNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(_shared: ToolUseRunShared<C>): Promise<void> {
+  async prep(_shared: ToolUseRunShared): Promise<void> {
     // No prep needed - services accessed via this.services
   }
 
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
-    // Use native services pattern
-    const prepared = await this.services.prepareState();
-    const cycleOptions = this.services.buildCycleOptions(prepared.store);
+    // Call helper functions directly (no closure wrappers)
+    // prepareInitialState returns individual slices directly (no store wrapper)
+    const prepared = await prepareInitialState(this.services);
+    const cycleOptions = await buildCycleOptions(this.services);
     return {
       kind: 'success',
       result: {
@@ -204,7 +266,7 @@ class ToolUsePrepareNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     _prepRes: void,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
@@ -215,13 +277,22 @@ class ToolUsePrepareNode<C> extends Node<
         : new Error(String(execRes.error));
     }
 
-    const { messages, store, shouldSkipCycle, cycleOptions, runState } =
-      execRes.result;
+    const {
+      messages,
+      runState,
+      workspaceState,
+      userChannels,
+      shouldSkipCycle,
+    } = execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
-    shared.state.cycleOptions = cycleOptions;
-    shared.state.store = store;
-    shared.state.runState = runState;
+    // Store individual snapshots instead of bundled AgentSharedStoreSnapshot
+    // This eliminates the AgentSharedStore wrapper overhead
+    shared.state.stateSlices = {
+      runStateSnapshot: runState.toSnapshot(),
+      workspaceSnapshot: workspaceState.toSnapshot(),
+      userChannels,
+    };
 
     return FlowTransition.DEFAULT; // Follow next() → CycleNode
   }
@@ -230,12 +301,13 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Uses native services pattern:
- * - this.services.runCycle() instead of shared.hooks.runCycle()
- * - this.services.persistCheckpoint() instead of shared.hooks.persistCheckpoint()
+ * Creates and runs ToolUseCycleFlow directly in exec() (like ResponseCycleNode).
+ * Flow is created fresh each execution to avoid stale state.
+ *
+ * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
 class ToolUseCycleNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -243,15 +315,27 @@ class ToolUseCycleNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ToolUseRunShared<C>): Promise<CycleNodePrepResult<C>> {
+  async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
+    // Reconstruct state slices directly from snapshots (no store wrapper)
+    const { stateSlices } = shared.state;
+    const runState = AgentRunState.fromSnapshot(stateSlices.runStateSnapshot);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
+      stateSlices.workspaceSnapshot,
+    );
+
+    // Rebuild cycleOptions directly (no closure wrapper, no store param)
+    const cycleOptions = await buildCycleOptions(this.services);
+
     return {
       shouldSkip: shared.state.shouldSkipCycle,
-      cycleOptions: shared.state.cycleOptions,
+      cycleOptions,
       conversation: shared.state.conversation,
-      store: shared.state.store,
+      runState,
+      workspaceState,
+      userChannels: stateSlices.userChannels,
     };
   }
 
@@ -261,20 +345,76 @@ class ToolUseCycleNode<C> extends Node<
       return { kind: 'skipped' };
     }
 
-    // Use native services pattern
-    const result = await this.services.runCycle(
-      prepRes.cycleOptions,
-      prepRes.conversation,
-      prepRes.store,
-    );
+    // Create cycle shared state (like ResponseCycleNode)
+    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
+    // cycleIndex starts from run.totalRounds to maintain continuity across user follow-ups
+    const cycleShared: ToolUseCycleShared = {
+      state: {
+        messages: prepRes.conversation,
+        shouldStop: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        stopReason: undefined,
+        cycleIndex: prepRes.runState.totalRounds,
+        cycleResponseTimeMs: 0,
+        cycleNormalizedUsage: undefined,
+        endTurn: false,
+      } satisfies ToolUseCycleState,
+      retryState: createRetryState(),
+    };
 
-    if (result.failedWithError) {
-      return { kind: 'failed', message: result.errorMessage ?? 'Cycle failed' };
+    // Create and run the flow directly (like ResponseCycleNode)
+    // Note: Tool-use cycles track metrics in flow state (cycleIndex, etc.)
+    // instead of a round object, so we only pass run/workspace/onRoundFinalized.
+    const flow = createToolUseCycleFlow<C>();
+    const onRoundFinalized = this.services.getUsageRecorder();
+    flow.setServices({
+      ...prepRes.cycleOptions,
+      run: prepRes.runState,
+      workspace: prepRes.workspaceState,
+      onRoundFinalized,
+    });
+
+    // Set up todo update callback to emit changes to the progress view
+    const { context } = this.services;
+    prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
+      bus.emit('updateTodos', {
+        stream: context.streamId,
+        executionId: context.executionId,
+        todos,
+      });
+    });
+
+    try {
+      await flow.run(cycleShared);
+
+      // Interpret cycle completion using shared helper
+      const completion = interpretCycleCompletion(
+        cycleShared.state,
+        cycleShared.retryState,
+      );
+
+      if (completion.failedWithError) {
+        return {
+          kind: 'failed',
+          message: completion.errorMessage ?? 'Cycle failed',
+        };
+      }
+      if (completion.userCancelled) {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'success' };
+    } catch (error) {
+      return {
+        kind: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    } finally {
+      // Clear the todo update callback to prevent memory leaks
+      prepRes.workspaceState.todos.clearOnUpdate();
     }
-    if (result.userCancelled) {
-      return { kind: 'cancelled' };
-    }
-    return { kind: 'success' };
   }
 
   async execFallback(
@@ -285,7 +425,7 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     prepRes: CycleNodePrepResult<C>,
     execRes: CycleExecResult,
   ): Promise<string | undefined> {
@@ -294,16 +434,18 @@ class ToolUseCycleNode<C> extends Node<
       shared.state.shouldSkipCycle = false;
     }
 
+    // Update state slices after cycle (cycle mutates run/workspace state)
+    // This ensures workspace state changes (todos, interactions, etc.) are persisted
+    shared.state.stateSlices = {
+      runStateSnapshot: prepRes.runState.toSnapshot(),
+      workspaceSnapshot: prepRes.workspaceState.toSnapshot(),
+      userChannels: prepRes.userChannels,
+    };
+
     switch (execRes.kind) {
       case 'success':
-        // Persist checkpoint via services (side effect belongs in post)
-        await this.services.persistCheckpoint(
-          shared.state.conversation,
-          prepRes.store,
-        );
-        return FlowTransition.DEFAULT; // Follow next() → WaitNode
-
       case 'skipped':
+        // PersistedFlow handles checkpoint persistence automatically after each node
         return FlowTransition.DEFAULT; // Follow next() → WaitNode
 
       case 'failed':
@@ -321,12 +463,11 @@ class ToolUseCycleNode<C> extends Node<
 /**
  * Waits for user follow-up message between cycles.
  *
- * Uses native services pattern:
- * - this.services.applyFollowUpMessage() instead of shared.agent.applyFollowUpMessage()
- * - Session operations via this.services.session
+ * Calls helper functions directly with services context (no closure wrappers).
+ * Session operations via this.services.session.
  */
 class ToolUseWaitNode<C> extends Node<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -334,7 +475,7 @@ class ToolUseWaitNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ToolUseRunShared<C>): Promise<WaitNodePrepResult> {
+  async prep(shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
     const session = this.services.session;
     return {
       conversation: shared.state.conversation,
@@ -344,18 +485,17 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    const { conversation, hasQueuedFollowUp, session } = prepRes;
+    const { hasQueuedFollowUp, session } = prepRes;
 
     // Check interruption first
     if (this.services.checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    // Handle waiting state (I/O in exec where errors are caught)
-    if (hasQueuedFollowUp) {
-      await session.clearPersistedSnapshot();
-    } else {
-      await session.enterWaitingState(conversation);
+    // Enter waiting state if no queued follow-up
+    // PersistedFlow handles state persistence automatically
+    if (!hasQueuedFollowUp) {
+      await session.enterWaitingState();
     }
 
     // Wait for follow-up (blocking I/O)
@@ -381,7 +521,7 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   async post(
-    shared: ToolUseRunShared<C>,
+    shared: ToolUseRunShared,
     _prepRes: WaitNodePrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
@@ -390,11 +530,11 @@ class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
-    // Apply follow-up via services
+    // Apply follow-up directly (no closure wrapper)
     const session = this.services.session;
     await session.markRunning();
-    await session.clearPersistedSnapshot();
-    shared.state.conversation = await this.services.applyFollowUpMessage(
+    shared.state.conversation = await applyFollowUpMessage(
+      this.services,
       execRes.followUp,
       shared.state.conversation,
     );
@@ -424,7 +564,7 @@ class ToolUseWaitNode<C> extends Node<
  * ```
  */
 export function createToolUseRunFlow<C = unknown>(): Flow<
-  ToolUseRunShared<C>,
+  ToolUseRunShared,
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
@@ -439,10 +579,7 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
   cycleNode.next(waitNode);
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
 
-  return new Flow<ToolUseRunShared<C>, ToolUseFlowParams, ToolUseServices<C>>(
+  return new Flow<ToolUseRunShared, ToolUseFlowParams, ToolUseServices<C>>(
     prepareNode,
   );
 }
-
-// Re-export types for convenience
-export type { ToolUseServices, ToolUseFlowParams } from './tooluse';

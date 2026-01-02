@@ -85,14 +85,13 @@ export class ProgressViewProvider
       this.state,
       this.webviewUpdater,
       {
-        showRetryRequest: (payload) => this.showRetryRequest(payload),
-        resolveRetryRequest: (streamId) => this.resolveRetryRequest(streamId),
-        showToolEditApprovalPrompt: (payload) =>
-          this.showToolEditApprovalPrompt(payload),
-        resolveToolEditApprovalPrompt: (requestId) =>
-          this.resolveToolEditApprovalPrompt(requestId),
-        updateToolEditApprovalBypassState: (bypassActive) =>
-          this.updateToolEditApprovalBypassState(bypassActive),
+        showRetryRequest: this.showRetryRequest.bind(this),
+        resolveRetryRequest: this.resolveRetryRequest.bind(this),
+        showToolEditApprovalPrompt: this.showToolEditApprovalPrompt.bind(this),
+        resolveToolEditApprovalPrompt:
+          this.resolveToolEditApprovalPrompt.bind(this),
+        updateToolEditApprovalBypassState:
+          this.updateToolEditApprovalBypassState.bind(this),
       },
     );
 
