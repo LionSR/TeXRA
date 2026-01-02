@@ -99,6 +99,10 @@ export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 /**
  * Unified debug context used across all cycle flows.
  * Provides consistent logging and execution tracking.
+ *
+ * NOTE: This type is NOT stored in shared state - it's derived from services
+ * at each `maybeSaveDebugObject` call site using `getDebugContext()`.
+ * This eliminates redundant storage of logger and executionId.
  */
 export interface CycleDebugContext {
   logger: AgentLogger;
@@ -106,6 +110,46 @@ export interface CycleDebugContext {
   executionId?: ExecutionId;
   /** Whether this is a remote agent (don't save messages to avoid leaking prompts) */
   isRemote?: boolean;
+}
+
+/**
+ * Minimal services interface for deriving debug context.
+ * Both ResponseCycleServices and ToolUseCycleServices satisfy this.
+ */
+export interface DebugContextServices {
+  logger: AgentLogger;
+  context: { executionId?: ExecutionId };
+}
+
+/**
+ * Parameters for creating debug context (fields not available in services).
+ */
+export interface DebugContextParams {
+  modelName?: string;
+  isRemote?: boolean;
+}
+
+/**
+ * Derive CycleDebugContext from services at call site.
+ *
+ * This eliminates redundant storage of logger/executionId in shared state.
+ * Call this at each `maybeSaveDebugObject` invocation instead of storing
+ * the context in shared or passing through prep/exec results.
+ *
+ * @param services - Services containing logger and context
+ * @param params - Additional params not available from services (modelName, isRemote)
+ * @returns CycleDebugContext for maybeSaveDebugObject
+ */
+export function getDebugContext(
+  services: DebugContextServices,
+  params: DebugContextParams,
+): CycleDebugContext {
+  return {
+    logger: services.logger,
+    executionId: services.context.executionId,
+    modelName: params.modelName,
+    isRemote: params.isRemote,
+  };
 }
 
 /**
