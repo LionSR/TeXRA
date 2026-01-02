@@ -85,8 +85,12 @@ export function createTaskGroupEvents(
         await shared.initializeStreamForTaskGroup(stream);
       }
 
-      // Send ADD_TASK_GROUP to frontend for immediate rendering
-      if (updater.isAvailable() && stream === state.activeStream) {
+      // Send ADD_TASK_GROUP to frontend for immediate rendering.
+      // Always send when updater is available - the frontend will handle
+      // the message correctly once activeStream is set by UPDATE_STREAMS.
+      // This fixes a race condition where setActiveStream creates the stream
+      // but hasn't set activeStream yet when addTaskGroup is processed.
+      if (updater.isAvailable()) {
         updater.addTaskGroup(stream, group);
       }
 
