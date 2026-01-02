@@ -7,7 +7,7 @@ export class HistoryViewState {
     this.stateManager = new WebviewStateManager();
     this.searchIndex = 0;
     this.totalMatches = 0;
-    this.toggleStates = new ToggleStateStore(() => this.save());
+    this.toggleStates = new ToggleStateStore(this.save.bind(this));
   }
 
   initialize() {
