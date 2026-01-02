@@ -153,15 +153,6 @@ export function getDebugContext(
 }
 
 /**
- * Debug file options for saving intermediate flow state.
- */
-export interface CycleDebugFileOptions {
-  continuationCount: number;
-  outputFile?: string;
-  baseName?: string;
-}
-
-/**
  * Result type for nodes that can be skipped based on flow state.
  * Uses 'kind' discriminant for consistency with InvocationResult.
  */
