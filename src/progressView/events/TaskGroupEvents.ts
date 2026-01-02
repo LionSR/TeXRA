@@ -59,10 +59,6 @@ export function createTaskGroupEvents(
       } = data;
 
       const hasStream = state.streamTabs.has(stream);
-      if (!hasStream) {
-        debugLog(`Creating stream from addTaskGroup: ${stream}`);
-        await shared.initializeStreamForTaskGroup(stream);
-      }
 
       const group: TaskGroup = {
         id: groupId,
@@ -73,19 +69,29 @@ export function createTaskGroupEvents(
         parentGroupId,
       };
 
+      // Add group to state BEFORE initializeStreamForTaskGroup, so that
+      // refreshStreamSurface (called inside) includes this group in UPDATE_LOGS.
+      // addGroup synchronously adds to in-memory state; save is async.
       const addGroupPromise = state.taskGroups.addGroup(stream, groupId, group);
 
-      try {
-        if (!parentGroupId) {
-          state.setActiveRunId(stream, groupId);
-        }
-
-        if (updater.isAvailable() && stream === state.activeStream) {
-          updater.addTaskGroup(stream, group);
-        }
-      } finally {
-        await addGroupPromise;
+      if (!parentGroupId) {
+        state.setActiveRunId(stream, groupId);
       }
+
+      if (!hasStream) {
+        debugLog(`Creating stream from addTaskGroup: ${stream}`);
+        // Initialize stream after group is in state. This sends UPDATE_LOGS
+        // with forceRebuild: true, which will include the new group.
+        await shared.initializeStreamForTaskGroup(stream);
+      }
+
+      // Send ADD_TASK_GROUP to frontend for immediate rendering
+      if (updater.isAvailable() && stream === state.activeStream) {
+        updater.addTaskGroup(stream, group);
+      }
+
+      // Ensure group persistence completes
+      await addGroupPromise;
     });
   };
 
