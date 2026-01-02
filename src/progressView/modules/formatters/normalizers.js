@@ -188,21 +188,6 @@ export const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
-  const edits = Array.isArray(parsed.edits)
-    ? parsed.edits
-    : Array.isArray(outputDetails.edits)
-      ? outputDetails.edits
-      : [];
-
-  const filesCandidate = Array.isArray(parsed.files)
-    ? parsed.files
-    : Array.isArray(outputDetails.files)
-      ? outputDetails.files
-      : edits
-          .map((entry) => (entry?.path ? { path: entry.path } : null))
-          .filter(Boolean);
-  const files = normalizeFileListEntries(filesCandidate) || [];
-
   return {
     parsed,
     toolName,
@@ -210,7 +195,6 @@ export const normalizeToolUseLog = (structured) => {
     errorText,
     outputText,
     input: parsed.input,
-    files,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
