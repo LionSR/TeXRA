@@ -2,10 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import {
-  showErrorMessage,
-  showWarningMessage,
-} from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -52,7 +48,7 @@ export async function getActiveEditorWithGuards(
     const fileDescription = resourceName
       ? `${resourceName} file`
       : 'supported file';
-    await showWarningMessage(
+    await vscode.window.showWarningMessage(
       `No active editor found. Open a ${fileDescription} in the editor and try again.`,
     );
     return { status: 'noEditor' };
@@ -70,7 +66,7 @@ export async function getActiveEditorWithGuards(
       ? `${resourceName} files`
       : 'files with the supported extensions';
     const extensionList = formatExtensionList(extensionsForDisplay);
-    await showWarningMessage(
+    await vscode.window.showWarningMessage(
       `This command only works with ${resourceLabel} (${extensionList}).`,
     );
     return { status: 'unsupportedExtension' };
@@ -79,7 +75,7 @@ export async function getActiveEditorWithGuards(
   if (saveDocument && editor.document.isDirty) {
     const saved = await editor.document.save();
     if (!saved) {
-      await showErrorMessage(
+      await vscode.window.showErrorMessage(
         'Could not save the current file. Please save and try again.',
       );
       return { status: 'saveFailed' };

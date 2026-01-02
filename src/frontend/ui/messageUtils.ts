@@ -2,8 +2,9 @@
 import * as vscode from 'vscode';
 
 /**
- * Message display utilities.
- * Abstracts VS Code message APIs for potential future platform independence.
+ * Platform abstraction layer for user-facing messages.
+ * These wrappers enable future platform independence for backend code
+ * that needs to display messages without direct VS Code coupling.
  */
 export const showInfoMessage = vscode.window.showInformationMessage;
 export const showWarningMessage = vscode.window.showWarningMessage;

@@ -8,7 +8,7 @@ export {
   BaseViewMessageHandler,
   type MessageHandlerOptions,
 } from './BaseViewMessageHandler';
-export { BaseWebviewProvider } from './BaseWebviewProvider';
+export { BaseWebviewProvider, type PanelOptions } from './BaseWebviewProvider';
 export {
   COMMON_COMMANDS,
   MAIN_VIEW_COMMANDS,

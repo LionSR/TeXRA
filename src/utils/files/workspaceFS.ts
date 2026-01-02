@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -36,6 +39,14 @@ export class WorkspaceFS extends RelativeFS {
 
   public static async readFileBytes(target: string): Promise<Buffer> {
     return AbsoluteFS.readBytes(this.fullPath(target));
+  }
+
+  /**
+   * Convert a file path to an absolute path.
+   * If already absolute, returns unchanged. Otherwise resolves relative to workspace.
+   */
+  public static toAbsolute(filePath: string): string {
+    return path.isAbsolute(filePath) ? filePath : this.fullPath(filePath);
   }
 }
 

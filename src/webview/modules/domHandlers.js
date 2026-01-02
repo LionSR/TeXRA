@@ -152,25 +152,25 @@ class MainViewDomHandler extends BaseDomHandler {
     });
   }
 
-  cleanupUI() {
+  disposeUI() {
     if (this.fileInputManager) {
-      this.fileInputManager.cleanup();
+      this.fileInputManager.dispose();
       this.fileInputManager = null;
     }
     if (this.actionButtonManager) {
-      this.actionButtonManager.cleanup();
+      this.actionButtonManager.dispose();
       this.actionButtonManager = null;
     }
     if (this.settingsButtonManager) {
-      this.settingsButtonManager.cleanup();
+      this.settingsButtonManager.dispose();
       this.settingsButtonManager = null;
     }
-    this.cleanup();
+    this.dispose();
   }
 }
 
 export const mainViewDomHandler = new MainViewDomHandler();
 
-export function cleanupManagers() {
-  mainViewDomHandler.cleanupUI();
+export function disposeManagers() {
+  mainViewDomHandler.disposeUI();
 }

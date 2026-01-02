@@ -218,36 +218,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ),
         );
       },
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
+      // Banner handlers - forwarded to client for rendering
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
+        this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: (m) =>
+        this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: (m) =>
+        this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
+        this.forwardToWebview(m),
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await setConfig('ui.showDependencyReminders', m.value);
       },
@@ -275,26 +256,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           });
         }
       },
-      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: async (m) => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage(m);
-      },
-      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: async () => {
-        /* Banner handled client-side */
-        const view = this.getActiveView();
-        view?.webview.postMessage({
+      [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.forwardToWebview(m),
+      [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
+        this.forwardToWebview({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
-        });
-      },
+        }),
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         try {
           await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
           // Only hide banner if sign-in was successful
           const authStatus = await getAuthStatus();
           if (authStatus.authenticated) {
-            const view = this.getActiveView();
-            view?.webview.postMessage({
+            this.forwardToWebview({
               command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
             });
           }
@@ -307,10 +280,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
-        // Save dismissal preference
         await setConfig('ui.showLoginBanner', false);
-        const view = this.getActiveView();
-        view?.webview.postMessage({
+        this.forwardToWebview({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
         });
       },
@@ -379,6 +350,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: async (m) =>
         this.executionManager.handleAcceptEdited(m),
     };
+  }
+
+  /** Forward a message directly to the webview client (for client-side handlers) */
+  private forwardToWebview(message: any): void {
+    const view = this.getActiveView();
+    view?.webview.postMessage(message);
   }
 
   // Implement handler methods
