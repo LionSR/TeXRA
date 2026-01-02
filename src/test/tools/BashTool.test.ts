@@ -8,10 +8,14 @@ import {
   AgentSetting,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import {
+  createToolUseCycleFlow,
+  type ToolUseCycleShared,
+  type ToolUseCycleState,
+} from '@agent/core/flows/ToolUseCycleFlow';
+import { createRetryState } from '@agent/core/flows/RetryState';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
@@ -174,18 +178,35 @@ describe('BashTool', () => {
       }),
     };
 
-    const store = new AgentSharedStore({
-      round: new ConversationRoundState(0),
-      run: new AgentRunState(),
-      workspace: workspaceState,
-      user: {
-        input: Object.freeze({}) as Readonly<Record<string, any>>,
-        transient: {},
-      },
-    });
+    const round = new ConversationRoundState(0);
+    const run = new AgentRunState();
 
     const messages: ProviderMessage[] = [];
-    await runToolUseCycle({ options, messages, store });
+
+    // Create shared state for the cycle flow
+    const shared: ToolUseCycleShared = {
+      state: {
+        messages,
+        shouldStop: false,
+        response: undefined,
+        responseTimeMs: undefined,
+        toolCalls: undefined,
+        text: undefined,
+        stopReason: undefined,
+        endTurn: false,
+      } satisfies ToolUseCycleState,
+      retryState: createRetryState(),
+    };
+
+    // Create and run the flow directly
+    const flow = createToolUseCycleFlow();
+    flow.setServices({
+      ...options,
+      round,
+      run,
+      workspace: workspaceState,
+    });
+    await flow.run(shared);
 
     const toolOutputMessage = messages.find(
       (msg) => (msg as any).type === 'function_call_output',

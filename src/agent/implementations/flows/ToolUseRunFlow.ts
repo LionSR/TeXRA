@@ -29,7 +29,6 @@ import {
 } from '@agent/core/flows/ToolUseCycleFlow';
 import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
-import type { ToolUseCycleParams } from '@agent/core/flows/CycleServices';
 
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
@@ -251,8 +250,8 @@ class ToolUsePrepareNode<C> extends Node<
 /**
  * Runs a single tool-use cycle.
  *
- * Directly instantiates and runs ToolUseCycleFlow (like ResponseCycleNode).
- * This eliminates the circular reference through services.runCycle().
+ * Creates and runs ToolUseCycleFlow directly in exec() (like ResponseCycleNode).
+ * Flow is created fresh each execution to avoid stale state.
  *
  * Note: PersistedFlow handles checkpoint persistence automatically after each node.
  */
@@ -261,11 +260,8 @@ class ToolUseCycleNode<C> extends Node<
   ToolUseFlowParams,
   ToolUseServices<C>
 > {
-  private cycleFlow: Flow<ToolUseCycleShared, ToolUseCycleParams<C>>;
-
   constructor() {
     super(NODE_NO_RETRY, NODE_NO_WAIT);
-    this.cycleFlow = createToolUseCycleFlow<C>();
   }
 
   async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
@@ -307,10 +303,10 @@ class ToolUseCycleNode<C> extends Node<
       retryState: createRetryState(),
     };
 
-    // Inject services directly and run sub-flow (like ResponseCycleNode)
-    // Options are spread with state slices (no store wrapper)
+    // Create and run the flow directly (like ResponseCycleNode)
+    const flow = createToolUseCycleFlow<C>();
     const onRoundFinalized = this.services.getUsageRecorder();
-    this.cycleFlow.setServices({
+    flow.setServices({
       ...prepRes.cycleOptions,
       round: prepRes.store.round,
       run: prepRes.store.run,
@@ -319,7 +315,7 @@ class ToolUseCycleNode<C> extends Node<
     });
 
     try {
-      await this.cycleFlow.run(cycleShared);
+      await flow.run(cycleShared);
 
       // Interpret cycle completion using shared helper
       const completion = interpretCycleCompletion(
