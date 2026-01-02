@@ -51,12 +51,12 @@ export interface StepResult<S> {
  * - Node history tracks actions, not outputs (minimal storage)
  * - Resume replays by navigating the graph, not re-executing nodes
  *
- * @template S - Shared state type (must be serializable)
+ * @template S - Shared state type (must be serializable via structuredClone)
  * @template P - Params type (must be serializable)
  * @template Svc - Services type (NOT serialized - injected at runtime)
  */
 export class PersistedFlow<
-  S extends Record<string, unknown> = Record<string, unknown>,
+  S = Record<string, unknown>,
   P extends Record<string, unknown> = Record<string, unknown>,
   Svc = unknown,
 > extends Flow<S, P, Svc> {
@@ -79,9 +79,11 @@ export class PersistedFlow<
   /**
    * Serialize shared state for storage using structuredClone.
    * Shared state must be plain JSON (no class instances).
+   *
+   * Note: Cast is safe because structuredClone produces plain JSON.
    */
   protected serializeShared(shared: S): Record<string, unknown> {
-    return structuredClone(shared);
+    return structuredClone(shared) as Record<string, unknown>;
   }
 
   async run(shared: S): Promise<Action | undefined> {
@@ -173,7 +175,7 @@ export class PersistedFlow<
    * @param start - The starting node of the flow graph
    */
   static async attach<
-    S extends Record<string, unknown>,
+    S = Record<string, unknown>,
     P extends Record<string, unknown> = Record<string, unknown>,
     Svc = unknown,
   >(

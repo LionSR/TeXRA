@@ -126,8 +126,6 @@ export function createInitialToolUseState(): ToolUseRunState {
  */
 export interface ToolUseRunShared {
   state: ToolUseRunState;
-  /** Index signature for PersistedFlow serialization compatibility */
-  [key: string]: unknown;
 }
 
 // ============================================================================
