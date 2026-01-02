@@ -264,10 +264,9 @@ function createUsageRecorder(
   usageMonitor: UsageMonitor,
   runKind: 'workflow' | 'tool-use' = 'workflow',
 ): () => RoundFinalizedCallback {
-  return () =>
-    async ({ run }) => {
-      await usageMonitor.recordUsage(run, { runKind });
-    };
+  return () => async (run) => {
+    await usageMonitor.recordUsage(run, { runKind });
+  };
 }
 
 // ============================================================================
