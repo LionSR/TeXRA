@@ -7,6 +7,7 @@ export {
   logErrorMessage,
   showLoggedErrorMessage,
   showLoggedMessage,
+  showLoggedInfoMessage,
   showLoggedMessageWithDocs,
 } from './errorHandlingUtils';
 export {
@@ -19,3 +20,7 @@ export {
   enrichError,
   buildErrorLogData,
 } from './sdkErrorUtils';
+export {
+  FileOperationResultOptions,
+  showFileOperationResult,
+} from './fileOperationUtils';
