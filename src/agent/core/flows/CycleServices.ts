@@ -63,16 +63,12 @@ export type RoundFinalizedCallback = (
 ) => void | Promise<void>;
 
 /**
- * State slices passed directly to cycle flows.
- * Replaces the AgentSharedStore wrapper for cleaner access.
+ * Base state slices common to all cycle flows.
+ * Contains run state, workspace state, and optional callback.
  *
- * Names match the original store accessors (store.round, store.run, store.workspace)
- * for easy migration.
+ * Extended by CycleStateSlices (with round) and ToolUseCycleStateSlices (without).
  */
-export interface CycleStateSlices {
-  /** Current round state for statistics (mutable for tool-use multi-round) */
-  round: ConversationRoundState;
-
+export interface BaseCycleStateSlices {
   /** Accumulated run state */
   readonly run: AgentRunState;
 
@@ -80,11 +76,24 @@ export interface CycleStateSlices {
   readonly workspace: AgentWorkspaceState;
 
   /**
-   * Callback invoked when round completes.
+   * Callback invoked when round/cycle completes.
    * Called by finalize nodes for usage tracking.
    */
   readonly onRoundFinalized?: RoundFinalizedCallback;
 }
+
+/**
+ * State slices passed directly to response cycle flows.
+ * Extends base with round object for round-based agents.
+ *
+ * Names match the original store accessors (store.round, store.run, store.workspace)
+ * for easy migration.
+ */
+export interface CycleStateSlices extends BaseCycleStateSlices {
+  /** Current round state for statistics (mutable for multi-round) */
+  round: ConversationRoundState;
+}
+
 
 // ============================================================================
 // CYCLE OPTIONS (single source of truth)
@@ -133,9 +142,12 @@ export type ResponseCycleServices<C = unknown> = CycleStateSlices &
  * Services for tool-use cycle flows.
  *
  * Options are flattened directly into services (no nested `options` wrapper).
- * Access via: `services.logger`, `services.round`, etc.
+ * Access via: `services.logger`, `services.run`, `services.workspace`, etc.
+ *
+ * Note: Tool-use cycles track metrics in flow state (cycleIndex, cycleResponseTimeMs)
+ * instead of a round object, so this uses BaseCycleStateSlices (without round).
  */
-export type ToolUseCycleServices<C = unknown> = CycleStateSlices &
+export type ToolUseCycleServices<C = unknown> = BaseCycleStateSlices &
   Readonly<ToolUseCycleOptions<C>>;
 
 /**
@@ -146,7 +158,7 @@ export type ToolUseCycleServices<C = unknown> = CycleStateSlices &
  *
  * @template TServices - The specific services type for this cycle
  */
-export interface CycleParams<TServices extends CycleStateSlices> {
+export interface CycleParams<TServices extends BaseCycleStateSlices> {
   [key: string]: unknown;
   services: TServices;
 }
@@ -169,8 +181,7 @@ export type ToolUseCycleParams<C = unknown> = CycleParams<
  * Finalize a round by recording statistics and invoking callback.
  *
  * This is the SINGLE SOURCE OF TRUTH for round finalization logic.
- * Both ResponseCycleFlow and ToolUseCycleFlow should use this helper
- * instead of duplicating the logic.
+ * ResponseCycleFlow uses this helper (reflection agents have real rounds).
  *
  * @param slices - The cycle state slices containing round, run, workspace
  * @returns Promise that resolves when finalization is complete
@@ -184,5 +195,56 @@ export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
   // Invoke usage tracking callback if provided
   if (onRoundFinalized) {
     await onRoundFinalized({ round, run, workspace });
+  }
+}
+
+/**
+ * Input for tool-use cycle finalization.
+ * Takes values directly instead of reading from ConversationRoundState.
+ */
+export interface ToolUseCycleFinalizeInput {
+  cycleIndex: number;
+  responseTimeMs: number;
+  normalizedUsage: import('@agent/types/NormalizedUsage').NormalizedUsage | null;
+  run: BaseCycleStateSlices['run'];
+  workspace: BaseCycleStateSlices['workspace'];
+  onRoundFinalized?: RoundFinalizedCallback;
+}
+
+/**
+ * Finalize a tool-use cycle by recording statistics directly.
+ *
+ * Unlike finalizeRound(), this takes values directly instead of reading
+ * from a ConversationRoundState. This eliminates the need for tool-use
+ * agents to maintain a round object that gets reset after each cycle.
+ *
+ * @param input - Direct values for cycle statistics
+ */
+export async function finalizeToolUseCycle(
+  input: ToolUseCycleFinalizeInput,
+): Promise<void> {
+  const { cycleIndex, responseTimeMs, normalizedUsage, run, workspace } = input;
+
+  // Record directly to run state (bypass round object)
+  if (normalizedUsage) {
+    run.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
+  }
+  run.addResponseTime(responseTimeMs);
+
+  // Invoke usage tracking callback if provided
+  if (input.onRoundFinalized) {
+    // Create a minimal round-like object for callback compatibility
+    const roundSnapshot = {
+      roundIndex: cycleIndex,
+      responseTimeMs,
+      normalizedUsage,
+      continuationCount: 0,
+      outputFile: '',
+    };
+    await input.onRoundFinalized({
+      round: roundSnapshot as any,
+      run,
+      workspace,
+    });
   }
 }
