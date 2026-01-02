@@ -35,6 +35,7 @@ import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TaskRunFileService } from '@utils/files';
 
 // ============================================================================
@@ -191,9 +192,7 @@ export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
 export interface ToolUseCycleFinalizeInput {
   cycleIndex: number;
   responseTimeMs: number;
-  normalizedUsage:
-    | import('@agent/types/NormalizedUsage').NormalizedUsage
-    | null;
+  normalizedUsage: NormalizedUsage | null;
   run: BaseCycleStateSlices['run'];
   onRoundFinalized?: RoundFinalizedCallback;
 }
