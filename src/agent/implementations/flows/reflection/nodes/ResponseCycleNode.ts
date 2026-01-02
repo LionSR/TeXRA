@@ -187,7 +187,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
       shared.shouldStop = false;
       shared.outputExists = false;
       shared.systemPrompt = undefined;
-      shared.debugFileOptions = undefined;
       shared.responseObject = undefined;
       shared.responseTimeMs = undefined;
       shared.stopReason = undefined;
