@@ -6,7 +6,7 @@ import fsExtra from 'fs-extra';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -62,10 +62,10 @@ export function registerSampleProjectCommands(
           await vscode.window.showTextDocument(document, { preview: false });
         }
       } catch (err) {
-        const message = toErrorMessage(err);
-        logger.error(CHANNEL, `Failed to create sample project: ${message}`);
-        void vscode.window.showErrorMessage(
-          `Failed to create sample project: ${message}`,
+        await showLoggedErrorMessage(
+          CHANNEL,
+          'Failed to create sample project',
+          err,
         );
       }
     },
