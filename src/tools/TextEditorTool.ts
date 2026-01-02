@@ -353,6 +353,10 @@ export class TextEditorTool extends defineTool({
         finalContent,
       );
 
+      // Record file as "read" after creation so subsequent edits don't require
+      // an explicit read - this is essential for newly created files.
+      recordToolFileRead(filePath);
+
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
         finalContent,
@@ -453,6 +457,10 @@ export class TextEditorTool extends defineTool({
         this.addToHistory(filePath, baseContent);
       }
       const finalContent = appliedContent;
+
+      // Record file as "read" after editing so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -571,6 +579,10 @@ export class TextEditorTool extends defineTool({
       }
       const finalContent = appliedContent;
 
+      // Record file as "read" after editing so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
+
       // Prepare success message
       const previewLines = finalContent.split('\n');
       const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
@@ -663,6 +675,10 @@ export class TextEditorTool extends defineTool({
       );
       history.pop();
       const finalContent = appliedContent;
+
+      // Record file as "read" after undo so subsequent edits don't require
+      // an explicit read again.
+      recordToolFileRead(filePath);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {
