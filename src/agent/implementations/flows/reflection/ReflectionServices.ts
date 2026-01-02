@@ -13,9 +13,11 @@
 import type { IOutputHandler } from '@agent/output';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import type { AgentLogStage, AgentLogger } from '@logger/AgentLogger';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type {
+  BaseFlowContextInit,
+  FlowServiceAccessors,
+} from '../common/BaseFlowServices';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
 import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
@@ -31,14 +33,9 @@ import type { LatexMediaManager } from '@latex';
  * - runStage: Parent logging stage for round stages (runtime-only)
  * - Configuration-driven behavior delegates
  */
-export interface ReflectionServices<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
-  /** Logger for debugging and progress */
-  readonly logger: AgentLogger;
-
-  /** Execution context (IDs, storage key, etc.) */
-  readonly context: AgentExecutionContext;
+export interface ReflectionServices<C = unknown>
+  extends BaseFlowContextInit<C>,
+    FlowServiceAccessors {
   /** Narrow setting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
   /** Output handler for file processing and artifacts */
