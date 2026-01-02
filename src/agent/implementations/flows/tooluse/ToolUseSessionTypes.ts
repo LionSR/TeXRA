@@ -14,11 +14,11 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
+import { ToolUseStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Type imports
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { ToolUseStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -38,7 +38,7 @@ export const ToolUseSessionSnapshotSchema = z.object({
   streamId: z.string(),
   agentConfig: AgentConfigSchema,
   messages: z.array(ProviderMessageSchema),
-  store: AgentSharedStoreSnapshotSchema,
+  store: ToolUseStoreSnapshotSchema,
   lastUpdated: z.number(),
 });
 
@@ -50,10 +50,10 @@ export type ToolUseSessionSnapshot = z.infer<
 /**
  * Input payload for saving a tool-use session snapshot.
  *
- * NOTE: This is a manual interface (not schema-derived) because `store` is an
- * AgentSharedStore class instance with methods (e.g., toSnapshot()), not a plain
+ * NOTE: This is a manual interface (not schema-derived) because `store` is a
+ * ToolUseStore class instance with methods (e.g., toSnapshot()), not a plain
  * data structure. Zod schemas cannot validate class instances with private fields.
- * The store is serialized to AgentSharedStoreSnapshot during the save operation.
+ * The store is serialized to ToolUseStoreSnapshot during the save operation.
  *
  * @see ToolUseSessionSnapshotSchema - SSOT for the serialized snapshot format
  */
@@ -62,5 +62,5 @@ export interface SaveToolUseSnapshotPayload {
   streamId: StreamTabId;
   agentConfig: AgentConfig;
   messages: ProviderMessage[];
-  store: AgentSharedStore;
+  store: ToolUseStore;
 }

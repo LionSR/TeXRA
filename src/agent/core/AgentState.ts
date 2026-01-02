@@ -114,12 +114,10 @@ export class ConversationRoundState {
 
 /** Default values for AgentRunState */
 const RUN_STATE_DEFAULTS = {
-  totalRounds: 0,
   totalResponseTimeMs: 0,
 } as const;
 
 export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative().prefault(RUN_STATE_DEFAULTS.totalRounds),
   totalResponseTimeMs: z
     .number()
     .nonnegative()
@@ -140,12 +138,10 @@ export type AgentRunStateSnapshot = z.output<
 >;
 
 export class AgentRunState {
-  public totalRounds: number;
   public totalResponseTimeMs: number;
   public readonly usageAccumulator: RunUsageAccumulator;
 
   constructor(accumulator?: RunUsageAccumulator) {
-    this.totalRounds = RUN_STATE_DEFAULTS.totalRounds;
     this.totalResponseTimeMs = RUN_STATE_DEFAULTS.totalResponseTimeMs;
     this.usageAccumulator = accumulator ?? new RunUsageAccumulator();
   }
@@ -157,7 +153,6 @@ export class AgentRunState {
       parsed.usageAccumulator,
     );
     const state = new AgentRunState(usageAccumulator);
-    state.totalRounds = parsed.totalRounds;
     state.totalResponseTimeMs = parsed.totalResponseTimeMs;
     return state;
   }
@@ -165,14 +160,17 @@ export class AgentRunState {
   /** Serialize to a snapshot. */
   toSnapshot(): AgentRunStateSnapshot {
     return {
-      totalRounds: this.totalRounds,
       totalResponseTimeMs: this.totalResponseTimeMs,
       usageAccumulator: this.usageAccumulator.toSnapshot(),
     };
   }
 
-  incrementRounds(): void {
-    this.totalRounds += 1;
+  /**
+   * Get the number of completed cycles.
+   * Derived from usageAccumulator which is the single source of truth.
+   */
+  getCompletedCycles(): number {
+    return this.usageAccumulator.getCompletedCycles();
   }
 
   addResponseTime(durationMs: number): void {

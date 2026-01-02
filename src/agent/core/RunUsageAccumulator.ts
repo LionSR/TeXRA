@@ -139,4 +139,12 @@ export class RunUsageAccumulator {
   getNormalizedSnapshots(): readonly NormalizedUsageSnapshot[] {
     return this.normalizedSnapshots;
   }
+
+  /**
+   * Get the number of completed cycles.
+   * This is derived from the number of recorded usage snapshots.
+   */
+  getCompletedCycles(): number {
+    return this.normalizedSnapshots.length;
+  }
 }

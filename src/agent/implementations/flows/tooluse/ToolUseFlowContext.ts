@@ -13,14 +13,14 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { ToolUseStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import { createSharedStore } from '@agent/core/AgentSharedStore';
+import { createToolUseStore } from '@agent/core/AgentSharedStore';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
@@ -135,7 +135,7 @@ async function prepareInitialState<C>(
 
     const messages = snapshot.messages;
     // Store is a pure data holder; onRoundFinalized is passed to flow services separately
-    const store = createSharedStore({ snapshot: snapshot.store });
+    const store = createToolUseStore({ snapshot: snapshot.store });
 
     sessionLifecycle.setStore(store);
 
@@ -161,8 +161,8 @@ async function prepareInitialState<C>(
   );
 
   // Store is a pure data holder; onRoundFinalized is passed to flow services separately
-  const store = createSharedStore({
-    roundIndex: currentRunState.totalRounds,
+  // ToolUseStore doesn't include round since tool-use tracks metrics in flow state
+  const store = createToolUseStore({
     runState: currentRunState,
     workspaceState: AgentWorkspaceState.create(),
     userChannels: userVarChannels,
@@ -185,7 +185,7 @@ function createCycleOptions<C>(
   init: ToolUseFlowContextInit<C>,
   toolRegistry: IToolRegistry,
   resolvedTools: ToolDefinition[],
-  store: AgentSharedStore,
+  store: ToolUseStore,
 ): ToolUseCycleOptions<C> {
   // Use pre-resolved tools (computed at construction time)
   const resolvedSetting = {

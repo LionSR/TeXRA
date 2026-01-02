@@ -11,7 +11,7 @@
  */
 
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { ToolUseStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
@@ -29,7 +29,7 @@ import type { IToolUseSession } from './ToolUseSessionLifecycle';
  */
 export interface PrepareStateResult {
   messages: ProviderMessage[];
-  store: AgentSharedStore;
+  store: ToolUseStore;
   shouldSkipCycle: boolean;
   runState: AgentRunState;
 }
@@ -75,7 +75,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
    * Build cycle options for tool-use execution.
    */
   readonly buildCycleOptions: (
-    store: AgentSharedStore,
+    store: ToolUseStore,
   ) => ToolUseCycleOptions<C>;
 
   /**

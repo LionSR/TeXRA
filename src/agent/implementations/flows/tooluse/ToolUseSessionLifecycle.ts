@@ -4,7 +4,7 @@
  * Provides follow-up queue management and stream status updates.
  */
 
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { ToolUseStore } from '@agent/core/AgentSharedStore';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
@@ -44,17 +44,17 @@ export interface IToolUseSession {
  */
 export class ToolUseSessionLifecycle implements IToolUseSession {
   private readonly followUps: FollowUpQueue;
-  private store: AgentSharedStore | null = null;
+  private store: ToolUseStore | null = null;
 
   constructor(private readonly streamTabId: StreamTabId) {
     this.followUps = ToolUseFollowUpQueue.acquire(streamTabId);
   }
 
-  setStore(store: AgentSharedStore | null): void {
+  setStore(store: ToolUseStore | null): void {
     this.store = store;
   }
 
-  getStore(): AgentSharedStore | null {
+  getStore(): ToolUseStore | null {
     return this.store;
   }
 

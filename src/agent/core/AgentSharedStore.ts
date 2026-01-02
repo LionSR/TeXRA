@@ -24,6 +24,124 @@ export interface AgentSharedStoreSlices {
   user: UserVariableChannels;
 }
 
+// ============================================================================
+// ToolUseStore - Simplified store for tool-use agents (no round tracking)
+// ============================================================================
+
+/**
+ * Store slices for tool-use agents.
+ * Unlike AgentSharedStoreSlices, this doesn't include round since tool-use
+ * agents track cycle metrics directly in flow state, not via round objects.
+ */
+export interface ToolUseStoreSlices {
+  run: AgentRunState;
+  workspace: AgentWorkspaceState;
+  user: UserVariableChannels;
+}
+
+/**
+ * Snapshot schema for ToolUseStore.
+ * Uses z.object() for backward compatibility with legacy snapshots.
+ */
+export const ToolUseStoreSnapshotSchema = z.object({
+  run: AgentRunStateSnapshotSchema,
+  workspace: AgentWorkspaceStateSnapshotSchema,
+  user: UserVariableChannelsSchema,
+});
+
+/**
+ * Output type for ToolUseStore serialization.
+ */
+export type ToolUseStoreSnapshot = z.output<typeof ToolUseStoreSnapshotSchema>;
+
+/**
+ * Simplified store for tool-use agents.
+ *
+ * Unlike AgentSharedStore, this doesn't include a round object since tool-use
+ * agents track cycle metrics (cycleIndex, cycleResponseTimeMs, etc.) directly
+ * in ToolUseCycleState, not via ConversationRoundState.
+ */
+export class ToolUseStore {
+  private readonly runState: AgentRunState;
+  private readonly workspaceState: AgentWorkspaceState;
+  private readonly userChannels: UserVariableChannels;
+
+  constructor(config: ToolUseStoreSlices) {
+    this.runState = config.run;
+    this.workspaceState = config.workspace;
+    this.userChannels = config.user;
+  }
+
+  /** Deserialize from a snapshot. Validates and applies schema defaults. */
+  static fromSnapshot(snapshot: unknown): ToolUseStore {
+    const parsed = ToolUseStoreSnapshotSchema.parse(snapshot);
+    return new ToolUseStore({
+      run: AgentRunState.fromSnapshot(parsed.run),
+      workspace: AgentWorkspaceState.fromSnapshot(parsed.workspace),
+      user: {
+        input: Object.freeze({ ...parsed.user.input }),
+        transient: { ...parsed.user.transient },
+      },
+    });
+  }
+
+  /** Serialize to a snapshot. */
+  toSnapshot(): ToolUseStoreSnapshot {
+    return {
+      run: this.runState.toSnapshot(),
+      workspace: this.workspaceState.toSnapshot(),
+      user: {
+        input: { ...this.userChannels.input },
+        transient: { ...this.userChannels.transient },
+      },
+    };
+  }
+
+  get run(): AgentRunState {
+    return this.runState;
+  }
+
+  get workspace(): AgentWorkspaceState {
+    return this.workspaceState;
+  }
+
+  get user(): UserVariableChannels {
+    return this.userChannels;
+  }
+}
+
+/**
+ * Factory params for creating a new ToolUseStore.
+ */
+interface ToolUseStoreFactoryParams {
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
+}
+
+/**
+ * Factory args - either create from params or restore from snapshot.
+ */
+type ToolUseStoreFactoryArgs =
+  | (ToolUseStoreFactoryParams & { snapshot?: undefined })
+  | { snapshot: ToolUseStoreSnapshot };
+
+/**
+ * Create a ToolUseStore from params or snapshot.
+ */
+export function createToolUseStore(args: ToolUseStoreFactoryArgs): ToolUseStore {
+  if ('snapshot' in args && args.snapshot) {
+    return ToolUseStore.fromSnapshot(args.snapshot);
+  }
+
+  const params = args as ToolUseStoreFactoryParams;
+  return new ToolUseStore({
+    run: params.runState,
+    workspace: params.workspaceState,
+    user: params.userChannels,
+  });
+}
+
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible
  * with legacy store snapshots that may contain removed or renamed fields.

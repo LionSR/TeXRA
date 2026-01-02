@@ -606,6 +606,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Finalize cycle using direct values (no round object needed)
+    // Note: Recording to usageAccumulator automatically tracks completed cycles
     await finalizeToolUseCycle({
       cycleIndex: state.cycleIndex,
       responseTimeMs: state.cycleResponseTimeMs,
@@ -613,7 +614,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       run,
       onRoundFinalized,
     });
-    run.incrementRounds();
 
     if (execRes.endTurn) {
       // Apply side effects for end turn

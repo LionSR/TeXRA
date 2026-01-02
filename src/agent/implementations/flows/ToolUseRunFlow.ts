@@ -18,9 +18,9 @@
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
-  AgentSharedStore,
-  createSharedStore,
-  type AgentSharedStoreSnapshot,
+  ToolUseStore,
+  createToolUseStore,
+  type ToolUseStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
 import {
   createToolUseCycleFlow,
@@ -67,8 +67,8 @@ import type { ToolUseServices, ToolUseFlowParams } from './tooluse';
 export interface ToolUseRunState {
   conversation: ProviderMessage[];
   shouldSkipCycle: boolean;
-  /** Store snapshot (natively serializable) - reconstruct via createSharedStore() */
-  storeSnapshot: AgentSharedStoreSnapshot | null;
+  /** Store snapshot (natively serializable) - reconstruct via createToolUseStore() */
+  storeSnapshot: ToolUseStoreSnapshot | null;
 }
 
 /**
@@ -111,7 +111,7 @@ export interface ToolUseRunShared {
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  store: AgentSharedStore;
+  store: ToolUseStore;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -142,7 +142,7 @@ interface CycleNodePrepResult<C> {
   shouldSkip: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
   conversation: ProviderMessage[];
-  store: AgentSharedStore;
+  store: ToolUseStore;
 }
 
 /**
@@ -161,7 +161,7 @@ interface WaitNodePrepResult {
 
 /** Prepared state type with non-null storeSnapshot. */
 type PreparedState = ToolUseRunState & {
-  storeSnapshot: AgentSharedStoreSnapshot;
+  storeSnapshot: ToolUseStoreSnapshot;
 };
 
 /**
@@ -271,7 +271,7 @@ class ToolUseCycleNode<C> extends Node<
     assertPreparedState(shared.state);
 
     // Reconstruct store from snapshot (koala-code-reader pattern)
-    const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
+    const store = createToolUseStore({ snapshot: shared.state.storeSnapshot });
 
     // Rebuild cycleOptions from services (NOT stored in state - non-serializable)
     const cycleOptions = this.services.buildCycleOptions(store);
@@ -292,7 +292,7 @@ class ToolUseCycleNode<C> extends Node<
 
     // Create cycle shared state (like ResponseCycleNode)
     // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
-    // cycleIndex starts from run.totalRounds to maintain continuity across user follow-ups
+    // cycleIndex starts from run.getCompletedCycles() to maintain continuity across user follow-ups
     const cycleShared: ToolUseCycleShared = {
       state: {
         messages: prepRes.conversation,
@@ -302,7 +302,7 @@ class ToolUseCycleNode<C> extends Node<
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
-        cycleIndex: prepRes.store.run.totalRounds,
+        cycleIndex: prepRes.store.run.getCompletedCycles(),
         cycleResponseTimeMs: 0,
         cycleNormalizedUsage: undefined,
         endTurn: false,
