@@ -38,68 +38,6 @@ export interface StepResult<S> {
   shared: S;
 }
 
-// ============================================================================
-// Serialization Hooks
-// ============================================================================
-
-/**
- * Serialized state type - must be structuredClone-safe (plain JSON).
- */
-export type SerializedState = Record<string, unknown>;
-
-/**
- * Hooks for custom serialization/deserialization of shared state.
- *
- * Use when shared state contains class instances that can't survive structuredClone:
- * - AgentWorkspaceState → workspaceSnapshot
- * - AgentRunState → runStateSnapshot
- * - ConversationRoundState → roundStateSnapshot
- *
- * @example
- * ```typescript
- * const serialization: SerializationHooks<MyState> = {
- *   serialize: (shared) => ({
- *     ...shared,
- *     workspace: shared.workspace.toSnapshot(),
- *   }),
- *   deserialize: (data) => ({
- *     ...data,
- *     workspace: AgentWorkspaceState.fromSnapshot(data.workspace),
- *   }),
- * };
- * ```
- */
-export interface SerializationHooks<S> {
-  /**
-   * Convert shared state to a structuredClone-safe format for storage.
-   * Called before writing to KV store.
-   *
-   * @param shared - The live shared state (may contain class instances)
-   * @returns Plain JSON object safe for structuredClone
-   */
-  serialize: (shared: S) => SerializedState;
-
-  /**
-   * Reconstruct shared state from serialized format after reading from storage.
-   * Called after reading from KV store.
-   *
-   * @param data - Plain JSON object from storage
-   * @returns Reconstructed shared state (with class instances restored)
-   */
-  deserialize: (data: SerializedState) => S;
-}
-
-/**
- * Configuration for PersistedFlow.
- */
-export interface PersistedFlowConfig<S> {
-  /**
-   * Custom serialization hooks for shared state.
-   * If not provided, uses structuredClone (requires plain JSON state).
-   */
-  serialization?: SerializationHooks<S>;
-}
-
 /**
  * A Flow that persists its execution state to a KVStore after each node.
  *
@@ -124,7 +62,6 @@ export class PersistedFlow<
 > extends Flow<S, P, Svc> {
   protected readonly runId: string;
   protected readonly kv: FlowStore;
-  protected readonly serialization?: SerializationHooks<S>;
 
   /**
    * Create a new PersistedFlow.
@@ -132,40 +69,19 @@ export class PersistedFlow<
    * @param start - The starting node of the flow graph
    * @param kv - Storage backend (ExecutionKVStore)
    * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
-   * @param config - Optional configuration including serialization hooks.
    */
-  constructor(
-    start: BaseNode<any, any>,
-    kv: FlowStore,
-    runId?: string,
-    config?: PersistedFlowConfig<S>,
-  ) {
+  constructor(start: BaseNode<any, any>, kv: FlowStore, runId?: string) {
     super(start);
     this.kv = kv;
-    this.serialization = config?.serialization;
     this.runId = runId ?? kv.getExecutionId();
   }
 
   /**
-   * Serialize shared state for storage.
-   * Uses custom hooks if provided, otherwise structuredClone.
+   * Serialize shared state for storage using structuredClone.
+   * Shared state must be plain JSON (no class instances).
    */
-  protected serializeShared(shared: S): SerializedState {
-    if (this.serialization) {
-      return this.serialization.serialize(shared);
-    }
+  protected serializeShared(shared: S): Record<string, unknown> {
     return structuredClone(shared);
-  }
-
-  /**
-   * Deserialize shared state from storage.
-   * Uses custom hooks if provided, otherwise returns as-is (already cloned by storage).
-   */
-  protected deserializeShared(data: SerializedState): S {
-    if (this.serialization) {
-      return this.serialization.deserialize(data);
-    }
-    return data as S;
   }
 
   async run(shared: S): Promise<Action | undefined> {
@@ -214,12 +130,12 @@ export class PersistedFlow<
       return {
         hasMore: false,
         action: flow.nodes.at(-1)?.action,
-        shared: this.deserializeShared(flow.shared),
+        shared: flow.shared as S,
       };
     }
 
     const params = flow.params as P;
-    const shared = this.deserializeShared(flow.shared);
+    const shared = flow.shared as S;
 
     if (!shared) {
       throw new Error('Missing shared state in flow record');
@@ -275,7 +191,7 @@ export class PersistedFlow<
 
   async getShared(): Promise<S | undefined> {
     const flow = await this.kv.read<FlowRecord>(`flow:${this.runId}`);
-    return flow?.shared ? this.deserializeShared(flow.shared) : undefined;
+    return (flow?.shared as S) ?? undefined;
   }
 
   async setShared(newShared: S): Promise<void> {
