@@ -80,8 +80,22 @@ export type RoundContext = z.infer<typeof RoundContextSchema>;
  * Optional cycle fields for native nesting.
  *
  * These are derived from CycleFieldsSchema but made optional since they're
- * only populated when running a cycle. Fields already in the base schema
- * (endTurn, outputLocation) are omitted to avoid conflicts.
+ * only populated when running a cycle.
+ *
+ * ## Why certain fields are omitted
+ *
+ * `endTurn` and `outputLocation` are omitted because they have different
+ * semantics at the reflection flow level vs the cycle level:
+ *
+ * - **endTurn**: At reflection level, tracks whether the agent's turn ended.
+ *   At cycle level, tracks whether a single model call ended normally.
+ *   Both use boolean, but reflection flow needs it as a required non-optional field.
+ *
+ * - **outputLocation**: At reflection level, nullable (null before round starts).
+ *   At cycle level, must be set before cycle runs (enforced by assertCycleFieldsPopulated).
+ *   Keeping the base schema's nullable version avoids type conflicts.
+ *
+ * The base schema defines these directly; the merge adds the remaining cycle fields.
  */
 const OptionalCycleFieldsSchema = CycleFieldsSchema.partial().omit({
   endTurn: true,
