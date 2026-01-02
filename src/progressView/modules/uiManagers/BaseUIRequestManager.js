@@ -114,12 +114,12 @@ export class BaseUIRequestManager {
   }
 
   /**
-   * Clean up all resources.
+   * Dispose all resources.
    */
-  cleanup() {
+  dispose() {
     if (this.container) {
       this.container.removeEventListener('click', this._handleAction, true);
-      this._cleanupAdditionalListeners();
+      this._disposeAdditionalListeners();
     }
     this.requests.clear();
     this.container = null;
@@ -129,10 +129,10 @@ export class BaseUIRequestManager {
   }
 
   /**
-   * Override to clean up additional event listeners.
+   * Override to dispose additional event listeners.
    * @protected
    */
-  _cleanupAdditionalListeners() {
+  _disposeAdditionalListeners() {
     // Subclasses can override
   }
 

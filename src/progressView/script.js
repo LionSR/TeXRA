@@ -13,7 +13,7 @@ progressViewState.load();
 messageHandler.setup();
 
 window.addEventListener('beforeunload', () => {
-  messageHandler.cleanup();
+  messageHandler.dispose();
 });
 
 // Initialize event listeners and state when DOM is loaded
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
-  progressViewDomHandler.events.setupEventListeners();
+  progressViewDomHandler.events.setup();
   progressViewDomHandler.followUpInput.setup();
   progressViewDomHandler.approvalRequests.setup();
   progressViewDomHandler.retryRequests.setup();
