@@ -46,8 +46,15 @@ export type AgentSharedStoreSnapshot = z.output<
 /**
  * Central store wiring agent run, round, workspace, and user-variable slices together.
  *
- * This is a pure data holder for snapshot serialization. Round finalization logic
- * lives in CycleServices.finalizeRound() as the single source of truth.
+ * @deprecated This class is no longer instantiated in production code.
+ * The tool-use flow now passes state slices directly without this wrapper.
+ * Only the AgentSharedStoreSnapshotSchema is used for backwards-compatible
+ * snapshot parsing when resuming old sessions.
+ *
+ * For new code, use individual state slices:
+ * - AgentRunState.fromSnapshot() / .toSnapshot()
+ * - AgentWorkspaceState.fromSnapshot() / .toSnapshot()
+ * - UserVariableChannels passed directly
  */
 export class AgentSharedStore {
   private roundState: ConversationRoundState;
