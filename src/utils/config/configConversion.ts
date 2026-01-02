@@ -1,12 +1,7 @@
-// (none needed)
-
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import {
-  AgentCategory,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
 import { type TaskState } from '@logger/TaskState';
@@ -34,7 +29,8 @@ function createActiveFilesFromArrays(
 }
 
 /**
- * Converts an AgentConfig object to a TaskState object
+ * Converts an AgentConfig object to a TaskState object.
+ * Session metadata comes from config.session (single source of truth).
  *
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
@@ -45,32 +41,15 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
-  const sanitizedConfig: AgentConfig = { ...config };
-
   if (session.agentCategory === AgentCategory.ToolUse) {
-    const toolUseSession: AgentSessionDescriptor & {
-      agentCategory: AgentCategory.ToolUse;
-    } = {
-      ...session,
-      agentCategory: AgentCategory.ToolUse,
-    };
     return {
-      agentConfig: sanitizedConfig,
-      session: toolUseSession,
+      agentConfig: config as TaskState['agentConfig'],
       toolSessionState: {},
     };
   }
 
-  const workflowSession: AgentSessionDescriptor & {
-    agentCategory: AgentCategory.Workflow;
-  } = {
-    ...session,
-    agentCategory: AgentCategory.Workflow,
-  };
-
   return {
-    agentConfig: sanitizedConfig,
-    session: workflowSession,
+    agentConfig: config as TaskState['agentConfig'],
     activeFiles: createActiveFilesFromArrays(config),
   };
 }
