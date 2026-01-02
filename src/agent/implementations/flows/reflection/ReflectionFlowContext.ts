@@ -29,7 +29,6 @@ import { PromptBuilder } from '@utils/prompt';
 import { TaskRunFileService } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 import { createBaseFileLocations } from './helpers';
-import { buildBaseFlowServices } from '../common';
 import type {
   ReflectionServices,
   ReflectionServicesPartial,
@@ -258,13 +257,15 @@ export function buildReflectionServices<C = unknown>(
     init.getOutputFileLocation ??
     createOutputFileLocationGetter(config, setting, modelHandler, fileService);
 
-  // Build base services
-  const baseServices = buildBaseFlowServices(init);
-
   // Return partial services (missing runStage - added by runReflectionFlow)
   // Round stages (r0, r1...) are managed by RoundPersistedFlow, not by services
   return {
-    ...baseServices,
+    // Spread base init fields
+    ...init,
+    // Add convenience accessors
+    logger: executionContext.logger,
+    context: executionContext,
+    // Override with narrowed setting type
     setting,
     outputHandler,
     latexMediaManager,

@@ -236,7 +236,7 @@ Aim for code that looks like it was designed correctly from the start:
 Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 
 - **Flow types**: `ReflectionFlow` for multi-round reflection agents, `ToolUseRunFlow` for tool-use agents
-- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowServices`.
+- **Services** are immutable dependencies injected via `flow.setServices()`. Nodes access them via `this.services`. Define service interfaces in flow-specific files (e.g., `ReflectionServices`, `ToolUseServices`) extending `BaseFlowContextInit` with convenience accessors (`logger`, `context`) defined inline.
 - **Shared store** contains only mutable state (memories). Nodes read/write via `prep()` and `post()` methods.
 - **Flow transitions** - use named constants instead of magic values:
   - `FlowTransition.DEFAULT` - follow next() successor

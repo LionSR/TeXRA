@@ -81,30 +81,6 @@ export interface BaseFlowContextInit<C = unknown> {
   onInterrupt?: () => void;
 }
 
-// ============================================================================
-// Service Interfaces
-// ============================================================================
-
-/**
- * Convenience accessors added to services.
- *
- * These are convenience aliases that simplify access patterns:
- * - logger: Direct access to executionContext.logger
- * - context: Alias for executionContext (used by cycle options)
- *
- * Child service interfaces (ReflectionServices, ToolUseServices) extend
- * BaseFlowContextInit and include these accessors directly.
- *
- * @deprecated Use BaseFlowContextInit directly. Child services now define
- * logger and context fields inline. This type is kept for backward compatibility.
- */
-export type BaseFlowServices<C = unknown> = BaseFlowContextInit<C> & {
-  /** Logger for debugging and progress (convenience accessor) */
-  readonly logger: AgentLogger;
-  /** Alias for executionContext (used by AgentCycleOptions) */
-  readonly context: AgentExecutionContext;
-};
-
 /**
  * Base flow params type.
  *
@@ -117,22 +93,19 @@ export interface FlowParams {
 }
 
 // ============================================================================
-// Service Factory
+// Convenience Accessors
 // ============================================================================
 
 /**
- * Build base flow services from initialization config.
+ * Convenience accessors that child service interfaces define inline.
  *
- * Spreads init and adds convenience accessors (logger, context alias).
+ * ToolUseServices and ReflectionServices extend BaseFlowContextInit and add:
+ * - logger: Direct access to executionContext.logger
+ * - context: Alias for executionContext (used by cycle options)
  */
-export function buildBaseFlowServices<C>(
-  init: BaseFlowContextInit<C>,
-): BaseFlowServices<C> {
-  return {
-    ...init,
-    logger: init.executionContext.logger,
-    context: init.executionContext,
-  };
+export interface FlowServiceAccessors {
+  readonly logger: AgentLogger;
+  readonly context: AgentExecutionContext;
 }
 
 // ============================================================================
@@ -140,7 +113,7 @@ export function buildBaseFlowServices<C>(
 // ============================================================================
 
 /**
- * Build AgentCycleBaseOptions from BaseFlowServices or BaseFlowContextInit.
+ * Build AgentCycleBaseOptions from flow services or initialization config.
  *
  * Eliminates manual field copying by mapping service fields to cycle option fields:
  * - setting -> agentSetting
@@ -149,23 +122,23 @@ export function buildBaseFlowServices<C>(
  * - executionContext -> context (via services.context if available)
  * - getClient() -> client
  *
- * This helper enables inheritance-based option building instead of manual field copying.
+ * Accepts either:
+ * - BaseFlowContextInit (raw config, uses executionContext.logger)
+ * - Services with FlowServiceAccessors (uses .logger and .context directly)
  *
  * @param services - Flow services or initialization config
  * @returns Base cycle options ready for extension
  */
 export function buildBaseCycleOptions<C>(
-  services: BaseFlowServices<C> | BaseFlowContextInit<C>,
+  services: BaseFlowContextInit<C> & Partial<FlowServiceAccessors>,
 ): AgentCycleBaseOptions<C> {
   return {
     modelHandler: services.modelHandler,
     agentSetting: services.setting,
     agentPrompt: services.prompt,
     userVars: services.userVarChannels.transient,
-    logger:
-      'logger' in services ? services.logger : services.executionContext.logger,
-    context:
-      'context' in services ? services.context : services.executionContext,
+    logger: services.logger ?? services.executionContext.logger,
+    context: services.context ?? services.executionContext,
     client: services.getClient(),
     checkInterruption: services.checkInterruption,
     setAbortController: services.setAbortController,
