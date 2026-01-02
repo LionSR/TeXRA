@@ -336,12 +336,29 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   async getClient(): Promise<GoogleGenAI> {
+    // When using server-side relay keys, always create a fresh client to ensure
+    // auth tokens are refreshed (tokens expire and need refresh every 30 mins).
+    // Personal API keys don't expire, so caching is safe for those.
+    if (this.shouldUseServerSideKeys()) {
+      const credential = await this.getApiKey();
+      const baseUrl = this.getBaseUrl();
+      this.logger.debug(
+        `Using Google GenAI Native SDK with relay auth. Base URL: ${baseUrl}`,
+      );
+      return new GoogleGenAI({
+        apiKey: credential,
+        httpOptions: {
+          baseUrl: baseUrl ?? undefined,
+        },
+      });
+    }
+
+    // For personal API keys, cache the client
     if (!this.googleClient) {
       const credential = await this.getApiKey();
       const baseUrl = this.getBaseUrl();
       this.logger.debug(`Using Google GenAI Native SDK. Base URL: ${baseUrl}`);
 
-      // For relay auth: credential is the user's JWT, SDK sends it via x-goog-api-key header
       this.googleClient = new GoogleGenAI({
         apiKey: credential,
         httpOptions: {

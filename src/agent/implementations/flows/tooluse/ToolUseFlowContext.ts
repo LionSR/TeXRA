@@ -141,15 +141,16 @@ export async function prepareInitialState<C>(
 }
 
 /** Build cycle options for tool-use execution. */
-export function buildCycleOptions<C>(
+export async function buildCycleOptions<C>(
   services: ToolUseServices<C>,
   store: AgentSharedStore,
-): ToolUseCycleOptions<C> {
+): Promise<ToolUseCycleOptions<C>> {
   const { setting, toolRegistry, resolvedTools, config } = services;
   const resolvedSetting = { ...setting, tools: resolvedTools };
 
+  // Await to get fresh client with refreshed auth tokens for each response round
   return {
-    ...buildBaseCycleOptions(services),
+    ...(await buildBaseCycleOptions(services)),
     agentSetting: resolvedSetting,
     toolRegistry,
     modelName: config.model,

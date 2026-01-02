@@ -219,7 +219,7 @@ class ToolUsePrepareNode<C> extends Node<
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
     // Call helper functions directly (no closure wrappers)
     const prepared = await prepareInitialState(this.services);
-    const cycleOptions = buildCycleOptions(this.services, prepared.store);
+    const cycleOptions = await buildCycleOptions(this.services, prepared.store);
     return {
       kind: 'success',
       result: {
@@ -284,7 +284,7 @@ class ToolUseCycleNode<C> extends Node<
     const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
 
     // Rebuild cycleOptions directly (no closure wrapper)
-    const cycleOptions = buildCycleOptions(this.services, store);
+    const cycleOptions = await buildCycleOptions(this.services, store);
 
     return {
       shouldSkip: shared.state.shouldSkipCycle,
