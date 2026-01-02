@@ -138,11 +138,8 @@ export interface CycleTransientFields {
  * This is what cycle nodes operate on. For native nesting, the outer
  * flow's shared type (e.g., ReflectionFlowShared) must be compatible
  * with this type.
- *
- * Index signature enables compatibility with flow shared types.
  */
-export type ResponseCycleShared = CycleFields &
-  CycleTransientFields & { [key: string]: unknown };
+export type ResponseCycleShared = CycleFields & CycleTransientFields;
 
 /**
  * Assert that a shared object has all required cycle fields populated.
@@ -152,9 +149,9 @@ export type ResponseCycleShared = CycleFields &
  *
  * @throws Error if required cycle fields are missing
  */
-export function assertCycleFieldsPopulated(shared: {
-  [key: string]: unknown;
-}): asserts shared is ResponseCycleShared {
+export function assertCycleFieldsPopulated<T extends object>(
+  shared: T,
+): asserts shared is T & ResponseCycleShared {
   // Required fields that must be defined (not undefined)
   const requiredDefined = [
     'messages',
@@ -162,8 +159,9 @@ export function assertCycleFieldsPopulated(shared: {
     'endTurn',
     'outputExists',
   ] as const;
+  const obj = shared as Record<string, unknown>;
   for (const field of requiredDefined) {
-    if (shared[field] === undefined) {
+    if (obj[field] === undefined) {
       throw new Error(
         `Cycle field '${field}' must be populated before running cycle flow`,
       );
