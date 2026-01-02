@@ -474,9 +474,6 @@ export async function executeAgent(
       async () => {
         logger.info(`Executing ${agentName} with model ${config.model}`);
 
-        // Initialize client for all flow types
-        const client = await ctx.modelHandler.getClient();
-
         // Create interrupt manager (replaces mutable interruptState object)
         const interruptManager = new InterruptManager();
 
@@ -495,7 +492,8 @@ export async function executeAgent(
               streamTabId: ctx.streamTabId,
               checkInterruption: interruptManager.checkInterruption,
               setAbortController: interruptManager.setAbortController,
-              getClient: () => client,
+              // Get fresh client each response round to ensure auth keys are refreshed
+              getClient: () => ctx.modelHandler.getClient(),
               getUsageRecorder: createUsageRecorder(
                 ctx.usageMonitor,
                 'tool-use',
@@ -524,7 +522,8 @@ export async function executeAgent(
               userVarChannels: ctx.userVarChannels,
               checkInterruption: interruptManager.checkInterruption,
               setAbortController: interruptManager.setAbortController,
-              getClient: () => client,
+              // Get fresh client each response round to ensure auth keys are refreshed
+              getClient: () => ctx.modelHandler.getClient(),
               getUsageRecorder: createUsageRecorder(
                 ctx.usageMonitor,
                 'workflow',
@@ -605,9 +604,6 @@ export async function executeMergeAgent(
     await logger.withScope(`Task: merge@${model}`, async () => {
       logger.info(`Executing merge with model ${model}`);
 
-      // Initialize client
-      const client = await ctx.modelHandler.getClient();
-
       // Create interrupt manager
       const interruptManager = new InterruptManager();
 
@@ -632,7 +628,8 @@ export async function executeMergeAgent(
           userVarChannels: ctx.userVarChannels,
           checkInterruption: interruptManager.checkInterruption,
           setAbortController: interruptManager.setAbortController,
-          getClient: () => client,
+          // Get fresh client each response round to ensure auth keys are refreshed
+          getClient: () => ctx.modelHandler.getClient(),
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
           getOutputFileLocation,
           onInterrupt: interruptManager.onInterrupt,
@@ -702,12 +699,8 @@ export async function resumeToolUseFromSnapshot(
 
   // Create interrupt manager
   const interruptManager = new InterruptManager();
-  let client: any = null;
 
   try {
-    // Initialize client
-    client = await modelHandler.getClient();
-
     // Setup UI state for resume
     bus.emit('setActiveStream', {
       stream: streamTabId,
@@ -729,7 +722,8 @@ export async function resumeToolUseFromSnapshot(
         streamTabId,
         checkInterruption: interruptManager.checkInterruption,
         setAbortController: interruptManager.setAbortController,
-        getClient: () => client,
+        // Get fresh client each response round to ensure auth keys are refreshed
+        getClient: () => modelHandler.getClient(),
         getUsageRecorder: createUsageRecorder(usageMonitor, 'tool-use'),
         resumeSnapshot: snapshot,
         onInterrupt: interruptManager.onInterrupt,
