@@ -26,7 +26,9 @@ const CrossrefSearchInputSchema = z.strictObject({
   filter: z
     .union([
       z.string(),
-      z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+      // Use z.record(valueSchema) without key type to avoid generating propertyNames
+      // in JSON Schema, which OpenAI's function calling doesn't support
+      z.record(z.union([z.string(), z.array(z.string())])),
     ])
     .nullish(),
 });
