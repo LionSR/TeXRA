@@ -400,10 +400,8 @@ class ToolUseCycleNode<C> extends Node<
     try {
       await flow.run(cycleShared);
 
-      // Interpret cycle completion using shared helper (flat pattern)
-      const completion = interpretCycleCompletion(cycleShared, {
-        lastError: cycleShared.lastError,
-      });
+      // Interpret cycle completion using shared helper
+      const completion = interpretCycleCompletion(cycleShared);
 
       if (completion.failedWithError) {
         return {
