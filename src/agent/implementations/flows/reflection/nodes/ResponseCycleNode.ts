@@ -32,7 +32,7 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
-  type ResponseCycleShared,
+  assertCycleFieldsPopulated,
 } from '@agent/core/flows/ResponseCycleFlow';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import { finalizeRound } from '@agent/core/flows/CycleServices';
@@ -203,14 +203,15 @@ export class ResponseCycleNode<C = unknown> extends Node<
         workspace: prepRes.workspace,
         onRoundFinalized,
       });
-      // Cast shared to ResponseCycleShared - compatible due to flat structure
-      await flow.run(shared as unknown as ResponseCycleShared);
+
+      // Validate and narrow type - asserts all required cycle fields are populated
+      assertCycleFieldsPopulated(shared);
+      await flow.run(shared);
 
       // Interpret completion from shared (results are already there)
-      const completion = interpretCycleCompletion(
-        shared as unknown as ResponseCycleShared,
-        { lastError: shared.lastError },
-      );
+      const completion = interpretCycleCompletion(shared, {
+        lastError: shared.lastError,
+      });
 
       return {
         kind: 'success',
