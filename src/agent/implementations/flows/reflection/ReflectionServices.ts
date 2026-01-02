@@ -34,8 +34,7 @@ import type { LatexMediaManager } from '@latex';
  * - Configuration-driven behavior delegates
  */
 export interface ReflectionServices<C = unknown>
-  extends BaseFlowContextInit<C>,
-    FlowServiceAccessors {
+  extends BaseFlowContextInit<C>, FlowServiceAccessors {
   /** Narrow setting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
   /** Output handler for file processing and artifacts */

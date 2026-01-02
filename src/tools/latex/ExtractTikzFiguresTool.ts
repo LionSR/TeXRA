@@ -44,7 +44,7 @@ export class ExtractTikzFiguresTool extends defineTool({
       return {
         summary,
         output: formatToolOutput('TikZ figures', null),
-      });
+      };
     }
 
     const formattedEntries = tikzFigures.map(([label, pictures]) => {
@@ -109,6 +109,6 @@ export class ExtractTikzFiguresTool extends defineTool({
       summary: summaryParts.join(' '),
       output: outputs.join('\n'),
       files: attachments,
-    });
+    };
   }
 }

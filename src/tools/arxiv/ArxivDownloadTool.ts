@@ -75,6 +75,6 @@ export class ArxivDownloadTool extends defineTool({
     return {
       summary,
       output,
-    });
+    };
   }
 }
