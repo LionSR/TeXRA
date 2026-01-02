@@ -194,17 +194,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_USAGE]: this.handleUpdateUsage.bind(this),
       [COMMANDS.UPDATE_RUN_USAGE]: this.handleUpdateRunUsage.bind(this),
       [COMMANDS.UPDATE_FILES]: this.handleUpdateFiles.bind(this),
-      [COMMANDS.UPDATE_MISSING_OUTPUTS]: this.handleUpdateMissingOutputs.bind(this),
-      [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: this.handleShowToolEditApproval.bind(this),
-      [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: this.handleResolveToolEditApproval.bind(this),
-      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: this.handleUpdateToolEditApprovalState.bind(this),
+      [COMMANDS.UPDATE_MISSING_OUTPUTS]:
+        this.handleUpdateMissingOutputs.bind(this),
+      [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]:
+        this.handleShowToolEditApproval.bind(this),
+      [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]:
+        this.handleResolveToolEditApproval.bind(this),
+      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]:
+        this.handleUpdateToolEditApprovalState.bind(this),
       [COMMANDS.SHOW_RETRY_REQUEST]: this.handleShowRetryRequest.bind(this),
-      [COMMANDS.RESOLVE_RETRY_REQUEST]: this.handleResolveRetryRequest.bind(this),
+      [COMMANDS.RESOLVE_RETRY_REQUEST]:
+        this.handleResolveRetryRequest.bind(this),
       [COMMANDS.UPDATE_INSTRUCTION]: this.handleUpdateInstruction.bind(this),
       [COMMANDS.DELETE_STREAM]: this.handleDeleteStream.bind(this),
       [COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
-      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: this.handleFollowUpTextPolished.bind(this),
-      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: this.handleFollowUpTextTranscribed.bind(this),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]:
+        this.handleFollowUpTextPolished.bind(this),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]:
+        this.handleFollowUpTextTranscribed.bind(this),
       [COMMANDS.RECORDING_STARTED]: this.handleRecordingStarted.bind(this),
       [COMMANDS.RECORDING_STOPPED]: this.handleRecordingStopped.bind(this),
       [COMMANDS.RECORDING_ERROR]: this.handleRecordingError.bind(this),
