@@ -22,10 +22,14 @@
 import { Node, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
-  AgentSharedStore,
-  createSharedStore,
-  type AgentSharedStoreSnapshot,
-} from '@agent/core/AgentSharedStore';
+  AgentRunState,
+  type AgentRunStateSnapshot,
+} from '@agent/core/AgentState';
+import {
+  AgentWorkspaceState,
+  type AgentWorkspaceSnapshot,
+} from '@agent/core/AgentWorkspaceState';
+import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -62,14 +66,30 @@ import {
 // ============================================================================
 
 /**
+ * Snapshot of state slices for persistence.
+ *
+ * Stores individual snapshots instead of bundling in AgentSharedStoreSnapshot.
+ * This eliminates the AgentSharedStore wrapper overhead (convert→pass→convert pattern).
+ */
+interface StateSlicesSnapshot {
+  runStateSnapshot: AgentRunStateSnapshot;
+  workspaceSnapshot: AgentWorkspaceSnapshot;
+  userChannels: UserVariableChannels;
+}
+
+/**
  * Runtime state for tool-use agent runs.
  *
  * Following koala-code-reader pattern: stores **snapshots** (plain JSON objects)
  * instead of class instances. This ensures structuredClone() works correctly
  * when PersistedFlow serializes the state.
  *
- * - storeSnapshot: AgentSharedStoreSnapshot (not AgentSharedStore class)
- * - Nodes reconstruct class instances from snapshots when needed
+ * State slices are stored individually (no AgentSharedStore wrapper):
+ * - runStateSnapshot: Run-level statistics and usage
+ * - workspaceSnapshot: Workspace state (todos, interactions, etc.)
+ * - userChannels: User variable channels
+ *
+ * Nodes reconstruct class instances from snapshots when needed.
  *
  * IMPORTANT: cycleOptions is NOT stored here because it contains non-serializable
  * objects (modelHandler, client, logger, functions). It's rebuilt each cycle from services.
@@ -77,8 +97,8 @@ import {
 export interface ToolUseRunState {
   conversation: ProviderMessage[];
   shouldSkipCycle: boolean;
-  /** Store snapshot (natively serializable) - reconstruct via createSharedStore() */
-  storeSnapshot: AgentSharedStoreSnapshot | null;
+  /** State slices (natively serializable) - reconstruct via fromSnapshot() */
+  stateSlices: StateSlicesSnapshot | null;
 }
 
 /**
@@ -91,7 +111,7 @@ export function createInitialToolUseState(): ToolUseRunState {
   return {
     conversation: [],
     shouldSkipCycle: false,
-    storeSnapshot: null,
+    stateSlices: null,
   };
 }
 
@@ -116,12 +136,16 @@ export interface ToolUseRunShared {
 
 /**
  * Result of prepare execution.
- * Note: cycleOptions is only used within the same node (exec → post),
+ *
+ * Contains individual state slices directly (no AgentSharedStore wrapper).
+ * cycleOptions is only used within the same node (exec → post),
  * NOT persisted to state (non-serializable).
  */
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  store: AgentSharedStore;
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -147,12 +171,16 @@ type WaitExecResult =
 
 /**
  * Prep result for ToolUseCycleNode.
+ *
+ * Contains individual state slices directly (no AgentSharedStore wrapper).
  */
 interface CycleNodePrepResult<C> {
   shouldSkip: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
   conversation: ProviderMessage[];
-  store: AgentSharedStore;
+  runState: AgentRunState;
+  workspaceState: AgentWorkspaceState;
+  userChannels: UserVariableChannels;
 }
 
 /**
@@ -169,19 +197,19 @@ interface WaitNodePrepResult {
 // State Guards
 // ============================================================================
 
-/** Prepared state type with non-null storeSnapshot. */
+/** Prepared state type with non-null stateSlices. */
 type PreparedState = ToolUseRunState & {
-  storeSnapshot: AgentSharedStoreSnapshot;
+  stateSlices: StateSlicesSnapshot;
 };
 
 /**
- * Asserts that state has been prepared (storeSnapshot is non-null).
+ * Asserts that state has been prepared (stateSlices is non-null).
  * Called by CycleNode to ensure PrepareNode has run before entering cycle.
  */
 function assertPreparedState(
   state: ToolUseRunState,
 ): asserts state is PreparedState {
-  if (state.storeSnapshot === null) {
+  if (state.stateSlices === null) {
     throw new Error(
       'CycleNode invariant violated: PrepareNode must run before CycleNode.',
     );
@@ -218,8 +246,9 @@ class ToolUsePrepareNode<C> extends Node<
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
     // Call helper functions directly (no closure wrappers)
+    // prepareInitialState returns individual slices directly (no store wrapper)
     const prepared = await prepareInitialState(this.services);
-    const cycleOptions = await buildCycleOptions(this.services, prepared.store);
+    const cycleOptions = await buildCycleOptions(this.services);
     return {
       kind: 'success',
       result: {
@@ -248,12 +277,17 @@ class ToolUsePrepareNode<C> extends Node<
         : new Error(String(execRes.error));
     }
 
-    const { messages, store, shouldSkipCycle } = execRes.result;
+    const { messages, runState, workspaceState, userChannels, shouldSkipCycle } =
+      execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
-    // Store snapshot instead of class instance (for PersistedFlow serialization)
-    // cycleOptions is NOT stored - it's rebuilt from services in CycleNode
-    shared.state.storeSnapshot = store.toSnapshot();
+    // Store individual snapshots instead of bundled AgentSharedStoreSnapshot
+    // This eliminates the AgentSharedStore wrapper overhead
+    shared.state.stateSlices = {
+      runStateSnapshot: runState.toSnapshot(),
+      workspaceSnapshot: workspaceState.toSnapshot(),
+      userChannels,
+    };
 
     return FlowTransition.DEFAULT; // Follow next() → CycleNode
   }
@@ -280,17 +314,23 @@ class ToolUseCycleNode<C> extends Node<
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
-    // Reconstruct store from snapshot (koala-code-reader pattern)
-    const store = createSharedStore({ snapshot: shared.state.storeSnapshot });
+    // Reconstruct state slices directly from snapshots (no store wrapper)
+    const { stateSlices } = shared.state;
+    const runState = AgentRunState.fromSnapshot(stateSlices.runStateSnapshot);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
+      stateSlices.workspaceSnapshot,
+    );
 
-    // Rebuild cycleOptions directly (no closure wrapper)
-    const cycleOptions = await buildCycleOptions(this.services, store);
+    // Rebuild cycleOptions directly (no closure wrapper, no store param)
+    const cycleOptions = await buildCycleOptions(this.services);
 
     return {
       shouldSkip: shared.state.shouldSkipCycle,
       cycleOptions,
       conversation: shared.state.conversation,
-      store,
+      runState,
+      workspaceState,
+      userChannels: stateSlices.userChannels,
     };
   }
 
@@ -312,7 +352,7 @@ class ToolUseCycleNode<C> extends Node<
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
-        cycleIndex: prepRes.store.run.totalRounds,
+        cycleIndex: prepRes.runState.totalRounds,
         cycleResponseTimeMs: 0,
         cycleNormalizedUsage: undefined,
         endTurn: false,
@@ -327,14 +367,14 @@ class ToolUseCycleNode<C> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
     flow.setServices({
       ...prepRes.cycleOptions,
-      run: prepRes.store.run,
-      workspace: prepRes.store.workspace,
+      run: prepRes.runState,
+      workspace: prepRes.workspaceState,
       onRoundFinalized,
     });
 
     // Set up todo update callback to emit changes to the progress view
     const { context } = this.services;
-    prepRes.store.workspace.todos.setOnUpdate((todos: TodoItem[]) => {
+    prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
         stream: context.streamId,
         executionId: context.executionId,
@@ -368,7 +408,7 @@ class ToolUseCycleNode<C> extends Node<
       };
     } finally {
       // Clear the todo update callback to prevent memory leaks
-      prepRes.store.workspace.todos.clearOnUpdate();
+      prepRes.workspaceState.todos.clearOnUpdate();
     }
   }
 
@@ -389,9 +429,13 @@ class ToolUseCycleNode<C> extends Node<
       shared.state.shouldSkipCycle = false;
     }
 
-    // Update store snapshot after cycle (cycle mutates the store)
+    // Update state slices after cycle (cycle mutates run/workspace state)
     // This ensures workspace state changes (todos, interactions, etc.) are persisted
-    shared.state.storeSnapshot = prepRes.store.toSnapshot();
+    shared.state.stateSlices = {
+      runStateSnapshot: prepRes.runState.toSnapshot(),
+      workspaceSnapshot: prepRes.workspaceState.toSnapshot(),
+      userChannels: prepRes.userChannels,
+    };
 
     switch (execRes.kind) {
       case 'success':
