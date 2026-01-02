@@ -82,7 +82,8 @@ export function buildStreamInfos(
     }
 
     const agentType =
-      taskState?.agentConfig.session?.agentType ?? taskState?.agentConfig.agentType;
+      taskState?.agentConfig.session?.agentType ??
+      taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
     // and isRemoteAgent can reliably determine the source. When taskState is null,
