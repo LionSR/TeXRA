@@ -22,7 +22,7 @@ import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -572,7 +572,7 @@ export async function requestToolEditApproval(
     true,
   );
 
-  const context = getCurrentToolEditApprovalContext();
+  const context = getCurrentToolFileInteractionContext();
   const preparedRequest =
     request.streamId || !context?.streamId
       ? request
