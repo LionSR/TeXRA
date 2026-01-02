@@ -9,10 +9,8 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  CycleDebugContext,
-  CycleDebugFileOptions,
-  createDebugContext,
-  createDebugFileOptions,
+  type CycleDebugContext,
+  type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -209,17 +207,16 @@ class ToolUsePrepNode<C> extends BaseNode<
   }> {
     const services = this.services;
     const interrupted = Boolean(await services.checkInterruption());
-    const debugContext = createDebugContext({
+    const debugContext: CycleDebugContext = {
       logger: services.logger,
       modelName: services.modelName,
       executionId: services.context.executionId,
       isRemote: isRemoteAgent(services.agentName),
-    });
-    // Use cycleIndex from state instead of round.roundIndex
-    const debugFileOptions = createDebugFileOptions(
-      shared.state.cycleIndex,
-      'tooluse',
-    );
+    };
+    const debugFileOptions: CycleDebugFileOptions = {
+      continuationCount: shared.state.cycleIndex,
+      baseName: 'tooluse',
+    };
     return { interrupted, debugContext, debugFileOptions };
   }
 
@@ -316,17 +313,16 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    const debugContext = createDebugContext({
+    const debugContext: CycleDebugContext = {
       logger: services.logger,
       modelName: services.modelName,
       executionId: services.context.executionId,
       isRemote: isRemoteAgent(services.agentName),
-    });
-    // Use cycleIndex from prepRes instead of round.roundIndex
-    const debugFileOptions = createDebugFileOptions(
-      prepRes.cycleIndex,
-      'tooluse_response',
-    );
+    };
+    const debugFileOptions: CycleDebugFileOptions = {
+      continuationCount: prepRes.cycleIndex,
+      baseName: 'tooluse_response',
+    };
 
     const start = Date.now();
 
