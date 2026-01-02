@@ -3,12 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent metadata
-import {
-  AgentCategory,
-  resolveAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
-// Type imports
-import type { AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
@@ -655,7 +650,6 @@ export class ProgressViewState {
       buckets.push(container);
     }
 
-    let migratedLegacyState = false;
     let loaded = 0;
 
     for (const record of buckets) {
@@ -670,26 +664,9 @@ export class ProgressViewState {
           continue;
         }
 
-        // Migrate legacy data: ensure agentConfig.session exists
+        // Skip entries without session metadata
         if (!agentConfig.session) {
-          // Check for legacy top-level session
-          const legacySession = raw.session as Record<string, unknown>;
-          if (legacySession && typeof legacySession === 'object') {
-            agentConfig.session = legacySession;
-          } else {
-            // Resolve from agentType/agentCategory
-            agentConfig.session = resolveAgentSessionDescriptor(
-              agentConfig.agentType as AgentType | undefined,
-              agentConfig.agentCategory as AgentCategory | undefined,
-            );
-          }
-          migratedLegacyState = true;
-        }
-
-        // Remove legacy top-level session if present
-        if ('session' in raw) {
-          delete raw.session;
-          migratedLegacyState = true;
+          continue;
         }
 
         this.taskStates.set(stream as StreamTabId, cloneTaskState(raw as TaskState));
@@ -699,10 +676,6 @@ export class ProgressViewState {
 
     if (loaded > 0) {
       this.logger.debug(`Loaded task states for ${loaded} streams`);
-    }
-
-    if (migratedLegacyState) {
-      this.saveTaskStates();
     }
 
     this.cleanupToolUseAgentRegistry();
