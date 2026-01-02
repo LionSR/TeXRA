@@ -179,7 +179,12 @@ export async function applyFollowUpMessage<C>(
 export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
 ): ToolUseFlowContext<C> {
-  const { setting, streamTabId, toolRegistry: customRegistry, resumeSnapshot } = init;
+  const {
+    setting,
+    streamTabId,
+    toolRegistry: customRegistry,
+    resumeSnapshot,
+  } = init;
 
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
