@@ -2,7 +2,6 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { backOff, IBackOffOptions } from 'exponential-backoff';
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
 // Local imports - agent
@@ -708,7 +707,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
       this.logger.logProgress(
-        `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+        `Running OpenAI Responses in background mode for response ${response.id}; polling with exponential backoff (5s-60s). Completion may take longer than usual.`,
       );
     }
     if (useBackgroundResponses) {
@@ -886,135 +885,101 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return initialResponse;
     }
 
+    let current = initialResponse;
     const responseId = initialResponse.id;
     const startTime = Date.now();
     let pollCount = 0;
-    const initialStatus = initialResponse.status ?? 'unknown';
+    const initialStatus = current.status ?? 'unknown';
 
     this.logger.debug(
       `Background polling started for response ${responseId} (status: ${initialStatus})`,
       {
         data: {
           responseId,
-          status: initialResponse.status,
+          status: current.status,
         },
       },
     );
 
-    // If already complete, return immediately
-    if (!this.isBackgroundPending(initialResponse)) {
-      return this.validateBackgroundResponse(initialResponse, responseId, pollCount, startTime);
-    }
+    while (this.isBackgroundPending(current)) {
+      // Exponential backoff: 5s * 2^attempt, capped at 60s
+      const baseDelay = ModelHandlerOpenAIResponse.BACKGROUND_POLL_BASE_DELAY_MS;
+      const maxDelay = ModelHandlerOpenAIResponse.BACKGROUND_POLL_MAX_DELAY_MS;
+      const pollInterval = Math.min(maxDelay, baseDelay * Math.pow(2, pollCount));
 
-    // Custom error class to signal that polling should continue
-    class PendingError extends Error {
-      constructor(public response: Response) {
-        super('Response still pending');
-        this.name = 'PendingError';
-      }
-    }
+      pollCount++;
+      this.logger.debug(
+        `Waiting ${pollInterval}ms before poll ${pollCount} for response ${responseId}`,
+        {
+          data: {
+            responseId,
+            pollCount,
+            waitMs: pollInterval,
+          },
+        },
+      );
 
-    const backOffOptions: Partial<IBackOffOptions> = {
-      // Start with 5 second delay, exponentially increasing
-      startingDelay: ModelHandlerOpenAIResponse.BACKGROUND_POLL_BASE_DELAY_MS,
-      // Cap at 60 seconds between polls
-      maxDelay: ModelHandlerOpenAIResponse.BACKGROUND_POLL_MAX_DELAY_MS,
-      // No jitter - use deterministic exponential backoff
-      jitter: 'none',
-      // Calculate max attempts based on timeout (generous upper bound)
-      // With exponential backoff, we'll hit timeout before this limit
-      numOfAttempts: 1000,
-      // Custom retry logic
-      retry: (error: Error, attemptNumber: number) => {
-        // Check for abort signal
-        if (signal?.aborted) {
+      try {
+        await sleepWithAbort(pollInterval, signal);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
-            `Background polling aborted for response ${responseId}`,
+            `Background polling aborted for response ${responseId} while waiting to poll.`,
             {
               data: {
                 responseId,
-                pollCount: attemptNumber,
+                pollCount,
                 elapsedMs: Date.now() - startTime,
               },
             },
           );
-          return false;
         }
+        throw err;
+      }
 
-        // Check for timeout
-        const elapsedMs = Date.now() - startTime;
-        if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
-          this.logger.error(
-            `Background response ${responseId} exceeded maximum polling duration`,
-            {
-              data: {
-                responseId,
-                pollCount: attemptNumber,
-                elapsedMs,
-              },
-            },
-          );
-          return false;
-        }
-
-        // Only retry on PendingError (response still processing)
-        return error instanceof PendingError;
-      },
-    };
-
-    try {
-      const finalResponse = await backOff(async () => {
-        pollCount++;
-        const requestOptions = signal ? { signal } : undefined;
-
-        const current = await executeRequest(
-          {
-            model: this.config.name,
-            operation: `openai.responses.retrieve:${responseId}`,
-            signal,
-          },
-          () => client.responses.retrieve(responseId, undefined, requestOptions),
-        );
-
-        this.logger.debug(
-          `Background poll ${pollCount} for response ${responseId}: status=${
-            current.status ?? 'unknown'
-          }`,
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
+        this.logger.error(
+          `Background response ${responseId} exceeded maximum polling duration while pending`,
           {
             data: {
               responseId,
               status: current.status,
               pollCount,
+              elapsedMs,
             },
           },
         );
-
-        // If still pending, throw to trigger retry with backoff
-        if (this.isBackgroundPending(current)) {
-          throw new PendingError(current);
-        }
-
-        return current;
-      }, backOffOptions);
-
-      return this.validateBackgroundResponse(finalResponse, responseId, pollCount, startTime);
-    } catch (error) {
-      // Handle timeout exceeded
-      const elapsedMs = Date.now() - startTime;
-      if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
         throw new Error(
           `Background response ${responseId} exceeded maximum polling duration of ${ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS} ms. Retry later or cancel the job with client.responses.cancel("${responseId}").`,
         );
       }
 
-      // Handle abort
-      if (signal?.aborted) {
-        throw new DOMException('The operation was aborted.', 'AbortError');
-      }
+      const requestOptions = signal ? { signal } : undefined;
+      current = await executeRequest(
+        {
+          model: this.config.name,
+          operation: `openai.responses.retrieve:${responseId}`,
+          signal,
+        },
+        () => client.responses.retrieve(responseId, undefined, requestOptions),
+      );
 
-      // Re-throw other errors
-      throw error;
+      this.logger.debug(
+        `Background poll ${pollCount} for response ${responseId}: status=${
+          current.status ?? 'unknown'
+        }`,
+        {
+          data: {
+            responseId,
+            status: current.status,
+            pollCount,
+          },
+        },
+      );
     }
+
+    return this.validateBackgroundResponse(current, responseId, pollCount, startTime);
   }
 
   /**

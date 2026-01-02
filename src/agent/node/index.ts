@@ -1,3 +1,4 @@
+import { MAX_MODEL_RETRY_BACKOFF_MS } from '@utils/config';
 import { sleep } from '@utils/core';
 
 export type NonIterableObject = Partial<Record<string, unknown>> & {
@@ -200,9 +201,9 @@ class Node<
             return await this.execFallback(prepRes, e as Error);
           }
           if (this.wait > 0) {
-            // Exponential backoff: baseDelay * 2^attempt, capped at 30s
+            // Exponential backoff: baseDelay * 2^attempt, capped at max
             const baseDelayMs = this.wait * 1000;
-            const backoffMs = Math.min(30000, baseDelayMs * Math.pow(2, this.currentRetry));
+            const backoffMs = Math.min(MAX_MODEL_RETRY_BACKOFF_MS, baseDelayMs * Math.pow(2, this.currentRetry));
             await sleep(backoffMs);
           }
         }
