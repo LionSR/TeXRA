@@ -277,17 +277,6 @@ function createUsageRecorder(
 }
 
 /**
- * Options for createToolUseCallbacks helper.
- */
-interface ToolUseCallbackOptions {
-  /**
-   * Optional setup callback invoked after registration.
-   * Used by resumeToolUseFromSnapshot to configure the session before flow starts.
-   */
-  onSetup?: (context: { session: IToolUseSession }) => void;
-}
-
-/**
  * Create standardized interruptible callbacks for tool-use flows.
  *
  * DRY helper for the register/unregister pattern used when running tool-use flows.
@@ -295,16 +284,17 @@ interface ToolUseCallbackOptions {
  * to ensure consistent stream ID usage throughout the flow lifecycle.
  *
  * @param streamTabId - Stream ID to use for registration
- * @param options - Optional callbacks for additional setup
+ * @param onSetup - Optional callback invoked after registration, used by
+ *                  resumeToolUseFromSnapshot to configure the session before flow starts
  */
 function createToolUseCallbacks(
   streamTabId: StreamTabId,
-  options?: ToolUseCallbackOptions,
+  onSetup?: (context: { session: IToolUseSession }) => void,
 ): RunToolUseFlowCallbacks {
   return {
     onContextReady: (_callbackStreamId, context) => {
       registerInterruptible(streamTabId, context);
-      options?.onSetup?.(context);
+      onSetup?.(context);
     },
     onFlowComplete: (_callbackStreamId) => {
       unregisterInterruptible(streamTabId);
@@ -773,11 +763,10 @@ export async function resumeToolUseFromSnapshot(
         streamTabId,
         resumeSnapshot: snapshot,
       },
-      createToolUseCallbacks(streamTabId, {
-        onSetup: setupSession
-          ? (context) => setupSession(context.session)
-          : undefined,
-      }),
+      createToolUseCallbacks(
+        streamTabId,
+        setupSession ? (context) => setupSession(context.session) : undefined,
+      ),
     );
 
     updateFlowStatus(streamTabId, result.status);
