@@ -28,9 +28,7 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
-  type ResponseCycleState,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { createRetryState } from '@agent/core/flows/RetryState';
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 import { finalizeRound } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
@@ -179,22 +177,20 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // Create shared state for the cycle flow
-      const shared: ResponseCycleShared = {
-        state: {
-          messages: initializedMessages,
-          outputLocation: prepRes.outputLocation,
-          endTurn: false,
-          shouldStop: false,
-          outputExists: false,
-          systemPrompt: undefined,
-          debug: undefined,
-          responseObject: undefined,
-          responseTimeMs: undefined,
-          stopReason: undefined,
-          processedResponse: undefined,
-        } satisfies ResponseCycleState,
-        retryState: createRetryState(),
+      // Create shared state for the cycle flow (flat structure)
+      const cycleShared: ResponseCycleShared = {
+        messages: initializedMessages,
+        outputLocation: prepRes.outputLocation,
+        endTurn: false,
+        shouldStop: false,
+        outputExists: false,
+        systemPrompt: undefined,
+        debug: undefined,
+        responseObject: undefined,
+        responseTimeMs: undefined,
+        stopReason: undefined,
+        processedResponse: undefined,
+        lastError: undefined,
       };
 
       // Create and run the flow directly
@@ -206,12 +202,12 @@ export class ResponseCycleNode<C = unknown> extends Node<
         workspace: prepRes.workspace,
         onRoundFinalized,
       });
-      await flow.run(shared);
+      await flow.run(cycleShared);
 
-      // Interpret completion from flow state
+      // Interpret completion from flow state (flat structure)
       const completion = interpretCycleCompletion(
-        shared.state,
-        shared.retryState,
+        cycleShared,
+        { lastError: cycleShared.lastError },
       );
 
       return {
@@ -219,7 +215,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        endTurn: shared.state.endTurn,
+        endTurn: cycleShared.endTurn,
         ...completion,
       };
     } catch (error) {
