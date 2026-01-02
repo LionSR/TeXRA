@@ -1,13 +1,13 @@
 /**
- * MediaPreparationNode - Extracts media files (figures, TikZ, PDFs) and adds to messages.
+ * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
  *
- * Single responsibility: Extract media and add to user message.
+ * Single responsibility: Extract media from input/output files and add to user message.
  * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine files using shared helper, prepare isolated workspace for extraction
+ * - prep(): Determine files, create isolated workspace for extraction
  * - exec(): Extract media into isolated workspace (compute-only, no shared state mutation)
- * - post(): Merge extracted media into actual workspaceState, add to messages
+ * - post(): Merge extracted media into shared workspaceState, add to messages
  *
  * Note: We use an isolated AgentWorkspaceState for media extraction in exec() to
  * maintain PocketFlow's principle that exec() should be compute-only with no
@@ -63,7 +63,7 @@ interface MediaExecResult {
 // Node Implementation
 // ============================================================================
 
-export class MediaPreparationNode<C = unknown> extends Node<
+export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowShared,
   ReflectionFlowParams,
   ReflectionServices<C>

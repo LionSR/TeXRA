@@ -198,7 +198,7 @@ export function createInitialReflectionState(
  * @returns Reconstructed AgentWorkspaceState instance with mutation methods
  *
  * @example
- * // In MediaPreparationNode.prep()
+ * // In MediaExtractionNode.prep()
  * const workspaceState = getWorkspaceState(shared);
  * // ... pass to latexMediaManager for mutation ...
  * // ... in post(), call updateWorkspaceSnapshot() to persist changes
@@ -235,7 +235,7 @@ export function getWorkspaceState(
  * @param workspaceState - The mutated workspace state instance
  *
  * @example
- * // In MediaPreparationNode.post() - CRITICAL step
+ * // In MediaExtractionNode.post() - CRITICAL step
  * updateWorkspaceSnapshot(shared, prepRes.workspaceState);
  */
 export function updateWorkspaceSnapshot(
