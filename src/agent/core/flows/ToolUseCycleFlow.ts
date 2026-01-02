@@ -674,7 +674,11 @@ interface ToolUseDispatchPrepResult {
  */
 type ToolUseDispatchExecResult =
   | { kind: 'skipped'; interrupted: boolean }
-  | { kind: 'success'; execResults: ToolExecutionResult[]; assistantText: string };
+  | {
+      kind: 'success';
+      execResults: ToolExecutionResult[];
+      assistantText: string;
+    };
 
 /**
  * Dispatches tool calls and processes their results.

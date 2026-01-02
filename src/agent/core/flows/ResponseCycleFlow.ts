@@ -59,11 +59,47 @@ interface CycleDebugOptions {
 }
 
 /**
+ * Constraint interface for types that can be used with cycle nodes.
+ *
+ * Both ResponseCycleShared and ReflectionFlowShared satisfy this constraint,
+ * enabling cycle nodes to work with either shared type for native nesting.
+ *
+ * Note: Some fields are optional/nullable to accommodate the outer flow's
+ * shared type which may not have all fields populated at all times.
+ */
+export interface CycleSharedConstraint {
+  // Required cycle fields
+  messages: ProviderMessage[];
+  shouldStop: boolean;
+  endTurn: boolean;
+  outputExists: boolean;
+  outputLocation: AgentFileLocation | null;
+
+  // Optional cycle fields
+  responseTimeMs?: number;
+  stopReason?: ProviderStopReason;
+  systemPrompt?: string;
+  debug?: CycleDebugOptions;
+  responseObject?: unknown;
+  processedResponse?: string;
+  lastError?: RetryErrorInfo;
+
+  // Index signature for compatibility with flow shared types
+  [key: string]: unknown;
+}
+
+/**
  * Shared state for response cycle flows (FLAT structure).
  *
  * All fields are at the top level - no nested `state` or `retryState`.
  * This enables native flow nesting where cycle nodes can be wired
  * directly into outer flows that use the same shared type.
+ *
+ * ## Type Compatibility
+ *
+ * Fields use nullable/optional types to be compatible with ReflectionFlowShared,
+ * enabling cycle nodes to work directly with the outer flow's shared type.
+ * Cycle nodes use non-null assertions where values are guaranteed to be set.
  *
  * ## Architecture
  * - Mutable state: `shared` (this interface) - all fields flat
@@ -92,8 +128,8 @@ export interface ResponseCycleShared {
   endTurn: boolean;
   /** Whether output file exists */
   outputExists: boolean;
-  /** Agent output location */
-  outputLocation: AgentFileLocation;
+  /** Agent output location (nullable for compatibility with ReflectionFlowShared) */
+  outputLocation: AgentFileLocation | null;
   /** System prompt for model */
   systemPrompt?: string;
   /** Consolidated debug options */
@@ -147,7 +183,8 @@ class ResponsePrepNode<C> extends BaseNode<
     const services = this.services;
     const { agentPrompt, userVars, logger, agentConfig, round } = services;
     const interrupted = Boolean(await services.checkInterruption());
-    const outputLocation = shared.outputLocation;
+    // Non-null assertion: outputLocation is set by caller before cycle starts
+    const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
@@ -166,7 +203,7 @@ class ResponsePrepNode<C> extends BaseNode<
           fileOptions: {
             continuationCount: round.continuationCount,
             baseName: 'response',
-            outputFile: shared.outputLocation.relativePath,
+            outputFile: outputLocation.relativePath,
           },
         };
 
@@ -437,7 +474,8 @@ class ResponseProcessNode<C> extends BaseNode<
       responseObject: shared.responseObject,
       responseTimeMs: shared.responseTimeMs,
       messages: shared.messages,
-      outputLocation: shared.outputLocation,
+      // Non-null assertion: outputLocation is set by caller before cycle starts
+      outputLocation: shared.outputLocation!,
       outputExists: shared.outputExists,
       // Read workspace values before they're updated (for connector calculation)
       lastResponse: workspace.assembly.lastResponse,
