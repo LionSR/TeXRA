@@ -159,7 +159,9 @@ async function handleGetTeXCount(): Promise<void> {
                 headerMatch ? `Headers: ${headerMatch[1]}` : null,
                 captionMatch ? `Captions: ${captionMatch[1]}` : null,
                 mathInlineMatch ? `Inline math: ${mathInlineMatch[1]}` : null,
-                mathDisplayMatch ? `Display math: ${mathDisplayMatch[1]}` : null,
+                mathDisplayMatch
+                  ? `Display math: ${mathDisplayMatch[1]}`
+                  : null,
               ]
                 .filter(
                   (item): item is string => item !== null && item !== undefined,

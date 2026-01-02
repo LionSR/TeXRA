@@ -83,10 +83,18 @@ export class MainViewProvider
 
   private setupConfigurationWatcher() {
     // Watch for agent configuration changes - only refresh agent options
-    watchConfig(this.context, ['texra.agents', 'texra.toolUseAgents'], this.debouncedRefreshAgentOptions);
+    watchConfig(
+      this.context,
+      ['texra.agents', 'texra.toolUseAgents'],
+      this.debouncedRefreshAgentOptions,
+    );
 
     // Watch for model configuration changes - only refresh model options
-    watchConfig(this.context, ['texra.models'], this.debouncedRefreshModelOptions);
+    watchConfig(
+      this.context,
+      ['texra.models'],
+      this.debouncedRefreshModelOptions,
+    );
 
     // Watch for file configuration changes - only refresh file list
     watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
