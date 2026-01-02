@@ -81,6 +81,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     errorText,
     outputText,
     input,
+    inputFilePath,
     editedFiles,
   } = normalizedToolLog;
 
@@ -128,7 +129,9 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     sections.push(
       buildToolUseSection(
         'Output:',
-        wrapInHighlightedPre(outputText, 'tool-output-full'),
+        wrapInHighlightedPre(outputText, 'tool-output-full', {
+          filePath: inputFilePath,
+        }),
       ),
     );
   }

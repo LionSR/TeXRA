@@ -19,7 +19,91 @@ const REGISTERED_LANGUAGES = [
   'diff',
   'xml',
   'markdown',
+  'css',
+  'html',
+  'sql',
+  'rust',
+  'go',
+  'java',
+  'c',
+  'cpp',
 ];
+
+/**
+ * Map file extensions to highlight.js language names.
+ */
+const EXTENSION_TO_LANGUAGE = {
+  // JavaScript/TypeScript
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  // Python
+  py: 'python',
+  pyw: 'python',
+  pyi: 'python',
+  // Web
+  html: 'html',
+  htm: 'html',
+  css: 'css',
+  scss: 'css',
+  less: 'css',
+  // Data formats
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'yaml',
+  xml: 'xml',
+  svg: 'xml',
+  // Shell
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  fish: 'bash',
+  // LaTeX
+  tex: 'latex',
+  sty: 'latex',
+  cls: 'latex',
+  bib: 'latex',
+  // Systems
+  rs: 'rust',
+  go: 'go',
+  java: 'java',
+  c: 'c',
+  h: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  // Other
+  sql: 'sql',
+  md: 'markdown',
+  markdown: 'markdown',
+  diff: 'diff',
+  patch: 'diff',
+};
+
+/**
+ * Detect language from a file path or filename.
+ * @param {string} filePath - File path or filename
+ * @returns {string|null} Detected language or null
+ */
+export const detectLanguageFromPath = (filePath) => {
+  if (!filePath || typeof filePath !== 'string') {
+    return null;
+  }
+
+  // Extract extension from path
+  const match = filePath.match(/\.([a-zA-Z0-9]+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const ext = match[1].toLowerCase();
+  return EXTENSION_TO_LANGUAGE[ext] || null;
+};
 
 /**
  * Detect the likely language of a code string.

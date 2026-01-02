@@ -191,6 +191,9 @@ export const normalizeToolUseLog = (structured) => {
   // Extract edited files if present
   const editedFiles = extractEditedFiles(parsed, outputDetails);
 
+  // Extract file path from input for language detection
+  const inputFilePath = extractFilePathFromInput(parsed.input);
+
   return {
     parsed,
     toolName,
@@ -198,12 +201,35 @@ export const normalizeToolUseLog = (structured) => {
     errorText,
     outputText,
     input: parsed.input,
+    inputFilePath,
     editedFiles,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
     headerSummary: summaryText || errorText,
   };
+};
+
+/**
+ * Extract file path from tool input for language detection.
+ * Checks common property names used by file-related tools.
+ * @param {object} input - Tool input object
+ * @returns {string|null} File path or null
+ */
+const extractFilePathFromInput = (input) => {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  // Check common property names for file paths
+  const pathProps = ['path', 'file_path', 'filePath', 'file', 'filename'];
+  for (const prop of pathProps) {
+    if (typeof input[prop] === 'string' && input[prop].trim()) {
+      return input[prop].trim();
+    }
+  }
+
+  return null;
 };
 
 /**

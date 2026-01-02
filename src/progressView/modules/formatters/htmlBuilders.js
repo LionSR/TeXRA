@@ -13,7 +13,11 @@ import {
   INPUT_COMPACT_ENTRIES_THRESHOLD,
   COMPACT_VALUE_MAX_LENGTH,
 } from './constants.js';
-import { highlightCode, shouldHighlight } from './syntaxHighlighter.js';
+import {
+  highlightCode,
+  shouldHighlight,
+  detectLanguageFromPath,
+} from './syntaxHighlighter.js';
 
 /**
  * Build a tool-use section HTML block
@@ -46,20 +50,28 @@ export const wrapInPre = (text, className = '') => {
  * Falls back to plain pre if highlighting is not applicable.
  * @param {string} text - Text to wrap
  * @param {string} [className] - Optional CSS class for the pre element
- * @param {string} [language] - Optional language hint for highlighting
+ * @param {object} [options] - Highlighting options
+ * @param {string} [options.language] - Language hint for highlighting
+ * @param {string} [options.filePath] - File path for extension-based detection
  * @returns {string} HTML string with syntax highlighting
  */
-export const wrapInHighlightedPre = (text, className = '', language = null) => {
+export const wrapInHighlightedPre = (text, className = '', options = {}) => {
   if (!text) {
     return wrapInPre('', className);
   }
 
+  const { language, filePath } = options;
+
+  // Try to detect language from file path first (most reliable)
+  const langFromPath = filePath ? detectLanguageFromPath(filePath) : null;
+  const langHint = language || langFromPath;
+
   // Check if highlighting is appropriate for this content
-  if (!shouldHighlight(text) && !language) {
+  if (!shouldHighlight(text) && !langHint) {
     return wrapInPre(text, className);
   }
 
-  const { html, language: detectedLang } = highlightCode(text, language);
+  const { html, language: detectedLang } = highlightCode(text, langHint);
 
   // If no language was detected, fall back to plain pre
   if (!detectedLang) {
