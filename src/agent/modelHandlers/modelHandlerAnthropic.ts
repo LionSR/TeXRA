@@ -68,7 +68,7 @@ import { getConfig } from '@utils/config';
 import { flexibleFS } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { objectToLogString } from '@utils/text/stringUtils';
-import xmlUtils from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
@@ -1224,7 +1224,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
-    const scratchpad = await xmlUtils.extractScratchpad(
+    const scratchpad = await extractScratchpad(
       fileContent,
       'scratchpad',
     );
