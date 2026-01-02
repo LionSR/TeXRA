@@ -670,11 +670,60 @@ interface ToolUseDispatchPrepResult {
 
 /**
  * Result of exec() for tool dispatch.
- * PocketFlow compliance: exec() returns computation results, post() applies side effects.
+ * PocketFlow compliance: exec() executes tools and returns results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
   | { kind: 'skipped'; interrupted: boolean }
-  | { kind: 'success'; calls: SdkToolCall[] };
+  | { kind: 'success'; execResults: ToolExecutionResult[]; assistantText: string };
+
+/**
+ * Finalizes the tool-use cycle.
+ * All flow exit paths route through this node to ensure proper cleanup.
+ *
+ * PocketFlow pattern:
+ * - Single finalization point in the flow graph
+ * - No guard flags needed (graph ensures single execution)
+ * - Services accessed via `this.services`
+ *
+ * Note: Unlike ResponseCycleFinalizeNode, tool-use finalization is handled
+ * inline in ToolUseProcessNode for successful cycles. This node provides
+ * a consistent exit point for error/interrupt paths.
+ */
+class ToolUseCycleFinalizeNode<C> extends BaseNode<
+  ToolUseCycleShared,
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
+> {
+  /**
+   * No preparation needed - this node just exits the flow.
+   * PocketFlow compliance: prep() extracts data for exec().
+   */
+  async prep(_shared: ToolUseCycleShared): Promise<void> {
+    // No prep needed for finalize
+  }
+
+  /**
+   * No computation needed - finalization already happened in ProcessNode.
+   * PocketFlow compliance: exec() receives prepRes, returns compute result.
+   */
+  async exec(_prepRes: void): Promise<void> {
+    // No-op: finalization for successful cycles happens in ProcessNode
+    // This node just provides a consistent exit point for error/interrupt paths
+  }
+
+  /**
+   * Flow ends here.
+   * PocketFlow compliance: post() applies side effects and returns action.
+   */
+  async post(
+    _shared: ToolUseCycleShared,
+    _prepRes: void,
+    _execRes: void,
+  ): Promise<string | undefined> {
+    // Flow ends here
+    return undefined;
+  }
+}
 
 /**
  * Dispatches tool calls and processes their results.
@@ -719,8 +768,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
   }
 
   /**
-   * Check conditions for tool dispatch.
-   * PocketFlow compliance: Pure computation, no side effects.
+   * Execute all tool calls and return results.
+   *
+   * PocketFlow compliance:
+   * - exec() executes tools using services (tracker/todos are service state, not shared state)
+   * - Tool execution is I/O but acceptable since this node uses NODE_NO_RETRY
+   * - Results are returned for post() to apply side effects (logging, messages)
    */
   async exec(
     prepRes: ToolUseDispatchPrepResult,
@@ -733,9 +786,28 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return { kind: 'skipped', interrupted: true };
     }
 
+    const services = this.services;
+    const { workspace } = services;
+    const tracker = workspace.interactions;
+    const todoState = workspace.todos;
+    const assistantText = prepRes.text ?? '';
+
+    // Execute all tool calls and collect results
+    const execResults: ToolExecutionResult[] = [];
+    for (const call of prepRes.toolCalls) {
+      const execResult = await this.executeToolCall(
+        call,
+        services,
+        tracker,
+        todoState,
+      );
+      execResults.push(execResult);
+    }
+
     return {
       kind: 'success',
-      calls: prepRes.toolCalls,
+      execResults,
+      assistantText,
     };
   }
 
@@ -862,12 +934,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
   }
 
   /**
-   * Execute tool calls and apply side effects.
-   * PocketFlow compliance: All mutations happen here.
+   * Apply side effects from tool execution.
+   *
+   * PocketFlow compliance:
+   * - post() logs results, processes media files, and creates follow-up messages
+   * - All shared state mutations happen here
    */
   async post(
     shared: ToolUseCycleShared,
-    prepRes: ToolUseDispatchPrepResult,
+    _prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
@@ -883,23 +958,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { calls } = execRes;
-    const assistantText = prepRes.text ?? '';
-    const tracker = workspace.interactions;
-    const todoState = workspace.todos;
+    const { execResults, assistantText } = execRes;
 
-    // Step 1: Execute all tool calls and collect results
-    const execResults: ToolExecutionResult[] = [];
-    for (const call of calls) {
-      const execResult = await this.executeToolCall(
-        call,
-        services,
-        tracker,
-        todoState,
-      );
-      execResults.push(execResult);
-
-      // Log each tool execution as it completes
+    // Step 1: Log each tool execution and process media files
+    for (const execResult of execResults) {
       await this.logAndProcessMediaFiles(
         execResult,
         services,
@@ -913,6 +975,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const extracted = execResults.map((er) =>
       extractToolAttachments(er.result),
     );
+
+    // Extract calls from results for message creation
+    const calls = execResults.map((er) => er.call);
 
     // For Google handlers with multiple parallel calls, use batched method
     // to properly preserve thought signatures (required for Gemini 3 models).
@@ -989,6 +1054,7 @@ export function createToolUseCycleFlow<C>(): Flow<
   const callNode = new ToolUseCallNode<C>();
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
+  const finalizeNode = new ToolUseCycleFinalizeNode<C>();
 
   // Main flow: prep → call → process → dispatch
   // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
@@ -996,6 +1062,13 @@ export function createToolUseCycleFlow<C>(): Flow<
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
+
+  // All completion paths route through finalize node (PocketFlow-native pattern)
+  // This ensures consistent exit behavior regardless of which node triggers completion
+  prepNode.on(FlowTransition.COMPLETE, finalizeNode);
+  callNode.on(FlowTransition.COMPLETE, finalizeNode);
+  processNode.on(FlowTransition.COMPLETE, finalizeNode);
+  dispatchNode.on(FlowTransition.COMPLETE, finalizeNode);
 
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);

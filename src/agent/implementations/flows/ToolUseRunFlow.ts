@@ -185,12 +185,16 @@ interface CycleNodePrepResult<C> {
 
 /**
  * Prep result for ToolUseWaitNode.
- * Contains only the data needed to execute the wait operation.
+ * PocketFlow compliance: prep() does I/O (waiting for follow-up), exec() makes decision.
+ *
+ * Note: session is NOT passed through prepRes - access via this.services instead.
  */
 interface WaitNodePrepResult {
   conversation: ProviderMessage[];
-  hasQueuedFollowUp: boolean;
-  session: IToolUseSession;
+  /** Result of waiting for follow-up - null if interrupted or no follow-up */
+  followUp: string | null;
+  /** Whether the wait was interrupted */
+  interrupted: boolean;
 }
 
 // ============================================================================
@@ -223,10 +227,17 @@ function assertPreparedState(
 /**
  * Prepares state for tool-use cycle.
  *
- * Calls helper functions directly with services context (no closure wrappers).
- * This eliminates closure indirection for cleaner call stacks.
+ * PocketFlow compliance:
+ * - prep(): Empty because there's no shared state to extract (initial run)
+ * - exec(): Calls helper functions via this.services (allowed - services are immutable)
+ * - post(): Applies all state mutations (conversation, storeSnapshot)
  *
- * Note: cycleOptions is NOT stored in state (non-serializable). It's rebuilt
+ * Note: This node's prep() is intentionally empty because:
+ * 1. On first run, shared.state is empty (no data to extract)
+ * 2. All initialization happens via this.services, not shared state
+ * 3. The work done in exec() uses services, not shared state access
+ *
+ * cycleOptions is NOT stored in state (non-serializable). It's rebuilt
  * by CycleNode using buildCycleOptions().
  */
 class ToolUsePrepareNode<C> extends Node<
@@ -238,8 +249,13 @@ class ToolUsePrepareNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
+  /**
+   * No preparation needed - this is the initial node with empty shared state.
+   * All data comes from services, not shared state.
+   */
   async prep(_shared: ToolUseRunShared): Promise<void> {
-    // No prep needed - services accessed via this.services
+    // No prep needed - shared state is empty on first run
+    // Services accessed via this.services in exec()
   }
 
   async exec(
@@ -463,8 +479,12 @@ class ToolUseCycleNode<C> extends Node<
 /**
  * Waits for user follow-up message between cycles.
  *
- * Calls helper functions directly with services context (no closure wrappers).
- * Session operations via this.services.session.
+ * PocketFlow compliance:
+ * - prep(): Does I/O (enterWaitingState, waitForFollowUp) since these are read operations
+ * - exec(): Pure decision-making based on prep results
+ * - post(): Applies side effects (markRunning, update conversation)
+ *
+ * Session operations via this.services.session (not passed through prepRes).
  */
 class ToolUseWaitNode<C> extends Node<
   ToolUseRunShared,
@@ -475,38 +495,52 @@ class ToolUseWaitNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
+  /**
+   * Wait for follow-up message.
+   * PocketFlow compliance: I/O (waiting) happens in prep(), not exec().
+   */
   async prep(shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
     const session = this.services.session;
-    return {
-      conversation: shared.state.conversation,
-      hasQueuedFollowUp: session.hasQueuedFollowUp(),
-      session,
-    };
-  }
-
-  async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    const { hasQueuedFollowUp, session } = prepRes;
+    const checkInterruption = this.services.checkInterruption;
 
     // Check interruption first
-    if (this.services.checkInterruption()) {
-      return { kind: 'stop', reason: 'interrupted' };
+    if (checkInterruption()) {
+      return {
+        conversation: shared.state.conversation,
+        followUp: null,
+        interrupted: true,
+      };
     }
 
     // Enter waiting state if no queued follow-up
     // PersistedFlow handles state persistence automatically
-    if (!hasQueuedFollowUp) {
+    if (!session.hasQueuedFollowUp()) {
       await session.enterWaitingState();
     }
 
-    // Wait for follow-up (blocking I/O)
-    const checkInterruption = this.services.checkInterruption;
+    // Wait for follow-up (blocking I/O in prep - this is correct per PocketFlow)
     const followUp = await session.waitForFollowUp(checkInterruption);
 
-    if (!followUp || checkInterruption()) {
+    // Check interruption after wait
+    const interrupted = !followUp || checkInterruption();
+
+    return {
+      conversation: shared.state.conversation,
+      followUp: followUp ?? null,
+      interrupted,
+    };
+  }
+
+  /**
+   * Decide whether to continue or stop based on prep results.
+   * PocketFlow compliance: Pure decision, no I/O or state mutation.
+   */
+  async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
+    if (prepRes.interrupted || !prepRes.followUp) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    return { kind: 'continue', followUp };
+    return { kind: 'continue', followUp: prepRes.followUp };
   }
 
   async execFallback(
@@ -520,6 +554,10 @@ class ToolUseWaitNode<C> extends Node<
     return { kind: 'stop', reason: 'interrupted' };
   }
 
+  /**
+   * Apply follow-up to conversation.
+   * PocketFlow compliance: All state mutations happen in post().
+   */
   async post(
     shared: ToolUseRunShared,
     _prepRes: WaitNodePrepResult,
@@ -530,7 +568,7 @@ class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
-    // Apply follow-up directly (no closure wrapper)
+    // Apply follow-up (state mutation in post - correct)
     const session = this.services.session;
     await session.markRunning();
     shared.state.conversation = await applyFollowUpMessage(
@@ -577,6 +615,15 @@ export function createToolUseRunFlow<C = unknown>(): Flow<
   // Linear flow: prepare → cycle → wait (loop back via CONTINUE)
   prepareNode.next(cycleNode);
   cycleNode.next(waitNode);
+
+  // waitNode transitions:
+  // - CONTINUE: Loop back to cycleNode for next interaction
+  // - DEFAULT: Flow ends gracefully (no successor = intentional termination)
+  //
+  // Unlike ResponseCycleFlow which routes all exits through a finalize node,
+  // ToolUseRunFlow ends immediately when there's no follow-up. This is
+  // intentional because run-level finalization is handled by the agent's
+  // finally block, not by a flow node.
   waitNode.on(FlowTransition.CONTINUE, cycleNode);
 
   return new Flow<ToolUseRunShared, ToolUseFlowParams, ToolUseServices<C>>(
