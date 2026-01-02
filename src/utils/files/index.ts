@@ -1,4 +1,4 @@
-export { WorkspaceFS, resolveFilePath } from './workspaceFS';
+export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
 export { RelativeFS } from './relativeFS';

@@ -6,7 +6,7 @@ import * as path from 'path';
 import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Local imports - utils
-import { resolveFilePath } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 describe('pathUtils Test Suite', () => {
   describe('isTexFile', () => {
@@ -33,15 +33,15 @@ describe('pathUtils Test Suite', () => {
     });
   });
 
-  describe('resolveFilePath', () => {
+  describe('WorkspaceFS.toAbsolute', () => {
     it('should return absolute paths unchanged', () => {
       const absolutePath = path.resolve('/absolute/path/file.txt');
-      assert.strictEqual(resolveFilePath(absolutePath), absolutePath);
+      assert.strictEqual(WorkspaceFS.toAbsolute(absolutePath), absolutePath);
     });
 
     it('should resolve relative paths to workspace', () => {
       const relativePath = 'relative/path/file.txt';
-      const resolved = resolveFilePath(relativePath);
+      const resolved = WorkspaceFS.toAbsolute(relativePath);
       assert.strictEqual(path.isAbsolute(resolved), true);
       assert.strictEqual(resolved.endsWith(relativePath), true);
     });
