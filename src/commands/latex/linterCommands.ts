@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { showLoggedErrorMessage } from '@common/errors';
 import {
@@ -169,7 +169,7 @@ export async function handleFixLinterIssues(
       `Found ${issues.length} linter issues in ${relativePath}`,
     );
 
-    const agentConfig = parseAgentConfig({
+    const agentConfig = AgentConfigSchema.parse({
       agent: 'tex_linter_fix',
       model: 'claude-4-5-sonnet-4-5-latest',
       inputFile: relativePath,
