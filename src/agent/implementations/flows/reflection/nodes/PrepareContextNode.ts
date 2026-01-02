@@ -6,7 +6,7 @@
  * - Initialize base messages via modelHandler (without texcount/media)
  *
  * Note: TeXCount stats and media are added by subsequent nodes
- * (TeXCountNode and MediaPreparationNode) using message enrichment methods.
+ * (TeXCountNode and MediaExtractionNode) using message enrichment methods.
  *
  * PocketFlow pattern:
  * - prep(): Extract data needed for context preparation
@@ -87,11 +87,11 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
 
-      // Initialize base messages (no media - will be added by MediaPreparationNode)
+      // Initialize base messages (no media - will be added by MediaExtractionNode)
       const messages = await modelHandler.initializeMessages(
         userPrefix,
         userRequest,
-        undefined, // media added later by MediaPreparationNode
+        undefined, // media added later by MediaExtractionNode
         systemPrompt,
       );
 
@@ -114,11 +114,11 @@ export class PrepareContextNode<C = unknown> extends Node<
       // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
 
-      // Create round messages (no media - will be added by MediaPreparationNode)
+      // Create round messages (no media - will be added by MediaExtractionNode)
       const messages = await modelHandler.createRoundMessages(
         conversation,
         userRequest,
-        undefined, // media added later by MediaPreparationNode
+        undefined, // media added later by MediaExtractionNode
       );
 
       logger.debug(
