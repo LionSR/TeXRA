@@ -496,14 +496,13 @@ class ToolUseWaitNode<C> extends Node<
   }
 
   /**
-   * Wait for follow-up message.
-   * PocketFlow compliance: I/O (waiting) happens in prep(), not exec().
+   * Extract data needed for wait operation.
+   * PocketFlow compliance: Extract data, no blocking I/O here.
    */
   async prep(shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
-    const session = this.services.session;
     const checkInterruption = this.services.checkInterruption;
 
-    // Check interruption first
+    // Check interruption first - if interrupted, skip exec entirely
     if (checkInterruption()) {
       return {
         conversation: shared.state.conversation,
@@ -512,35 +511,42 @@ class ToolUseWaitNode<C> extends Node<
       };
     }
 
-    // Enter waiting state if no queued follow-up
-    // PersistedFlow handles state persistence automatically
-    if (!session.hasQueuedFollowUp()) {
-      await session.enterWaitingState();
-    }
-
-    // Wait for follow-up (blocking I/O in prep - this is correct per PocketFlow)
-    const followUp = await session.waitForFollowUp(checkInterruption);
-
-    // Check interruption after wait
-    const interrupted = !followUp || checkInterruption();
-
     return {
       conversation: shared.state.conversation,
-      followUp: followUp ?? null,
-      interrupted,
+      followUp: null,
+      interrupted: false,
     };
   }
 
   /**
-   * Decide whether to continue or stop based on prep results.
-   * PocketFlow compliance: Pure decision, no I/O or state mutation.
+   * Wait for follow-up message.
+   *
+   * PocketFlow compliance: Blocking I/O in exec() ensures errors are
+   * caught by the retry loop and handled by execFallback().
    */
   async exec(prepRes: WaitNodePrepResult): Promise<WaitExecResult> {
-    if (prepRes.interrupted || !prepRes.followUp) {
+    // Skip if already interrupted in prep
+    if (prepRes.interrupted) {
       return { kind: 'stop', reason: 'interrupted' };
     }
 
-    return { kind: 'continue', followUp: prepRes.followUp };
+    const session = this.services.session;
+    const checkInterruption = this.services.checkInterruption;
+
+    // Enter waiting state if no queued follow-up
+    if (!session.hasQueuedFollowUp()) {
+      await session.enterWaitingState();
+    }
+
+    // Wait for follow-up (blocking I/O - errors caught by execFallback)
+    const followUp = await session.waitForFollowUp(checkInterruption);
+
+    // Check interruption after wait
+    if (!followUp || checkInterruption()) {
+      return { kind: 'stop', reason: 'interrupted' };
+    }
+
+    return { kind: 'continue', followUp };
   }
 
   async execFallback(
