@@ -248,6 +248,33 @@ export async function showLoggedMessage(
 }
 
 /**
+ * Log a message and display it to the user as an information notification.
+ *
+ * This function is the success/info counterpart to `showLoggedMessage`. Use it for:
+ * - Success messages that should be logged for telemetry
+ * - Status updates that don't represent errors
+ * - Completion notifications
+ *
+ * @param channel - The logging channel to use (e.g., "Commands", "FileSystem")
+ * @param message - The message to log and display to the user
+ * @returns A promise that resolves to the message that was displayed
+ *
+ * @example
+ * ```typescript
+ * await showLoggedInfoMessage("LaTeXCommands", "LaTeX file indented successfully");
+ * // Logs at info level and shows information notification
+ * ```
+ */
+export async function showLoggedInfoMessage(
+  channel: string,
+  message: string,
+): Promise<string> {
+  logger.info(channel, message);
+  await vscode.window.showInformationMessage(message);
+  return message;
+}
+
+/**
  * Log an error message, display it with a docs action and open the docs if selected.
  *
  * This helper keeps messaging consistent when providing quick access to
