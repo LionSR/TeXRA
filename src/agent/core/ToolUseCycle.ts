@@ -63,7 +63,7 @@ export interface ToolUseCycleResult {
  *
  * @param input - Cycle input with options, messages, and store
  * @returns Result with failedWithError and userCancelled flags
- * @see runResponseCycle for workflow-based cycle execution
+ * @see executeResponseCycleCore for workflow-based cycle execution
  */
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,

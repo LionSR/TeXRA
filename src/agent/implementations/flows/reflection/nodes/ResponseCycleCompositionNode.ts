@@ -131,8 +131,8 @@ export class ResponseCycleCompositionNode<C = unknown> extends Node<
   /**
    * Execute response cycle via shared core function.
    *
-   * Delegates to executeResponseCycleCore() which is the single source of truth
-   * for response cycle execution (also used by runResponseCycle()).
+   * Delegates to executeResponseCycleCore() which is the single entry point
+   * for response cycle execution.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const services = this.services;
