@@ -204,6 +204,9 @@ export interface ToolUseCycleFinalizeInput {
  * from a ConversationRoundState. This eliminates the need for tool-use
  * agents to maintain a round object that gets reset after each cycle.
  *
+ * Uses AgentRunState.recordCycleMetrics() as the single source of truth
+ * for metrics recording logic.
+ *
  * @param input - Direct values for cycle statistics
  */
 export async function finalizeToolUseCycle(
@@ -211,11 +214,8 @@ export async function finalizeToolUseCycle(
 ): Promise<void> {
   const { cycleIndex, responseTimeMs, normalizedUsage, run } = input;
 
-  // Record directly to run state (bypass round object)
-  if (normalizedUsage) {
-    run.usageAccumulator.recordNormalizedUsage(cycleIndex, normalizedUsage);
-  }
-  run.addResponseTime(responseTimeMs);
+  // Use single source of truth for metrics recording
+  run.recordCycleMetrics(cycleIndex, responseTimeMs, normalizedUsage);
 
   // Invoke usage tracking callback if provided
   if (input.onRoundFinalized) {

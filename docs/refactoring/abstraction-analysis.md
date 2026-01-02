@@ -95,7 +95,7 @@ export const ReasoningExtractors = {
 
 ## 2. AGENT FLOWS - Well-Structured with Minor Issues
 
-### 2.1 [HIGH] Duplicate Finalization Logic
+### 2.1 [FIXED] Duplicate Finalization Logic
 
 **Problem:** Two separate finalization functions doing nearly the same thing.
 
@@ -104,15 +104,24 @@ export const ReasoningExtractors = {
 | `src/agent/core/flows/CycleServices.ts` | 176-186 | `finalizeRound()` |
 | `src/agent/core/flows/CycleServices.ts` | 209-224 | `finalizeToolUseCycle()` |
 
-**Difference:** Only whether usage goes through `round` object or directly to `usageAccumulator`.
+**Root Cause:** Both functions performed identical operations:
+1. Record usage to `usageAccumulator.recordNormalizedUsage(index, usage)`
+2. Add response time via `run.addResponseTime(ms)`
+3. Invoke callback if provided
 
-**Impact Files:**
-- `ResponseCycleFlow.ts:699` - uses `finalizeRound()`
-- `ToolUseCycleFlow.ts:603` - uses `finalizeToolUseCycle()`
-- `ResponseCycleNode.ts:226-231` - fallback finalization
+Only difference was input shape (round object vs direct values).
 
-**Refactoring:** Create unified `finalizeAgentCycle()` function.
-**Savings:** ~20 LOC, clearer single source of truth
+**Solution Applied:**
+1. Added `recordCycleMetrics(cycleIndex, responseTimeMs, normalizedUsage)` to `AgentRunState` as single source of truth
+2. `recordRound()` now delegates to `recordCycleMetrics()`
+3. `finalizeToolUseCycle()` now calls `run.recordCycleMetrics()` instead of duplicating logic
+
+**Files Changed:**
+- `src/agent/core/AgentState.ts:193-202` - Added `recordCycleMetrics()` method
+- `src/agent/core/AgentState.ts:208-214` - `recordRound()` delegates to new method
+- `src/agent/core/flows/CycleServices.ts:218` - Uses `run.recordCycleMetrics()`
+
+**Savings:** Eliminated 5 LOC duplication, established clear single source of truth
 
 ### 2.2 [LOW] Unused Local Interface
 
