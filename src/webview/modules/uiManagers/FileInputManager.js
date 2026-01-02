@@ -358,8 +358,8 @@ export class FileInputManager extends BaseUIManager {
     this._setupSaveListeners();
   }
 
-  cleanup() {
-    super.cleanup();
+  dispose() {
+    super.dispose();
     this._sortables.forEach((s) => s.destroy());
     this._sortables = [];
   }
