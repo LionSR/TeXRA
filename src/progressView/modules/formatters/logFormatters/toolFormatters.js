@@ -10,7 +10,6 @@ import {
   buildToolUseSection,
   wrapInPre,
   buildEditedFilesList,
-  formatToolInput,
   getToolIconClass,
 } from '../htmlBuilders.js';
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
@@ -90,27 +89,12 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
 
   const sections = [];
 
-  // Smart input display: use condensed format when possible
+  // Show full input (key info is already in header summary)
   if (input !== undefined && input !== null) {
-    const { display: condensedInput, isCondensed } = formatToolInput(
-      toolName,
-      input,
-    );
-
-    if (isCondensed && condensedInput) {
-      // Show condensed input inline
-      sections.push(
-        buildToolUseSection(
-          'Input:',
-          `<code class="tool-input-condensed">${encodeHtml(condensedInput)}</code>`,
-        ),
-      );
-    } else if (!isCondensed) {
-      // Fall back to full YAML display only if not condensed
-      const inputValue = stringifyForDisplay(input);
+    const inputValue = stringifyForDisplay(input);
+    if (inputValue) {
       sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
     }
-    // If isCondensed && !condensedInput, skip the input section entirely
   }
 
   // Show edited files with clickable links
