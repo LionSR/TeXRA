@@ -19,7 +19,7 @@ export class ProfileEventsManager {
   /**
    * Set up event listeners.
    */
-  setupEventListeners() {
+  setup() {
     // Sign in button click handler
     const signInBtn = safeGetElementById(ELEMENT_IDS.SIGN_IN_BTN);
     if (signInBtn) {

@@ -11,12 +11,12 @@ historyViewState.initialize();
 messageHandler.setup();
 
 document.addEventListener('DOMContentLoaded', () => {
-  historyViewDomHandler.events.setupEventListeners();
+  historyViewDomHandler.events.setup();
   vscode.postMessage({ command: HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA });
 });
 
 window.addEventListener('beforeunload', () => {
   historyViewDomHandler.events.dispose();
   historyViewDomHandler.searchManager.dispose();
-  messageHandler.cleanup();
+  messageHandler.dispose();
 });
