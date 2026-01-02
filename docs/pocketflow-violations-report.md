@@ -15,6 +15,7 @@ prep() → exec() → post()
 ```
 
 **The two logical paths are:**
+
 1. **Data Path (prep → post)**: Interacts with the shared store
 2. **Compute Path (exec)**: Pure compute logic - MUST NOT access shared store
 
@@ -22,13 +23,13 @@ prep() → exec() → post()
 
 ## Summary of Violations (FIXED)
 
-| Category | Count | Status |
-|----------|-------|--------|
-| exec() Shared Store Access | 3 | ✅ FIXED |
-| Lifecycle Pattern Violations | 5 | ✅ FIXED |
-| Flow Wiring Violations | 2 | ✅ FIXED |
-| Service Access Violations | 1 | ✅ FIXED |
-| State/Snapshot Violations | 0 | N/A |
+| Category                     | Count | Status   |
+| ---------------------------- | ----- | -------- |
+| exec() Shared Store Access   | 3     | ✅ FIXED |
+| Lifecycle Pattern Violations | 5     | ✅ FIXED |
+| Flow Wiring Violations       | 2     | ✅ FIXED |
+| Service Access Violations    | 1     | ✅ FIXED |
+| State/Snapshot Violations    | 0     | N/A      |
 
 **Total: 11 violations identified and resolved**
 
@@ -86,6 +87,7 @@ async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
 **Severity:** High
 
 **Issue:** The `exec()` method:
+
 1. Calls `session.enterWaitingState()` which mutates session state (line 449)
 2. Performs blocking I/O with `session.waitForFollowUp()` (line 454)
 
@@ -226,6 +228,7 @@ export function createToolUseRunFlow<C = unknown>(): Flow<...> {
 | ToolUseDispatchNode | 883 | Skipped/interrupted |
 
 **Compare to ResponseCycleFlow (correct pattern):**
+
 ```typescript
 prepNode.on(FlowTransition.COMPLETE, finalizeNode);
 invokeNode.on(FlowTransition.COMPLETE, finalizeNode);
@@ -267,6 +270,7 @@ async post(shared, _prepRes, execRes): Promise<...> {
 ## Category 5: State/Snapshot Violations
 
 **No violations found.** All implementations correctly:
+
 - Store snapshots (serializable) instead of class instances
 - Use `toSnapshot()`/`fromSnapshot()` conversions
 - Keep non-serializable objects (callbacks, services) out of shared state
@@ -277,17 +281,18 @@ async post(shared, _prepRes, execRes): Promise<...> {
 
 The following nodes correctly follow the dual logical path pattern:
 
-| File | Nodes |
-|------|-------|
-| PrepareContextNode.ts | PrepareContextNode |
-| TeXCountNode.ts | TeXCountNode |
-| RoundCompleteNode.ts | RoundCompleteNode |
-| OutputNode.ts | OutputNode |
-| ResponseCycleNode.ts | ResponseCycleNode |
-| ResponseCycleFlow.ts | ResponseModelInvocationNode, ResponseProcessNode, ResponseContinuationNode |
-| ToolUseCycleFlow.ts | ToolUseCallNode, ToolUseProcessNode |
+| File                  | Nodes                                                                      |
+| --------------------- | -------------------------------------------------------------------------- |
+| PrepareContextNode.ts | PrepareContextNode                                                         |
+| TeXCountNode.ts       | TeXCountNode                                                               |
+| RoundCompleteNode.ts  | RoundCompleteNode                                                          |
+| OutputNode.ts         | OutputNode                                                                 |
+| ResponseCycleNode.ts  | ResponseCycleNode                                                          |
+| ResponseCycleFlow.ts  | ResponseModelInvocationNode, ResponseProcessNode, ResponseContinuationNode |
+| ToolUseCycleFlow.ts   | ToolUseCallNode, ToolUseProcessNode                                        |
 
 **ReflectionFlow** is the gold-standard implementation with proper wiring:
+
 - Linear main flow with explicit transitions
 - All COMPLETE actions routed to finalize node
 - Proper round continuation via `FlowTransition.CONTINUE_NEXT_ROUND`
