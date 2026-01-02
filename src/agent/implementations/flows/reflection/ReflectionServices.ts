@@ -73,10 +73,10 @@ export interface ReflectionServices<C = unknown>
   readonly getOutputFileLocation: (round: number) => AgentFileLocation;
 
   /**
-   * Check if XML structure should be ensured before processing.
-   * Based on xmlStructureMode config: 'never', 'scratchpadOnly', or 'always'.
+   * Whether XML structure should be ensured before processing.
+   * Computed from xmlStructureMode config: 'never', 'scratchpadOnly', or 'always'.
    */
-  readonly shouldEnsureXmlStructure: () => boolean;
+  readonly shouldEnsureXmlStructure: boolean;
 
   /**
    * Get usage recorder callback for tracking round statistics.
