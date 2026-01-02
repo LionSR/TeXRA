@@ -9,7 +9,6 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  type CycleDebugFileOptions,
   getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
 import { createRetryState, type RetryState } from './RetryState';
@@ -206,35 +205,24 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
 }
 
 /**
- * Prepares a tool-use cycle by checking interruptions and setting up debug file options.
+ * Prepares a tool-use cycle by checking interruptions.
  *
  * Services accessed via `this.services` (ToolUseCycleServices).
- * Debug context is derived from services at call sites (no redundant storage).
+ * All debug options are derived at maybeSaveDebugObject call sites.
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<{
-    interrupted: boolean;
-    debugFileOptions: CycleDebugFileOptions;
-  }> {
-    const services = this.services;
-    const interrupted = Boolean(await services.checkInterruption());
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: shared.cycleIndex,
-      baseName: 'tooluse',
-    };
-    return { interrupted, debugFileOptions };
+  async prep(shared: ToolUseCycleShared): Promise<{ interrupted: boolean }> {
+    const interrupted = Boolean(await this.services.checkInterruption());
+    return { interrupted };
   }
 
   async post(
     shared: ToolUseCycleShared,
-    prepRes: {
-      interrupted: boolean;
-      debugFileOptions: CycleDebugFileOptions;
-    },
+    prepRes: { interrupted: boolean },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;
@@ -254,7 +242,10 @@ class ToolUsePrepNode<C> extends BaseNode<
         modelName,
         isRemote: isRemoteAgent(agentName),
       }),
-      fileOptions: prepRes.debugFileOptions,
+      fileOptions: {
+        continuationCount: shared.cycleIndex,
+        baseName: 'tooluse',
+      },
     });
 
     return FlowTransition.DEFAULT;
@@ -263,12 +254,9 @@ class ToolUsePrepNode<C> extends BaseNode<
 
 /**
  * Success data for tool-use call.
- * Extends base with debug file options for message saving.
- * Debug context is derived from services at call site.
+ * All debug options are derived at maybeSaveDebugObject call sites.
  */
-interface ToolUseCallSuccessData extends BaseInvocationSuccessData {
-  debugFileOptions: CycleDebugFileOptions;
-}
+type ToolUseCallSuccessData = BaseInvocationSuccessData;
 
 /**
  * Result type for tool-use call (uses shared InvocationResult).
@@ -322,12 +310,6 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    // Only file options vary by cycle - context is derived from services at call site
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: prepRes.cycleIndex,
-      baseName: 'tooluse_response',
-    };
-
     const start = Date.now();
 
     // Use base class helper for abort controller lifecycle
@@ -343,12 +325,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
       const responseTimeMs = Date.now() - start;
 
-      return {
-        kind: 'success',
-        response,
-        responseTimeMs,
-        debugFileOptions,
-      };
+      return { kind: 'success', response, responseTimeMs };
     });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
@@ -400,7 +377,10 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
         modelName,
         isRemote: isRemoteAgent(agentName),
       }),
-      fileOptions: successRes.debugFileOptions,
+      fileOptions: {
+        continuationCount: shared.cycleIndex,
+        baseName: 'tooluse_response',
+      },
     });
 
     return FlowTransition.DEFAULT;
