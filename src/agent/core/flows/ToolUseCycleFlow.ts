@@ -151,7 +151,7 @@ export interface ToolUseCycleState extends BaseCycleState {
    * Normalized usage for current cycle.
    * Reset after finalization when continuing to next cycle.
    */
-  cycleNormalizedUsage?: import('@agent/types/NormalizedUsage').NormalizedUsage;
+  cycleNormalizedUsage?: NormalizedUsage;
   /**
    * Whether the last cycle ended normally (model said end_turn).
    *
