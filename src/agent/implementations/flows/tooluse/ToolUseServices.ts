@@ -6,8 +6,9 @@
  * - Nodes access services via this.services
  * - shared contains mutable runtime state only
  *
- * ToolUseServices extends BaseFlowServices with tool-use specific
- * dependencies (tool registry, session, cycle operations).
+ * ToolUseServices extends BaseFlowContextInit with tool-use specific
+ * dependencies (tool registry, session, cycle operations), plus
+ * convenience accessors (logger, context) defined inline.
  */
 
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
