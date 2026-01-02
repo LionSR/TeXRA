@@ -493,14 +493,14 @@ export async function executeAgent(
               executionContext: ctx.executionContext,
               userVarChannels: ctx.userVarChannels,
               streamTabId: ctx.streamTabId,
-              checkInterruption: interruptManager.createCheckInterruption(),
-              setAbortController: interruptManager.createSetAbortController(),
+              checkInterruption: interruptManager.checkInterruption,
+              setAbortController: interruptManager.setAbortController,
               getClient: () => client,
               getUsageRecorder: createUsageRecorder(
                 ctx.usageMonitor,
                 'tool-use',
               ),
-              onInterrupt: interruptManager.createOnInterrupt(),
+              onInterrupt: interruptManager.onInterrupt,
             },
             {
               onContextReady: (streamId, context) => {
@@ -522,14 +522,14 @@ export async function executeAgent(
               prompt: ctx.agentPrompt,
               executionContext: ctx.executionContext,
               userVarChannels: ctx.userVarChannels,
-              checkInterruption: interruptManager.createCheckInterruption(),
-              setAbortController: interruptManager.createSetAbortController(),
+              checkInterruption: interruptManager.checkInterruption,
+              setAbortController: interruptManager.setAbortController,
               getClient: () => client,
               getUsageRecorder: createUsageRecorder(
                 ctx.usageMonitor,
                 'workflow',
               ),
-              onInterrupt: interruptManager.createOnInterrupt(),
+              onInterrupt: interruptManager.onInterrupt,
             },
             {
               onContextReady: (_storageKey, context) => {
@@ -630,12 +630,12 @@ export async function executeMergeAgent(
           prompt: ctx.agentPrompt,
           executionContext: ctx.executionContext,
           userVarChannels: ctx.userVarChannels,
-          checkInterruption: interruptManager.createCheckInterruption(),
-          setAbortController: interruptManager.createSetAbortController(),
+          checkInterruption: interruptManager.checkInterruption,
+          setAbortController: interruptManager.setAbortController,
           getClient: () => client,
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
           getOutputFileLocation,
-          onInterrupt: interruptManager.createOnInterrupt(),
+          onInterrupt: interruptManager.onInterrupt,
         },
         {
           onContextReady: (_storageKey, context) => {
@@ -727,12 +727,12 @@ export async function resumeToolUseFromSnapshot(
         executionContext,
         userVarChannels,
         streamTabId,
-        checkInterruption: interruptManager.createCheckInterruption(),
-        setAbortController: interruptManager.createSetAbortController(),
+        checkInterruption: interruptManager.checkInterruption,
+        setAbortController: interruptManager.setAbortController,
         getClient: () => client,
         getUsageRecorder: createUsageRecorder(usageMonitor, 'tool-use'),
         resumeSnapshot: snapshot,
-        onInterrupt: interruptManager.createOnInterrupt(),
+        onInterrupt: interruptManager.onInterrupt,
       },
       {
         onContextReady: (streamId, context) => {
