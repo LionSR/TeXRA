@@ -3,12 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent metadata
-import {
-  AgentCategory,
-  resolveAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
-// Type imports
-import type { AgentType } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
@@ -655,7 +650,6 @@ export class ProgressViewState {
       buckets.push(container);
     }
 
-    let migratedLegacyState = false;
     let loaded = 0;
 
     for (const record of buckets) {
@@ -664,38 +658,24 @@ export class ProgressViewState {
           continue;
         }
 
-        const state = rawState as TaskState;
-
-        if (!state.session) {
-          const agentConfig = (state as { agentConfig?: any }).agentConfig;
-          if (!agentConfig || typeof agentConfig !== 'object') {
-            continue;
-          }
-
-          const session = resolveAgentSessionDescriptor(
-            agentConfig.agentType as AgentType | undefined,
-            agentConfig.agentCategory as AgentCategory | undefined,
-          );
-
-          state.session = session;
-          state.agentConfig = { ...agentConfig, session };
-          migratedLegacyState = true;
-        } else if (!state.agentConfig.session) {
-          state.agentConfig = { ...state.agentConfig, session: state.session };
-          migratedLegacyState = true;
+        const raw = rawState as Record<string, unknown>;
+        const agentConfig = raw.agentConfig as Record<string, unknown>;
+        if (!agentConfig || typeof agentConfig !== 'object') {
+          continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(state));
+        // Skip entries without session metadata
+        if (!agentConfig.session) {
+          continue;
+        }
+
+        this.taskStates.set(stream as StreamTabId, cloneTaskState(raw as TaskState));
         loaded += 1;
       }
     }
 
     if (loaded > 0) {
       this.logger.debug(`Loaded task states for ${loaded} streams`);
-    }
-
-    if (migratedLegacyState) {
-      this.saveTaskStates();
     }
 
     this.cleanupToolUseAgentRegistry();
