@@ -188,9 +188,6 @@ export const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
-  // Extract edit records with file paths and line changes
-  const edits = Array.isArray(parsed.edits) ? parsed.edits : [];
-
   return {
     parsed,
     toolName,
@@ -202,7 +199,6 @@ export const normalizeToolUseLog = (structured) => {
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
     headerSummary: summaryText || errorText,
-    edits,
   };
 };
 
