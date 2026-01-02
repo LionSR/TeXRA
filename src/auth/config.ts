@@ -34,12 +34,18 @@ export interface SupabaseConfig {
  * Row Level Security (RLS) policies protect data access, not the key.
  */
 
-/** Custom domain for Supabase (remote agent access) */
+/** Custom domain for Supabase Edge Functions */
 export const SUPABASE_CUSTOM_DOMAIN = 'remote.texra.ai';
 
+/**
+ * Original Supabase project URL.
+ * Used for auth because the custom domain has issues with /auth/v1/* routing.
+ */
+export const SUPABASE_PROJECT_URL = 'https://jntubmcgbhwtcktubelv.supabase.co';
+
 export const SUPABASE_CONFIG: SupabaseConfig = {
-  // Production Supabase URL via custom domain
-  url: `https://${SUPABASE_CUSTOM_DOMAIN}`,
+  // Use project URL for auth (custom domain doesn't route /auth/v1/* properly)
+  url: SUPABASE_PROJECT_URL,
 
   // Production public key - safe to include in client code
   publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
