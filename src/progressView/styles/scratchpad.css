@@ -69,16 +69,6 @@
   overflow: auto;
 }
 
-/* Condensed input display */
-.tool-input-condensed {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: var(--font-size-sm);
-  padding: 2px 6px;
-  background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.05));
-  border-radius: var(--border-radius-small);
-  word-break: break-all;
-}
-
 /* Line changes badge */
 .line-changes-badge {
   display: inline-flex;
