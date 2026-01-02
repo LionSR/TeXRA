@@ -18,6 +18,7 @@ export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
   LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
+  GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
   RUN_SELECTOR: 'runSelector',

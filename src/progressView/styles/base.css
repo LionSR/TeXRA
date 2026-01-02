@@ -35,3 +35,12 @@ vscode-split-layout {
 }
 
 /* Animations moved to common.css as pulse-scale, pulse-fade, and spin */
+
+/* Shared progress collapsible styles */
+.progress-collapsible {
+  background-color: transparent;
+}
+
+.progress-collapsible[hidden] {
+  display: none;
+}

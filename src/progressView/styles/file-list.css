@@ -1,7 +1,23 @@
 /**
  * File list styles for ProgressView
  * Styling for file list entries and file tree display
+ * Uses native VS Code collapsible component
  */
+
+/* Collapsible container styling */
+.files-collapsible {
+  margin: var(--spacing-small) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.files-collapsible::part(header) {
+  padding: var(--spacing-small) var(--spacing-medium);
+}
+
+.files-collapsible::part(body) {
+  padding: 0 var(--spacing-medium) var(--spacing-small);
+}
 
 /* File metadata styling */
 .file-list-content .file-var {
