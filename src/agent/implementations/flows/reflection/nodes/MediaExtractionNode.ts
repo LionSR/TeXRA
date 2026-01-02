@@ -5,13 +5,12 @@
  * Uses shared helper for file determination (DRY).
  *
  * PocketFlow pattern:
- * - prep(): Determine files, create isolated workspace for extraction
- * - exec(): Extract media into isolated workspace (compute-only, no shared state mutation)
- * - post(): Merge extracted media into shared workspaceState, add to messages
+ * - prep(): Determine files, reconstruct workspace from snapshot
+ * - exec(): Extract media via latexMediaManager (mutates workspace)
+ * - post(): Update snapshot, add media to messages
  *
- * Note: We use an isolated AgentWorkspaceState for media extraction in exec() to
- * maintain PocketFlow's principle that exec() should be compute-only with no
- * side effects on shared state. The extracted media is merged in post().
+ * Note: exec() mutates workspaceState via latexMediaManager. This is acceptable
+ * because NODE_NO_RETRY means no retries, so no duplicate mutations possible.
  *
  * Services accessed via native `this.services`:
  * - latexMediaManager, config, fileService, modelHandler, logger
@@ -23,8 +22,7 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { toErrorMessage } from '@common/errors';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
@@ -49,13 +47,11 @@ interface MediaPrepInput {
   currentRound: number;
   supportsVision: boolean;
   extraMediaFiles: FileLocation[];
-  /** Isolated workspace for media extraction - NOT the shared state */
-  isolatedWorkspace: AgentWorkspaceState;
+  workspaceState: AgentWorkspaceState;
   context: RoundContext | null;
 }
 
 interface MediaExecResult {
-  /** Media files extracted into the isolated workspace */
   mediaFiles: FileLocation[];
 }
 
@@ -73,18 +69,14 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   /**
-   * Determine files using shared helper and create isolated workspace for extraction.
-   *
-   * Creates a fresh AgentWorkspaceState for media extraction to ensure exec()
-   * doesn't mutate the shared state. Media will be merged in post().
+   * Determine files and reconstruct workspace from snapshot.
    */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
-    // Create an ISOLATED workspace for media extraction
-    // This ensures exec() doesn't mutate shared state (PocketFlow principle)
-    const isolatedWorkspace = AgentWorkspaceState.create();
+    // Reconstruct workspace state from snapshot
+    const workspaceState = getWorkspaceState(shared);
 
     // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
@@ -110,21 +102,14 @@ export class MediaExtractionNode<C = unknown> extends Node<
       currentRound,
       supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,
-      isolatedWorkspace,
+      workspaceState,
       context,
     };
   }
 
   /**
-   * Extract media from files into the isolated workspace.
-   *
-   * This method is compute-only from the perspective of shared state:
-   * - It mutates the ISOLATED workspace (created fresh in prep())
-   * - It does NOT access or mutate the shared state
-   * - Extracted media is merged into shared state in post()
-   *
-   * This satisfies PocketFlow's principle that exec() should not have
-   * side effects on shared state, enabling safe retries.
+   * Extract media from files.
+   * Mutates workspaceState via latexMediaManager to collect media files.
    */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
     const { latexMediaManager, config, logger } = this.services;
@@ -135,12 +120,11 @@ export class MediaExtractionNode<C = unknown> extends Node<
       return { mediaFiles: [] };
     }
 
-    // Extract media into the ISOLATED workspace (not shared state)
     // Different processing for first round vs subsequent rounds
     if (prepRes.currentRound === 0) {
       await latexMediaManager.processInputFiles(
         prepRes.files,
-        prepRes.isolatedWorkspace,
+        prepRes.workspaceState,
         config.toolConfig,
         true,
         prepRes.extraMediaFiles,
@@ -148,14 +132,14 @@ export class MediaExtractionNode<C = unknown> extends Node<
     } else {
       await latexMediaManager.processOutputFiles(
         prepRes.files,
-        prepRes.isolatedWorkspace,
+        prepRes.workspaceState,
         config.toolConfig,
         true,
       );
     }
 
-    // Return extracted media files (to be merged in post())
-    const mediaFiles = prepRes.isolatedWorkspace.media.files;
+    // Collect media files from workspaceState
+    const mediaFiles = prepRes.workspaceState.media.files;
     logger.debug(
       `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
     );
@@ -174,35 +158,27 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   /**
-   * Merge extracted media into shared state and add to messages.
-   *
-   * This is where we apply the results from exec() to the shared state,
-   * following PocketFlow's principle that post() is for writing back to shared.
+   * Update snapshot and add media to messages.
    */
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: MediaPrepInput,
+    prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
     const { modelHandler, logger } = this.services;
 
-    // Merge extracted media into the actual workspaceState
-    if (execRes.mediaFiles.length > 0) {
-      // Reconstruct workspace, add media, then update snapshot
-      const workspaceState = getWorkspaceState(shared);
-      workspaceState.media.addMediaFiles(execRes.mediaFiles);
-      updateWorkspaceSnapshot(shared, workspaceState);
+    // Update workspace snapshot (exec mutated workspaceState)
+    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
-      // Add media to messages if we have context
-      if (shared.context) {
-        await modelHandler.addMediaToUserMessage(
-          shared.context.messages,
-          execRes.mediaFiles,
-        );
-        logger.debug(
-          `${execRes.mediaFiles.length} media files added to user message`,
-        );
-      }
+    // Add media to messages if we have files and context
+    if (execRes.mediaFiles.length > 0 && shared.context) {
+      await modelHandler.addMediaToUserMessage(
+        shared.context.messages,
+        execRes.mediaFiles,
+      );
+      logger.debug(
+        `${execRes.mediaFiles.length} media files added to user message`,
+      );
     }
 
     // Continue to next node
