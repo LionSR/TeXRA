@@ -20,7 +20,3 @@ export {
   enrichError,
   buildErrorLogData,
 } from './sdkErrorUtils';
-export {
-  FileOperationResultOptions,
-  showFileOperationResult,
-} from './fileOperationUtils';
