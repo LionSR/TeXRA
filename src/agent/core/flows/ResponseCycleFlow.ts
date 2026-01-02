@@ -12,7 +12,6 @@ import {
   BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
-  type CycleDebugFileOptions,
   getDebugContext,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
@@ -52,8 +51,7 @@ import {
   type ResponseCycleServices,
 } from './CycleServices';
 
-// Debug context is now derived from services at call sites using getDebugContext().
-// CycleDebugFileOptions is imported from CommonCycleTypes where needed.
+// All debug options (context + file options) are derived at maybeSaveDebugObject call sites.
 
 // ============================================================================
 // Cycle Fields Schema (Extends Base)
@@ -96,15 +94,13 @@ export type CycleFields = z.infer<typeof CycleFieldsSchema>;
  * These contain non-serializable data (unknown response objects)
  * and are regenerated each cycle execution.
  *
- * NOTE: Debug context (logger, executionId) is derived from services at each
- * `maybeSaveDebugObject` call site using `getDebugContext()`. Only file options
- * are stored in shared since they vary by cycle state.
+ * NOTE: All debug options (context and file options) are derived from
+ * services/shared at each `maybeSaveDebugObject` call site. Nothing is
+ * stored in shared state.
  */
 export interface CycleTransientFields {
   /** System prompt for model (regenerated from agent prompt each cycle) */
   systemPrompt?: string;
-  /** Debug file options (context derived from services at call sites) */
-  debugFileOptions?: CycleDebugFileOptions;
   /** Raw response from model (type unknown, not serialized) */
   responseObject?: unknown;
 }
@@ -186,11 +182,10 @@ class ResponsePrepNode<C> extends BaseNode<
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
-    debugFileOptions?: CycleDebugFileOptions;
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { agentPrompt, userVars, round } = services;
+    const { agentPrompt, userVars } = services;
     const interrupted = Boolean(await services.checkInterruption());
     // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
@@ -199,20 +194,10 @@ class ResponsePrepNode<C> extends BaseNode<
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
 
-    // Only file options are stored - context is derived from services at call sites
-    const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
-      ? undefined
-      : {
-          continuationCount: round.continuationCount,
-          baseName: 'response',
-          outputFile: outputLocation.relativePath,
-        };
-
     return {
       interrupted,
       exists,
       systemPrompt,
-      debugFileOptions,
       outputLocation,
     };
   }
@@ -223,7 +208,6 @@ class ResponsePrepNode<C> extends BaseNode<
       interrupted: boolean;
       exists: boolean;
       systemPrompt?: string;
-      debugFileOptions?: CycleDebugFileOptions;
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
@@ -233,24 +217,26 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { agentConfig } = this.services;
+    const { agentConfig, round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
-    shared.debugFileOptions = prepRes.debugFileOptions;
     shared.outputLocation = prepRes.outputLocation;
     resetResponseCycleShared(shared);
 
-    if (shared.debugFileOptions) {
-      await maybeSaveDebugObject({
-        object: shared.messages,
-        objectType: 'messages',
-        context: getDebugContext(this.services, {
-          modelName: agentConfig.model,
-          isRemote: isRemoteAgent(agentConfig.agent),
-        }),
-        fileOptions: shared.debugFileOptions,
-      });
-    }
+    // Debug file options derived at call site (not stored in shared)
+    await maybeSaveDebugObject({
+      object: shared.messages,
+      objectType: 'messages',
+      context: getDebugContext(this.services, {
+        modelName: agentConfig.model,
+        isRemote: isRemoteAgent(agentConfig.agent),
+      }),
+      fileOptions: {
+        continuationCount: round.continuationCount,
+        baseName: 'response',
+        outputFile: prepRes.outputLocation.relativePath,
+      },
+    });
 
     return FlowTransition.DEFAULT;
   }
@@ -370,7 +356,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { logger, agentConfig } = this.services;
+    const { logger, agentConfig, round } = this.services;
 
     // Handle non-success cases (returns null) or get narrowed success result
     // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
@@ -387,17 +373,20 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     shared.responseObject = successRes.response;
     shared.responseTimeMs = successRes.responseTimeMs;
 
-    if (shared.debugFileOptions) {
-      await maybeSaveDebugObject({
-        object: successRes.response,
-        objectType: 'response',
-        context: getDebugContext(this.services, {
-          modelName: agentConfig.model,
-          isRemote: isRemoteAgent(agentConfig.agent),
-        }),
-        fileOptions: shared.debugFileOptions,
-      });
-    }
+    // Debug options derived at call site (not stored in shared)
+    await maybeSaveDebugObject({
+      object: successRes.response,
+      objectType: 'response',
+      context: getDebugContext(this.services, {
+        modelName: agentConfig.model,
+        isRemote: isRemoteAgent(agentConfig.agent),
+      }),
+      fileOptions: {
+        continuationCount: round.continuationCount,
+        baseName: 'response',
+        outputFile: shared.outputLocation!.relativePath,
+      },
+    });
 
     return FlowTransition.DEFAULT;
   }
