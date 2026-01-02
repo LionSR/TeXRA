@@ -12,7 +12,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentLogger } from '@logger/AgentLogger';
-import { toolResult, type ToolResult } from '@tools/result';
+import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - logging
@@ -89,7 +89,7 @@ Best practices:
       logger.warn(
         'todo_write called without todoState in context - todos will not persist or display in UI',
       );
-      return toolResult({
+      return {
         summary: 'Updated todo list (no active session)',
         output: this.formatTodoList(input.todos),
         diagnostics: {
@@ -116,7 +116,7 @@ Best practices:
 
     const summary = `Todo list updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
 
-    return toolResult({
+    return {
       summary,
       output,
     });
