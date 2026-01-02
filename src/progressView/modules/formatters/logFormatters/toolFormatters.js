@@ -91,7 +91,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   const sections = [];
 
   // Smart input display: use condensed format when possible
-  if (input !== undefined) {
+  if (input !== undefined && input !== null) {
     const { display: condensedInput, isCondensed } = formatToolInput(
       toolName,
       input,
@@ -105,11 +105,12 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
           `<code class="tool-input-condensed">${encodeHtml(condensedInput)}</code>`,
         ),
       );
-    } else {
-      // Fall back to full YAML display
+    } else if (!isCondensed) {
+      // Fall back to full YAML display only if not condensed
       const inputValue = stringifyForDisplay(input);
       sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
     }
+    // If isCondensed && !condensedInput, skip the input section entirely
   }
 
   // Show edited files with clickable links
