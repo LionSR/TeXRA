@@ -953,7 +953,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     });
   }
 
-  cleanup() {
+  dispose() {
     this._isDisposed = true;
     if (this._disposeModelWaiter) {
       this._disposeModelWaiter();
@@ -962,7 +962,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     this._cleanupAgentWaiters();
 
     this._cleanupTooltipListeners();
-    super.cleanup();
+    super.dispose();
     this._instructionEl = null;
     this._elementCache.clear();
   }
@@ -1351,4 +1351,4 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
 const handler = new MainViewMessageHandler();
 export const setup = handler.setup.bind(handler);
-export const cleanup = handler.cleanup.bind(handler);
+export const dispose = handler.dispose.bind(handler);
