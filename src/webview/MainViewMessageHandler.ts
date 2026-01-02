@@ -258,7 +258,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.forwardToWebview(m),
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: () =>
-        this.forwardToWebview({ command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER }),
+        this.forwardToWebview({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        }),
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         try {
           await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
@@ -279,7 +281,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
       [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
         await setConfig('ui.showLoginBanner', false);
-        this.forwardToWebview({ command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER });
+        this.forwardToWebview({
+          command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
+        });
       },
 
       // Recording commands
