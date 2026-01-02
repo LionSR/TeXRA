@@ -8,7 +8,7 @@ import {
   AgentSetting,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
@@ -178,12 +178,12 @@ describe('BashTool', () => {
       }),
     };
 
-    const round = new ConversationRoundState(0);
     const run = new AgentRunState();
 
     const messages: ProviderMessage[] = [];
 
     // Create shared state for the cycle flow
+    // Tool-use cycles track metrics in state (cycleIndex, etc.) instead of round object
     const shared: ToolUseCycleShared = {
       state: {
         messages,
@@ -193,16 +193,19 @@ describe('BashTool', () => {
         toolCalls: undefined,
         text: undefined,
         stopReason: undefined,
+        cycleIndex: 0,
+        cycleResponseTimeMs: 0,
+        cycleNormalizedUsage: undefined,
         endTurn: false,
       } satisfies ToolUseCycleState,
       retryState: createRetryState(),
     };
 
     // Create and run the flow directly
+    // Note: Tool-use cycles don't need round - metrics tracked in state
     const flow = createToolUseCycleFlow();
     flow.setServices({
       ...options,
-      round,
       run,
       workspace: workspaceState,
     });
