@@ -11,6 +11,11 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.files-collapsible[hidden] {
+  display: none;
+}
+
+/* Override vscode-collapsible header padding */
 .files-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);
 }
