@@ -6,24 +6,25 @@
  * - Nodes access services via this.services
  * - shared contains mutable runtime state only
  *
- * ToolUseServices extends BaseFlowContextInit and FlowServiceAccessors
- * with tool-use specific dependencies (tool registry, session, cycle operations).
+ * Architecture (refactored - no closure wrappers):
+ * - Services pass context values directly (resolvedTools, snapshot, etc.)
+ * - Nodes call helper functions directly with services context
+ * - Eliminates closure indirection for cleaner call stacks
  */
 
-import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { ToolDefinition } from '@model';
 import type {
   BaseFlowContextInit,
   FlowServiceAccessors,
 } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
-
-// Note: RunCycleResult was removed - ToolUseCycleNode now directly runs ToolUseCycleFlow
+import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 /**
  * Result of preparing initial state for a tool-use session.
@@ -38,10 +39,13 @@ export interface PrepareStateResult {
 /**
  * Services for tool-use flow nodes.
  *
- * Extends BaseFlowContextInit directly with tool-use specific dependencies:
- * - toolRegistry: Available tools for the agent
- * - session: Session lifecycle management (follow-ups, status)
- * - Operations: prepareState, buildCycleOptions, applyFollowUpMessage
+ * Extends BaseFlowContextInit directly with tool-use specific dependencies.
+ * Nodes call helper functions directly with these context values (no closures).
+ *
+ * Refactored architecture:
+ * - resolvedTools: Pre-resolved tool definitions (computed once at creation)
+ * - snapshot: Resume snapshot for session recovery (null for fresh start)
+ * - Nodes import and call helper functions directly
  *
  * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
  * Persistence is handled automatically by PersistedFlow after each node.
@@ -57,31 +61,11 @@ export interface ToolUseServices<C = unknown>
   /** Session lifecycle for follow-ups and status management */
   readonly session: IToolUseSession;
 
-  // =========================================================================
-  // Cycle Operations
-  // These are agent-specific operations that nodes invoke via services.
-  // =========================================================================
+  /** Pre-resolved tool definitions (computed once at context creation) */
+  readonly resolvedTools: ToolDefinition[];
 
-  /**
-   * Prepare initial state for the tool-use session.
-   * Handles both new sessions and resumed sessions from snapshots.
-   */
-  readonly prepareState: () => Promise<PrepareStateResult>;
-
-  /**
-   * Build cycle options for tool-use execution.
-   */
-  readonly buildCycleOptions: (
-    store: AgentSharedStore,
-  ) => ToolUseCycleOptions<C>;
-
-  /**
-   * Apply a follow-up message to the conversation.
-   */
-  readonly applyFollowUpMessage: (
-    message: string,
-    conversation: ProviderMessage[],
-  ) => Promise<ProviderMessage[]>;
+  /** Resume snapshot for session recovery (null for fresh start) */
+  readonly snapshot: ToolUseSessionSnapshot | null;
 
   /**
    * Get usage recorder callback for tracking round statistics.
