@@ -16,7 +16,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { toolResult, type ToolResult, type LineChanges } from '@tools/result';
+import { type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -765,5 +765,5 @@ export function buildApprovalRejectedResult(
 
   // No file attachments for user notes; treated purely as guidance via fields.
 
-  return toolResult(result);
+  return result;
 }

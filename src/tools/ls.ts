@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { ToolError, ToolResult } from '@tools/result';
 import {
   createGlobMatcher,
   joinWorkspaceRelativePath,
@@ -80,7 +80,7 @@ export class LsTool extends defineTool({
         matchesCustomIgnore(display) ||
         matchesCustomIgnore(relativePosix)
       ) {
-        return toolResult({
+        return {
           summary,
           output: formatToolOutput(
             `Listing for ${display}`,
@@ -89,7 +89,7 @@ export class LsTool extends defineTool({
           ),
         });
       }
-      return toolResult({
+      return {
         summary,
         output: formatToolOutput(
           `Listing for ${display}`,
@@ -99,7 +99,7 @@ export class LsTool extends defineTool({
     }
 
     if (relative !== '.' && gitignore.ignores(relative)) {
-      return toolResult({
+      return {
         summary,
         output: formatToolOutput(
           `Listing for ${display}`,
@@ -129,7 +129,7 @@ export class LsTool extends defineTool({
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));
     const formatted = sorted.map(([name, type]) => formatEntry(name, type));
 
-    return toolResult({
+    return {
       summary,
       output: formatToolOutput(`Listing for ${display}`, formatted),
     });
