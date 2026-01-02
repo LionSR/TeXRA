@@ -1,10 +1,8 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-
-// Internal imports
 import { showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -15,8 +13,6 @@ import {
   runCleanOutput,
 } from '@housekeeping';
 import { getStreamTabId } from '@/logger/streamUtils';
-
-// Local imports - housekeeping
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
@@ -36,8 +32,6 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
       break;
     case 'error':
       vscode.window.showErrorMessage(`Error during cleanup: ${result.error}`);
-      break;
-    default:
       break;
   }
 }
