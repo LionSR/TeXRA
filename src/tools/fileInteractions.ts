@@ -28,5 +28,5 @@ export function requireFileReadForEdit(
       'Edits to existing files require a prior read in this session. Please call read_file first or write a new file instead.',
     isError: true,
     diagnostics: { reason: 'unread-file', path },
-  });
+  };
 }

@@ -32,7 +32,7 @@ export class BashTool extends defineTool({
       return {
         summary: `Ran bash: ${commandPreview}`,
         output: result.stdout || '',
-      });
+      };
     }
     throw new ToolError(
       `Bash command failed: ${result.stderr || 'No error output available'}`,

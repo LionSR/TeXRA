@@ -36,7 +36,7 @@ export class ApplyPathTool extends defineTool({
         return {
           summary: 'Applied patch',
           output: result.stdout ?? '',
-        });
+        };
       }
 
       throw new ToolError(
