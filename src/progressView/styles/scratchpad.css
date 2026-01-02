@@ -68,26 +68,6 @@
   overflow: auto;
 }
 
-/* Collapsed output state for very long outputs */
-.tool-output-collapsed {
-  max-height: 200px;
-  position: relative;
-}
-
-.tool-output-collapsed::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40px;
-  background: linear-gradient(
-    transparent,
-    var(--vscode-editor-background, #1e1e1e)
-  );
-  pointer-events: none;
-}
-
 /* Condensed input display */
 .tool-input-condensed {
   font-family: var(--vscode-editor-font-family, monospace);
