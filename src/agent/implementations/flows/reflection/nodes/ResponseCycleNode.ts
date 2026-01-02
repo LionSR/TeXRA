@@ -209,7 +209,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
       await flow.run(shared);
 
       // Interpret completion from flow state
-      const completion = interpretCycleCompletion(shared.state, shared.retryState);
+      const completion = interpretCycleCompletion(
+        shared.state,
+        shared.retryState,
+      );
 
       return {
         kind: 'success',
