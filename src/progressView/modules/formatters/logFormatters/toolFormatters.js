@@ -9,6 +9,7 @@ import {
   initToggleIcon,
   buildToolUseSection,
   wrapInPre,
+  wrapInHighlightedPre,
   buildEditedFilesSection,
   buildCompactInput,
 } from '../htmlBuilders.js';
@@ -120,12 +121,15 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     }
   }
 
-  // Error or output section
+  // Error or output section - with syntax highlighting for structured output
   if (errorText) {
     sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
   } else if (outputText) {
     sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      buildToolUseSection(
+        'Output:',
+        wrapInHighlightedPre(outputText, 'tool-output-full'),
+      ),
     );
   }
 

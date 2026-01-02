@@ -68,6 +68,20 @@
   overflow: auto;
 }
 
+/* Syntax highlighted code blocks in tool output */
+pre.hljs.tool-output-full {
+  padding: var(--spacing-small);
+  margin: 0;
+  border-radius: var(--border-radius-small);
+  background-color: var(--vscode-textCodeBlock-background);
+}
+
+pre.hljs.tool-output-full code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
 /* Edited files section */
 .tool-files-section {
   margin: var(--spacing-small) 0;

@@ -13,6 +13,7 @@ import {
   INPUT_COMPACT_ENTRIES_THRESHOLD,
   COMPACT_VALUE_MAX_LENGTH,
 } from './constants.js';
+import { highlightCode, shouldHighlight } from './syntaxHighlighter.js';
 
 /**
  * Build a tool-use section HTML block
@@ -38,6 +39,40 @@ export const buildToolUseSection = (label, content) => `
 export const wrapInPre = (text, className = '') => {
   const classAttr = className ? ` class="${className}"` : '';
   return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
+};
+
+/**
+ * Wrap text in a pre/code element with syntax highlighting.
+ * Falls back to plain pre if highlighting is not applicable.
+ * @param {string} text - Text to wrap
+ * @param {string} [className] - Optional CSS class for the pre element
+ * @param {string} [language] - Optional language hint for highlighting
+ * @returns {string} HTML string with syntax highlighting
+ */
+export const wrapInHighlightedPre = (text, className = '', language = null) => {
+  if (!text) {
+    return wrapInPre('', className);
+  }
+
+  // Check if highlighting is appropriate for this content
+  if (!shouldHighlight(text) && !language) {
+    return wrapInPre(text, className);
+  }
+
+  const { html, language: detectedLang } = highlightCode(text, language);
+
+  // If no language was detected, fall back to plain pre
+  if (!detectedLang) {
+    return wrapInPre(text, className);
+  }
+
+  // Build class string: include both original class and hljs language class
+  const classes = ['hljs', className, `language-${detectedLang}`]
+    .filter(Boolean)
+    .join(' ');
+
+  // Note: highlightCode returns pre-escaped HTML, so we don't encode again
+  return `<pre class="${classes}"><code>${html}</code></pre>`;
 };
 
 /**
