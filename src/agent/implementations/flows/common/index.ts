@@ -3,9 +3,10 @@
  *
  * Exports:
  * - NODE_NO_RETRY, NODE_NO_WAIT: Node configuration constants
- * - NodeExecResult: Shared result type for nodes
- * - BaseFlowServices: Base service interface for all flows
+ * - BaseFlowContextInit: Base initialization config for all flows
+ * - FlowServiceAccessors: Convenience accessors (logger, context) added by child services
  * - FlowParams: Base flow params type (aliased by flow-specific types)
+ * - buildBaseCycleOptions: Helper to build cycle options from services
  */
 
 export * from './AgentRunFlowRunner';
