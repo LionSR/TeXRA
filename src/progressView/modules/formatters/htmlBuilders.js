@@ -169,8 +169,9 @@ export const buildEditedFilesList = (edits) => {
   if (!Array.isArray(edits) || edits.length === 0) return '';
 
   const items = edits
+    .filter((edit) => edit && typeof edit === 'object' && edit.path)
     .map((edit) => {
-      const path = edit.path || '';
+      const path = edit.path;
       const fileName = path.split('/').pop() || path;
       const pathEscaped = encodeHtml(path);
       const fileNameEscaped = encodeHtml(fileName);
@@ -184,6 +185,7 @@ export const buildEditedFilesList = (edits) => {
     })
     .join('');
 
+  if (!items) return '';
   return `<ul class="detail-list edited-files-list">${items}</ul>`;
 };
 
