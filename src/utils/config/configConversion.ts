@@ -4,7 +4,11 @@ import { type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Type imports
-import { type TaskState } from '@logger/TaskState';
+import {
+  type TaskState,
+  type ToolUseTaskState,
+  type WorkflowTaskState,
+} from '@logger/TaskState';
 
 // Local file imports
 import { FILE_TYPES, type FileType } from './constants';
@@ -43,13 +47,13 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
 
   if (session.agentCategory === AgentCategory.ToolUse) {
     return {
-      agentConfig: config as TaskState['agentConfig'],
+      agentConfig: config as ToolUseTaskState['agentConfig'],
       toolSessionState: {},
     };
   }
 
   return {
-    agentConfig: config as TaskState['agentConfig'],
+    agentConfig: config as WorkflowTaskState['agentConfig'],
     activeFiles: createActiveFilesFromArrays(config),
   };
 }

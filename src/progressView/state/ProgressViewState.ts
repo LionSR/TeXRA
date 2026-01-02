@@ -669,7 +669,10 @@ export class ProgressViewState {
           continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(raw as TaskState));
+        this.taskStates.set(
+          stream as StreamTabId,
+          cloneTaskState(raw as unknown as TaskState),
+        );
         loaded += 1;
       }
     }
