@@ -1,13 +1,13 @@
 # Agent State Architecture
 
-TeXRA's agents follow the pocket flow model where flows operate over an explicit
-shared store. This document outlines the state slices that travel through the
-store and how they relate to the response and tool-use cycles.
+TeXRA's agents follow the PocketFlow model where flows operate over explicit
+state slices. This document outlines the state slices that travel through the
+flow and how they relate to the response and tool-use cycles.
 
-## Shared store slices
+## State slices
 
-Each agent execution owns an `AgentSharedStore` composed of the following
-slices:
+Each agent execution uses the following state slices (passed directly, not
+wrapped in a store class):
 
 - **Round state (`ConversationRoundState`)** – Tracks the current round index,
   continuation count, accumulated response time, target output file, and the
@@ -23,8 +23,25 @@ slices:
   variables, per-round transient variables, and exported output variables so
   orchestrators can safely compose multiple agents.
 
-Flows receive a reference to the shared store and always mutate state through
-these slices rather than copying structures between nodes.
+Flows receive references to these state slices directly (via `flow.setServices()`)
+and mutate them in place rather than copying structures between nodes.
+
+## Snapshot serialization
+
+State slices support snapshot serialization for PersistedFlow:
+
+```typescript
+// Serialize to plain objects (structuredClone-safe)
+const runSnapshot = runState.toSnapshot();
+const workspaceSnapshot = workspaceState.toSnapshot();
+
+// Restore from snapshots
+const runState = AgentRunState.fromSnapshot(runSnapshot);
+const workspaceState = AgentWorkspaceState.fromSnapshot(workspaceSnapshot);
+```
+
+This pattern enables PersistedFlow to checkpoint state between nodes using
+`structuredClone()` without requiring special handling.
 
 ## Usage tracking
 
@@ -35,23 +52,14 @@ records the round, which updates the accumulator and captures the raw usage
 snapshot. The `UsageMonitor` reads from the accumulator to emit telemetry while
 summing native payloads to compute total cost.
 
-## Persistence and resume
-
-Tool-use persistence stores the serialized `AgentWorkspaceState` by delegating to
-its `toJSON`/`fromJSON` helpers. Round and run state serialization hooks are
-available through their `toJSON`/`fromJSON` methods for future resume support.
-
 ## Integration points
 
-- **Response cycle flow** uses `AgentSharedStore` directly, mutating
-  `store.round`, `store.run`, and `store.workspace` as the model is invoked and the
-  response is processed.
+- **Response cycle flow** receives state slices directly via `flow.setServices()`,
+  mutating `run` and `workspace` as the model is invoked and response processed.
 - **Reflection run flow** keeps track of run progress through `AgentRunState`
   and persists round/tool states for later inspection.
-- **Tool-use flows** rely on `AgentWorkspaceState` slices to manage assembled
-  responses, media files, and reasoning caches while persisting state between
-  executions.
+- **Tool-use flows** pass state slices through `shared.state.stateSlices` as
+  individual snapshots, reconstructing class instances only when needed.
 
-By consolidating state management around the shared store, the refactored flows
-align with the pocket flow design and make it easier to orchestrate agents,
-resume executions, and surface telemetry.
+By passing state slices directly (without wrapper classes), flows align with the
+PocketFlow design while eliminating unnecessary abstraction overhead.
