@@ -202,6 +202,16 @@ async function prepareFlowExecution(
   modelHandler.setAgentType(agentSetting.agentType);
   modelHandler.setLogger(executionContext.logger);
 
+  // Emit setActiveStream BEFORE creating the Init stage.
+  // This ensures the progress view's activeStream is set before any
+  // addTaskGroup events arrive, so the frontend correctly renders groups.
+  bus.emit('setActiveStream', {
+    stream: streamTabId,
+    session: agentConfig.session,
+    isRemote: isRemoteAgent(agentConfig.agent),
+    hasMultipleOutputs: agentConfig.useMultipleOutputs,
+  });
+
   // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
   const initStage = await executionContext.logger.stage('Init');
@@ -423,13 +433,7 @@ export async function executeAgent(
 
     const runStorage = getRunStorageService();
 
-    // Setup UI state
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: config.session,
-      isRemote: isRemoteAgent(config.agent),
-      hasMultipleOutputs: config.useMultipleOutputs,
-    });
+    // Setup UI state (setActiveStream already emitted in prepareFlowExecution)
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     if (!isResume) {
@@ -592,13 +596,7 @@ export async function executeMergeAgent(
   }
 
   try {
-    // Setup UI state
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: ctx.agentConfig.session!,
-      isRemote: isRemoteAgent(ctx.agentConfig.agent),
-      hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
-    });
+    // Setup UI state (setActiveStream already emitted in prepareFlowExecution)
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     await logger.withScope(`Task: merge@${model}`, async () => {
@@ -701,13 +699,7 @@ export async function resumeToolUseFromSnapshot(
   const interruptManager = new InterruptManager();
 
   try {
-    // Setup UI state for resume
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: agentConfig.session!,
-      isRemote: isRemoteAgent(agentConfig.agent),
-      hasMultipleOutputs: agentConfig.useMultipleOutputs,
-    });
+    // Setup UI state (setActiveStream already emitted in prepareFlowExecution)
     StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 
     // Run the flow with resume snapshot
