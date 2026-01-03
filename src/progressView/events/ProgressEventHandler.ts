@@ -13,6 +13,7 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -244,10 +245,10 @@ export class ProgressEventHandler {
       this.state.runInstructions.getInstructions(stream).entries(),
     );
 
-    const filesByRun = this.formatRunOutputs(
+    const filesByRun = nestedMapToRecord(
       this.state.outputFiles.getFiles(stream),
     );
-    const missingByRun = this.formatRunStringOutputs(
+    const missingByRun = nestedMapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
     );
     const usageByRun = Object.fromEntries(
@@ -337,26 +338,6 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
-  }
-
-  private formatRunOutputs(
-    runs: Map<string, Map<number, OutputFileInfo[]>>,
-  ): Record<string, { [key: number]: OutputFileInfo[] }> {
-    const payload: Record<string, { [key: number]: OutputFileInfo[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
-    }
-    return payload;
-  }
-
-  private formatRunStringOutputs(
-    runs: Map<string, Map<number, string[]>>,
-  ): Record<string, { [key: number]: string[] }> {
-    const payload: Record<string, { [key: number]: string[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
-    }
-    return payload;
   }
 
   /**
