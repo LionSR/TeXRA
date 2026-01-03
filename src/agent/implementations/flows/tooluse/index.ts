@@ -34,5 +34,5 @@ export {
   runToolUseFlow,
   type RunToolUseFlowInput,
   type RunToolUseFlowResult,
-  type RunToolUseFlowCallbacks,
+  type ToolUseFlowSetupCallback,
 } from './runToolUseFlow';

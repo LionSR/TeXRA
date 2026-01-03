@@ -26,12 +26,8 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import {
   runToolUseFlow,
   type IToolUseSession,
-  type RunToolUseFlowCallbacks,
 } from '@agent/implementations/flows/tooluse';
-import {
-  runReflectionFlow,
-  type RunReflectionFlowCallbacks,
-} from '@agent/implementations/flows/reflection/runReflectionFlow';
+import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -52,10 +48,6 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -96,9 +88,9 @@ export interface ExecuteAgentOptions {
  */
 interface FlowExecutionContext {
   modelHandler: IModelHandler<any, any, any, any, any>;
-  agentConfig: AgentConfig;
-  agentSetting: AgentSetting;
-  agentPrompt: AgentPrompt;
+  config: AgentConfig;
+  setting: AgentSetting;
+  prompt: AgentPrompt;
   agentPath: string;
   executionContext: AgentExecutionContext;
   streamTabId: StreamTabId;
@@ -161,40 +153,40 @@ async function prepareFlowExecution(
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
-  const [loadedSettings, agentPrompt] = await loadAgentSettingAndPrompts(
+  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
     resolution,
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const agentSetting = ensureAgentTypeForSource(
+  const setting = ensureAgentTypeForSource(
     loadedSettings,
     resolution.entry.source,
   );
-  const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
+  const sessionDescriptor = getAgentSessionDescriptor(setting);
   const agentPath = path.dirname(resolution.definitionPath);
 
   // 2. Validate and create model handler
   await validateAndGetModelConfig(fullConfig.model);
-  const agentConfig: AgentConfig = {
+  const config: AgentConfig = {
     ...fullConfig,
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
   const modelConfig = {
     ...MODEL_CONFIGS[fullConfig.model],
-    toolConfig: agentConfig.toolConfig,
+    toolConfig: config.toolConfig,
   };
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
   // 3. Create execution context
   const streamTabId = getStreamTabId(
-    agentConfig.agent,
+    config.agent,
     fullConfig.model,
-    agentConfig.inputFile,
+    config.inputFile,
     {
-      agentType: agentSetting.agentType,
+      agentType: setting.agentType,
       executionId,
-      useMultipleOutputs: agentConfig.useMultipleOutputs,
+      useMultipleOutputs: config.useMultipleOutputs,
     },
   );
   const executionContext = new AgentExecutionContext({
@@ -206,7 +198,7 @@ async function prepareFlowExecution(
   // Configure model handler with agent type and logger
   // This enables provider-specific behavior (e.g., Anthropic context management beta
   // for tool-use agents, OpenAI Response API background mode detection)
-  modelHandler.setAgentType(agentSetting.agentType);
+  modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(executionContext.logger);
 
   // 4. Build user variable channels (replaces agent.init() logic)
@@ -215,9 +207,9 @@ async function prepareFlowExecution(
   let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
   try {
     baseVars = await buildUserVars(
-      agentConfig,
-      agentSetting,
-      agentPrompt,
+      config,
+      setting,
+      prompt,
       agentPath,
       modelHandler,
       executionContext.logger,
@@ -234,21 +226,21 @@ async function prepareFlowExecution(
 
   // 5. Create usage monitor for tracking API usage
   const isMultipleOutput =
-    agentSetting.agentCategory === AgentCategory.Workflow
-      ? (agentSetting as AgentWorkflowSetting).isMultipleOutput
+    setting.agentCategory === AgentCategory.Workflow
+      ? (setting as AgentWorkflowSetting).isMultipleOutput
       : undefined;
 
   const usageMonitor = new UsageMonitor(modelHandler, executionContext, {
-    agentName: agentConfig.agent,
-    agentCategory: agentSetting.agentCategory,
+    agentName: config.agent,
+    agentCategory: setting.agentCategory,
     isMultipleOutput,
   });
 
   return {
     modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
+    config,
+    setting,
+    prompt,
     agentPath,
     executionContext,
     streamTabId,
@@ -277,97 +269,6 @@ function createUsageRecorder(
 }
 
 /**
- * Create standardized interruptible callbacks for tool-use flows.
- *
- * DRY helper for the register/unregister pattern used when running tool-use flows.
- * Uses the captured streamTabId from the closure rather than callback parameters
- * to ensure consistent stream ID usage throughout the flow lifecycle.
- *
- * @param streamTabId - Stream ID to use for registration
- * @param onSetup - Optional callback invoked after registration, used by
- *                  resumeToolUseFromSnapshot to configure the session before flow starts
- */
-function createToolUseCallbacks(
-  streamTabId: StreamTabId,
-  onSetup?: (context: { session: IToolUseSession }) => void,
-): RunToolUseFlowCallbacks {
-  return {
-    onContextReady: (_callbackStreamId, context) => {
-      registerInterruptible(streamTabId, context);
-      onSetup?.(context);
-    },
-    onFlowComplete: (_callbackStreamId) => {
-      unregisterInterruptible(streamTabId);
-    },
-  };
-}
-
-/**
- * Create standardized interruptible callbacks for reflection flows.
- *
- * DRY helper for the register/unregister pattern used when running reflection flows.
- * Uses the captured streamTabId from the closure rather than the storageKey callback
- * parameter, since registerInterruptible expects a StreamTabId.
- */
-function createReflectionCallbacks(
-  streamTabId: StreamTabId,
-): RunReflectionFlowCallbacks {
-  return {
-    onContextReady: (_storageKey, context) => {
-      registerInterruptible(streamTabId, context);
-    },
-    onFlowComplete: (_storageKey) => {
-      unregisterInterruptible(streamTabId);
-    },
-  };
-}
-
-/**
- * Common flow input fields shared by all flow types.
- * Returned by buildBaseFlowInput helper.
- */
-interface BaseFlowInputFields {
-  modelHandler: FlowExecutionContext['modelHandler'];
-  config: FlowExecutionContext['agentConfig'];
-  prompt: FlowExecutionContext['agentPrompt'];
-  executionContext: FlowExecutionContext['executionContext'];
-  userVarChannels: FlowExecutionContext['userVarChannels'];
-  checkInterruption: InterruptManager['checkInterruption'];
-  setAbortController: InterruptManager['setAbortController'];
-  onInterrupt: InterruptManager['onInterrupt'];
-  getClient: () => ReturnType<
-    FlowExecutionContext['modelHandler']['getClient']
-  >;
-  getUsageRecorder: () => RoundFinalizedCallback;
-}
-
-/**
- * Build the common flow input fields shared by all flow types.
- *
- * DRY helper: Both tool-use and reflection flows share these fields.
- * This extracts the common pattern instead of duplicating it 4+ times.
- */
-function buildBaseFlowInput(
-  ctx: FlowExecutionContext,
-  interruptManager: InterruptManager,
-  runKind: 'workflow' | 'tool-use',
-): BaseFlowInputFields {
-  return {
-    modelHandler: ctx.modelHandler,
-    config: ctx.agentConfig,
-    prompt: ctx.agentPrompt,
-    executionContext: ctx.executionContext,
-    userVarChannels: ctx.userVarChannels,
-    checkInterruption: interruptManager.checkInterruption,
-    setAbortController: interruptManager.setAbortController,
-    onInterrupt: interruptManager.onInterrupt,
-    // Get fresh client each response round to ensure auth keys are refreshed
-    getClient: () => ctx.modelHandler.getClient(),
-    getUsageRecorder: createUsageRecorder(ctx.usageMonitor, runKind),
-  };
-}
-
-/**
  * Setup UI state for flow execution.
  *
  * DRY helper: All three flow execution functions call setActiveStream
@@ -385,9 +286,9 @@ function setupFlowUIState(
   const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
   bus.emit('setActiveStream', {
     stream: streamTabId,
-    session: ctx.agentConfig.session!,
-    isRemote: isRemoteAgent(ctx.agentConfig.agent),
-    hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
+    session: ctx.config.session!,
+    isRemote: isRemoteAgent(ctx.config.agent),
+    hasMultipleOutputs: ctx.config.useMultipleOutputs,
   });
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
@@ -517,11 +418,11 @@ async function handleFlowError(
  * The flow contexts create all necessary services internally.
  */
 export async function executeAgent(
-  agentConfig: Partial<AgentConfig>,
+  configPayload: Partial<AgentConfig>,
   executionId?: ExecutionId,
   options?: ExecuteAgentOptions,
 ): Promise<void> {
-  if (!agentConfig.model || !agentConfig.agent) {
+  if (!configPayload.model || !configPayload.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
 
@@ -529,13 +430,12 @@ export async function executeAgent(
 
   // Prepare flow execution context
   const ctx = await prepareFlowExecution(
-    agentConfig.agent,
-    agentConfig,
+    configPayload.agent,
+    configPayload,
     executionId,
   );
 
-  const { streamTabId, agentSetting, executionContext } = ctx;
-  const config = ctx.agentConfig;
+  const { streamTabId, setting, executionContext, config } = ctx;
   const agentName = config.agent;
 
   if (!config.session) {
@@ -556,7 +456,7 @@ export async function executeAgent(
   // Handle resume state
   // Note: Full resume hydration is handled internally by agents/flows
   // Here we just set the status for UI feedback
-  if (isResume && agentSetting.agentType !== 'toolUse' && executionId) {
+  if (isResume && setting.agentType !== 'toolUse' && executionId) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
   }
 
@@ -613,26 +513,25 @@ export async function executeAgent(
         const interruptManager = new InterruptManager();
         let flowStatus: 'error' | 'stopped';
 
-        if (agentSetting.agentType === 'toolUse') {
+        if (setting.agentType === 'toolUse') {
           // Tool-use flow execution
-          const result = await runToolUseFlow(
-            {
-              ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
-              setting: ctx.agentSetting as AgentToolUseSetting,
-              streamTabId: ctx.streamTabId,
-            },
-            createToolUseCallbacks(streamTabId),
-          );
+          const result = await runToolUseFlow({
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getClient: () => ctx.modelHandler.getClient(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+            setting: ctx.setting as AgentToolUseSetting,
+          });
           flowStatus = result.status;
         } else {
           // Reflection flow execution (direct/CoT/workflow)
-          const result = await runReflectionFlow(
-            {
-              ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-              setting: ctx.agentSetting as AgentWorkflowSetting,
-            },
-            createReflectionCallbacks(streamTabId),
-          );
+          const result = await runReflectionFlow({
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getClient: () => ctx.modelHandler.getClient(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+            setting: ctx.setting as AgentWorkflowSetting,
+          });
           flowStatus = result.status;
         }
 
@@ -665,9 +564,9 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, executionContext, agentConfig } = ctx;
+  const { streamTabId, executionContext, config } = ctx;
 
-  if (!agentConfig.session) {
+  if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
   }
 
@@ -696,17 +595,17 @@ export async function executeMergeAgent(
       );
 
       // Run reflection flow with custom file naming
-      const result = await runReflectionFlow(
-        {
-          ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-          setting: ctx.agentSetting as AgentWorkflowSetting,
-          getOutputFileLocation,
-        },
-        createReflectionCallbacks(streamTabId),
-      );
+      const result = await runReflectionFlow({
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getClient: () => ctx.modelHandler.getClient(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        setting: ctx.setting as AgentWorkflowSetting,
+        getOutputFileLocation,
+      });
 
-      logger.debug(`Task completed successfully`);
       updateFlowStatus(streamTabId, result.status);
+      logger.debug(`Task completed with status: ${result.status}`);
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
@@ -732,22 +631,26 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  const config = snapshot.agentConfig;
+  const snapshotConfig = snapshot.agentConfig;
   const executionId = snapshot.executionId as ExecutionId;
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context
-  const ctx = await prepareFlowExecution(config.agent, config, executionId);
-  const { agentSetting, executionContext, agentConfig } = ctx;
+  const ctx = await prepareFlowExecution(
+    snapshotConfig.agent,
+    snapshotConfig,
+    executionId,
+  );
+  const { setting, executionContext, config } = ctx;
 
   // Validate agent type and session
-  if (agentSetting.agentType !== 'toolUse') {
+  if (setting.agentType !== 'toolUse') {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
   }
 
-  if (!agentConfig.session) {
+  if (!config.session) {
     throw new Error('Resume agent configuration is missing session metadata.');
   }
 
@@ -760,21 +663,25 @@ export async function resumeToolUseFromSnapshot(
     // Run the flow with resume snapshot
     const result = await runToolUseFlow(
       {
-        ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
-        setting: agentSetting as AgentToolUseSetting,
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getClient: () => ctx.modelHandler.getClient(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+        setting: setting as AgentToolUseSetting,
         streamTabId,
         resumeSnapshot: snapshot,
       },
-      createToolUseCallbacks(
-        streamTabId,
-        setupSession ? (context) => setupSession(context.session) : undefined,
-      ),
+      setupSession ? (context) => setupSession(context.session) : undefined,
     );
 
     updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(error, config.agent, streamTabId, executionContext);
-    throw error;
+    await handleFlowError(
+      error,
+      snapshotConfig.agent,
+      streamTabId,
+      executionContext,
+    );
   }
 }
