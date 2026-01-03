@@ -52,7 +52,7 @@ export class VSCodeTransport extends Transport {
   log(info: any, callback: () => void): void {
     const { level, message, timestamp, messageType } = info;
     const structuredData = serializeLogData(info.data);
-    const groupId = info.groupId ?? this.activeGroupId;
+    const groupId = info.groupId;
 
     this.writeToChannel(level, message, timestamp, structuredData);
     this.emitLogEvent({
@@ -109,16 +109,6 @@ export class VSCodeTransport extends Transport {
 
     if (this.activeGroupId === groupId) {
       this.activeGroupId = group.parentGroupId;
-    }
-  }
-
-  getActiveGroupId(): string | undefined {
-    return this.activeGroupId;
-  }
-
-  setActiveGroupId(groupId: string | undefined): void {
-    if (groupId === undefined || this.groups.has(groupId)) {
-      this.activeGroupId = groupId;
     }
   }
 

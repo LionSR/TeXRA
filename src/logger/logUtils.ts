@@ -20,7 +20,6 @@ type ChannelKey = string;
 
 interface ChannelContext {
   stack: string[];
-  override?: string;
 }
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
@@ -77,7 +76,6 @@ function pushGroupContext(
 
   const nextContext: ChannelContext = {
     stack: [...context.stack, groupId],
-    override: context.override,
   };
 
   store.set(key, nextContext);
@@ -94,16 +92,10 @@ function popGroupContext(
   const previous = previousStacks.get(`${key}:${groupId}`);
   previousStacks.delete(`${key}:${groupId}`);
 
-  const existing = store.get(key);
-
   if (!previous || previous.length === 0) {
-    if (existing?.override !== undefined) {
-      store.set(key, { stack: [], override: existing.override });
-    } else {
-      store.delete(key);
-    }
+    store.delete(key);
   } else {
-    store.set(key, { stack: [...previous], override: existing?.override });
+    store.set(key, { stack: [...previous] });
   }
 
   contextStorage.enterWith(store);
@@ -123,7 +115,7 @@ function resolveActiveGroup(
     return undefined;
   }
 
-  return context.override ?? context.stack.at(-1);
+  return context.stack.at(-1);
 }
 
 function getTransport(
@@ -192,20 +184,6 @@ export function getActiveGroupId(
   isAgent = false,
 ): string | undefined {
   return resolveActiveGroup(channel, undefined, isAgent);
-}
-
-export function setActiveGroupId(
-  channel: string,
-  groupId: string | undefined,
-  isAgent = false,
-): void {
-  const context = getContext(channel, isAgent) ?? { stack: [] };
-  if (groupId === undefined) {
-    delete context.override;
-  } else {
-    context.override = groupId;
-  }
-  setContext(channel, isAgent, context);
 }
 
 export async function runWithGroupContext<T>(
