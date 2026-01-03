@@ -195,10 +195,10 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
-        // Flat structure: shared.workspaceSnapshot, shared.lastRetryError
+        // Flat structure: shared.workspaceSnapshot, shared.lastError
         const persistedShared = flowRecord.shared as {
           workspaceSnapshot?: unknown;
-          lastRetryError?: RetryErrorInfo;
+          lastError?: RetryErrorInfo;
         };
         if (persistedShared.workspaceSnapshot) {
           // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
@@ -215,10 +215,10 @@ export async function runReflectionFlow<C = unknown>(
         }
 
         // Restore retry error if present (for proper error classification on resume)
-        if (persistedShared.lastRetryError) {
-          restoredRetryError = persistedShared.lastRetryError;
+        if (persistedShared.lastError) {
+          restoredRetryError = persistedShared.lastError;
           executionContext.logger.debug(
-            `Restored lastRetryError from persisted flow: ${restoredRetryError.message}`,
+            `Restored lastError from persisted flow: ${restoredRetryError.message}`,
           );
         }
       } else {
@@ -237,7 +237,7 @@ export async function runReflectionFlow<C = unknown>(
 
     // Restore retry error if present
     if (restoredRetryError) {
-      shared.lastRetryError = restoredRetryError;
+      shared.lastError = restoredRetryError;
     }
 
     // Create RoundPersistedFlow with the start node
