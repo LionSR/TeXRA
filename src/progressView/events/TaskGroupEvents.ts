@@ -25,6 +25,11 @@ import type {
 interface TaskGroupEventsShared extends BaseEventShared {
   initializeStreamForTaskGroup(stream: string): Promise<void>;
   debugLog(message: string): void;
+  /**
+   * Buffer a task group for later replay when the stream becomes active.
+   * Used when addTaskGroup arrives before setActiveStream for a stream.
+   */
+  bufferTaskGroupForReplay(stream: string, group: TaskGroup): void;
 }
 
 /**
@@ -85,13 +90,20 @@ export function createTaskGroupEvents(
         await shared.initializeStreamForTaskGroup(stream);
       }
 
-      // Send ADD_TASK_GROUP to frontend for immediate rendering.
-      // Always send when updater is available - the frontend will handle
-      // the message correctly once activeStream is set by UPDATE_STREAMS.
-      // This fixes a race condition where setActiveStream creates the stream
-      // but hasn't set activeStream yet when addTaskGroup is processed.
+      // Send ADD_TASK_GROUP to frontend only if this stream is currently active.
+      // If the stream isn't active yet (addTaskGroup arrived before setActiveStream),
+      // buffer the group for replay when setActiveStream is processed.
+      // This fixes the race condition where Init groups are dropped by the frontend
+      // because state.activeStream isn't set when the ADD_TASK_GROUP message arrives.
       if (updater.isAvailable()) {
-        updater.addTaskGroup(stream, group);
+        if (stream === state.activeStream) {
+          updater.addTaskGroup(stream, group);
+        } else {
+          debugLog(
+            `Buffering task group ${groupId} for stream ${stream} (activeStream=${state.activeStream})`,
+          );
+          shared.bufferTaskGroupForReplay(stream, group);
+        }
       }
 
       // Ensure group persistence completes
