@@ -128,6 +128,25 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Clear stale state when switching between session kinds.
+   * Different session kinds have incompatible task group structures:
+   * - Workflow sessions create hierarchical task groups
+   * - Tool-use sessions don't create task groups at all
+   * Stale groups from previous sessions interfere with run ID resolution.
+   * @param {string} newSessionKind - The new session kind being switched to
+   */
+  _clearSessionKindState(newSessionKind) {
+    if (newSessionKind !== state.activeSessionKind && state.activeSessionKind) {
+      state.taskGroups.clear();
+      dom.taskGroups.clear();
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
+    }
+  }
+
+  /**
    * Update run-scoped metadata (instructions, usage, files) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
@@ -284,6 +303,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       'workflow'; // Default fallback
     const isToolAgent = sessionKind === 'toolUse';
 
+    this._clearSessionKindState(sessionKind);
     state.activeSessionKind = sessionKind;
 
     dom.runSelector.setDisplayEnabled(
@@ -777,6 +797,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       message.sessionKind || state.activeSessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
+    this._clearSessionKindState(sessionKind);
     state.activeSessionKind = sessionKind;
 
     let activeRunId = state.getActiveRunId(activeStream);
