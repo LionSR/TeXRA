@@ -31,99 +31,6 @@ import type { TodoItem } from '@eventBus/schemas';
 // Type imports
 
 /**
- * Type-safe mapping of commands to their payload types.
- * This enables autocomplete and type checking for the generic send method.
- */
-type CommandPayloads = {
-  [COMMANDS.UPDATE_STREAMS]: {
-    streams: StreamTabInfo[];
-    activeStream: StreamTabId;
-    agentFilter: AgentTypeFilter;
-  };
-  [COMMANDS.UPDATE_LOGS]: {
-    stream: StreamTabId;
-    messages: LogMessageData[];
-    groups?: any[];
-    runInstructions?: Record<string, InstructionUpdate>;
-    activeRunId?: string | null;
-    runUsage?: Record<string, TokenUsageStats>;
-    runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
-    forceRebuild?: boolean;
-  };
-  [COMMANDS.APPEND_LOG]: {
-    stream: StreamTabId;
-    logMessage: LogMessageData;
-  };
-  [COMMANDS.UPDATE_LOG]: {
-    stream: StreamTabId;
-    logMessage: LogMessageData;
-  };
-  [COMMANDS.UPDATE_FILES]: {
-    stream: StreamTabId;
-    runId?: string;
-    rounds?: { [key: number]: OutputFileInfo[] };
-    reset?: boolean;
-  };
-  [COMMANDS.UPDATE_MISSING_OUTPUTS]: {
-    stream: StreamTabId;
-    runId?: string;
-    rounds?: { [key: number]: string[] };
-    reset?: boolean;
-  };
-  [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: {
-    request: ToolEditApprovalPrompt;
-  };
-  [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: {
-    requestId: string;
-  };
-  [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: {
-    bypassActive: boolean;
-  };
-  [COMMANDS.SHOW_RETRY_REQUEST]: {
-    request: RetryRequestPrompt;
-  };
-  [COMMANDS.RESOLVE_RETRY_REQUEST]: {
-    streamId: string;
-  };
-  [COMMANDS.UPDATE_USAGE]: {
-    stream: StreamTabId;
-    usageByRun: Record<string, TokenUsageStats>;
-  };
-  [COMMANDS.UPDATE_RUN_USAGE]: {
-    stream: StreamTabId;
-    runId: string;
-    usage: TokenUsageStats;
-  };
-  [COMMANDS.UPDATE_INSTRUCTION]: {
-    stream: StreamTabId | '';
-    instruction: InstructionUpdate | null;
-    sessionKind?: string;
-  };
-  [COMMANDS.THEME_SET]: {
-    theme: 'dark' | 'light';
-  };
-  [COMMANDS.UPDATE_STATUS]: {
-    status: StreamStatus;
-  };
-  [COMMANDS.UPDATE_STREAM_STATUS]: {
-    stream: StreamTabId;
-    status: StreamStatus;
-    lastTimestamp?: number;
-  };
-  [COMMANDS.ADD_TASK_GROUP]: {
-    stream: StreamTabId;
-    group: any;
-  };
-  [COMMANDS.UPDATE_TASK_GROUP]: {
-    update: TaskGroupUpdatePayload;
-  };
-  [COMMANDS.UPDATE_TODOS]: {
-    stream: StreamTabId;
-    todos: TodoItem[];
-  };
-};
-
-/**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
@@ -140,21 +47,6 @@ export class WebviewUpdater {
     const webview = this.getWebview();
     if (!webview) return;
     webview.postMessage(message);
-  }
-
-  /**
-   * Type-safe generic method to send commands to the webview.
-   * Provides autocomplete for command names and their required payloads.
-   *
-   * @example
-   * updater.send(COMMANDS.UPDATE_STATUS, { status: 'running' });
-   * updater.send(COMMANDS.APPEND_LOG, { stream: 'main', logMessage: msg });
-   */
-  send<K extends keyof CommandPayloads>(
-    command: K,
-    payload: CommandPayloads[K],
-  ): void {
-    this.sendMessage({ command, ...payload });
   }
 
   static createInstructionUpdate(
@@ -197,7 +89,12 @@ export class WebviewUpdater {
     activeStream: StreamTabId,
     agentFilter: AgentTypeFilter,
   ): void {
-    this.send(COMMANDS.UPDATE_STREAMS, { streams, activeStream, agentFilter });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STREAMS,
+      streams,
+      activeStream,
+      agentFilter,
+    });
   }
 
   /**
@@ -223,7 +120,8 @@ export class WebviewUpdater {
       forceRebuild?: boolean;
     },
   ): void {
-    this.send(COMMANDS.UPDATE_LOGS, {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_LOGS,
       stream,
       messages,
       groups,
@@ -239,14 +137,22 @@ export class WebviewUpdater {
    * Append a single log message to a stream
    */
   appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.send(COMMANDS.APPEND_LOG, { stream, logMessage });
+    this.sendMessage({
+      command: COMMANDS.APPEND_LOG,
+      stream,
+      logMessage,
+    });
   }
 
   /**
    * Update an existing log message
    */
   updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.send(COMMANDS.UPDATE_LOG, { stream, logMessage });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_LOG,
+      stream,
+      logMessage,
+    });
   }
 
   /**
@@ -260,7 +166,11 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    this.send(COMMANDS.UPDATE_FILES, { stream, ...payload });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_FILES,
+      stream,
+      ...payload,
+    });
   }
 
   /**
@@ -274,27 +184,46 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    this.send(COMMANDS.UPDATE_MISSING_OUTPUTS, { stream, ...payload });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream,
+      ...payload,
+    });
   }
 
   showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
-    this.send(COMMANDS.SHOW_TOOL_EDIT_APPROVAL, { request: prompt });
+    this.sendMessage({
+      command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
+      request: prompt,
+    });
   }
 
   resolveToolEditApprovalPrompt(requestId: string): void {
-    this.send(COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL, { requestId });
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
+      requestId,
+    });
   }
 
   updateToolEditApprovalState(bypassActive: boolean): void {
-    this.send(COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE, { bypassActive });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      bypassActive,
+    });
   }
 
   showRetryRequest(request: RetryRequestPrompt): void {
-    this.send(COMMANDS.SHOW_RETRY_REQUEST, { request });
+    this.sendMessage({
+      command: COMMANDS.SHOW_RETRY_REQUEST,
+      request,
+    });
   }
 
   resolveRetryRequest(streamId: string): void {
-    this.send(COMMANDS.RESOLVE_RETRY_REQUEST, { streamId });
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_RETRY_REQUEST,
+      streamId,
+    });
   }
 
   /**
@@ -304,7 +233,11 @@ export class WebviewUpdater {
     stream: StreamTabId,
     usageByRun: Record<string, TokenUsageStats>,
   ): void {
-    this.send(COMMANDS.UPDATE_USAGE, { stream, usageByRun });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_USAGE,
+      stream,
+      usageByRun,
+    });
   }
 
   /**
@@ -316,7 +249,12 @@ export class WebviewUpdater {
     runId: string,
     usage: TokenUsageStats,
   ): void {
-    this.send(COMMANDS.UPDATE_RUN_USAGE, { stream, runId, usage });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_RUN_USAGE,
+      stream,
+      runId,
+      usage,
+    });
   }
 
   /**
@@ -327,28 +265,43 @@ export class WebviewUpdater {
     instruction: InstructionUpdate,
     sessionKind?: string,
   ): void {
-    this.send(COMMANDS.UPDATE_INSTRUCTION, { stream, instruction, sessionKind });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_INSTRUCTION,
+      stream,
+      instruction,
+      sessionKind,
+    });
   }
 
   /**
    * Clear instruction panel content
    */
   clearInstruction(stream: StreamTabId | ''): void {
-    this.send(COMMANDS.UPDATE_INSTRUCTION, { stream, instruction: null });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_INSTRUCTION,
+      stream,
+      instruction: null,
+    });
   }
 
   /**
    * Update the code highlight theme
    */
   updateTheme(theme: 'dark' | 'light'): void {
-    this.send(COMMANDS.THEME_SET, { theme });
+    this.sendMessage({
+      command: COMMANDS.THEME_SET,
+      theme,
+    });
   }
 
   /**
    * Update stream status indicator (for active stream)
    */
   updateStatus(status: StreamStatus): void {
-    this.send(COMMANDS.UPDATE_STATUS, { status });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STATUS,
+      status,
+    });
   }
 
   /**
@@ -361,33 +314,44 @@ export class WebviewUpdater {
     status: StreamStatus,
     lastTimestamp?: number,
   ): void {
-    const payload: CommandPayloads[typeof COMMANDS.UPDATE_STREAM_STATUS] = {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,
       status,
-      ...(lastTimestamp !== undefined && { lastTimestamp }),
-    };
-    this.send(COMMANDS.UPDATE_STREAM_STATUS, payload);
+      lastTimestamp,
+    });
   }
 
   /**
    * Add a task group to the webview
    */
   addTaskGroup(stream: StreamTabId, group: any): void {
-    this.send(COMMANDS.ADD_TASK_GROUP, { stream, group });
+    this.sendMessage({
+      command: COMMANDS.ADD_TASK_GROUP,
+      stream,
+      group,
+    });
   }
 
   /**
    * Update a task group in the webview
    */
   updateTaskGroup(update: TaskGroupUpdatePayload): void {
-    this.send(COMMANDS.UPDATE_TASK_GROUP, { update });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_TASK_GROUP,
+      update,
+    });
   }
 
   /**
    * Update the todo list for a stream
    */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    this.send(COMMANDS.UPDATE_TODOS, { stream, todos });
+    this.sendMessage({
+      command: COMMANDS.UPDATE_TODOS,
+      stream,
+      todos,
+    });
   }
 
   /**
