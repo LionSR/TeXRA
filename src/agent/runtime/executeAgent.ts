@@ -137,13 +137,28 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
 }
 
 /**
+ * Options for prepareFlowExecution.
+ */
+interface PrepareFlowOptions {
+  /**
+   * Override the stream tab ID for UI state.
+   * Used in resume scenarios where the snapshot's stream ID should be used.
+   */
+  streamTabIdOverride?: StreamTabId;
+}
+
+/**
  * Prepare execution context for flow-first execution.
  * Creates all dependencies needed to run flows directly without agent classes.
+ *
+ * IMPORTANT: This function emits setActiveStream BEFORE creating the Init stage,
+ * ensuring task groups appear correctly in the progress board.
  */
 async function prepareFlowExecution(
   agentName: string,
   configPayload: Partial<AgentConfig>,
   executionId?: ExecutionId,
+  options?: PrepareFlowOptions,
 ): Promise<FlowExecutionContext> {
   // 1. Resolve agent definition
   const fullConfig = AgentConfigSchema.parse({
@@ -200,6 +215,19 @@ async function prepareFlowExecution(
   // for tool-use agents, OpenAI Response API background mode detection)
   modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(executionContext.logger);
+
+  // Determine effective stream ID (may be overridden for resume scenarios)
+  const effectiveStreamTabId = options?.streamTabIdOverride ?? streamTabId;
+
+  // Emit setActiveStream BEFORE Init stage creation.
+  // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
+  // preventing the race condition where Init groups are dropped.
+  bus.emit('setActiveStream', {
+    stream: effectiveStreamTabId,
+    session: sessionDescriptor,
+    isRemote: isRemoteAgent(fullConfig.agent),
+    hasMultipleOutputs: fullConfig.useMultipleOutputs,
+  });
 
   // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
@@ -271,8 +299,9 @@ function createUsageRecorder(
 /**
  * Setup UI state for flow execution.
  *
- * DRY helper: All three flow execution functions call setActiveStream
- * and set stream status to RUNNING.
+ * Sets the stream status to RUNNING. Note: setActiveStream is emitted
+ * in prepareFlowExecution BEFORE Init stage creation to ensure correct
+ * ordering of task group events.
  *
  * @param ctx - Flow execution context
  * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
@@ -284,12 +313,6 @@ function setupFlowUIState(
   streamTabIdOverride?: StreamTabId,
 ): void {
   const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
-  bus.emit('setActiveStream', {
-    stream: streamTabId,
-    session: ctx.config.session!,
-    isRemote: isRemoteAgent(ctx.config.agent),
-    hasMultipleOutputs: ctx.config.useMultipleOutputs,
-  });
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
@@ -635,11 +658,12 @@ export async function resumeToolUseFromSnapshot(
   const executionId = snapshot.executionId as ExecutionId;
   const streamTabId = snapshot.streamId as StreamTabId;
 
-  // Prepare flow execution context
+  // Prepare flow execution context with snapshot's stream ID for correct UI state
   const ctx = await prepareFlowExecution(
     snapshotConfig.agent,
     snapshotConfig,
     executionId,
+    { streamTabIdOverride: streamTabId },
   );
   const { setting, executionContext, config } = ctx;
 
