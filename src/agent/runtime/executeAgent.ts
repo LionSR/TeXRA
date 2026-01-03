@@ -153,40 +153,40 @@ async function prepareFlowExecution(
   const resolution = await getAgentPath(fullConfig.agent, {
     preferMultiple: fullConfig.useMultipleOutputs,
   });
-  const [loadedSettings, agentPrompt] = await loadAgentSettingAndPrompts(
+  const [loadedSettings, prompt] = await loadAgentSettingAndPrompts(
     resolution,
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const agentSetting = ensureAgentTypeForSource(
+  const setting = ensureAgentTypeForSource(
     loadedSettings,
     resolution.entry.source,
   );
-  const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
+  const sessionDescriptor = getAgentSessionDescriptor(setting);
   const agentPath = path.dirname(resolution.definitionPath);
 
   // 2. Validate and create model handler
   await validateAndGetModelConfig(fullConfig.model);
-  const agentConfig: AgentConfig = {
+  const config: AgentConfig = {
     ...fullConfig,
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
   const modelConfig = {
     ...MODEL_CONFIGS[fullConfig.model],
-    toolConfig: agentConfig.toolConfig,
+    toolConfig: config.toolConfig,
   };
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
   // 3. Create execution context
   const streamTabId = getStreamTabId(
-    agentConfig.agent,
+    config.agent,
     fullConfig.model,
-    agentConfig.inputFile,
+    config.inputFile,
     {
-      agentType: agentSetting.agentType,
+      agentType: setting.agentType,
       executionId,
-      useMultipleOutputs: agentConfig.useMultipleOutputs,
+      useMultipleOutputs: config.useMultipleOutputs,
     },
   );
   const executionContext = new AgentExecutionContext({
@@ -198,7 +198,7 @@ async function prepareFlowExecution(
   // Configure model handler with agent type and logger
   // This enables provider-specific behavior (e.g., Anthropic context management beta
   // for tool-use agents, OpenAI Response API background mode detection)
-  modelHandler.setAgentType(agentSetting.agentType);
+  modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(executionContext.logger);
 
   // 4. Build user variable channels (replaces agent.init() logic)
@@ -207,9 +207,9 @@ async function prepareFlowExecution(
   let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
   try {
     baseVars = await buildUserVars(
-      agentConfig,
-      agentSetting,
-      agentPrompt,
+      config,
+      setting,
+      prompt,
       agentPath,
       modelHandler,
       executionContext.logger,
@@ -226,21 +226,21 @@ async function prepareFlowExecution(
 
   // 5. Create usage monitor for tracking API usage
   const isMultipleOutput =
-    agentSetting.agentCategory === AgentCategory.Workflow
-      ? (agentSetting as AgentWorkflowSetting).isMultipleOutput
+    setting.agentCategory === AgentCategory.Workflow
+      ? (setting as AgentWorkflowSetting).isMultipleOutput
       : undefined;
 
   const usageMonitor = new UsageMonitor(modelHandler, executionContext, {
-    agentName: agentConfig.agent,
-    agentCategory: agentSetting.agentCategory,
+    agentName: config.agent,
+    agentCategory: setting.agentCategory,
     isMultipleOutput,
   });
 
   return {
     modelHandler,
-    config: agentConfig,
-    setting: agentSetting,
-    prompt: agentPrompt,
+    config,
+    setting,
+    prompt,
     agentPath,
     executionContext,
     streamTabId,
@@ -418,11 +418,11 @@ async function handleFlowError(
  * The flow contexts create all necessary services internally.
  */
 export async function executeAgent(
-  agentConfig: Partial<AgentConfig>,
+  configPayload: Partial<AgentConfig>,
   executionId?: ExecutionId,
   options?: ExecuteAgentOptions,
 ): Promise<void> {
-  if (!agentConfig.model || !agentConfig.agent) {
+  if (!configPayload.model || !configPayload.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
 
@@ -430,8 +430,8 @@ export async function executeAgent(
 
   // Prepare flow execution context
   const ctx = await prepareFlowExecution(
-    agentConfig.agent,
-    agentConfig,
+    configPayload.agent,
+    configPayload,
     executionId,
   );
 
@@ -631,15 +631,13 @@ export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   setupSession?: (session: IToolUseSession) => void,
 ): Promise<void> {
-  const config = snapshot.agentConfig;
+  const snapshotConfig = snapshot.agentConfig;
   const executionId = snapshot.executionId as ExecutionId;
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context
-  // Note: local 'config' shadows snapshot.agentConfig, so rename to snapshotConfig
-  const snapshotConfig = config;
   const ctx = await prepareFlowExecution(snapshotConfig.agent, snapshotConfig, executionId);
-  const { setting, executionContext, config: ctxConfig } = ctx;
+  const { setting, executionContext, config } = ctx;
 
   // Validate agent type and session
   if (setting.agentType !== 'toolUse') {
@@ -648,7 +646,7 @@ export async function resumeToolUseFromSnapshot(
     );
   }
 
-  if (!ctxConfig.session) {
+  if (!config.session) {
     throw new Error('Resume agent configuration is missing session metadata.');
   }
 
