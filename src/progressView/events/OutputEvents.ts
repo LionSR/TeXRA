@@ -1,12 +1,12 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import type { ProgressEventBusLike } from './types';
+import {
+  createStatefulEventDisposable,
+  type ProgressEventBusLike,
+} from './types';
 import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
@@ -35,37 +35,61 @@ export function createOutputEvents(
   return {
     register(bus, state, updater) {
       return [
-        new vscode.Disposable(
-          bus.on('addOutputFiles', ({ stream, storageKey, filesByRound }) => {
+        createStatefulEventDisposable(
+          bus,
+          'addOutputFiles',
+          state,
+          updater,
+          ({ stream, storageKey, filesByRound }) => {
             withErrorBoundary('failed to handle addOutputFiles', async () => {
               await state.outputFiles.addFiles(stream, storageKey, filesByRound);
               if (!updater.isAvailable()) return;
               const runFiles = state.outputFiles.getFiles(stream).get(storageKey);
               const rounds = toRoundRecord(runFiles);
-              updater.updateFiles(stream, rounds ? { runId: storageKey, rounds } : { runId: storageKey });
+              updater.updateFiles(
+                stream,
+                rounds ? { runId: storageKey, rounds } : { runId: storageKey },
+              );
             });
-          }),
+          },
         ),
-        new vscode.Disposable(
-          bus.on('updateMissingOutputs', ({ stream, storageKey, filesByRound }) => {
+        createStatefulEventDisposable(
+          bus,
+          'updateMissingOutputs',
+          state,
+          updater,
+          ({ stream, storageKey, filesByRound }) => {
             withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-              await state.outputFiles.updateMissingOutputs(stream, storageKey, filesByRound);
+              await state.outputFiles.updateMissingOutputs(
+                stream,
+                storageKey,
+                filesByRound,
+              );
               if (!updater.isAvailable()) return;
-              const runMissing = state.outputFiles.getMissingOutputs(stream).get(storageKey);
+              const runMissing = state.outputFiles
+                .getMissingOutputs(stream)
+                .get(storageKey);
               const rounds = toRoundRecord(runMissing);
-              updater.updateMissingOutputs(stream, rounds ? { runId: storageKey, rounds } : { runId: storageKey });
+              updater.updateMissingOutputs(
+                stream,
+                rounds ? { runId: storageKey, rounds } : { runId: storageKey },
+              );
             });
-          }),
+          },
         ),
-        new vscode.Disposable(
-          bus.on('clearMissingOutputs', (stream) => {
+        createStatefulEventDisposable(
+          bus,
+          'clearMissingOutputs',
+          state,
+          updater,
+          (stream) => {
             withErrorBoundary('failed to handle clearMissingOutputs', async () => {
               await state.outputFiles.clearMissingOutputs(stream);
               if (state.activeStream === stream && updater.isAvailable()) {
                 updater.updateMissingOutputs(stream, { reset: true });
               }
             });
-          }),
+          },
         ),
       ];
     },
