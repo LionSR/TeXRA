@@ -32,7 +32,7 @@ export interface StreamStatusEventShared extends BaseEventShared {
   refreshStreamSurface(
     stream: string,
     options?: { updateInstruction?: boolean; forceRebuild?: boolean },
-  ): void;
+  ): string | null;
   warnLog(message: string): void;
   debugLog(message: string): void;
 }
@@ -102,12 +102,13 @@ export function createStreamStatusEvents(
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
-      // Only force rebuild when actually switching streams
-      shared.refreshStreamSurface(stream, {
+      // Only force rebuild when actually switching streams.
+      // Use the returned runId to avoid duplicate resolveRunId call.
+      const activeRunId = shared.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: isStreamSwitch,
       });
-      shared.sendInstructionUpdate(stream);
+      shared.sendInstructionUpdate(stream, activeRunId);
     }
   };
 
