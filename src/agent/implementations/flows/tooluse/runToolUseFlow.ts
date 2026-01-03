@@ -99,16 +99,15 @@ export async function runToolUseFlow<C = unknown>(
   });
 
   const streamTabId = flowContext.streamTabId;
-
-  // Register for interrupt handling (moved from executeAgent callbacks)
-  registerInterruptible(streamTabId, flowContext);
-
-  // Allow caller to configure context (e.g., append follow-ups for resume)
-  onSetup?.(flowContext as ToolUseFlowContext<unknown>);
-
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
+    // Register for interrupt handling (inside try to ensure finally runs)
+    registerInterruptible(streamTabId, flowContext);
+
+    // Allow caller to configure context (e.g., append follow-ups for resume)
+    onSetup?.(flowContext as ToolUseFlowContext<unknown>);
+
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
       input.executionContext.executionId,

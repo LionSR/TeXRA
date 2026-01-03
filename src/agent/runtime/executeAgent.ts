@@ -564,7 +564,7 @@ export async function executeAgent(
           const result = await runToolUseFlow({
             ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
             setting: ctx.agentSetting as AgentToolUseSetting,
-            streamTabId: ctx.streamTabId,
+            streamTabId,
           });
           flowStatus = result.status;
         } else {
@@ -644,8 +644,8 @@ export async function executeMergeAgent(
         streamTabId,
       });
 
-      logger.debug(`Task completed successfully`);
       updateFlowStatus(streamTabId, result.status);
+      logger.debug(`Task completed with status: ${result.status}`);
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
@@ -711,6 +711,5 @@ export async function resumeToolUseFromSnapshot(
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(error, config.agent, streamTabId, executionContext);
-    throw error;
   }
 }
