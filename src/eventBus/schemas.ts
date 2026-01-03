@@ -31,28 +31,18 @@ export { TaskGroupStatusSchema, type TaskGroupStatus };
 
 /**
  * Payload for adding a new task group.
- * Uses TaskGroupSchema fields via composition (field names differ for API clarity).
+ * Uses TaskGroupSchema fields directly - no field renaming to avoid mapping overhead.
  */
 export const AddTaskGroupPayloadSchema = z.strictObject({
   stream: StreamTabIdSchema,
-  // Renamed from TaskGroup.id for payload clarity
-  groupId: z.string().min(1),
-  // Renamed from TaskGroup.name for payload clarity
-  groupName: z.string(),
-  // Fields from TaskGroupSchema (same names)
-  ...TaskGroupSchema.pick({
-    startTime: true,
-    status: true,
-    endTime: true,
-    parentGroupId: true,
-  }).shape,
+  ...TaskGroupSchema.shape,
 });
 export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
 
 /** Payload for updating a task group (subset of AddTaskGroupPayload) */
 export const UpdateTaskGroupPayloadSchema = AddTaskGroupPayloadSchema.pick({
   stream: true,
-  groupId: true,
+  id: true,
   status: true,
   endTime: true,
 });

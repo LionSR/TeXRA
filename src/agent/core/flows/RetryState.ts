@@ -19,6 +19,8 @@ import {
   retryCoordinator,
   type RetryResult,
 } from '@agent/runtime/RetryRequestCoordinator';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -26,7 +28,6 @@ import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
 } from '@utils/config';
-import { bus } from '@eventBus/ProgressEventBus';
 
 /** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
 const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -403,8 +404,8 @@ export abstract class RetryableInvocationNode<
       retryable: formatted.retryable,
     });
 
-    // Emit waiting status to UI
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+    // Emit waiting status to UI via single source of truth
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
 
     // Wait for user action via the Promise-based coordinator
     const result: RetryResult = await retryCoordinator.waitForUserAction(
@@ -419,7 +420,7 @@ export abstract class RetryableInvocationNode<
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');
-      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
       return { shouldRetry: true, userCancelled: false };
     }
 
@@ -427,7 +428,7 @@ export abstract class RetryableInvocationNode<
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
     return { shouldRetry: false, userCancelled: true };
   }
 
