@@ -207,12 +207,12 @@ export async function activate(context: vscode.ExtensionContext) {
   // Detect streams with persisted flows that should be marked as WAITING.
   // This allows users to send follow-ups and resume interrupted sessions.
   const executionIdMap = progressViewProvider.state.getAllExecutionIds();
-  const waitingStreams = await detectWaitingStreams(
-    executionIdMap as Map<string, string>,
-  );
+  const waitingStreams = await detectWaitingStreams(executionIdMap);
 
-  // Set StreamStatusService status for waiting streams.
-  // This enables the follow-up queuing mechanism in ToolUseFollowUp.
+  // Set backend runtime status for waiting streams.
+  // StreamStatusService is used by ToolUseFollowUp to determine if follow-ups
+  // can be queued for a stream. This is separate from the UI state managed by
+  // ProgressEventHandler._streamStatus (updated via cleanupTasksAfterRestart).
   for (const streamId of waitingStreams) {
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
   }
@@ -226,7 +226,10 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   }
 
-  // Clean up any tasks that were left in "running" state from previous session
+  // Clean up UI state: mark running streams as ERROR (or WAITING if in waitingStreams).
+  // This only affects streams that were RUNNING in the UI state, which won't include
+  // any streams on a fresh restart. The StreamStatusService.set() above handles the
+  // backend status for all waiting streams regardless of prior UI state.
   await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
