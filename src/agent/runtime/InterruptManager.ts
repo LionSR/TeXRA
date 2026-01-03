@@ -56,8 +56,8 @@ export class InterruptManager {
   /**
    * Get interrupt-related fields for flow input.
    *
-   * Returns an object with checkInterruption, setAbortController, and onInterrupt
-   * that matches what BaseFlowContextInit expects.
+   * Returns the interrupt-related subset of fields required by BaseFlowContextInit.
+   * Designed to be spread into flow initialization objects alongside other context fields.
    */
   asFlowInput() {
     return {
