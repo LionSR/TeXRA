@@ -500,6 +500,14 @@ export class ProgressViewState {
     return this._executionIds.get(streamTabId);
   }
 
+  /**
+   * Get all execution IDs as a read-only Map.
+   * Used for detecting waiting streams from persisted flows on startup.
+   */
+  getAllExecutionIds(): ReadonlyMap<StreamTabId, ExecutionId> {
+    return this._executionIds;
+  }
+
   clearExecutionId(streamTabId: StreamTabId): void {
     this._executionIds.delete(streamTabId);
     this.saveExecutionIds();

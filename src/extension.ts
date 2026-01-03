@@ -6,6 +6,9 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
+import { detectWaitingStreams } from '@agent/storage';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
@@ -201,14 +204,32 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  // PersistedFlow handles state persistence automatically.
-  // Waiting streams detection will be restored from ExecutionKVStore in future.
-  const waitingStreams = new Set<string>();
+  // Detect streams with persisted flows that should be marked as WAITING.
+  // This allows users to send follow-ups and resume interrupted sessions.
+  const executionIdMap = progressViewProvider.state.getAllExecutionIds();
+  const waitingStreams = await detectWaitingStreams(executionIdMap);
+
+  // Set backend runtime status for waiting streams.
+  // StreamStatusService is used by ToolUseFollowUp to determine if follow-ups
+  // can be queued for a stream. This is separate from the UI state managed by
+  // ProgressEventHandler._streamStatus (updated via cleanupTasksAfterRestart).
+  for (const streamId of waitingStreams) {
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+  }
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
+  if (waitingStreams.size > 0) {
+    logger.debug(
+      'extension',
+      `Detected ${waitingStreams.size} waiting stream(s) with persisted flows`,
+    );
+  }
 
-  // Clean up any tasks that were left in "running" state from previous session
+  // Clean up UI state: mark running streams as ERROR (or WAITING if in waitingStreams).
+  // This only affects streams that were RUNNING in the UI state, which won't include
+  // any streams on a fresh restart. The StreamStatusService.set() above handles the
+  // backend status for all waiting streams regardless of prior UI state.
   await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
