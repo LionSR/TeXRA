@@ -394,6 +394,10 @@ export class ProgressEventHandler {
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
+      // Send UPDATE_STREAMS first so frontend sets state.activeStream.
+      // Without this, the subsequent UPDATE_LOGS fails _isActiveStream check.
+      this.webviewUpdater.updateAll(this.state, this._streamStatus);
+
       // Force rebuild to clear any previous stream's content. The new task
       // group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
