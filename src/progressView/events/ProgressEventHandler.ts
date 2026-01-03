@@ -13,6 +13,7 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -211,12 +212,14 @@ export class ProgressEventHandler {
    * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
    *   Required when switching streams or after data deletion. Defaults to false
    *   for incremental updates.
+   * @returns The resolved active run ID, useful for callers that need to pass it
+   *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
     stream: string,
     options: { updateInstruction?: boolean; forceRebuild?: boolean } = {},
-  ): void {
-    if (!this.webviewUpdater.isAvailable()) return;
+  ): string | null {
+    if (!this.webviewUpdater.isAvailable()) return null;
 
     const { updateInstruction = true, forceRebuild = false } = options;
 
@@ -229,7 +232,7 @@ export class ProgressEventHandler {
       if (updateInstruction) {
         this.webviewUpdater.clearInstruction('');
       }
-      return;
+      return null;
     }
 
     const messages = this.state.streamTabs.getMessages(stream);
@@ -244,10 +247,10 @@ export class ProgressEventHandler {
       this.state.runInstructions.getInstructions(stream).entries(),
     );
 
-    const filesByRun = this.formatRunOutputs(
+    const filesByRun = nestedMapToRecord(
       this.state.outputFiles.getFiles(stream),
     );
-    const missingByRun = this.formatRunStringOutputs(
+    const missingByRun = nestedMapToRecord(
       this.state.outputFiles.getMissingOutputs(stream),
     );
     const usageByRun = Object.fromEntries(
@@ -294,6 +297,8 @@ export class ProgressEventHandler {
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
     }
+
+    return activeRunId;
   }
 
   /**
@@ -307,6 +312,8 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
+    const previousStatus = this._streamStatus.get(stream);
+
     // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
@@ -315,11 +322,15 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // When sorted by time, status changes may affect tab order (due to new log entries),
-      // so we need a full refresh. Otherwise use efficient targeted update.
+      const streamExists = this.state.streamTabs.has(stream);
+
+      // Determine if full refresh is needed:
+      // - New stream (not in tabs yet) always needs full refresh
+      // - When time-sorted, only refresh if status change might affect order
       const needsFullRefresh =
-        !this.state.streamTabs.has(stream) ||
-        this.state.streamSortOrder === 'time';
+        !streamExists ||
+        (this.state.streamSortOrder === 'time' &&
+          this.mightAffectTabOrder(previousStatus, status));
 
       if (needsFullRefresh) {
         // Include current status in refresh map so frontend displays it correctly.
@@ -339,24 +350,26 @@ export class ProgressEventHandler {
     }
   }
 
-  private formatRunOutputs(
-    runs: Map<string, Map<number, OutputFileInfo[]>>,
-  ): Record<string, { [key: number]: OutputFileInfo[] }> {
-    const payload: Record<string, { [key: number]: OutputFileInfo[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
+  /**
+   * Determine if a status transition might affect stream tab ordering.
+   * First status assignment or transitions TO running may result in new log
+   * activity that changes the stream's position in time-sorted order.
+   * Other transitions (RUNNING→STOPPED, etc.) don't require re-sorting because
+   * all log timestamps were already captured while the stream was RUNNING.
+   */
+  private mightAffectTabOrder(
+    previous: StreamStatus | undefined,
+    current: StreamStatus,
+  ): boolean {
+    // First status assignment should always trigger refresh
+    if (previous === undefined) {
+      return true;
     }
-    return payload;
-  }
 
-  private formatRunStringOutputs(
-    runs: Map<string, Map<number, string[]>>,
-  ): Record<string, { [key: number]: string[] }> {
-    const payload: Record<string, { [key: number]: string[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
-    }
-    return payload;
+    // Transitioning TO running may result in new log activity
+    return (
+      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
+    );
   }
 
   /**
@@ -375,8 +388,10 @@ export class ProgressEventHandler {
 
     await this.state.streamTabs.ensureStream(stream);
 
+    // Set status directly without triggering webview update - we do a single
+    // coordinated updateAll below to avoid multiple redundant updates.
     if (!existingStatus) {
-      this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
+      this._streamStatus.set(stream, STREAM_STATUS.RUNNING);
     }
 
     this.state.updateStreamHints(stream, {
@@ -390,18 +405,20 @@ export class ProgressEventHandler {
 
     this.state.activeStream = stream;
 
-    const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
-    this.setStreamStatus(stream, status);
-
     if (this.webviewUpdater.isAvailable()) {
+      // Single coordinated update - send UPDATE_STREAMS first so frontend
+      // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
+      this.webviewUpdater.updateAll(this.state, this._streamStatus);
+
       // Force rebuild to clear any previous stream's content. The new task
       // group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
-      this.refreshStreamSurface(stream, {
+      // Use the returned runId to avoid duplicate resolveRunId call.
+      const activeRunId = this.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: true,
       });
-      this.sendInstructionUpdate(stream);
+      this.sendInstructionUpdate(stream, activeRunId);
     }
   }
 
