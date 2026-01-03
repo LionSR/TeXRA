@@ -110,6 +110,9 @@ export class VSCodeTransport extends Transport {
     if (this.activeGroupId === groupId) {
       this.activeGroupId = group.parentGroupId;
     }
+
+    // Clean up completed group to prevent memory accumulation
+    this.groups.delete(groupId);
   }
 
   getActiveGroupId(): string | undefined {
@@ -120,6 +123,14 @@ export class VSCodeTransport extends Transport {
     if (groupId === undefined || this.groups.has(groupId)) {
       this.activeGroupId = groupId;
     }
+  }
+
+  /**
+   * Close the transport and dispose of the output channel.
+   */
+  close(): void {
+    this.groups.clear();
+    this.channel.dispose();
   }
 
   private writeToChannel(

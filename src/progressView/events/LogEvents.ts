@@ -4,7 +4,6 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports
-import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   createStatefulEventDisposable,
@@ -35,16 +34,8 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     withErrorBoundary('failed to handle addLogMessage', async () => {
       const { stream, logMessage } = data;
 
-      if (
-        logMessage.level === 'debug' &&
-        !getConfig<boolean>('texra.logger.debugMode', false)
-      ) {
-        return;
-      }
-
-      if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) {
-        return;
-      }
+      // Note: Debug and INTERNAL filtering already happens in ProgressViewSink
+      // before events reach this handler, so no duplicate filtering needed here.
 
       const isNew = await state.streamTabs.addMessage(stream, logMessage);
 

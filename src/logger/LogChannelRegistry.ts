@@ -97,6 +97,25 @@ export class LogChannelRegistry {
   private getKey(channel: string, isAgent: boolean): string {
     return `${channel}::${isAgent ? 'agent' : 'shared'}`;
   }
+
+  /**
+   * Dispose all output channels and clear the registry.
+   * Should be called during extension deactivation.
+   */
+  dispose(): void {
+    for (const entry of this.channels.values()) {
+      // Dispose the output channel if it's an agent channel
+      // (shared channels use the main output channel)
+      if (entry.options.isAgent) {
+        entry.transport.close();
+      }
+    }
+    this.channels.clear();
+
+    // Dispose the main output channel
+    this.mainOutputChannel?.dispose();
+    this.mainOutputChannel = null;
+  }
 }
 
 export const registry = new LogChannelRegistry();

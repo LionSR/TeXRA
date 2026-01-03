@@ -23,6 +23,7 @@ import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { UsageLogService } from '@logger/UsageLogService';
+import { registry as logChannelRegistry } from '@logger/LogChannelRegistry';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
@@ -363,4 +364,7 @@ export async function deactivate() {
 
   statusBarItem?.dispose();
   disposeDiffRefresh();
+
+  // Dispose all log channels to prevent memory leaks
+  logChannelRegistry.dispose();
 }
