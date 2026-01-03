@@ -352,23 +352,24 @@ export class ProgressEventHandler {
 
   /**
    * Determine if a status transition might affect stream tab ordering.
-   * Only transitions TO running state may result in new log activity that changes order.
-   * Other transitions (RUNNING→STOPPED, STOPPED→ERROR, etc.) don't add logs.
+   * First status assignment or transitions TO running may result in new log
+   * activity that changes the stream's position in time-sorted order.
+   * Other transitions (RUNNING→STOPPED, etc.) don't require re-sorting because
+   * all log timestamps were already captured while the stream was RUNNING.
    */
   private mightAffectTabOrder(
     previous: StreamStatus | undefined,
     current: StreamStatus,
   ): boolean {
-    // Transitioning TO running may result in new logs
-    if (
-      current === STREAM_STATUS.RUNNING &&
-      previous !== STREAM_STATUS.RUNNING
-    ) {
+    // First status assignment should always trigger refresh
+    if (previous === undefined) {
       return true;
     }
 
-    // Other transitions don't add new logs, so order is stable
-    return false;
+    // Transitioning TO running may result in new log activity
+    return (
+      current === STREAM_STATUS.RUNNING && previous !== STREAM_STATUS.RUNNING
+    );
   }
 
   /**
