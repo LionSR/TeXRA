@@ -14,11 +14,15 @@ import { getExecutionStore } from './ExecutionKVStore';
 /**
  * Detect streams that have persisted flow state and should be marked as WAITING.
  *
+ * A stream is considered "waiting" if it has a persisted flow record, which only
+ * happens when VS Code reloads mid-execution (the finally block in runToolUseFlow
+ * deletes the record on normal completion).
+ *
  * @param executionIdMap - Map of streamTabId to executionId from ProgressViewState
  * @returns Set of streamIds that have persisted flows (should be marked WAITING)
  */
 export async function detectWaitingStreams(
-  executionIdMap: Map<StreamTabId, ExecutionId>,
+  executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
 ): Promise<Set<StreamTabId>> {
   const waitingStreams = new Set<StreamTabId>();
 
