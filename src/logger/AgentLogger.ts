@@ -161,6 +161,26 @@ export interface AgentLogStream {
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.
  * Uses the updated consolidated logger system.
+ *
+ * ## Two Logging Paths
+ *
+ * This class provides two distinct logging paths optimized for different use cases:
+ *
+ * ### Path 1: Streaming Content ({@link createStream})
+ * - **Use for**: Real-time streaming content (thinking, model responses)
+ * - **Latency**: Immediate - emits directly to ProgressEventBus
+ * - **Output**: Progress View only (no Output Channel)
+ * - **Updates**: Supports incremental append/update via same message ID
+ *
+ * ### Path 2: Structured Logging ({@link info}, {@link debug}, {@link warn}, {@link error})
+ * - **Use for**: Discrete log messages, status updates, errors
+ * - **Latency**: Slight delay - routes through Winston → VSCodeTransport → ProgressViewSink
+ * - **Output**: Both Output Channel AND Progress View
+ * - **Filtering**: Debug messages filtered by `texra.logger.debugMode` config
+ *
+ * Choose the appropriate path based on whether you need:
+ * - Real-time streaming with updates → {@link createStream}
+ * - Persistent logs in Output Channel → {@link info}/{@link debug}/{@link warn}/{@link error}
  */
 export class AgentLogger {
   public readonly isAgentLogger: boolean;
@@ -187,6 +207,8 @@ export class AgentLogger {
 
   /**
    * Log an info message with options object.
+   *
+   * **Path**: Winston → VSCodeTransport → Output Channel + ProgressViewSink
    */
   info(message: string, options: LogOptions = {}): void {
     logger.info(this.channelId, message, {
@@ -506,6 +528,26 @@ export class AgentLogger {
     });
   }
 
+  /**
+   * Creates a streaming log entry for real-time content updates.
+   *
+   * Use this for content that streams incrementally (e.g., model thinking, responses).
+   * Each `append()` call updates the same log entry in the Progress View.
+   *
+   * **Path**: Direct → ProgressEventBus (bypasses Winston/Output Channel)
+   *
+   * @example
+   * ```typescript
+   * const stream = logger.createStream(MESSAGE_TYPES.THINKING);
+   * stream.append('Processing...');
+   * stream.append(' Done!');  // Updates same entry to "Processing... Done!"
+   * stream.finalize();
+   * ```
+   *
+   * @param type - Message type for UI rendering (THINKING, MODEL_RESPONSE, etc.)
+   * @param options - Stream configuration
+   * @returns Stream interface with append/finalize methods
+   */
   createStream(
     type: MessageType,
     options: AgentLogStreamOptions = {},

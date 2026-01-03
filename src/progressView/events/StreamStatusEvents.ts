@@ -26,8 +26,12 @@ import type {
  * Also requires logging callbacks for warn/debug messages.
  */
 export interface StreamStatusEventShared extends BaseEventShared {
-  streamStatus: Map<string, StreamStatus>;
-  setStreamStatus(stream: string, status: StreamStatus): void;
+  /** Get status for a specific stream from StreamStatusService */
+  getStreamStatus(stream: string): StreamStatus;
+  /** Get all stream statuses from StreamStatusService */
+  getAllStreamStatuses(): Map<StreamTabId, StreamStatus>;
+  /** Notify webview of status change (status already updated in service) */
+  notifyStreamStatus(stream: string, status: StreamStatus): void;
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
@@ -84,22 +88,23 @@ export function createStreamStatusEvents(
 
     state.activeStream = stream;
 
+    const currentStatus = shared.getStreamStatus(stream);
     const status: StreamStatus =
-      shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+      currentStatus !== STREAM_STATUS.READY
+        ? currentStatus
+        : STREAM_STATUS.RUNNING;
 
     if (updater.isAvailable()) {
       // ORDERING REQUIREMENTS:
       // 1. ensureStream (line 70) must be awaited BEFORE this block to ensure
-      //    backend state.streamTabs.has(stream) returns true in setStreamStatus.
+      //    backend state.streamTabs.has(stream) returns true in notifyStreamStatus.
       // 2. updateAll sends UPDATE_STREAMS which creates the frontend tab.
-      // 3. setStreamStatus sends UPDATE_STREAM_STATUS to update the existing tab.
+      // 3. notifyStreamStatus sends UPDATE_STREAM_STATUS to update the existing tab.
       // Frontend processes messages FIFO, so tab exists before status update.
-      // If setStreamStatus is called before stream is in backend state, it will
-      // trigger another full updateAll, which is inefficient but safe.
-      updater.updateAll(state, shared.streamStatus);
+      updater.updateAll(state, shared.getAllStreamStatuses());
     }
 
-    shared.setStreamStatus(stream, status);
+    shared.notifyStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
       // Only force rebuild when actually switching streams
@@ -156,7 +161,7 @@ export function createStreamStatusEvents(
     if (updater.isAvailable()) {
       const infos: StreamTabInfo[] = buildStreamInfos(
         state,
-        shared.streamStatus,
+        shared.getAllStreamStatuses(),
         state.agentTypeFilter,
       );
       updater.updateStreams(infos, state.activeStream, state.agentTypeFilter);
@@ -180,7 +185,7 @@ export function createStreamStatusEvents(
         new vscode.Disposable(
           bus.on('updateStreamStatus', (payload) =>
             withErrorBoundary('failed to handle updateStreamStatus', () =>
-              shared.setStreamStatus(payload.stream, payload.status),
+              shared.notifyStreamStatus(payload.stream, payload.status),
             ),
           ),
         ),

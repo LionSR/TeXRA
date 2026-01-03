@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent and usage types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
@@ -48,7 +49,7 @@ import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
  */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
-  private _streamStatus: Map<string, StreamStatus> = new Map();
+  // Status is now managed by StreamStatusService (single source of truth)
   private readonly streamStatusEvents: StreamStatusEventModule;
   private readonly outputEvents: OutputEventsModule;
   private readonly logEvents: LogEventsModule;
@@ -77,8 +78,10 @@ export class ProgressEventHandler {
     // Create error boundaries centrally - modules receive pre-configured boundaries
     this.streamStatusEvents = createStreamStatusEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'StreamStatusEvents'),
-      streamStatus: this._streamStatus,
-      setStreamStatus: this.setStreamStatus.bind(this),
+      getStreamStatus: (stream: string) =>
+        StreamStatusService.get(stream as StreamTabId),
+      getAllStreamStatuses: () => StreamStatusService.getAll(),
+      notifyStreamStatus: this.notifyStreamStatusChange.bind(this),
       sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
       refreshStreamSurface: this.refreshStreamSurface.bind(this),
       warnLog: this.logger.warn.bind(this.logger),
@@ -288,7 +291,8 @@ export class ProgressEventHandler {
     }
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
-    const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;
+    const status =
+      StreamStatusService.get(stream as StreamTabId) || STREAM_STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
@@ -297,45 +301,41 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get current stream status
+   * Get current stream status from the single source of truth.
    */
-  getStreamStatus(stream: string): StreamStatus | undefined {
-    return this._streamStatus.get(stream);
+  getStreamStatus(stream: string): StreamStatus {
+    return StreamStatusService.get(stream as StreamTabId);
   }
 
   /**
-   * Set the status for a specific stream synchronously.
+   * Notify webview of a stream status change.
+   * Called when receiving updateStreamStatus events from the bus.
+   * Status is already updated in StreamStatusService before this is called.
    */
-  setStreamStatus(stream: string, status: StreamStatus): void {
-    // Update the persistent status map first
-    if (status === STREAM_STATUS.READY) {
-      this._streamStatus.delete(stream);
-    } else {
-      this._streamStatus.set(stream, status);
+  private notifyStreamStatusChange(stream: string, status: StreamStatus): void {
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
     }
 
-    if (this.webviewUpdater.isAvailable()) {
-      // When sorted by time, status changes may affect tab order (due to new log entries),
-      // so we need a full refresh. Otherwise use efficient targeted update.
-      const needsFullRefresh =
-        !this.state.streamTabs.has(stream) ||
-        this.state.streamSortOrder === 'time';
+    // When sorted by time, status changes may affect tab order (due to new log entries),
+    // so we need a full refresh. Otherwise use efficient targeted update.
+    const needsFullRefresh =
+      !this.state.streamTabs.has(stream) ||
+      this.state.streamSortOrder === 'time';
 
-      if (needsFullRefresh) {
-        // Include current status in refresh map so frontend displays it correctly.
-        // READY is deleted from _streamStatus but should still be shown to user.
-        const statusesForRefresh = new Map(this._streamStatus);
-        statusesForRefresh.set(stream, status);
-        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
-      } else {
-        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
-        const logs = this.state.streamTabs.getMessages(stream);
-        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
-        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
-        const lastTimestamp =
-          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
-      }
+    if (needsFullRefresh) {
+      // Include current status in refresh map so frontend displays it correctly.
+      const statusesForRefresh = StreamStatusService.getAll();
+      statusesForRefresh.set(stream as StreamTabId, status);
+      this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+    } else {
+      // Targeted update - frontend handles main status update via handleUpdateStreamStatus
+      const logs = this.state.streamTabs.getMessages(stream);
+      // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
+      // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
+      const lastTimestamp =
+        logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+      this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
     }
   }
 
@@ -360,10 +360,10 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get a copy of all stream statuses
+   * Get a copy of all stream statuses from the single source of truth.
    */
   getAllStreamStatuses(): Map<string, StreamStatus> {
-    return new Map(this._streamStatus);
+    return StreamStatusService.getAll() as Map<string, StreamStatus>;
   }
 
   /**
@@ -371,12 +371,14 @@ export class ProgressEventHandler {
    * status or activation events, preserving any existing status metadata.
    */
   private async initializeStreamForTaskGroup(stream: string): Promise<void> {
-    const existingStatus = this._streamStatus.get(stream);
+    const existingStatus = StreamStatusService.get(stream as StreamTabId);
+    const hasExistingStatus = existingStatus !== STREAM_STATUS.READY;
 
     await this.state.streamTabs.ensureStream(stream);
 
-    if (!existingStatus) {
-      this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
+    if (!hasExistingStatus) {
+      // Set status via service - this emits event and triggers notifyStreamStatusChange
+      StreamStatusService.set(stream as StreamTabId, STREAM_STATUS.RUNNING);
     }
 
     this.state.updateStreamHints(stream, {
@@ -390,8 +392,10 @@ export class ProgressEventHandler {
 
     this.state.activeStream = stream;
 
-    const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
-    this.setStreamStatus(stream, status);
+    // Notify webview of current status
+    const status =
+      StreamStatusService.get(stream as StreamTabId) ?? STREAM_STATUS.RUNNING;
+    this.notifyStreamStatusChange(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
       // Force rebuild to clear any previous stream's content. The new task
@@ -409,9 +413,11 @@ export class ProgressEventHandler {
    * Mark all running tasks as cancelled (used during restart)
    */
   markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of this._streamStatus.entries()) {
+    const allStatuses = StreamStatusService.getAll();
+    for (const [stream, status] of allStatuses.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
-        this._streamStatus.set(stream, STREAM_STATUS.STOPPED);
+        // Use setQuiet to avoid emitting events during shutdown
+        StreamStatusService.setQuiet(stream, STREAM_STATUS.STOPPED);
       }
     }
   }
@@ -423,16 +429,18 @@ export class ProgressEventHandler {
   resetRunningTasksToError(waitingStreams?: Set<string>): string[] {
     const affectedStreams: string[] = [];
     const waitingSet = waitingStreams ?? new Set<string>();
+    const allStatuses = StreamStatusService.getAll();
 
-    for (const [stream, status] of this._streamStatus.entries()) {
+    for (const [stream, status] of allStatuses.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
-          this._streamStatus.set(stream, STREAM_STATUS.WAITING);
+          // Use setQuiet to avoid re-emitting during reload recovery
+          StreamStatusService.setQuiet(stream, STREAM_STATUS.WAITING);
           this.logger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
         } else {
-          this._streamStatus.set(stream, STREAM_STATUS.ERROR);
+          StreamStatusService.setQuiet(stream, STREAM_STATUS.ERROR);
           affectedStreams.push(stream);
           this.logger.debug(
             `Stream ${stream} set to ERROR due to webview reload`,

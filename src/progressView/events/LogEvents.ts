@@ -4,7 +4,6 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports
-import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   createStatefulEventDisposable,
@@ -35,13 +34,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     withErrorBoundary('failed to handle addLogMessage', async () => {
       const { stream, logMessage } = data;
 
-      if (
-        logMessage.level === 'debug' &&
-        !getConfig<boolean>('texra.logger.debugMode', false)
-      ) {
-        return;
-      }
-
+      // Debug filtering is handled upstream by ProgressViewSink
       if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) {
         return;
       }
