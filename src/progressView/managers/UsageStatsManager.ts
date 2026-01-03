@@ -134,13 +134,6 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Delete usage statistics for a stream
-   */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    await super.delete(stream);
-  }
-
-  /**
    * Set all usage statistics (used during loading)
    */
   setAll(
