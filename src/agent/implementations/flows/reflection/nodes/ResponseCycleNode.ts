@@ -34,7 +34,10 @@ import {
   createResponseCycleFlow,
   assertCycleFieldsPopulated,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import {
+  interpretCycleCompletion,
+  type CycleCompletionResult,
+} from '@agent/core/flows/CommonCycleTypes';
 import { finalizeRound } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -72,13 +75,8 @@ interface CyclePrepInput extends CycleStateSlices {
 }
 
 type CycleExecResult =
-  | ({
-      kind: 'success';
-      endTurn: boolean;
-      failedWithError: boolean;
-      errorMessage?: string;
-      userCancelled: boolean;
-    } & CycleStateSlices)
+  | ({ kind: 'success'; endTurn: boolean } & CycleCompletionResult &
+      CycleStateSlices)
   | { kind: 'error'; error: Error };
 
 // ============================================================================
