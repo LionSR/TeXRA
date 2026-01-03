@@ -3,15 +3,14 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
+// Internal imports
 import type { TaskGroupStatus } from '@common/constants/streamStatus';
-// Local imports - logger
+import { bus } from '@eventBus/ProgressEventBus';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
-// Internal imports
 import { getConfig } from '@utils/config';
-import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
@@ -51,11 +50,11 @@ export class VSCodeTransport extends Transport {
 
   log(info: any, callback: () => void): void {
     const { level, message, timestamp, messageType } = info;
-    const structuredData = serializeLogData(info.data);
-    const groupId = info.groupId;
+    const data = serializeLogData(info.data);
+    const groupId = info.groupId ?? this.activeGroupId;
 
-    this.writeToChannel(level, message, timestamp, structuredData);
-    this.emitLogEvent(level, message, timestamp, groupId, messageType, structuredData);
+    this.writeToChannel(level, message, timestamp, data);
+    this.emitLogEvent({ level, message, timestamp, groupId, messageType, data });
 
     callback();
   }
@@ -121,34 +120,36 @@ export class VSCodeTransport extends Transport {
    * Emit log message to progress view event bus.
    * Only emits for agent channels; filters debug and internal messages.
    */
-  private emitLogEvent(
-    level: string,
-    message: string,
-    timestamp: string,
-    groupId: string | undefined,
-    messageType: unknown,
-    data: unknown,
-  ): void {
+  private emitLogEvent(event: {
+    level: string;
+    message: string;
+    timestamp: string;
+    groupId: string | undefined;
+    messageType: unknown;
+    data: unknown;
+  }): void {
     if (!this.isAgentChannel) return;
 
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-    if (level === 'debug' && !debugMode) return;
+    if (event.level === 'debug' && !debugMode) return;
 
-    const validatedMessageType: MessageType = isValidMessageType(messageType)
-      ? messageType
+    const validatedMessageType: MessageType = isValidMessageType(
+      event.messageType,
+    )
+      ? event.messageType
       : MESSAGE_TYPES.DEFAULT;
 
     if (validatedMessageType === MESSAGE_TYPES.INTERNAL) return;
 
     const logMessage: LogMessageData = {
       id: randomUUID(),
-      text: message,
-      level: level as LogMessageData['level'],
-      timestamp: new Date(timestamp).getTime(),
-      groupId,
+      text: event.message,
+      level: event.level as LogMessageData['level'],
+      timestamp: new Date(event.timestamp).getTime(),
+      groupId: event.groupId,
       messageType: validatedMessageType,
       verbose: debugMode,
-      data,
+      data: event.data,
     };
 
     bus.emit('addLogMessage', {
