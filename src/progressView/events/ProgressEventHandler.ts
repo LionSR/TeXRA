@@ -212,12 +212,14 @@ export class ProgressEventHandler {
    * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
    *   Required when switching streams or after data deletion. Defaults to false
    *   for incremental updates.
+   * @returns The resolved active run ID, useful for callers that need to pass it
+   *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
     stream: string,
     options: { updateInstruction?: boolean; forceRebuild?: boolean } = {},
-  ): void {
-    if (!this.webviewUpdater.isAvailable()) return;
+  ): string | null {
+    if (!this.webviewUpdater.isAvailable()) return null;
 
     const { updateInstruction = true, forceRebuild = false } = options;
 
@@ -230,7 +232,7 @@ export class ProgressEventHandler {
       if (updateInstruction) {
         this.webviewUpdater.clearInstruction('');
       }
-      return;
+      return null;
     }
 
     const messages = this.state.streamTabs.getMessages(stream);
@@ -295,6 +297,8 @@ export class ProgressEventHandler {
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
     }
+
+    return activeRunId;
   }
 
   /**
@@ -356,8 +360,10 @@ export class ProgressEventHandler {
 
     await this.state.streamTabs.ensureStream(stream);
 
+    // Set status directly without triggering webview update - we do a single
+    // coordinated updateAll below to avoid multiple redundant updates.
     if (!existingStatus) {
-      this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
+      this._streamStatus.set(stream, STREAM_STATUS.RUNNING);
     }
 
     this.state.updateStreamHints(stream, {
@@ -371,22 +377,20 @@ export class ProgressEventHandler {
 
     this.state.activeStream = stream;
 
-    const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
-    this.setStreamStatus(stream, status);
-
     if (this.webviewUpdater.isAvailable()) {
-      // Send UPDATE_STREAMS first so frontend sets state.activeStream.
-      // Without this, the subsequent UPDATE_LOGS fails _isActiveStream check.
+      // Single coordinated update - send UPDATE_STREAMS first so frontend
+      // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
       this.webviewUpdater.updateAll(this.state, this._streamStatus);
 
       // Force rebuild to clear any previous stream's content. The new task
       // group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
-      this.refreshStreamSurface(stream, {
+      // Use the returned runId to avoid duplicate resolveRunId call.
+      const activeRunId = this.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: true,
       });
-      this.sendInstructionUpdate(stream);
+      this.sendInstructionUpdate(stream, activeRunId);
     }
   }
 
