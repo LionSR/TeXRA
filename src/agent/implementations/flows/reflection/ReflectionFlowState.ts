@@ -43,10 +43,6 @@ import {
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
-  RetryErrorInfoSchema,
-  type RetryErrorInfo,
-} from '@agent/core/flows/RetryState';
-import {
   CycleFieldsSchema,
   type CycleTransientFields,
 } from '@agent/core/flows/ResponseCycleFlow';
@@ -156,9 +152,8 @@ export const ReflectionFlowStateSchema = z
     continueRounds: z.boolean(),
     endTurn: z.boolean(),
 
-    // Retry state (reflection flow's name for error tracking)
-    /** Last error from model invocation. Used to distinguish failure from cancellation. */
-    lastRetryError: RetryErrorInfoSchema.optional(),
+    // Note: lastError is inherited from OptionalCycleFieldsSchema (via BaseCycleFieldsSchema).
+    // Used to distinguish failure from cancellation during resume.
   })
   .merge(OptionalCycleFieldsSchema);
 
