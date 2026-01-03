@@ -312,6 +312,8 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
+    const previousStatus = this._streamStatus.get(stream);
+
     // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
@@ -320,11 +322,15 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // When sorted by time, status changes may affect tab order (due to new log entries),
-      // so we need a full refresh. Otherwise use efficient targeted update.
+      const streamExists = this.state.streamTabs.has(stream);
+
+      // Determine if full refresh is needed:
+      // - New stream (not in tabs yet) always needs full refresh
+      // - When time-sorted, only refresh if status change might affect order
       const needsFullRefresh =
-        !this.state.streamTabs.has(stream) ||
-        this.state.streamSortOrder === 'time';
+        !streamExists ||
+        (this.state.streamSortOrder === 'time' &&
+          this.mightAffectTabOrder(previousStatus, status));
 
       if (needsFullRefresh) {
         // Include current status in refresh map so frontend displays it correctly.
@@ -342,6 +348,27 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
+  }
+
+  /**
+   * Determine if a status transition might affect stream tab ordering.
+   * Only transitions TO running state may result in new log activity that changes order.
+   * Other transitions (RUNNING→STOPPED, STOPPED→ERROR, etc.) don't add logs.
+   */
+  private mightAffectTabOrder(
+    previous: StreamStatus | undefined,
+    current: StreamStatus,
+  ): boolean {
+    // Transitioning TO running may result in new logs
+    if (
+      current === STREAM_STATUS.RUNNING &&
+      previous !== STREAM_STATUS.RUNNING
+    ) {
+      return true;
+    }
+
+    // Other transitions don't add new logs, so order is stable
+    return false;
   }
 
   /**
