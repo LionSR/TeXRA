@@ -35,6 +35,11 @@ export interface StreamStatusEventShared extends BaseEventShared {
   ): string | null;
   warnLog(message: string): void;
   debugLog(message: string): void;
+  /**
+   * Replay any task groups that were buffered while waiting for this stream
+   * to become active. Called after state.activeStream is set.
+   */
+  replayPendingTaskGroups(stream: string, updater: WebviewUpdater): void;
 }
 
 /**
@@ -83,6 +88,12 @@ export function createStreamStatusEvents(
     }
 
     state.activeStream = stream;
+
+    // Replay any task groups that were buffered before this stream became active.
+    // Must be called AFTER setting state.activeStream so subsequent events see it.
+    if (updater.isAvailable()) {
+      shared.replayPendingTaskGroups(stream, updater);
+    }
 
     const status: StreamStatus =
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
