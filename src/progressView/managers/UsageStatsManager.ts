@@ -13,6 +13,7 @@ import {
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 
 // --- Zod Schemas for Usage Stats ---
 
@@ -243,7 +244,7 @@ export class UsageStatsManager extends PersistentMapManager<
 
   /** Normalize loaded usage records */
   protected override serialize(value: RunUsageMap, _key: StreamTabId): unknown {
-    return Object.fromEntries(value.entries());
+    return mapToRecord(value);
   }
 
   protected override async deserialize(
