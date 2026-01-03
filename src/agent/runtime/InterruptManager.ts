@@ -52,4 +52,18 @@ export class InterruptManager {
   getAbortController(): AbortController | null {
     return this._abortController;
   }
+
+  /**
+   * Get interrupt-related fields for flow input.
+   *
+   * Returns an object with checkInterruption, setAbortController, and onInterrupt
+   * that matches what BaseFlowContextInit expects.
+   */
+  asFlowInput() {
+    return {
+      checkInterruption: this.checkInterruption,
+      setAbortController: this.setAbortController,
+      onInterrupt: this.onInterrupt,
+    };
+  }
 }
