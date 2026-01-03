@@ -5,11 +5,10 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
 import {
-  registerStatefulEvents,
+  createStatefulEventDisposable,
   type ProgressEventBusLike,
-  type BaseEventShared,
-  type StatefulEventModule,
 } from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * UsageEvents module interface.
@@ -30,29 +29,36 @@ export function createUsageEvents(
 
   return {
     register(bus, state, updater) {
-      return registerStatefulEvents(bus, state, updater, withErrorBoundary, [
-        {
-          event: 'updateStreamUsage',
-          errorMessage: 'failed to handle updateStreamUsage',
-          handler: async ({ stream, usage, storageKey }, state, updater) => {
-            const normalizedUsage: TokenUsageStats = {
-              inputTokens: Number(usage.inputTokens ?? 0),
-              outputTokens: Number(usage.outputTokens ?? 0),
-              cost: Number(usage.cost ?? 0),
-            };
+      return [
+        createStatefulEventDisposable(
+          bus,
+          'updateStreamUsage',
+          state,
+          updater,
+          ({ stream, usage, storageKey }) => {
+            withErrorBoundary(
+              'failed to handle updateStreamUsage',
+              async () => {
+                const normalizedUsage: TokenUsageStats = {
+                  inputTokens: Number(usage.inputTokens ?? 0),
+                  outputTokens: Number(usage.outputTokens ?? 0),
+                  cost: Number(usage.cost ?? 0),
+                };
 
-            await state.usageStats.setRunUsage(
-              stream,
-              storageKey,
-              normalizedUsage,
+                await state.usageStats.setRunUsage(
+                  stream,
+                  storageKey,
+                  normalizedUsage,
+                );
+
+                if (state.activeStream === stream && updater.isAvailable()) {
+                  updater.updateRunUsage(stream, storageKey, normalizedUsage);
+                }
+              },
             );
-
-            if (state.activeStream === stream && updater.isAvailable()) {
-              updater.updateRunUsage(stream, storageKey, normalizedUsage);
-            }
           },
-        },
-      ]);
+        ),
+      ];
     },
   };
 }
