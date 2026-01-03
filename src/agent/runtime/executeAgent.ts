@@ -636,7 +636,11 @@ export async function resumeToolUseFromSnapshot(
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context
-  const ctx = await prepareFlowExecution(snapshotConfig.agent, snapshotConfig, executionId);
+  const ctx = await prepareFlowExecution(
+    snapshotConfig.agent,
+    snapshotConfig,
+    executionId,
+  );
   const { setting, executionContext, config } = ctx;
 
   // Validate agent type and session
@@ -673,6 +677,11 @@ export async function resumeToolUseFromSnapshot(
     updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(error, snapshotConfig.agent, streamTabId, executionContext);
+    await handleFlowError(
+      error,
+      snapshotConfig.agent,
+      streamTabId,
+      executionContext,
+    );
   }
 }
