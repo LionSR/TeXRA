@@ -1,21 +1,24 @@
-// Third-party imports (none needed)
+// Third-party imports
+import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { isRemoteAgent } from '@agent/index';
 import { BaseNode, Flow } from '@agent/node';
 import {
-  BaseCycleState,
-  BaseCycleShared,
+  BaseCycleFieldsSchema,
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   resetCycleState,
-  type CycleDebugContext,
-  type CycleDebugFileOptions,
+  getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
+import { createRetryState, type RetryState } from './RetryState';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import {
+  NormalizedUsageSchema,
+  type NormalizedUsage,
+} from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -124,125 +127,132 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
-export interface ToolUseCycleState extends BaseCycleState {
-  response?: unknown;
-  toolCalls?: SdkToolCall[];
-  text?: string;
+// ============================================================================
+// Tool-Use Cycle Schema (Extends Base)
+// ============================================================================
+
+/**
+ * Schema for serializable tool-use cycle fields.
+ *
+ * Extends BaseCycleFieldsSchema with tool-specific fields.
+ * Uses the same flat pattern as ResponseCycleFlow for consistency.
+ *
+ * ## Field Categories
+ *
+ * From BaseCycleFieldsSchema (shared with ResponseCycleFlow):
+ * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
+ *
+ * Tool-use specific fields:
+ * - response, toolCalls, text, cycleIndex, cycleResponseTimeMs, cycleNormalizedUsage
+ */
+export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
+  /** Raw response from model (provider-specific, not schematized) */
+  response: z.unknown().optional(),
+  /**
+   * Tool calls extracted from response.
+   * Runtime type is SdkToolCall[] (discriminated union of provider-specific types).
+   * Uses z.unknown() because SdkToolCall is a complex union without a Zod schema.
+   */
+  toolCalls: z.array(z.unknown()).optional(),
+  /** Text content from response */
+  text: z.string().optional(),
   /**
    * Current cycle index (0-based).
    *
    * Used for debug file naming and usage tracking. Incremented after each
    * successful cycle in ToolUseProcessNode.post().
-   *
-   * This replaces the need for ConversationRoundState.roundIndex in tool-use
-   * agents, simplifying the service dependencies.
    */
-  cycleIndex: number;
+  cycleIndex: z.number(),
   /**
    * Accumulated response time for current cycle (milliseconds).
    * Reset after finalization when continuing to next cycle.
    */
-  cycleResponseTimeMs: number;
+  cycleResponseTimeMs: z.number(),
   /**
    * Normalized usage for current cycle.
    * Reset after finalization when continuing to next cycle.
    */
-  cycleNormalizedUsage?: NormalizedUsage;
-  /**
-   * Whether the last cycle ended normally (model said end_turn).
-   *
-   * Lifecycle:
-   * - Initialized to `false` when shared state is created
-   * - Set to `true` when model's stop_reason is 'end_turn'
-   * - Set to `false` on failures, cancellations, or empty responses
-   * - NOT reset by resetToolUseState() - preserved across cycles
-   *
-   * Used by callers to distinguish between:
-   * - Normal completion: shouldStop=true, endTurn=true
-   * - User cancellation: shouldStop=true, endTurn=false, lastError=undefined
-   * - Failure: shouldStop=true, endTurn=false, lastError defined
-   */
-  endTurn: boolean;
-}
+  cycleNormalizedUsage: NormalizedUsageSchema.optional(),
+});
 
-function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, []);
-  state.response = undefined;
-  state.toolCalls = undefined;
-  state.text = undefined;
+/** Tool-use cycle fields derived from schema */
+export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
+
+/**
+ * Reset tool-use cycle state for a new iteration.
+ * Called at the start of each cycle to clear transient fields.
+ */
+function resetToolUseState(shared: ToolUseCycleShared): void {
+  resetCycleState(shared, []);
+  shared.response = undefined;
+  shared.toolCalls = undefined;
+  shared.text = undefined;
   // Reset cycle metrics for next cycle
-  state.cycleResponseTimeMs = 0;
-  state.cycleNormalizedUsage = undefined;
+  shared.cycleResponseTimeMs = 0;
+  shared.cycleNormalizedUsage = undefined;
   // Note: cycleIndex is incremented, not reset
-  // Note: endTurn is NOT reset here - it tracks whether the LAST cycle
-  // ended normally, which is needed for caller detection of user cancellation.
+  // Note: endTurn is reset by resetCycleState (part of base fields)
 }
 
 /**
  * Shared state for tool-use cycle flows.
- * Uses BaseCycleShared with ToolUseCycleState for type safety.
+ *
+ * Uses flat structure (like ResponseCycleFlow) for consistency.
+ * All fields from ToolUseCycleFieldsSchema plus runtime-only toolCalls typing.
  *
  * ## Architecture
- * - Mutable state: `shared` (this interface)
- * - Immutable services: `_params.services` (ToolUseCycleServices)
+ * - Mutable state: `shared` (this interface) - flat, no nested wrappers
+ * - Immutable services: `this.services` (ToolUseCycleServices)
  */
-export type ToolUseCycleShared = BaseCycleShared<ToolUseCycleState>;
+export interface ToolUseCycleShared extends ToolUseCycleFields {
+  /** Tool calls with proper typing (schema uses z.unknown()) */
+  toolCalls?: SdkToolCall[];
+  /** Normalized usage with proper typing */
+  cycleNormalizedUsage?: NormalizedUsage;
+}
 
 /**
- * Prepares a tool-use cycle by checking interruptions and setting up debug context.
+ * Prepares a tool-use cycle by checking interruptions.
  *
- * Services accessed via `_params.services`: options, store
+ * Services accessed via `this.services` (ToolUseCycleServices).
+ * All debug options are derived at maybeSaveDebugObject call sites.
  */
 class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared,
   ToolUseCycleParams<C>,
   ToolUseCycleServices<C>
 > {
-  async prep(shared: ToolUseCycleShared): Promise<{
-    interrupted: boolean;
-    debugContext: CycleDebugContext;
-    debugFileOptions: CycleDebugFileOptions;
-  }> {
-    const services = this.services;
-    const interrupted = Boolean(await services.checkInterruption());
-    const debugContext: CycleDebugContext = {
-      logger: services.logger,
-      modelName: services.modelName,
-      executionId: services.context.executionId,
-      isRemote: isRemoteAgent(services.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: shared.state.cycleIndex,
-      baseName: 'tooluse',
-    };
-    return { interrupted, debugContext, debugFileOptions };
+  async prep(shared: ToolUseCycleShared): Promise<{ interrupted: boolean }> {
+    const interrupted = Boolean(await this.services.checkInterruption());
+    return { interrupted };
   }
 
   async post(
     shared: ToolUseCycleShared,
-    prepRes: {
-      interrupted: boolean;
-      debugContext: CycleDebugContext;
-      debugFileOptions: CycleDebugFileOptions;
-    },
+    prepRes: { interrupted: boolean },
   ): Promise<string | undefined> {
-    const { state } = shared;
-
     if (prepRes.interrupted) {
-      state.shouldStop = true;
-      state.endTurn = false; // Interrupted, not a normal completion
+      shared.shouldStop = true;
+      shared.endTurn = false; // Interrupted, not a normal completion
       return FlowTransition.COMPLETE;
     }
 
     // Reset at the start of each cycle so downstream nodes observe a clean
     // runtime state before enriching it with model responses.
-    resetToolUseState(state);
+    resetToolUseState(shared);
 
+    const { modelName, agentName } = this.services;
     await maybeSaveDebugObject({
-      object: state.messages,
+      object: shared.messages,
       objectType: 'messages',
-      context: prepRes.debugContext,
-      fileOptions: prepRes.debugFileOptions,
+      context: getDebugContext(this.services, {
+        modelName,
+        isRemote: isRemoteAgent(agentName),
+      }),
+      fileOptions: {
+        continuationCount: shared.cycleIndex,
+        baseName: 'tooluse',
+      },
     });
 
     return FlowTransition.DEFAULT;
@@ -251,12 +261,9 @@ class ToolUsePrepNode<C> extends BaseNode<
 
 /**
  * Success data for tool-use call.
- * Extends base with debug context for message saving.
+ * All debug options are derived at maybeSaveDebugObject call sites.
  */
-interface ToolUseCallSuccessData extends BaseInvocationSuccessData {
-  debugContext: CycleDebugContext;
-  debugFileOptions: CycleDebugFileOptions;
-}
+type ToolUseCallSuccessData = BaseInvocationSuccessData;
 
 /**
  * Result type for tool-use call (uses shared InvocationResult).
@@ -291,36 +298,19 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
    * Extract data from shared for exec().
    * PocketFlow compliance: exec() should only use prepRes, not shared.
    */
-  async prep(
-    shared: ToolUseCycleShared,
-  ): Promise<BaseInvocationPrepResult & { cycleIndex: number }> {
-    const { state } = shared;
+  async prep(shared: ToolUseCycleShared): Promise<BaseInvocationPrepResult> {
     return {
-      shouldStop: state.shouldStop,
-      messages: state.messages,
-      cycleIndex: state.cycleIndex,
+      shouldStop: shared.shouldStop,
+      messages: shared.messages,
     };
   }
 
-  async exec(
-    prepRes: BaseInvocationPrepResult & { cycleIndex: number },
-  ): Promise<ToolUseCallResult> {
+  async exec(prepRes: BaseInvocationPrepResult): Promise<ToolUseCallResult> {
     const services = this.services;
 
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
-
-    const debugContext: CycleDebugContext = {
-      logger: services.logger,
-      modelName: services.modelName,
-      executionId: services.context.executionId,
-      isRemote: isRemoteAgent(services.agentName),
-    };
-    const debugFileOptions: CycleDebugFileOptions = {
-      continuationCount: prepRes.cycleIndex,
-      baseName: 'tooluse_response',
-    };
 
     const start = Date.now();
 
@@ -337,13 +327,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
 
       const responseTimeMs = Date.now() - start;
 
-      return {
-        kind: 'success',
-        response,
-        responseTimeMs,
-        debugContext,
-        debugFileOptions,
-      };
+      return { kind: 'success', response, responseTimeMs };
     });
     // Note: Errors from createResponse() are caught by PocketFlow Node's
     // retry loop in _exec(), which calls retryPrompt() then execFallback().
@@ -366,27 +350,39 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const services = this.services;
-    const { state, retryState } = shared;
 
     // Handle non-success cases (returns null) or get narrowed success result
-    const successRes = handleInvocationResult(execRes, state, retryState, {
-      logger: services.logger,
-      operationName: this.getOperationName(),
-    });
+    // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
+    const successRes = handleInvocationResult(
+      execRes,
+      shared,
+      { lastError: shared.lastError },
+      {
+        logger: services.logger,
+        operationName: this.getOperationName(),
+      },
+    );
 
     if (!successRes) {
       return FlowTransition.COMPLETE;
     }
 
     // Apply success-specific side effects
-    state.response = successRes.response;
-    state.responseTimeMs = successRes.responseTimeMs;
+    shared.response = successRes.response;
+    shared.responseTimeMs = successRes.responseTimeMs;
 
+    const { modelName, agentName } = services;
     await maybeSaveDebugObject({
       object: successRes.response,
       objectType: 'response',
-      context: successRes.debugContext,
-      fileOptions: successRes.debugFileOptions,
+      context: getDebugContext(services, {
+        modelName,
+        isRemote: isRemoteAgent(agentName),
+      }),
+      fileOptions: {
+        continuationCount: shared.cycleIndex,
+        baseName: 'tooluse_response',
+      },
     });
 
     return FlowTransition.DEFAULT;
@@ -446,11 +442,10 @@ class ToolUseProcessNode<C> extends BaseNode<
    * PocketFlow compliance: Only extract what exec() needs.
    */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseProcessPrepResult> {
-    const { state } = shared;
     return {
-      shouldStop: state.shouldStop,
-      response: state.response,
-      responseTimeMs: state.responseTimeMs,
+      shouldStop: shared.shouldStop,
+      response: shared.response,
+      responseTimeMs: shared.responseTimeMs,
     };
   }
 
@@ -579,7 +574,6 @@ class ToolUseProcessNode<C> extends BaseNode<
   ): Promise<string | undefined> {
     const services = this.services;
     const { run, workspace, onRoundFinalized } = services;
-    const { state } = shared;
 
     if (execRes.kind === 'skipped') {
       return FlowTransition.COMPLETE;
@@ -591,19 +585,19 @@ class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    // Accumulate cycle metrics in state (not round object)
+    // Accumulate cycle metrics in shared (flat pattern)
     if (execRes.responseTimeMs !== undefined) {
-      state.cycleResponseTimeMs += execRes.responseTimeMs;
+      shared.cycleResponseTimeMs += execRes.responseTimeMs;
     }
     if (execRes.normalizedUsage) {
-      state.cycleNormalizedUsage = execRes.normalizedUsage;
+      shared.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
     // Finalize cycle using direct values (no round object needed)
     await finalizeToolUseCycle({
-      cycleIndex: state.cycleIndex,
-      responseTimeMs: state.cycleResponseTimeMs,
-      normalizedUsage: state.cycleNormalizedUsage ?? null,
+      cycleIndex: shared.cycleIndex,
+      responseTimeMs: shared.cycleResponseTimeMs,
+      normalizedUsage: shared.cycleNormalizedUsage ?? null,
       run,
       onRoundFinalized,
     });
@@ -611,9 +605,9 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (execRes.endTurn) {
       // Apply side effects for end turn
-      state.toolCalls = undefined;
+      shared.toolCalls = undefined;
       if (execRes.createAssistantMessage && execRes.text) {
-        state.messages.push(
+        shared.messages.push(
           services.modelHandler.createAssistantMessage(execRes.text),
         );
         workspace.assembly.lastResponse = execRes.text;
@@ -621,20 +615,20 @@ class ToolUseProcessNode<C> extends BaseNode<
       // Clear ephemeral state
       workspace.resetServerToolContent();
       workspace.resetReasoning();
-      state.shouldStop = true;
-      state.endTurn = true; // Normal completion (model said end_turn)
-      state.stopReason = execRes.stopReason;
+      shared.shouldStop = true;
+      shared.endTurn = true; // Normal completion (model said end_turn)
+      shared.stopReason = execRes.stopReason;
       return FlowTransition.COMPLETE;
     }
 
     // Apply side effects for continuing with tool calls
-    state.toolCalls = execRes.toolCalls;
-    state.text = execRes.text;
-    state.stopReason = execRes.stopReason;
+    shared.toolCalls = execRes.toolCalls;
+    shared.text = execRes.text;
+    shared.stopReason = execRes.stopReason;
     // Increment cycle index and reset metrics for next cycle
-    state.cycleIndex += 1;
-    state.cycleResponseTimeMs = 0;
-    state.cycleNormalizedUsage = undefined;
+    shared.cycleIndex += 1;
+    shared.cycleResponseTimeMs = 0;
+    shared.cycleNormalizedUsage = undefined;
 
     return FlowTransition.DEFAULT;
   }
@@ -670,11 +664,15 @@ interface ToolUseDispatchPrepResult {
 
 /**
  * Result of exec() for tool dispatch.
- * PocketFlow compliance: exec() returns computation results, post() applies side effects.
+ * PocketFlow compliance: exec() executes tools and returns results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
   | { kind: 'skipped'; interrupted: boolean }
-  | { kind: 'success'; calls: SdkToolCall[] };
+  | {
+      kind: 'success';
+      execResults: ToolExecutionResult[];
+      assistantText: string;
+    };
 
 /**
  * Dispatches tool calls and processes their results.
@@ -701,11 +699,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
    */
   async prep(shared: ToolUseCycleShared): Promise<ToolUseDispatchPrepResult> {
     const services = this.services;
-    const { state } = shared;
-    const toolCalls = state.toolCalls ?? [];
+    const toolCalls = shared.toolCalls ?? [];
 
     // Check skip conditions (including interruption) in prep
-    const shouldSkip = state.shouldStop || toolCalls.length === 0;
+    const shouldSkip = shared.shouldStop || toolCalls.length === 0;
     const interrupted = shouldSkip
       ? false
       : Boolean(await services.checkInterruption());
@@ -714,13 +711,17 @@ class ToolUseDispatchNode<C> extends BaseNode<
       shouldSkip,
       interrupted,
       toolCalls,
-      text: state.text,
+      text: shared.text,
     };
   }
 
   /**
-   * Check conditions for tool dispatch.
-   * PocketFlow compliance: Pure computation, no side effects.
+   * Execute all tool calls and return results.
+   *
+   * PocketFlow compliance:
+   * - exec() executes tools using services (tracker/todos are service state, not shared state)
+   * - Tool execution is I/O but acceptable since this node uses NODE_NO_RETRY
+   * - Results are returned for post() to apply side effects (logging, messages)
    */
   async exec(
     prepRes: ToolUseDispatchPrepResult,
@@ -733,9 +734,28 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return { kind: 'skipped', interrupted: true };
     }
 
+    const services = this.services;
+    const { workspace } = services;
+    const tracker = workspace.interactions;
+    const todoState = workspace.todos;
+    const assistantText = prepRes.text ?? '';
+
+    // Execute all tool calls and collect results
+    const execResults: ToolExecutionResult[] = [];
+    for (const call of prepRes.toolCalls) {
+      const execResult = await this.executeToolCall(
+        call,
+        services,
+        tracker,
+        todoState,
+      );
+      execResults.push(execResult);
+    }
+
     return {
       kind: 'success',
-      calls: prepRes.toolCalls,
+      execResults,
+      assistantText,
     };
   }
 
@@ -862,44 +882,33 @@ class ToolUseDispatchNode<C> extends BaseNode<
   }
 
   /**
-   * Execute tool calls and apply side effects.
-   * PocketFlow compliance: All mutations happen here.
+   * Apply side effects from tool execution.
+   *
+   * PocketFlow compliance:
+   * - post() logs results, processes media files, and creates follow-up messages
+   * - All shared state mutations happen here
    */
   async post(
     shared: ToolUseCycleShared,
-    prepRes: ToolUseDispatchPrepResult,
+    _prepRes: ToolUseDispatchPrepResult,
     execRes: ToolUseDispatchExecResult,
   ): Promise<string | undefined> {
     const services = this.services;
     const { workspace } = services;
-    const { state } = shared;
     const groupId = services.logger.withCurrentGroup((id) => id);
 
     if (execRes.kind === 'skipped') {
       // Apply interrupted side effect if needed
       if (execRes.interrupted) {
-        state.shouldStop = true;
+        shared.shouldStop = true;
       }
       return FlowTransition.COMPLETE;
     }
 
-    const { calls } = execRes;
-    const assistantText = prepRes.text ?? '';
-    const tracker = workspace.interactions;
-    const todoState = workspace.todos;
+    const { execResults, assistantText } = execRes;
 
-    // Step 1: Execute all tool calls and collect results
-    const execResults: ToolExecutionResult[] = [];
-    for (const call of calls) {
-      const execResult = await this.executeToolCall(
-        call,
-        services,
-        tracker,
-        todoState,
-      );
-      execResults.push(execResult);
-
-      // Log each tool execution as it completes
+    // Step 1: Log each tool execution and process media files
+    for (const execResult of execResults) {
       await this.logAndProcessMediaFiles(
         execResult,
         services,
@@ -913,6 +922,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const extracted = execResults.map((er) =>
       extractToolAttachments(er.result),
     );
+
+    // Extract calls from results for message creation
+    const calls = execResults.map((er) => er.call);
 
     // For Google handlers with multiple parallel calls, use batched method
     // to properly preserve thought signatures (required for Gemini 3 models).
@@ -934,7 +946,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
-      state.messages.push(...followUpMsgs);
+      shared.messages.push(...followUpMsgs);
     } else {
       // Individual: Process each call separately (original behavior)
       for (const [index, execResult] of execResults.entries()) {
@@ -948,7 +960,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
             workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );
-        state.messages.push(...followUpMsgs);
+        shared.messages.push(...followUpMsgs);
       }
     }
 
@@ -956,13 +968,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
     for (const execResult of execResults) {
       if (isNonEmptyString(execResult.result.userInstruction)) {
         await services.modelHandler.createUserFollowUpMessages(
-          state.messages,
+          shared.messages,
           execResult.result.userInstruction,
         );
       }
     }
 
-    state.toolCalls = [];
+    shared.toolCalls = [];
 
     return FlowTransition.CONTINUE;
   }
@@ -999,6 +1011,12 @@ export function createToolUseCycleFlow<C>(): Flow<
 
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
+
+  // COMPLETE transitions exit directly (no finalize node needed).
+  // Unlike ResponseCycleFlow which needs finalizeRound() for stats recording,
+  // ToolUseCycleFlow handles finalization inline in ProcessNode.post() for
+  // successful cycles. Error/interrupt paths don't need finalization since
+  // there's nothing to record.
 
   return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }

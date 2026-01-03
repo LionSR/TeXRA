@@ -1,16 +1,21 @@
 /**
- * ResponseCycleNode - Runs a response cycle flow.
+ * ResponseCycleNode - Runs a response cycle flow with native nesting.
  *
- * Responsibilities:
- * - Reconstruct state slices from snapshots
- * - Build cycle options from services
- * - Create and run ResponseCycleFlow
- * - Extract results back to ReflectionFlowShared
+ * ## Native Nesting Architecture
  *
- * PocketFlow pattern:
- * - prep(): Reconstruct state slices and output location
- * - exec(): Create and run ResponseCycleFlow directly
- * - post(): Update shared state snapshots with results
+ * Instead of creating a separate shared state for the cycle flow, this node
+ * runs the cycle directly on ReflectionFlowShared. This eliminates the
+ * translation layer between inner/outer shared types.
+ *
+ * The cycle flow modifies ReflectionFlowShared's cycle fields directly:
+ * - messages, shouldStop, endTurn, outputExists, outputLocation
+ * - responseTimeMs, stopReason, systemPrompt, debug, responseObject, processedResponse
+ * - lastError
+ *
+ * ## PocketFlow pattern:
+ * - prep(): Reconstruct state slices, populate cycle fields on shared
+ * - exec(): Run ResponseCycleFlow directly on shared (native nesting)
+ * - post(): Update snapshots from slices (cycle results already in shared)
  *
  * Services accessed via native `this.services`:
  * - modelHandler, logger, setting, prompt, config, context, etc.
@@ -27,11 +32,12 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
-  type ResponseCycleShared,
-  type ResponseCycleState,
+  assertCycleFieldsPopulated,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { createRetryState } from '@agent/core/flows/RetryState';
-import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
+import {
+  interpretCycleCompletion,
+  type CycleCompletionResult,
+} from '@agent/core/flows/CommonCycleTypes';
 import { finalizeRound } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
@@ -64,16 +70,13 @@ interface CyclePrepInput extends CycleStateSlices {
   context: RoundContext;
   currentRound: number;
   outputLocation: AgentFileLocation;
+  /** Reference to outer shared for native nesting (cycle runs directly on it) */
+  shared: ReflectionFlowShared;
 }
 
 type CycleExecResult =
-  | ({
-      kind: 'success';
-      endTurn: boolean;
-      failedWithError: boolean;
-      errorMessage?: string;
-      userCancelled: boolean;
-    } & CycleStateSlices)
+  | ({ kind: 'success'; endTurn: boolean } & CycleCompletionResult &
+      CycleStateSlices)
   | { kind: 'error'; error: Error };
 
 // ============================================================================
@@ -90,16 +93,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
   }
 
   /**
-   * Build shared store and determine output location.
+   * Reconstruct state slices and prepare for cycle execution.
+   * Also stores shared reference for native nesting in exec().
    */
   async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
-    const {
-      fileService,
-      config,
-      setting,
-      userVarChannels,
-      getOutputFileLocation,
-    } = this.services;
+    const { getOutputFileLocation } = this.services;
     const { currentRound, context } = shared;
 
     if (!context) {
@@ -109,14 +107,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Reconstruct state instances from snapshots
-    // Use slices directly - no wrapper needed
     const workspace = getWorkspaceState(shared);
     const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
     );
 
-    // Determine output location for this round (delegates to agent for polymorphism)
+    // Determine output location for this round
     const outputLocation = getOutputFileLocation(currentRound);
 
     return {
@@ -126,21 +123,22 @@ export class ResponseCycleNode<C = unknown> extends Node<
       round,
       run,
       workspace,
+      shared, // Pass shared for native nesting
     };
   }
 
   /**
-   * Execute response cycle directly (no wrapper function).
+   * Execute response cycle with native nesting.
    *
-   * Creates and runs ResponseCycleFlow inline, eliminating the
-   * executeResponseCycleCore() wrapper layer.
+   * Runs ResponseCycleFlow directly on the outer shared state
+   * (ReflectionFlowShared), eliminating the translation layer.
+   * Cycle results are written directly to shared's cycle fields.
    */
   async exec(prepRes: CyclePrepInput): Promise<CycleExecResult> {
     const services = this.services;
+    const { shared } = prepRes;
 
     // Initialize output file and prefill before starting cycle
-    // This handles: writing prefill to file, updating messages with assistant prefill,
-    // and detecting if existing output completes the response (endTurn=true)
     const [prefillEndsTurn, initializedMessages] =
       await services.modelHandler.initializeOutputAndPrefill(
         services.config,
@@ -152,9 +150,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
       );
 
     // If prefill already completes the response, return success with endTurn=true
-    // This happens on resume when replaying completed rounds - the output file
-    // already contains the full response, so we skip the model call.
     if (prefillEndsTurn) {
+      // Update shared directly for native nesting
+      shared.endTurn = true;
+      shared.messages = initializedMessages;
+      shared.outputLocation = prepRes.outputLocation;
       return {
         kind: 'success',
         endTurn: true,
@@ -166,8 +166,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       };
     }
 
-    // Build ResponseCycleOptions from services using helper
-    // Await to get fresh client with refreshed auth tokens for each response round
+    // Build ResponseCycleOptions from services
     const { userVarChannels } = services;
     const cycleOptions = {
       ...(await buildBaseCycleOptions(services)),
@@ -179,25 +178,20 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // Create shared state for the cycle flow
-      const shared: ResponseCycleShared = {
-        state: {
-          messages: initializedMessages,
-          outputLocation: prepRes.outputLocation,
-          endTurn: false,
-          shouldStop: false,
-          outputExists: false,
-          systemPrompt: undefined,
-          debug: undefined,
-          responseObject: undefined,
-          responseTimeMs: undefined,
-          stopReason: undefined,
-          processedResponse: undefined,
-        } satisfies ResponseCycleState,
-        retryState: createRetryState(),
-      };
+      // === NATIVE NESTING: Populate cycle fields directly on shared ===
+      shared.messages = initializedMessages;
+      shared.outputLocation = prepRes.outputLocation;
+      shared.endTurn = false;
+      shared.shouldStop = false;
+      shared.outputExists = false;
+      shared.systemPrompt = undefined;
+      shared.responseObject = undefined;
+      shared.responseTimeMs = undefined;
+      shared.stopReason = undefined;
+      shared.processedResponse = undefined;
+      shared.lastError = undefined;
 
-      // Create and run the flow directly
+      // Create and run the flow directly on shared (native nesting)
       const flow = createResponseCycleFlow<C>();
       flow.setServices({
         ...cycleOptions,
@@ -206,20 +200,20 @@ export class ResponseCycleNode<C = unknown> extends Node<
         workspace: prepRes.workspace,
         onRoundFinalized,
       });
+
+      // Validate and narrow type - asserts all required cycle fields are populated
+      assertCycleFieldsPopulated(shared);
       await flow.run(shared);
 
-      // Interpret completion from flow state
-      const completion = interpretCycleCompletion(
-        shared.state,
-        shared.retryState,
-      );
+      // Interpret completion from shared
+      const completion = interpretCycleCompletion(shared);
 
       return {
         kind: 'success',
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,
-        endTurn: shared.state.endTurn,
+        endTurn: shared.endTurn,
         ...completion,
       };
     } catch (error) {
@@ -248,9 +242,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
   }
 
   /**
-   * Update shared state with cycle results.
+   * Update snapshots and handle errors.
    *
-   * Errors are thrown directly - agent.run() catches and handles cleanup.
+   * With native nesting, cycle results are already in shared's cycle fields.
+   * This method just updates snapshots and handles error/cancellation paths.
    */
   async post(
     shared: ReflectionFlowShared,
@@ -261,8 +256,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      // Store error in shared state for persistence (enables proper resume behavior)
-      shared.lastRetryError = {
+      shared.lastError = {
         message: execRes.error.message,
         retryable: false,
       };
@@ -272,19 +266,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
       shared.continueRounds = false;
-      // Clear stale state to prevent OutputNode from processing previous round's data
-      shared.endTurn = false;
-      shared.outputLocation = prepRes.outputLocation;
-      // Clear any previous error - user cancellation is not an error
-      shared.lastRetryError = undefined;
-      // User cancellation is not an error - just stop gracefully
+      shared.lastError = undefined;
       return FlowTransition.DEFAULT;
     }
 
     if (execRes.failedWithError) {
       logger.error(`Response cycle failed: ${execRes.errorMessage}`);
-      // Store error in shared state for persistence
-      shared.lastRetryError = {
+      shared.lastError = {
         message: execRes.errorMessage ?? 'Unknown error',
         retryable: false,
       };
@@ -292,22 +280,18 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Success - clear any previous error
-    shared.lastRetryError = undefined;
+    shared.lastError = undefined;
 
-    // Update state from slices - convert to snapshot
+    // Update snapshots from slices (cycle results already in shared via native nesting)
     shared.runStateSnapshot = execRes.run.toSnapshot();
     updateWorkspaceSnapshot(shared, execRes.workspace);
-    shared.endTurn = execRes.endTurn;
-    shared.outputLocation = prepRes.outputLocation;
 
-    // Sync conversation state - messages are modified in-place during cycle
-    // (via updateMessageContentWithPrefill) and must be propagated for multi-round flows
+    // Sync conversation state - messages modified in-place during cycle
     shared.conversation = prepRes.context.messages;
 
-    // Store round state snapshot for later (already a snapshot, just push directly)
+    // Store round state snapshot
     shared.roundStateSnapshots.push(prepRes.context.stateRoundSnapshot);
 
-    // Continue to OutputNode
     return FlowTransition.DEFAULT;
   }
 }
