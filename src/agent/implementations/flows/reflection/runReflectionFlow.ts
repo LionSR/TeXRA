@@ -176,10 +176,10 @@ export async function runReflectionFlow<C = unknown>(
   });
   flowContext.setActiveRun(storageKey);
 
-  // Register for interrupt handling (moved from executeAgent callbacks)
-  registerInterruptible(streamTabId, flowContext);
-
   try {
+    // Register for interrupt handling (inside try to ensure finally runs)
+    registerInterruptible(streamTabId, flowContext);
+
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
       executionContext.executionId,
