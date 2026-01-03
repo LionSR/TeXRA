@@ -186,7 +186,6 @@ interface CycleNodePrepResult<C> {
  * Note: session is NOT passed through prepRes - access via this.services instead.
  */
 interface WaitNodePrepResult {
-  conversation: ProviderMessage[];
   /** Whether the wait was interrupted before it started */
   interrupted: boolean;
 }
@@ -469,8 +468,8 @@ class ToolUseCycleNode<C> extends Node<
  * Waits for user follow-up message between cycles.
  *
  * PocketFlow compliance:
- * - prep(): Does I/O (enterWaitingState, waitForFollowUp) since these are read operations
- * - exec(): Pure decision-making based on prep results
+ * - prep(): Check interruption state (no blocking I/O)
+ * - exec(): Blocking I/O (enterWaitingState, waitForFollowUp)
  * - post(): Applies side effects (markRunning, update conversation)
  *
  * Session operations via this.services.session (not passed through prepRes).
@@ -488,15 +487,15 @@ class ToolUseWaitNode<C> extends Node<
    * Extract data needed for wait operation.
    * PocketFlow compliance: Extract data, no blocking I/O here.
    */
-  async prep(shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
+  async prep(_shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
     const checkInterruption = this.services.checkInterruption;
 
     // Check interruption first - if interrupted, skip exec entirely
     if (checkInterruption()) {
-      return { conversation: shared.state.conversation, interrupted: true };
+      return { interrupted: true };
     }
 
-    return { conversation: shared.state.conversation, interrupted: false };
+    return { interrupted: false };
   }
 
   /**
