@@ -128,10 +128,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Update run-scoped metadata (instructions, usage, files) from message.
+   * Update run-scoped metadata (instructions, usage, files, missing outputs) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
-   * @param {Object} message - Message containing runInstructions, runUsage, runFiles
+   * @param {Object} message - Message containing runInstructions, runUsage, runFiles, runMissingOutputs
    */
   _updateRunMetadata(stream, message) {
     if (message.runInstructions) {
@@ -156,6 +156,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           state.setRunFiles(stream, runId, filesByRound);
         }
       });
+    }
+
+    // Handle missing outputs included in UPDATE_LOGS to reduce round-trips
+    if (message.runMissingOutputs) {
+      // Clear existing missing outputs first (equivalent to reset: true)
+      state.clearRunMissingOutputs(stream);
+      Object.entries(message.runMissingOutputs).forEach(
+        ([runId, missingByRound]) => {
+          if (runId) {
+            state.setRunMissingOutputs(stream, runId, missingByRound);
+          }
+        },
+      );
     }
   }
 

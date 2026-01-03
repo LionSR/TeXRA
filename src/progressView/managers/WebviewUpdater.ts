@@ -115,6 +115,8 @@ export class WebviewUpdater {
       activeRunId?: string | null;
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+      /** Missing output files by runId. Included in UPDATE_LOGS to reduce round-trips. */
+      runMissingOutputs?: Record<string, { [key: number]: string[] }>;
     },
     options?: {
       forceRebuild?: boolean;
@@ -129,6 +131,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
+      runMissingOutputs: extras?.runMissingOutputs,
       forceRebuild: options?.forceRebuild,
     });
   }
@@ -189,6 +192,34 @@ export class WebviewUpdater {
       stream,
       ...payload,
     });
+  }
+
+  /**
+   * Batch update missing outputs for all runs in a stream.
+   * Sends a single reset message followed by one message per run.
+   * More efficient than calling updateMissingOutputs multiple times.
+   */
+  updateMissingOutputsBatch(
+    stream: StreamTabId,
+    missingByRun: Record<string, { [key: number]: string[] }>,
+  ): void {
+    // Send reset first
+    this.sendMessage({
+      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+      stream,
+      reset: true,
+    });
+
+    // Send all runs in a single message batch
+    // Note: Frontend processes messages FIFO, so order is preserved
+    for (const [runId, rounds] of Object.entries(missingByRun)) {
+      this.sendMessage({
+        command: COMMANDS.UPDATE_MISSING_OUTPUTS,
+        stream,
+        runId,
+        rounds,
+      });
+    }
   }
 
   showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {

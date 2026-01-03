@@ -224,10 +224,12 @@ export class ProgressEventHandler {
     const { updateInstruction = true, forceRebuild = false } = options;
 
     if (!stream) {
-      this.webviewUpdater.updateLogContent('', [], []);
-      this.webviewUpdater.updateFiles('', { reset: true });
-      this.webviewUpdater.updateMissingOutputs('', { reset: true });
-      this.webviewUpdater.updateUsage('', {});
+      // Send empty content to clear all surface data in a single message
+      this.webviewUpdater.updateLogContent('', [], [], {
+        runFiles: {},
+        runMissingOutputs: {},
+        runUsage: {},
+      });
       this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
       if (updateInstruction) {
         this.webviewUpdater.clearInstruction('');
@@ -257,6 +259,10 @@ export class ProgressEventHandler {
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
+    // Send all surface data in a single UPDATE_LOGS message to reduce round-trips.
+    // Files and missing outputs are included in extras and handled by frontend's
+    // handleUpdateLogs. We don't send separate UPDATE_FILES/UPDATE_MISSING_OUTPUTS
+    // messages to avoid race conditions where reset: true would clear data.
     this.webviewUpdater.updateLogContent(
       stream,
       messages,
@@ -266,22 +272,10 @@ export class ProgressEventHandler {
         activeRunId,
         runUsage: usageByRun,
         runFiles: filesByRun,
+        runMissingOutputs: missingByRun,
       },
       { forceRebuild },
     );
-
-    // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
-    // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
-    // messages here to avoid a race condition where reset: true would clear
-    // the files just populated from UPDATE_LOGS.
-
-    this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
-    Object.entries(missingByRun).forEach(([runId, rounds]) => {
-      this.webviewUpdater.updateMissingOutputs(stream, {
-        runId,
-        rounds,
-      });
-    });
 
     // Refresh todos for the stream (ephemeral state)
     // Always send todos if defined (including empty array to clear stale UI)
