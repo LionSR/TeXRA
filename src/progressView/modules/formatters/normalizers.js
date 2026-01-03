@@ -174,11 +174,25 @@ export const normalizeToolUseLog = (structured) => {
 
   const outputCandidate =
     parsed.output !== undefined ? parsed.output : outputDetails.output;
+
+  // Extract the actual output content, avoiding redundant nesting
+  // If outputCandidate is an object with an 'output' field, use that directly
+  let outputContent = outputCandidate;
+  if (
+    outputCandidate !== null &&
+    typeof outputCandidate === 'object' &&
+    !Array.isArray(outputCandidate)
+  ) {
+    const { summary: _unusedSummary, output, ...rest } = outputCandidate;
+    // Prefer the nested output field if it exists, otherwise use remaining fields
+    outputContent = output !== undefined ? output : rest;
+  }
+
   const outputText =
-    typeof outputCandidate === 'string'
-      ? outputCandidate
-      : outputCandidate !== undefined
-        ? stringifyForDisplay(outputCandidate)
+    typeof outputContent === 'string'
+      ? outputContent
+      : outputContent !== undefined
+        ? stringifyForDisplay(outputContent)
         : '';
 
   const toolName =
