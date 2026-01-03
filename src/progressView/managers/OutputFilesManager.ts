@@ -22,6 +22,10 @@ import {
   createRoundMapSchema,
   createRunMapSchema,
 } from '@progressView/persistence/schemaUtils';
+import {
+  nestedMapToRecord,
+  tripleNestedMapToRecord,
+} from '@progressView/persistence/serializationUtils';
 
 // --- Zod Schemas for Output Files ---
 
@@ -462,17 +466,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Save missing outputs to persistence */
   async saveMissingOutputs(): Promise<void> {
-    const obj = Object.fromEntries(
-      Array.from(this._missingOutputs.entries(), ([stream, runs]) => [
-        stream,
-        Object.fromEntries(
-          Array.from(runs.entries(), ([runId, rounds]) => [
-            runId,
-            Object.fromEntries(rounds.entries()),
-          ]),
-        ),
-      ]),
-    );
+    const obj = tripleNestedMapToRecord(this._missingOutputs);
     await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
   }
 
@@ -526,13 +520,7 @@ export class OutputFilesManager extends PersistentMapManager<
     value: Map<string, Map<number, OutputFileInfo[]>>,
     _key: StreamTabId,
   ): unknown {
-    const runs = Object.fromEntries(
-      Array.from(value.entries(), ([runId, rounds]) => [
-        runId,
-        Object.fromEntries(rounds.entries()),
-      ]),
-    );
-    return runs;
+    return nestedMapToRecord(value);
   }
 
   /** Validate and normalize loaded output files */
