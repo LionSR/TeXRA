@@ -11,6 +11,10 @@
 
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import {
+  registerInterruptible,
+  unregisterInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
 import {
@@ -58,24 +62,17 @@ export interface RunToolUseFlowResult {
 }
 
 /**
- * Callbacks for tool-use flow lifecycle events.
+ * Optional setup callback for tool-use flow.
+ *
+ * Called after the flow context is created but before execution starts.
+ * Use this to configure the session (e.g., append follow-up messages for resume).
+ *
+ * Note: Interrupt registration/unregistration is handled automatically by the
+ * flow runner - callers don't need to manage this.
  */
-export interface RunToolUseFlowCallbacks {
-  /**
-   * Called when the flow context is ready, before execution starts.
-   * Use this to register the session for interruption handling.
-   */
-  onContextReady?: (
-    streamTabId: StreamTabId,
-    context: ToolUseFlowContext<unknown>,
-  ) => void;
-
-  /**
-   * Called when the flow is complete or failed.
-   * Use this to unregister the session.
-   */
-  onFlowComplete?: (streamTabId: StreamTabId) => void;
-}
+export type ToolUseFlowSetupCallback = (
+  context: ToolUseFlowContext<unknown>,
+) => void;
 
 // ============================================================================
 // Flow Runner
@@ -84,13 +81,16 @@ export interface RunToolUseFlowCallbacks {
 /**
  * Run a tool-use flow.
  *
+ * Interrupt registration is handled automatically - the flow context is
+ * registered when created and unregistered on completion/error.
+ *
  * @param input - Flow configuration and dependencies
- * @param callbacks - Optional lifecycle callbacks for registration
+ * @param onSetup - Optional callback to configure context before execution
  * @returns Flow execution result
  */
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
-  callbacks?: RunToolUseFlowCallbacks,
+  onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
   // Create the flow context (owns all services including session lifecycle)
   const flowContext = createToolUseFlowContext<C>({
@@ -100,11 +100,11 @@ export async function runToolUseFlow<C = unknown>(
 
   const streamTabId = flowContext.streamTabId;
 
-  // Notify that context is ready (for agent registry if needed)
-  callbacks?.onContextReady?.(
-    streamTabId,
-    flowContext as ToolUseFlowContext<unknown>,
-  );
+  // Register for interrupt handling (moved from executeAgent callbacks)
+  registerInterruptible(streamTabId, flowContext);
+
+  // Allow caller to configure context (e.g., append follow-ups for resume)
+  onSetup?.(flowContext as ToolUseFlowContext<unknown>);
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
@@ -168,8 +168,8 @@ export async function runToolUseFlow<C = unknown>(
     // Cleanup (PersistedFlow handles state cleanup automatically)
     flowContext.dispose();
 
-    // Notify completion
-    callbacks?.onFlowComplete?.(streamTabId);
+    // Unregister from interrupt handling (moved from executeAgent callbacks)
+    unregisterInterruptible(streamTabId);
   }
 
   return { status };

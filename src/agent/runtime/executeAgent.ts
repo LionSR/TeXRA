@@ -26,12 +26,8 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import {
   runToolUseFlow,
   type IToolUseSession,
-  type RunToolUseFlowCallbacks,
 } from '@agent/implementations/flows/tooluse';
-import {
-  runReflectionFlow,
-  type RunReflectionFlowCallbacks,
-} from '@agent/implementations/flows/reflection/runReflectionFlow';
+import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -52,10 +48,6 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -273,52 +265,6 @@ function createUsageRecorder(
 ): () => RoundFinalizedCallback {
   return () => async (run) => {
     await usageMonitor.recordUsage(run, { runKind });
-  };
-}
-
-/**
- * Create standardized interruptible callbacks for tool-use flows.
- *
- * DRY helper for the register/unregister pattern used when running tool-use flows.
- * Uses the captured streamTabId from the closure rather than callback parameters
- * to ensure consistent stream ID usage throughout the flow lifecycle.
- *
- * @param streamTabId - Stream ID to use for registration
- * @param onSetup - Optional callback invoked after registration, used by
- *                  resumeToolUseFromSnapshot to configure the session before flow starts
- */
-function createToolUseCallbacks(
-  streamTabId: StreamTabId,
-  onSetup?: (context: { session: IToolUseSession }) => void,
-): RunToolUseFlowCallbacks {
-  return {
-    onContextReady: (_callbackStreamId, context) => {
-      registerInterruptible(streamTabId, context);
-      onSetup?.(context);
-    },
-    onFlowComplete: (_callbackStreamId) => {
-      unregisterInterruptible(streamTabId);
-    },
-  };
-}
-
-/**
- * Create standardized interruptible callbacks for reflection flows.
- *
- * DRY helper for the register/unregister pattern used when running reflection flows.
- * Uses the captured streamTabId from the closure rather than the storageKey callback
- * parameter, since registerInterruptible expects a StreamTabId.
- */
-function createReflectionCallbacks(
-  streamTabId: StreamTabId,
-): RunReflectionFlowCallbacks {
-  return {
-    onContextReady: (_storageKey, context) => {
-      registerInterruptible(streamTabId, context);
-    },
-    onFlowComplete: (_storageKey) => {
-      unregisterInterruptible(streamTabId);
-    },
   };
 }
 
@@ -615,24 +561,19 @@ export async function executeAgent(
 
         if (agentSetting.agentType === 'toolUse') {
           // Tool-use flow execution
-          const result = await runToolUseFlow(
-            {
-              ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
-              setting: ctx.agentSetting as AgentToolUseSetting,
-              streamTabId: ctx.streamTabId,
-            },
-            createToolUseCallbacks(streamTabId),
-          );
+          const result = await runToolUseFlow({
+            ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
+            setting: ctx.agentSetting as AgentToolUseSetting,
+            streamTabId: ctx.streamTabId,
+          });
           flowStatus = result.status;
         } else {
           // Reflection flow execution (direct/CoT/workflow)
-          const result = await runReflectionFlow(
-            {
-              ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-              setting: ctx.agentSetting as AgentWorkflowSetting,
-            },
-            createReflectionCallbacks(streamTabId),
-          );
+          const result = await runReflectionFlow({
+            ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
+            setting: ctx.agentSetting as AgentWorkflowSetting,
+            streamTabId,
+          });
           flowStatus = result.status;
         }
 
@@ -696,14 +637,12 @@ export async function executeMergeAgent(
       );
 
       // Run reflection flow with custom file naming
-      const result = await runReflectionFlow(
-        {
-          ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-          setting: ctx.agentSetting as AgentWorkflowSetting,
-          getOutputFileLocation,
-        },
-        createReflectionCallbacks(streamTabId),
-      );
+      const result = await runReflectionFlow({
+        ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
+        setting: ctx.agentSetting as AgentWorkflowSetting,
+        getOutputFileLocation,
+        streamTabId,
+      });
 
       logger.debug(`Task completed successfully`);
       updateFlowStatus(streamTabId, result.status);
@@ -765,10 +704,7 @@ export async function resumeToolUseFromSnapshot(
         streamTabId,
         resumeSnapshot: snapshot,
       },
-      createToolUseCallbacks(
-        streamTabId,
-        setupSession ? (context) => setupSession(context.session) : undefined,
-      ),
+      setupSession ? (context) => setupSession(context.session) : undefined,
     );
 
     updateFlowStatus(streamTabId, result.status);
