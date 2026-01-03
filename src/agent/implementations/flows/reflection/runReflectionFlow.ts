@@ -301,6 +301,16 @@ export async function runReflectionFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
+    // Clean up flow record on completion.
+    // When VS Code reloads mid-execution, this block never runs, preserving
+    // the record for sessions that were genuinely interrupted mid-wait.
+    try {
+      const kv = getExecutionStore(executionContext.executionId);
+      await kv.delete(`flow:${executionContext.executionId}`);
+    } catch {
+      // Ignore cleanup errors - non-critical
+    }
+
     // Round stages are finalized by RoundPersistedFlow - no need to end them here
 
     // Finalize run stage if we created it internally.
