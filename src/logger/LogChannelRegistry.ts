@@ -104,15 +104,17 @@ export class LogChannelRegistry {
    */
   dispose(): void {
     for (const entry of this.channels.values()) {
-      // Dispose the output channel if it's an agent channel
-      // (shared channels use the main output channel)
       if (entry.options.isAgent) {
+        // Agent channels own their output channel - dispose both
         entry.transport.close();
+      } else {
+        // Shared channels use the main output channel - only clear state
+        entry.transport.clearState();
       }
     }
     this.channels.clear();
 
-    // Dispose the main output channel
+    // Dispose the main output channel (used by non-agent transports)
     this.mainOutputChannel?.dispose();
     this.mainOutputChannel = null;
   }

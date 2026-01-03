@@ -109,10 +109,19 @@ export class VSCodeTransport extends Transport {
   }
 
   /**
-   * Close the transport and dispose of the output channel.
+   * Clear internal state without disposing the output channel.
+   * Used during extension deactivation for transports sharing the main channel.
+   */
+  clearState(): void {
+    this.groups.clear();
+  }
+
+  /**
+   * Close the transport: clear state and dispose of the output channel.
+   * Only call this for agent channels that own their output channel.
    */
   close(): void {
-    this.groups.clear();
+    this.clearState();
     this.channel.dispose();
   }
 
