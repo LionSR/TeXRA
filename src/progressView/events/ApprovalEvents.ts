@@ -1,14 +1,12 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  EventModuleBase,
-  ProgressEventBusLike,
+import {
+  registerSimpleEvents,
+  type BaseEventShared,
+  type EventModuleBase,
+  type ProgressEventBusLike,
 } from './types';
 
 /**
@@ -39,30 +37,26 @@ export function createApprovalEventsModule(
   const { withErrorBoundary } = shared;
 
   return {
-    register(bus: ProgressEventBusLike): vscode.Disposable[] {
-      return [
-        new vscode.Disposable(
-          bus.on('showToolEditApprovalPrompt', (payload) =>
-            withErrorBoundary('failed to show approval prompt', () =>
-              shared.showToolEditApprovalPrompt(payload),
-            ),
-          ),
-        ),
-        new vscode.Disposable(
-          bus.on('resolveToolEditApprovalPrompt', (payload) =>
-            withErrorBoundary('failed to resolve approval prompt', () =>
-              shared.resolveToolEditApprovalPrompt(payload.requestId),
-            ),
-          ),
-        ),
-        new vscode.Disposable(
-          bus.on('updateToolEditApprovalBypassState', (payload) =>
-            withErrorBoundary('failed to update approval bypass state', () =>
-              shared.updateToolEditApprovalBypassState(payload.bypassActive),
-            ),
-          ),
-        ),
-      ];
+    register(bus) {
+      return registerSimpleEvents(bus, withErrorBoundary, [
+        {
+          event: 'showToolEditApprovalPrompt',
+          errorMessage: 'failed to show approval prompt',
+          handler: shared.showToolEditApprovalPrompt,
+        },
+        {
+          event: 'resolveToolEditApprovalPrompt',
+          errorMessage: 'failed to resolve approval prompt',
+          handler: (payload) =>
+            shared.resolveToolEditApprovalPrompt(payload.requestId),
+        },
+        {
+          event: 'updateToolEditApprovalBypassState',
+          errorMessage: 'failed to update approval bypass state',
+          handler: (payload) =>
+            shared.updateToolEditApprovalBypassState(payload.bypassActive),
+        },
+      ]);
     },
   };
 }
