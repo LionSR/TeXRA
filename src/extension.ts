@@ -6,6 +6,9 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
+import { detectWaitingStreams } from '@agent/storage';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
@@ -201,12 +204,27 @@ export async function activate(context: vscode.ExtensionContext) {
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
-  // PersistedFlow handles state persistence automatically.
-  // Waiting streams detection will be restored from ExecutionKVStore in future.
-  const waitingStreams = new Set<string>();
+  // Detect streams with persisted flows that should be marked as WAITING.
+  // This allows users to send follow-ups and resume interrupted sessions.
+  const executionIdMap = progressViewProvider.state.getAllExecutionIds();
+  const waitingStreams = await detectWaitingStreams(
+    executionIdMap as Map<string, string>,
+  );
+
+  // Set StreamStatusService status for waiting streams.
+  // This enables the follow-up queuing mechanism in ToolUseFollowUp.
+  for (const streamId of waitingStreams) {
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+  }
 
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
+  if (waitingStreams.size > 0) {
+    logger.debug(
+      'extension',
+      `Detected ${waitingStreams.size} waiting stream(s) with persisted flows`,
+    );
+  }
 
   // Clean up any tasks that were left in "running" state from previous session
   await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
