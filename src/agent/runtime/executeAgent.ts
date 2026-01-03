@@ -88,9 +88,9 @@ export interface ExecuteAgentOptions {
  */
 interface FlowExecutionContext {
   modelHandler: IModelHandler<any, any, any, any, any>;
-  agentConfig: AgentConfig;
-  agentSetting: AgentSetting;
-  agentPrompt: AgentPrompt;
+  config: AgentConfig;
+  setting: AgentSetting;
+  prompt: AgentPrompt;
   agentPath: string;
   executionContext: AgentExecutionContext;
   streamTabId: StreamTabId;
@@ -238,9 +238,9 @@ async function prepareFlowExecution(
 
   return {
     modelHandler,
-    agentConfig,
-    agentSetting,
-    agentPrompt,
+    config: agentConfig,
+    setting: agentSetting,
+    prompt: agentPrompt,
     agentPath,
     executionContext,
     streamTabId,
@@ -269,51 +269,6 @@ function createUsageRecorder(
 }
 
 /**
- * Common flow input fields shared by all flow types.
- * Returned by buildBaseFlowInput helper.
- */
-interface BaseFlowInputFields {
-  modelHandler: FlowExecutionContext['modelHandler'];
-  config: FlowExecutionContext['agentConfig'];
-  prompt: FlowExecutionContext['agentPrompt'];
-  executionContext: FlowExecutionContext['executionContext'];
-  userVarChannels: FlowExecutionContext['userVarChannels'];
-  checkInterruption: InterruptManager['checkInterruption'];
-  setAbortController: InterruptManager['setAbortController'];
-  onInterrupt: InterruptManager['onInterrupt'];
-  getClient: () => ReturnType<
-    FlowExecutionContext['modelHandler']['getClient']
-  >;
-  getUsageRecorder: () => RoundFinalizedCallback;
-}
-
-/**
- * Build the common flow input fields shared by all flow types.
- *
- * DRY helper: Both tool-use and reflection flows share these fields.
- * This extracts the common pattern instead of duplicating it 4+ times.
- */
-function buildBaseFlowInput(
-  ctx: FlowExecutionContext,
-  interruptManager: InterruptManager,
-  runKind: 'workflow' | 'tool-use',
-): BaseFlowInputFields {
-  return {
-    modelHandler: ctx.modelHandler,
-    config: ctx.agentConfig,
-    prompt: ctx.agentPrompt,
-    executionContext: ctx.executionContext,
-    userVarChannels: ctx.userVarChannels,
-    checkInterruption: interruptManager.checkInterruption,
-    setAbortController: interruptManager.setAbortController,
-    onInterrupt: interruptManager.onInterrupt,
-    // Get fresh client each response round to ensure auth keys are refreshed
-    getClient: () => ctx.modelHandler.getClient(),
-    getUsageRecorder: createUsageRecorder(ctx.usageMonitor, runKind),
-  };
-}
-
-/**
  * Setup UI state for flow execution.
  *
  * DRY helper: All three flow execution functions call setActiveStream
@@ -331,9 +286,9 @@ function setupFlowUIState(
   const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
   bus.emit('setActiveStream', {
     stream: streamTabId,
-    session: ctx.agentConfig.session!,
-    isRemote: isRemoteAgent(ctx.agentConfig.agent),
-    hasMultipleOutputs: ctx.agentConfig.useMultipleOutputs,
+    session: ctx.config.session!,
+    isRemote: isRemoteAgent(ctx.config.agent),
+    hasMultipleOutputs: ctx.config.useMultipleOutputs,
   });
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
@@ -480,8 +435,7 @@ export async function executeAgent(
     executionId,
   );
 
-  const { streamTabId, agentSetting, executionContext } = ctx;
-  const config = ctx.agentConfig;
+  const { streamTabId, setting, executionContext, config } = ctx;
   const agentName = config.agent;
 
   if (!config.session) {
@@ -502,7 +456,7 @@ export async function executeAgent(
   // Handle resume state
   // Note: Full resume hydration is handled internally by agents/flows
   // Here we just set the status for UI feedback
-  if (isResume && agentSetting.agentType !== 'toolUse' && executionId) {
+  if (isResume && setting.agentType !== 'toolUse' && executionId) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
   }
 
@@ -559,20 +513,24 @@ export async function executeAgent(
         const interruptManager = new InterruptManager();
         let flowStatus: 'error' | 'stopped';
 
-        if (agentSetting.agentType === 'toolUse') {
+        if (setting.agentType === 'toolUse') {
           // Tool-use flow execution
           const result = await runToolUseFlow({
-            ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
-            setting: ctx.agentSetting as AgentToolUseSetting,
-            streamTabId,
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getClient: () => ctx.modelHandler.getClient(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+            setting: ctx.setting as AgentToolUseSetting,
           });
           flowStatus = result.status;
         } else {
           // Reflection flow execution (direct/CoT/workflow)
           const result = await runReflectionFlow({
-            ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-            setting: ctx.agentSetting as AgentWorkflowSetting,
-            streamTabId,
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getClient: () => ctx.modelHandler.getClient(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+            setting: ctx.setting as AgentWorkflowSetting,
           });
           flowStatus = result.status;
         }
@@ -606,9 +564,9 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, executionContext, agentConfig } = ctx;
+  const { streamTabId, executionContext, config } = ctx;
 
-  if (!agentConfig.session) {
+  if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
   }
 
@@ -638,10 +596,12 @@ export async function executeMergeAgent(
 
       // Run reflection flow with custom file naming
       const result = await runReflectionFlow({
-        ...buildBaseFlowInput(ctx, interruptManager, 'workflow'),
-        setting: ctx.agentSetting as AgentWorkflowSetting,
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getClient: () => ctx.modelHandler.getClient(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
-        streamTabId,
       });
 
       updateFlowStatus(streamTabId, result.status);
@@ -676,17 +636,19 @@ export async function resumeToolUseFromSnapshot(
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context
-  const ctx = await prepareFlowExecution(config.agent, config, executionId);
-  const { agentSetting, executionContext, agentConfig } = ctx;
+  // Note: local 'config' shadows snapshot.agentConfig, so rename to snapshotConfig
+  const snapshotConfig = config;
+  const ctx = await prepareFlowExecution(snapshotConfig.agent, snapshotConfig, executionId);
+  const { setting, executionContext, config: ctxConfig } = ctx;
 
   // Validate agent type and session
-  if (agentSetting.agentType !== 'toolUse') {
+  if (setting.agentType !== 'toolUse') {
     throw new Error(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
   }
 
-  if (!agentConfig.session) {
+  if (!ctxConfig.session) {
     throw new Error('Resume agent configuration is missing session metadata.');
   }
 
@@ -699,8 +661,11 @@ export async function resumeToolUseFromSnapshot(
     // Run the flow with resume snapshot
     const result = await runToolUseFlow(
       {
-        ...buildBaseFlowInput(ctx, interruptManager, 'tool-use'),
-        setting: agentSetting as AgentToolUseSetting,
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getClient: () => ctx.modelHandler.getClient(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+        setting: setting as AgentToolUseSetting,
         streamTabId,
         resumeSnapshot: snapshot,
       },
@@ -710,6 +675,6 @@ export async function resumeToolUseFromSnapshot(
     updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(error, config.agent, streamTabId, executionContext);
+    await handleFlowError(error, snapshotConfig.agent, streamTabId, executionContext);
   }
 }
