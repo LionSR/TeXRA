@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
 // Local imports - logger
 import { getColorForLevel, serializeLogData } from '@logger/utils';
 import type { EndGroupStatus } from '@logger/messageTypes';
@@ -22,22 +21,12 @@ interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   includeStructuredData?: () => boolean;
 }
 
-interface TransportGroup {
-  id: string;
-  name: string;
-  startTime: number;
-  status: TaskGroupStatus;
-  parentGroupId?: string;
-  endTime?: number;
-}
-
 export class VSCodeTransport extends Transport {
   private readonly channel: vscode.OutputChannel;
   private readonly streamName: string;
   private readonly sink?: LogEventSink;
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
-  private readonly groups = new Map<string, TransportGroup>();
   private activeGroupId?: string;
 
   constructor(options: VSCodeTransportOptions) {
@@ -69,46 +58,26 @@ export class VSCodeTransport extends Transport {
   }
 
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
-    const now = Date.now();
-    const group: TransportGroup = {
-      id,
-      name: groupName,
-      startTime: now,
-      status: 'running',
-      parentGroupId,
-    };
-    this.groups.set(id, group);
     this.activeGroupId = id;
-
     this.emitGroupStarted({
       stream: this.streamName,
       groupId: id,
       groupName,
-      startTime: now,
+      startTime: Date.now(),
       parentGroupId,
     });
-
     return id;
   }
 
-  endGroup(groupId: string, status: EndGroupStatus): void {
-    const group = this.groups.get(groupId);
-    if (!group) {
-      return;
-    }
-
-    group.endTime = Date.now();
-    group.status = status;
-
+  endGroup(groupId: string, status: EndGroupStatus, parentGroupId?: string): void {
     this.emitGroupFinished({
       stream: this.streamName,
       groupId,
       status,
-      endTime: group.endTime,
+      endTime: Date.now(),
     });
-
     if (this.activeGroupId === groupId) {
-      this.activeGroupId = group.parentGroupId;
+      this.activeGroupId = parentGroupId;
     }
   }
 
@@ -117,9 +86,7 @@ export class VSCodeTransport extends Transport {
   }
 
   setActiveGroupId(groupId: string | undefined): void {
-    if (groupId === undefined || this.groups.has(groupId)) {
-      this.activeGroupId = groupId;
-    }
+    this.activeGroupId = groupId;
   }
 
   private writeToChannel(

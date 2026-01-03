@@ -183,7 +183,10 @@ export function endGroup(
   isAgent = false,
 ): void {
   const transport = getTransport(channel, isAgent);
-  transport?.endGroup(groupId, status);
+  const context = getContext(channel, isAgent);
+  // Parent is second-to-last in stack (current group is last)
+  const parentGroupId = context?.stack.at(-2);
+  transport?.endGroup(groupId, status, parentGroupId);
   popGroupContext(channel, groupId, isAgent);
 }
 
