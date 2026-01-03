@@ -23,6 +23,7 @@ import { normalizeRunId } from '@common/constants/runIds';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
+  isToolUseTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
@@ -206,31 +207,41 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleRunAgain(message: any): Promise<void> {
-    await this.withToolbarTaskState(message.stream, async (taskState) => {
-      const executionId = this.provider.state.getExecutionId(message.stream);
-      if (!executionId) {
-        this.logger.warn(
-          this.channel,
-          `Resume requested for ${message.stream} without an execution ID`,
-        );
-        return;
-      }
+    const taskState = this.provider.state.getTaskState(message.stream);
+    if (!taskState) {
+      return;
+    }
 
-      await safeExecuteCommand('texra.execute', [
-        {
-          config: taskState.agentConfig,
-          executionId,
-          stream: message.stream,
-          resume: true,
-        },
-      ]);
-    });
+    const executionId = this.provider.state.getExecutionId(message.stream);
+    if (!executionId) {
+      this.logger.warn(
+        this.channel,
+        `Resume requested for ${message.stream} without an execution ID`,
+      );
+      return;
+    }
+
+    // Handle both workflow and tool-use sessions
+    // Both task state types have agentConfig which is all we need for resume
+    await safeExecuteCommand('texra.execute', [
+      {
+        config: taskState.agentConfig,
+        executionId,
+        stream: message.stream,
+        resume: true,
+      },
+    ]);
   }
 
   private async handleRunNew(message: any): Promise<void> {
-    await this.withToolbarTaskState(message.stream, async (taskState) => {
-      await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
-    });
+    const taskState = this.provider.state.getTaskState(message.stream);
+    if (!taskState) {
+      return;
+    }
+
+    // Handle both workflow and tool-use sessions
+    // Both task state types have agentConfig which is all we need to start new run
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
   private async handleRetryStreamRequest(message: any): Promise<void> {
