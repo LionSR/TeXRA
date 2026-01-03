@@ -38,7 +38,6 @@ export class VSCodeTransport extends Transport {
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
   private readonly groups = new Map<string, TransportGroup>();
-  private activeGroupId?: string;
 
   constructor(options: VSCodeTransportOptions) {
     super(options);
@@ -50,9 +49,8 @@ export class VSCodeTransport extends Transport {
   }
 
   log(info: any, callback: () => void): void {
-    const { level, message, timestamp, messageType } = info;
+    const { level, message, timestamp, messageType, groupId } = info;
     const structuredData = serializeLogData(info.data);
-    const groupId = info.groupId ?? this.activeGroupId;
 
     this.writeToChannel(level, message, timestamp, structuredData);
     this.emitLogEvent({
@@ -78,7 +76,6 @@ export class VSCodeTransport extends Transport {
       parentGroupId,
     };
     this.groups.set(id, group);
-    this.activeGroupId = id;
 
     this.emitGroupStarted({
       stream: this.streamName,
@@ -107,22 +104,8 @@ export class VSCodeTransport extends Transport {
       endTime: group.endTime,
     });
 
-    if (this.activeGroupId === groupId) {
-      this.activeGroupId = group.parentGroupId;
-    }
-
     // Clean up completed group to prevent memory accumulation
     this.groups.delete(groupId);
-  }
-
-  getActiveGroupId(): string | undefined {
-    return this.activeGroupId;
-  }
-
-  setActiveGroupId(groupId: string | undefined): void {
-    if (groupId === undefined || this.groups.has(groupId)) {
-      this.activeGroupId = groupId;
-    }
   }
 
   /**
