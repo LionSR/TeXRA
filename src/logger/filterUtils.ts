@@ -2,7 +2,7 @@
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 import { getConfig } from '@utils/config';
 
-export interface FilterOptions {
+interface FilterOptions {
   level: 'debug' | 'info' | 'warn' | 'error';
   messageType: MessageType;
 }
