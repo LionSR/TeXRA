@@ -73,25 +73,6 @@ export type StatefulEventHandler<K extends ProgressEvent> = (
 ) => void;
 
 /**
- * Type for simple event handlers (bus only).
- */
-export type SimpleEventHandler<K extends ProgressEvent> = (
-  payload: ProgressEventPayloads[K],
-) => void;
-
-/**
- * Creates a vscode.Disposable from an event bus listener.
- * Reduces boilerplate: `new vscode.Disposable(bus.on(...))` -> `createEventDisposable(...)`
- */
-export function createEventDisposable<K extends ProgressEvent>(
-  bus: ProgressEventBusLike,
-  event: K,
-  handler: SimpleEventHandler<K>,
-): vscode.Disposable {
-  return new vscode.Disposable(bus.on(event, handler));
-}
-
-/**
  * Creates a vscode.Disposable from an event bus listener with state/updater access.
  * Reduces boilerplate for stateful event handlers.
  */
@@ -105,14 +86,4 @@ export function createStatefulEventDisposable<K extends ProgressEvent>(
   return new vscode.Disposable(
     bus.on(event, (payload) => handler(payload, state, updater)),
   );
-}
-
-/**
- * Converts an array of unsubscribe functions to Disposables.
- * Simplifies: `[a, b, c].map(d => new vscode.Disposable(d))` -> `toDisposables([a, b, c])`
- */
-export function toDisposables(
-  unsubscribes: (() => void)[],
-): vscode.Disposable[] {
-  return unsubscribes.map((unsubscribe) => new vscode.Disposable(unsubscribe));
 }
