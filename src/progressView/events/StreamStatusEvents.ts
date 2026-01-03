@@ -27,7 +27,10 @@ import type {
  */
 export interface StreamStatusEventShared extends BaseEventShared {
   streamStatus: Map<string, StreamStatus>;
+  /** Updates status map only. Use for complex flows that handle their own UI updates. */
   setStreamStatus(stream: string, status: StreamStatus): void;
+  /** Updates status map AND sends UI update. Use for standalone status changes. */
+  updateStreamStatusWithUI(stream: string, status: StreamStatus): void;
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
@@ -180,7 +183,7 @@ export function createStreamStatusEvents(
         new vscode.Disposable(
           bus.on('updateStreamStatus', (payload) =>
             withErrorBoundary('failed to handle updateStreamStatus', () =>
-              shared.setStreamStatus(payload.stream, payload.status),
+              shared.updateStreamStatusWithUI(payload.stream, payload.status),
             ),
           ),
         ),

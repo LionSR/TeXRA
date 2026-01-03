@@ -79,6 +79,7 @@ export class ProgressEventHandler {
       withErrorBoundary: createErrorBoundary(this.logger, 'StreamStatusEvents'),
       streamStatus: this._streamStatus,
       setStreamStatus: this.setStreamStatus.bind(this),
+      updateStreamStatusWithUI: this.updateStreamStatusWithUI.bind(this),
       sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
       refreshStreamSurface: this.refreshStreamSurface.bind(this),
       warnLog: this.logger.warn.bind(this.logger),
@@ -304,38 +305,42 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Set the status for a specific stream synchronously.
+   * Set the status for a specific stream. Only updates the map.
+   * Callers are responsible for triggering any needed UI updates.
    */
   setStreamStatus(stream: string, status: StreamStatus): void {
-    // Update the persistent status map first
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
       this._streamStatus.set(stream, status);
     }
+  }
 
-    if (this.webviewUpdater.isAvailable()) {
-      // When sorted by time, status changes may affect tab order (due to new log entries),
-      // so we need a full refresh. Otherwise use efficient targeted update.
-      const needsFullRefresh =
-        !this.state.streamTabs.has(stream) ||
-        this.state.streamSortOrder === 'time';
+  /**
+   * Update stream status and send targeted UI update.
+   * Use this for status-only changes (not full stream switches).
+   */
+  updateStreamStatusWithUI(stream: string, status: StreamStatus): void {
+    this.setStreamStatus(stream, status);
 
-      if (needsFullRefresh) {
-        // Include current status in refresh map so frontend displays it correctly.
-        // READY is deleted from _streamStatus but should still be shown to user.
-        const statusesForRefresh = new Map(this._streamStatus);
-        statusesForRefresh.set(stream, status);
-        this.webviewUpdater.updateAll(this.state, statusesForRefresh);
-      } else {
-        // Targeted update - frontend handles main status update via handleUpdateStreamStatus
-        const logs = this.state.streamTabs.getMessages(stream);
-        // Note: lastTimestamp may be undefined if logs exist but last entry has no timestamp.
-        // Frontend guards against invalid timestamps (0, undefined) with lastTimestamp > 0 check.
-        const lastTimestamp =
-          logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-        this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
-      }
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
+    }
+
+    // When sorted by time, status changes may affect tab order,
+    // so we need a full refresh. Otherwise use targeted update.
+    if (
+      !this.state.streamTabs.has(stream) ||
+      this.state.streamSortOrder === 'time'
+    ) {
+      const statusesForRefresh = new Map(this._streamStatus);
+      statusesForRefresh.set(stream, status);
+      this.webviewUpdater.updateAll(this.state, statusesForRefresh);
+    } else {
+      const logs = this.state.streamTabs.getMessages(stream);
+      const lastTimestamp =
+        logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+      this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
     }
   }
 
@@ -371,11 +376,10 @@ export class ProgressEventHandler {
    * status or activation events, preserving any existing status metadata.
    */
   private async initializeStreamForTaskGroup(stream: string): Promise<void> {
-    const existingStatus = this._streamStatus.get(stream);
-
     await this.state.streamTabs.ensureStream(stream);
 
-    if (!existingStatus) {
+    // Set status if not already set
+    if (!this._streamStatus.has(stream)) {
       this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
     }
 
@@ -389,9 +393,6 @@ export class ProgressEventHandler {
     }
 
     this.state.activeStream = stream;
-
-    const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
-    this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
       // Force rebuild to clear any previous stream's content. The new task
