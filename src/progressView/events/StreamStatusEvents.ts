@@ -67,6 +67,11 @@ export function createStreamStatusEvents(
     const previousStream = state.activeStream;
     const isStreamSwitch = previousStream !== stream;
 
+    // Check if stream was already initialized (e.g., by addTaskGroup arriving first)
+    const wasAlreadyInitialized =
+      state.streamTabs.has(stream) &&
+      state.taskGroups.getStreamGroups(stream).size > 0;
+
     await state.streamTabs.ensureStream(stream);
 
     // Store hints so the UI can show indicators before the full TaskState is set
@@ -94,9 +99,22 @@ export function createStreamStatusEvents(
         ? currentStatus
         : STREAM_STATUS.RUNNING;
 
+    // If stream was already initialized by addTaskGroup, skip redundant updates.
+    // The task group handler already did: setStreamStatus, refreshStreamSurface.
+    // We only need to ensure hints are updated (done above) and send instruction.
+    if (wasAlreadyInitialized && !isStreamSwitch) {
+      debugLog(`Stream ${stream} already initialized, skipping redundant refresh`);
+      if (updater.isAvailable()) {
+        // Just update the streams list (for hints) and instruction
+        updater.updateAll(state, shared.getAllStreamStatuses());
+        shared.sendInstructionUpdate(stream);
+      }
+      return;
+    }
+
     if (updater.isAvailable()) {
       // ORDERING REQUIREMENTS:
-      // 1. ensureStream (line 70) must be awaited BEFORE this block to ensure
+      // 1. ensureStream must be awaited BEFORE this block to ensure
       //    backend state.streamTabs.has(stream) returns true in notifyStreamStatus.
       // 2. updateAll sends UPDATE_STREAMS which creates the frontend tab.
       // 3. notifyStreamStatus sends UPDATE_STREAM_STATUS to update the existing tab.
