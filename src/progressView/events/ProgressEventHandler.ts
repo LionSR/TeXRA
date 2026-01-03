@@ -11,6 +11,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { TaskGroup } from '@logger/LogTypes';
 import { WebviewUpdater } from '@progressView/managers';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
@@ -50,6 +51,12 @@ import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
   private _streamStatus: Map<string, StreamStatus> = new Map();
+  /**
+   * Buffer for task groups that arrive before their stream is activated.
+   * Key: stream ID, Value: array of groups waiting to be sent to frontend.
+   * Groups are replayed when setActiveStream is processed for the stream.
+   */
+  private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
   private readonly streamStatusEvents: StreamStatusEventModule;
   private readonly outputEvents: OutputEventsModule;
   private readonly logEvents: LogEventsModule;
@@ -84,6 +91,7 @@ export class ProgressEventHandler {
       refreshStreamSurface: this.refreshStreamSurface.bind(this),
       warnLog: this.logger.warn.bind(this.logger),
       debugLog: this.logger.debug.bind(this.logger),
+      replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
     });
     this.outputEvents = createOutputEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'OutputEvents'),
@@ -99,6 +107,7 @@ export class ProgressEventHandler {
       initializeStreamForTaskGroup:
         this.initializeStreamForTaskGroup.bind(this),
       debugLog: this.logger.debug.bind(this.logger),
+      bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
     });
     this.todoEvents = createTodoEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
@@ -377,6 +386,38 @@ export class ProgressEventHandler {
    */
   getAllStreamStatuses(): Map<string, StreamStatus> {
     return new Map(this._streamStatus);
+  }
+
+  /**
+   * Buffer a task group for later replay when the stream becomes active.
+   * Called by TaskGroupEvents when addTaskGroup arrives before setActiveStream.
+   */
+  private bufferTaskGroupForReplay(stream: string, group: TaskGroup): void {
+    const pending = this.pendingTaskGroups.get(stream) ?? [];
+    pending.push(group);
+    this.pendingTaskGroups.set(stream, pending);
+  }
+
+  /**
+   * Replay any buffered task groups for a stream after it becomes active.
+   * Called by StreamStatusEvents after setActiveStream sets state.activeStream.
+   */
+  private replayPendingTaskGroups(
+    stream: string,
+    updater: WebviewUpdater,
+  ): void {
+    const pending = this.pendingTaskGroups.get(stream);
+    if (!pending || pending.length === 0) {
+      return;
+    }
+
+    this.logger.debug(
+      `Replaying ${pending.length} buffered task groups for stream ${stream}`,
+    );
+    for (const group of pending) {
+      updater.addTaskGroup(stream, group);
+    }
+    this.pendingTaskGroups.delete(stream);
   }
 
   /**
