@@ -5,3 +5,4 @@
  */
 
 export { type ExecutionKVStore, getExecutionStore } from './ExecutionKVStore';
+export { detectWaitingStreams } from './detectWaitingStreams';
