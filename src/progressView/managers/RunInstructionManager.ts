@@ -13,6 +13,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 
 type InstructionMap = Map<string, InstructionUpdate>;
 
@@ -82,7 +83,7 @@ export class RunInstructionManager extends PersistentMapManager<
     value: InstructionMap,
     _key: StreamTabId,
   ): unknown {
-    return Object.fromEntries(value.entries());
+    return mapToRecord(value);
   }
 
   protected override async deserialize(

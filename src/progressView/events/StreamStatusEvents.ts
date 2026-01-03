@@ -121,28 +121,21 @@ export function createStreamStatusEvents(
     state.setTaskState(streamTabId, taskState);
     // Note: setTaskState already clears stream hints
 
-    const normalizedState = state.getTaskState(streamTabId);
+    // Use taskState directly - no need to re-fetch what we just stored
+    const sessionKind = taskState.agentConfig.session.agentCategory;
+    const currentFilter = state.agentTypeFilter;
+    const activeStream = state.activeStream;
 
-    if (!normalizedState) {
-      warnLog(
-        `Received setTaskState for ${streamTabId} but no state was stored`,
+    if (
+      activeStream &&
+      activeStream === streamTabId &&
+      currentFilter !== 'all' &&
+      currentFilter !== sessionKind
+    ) {
+      debugLog(
+        `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
       );
-    } else {
-      const sessionKind = normalizedState.agentConfig.session.agentCategory;
-      const currentFilter = state.agentTypeFilter;
-      const activeStream = state.activeStream;
-
-      if (
-        activeStream &&
-        activeStream === streamTabId &&
-        currentFilter !== 'all' &&
-        currentFilter !== sessionKind
-      ) {
-        debugLog(
-          `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
-        );
-        state.agentTypeFilter = sessionKind;
-      }
+      state.agentTypeFilter = sessionKind;
     }
 
     if (executionId) {

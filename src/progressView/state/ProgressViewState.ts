@@ -34,6 +34,7 @@ import {
   RunInstructionManager,
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import { getConfig } from '@utils/config';
 import type { TodoItem } from '@eventBus/schemas';
 
@@ -405,7 +406,7 @@ export class ProgressViewState {
   }
 
   private saveActiveRunIds(): void {
-    const serialized = Object.fromEntries(this._activeRunIds.entries());
+    const serialized = mapToRecord(this._activeRunIds);
     void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, serialized);
   }
 
@@ -753,7 +754,7 @@ export class ProgressViewState {
    * Save execution IDs to persistence
    */
   private saveExecutionIds(): void {
-    const executionIdsObj = Object.fromEntries(this._executionIds.entries());
+    const executionIdsObj = mapToRecord(this._executionIds);
     void this.storage.update(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
   }
 
