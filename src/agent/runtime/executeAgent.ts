@@ -271,34 +271,25 @@ function createUsageRecorder(
 /**
  * Setup UI state for flow execution.
  *
- * Sets stream status to RUNNING and optionally emits setActiveStream.
- *
- * NOTE: setActiveStream is now emitted by prepareFlowExecution() before the Init
- * stage to fix the race condition where task groups arrived before activeStream
- * was set. This function only emits setActiveStream when:
- * - A streamTabIdOverride is provided (resume scenarios where snapshot stream ID
- *   differs from the regenerated one)
+ * DRY helper: All three flow execution functions call setActiveStream
+ * and set stream status to RUNNING.
  *
  * @param ctx - Flow execution context
- * @param streamTabIdOverride - Optional override for stream ID (resume scenarios)
+ * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
+ *                              where the snapshot's stream ID should be used instead of
+ *                              the regenerated one from ctx)
  */
 function setupFlowUIState(
   ctx: FlowExecutionContext,
   streamTabIdOverride?: StreamTabId,
 ): void {
   const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
-
-  // Only emit setActiveStream if we have an override (resume case)
-  // Normal flows already have setActiveStream emitted by prepareFlowExecution
-  if (streamTabIdOverride) {
-    bus.emit('setActiveStream', {
-      stream: streamTabId,
-      session: ctx.config.session!,
-      isRemote: isRemoteAgent(ctx.config.agent),
-      hasMultipleOutputs: ctx.config.useMultipleOutputs,
-    });
-  }
-
+  bus.emit('setActiveStream', {
+    stream: streamTabId,
+    session: ctx.config.session!,
+    isRemote: isRemoteAgent(ctx.config.agent),
+    hasMultipleOutputs: ctx.config.useMultipleOutputs,
+  });
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
