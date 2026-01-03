@@ -362,29 +362,6 @@ export class ProgressViewProvider
   }
 
   /**
-   * Update log content for a stream (used by message handler)
-   * Now properly focused on just updating log content with groups
-   */
-  public updateLogContent(stream: string): void {
-    if (!this.webviewUpdater.isAvailable()) {
-      return;
-    }
-
-    const targetStream = this.state.streamTabs.has(stream)
-      ? stream
-      : (this.state.streamTabs.keys()[0] ?? '');
-
-    if (!targetStream) {
-      this.webviewUpdater.updateLogContent('', [], []);
-      return;
-    }
-
-    this.eventHandler.refreshStreamSurface(targetStream, {
-      updateInstruction: false,
-    });
-  }
-
-  /**
    * Set active stream (used by message handler)
    */
   public setActiveStream(stream: string): void {
