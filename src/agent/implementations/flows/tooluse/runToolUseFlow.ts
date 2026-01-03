@@ -165,6 +165,16 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
+    // Clean up flow record on completion.
+    // When VS Code reloads mid-execution, this block never runs, preserving
+    // the record for sessions that were genuinely interrupted mid-wait.
+    try {
+      const kv = getExecutionStore(input.executionContext.executionId);
+      await kv.delete(`flow:${input.executionContext.executionId}`);
+    } catch {
+      // Ignore cleanup errors - non-critical
+    }
+
     // Cleanup (PersistedFlow handles state cleanup automatically)
     flowContext.dispose();
 
