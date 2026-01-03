@@ -155,10 +155,29 @@ const todos = state.getTodos(stream);
 | Stream not activated first | `59d84b5` | setActiveStream after Init |
 | Race in ensureStream | `da11dda` | Async timing with activeStream check |
 | Stale groups on session switch | `509592a` | Groups not cleared |
+| Groups dropped before activation | `87679a4` | addTaskGroup arrives before setActiveStream |
 
 ### Current Session Kind Switching
 
 Commit `509592a` clears task groups when switching between session kinds (workflow ↔ tool-use). This prevents stale groups but may cause Init groups from previous sessions to disappear when switching contexts.
+
+### Backend Buffering Solution (87679a4)
+
+When `addTaskGroup` arrives before `setActiveStream` for a stream, the group is now buffered in `ProgressEventHandler.pendingTaskGroups`. When `setActiveStream` is processed and `state.activeStream` is set, buffered groups are replayed via `replayPendingTaskGroups()`.
+
+```
+TaskGroupEvents.handleAddTaskGroup()
+    │
+    ├─ stream === state.activeStream?
+    │     ├─ YES: updater.addTaskGroup() immediately
+    │     └─ NO:  bufferTaskGroupForReplay(stream, group)
+    │
+StreamStatusEvents.handleSetActiveStream()
+    │
+    ├─ state.activeStream = stream
+    └─ replayPendingTaskGroups(stream, updater)
+          └─ sends buffered groups via updater.addTaskGroup()
+```
 
 ## Round Trip Analysis
 
