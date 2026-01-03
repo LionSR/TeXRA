@@ -21,8 +21,12 @@
 
 import type { RoundOutput } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StorageKey } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import {
+  registerInterruptible,
+  unregisterInterruptible,
+} from '@agent/toolUse/ToolUseAgentRegistry';
 
 import {
   AgentWorkspaceState,
@@ -67,6 +71,12 @@ export interface RunReflectionFlowInput<C = unknown> extends Omit<
   'getUsageRecorder'
 > {
   /**
+   * Stream tab ID for interrupt registration.
+   * Required for the flow runner to manage interrupt handling.
+   */
+  streamTabId: StreamTabId;
+
+  /**
    * Usage recorder callback. If not provided, usage is not tracked.
    */
   getUsageRecorder?: () => RoundFinalizedCallback;
@@ -89,27 +99,6 @@ export interface RunReflectionFlowResult {
   status: EndGroupStatus;
 }
 
-/**
- * Callbacks for reflection flow lifecycle events.
- * Mirrors the pattern from runToolUseFlow for consistency.
- */
-export interface RunReflectionFlowCallbacks {
-  /**
-   * Called when the flow context is ready for registration.
-   * Use this to register the context with the interrupt registry.
-   */
-  onContextReady?: (
-    storageKey: StorageKey,
-    context: ReflectionFlowContext<unknown>,
-  ) => void;
-
-  /**
-   * Called when the flow completes (success or error).
-   * Use this to unregister from the interrupt registry.
-   */
-  onFlowComplete?: (storageKey: StorageKey) => void;
-}
-
 // ============================================================================
 // Flow Runner
 // ============================================================================
@@ -117,13 +106,14 @@ export interface RunReflectionFlowCallbacks {
 /**
  * Run a reflection flow.
  *
+ * Interrupt registration is handled automatically - the flow context is
+ * registered when created and unregistered on completion/error.
+ *
  * @param input - Flow configuration and dependencies
- * @param callbacks - Optional lifecycle callbacks for interrupt registration
  * @returns Flow execution result
  */
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
-  callbacks?: RunReflectionFlowCallbacks,
 ): Promise<RunReflectionFlowResult> {
   const {
     modelHandler,
@@ -137,6 +127,7 @@ export async function runReflectionFlow<C = unknown>(
     getClient,
     getUsageRecorder = () => async () => {},
     parentStage,
+    streamTabId,
   } = input;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
@@ -186,8 +177,8 @@ export async function runReflectionFlow<C = unknown>(
   flowContext.setActiveRun(storageKey);
 
   try {
-    // Register context for interrupt handling
-    callbacks?.onContextReady?.(storageKey, flowContext);
+    // Register for interrupt handling (inside try to ensure finally runs)
+    registerInterruptible(streamTabId, flowContext);
 
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
@@ -204,10 +195,10 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
-        // Flat structure: shared.workspaceSnapshot, shared.lastRetryError
+        // Flat structure: shared.workspaceSnapshot, shared.lastError
         const persistedShared = flowRecord.shared as {
           workspaceSnapshot?: unknown;
-          lastRetryError?: RetryErrorInfo;
+          lastError?: RetryErrorInfo;
         };
         if (persistedShared.workspaceSnapshot) {
           // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
@@ -224,10 +215,10 @@ export async function runReflectionFlow<C = unknown>(
         }
 
         // Restore retry error if present (for proper error classification on resume)
-        if (persistedShared.lastRetryError) {
-          restoredRetryError = persistedShared.lastRetryError;
+        if (persistedShared.lastError) {
+          restoredRetryError = persistedShared.lastError;
           executionContext.logger.debug(
-            `Restored lastRetryError from persisted flow: ${restoredRetryError.message}`,
+            `Restored lastError from persisted flow: ${restoredRetryError.message}`,
           );
         }
       } else {
@@ -246,7 +237,7 @@ export async function runReflectionFlow<C = unknown>(
 
     // Restore retry error if present
     if (restoredRetryError) {
-      shared.lastRetryError = restoredRetryError;
+      shared.lastError = restoredRetryError;
     }
 
     // Create RoundPersistedFlow with the start node
@@ -322,8 +313,8 @@ export async function runReflectionFlow<C = unknown>(
     // Clean up context resources (defensive check in case of early failure)
     flowContext?.dispose();
 
-    // Unregister from interrupt registry
-    callbacks?.onFlowComplete?.(storageKey);
+    // Unregister from interrupt handling (moved from executeAgent callbacks)
+    unregisterInterruptible(streamTabId);
   }
 
   return {

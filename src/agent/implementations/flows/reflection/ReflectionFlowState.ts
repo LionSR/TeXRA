@@ -42,7 +42,10 @@ import {
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
-import { RetryErrorInfoSchema } from '@agent/core/flows/RetryState';
+import {
+  CycleFieldsSchema,
+  type CycleTransientFields,
+} from '@agent/core/flows/ResponseCycleFlow';
 import { AgentFileLocationSchema } from '@utils/files';
 
 // ============================================================================
@@ -70,6 +73,32 @@ export const RoundContextSchema = z.object({
 export type RoundContext = z.infer<typeof RoundContextSchema>;
 
 /**
+ * Optional cycle fields for native nesting.
+ *
+ * These are derived from CycleFieldsSchema but made optional since they're
+ * only populated when running a cycle.
+ *
+ * ## Why certain fields are omitted
+ *
+ * `endTurn` and `outputLocation` are omitted because they have different
+ * semantics at the reflection flow level vs the cycle level:
+ *
+ * - **endTurn**: At reflection level, tracks whether the agent's turn ended.
+ *   At cycle level, tracks whether a single model call ended normally.
+ *   Both use boolean, but reflection flow needs it as a required non-optional field.
+ *
+ * - **outputLocation**: At reflection level, nullable (null before round starts).
+ *   At cycle level, must be set before cycle runs (enforced by assertCycleFieldsPopulated).
+ *   Keeping the base schema's nullable version avoids type conflicts.
+ *
+ * The base schema defines these directly; the merge adds the remaining cycle fields.
+ */
+const OptionalCycleFieldsSchema = CycleFieldsSchema.partial().omit({
+  endTurn: true,
+  outputLocation: true,
+});
+
+/**
  * Shared state for reflection flow (flat structure).
  *
  * This flows through all nodes and gets updated in post() methods.
@@ -88,49 +117,61 @@ export type RoundContext = z.infer<typeof RoundContextSchema>;
  * store snapshots back after mutation. This ensures structuredClone()
  * works without any special handling.
  *
+ * ## Native Nesting
+ *
+ * Includes optional cycle fields (via OptionalCycleFieldsSchema) to enable
+ * cycle nodes to run directly on this shared type. See CycleFieldsSchema
+ * in ResponseCycleFlow.ts for the single source of truth.
+ *
  * ## Round Stage Management
  *
  * Round stages (r0, r1, r2...) are managed by RoundPersistedFlow, not by
  * shared state or services. This keeps round lifecycle as a flow-level
  * concern, invisible to individual nodes.
  */
-export const ReflectionFlowStateSchema = z.object({
-  // Round tracking
-  currentRound: z.number(),
-  totalRounds: z.number(),
+export const ReflectionFlowStateSchema = z
+  .object({
+    // Round tracking
+    currentRound: z.number(),
+    totalRounds: z.number(),
 
-  // Per-round state (natively serializable)
-  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  context: RoundContextSchema.nullable(),
-  outputLocation: AgentFileLocationSchema.nullable(),
+    // Per-round state (natively serializable)
+    workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
+    context: RoundContextSchema.nullable(),
+    outputLocation: AgentFileLocationSchema.nullable(),
 
-  // Accumulated state (natively serializable)
-  conversation: z.array(ProviderMessageSchema),
-  runStateSnapshot: AgentRunStateSnapshotSchema,
+    // Accumulated state (natively serializable)
+    conversation: z.array(ProviderMessageSchema),
+    runStateSnapshot: AgentRunStateSnapshotSchema,
 
-  // Results (natively serializable)
-  roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
-  roundOutputs: z.array(RoundOutputSchema),
+    // Results (natively serializable)
+    roundStateSnapshots: z.array(ConversationRoundStateSnapshotSchema),
+    roundOutputs: z.array(RoundOutputSchema),
 
-  // Control flags
-  continueRounds: z.boolean(),
-  endTurn: z.boolean(),
+    // Control flags
+    continueRounds: z.boolean(),
+    endTurn: z.boolean(),
 
-  // Retry state (flattened - was separate RetryState object)
-  /** Last error from model invocation, if any. Used to distinguish failure from cancellation. */
-  lastRetryError: RetryErrorInfoSchema.optional(),
-});
+    // Note: lastError is inherited from OptionalCycleFieldsSchema (via BaseCycleFieldsSchema).
+    // Used to distinguish failure from cancellation during resume.
+  })
+  .merge(OptionalCycleFieldsSchema);
 
-/** Derived type from schema */
+/** Derived type from schema (serializable fields only) */
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
 
 /**
  * Shared context passed through the flow.
  *
- * This is now a type alias - ReflectionFlowState IS the shared state.
- * No more nested `shared.state.X` - access directly as `shared.X`.
+ * Combines serializable state (ReflectionFlowState) with transient cycle
+ * fields (CycleTransientFields) for native flow nesting.
+ *
+ * - Serializable fields are persisted by PersistedFlow
+ * - Transient fields are cleared between checkpoints
+ *
+ * CycleTransientFields is imported from ResponseCycleFlow.ts (single source of truth).
  */
-export type ReflectionFlowShared = ReflectionFlowState;
+export type ReflectionFlowShared = ReflectionFlowState & CycleTransientFields;
 
 /**
  * Create initial state for a reflection flow run.
