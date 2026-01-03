@@ -30,10 +30,6 @@ export class LogChannelRegistry {
     return this.getOrCreate(channel, options);
   }
 
-  getLogger(channel: string, options: ChannelOptions): winston.Logger {
-    return this.getOrCreate(channel, options).logger;
-  }
-
   getTransport(
     channel: string,
     options?: ChannelOptions,
