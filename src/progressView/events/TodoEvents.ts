@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -10,10 +7,11 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { TODO_STATUS } from '@eventBus/schemas';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  ProgressEventBusLike,
-  StatefulEventModule,
+import {
+  registerStatefulEvents,
+  type BaseEventShared,
+  type ProgressEventBusLike,
+  type StatefulEventModule,
 } from './types';
 
 /**
@@ -46,38 +44,29 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );
 
-    // Note: Unlike TaskGroupEvents which uses async handlers for stream initialization,
-    // TodoEvents uses sync handlers since there are no async operations needed.
-    // The error boundary still catches thrown errors synchronously.
-    withErrorBoundary('failed to handle updateTodos', () => {
-      const { stream, todos } = data;
+    const { stream, todos } = data;
 
-      // Always store todos in state for persistence across stream switches
-      state.setTodos(stream, todos);
+    // Always store todos in state for persistence across stream switches
+    state.setTodos(stream, todos);
 
-      // Send to webview if it's the active stream and webview is available
-      const shouldSendToWebview =
-        updater.isAvailable() && stream === state.activeStream;
+    // Send to webview if it's the active stream and webview is available
+    const shouldSendToWebview =
+      updater.isAvailable() && stream === state.activeStream;
 
-      if (shouldSendToWebview) {
-        updater.updateTodos(stream, todos);
-      }
-    });
+    if (shouldSendToWebview) {
+      updater.updateTodos(stream, todos);
+    }
   };
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): vscode.Disposable[] {
-      return [
-        new vscode.Disposable(
-          bus.on('updateTodos', (payload) =>
-            handleUpdateTodos(payload, state, updater),
-          ),
-        ),
-      ];
+    register(bus, state, updater) {
+      return registerStatefulEvents(bus, state, updater, withErrorBoundary, [
+        {
+          event: 'updateTodos',
+          errorMessage: 'failed to handle updateTodos',
+          handler: handleUpdateTodos,
+        },
+      ]);
     },
   };
 }
