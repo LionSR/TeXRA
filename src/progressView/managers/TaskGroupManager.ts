@@ -10,6 +10,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;
@@ -165,7 +166,7 @@ export class TaskGroupManager extends PersistentMapManager<
     value: Map<string, TaskGroup>,
     _key: StreamTabId,
   ): unknown {
-    return Object.fromEntries(value.entries());
+    return mapToRecord(value);
   }
 
   /** Normalize loaded groups */
