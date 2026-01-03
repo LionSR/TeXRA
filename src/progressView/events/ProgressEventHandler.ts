@@ -395,9 +395,11 @@ export class ProgressEventHandler {
     this.state.activeStream = stream;
 
     if (this.webviewUpdater.isAvailable()) {
-      // Force rebuild to clear any previous stream's content. The new task
-      // group must be added to state BEFORE this call (in TaskGroupEvents)
-      // so UPDATE_LOGS includes it and the frontend renders it correctly.
+      // Send UPDATE_STREAMS first to create the tab in frontend
+      this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      // Then send UPDATE_LOGS with content. The new task group must be
+      // added to state BEFORE this call (in TaskGroupEvents) so UPDATE_LOGS
+      // includes it and the frontend renders it correctly.
       this.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: true,
