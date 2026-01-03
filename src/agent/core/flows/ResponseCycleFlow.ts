@@ -272,7 +272,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       return { kind: 'skipped' };
     }
 
-    services.modelHandler.setOutputStreaming(true);
+    services.modelHandler.setOutputStreaming(false);
 
     const stage = await services.logger.stage('Model invocation', {
       skip: true,
