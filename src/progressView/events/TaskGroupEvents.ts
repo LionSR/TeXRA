@@ -81,16 +81,13 @@ export function createTaskGroupEvents(
       if (!hasStream) {
         debugLog(`Creating stream from addTaskGroup: ${stream}`);
         // Initialize stream after group is in state. This sends UPDATE_LOGS
-        // with forceRebuild: true, which will include the new group.
+        // with forceRebuild: true, which already includes the new group.
+        // No need to send addTaskGroup separately - that would be duplicate.
         await shared.initializeStreamForTaskGroup(stream);
-      }
-
-      // Send ADD_TASK_GROUP to frontend for immediate rendering.
-      // Always send when updater is available - the frontend will handle
-      // the message correctly once activeStream is set by UPDATE_STREAMS.
-      // This fixes a race condition where setActiveStream creates the stream
-      // but hasn't set activeStream yet when addTaskGroup is processed.
-      if (updater.isAvailable()) {
+      } else if (updater.isAvailable()) {
+        // Stream already exists - send ADD_TASK_GROUP for incremental update.
+        // Only needed when stream existed, since initializeStreamForTaskGroup
+        // already sends all groups via UPDATE_LOGS with forceRebuild.
         updater.addTaskGroup(stream, group);
       }
 
