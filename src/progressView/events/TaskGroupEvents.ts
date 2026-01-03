@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { TaskGroup } from '@logger/LogTypes';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -8,11 +5,11 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  ProgressEventBusLike,
-  StatefulEventModule,
+import {
+  createStatefulEventDisposable,
+  type ProgressEventBusLike,
 } from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * Shared context for TaskGroupEvents module.
@@ -118,21 +115,21 @@ export function createTaskGroupEvents(
   };
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): vscode.Disposable[] {
+    register(bus, state, updater) {
       return [
-        new vscode.Disposable(
-          bus.on('addTaskGroup', (payload) =>
-            handleAddTaskGroup(payload, state, updater),
-          ),
+        createStatefulEventDisposable(
+          bus,
+          'addTaskGroup',
+          state,
+          updater,
+          handleAddTaskGroup,
         ),
-        new vscode.Disposable(
-          bus.on('updateTaskGroup', (payload) =>
-            handleUpdateTaskGroup(payload, state, updater),
-          ),
+        createStatefulEventDisposable(
+          bus,
+          'updateTaskGroup',
+          state,
+          updater,
+          handleUpdateTaskGroup,
         ),
       ];
     },

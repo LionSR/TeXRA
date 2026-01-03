@@ -6,12 +6,12 @@ export { ProgressEventHandler } from './ProgressEventHandler';
 export {
   RetryEventsModule,
   RetryEventsShared,
-  createRetryEventsModule,
+  createRetryEvents,
 } from './RetryEvents';
 export {
   ApprovalEventsModule,
   ApprovalEventsShared,
-  createApprovalEventsModule,
+  createApprovalEvents,
 } from './ApprovalEvents';
 export {
   StreamStatusEventShared,
