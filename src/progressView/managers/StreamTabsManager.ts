@@ -69,20 +69,6 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Delete a stream and its messages
-   */
-  async delete(stream: StreamTabId): Promise<void> {
-    await super.delete(stream);
-  }
-
-  /**
-   * Clear all streams
-   */
-  async clear(): Promise<void> {
-    await super.clear();
-  }
-
-  /**
    * Clear content of a specific stream (but keep the stream)
    */
   async clearContent(stream: StreamTabId): Promise<void> {

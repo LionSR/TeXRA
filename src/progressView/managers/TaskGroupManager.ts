@@ -121,34 +121,6 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
-   * Check if a stream has groups
-   */
-  hasStream(stream: StreamTabId): boolean {
-    return this.has(stream);
-  }
-
-  /**
-   * Delete all groups for a stream
-   */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    await this.delete(stream);
-  }
-
-  /**
-   * Clear all groups
-   */
-  async clear(): Promise<void> {
-    await super.clear();
-  }
-
-  /**
-   * Set all groups (used during loading)
-   */
-  setAll(groups: Map<StreamTabId, Map<string, TaskGroup>>): void {
-    super.setAll(groups);
-  }
-
-  /**
    * Load task groups from persistence
    */
   async load(): Promise<void> {
