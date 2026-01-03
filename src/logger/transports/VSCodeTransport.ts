@@ -1,25 +1,27 @@
 // Third-party imports
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 import type { TaskGroupStatus } from '@common/constants/streamStatus';
 // Local imports - logger
-import { getColorForLevel, serializeLogData } from '@logger/utils';
+import type { LogMessageData } from '@logger/LogTypes';
+import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
-// Type imports
-import type {
-  LogEventSink,
-  LogGroupFinishedEvent,
-  LogGroupStartedEvent,
-  LogMessageEvent,
-} from '@logger/types';
+import { getColorForLevel, serializeLogData } from '@logger/utils';
+// Internal imports
+import { getConfig } from '@utils/config';
+import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
   streamName: string;
-  sink?: LogEventSink;
   isAgentChannel: boolean;
   includeStructuredData?: () => boolean;
+}
+
+function isValidMessageType(type: unknown): type is MessageType {
+  return Object.values(MESSAGE_TYPES).includes(type as MessageType);
 }
 
 interface TransportGroup {
@@ -34,7 +36,6 @@ interface TransportGroup {
 export class VSCodeTransport extends Transport {
   private readonly channel: vscode.OutputChannel;
   private readonly streamName: string;
-  private readonly sink?: LogEventSink;
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
   private readonly groups = new Map<string, TransportGroup>();
@@ -44,7 +45,6 @@ export class VSCodeTransport extends Transport {
     super(options);
     this.channel = options.channel;
     this.streamName = options.streamName;
-    this.sink = options.sink;
     this.isAgentChannel = options.isAgentChannel;
     this.includeStructuredData = options.includeStructuredData;
   }
@@ -55,15 +55,7 @@ export class VSCodeTransport extends Transport {
     const groupId = info.groupId;
 
     this.writeToChannel(level, message, timestamp, structuredData);
-    this.emitLogEvent({
-      level,
-      message,
-      timestamp,
-      stream: this.streamName,
-      groupId,
-      messageType,
-      data: structuredData,
-    });
+    this.emitLogEvent(level, message, timestamp, groupId, messageType, structuredData);
 
     callback();
   }
@@ -80,13 +72,7 @@ export class VSCodeTransport extends Transport {
     this.groups.set(id, group);
     this.activeGroupId = id;
 
-    this.emitGroupStarted({
-      stream: this.streamName,
-      groupId: id,
-      groupName,
-      startTime: now,
-      parentGroupId,
-    });
+    this.emitGroupStarted(id, groupName, now, parentGroupId);
 
     return id;
   }
@@ -100,12 +86,7 @@ export class VSCodeTransport extends Transport {
     group.endTime = Date.now();
     group.status = status;
 
-    this.emitGroupFinished({
-      stream: this.streamName,
-      groupId,
-      status,
-      endTime: group.endTime,
-    });
+    this.emitGroupFinished(groupId, status, group.endTime);
 
     if (this.activeGroupId === groupId) {
       this.activeGroupId = group.parentGroupId;
@@ -136,15 +117,83 @@ export class VSCodeTransport extends Transport {
     }
   }
 
-  private emitLogEvent(event: LogMessageEvent): void {
-    this.sink?.handleLogMessage(event);
+  /**
+   * Emit log message to progress view event bus.
+   * Only emits for agent channels; filters debug and internal messages.
+   */
+  private emitLogEvent(
+    level: string,
+    message: string,
+    timestamp: string,
+    groupId: string | undefined,
+    messageType: unknown,
+    data: unknown,
+  ): void {
+    if (!this.isAgentChannel) return;
+
+    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
+    if (level === 'debug' && !debugMode) return;
+
+    const validatedMessageType: MessageType = isValidMessageType(messageType)
+      ? messageType
+      : MESSAGE_TYPES.DEFAULT;
+
+    if (validatedMessageType === MESSAGE_TYPES.INTERNAL) return;
+
+    const logMessage: LogMessageData = {
+      id: randomUUID(),
+      text: message,
+      level: level as LogMessageData['level'],
+      timestamp: new Date(timestamp).getTime(),
+      groupId,
+      messageType: validatedMessageType,
+      verbose: debugMode,
+      data,
+    };
+
+    bus.emit('addLogMessage', {
+      stream: this.streamName,
+      logMessage,
+    });
   }
 
-  private emitGroupStarted(event: LogGroupStartedEvent): void {
-    this.sink?.handleGroupStarted(event);
+  /**
+   * Emit task group started to progress view event bus.
+   */
+  private emitGroupStarted(
+    id: string,
+    name: string,
+    startTime: number,
+    parentGroupId?: string,
+  ): void {
+    if (!this.isAgentChannel) return;
+
+    bus.emit('addTaskGroup', {
+      stream: this.streamName,
+      id,
+      name,
+      startTime,
+      status: 'running',
+      endTime: undefined,
+      parentGroupId,
+    });
   }
 
-  private emitGroupFinished(event: LogGroupFinishedEvent): void {
-    this.sink?.handleGroupFinished(event);
+  /**
+   * Emit task group finished to progress view event bus.
+   */
+  private emitGroupFinished(
+    id: string,
+    status: EndGroupStatus,
+    endTime: number,
+  ): void {
+    if (!this.isAgentChannel) return;
+
+    bus.emit('updateTaskGroup', {
+      stream: this.streamName,
+      id,
+      status,
+      endTime,
+    });
   }
 }

@@ -3,10 +3,7 @@ import * as vscode from 'vscode';
 
 // Type imports
 import type { TaskGroup } from '@logger/LogTypes';
-import type {
-  TaskGroupUpdatePayload,
-  WebviewUpdater,
-} from '@progressView/managers';
+import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -49,38 +46,22 @@ export function createTaskGroupEvents(
     updater: WebviewUpdater,
   ): void => {
     debugLog(
-      `addTaskGroup: groupId=${data.groupId}, name=${data.groupName}, parentGroupId=${data.parentGroupId ?? 'none'}, stream=${data.stream}`,
+      `addTaskGroup: id=${data.id}, name=${data.name}, parentGroupId=${data.parentGroupId ?? 'none'}, stream=${data.stream}`,
     );
 
     withErrorBoundary('failed to handle addTaskGroup', async () => {
-      const {
-        stream,
-        groupId,
-        groupName,
-        startTime,
-        status,
-        endTime,
-        parentGroupId,
-      } = data;
+      const { stream, ...group } = data;
+      const { id, parentGroupId } = group;
 
       const hasStream = state.streamTabs.has(stream);
-
-      const group: TaskGroup = {
-        id: groupId,
-        name: groupName,
-        startTime,
-        endTime,
-        status,
-        parentGroupId,
-      };
 
       // Add group to state BEFORE initializeStreamForTaskGroup, so that
       // refreshStreamSurface (called inside) includes this group in UPDATE_LOGS.
       // addGroup synchronously adds to in-memory state; save is async.
-      const addGroupPromise = state.taskGroups.addGroup(stream, groupId, group);
+      const addGroupPromise = state.taskGroups.addGroup(stream, id, group);
 
       if (!parentGroupId) {
-        state.setActiveRunId(stream, groupId);
+        state.setActiveRunId(stream, id);
       }
 
       if (!hasStream) {
@@ -100,7 +81,7 @@ export function createTaskGroupEvents(
           updater.addTaskGroup(stream, group);
         } else {
           debugLog(
-            `Buffering task group ${groupId} for stream ${stream} (activeStream=${state.activeStream})`,
+            `Buffering task group ${id} for stream ${stream} (activeStream=${state.activeStream})`,
           );
           shared.bufferTaskGroupForReplay(stream, group);
         }
@@ -117,20 +98,12 @@ export function createTaskGroupEvents(
     updater: WebviewUpdater,
   ): void => {
     debugLog(
-      `updateTaskGroup: groupId=${data.groupId}, status=${data.status}, stream=${data.stream}`,
+      `updateTaskGroup: id=${data.id}, status=${data.status}, stream=${data.stream}`,
     );
 
     withErrorBoundary('failed to handle updateTaskGroup', async () => {
-      const update: TaskGroupUpdatePayload = {
-        stream: data.stream,
-        groupId: data.groupId,
-        updates: {
-          status: data.status,
-          endTime: data.endTime,
-        },
-      };
-
-      await state.taskGroups.updateGroup(update);
+      // Pass event data directly - no transformation needed
+      await state.taskGroups.updateGroup(data);
 
       const shouldSendToWebview =
         updater.isAvailable() && data.stream === state.activeStream;
@@ -139,7 +112,7 @@ export function createTaskGroupEvents(
       );
 
       if (shouldSendToWebview) {
-        updater.updateTaskGroup(update);
+        updater.updateTaskGroup(data);
       }
     });
   };
