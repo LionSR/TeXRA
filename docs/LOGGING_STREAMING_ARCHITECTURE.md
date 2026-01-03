@@ -143,27 +143,43 @@ const todos = state.getTodos(stream);
 ### Init Group Creation
 
 1. `executeAgent()` starts agent execution
-2. `prepareFlowExecution()` emits `setActiveStream` (critical timing)
-3. `logger.stage('Init')` creates the Init group
+2. `prepareFlowExecution()` emits `setActiveStream` **BEFORE** Init stage
+3. `logger.stage('Init')` creates the Init group (now after setActiveStream)
 4. `ProgressViewSink.handleGroupStarted()` emits `addTaskGroup`
 5. `TaskGroupEvents` adds to state and sends to frontend
 
+The correct ordering is enforced in `prepareFlowExecution()` which emits
+`setActiveStream` before calling `logger.stage('Init')`. This ensures
+the frontend has `state.activeStream` set when `addTaskGroup` arrives.
+
 ### Historical Init Group Issues (FIXED)
 
-| Issue | Commit | Root Cause |
-|-------|--------|------------|
-| Stream not activated first | `59d84b5` | setActiveStream after Init |
-| Race in ensureStream | `da11dda` | Async timing with activeStream check |
-| Stale groups on session switch | `509592a` | Groups not cleared |
-| Groups dropped before activation | `87679a4` | addTaskGroup arrives before setActiveStream |
+| Issue | Commit | Root Cause | Fix |
+|-------|--------|------------|-----|
+| Stream not activated first | `59d84b5` | setActiveStream after Init | Moved emission order |
+| Race in ensureStream | `da11dda` | Async timing with activeStream check | Await ensureStream |
+| Stale groups on session switch | `509592a` | Groups not cleared | Clear on switch |
+| Groups dropped before activation | `87679a4` | addTaskGroup before setActiveStream | Backend buffering |
+| Source ordering incorrect | (latest) | prepareFlowExecution order | Emit before Init |
 
 ### Current Session Kind Switching
 
 Commit `509592a` clears task groups when switching between session kinds (workflow ↔ tool-use). This prevents stale groups but may cause Init groups from previous sessions to disappear when switching contexts.
 
-### Backend Buffering Solution (87679a4)
+### Source Order Fix (executeAgent.ts)
 
-When `addTaskGroup` arrives before `setActiveStream` for a stream, the group is now buffered in `ProgressEventHandler.pendingTaskGroups`. When `setActiveStream` is processed and `state.activeStream` is set, buffered groups are replayed via `replayPendingTaskGroups()`.
+The root cause fix: `prepareFlowExecution()` now emits `setActiveStream` before
+creating the Init stage. The `setupFlowUIState()` helper only sets stream status
+(no longer emits setActiveStream to avoid duplicate emissions).
+
+For resume scenarios, `streamTabIdOverride` option ensures the snapshot's stream
+ID is used instead of the regenerated one.
+
+### Backend Buffering Safety Net (87679a4)
+
+As a safety net for edge cases, when `addTaskGroup` arrives before `setActiveStream`
+for a stream, the group is buffered in `ProgressEventHandler.pendingTaskGroups`.
+When `setActiveStream` is processed, buffered groups are replayed.
 
 ```
 TaskGroupEvents.handleAddTaskGroup()
