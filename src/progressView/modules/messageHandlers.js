@@ -360,13 +360,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearActiveRun(message.stream);
     logContent.innerHTML = '';
     const groups = message.groups || [];
+
+    // Always update run metadata (instructions, usage, files) regardless of groups
+    // Tool-use sessions don't create task groups but still have usage data
+    this._updateRunMetadata(message.stream, message);
+
     if (groups.length > 0) {
       const parentGroups = groups.filter((g) => !g.parentGroupId);
       dom.runSelector.setRuns(parentGroups);
       dom.taskGroups.renderInitial(groups);
-
-      // Update run metadata using shared helper
-      this._updateRunMetadata(message.stream, message);
 
       if (parentGroups.length > 0) {
         const runIds = parentGroups.map((group) => group.id);
