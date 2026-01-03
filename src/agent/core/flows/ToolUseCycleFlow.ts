@@ -15,7 +15,10 @@ import { createRetryState, type RetryState } from './RetryState';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import {
+  NormalizedUsageSchema,
+  type NormalizedUsage,
+} from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -143,10 +146,14 @@ function normalizeToolCallError(
  * - response, toolCalls, text, cycleIndex, cycleResponseTimeMs, cycleNormalizedUsage
  */
 export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
-  /** Raw response from model */
+  /** Raw response from model (provider-specific, not schematized) */
   response: z.unknown().optional(),
-  /** Tool calls extracted from response */
-  toolCalls: z.array(z.unknown()).optional(), // SdkToolCall[] at runtime
+  /**
+   * Tool calls extracted from response.
+   * Runtime type is SdkToolCall[] (discriminated union of provider-specific types).
+   * Uses z.unknown() because SdkToolCall is a complex union without a Zod schema.
+   */
+  toolCalls: z.array(z.unknown()).optional(),
   /** Text content from response */
   text: z.string().optional(),
   /**
@@ -165,7 +172,7 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
    * Normalized usage for current cycle.
    * Reset after finalization when continuing to next cycle.
    */
-  cycleNormalizedUsage: z.unknown().optional(), // NormalizedUsage at runtime
+  cycleNormalizedUsage: NormalizedUsageSchema.optional(),
 });
 
 /** Tool-use cycle fields derived from schema */

@@ -256,7 +256,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     if (execRes.kind === 'error') {
       logger.error(`Response cycle failed: ${execRes.error.message}`);
-      shared.lastRetryError = {
+      shared.lastError = {
         message: execRes.error.message,
         retryable: false,
       };
@@ -266,13 +266,13 @@ export class ResponseCycleNode<C = unknown> extends Node<
     if (execRes.userCancelled) {
       logger.debug('Response cycle cancelled by user');
       shared.continueRounds = false;
-      shared.lastRetryError = undefined;
+      shared.lastError = undefined;
       return FlowTransition.DEFAULT;
     }
 
     if (execRes.failedWithError) {
       logger.error(`Response cycle failed: ${execRes.errorMessage}`);
-      shared.lastRetryError = {
+      shared.lastError = {
         message: execRes.errorMessage ?? 'Unknown error',
         retryable: false,
       };
@@ -280,7 +280,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Success - clear any previous error
-    shared.lastRetryError = undefined;
+    shared.lastError = undefined;
 
     // Update snapshots from slices (cycle results already in shared via native nesting)
     shared.runStateSnapshot = execRes.run.toSnapshot();
