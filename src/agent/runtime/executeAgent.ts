@@ -201,18 +201,7 @@ async function prepareFlowExecution(
   modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(executionContext.logger);
 
-  // 4. Emit setActiveStream BEFORE creating Init stage
-  // This ensures the frontend has activeStream set before addTaskGroup arrives,
-  // preventing the race condition where handleAddTaskGroup's _isActiveStream check
-  // fails because state.activeStream isn't set yet.
-  bus.emit('setActiveStream', {
-    stream: streamTabId,
-    session: sessionDescriptor,
-    isRemote: isRemoteAgent(config.agent),
-    hasMultipleOutputs: config.useMultipleOutputs,
-  });
-
-  // 5. Build user variable channels (replaces agent.init() logic)
+  // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
   const initStage = await executionContext.logger.stage('Init');
   let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
@@ -235,7 +224,7 @@ async function prepareFlowExecution(
     transient: { ...baseVars },
   };
 
-  // 6. Create usage monitor for tracking API usage
+  // 5. Create usage monitor for tracking API usage
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
       ? (setting as AgentWorkflowSetting).isMultipleOutput
