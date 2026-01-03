@@ -208,39 +208,34 @@ export class TaskGroupDomManager {
   }
 
   /**
-   * Updates the UI of a log group's header
-   * @param {string} groupId - ID of the group to update
-   * @param {string} status - New status
-   * @param {string} endTime - End time (optional)
+   * Updates the UI of a log group's header.
+   * Payload uses flat structure: { id, status, endTime } matching UpdateTaskGroupPayload.
+   * @param {{ id: string, status?: string, endTime?: number }} update
    */
   updateGroup(update) {
     if (!update || typeof update !== 'object') {
       return;
     }
 
-    const { groupId, updates = {} } = update;
-    if (!groupId) {
+    const { id, status, endTime } = update;
+    if (!id) {
       return;
     }
 
-    const group = progressViewState.taskGroups.get(groupId);
+    const group = progressViewState.taskGroups.get(id);
     if (!group) return;
 
-    const hasStatusUpdate = Object.hasOwn(updates, 'status');
-    const hasEndTimeUpdate = Object.hasOwn(updates, 'endTime');
+    const hasStatusUpdate = status !== undefined;
+    const hasEndTimeUpdate = endTime !== undefined && endTime !== null;
 
-    if (hasStatusUpdate && updates.status) {
-      group.status = updates.status;
+    if (hasStatusUpdate && status) {
+      group.status = status;
     }
-    if (
-      hasEndTimeUpdate &&
-      updates.endTime !== undefined &&
-      updates.endTime !== null
-    ) {
-      group.endTime = updates.endTime;
+    if (hasEndTimeUpdate) {
+      group.endTime = endTime;
     }
 
-    const detailsElem = this.groupElements.get(groupId);
+    const detailsElem = this.groupElements.get(id);
     if (!detailsElem) {
       return;
     }
@@ -261,14 +256,8 @@ export class TaskGroupDomManager {
       // Update or add the duration display when the group finishes
       const timeContainer = header.querySelector('.group-time');
 
-      if (
-        hasEndTimeUpdate &&
-        group.endTime !== undefined &&
-        group.endTime !== null
-      ) {
-        const endDate = group.endTime;
-        const startDate = group.startTime;
-        const durationMs = endDate - startDate;
+      if (hasEndTimeUpdate) {
+        const durationMs = group.endTime - group.startTime;
 
         // Update or create duration element
         const durationElem = header.querySelector('.group-duration');
@@ -289,7 +278,7 @@ export class TaskGroupDomManager {
       }
     }
 
-    progressViewState.taskGroups.set(groupId, group);
+    progressViewState.taskGroups.set(id, group);
   }
 
   showRun(groupId) {
