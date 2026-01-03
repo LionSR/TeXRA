@@ -16,8 +16,6 @@ import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
-// Type imports
-import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
 // Internal imports
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { COMMANDS } from '@progressView/modules/constants.js';
@@ -25,7 +23,7 @@ import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
-import type { TodoItem } from '@eventBus/schemas';
+import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 // Logger imports
 // Type imports
@@ -336,7 +334,7 @@ export class WebviewUpdater {
   /**
    * Update a task group in the webview
    */
-  updateTaskGroup(update: TaskGroupUpdatePayload): void {
+  updateTaskGroup(update: UpdateTaskGroupPayload): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_TASK_GROUP,
       update,
