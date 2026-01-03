@@ -483,6 +483,9 @@ class ResponseProcessNode<C> extends BaseNode<
       return { kind: 'skipped' };
     }
 
+    // Capture the current group ID for logging (matches ToolUseCycleFlow pattern)
+    const groupId = logger.withCurrentGroup((id) => id);
+
     const stage = await logger.stage('Process response', {
       skip: true,
     });
@@ -520,6 +523,7 @@ class ResponseProcessNode<C> extends BaseNode<
       // (streaming mode already shows it progressively via streams)
       if (thinkingContent && !useStreaming) {
         logger.info(thinkingContent, {
+          groupId,
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
@@ -528,6 +532,7 @@ class ResponseProcessNode<C> extends BaseNode<
       const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
       if (scratchpad) {
         logger.info(scratchpad, {
+          groupId,
           messageType: MESSAGE_TYPES.SCRATCHPAD,
         });
       }
