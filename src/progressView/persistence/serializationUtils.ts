@@ -1,5 +1,5 @@
 /**
- * Shared serialization utilities for converting Map structures to plain objects.
+ * Shared serialization utilities for converting between Map and Record structures.
  * These are used throughout the progress view for persistence and webview messaging.
  */
 
@@ -11,6 +11,18 @@ export function mapToRecord<K extends string | number, V>(
   map: Map<K, V>,
 ): Record<string, V> {
   return Object.fromEntries(map.entries()) as Record<string, V>;
+}
+
+/**
+ * Deserialize a plain Record object to a Map.
+ * Handles null/undefined/non-object inputs gracefully by returning empty Map.
+ * @example recordToMap({ a: 1 }) // Map([['a', 1]])
+ */
+export function recordToMap<V>(data: unknown): Map<string, V> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return new Map();
+  }
+  return new Map(Object.entries(data as Record<string, V>));
 }
 
 /**
