@@ -57,9 +57,7 @@ export class TaskGroupManager extends PersistentMapManager<
   }: UpdateTaskGroupPayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
-      this.logger.warn(
-        `Cannot update group ${id}: stream ${stream} not found`,
-      );
+      this.logger.warn(`Cannot update group ${id}: stream ${stream} not found`);
       return;
     }
 
@@ -71,8 +69,12 @@ export class TaskGroupManager extends PersistentMapManager<
       return;
     }
 
-    // Apply updates
-    streamGroups.set(id, { ...group, status, endTime });
+    // Apply updates - only include endTime if explicitly provided
+    const updated: TaskGroup = { ...group, status };
+    if (endTime !== undefined) {
+      updated.endTime = endTime;
+    }
+    streamGroups.set(id, updated);
     await this.save();
   }
 

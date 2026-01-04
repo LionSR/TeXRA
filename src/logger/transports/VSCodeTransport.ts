@@ -54,7 +54,14 @@ export class VSCodeTransport extends Transport {
     const groupId = info.groupId ?? this.activeGroupId;
 
     this.writeToChannel(level, message, timestamp, data);
-    this.emitLogEvent({ level, message, timestamp, groupId, messageType, data });
+    this.emitLogEvent({
+      level,
+      message,
+      timestamp,
+      groupId,
+      messageType,
+      data,
+    });
 
     callback();
   }
