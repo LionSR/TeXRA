@@ -92,7 +92,7 @@ export class LatexMediaManager {
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
-    const activeGroupId = this.logger.withCurrentGroup((id) => id);
+    const activeGroupId = this.logger.getCurrentGroupId();
     const texFiles = files.filter((file) =>
       file.absolutePath.toLowerCase().endsWith('.tex'),
     );
@@ -152,7 +152,7 @@ export class LatexMediaManager {
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
-    const activeGroupId = this.logger.withCurrentGroup((id) => id);
+    const activeGroupId = this.logger.getCurrentGroupId();
     const figureResults = await Promise.allSettled(
       files.map((file) => extractFigurePathsFromLatex(file)),
     );
@@ -215,7 +215,7 @@ export class LatexMediaManager {
     workspaceState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
-    const activeGroupId = this.logger.withCurrentGroup((id) => id);
+    const activeGroupId = this.logger.getCurrentGroupId();
     const tikzResults = await Promise.allSettled(
       files.map((file) => tikzPictureManager.compile(file)),
     );

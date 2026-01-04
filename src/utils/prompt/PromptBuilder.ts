@@ -84,7 +84,7 @@ export class PromptBuilder {
    * @remarks Rounds beyond the configured templates fall back to the second template (index 1).
    */
   public async buildUserRequest(currRound: number): Promise<string> {
-    const groupId = this.logger?.withCurrentGroup((id) => id);
+    const groupId = this.logger?.getCurrentGroupId();
     const template = this.getRoundTemplate(currRound);
 
     if (!template) {
@@ -116,7 +116,7 @@ export class PromptBuilder {
       return prefills[normalizedRound] ?? '';
     }
 
-    const groupId = this.logger?.withCurrentGroup((id) => id);
+    const groupId = this.logger?.getCurrentGroupId();
     this.logger?.debug(
       `No prefill configured for round ${currRound}. Reusing first prefill.`,
       { groupId },
@@ -140,7 +140,7 @@ export class PromptBuilder {
 
     // For rounds beyond configured templates, fall back to the second template
     if (normalizedRound > 0 && requestArray.length > 1) {
-      const groupId = this.logger?.withCurrentGroup((id) => id);
+      const groupId = this.logger?.getCurrentGroupId();
       this.logger?.debug(
         `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
         { groupId },
