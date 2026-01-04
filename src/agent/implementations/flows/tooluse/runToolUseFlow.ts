@@ -92,35 +92,32 @@ export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, executionContext } = input;
+  const { logger, streamId, executionId } = input;
 
   // Create the flow context (owns all services including session lifecycle)
   const flowContext = createToolUseFlowContext<C>({
     ...input,
     resumeSnapshot: input.resumeSnapshot ?? null,
   });
-
-  // Single source of truth: get streamTabId from execution context
-  const streamTabId = executionContext.streamId;
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
     // Register for interrupt handling (inside try to ensure finally runs)
-    registerInterruptible(streamTabId, flowContext);
+    registerInterruptible(streamId, flowContext);
 
     // Allow caller to configure context (e.g., append follow-ups for resume)
     onSetup?.(flowContext as ToolUseFlowContext<unknown>);
 
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
-      executionContext.executionId,
+      executionId,
     );
 
     // Try to restore from persisted flow (resume scenario)
     let isResume = false;
     try {
       const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionContext.executionId}`,
+        `flow:${executionId}`,
       );
       if (flowRecord?.shared) {
         isResume = true;
@@ -171,8 +168,8 @@ export async function runToolUseFlow<C = unknown>(
     // When VS Code reloads mid-execution, this block never runs, preserving
     // the record for sessions that were genuinely interrupted mid-wait.
     try {
-      const kv = getExecutionStore(executionContext.executionId);
-      await kv.delete(`flow:${executionContext.executionId}`);
+      const kv = getExecutionStore(executionId);
+      await kv.delete(`flow:${executionId}`);
     } catch {
       // Ignore cleanup errors - non-critical
     }
@@ -181,7 +178,7 @@ export async function runToolUseFlow<C = unknown>(
     flowContext.dispose();
 
     // Unregister from interrupt handling (moved from executeAgent callbacks)
-    unregisterInterruptible(streamTabId);
+    unregisterInterruptible(streamId);
   }
 
   return { status };

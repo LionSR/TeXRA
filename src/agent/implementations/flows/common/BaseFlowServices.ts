@@ -36,6 +36,7 @@ import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // ============================================================================
 // Context Initialization
@@ -45,7 +46,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
  * Base initialization config shared by all flow contexts.
  *
  * Flow-specific contexts extend this with additional fields:
- * - ToolUseFlowContextInit adds: streamTabId, toolRegistry, resumeSnapshot
+ * - ToolUseFlowContextInit adds: toolRegistry, resumeSnapshot
  * - ReflectionFlowContextInit adds: getUsageRecorder (required)
  */
 export interface BaseFlowContextInit<C = unknown> {
@@ -64,7 +65,13 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Logger for flow operations */
   logger: AgentLogger;
 
-  /** Execution context (IDs, storage key, etc.) */
+  /** Stream/tab identifier */
+  streamId: StreamTabId;
+
+  /** Execution identifier */
+  executionId: ExecutionId;
+
+  /** Execution context (for methods: updateStorageKey, hasInitialStorageKey) */
   executionContext: AgentExecutionContext;
 
   /** User variable channels for template rendering */
