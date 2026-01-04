@@ -89,7 +89,13 @@ export class FollowUpInputManager {
 
     const text = this.textarea.value.trim();
     const stream = progressViewState.activeStream;
-    if (!text || !stream) {
+    if (!text) {
+      return;
+    }
+    if (!stream) {
+      console.warn(
+        '[FollowUpInputManager] Cannot send follow-up: no active stream',
+      );
       return;
     }
 
