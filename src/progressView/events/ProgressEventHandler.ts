@@ -471,6 +471,7 @@ export class ProgressEventHandler {
 
   /**
    * Replay any buffered task groups for a stream after it becomes active.
+   * Groups are only deleted after successful replay to preserve them if webview unavailable.
    */
   private replayPendingTaskGroups(stream: string): void {
     const pending = this.pendingTaskGroups.get(stream);
@@ -482,8 +483,8 @@ export class ProgressEventHandler {
       for (const group of pending) {
         this.webviewUpdater.addTaskGroup(stream, group);
       }
+      this.pendingTaskGroups.delete(stream);
     }
-    this.pendingTaskGroups.delete(stream);
   }
 
   /**
