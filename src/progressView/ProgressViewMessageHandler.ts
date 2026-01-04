@@ -206,25 +206,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await vscode.commands.executeCommand('texra.stopAgent', message.stream);
   }
 
+  /**
+   * Start a new execution with the same agent config.
+   * Note: For resuming paused tool-use sessions, use texra.resumeAgent instead.
+   */
   private async handleRunAgain(message: any): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
-    if (!taskState) {
-      return;
-    }
-
-    // Start a new execution with the same config
-    // For resuming paused tool-use sessions, use texra.resumeAgent instead
-    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
+    await this.startNewExecution(message.stream);
   }
 
   private async handleRunNew(message: any): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
+    await this.startNewExecution(message.stream);
+  }
+
+  private async startNewExecution(streamId: string): Promise<void> {
+    const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState) {
       return;
     }
-
-    // Handle both workflow and tool-use sessions
-    // Both task state types have agentConfig which is all we need to start new run
     await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
