@@ -87,7 +87,7 @@ async function handleCleanSingle(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: false,
   });
-  bus.emit('clearMissingOutputs', streamId);
+  bus.emit('clearMissingOutputs', { stream: streamId });
 }
 
 async function handleCleanMultiple(
@@ -107,7 +107,7 @@ async function handleCleanMultiple(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: true,
   });
-  bus.emit('clearMissingOutputs', streamId);
+  bus.emit('clearMissingOutputs', { stream: streamId });
 }
 
 export async function handleClean(config: {
@@ -162,7 +162,7 @@ export async function handleClean(config: {
     });
 
   if (!config.skipProgressViewClear) {
-    bus.emit('clearMissingOutputs', streamId);
+    bus.emit('clearMissingOutputs', { stream: streamId });
   }
 }
 
