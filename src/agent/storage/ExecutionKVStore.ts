@@ -16,7 +16,8 @@
 import * as path from 'path';
 
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { isFileNotFoundError, isFile, isDirectory } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
+import { isFile, isDirectory } from '@common/files/fsEntryType';
 
 import { StorageFS } from '@utils/files';
 
