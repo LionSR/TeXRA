@@ -6,39 +6,42 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   createStatefulEventDisposable,
   sendIfActive,
-  type BaseEventShared,
+  type ProgressEventBusLike,
   type StatefulEventModule,
 } from './types';
+import { withEventErrorHandling } from './errorHandling';
+
+const MODULE = 'LogEvents';
 
 export type LogEventsModule = StatefulEventModule;
 
-export function createLogEvents(shared: BaseEventShared): LogEventsModule {
-  const { withErrorBoundary } = shared;
+const handleAddLogMessage = (
+  data: ProgressEventPayloads['addLogMessage'],
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+): void => {
+  // Note: Debug level and INTERNAL message filtering is done at the source
+  // in VSCodeTransport.emitLogEvent() before events reach this handler.
+  withEventErrorHandling(MODULE, 'failed to handle addLogMessage', async () => {
+    const { stream, logMessage } = data;
 
-  const handleAddLogMessage = (
-    data: ProgressEventPayloads['addLogMessage'],
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): void => {
-    // Note: Debug level and INTERNAL message filtering is done at the source
-    // in VSCodeTransport.emitLogEvent() before events reach this handler.
-    withErrorBoundary('failed to handle addLogMessage', async () => {
-      const { stream, logMessage } = data;
+    const isNew = await state.streamTabs.addMessage(stream, logMessage);
 
-      const isNew = await state.streamTabs.addMessage(stream, logMessage);
+    if (isNew && updater.isAvailable()) {
+      updater.appendLogMessage(stream, logMessage);
+    }
+  });
+};
 
-      if (isNew && updater.isAvailable()) {
-        updater.appendLogMessage(stream, logMessage);
-      }
-    });
-  };
-
-  const handleUpdateLogMessage = (
-    data: ProgressEventPayloads['updateLogMessage'],
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): void => {
-    withErrorBoundary('failed to handle updateLogMessage', async () => {
+const handleUpdateLogMessage = (
+  data: ProgressEventPayloads['updateLogMessage'],
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+): void => {
+  withEventErrorHandling(
+    MODULE,
+    'failed to handle updateLogMessage',
+    async () => {
       const { stream, logMessage } = data;
 
       if (!state.streamTabs.has(stream)) {
@@ -72,9 +75,14 @@ export function createLogEvents(shared: BaseEventShared): LogEventsModule {
       sendIfActive(stream, state, updater, () => {
         updater.updateLogMessage(stream, existing);
       });
-    });
-  };
+    },
+  );
+};
 
+/**
+ * Create log event module for registration.
+ */
+export function createLogEvents(_shared: unknown = {}): LogEventsModule {
   return {
     register(bus, state, updater) {
       return [
