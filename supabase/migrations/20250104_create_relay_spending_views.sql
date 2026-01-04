@@ -20,6 +20,30 @@ ON public.usage_logs(user_id, logged_at)
 WHERE used_relay = TRUE;
 
 -- ============================================================================
+-- STEP 1.5: Create spending check function (server-side aggregation)
+-- ============================================================================
+-- This function computes monthly relay spending server-side for efficiency.
+-- Returns a single numeric value instead of fetching all rows.
+--
+-- RACE CONDITION NOTE: Usage is logged asynchronously after requests complete.
+-- Concurrent requests may pass the spending check before their costs are logged.
+-- This is acceptable for soft limits; for hard limits, consider:
+-- - Synchronous logging (adds latency)
+-- - Pessimistic locking (complex)
+-- - Buffer margin in limit checks (e.g., 90% threshold)
+CREATE OR REPLACE FUNCTION get_user_monthly_relay_spend(
+  p_user_id UUID,
+  p_month_start TIMESTAMPTZ
+)
+RETURNS NUMERIC AS $$
+  SELECT COALESCE(SUM(cost), 0)
+  FROM public.usage_logs
+  WHERE user_id = p_user_id
+    AND used_relay = TRUE
+    AND logged_at >= p_month_start;
+$$ LANGUAGE SQL STABLE;
+
+-- ============================================================================
 -- STEP 2: Create relay_spending_summary view
 -- ============================================================================
 -- Per-user totals: cost, tokens, request count

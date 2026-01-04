@@ -139,9 +139,10 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
 // Tier Constants
 // =============================================================================
 
-const ULTRA_TIER = 'Ultra';
-const MAX_TIER = 'Max';
-const FREE_TIER = 'free';
+/** Tier value constants - exported for use in relay index.ts */
+export const ULTRA_TIER = 'Ultra';
+export const MAX_TIER = 'Max';
+export const FREE_TIER = 'free';
 
 /**
  * Get the monthly spending limit for a tier.
