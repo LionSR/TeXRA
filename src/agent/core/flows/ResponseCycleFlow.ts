@@ -486,7 +486,7 @@ class ResponseProcessNode<C> extends BaseNode<
     }
 
     // Capture the current group ID for logging (matches ToolUseCycleFlow pattern)
-    const groupId = logger.withCurrentGroup((id) => id);
+    const groupId = logger.getCurrentGroupId();
 
     const stage = await logger.stage('Process response', {
       skip: true,
