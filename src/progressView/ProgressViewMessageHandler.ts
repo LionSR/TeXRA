@@ -229,7 +229,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       }
     }
 
-    // Fall back to fresh execution (no executionId or tool-use agent)
+    // Defensive fallback: start fresh if no executionId available.
+    // Tool-use agents shouldn't reach here (Resume button not in their toolbar).
     await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
