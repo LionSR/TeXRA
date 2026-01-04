@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 
@@ -18,13 +15,8 @@ export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
   protected readonly storage: StateStorage;
   protected readonly storageKey: WorkspaceStateKey;
-  private readonly legacyKeyRoots: string[];
 
-  constructor(
-    storageKey: WorkspaceStateKey,
-    storage?: StateStorage,
-    legacyKeyRoots: string[] = [],
-  ) {
+  constructor(storageKey: WorkspaceStateKey, storage?: StateStorage) {
     const resolvedStorage = storage ?? workspaceSM;
     if (!resolvedStorage) {
       throw new Error('workspace state manager is not initialized');
@@ -32,7 +24,6 @@ export abstract class PersistentMapManager<K extends string, V> {
 
     this.storage = resolvedStorage;
     this.storageKey = storageKey;
-    this.legacyKeyRoots = legacyKeyRoots;
   }
 
   /** Add an entry to the map and persist it */
@@ -99,11 +90,7 @@ export abstract class PersistentMapManager<K extends string, V> {
 
     if (saved && Object.keys(saved).length > 0) {
       await this.populateFromRecord(saved);
-      return;
-    }
-
-    const migrated = await this.migrateLegacyState();
-    if (!migrated) {
+    } else {
       this.items.clear();
     }
   }
@@ -127,29 +114,5 @@ export abstract class PersistentMapManager<K extends string, V> {
       entries.push([key as K, deserialized]);
     }
     this.items = new Map(entries);
-  }
-
-  private async migrateLegacyState(): Promise<boolean> {
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspacePath) {
-      return false;
-    }
-
-    const candidates = [this.storageKey as string, ...this.legacyKeyRoots];
-
-    for (const root of candidates) {
-      const legacyKey = `${root}.${workspacePath}`;
-      const legacy = this.storage.get<Record<string, unknown>>(legacyKey, {});
-      if (!legacy || Object.keys(legacy).length === 0) {
-        continue;
-      }
-
-      await this.populateFromRecord(legacy);
-      await this.save();
-      await this.storage.update(legacyKey, undefined as never);
-      return true;
-    }
-
-    return false;
   }
 }

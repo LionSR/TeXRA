@@ -12,7 +12,7 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
@@ -23,7 +23,6 @@ import { normalizeRunId } from '@common/constants/runIds';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
-  isToolUseTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
@@ -102,7 +101,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
 
       // Actions
-      [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RESUME]: this.handleResume.bind(this),
       [PROGRESS_VIEW_COMMANDS.RUN_NEW]: this.handleRunNew.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
@@ -206,31 +205,33 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await vscode.commands.executeCommand('texra.stopAgent', message.stream);
   }
 
-  private async handleRunAgain(message: any): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
+  /**
+   * Resume a paused workflow/reflection session.
+   * Reuses the executionId so the flow picks up persisted state.
+   * Tool-use agents use the follow-up mechanism instead.
+   */
+  private async handleResume(message: any): Promise<void> {
+    const streamId = message.stream as StreamTabId;
+    const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState) {
       return;
     }
 
-    const executionId = this.provider.state.getExecutionId(message.stream);
-    if (!executionId) {
-      this.logger.warn(
-        this.channel,
-        `Resume requested for ${message.stream} without an execution ID`,
-      );
-      return;
+    // For workflow agents, resume by passing the same executionId
+    if (isWorkflowTaskState(taskState)) {
+      const executionId = this.provider.state.getExecutionId(streamId);
+      if (executionId) {
+        // Pass executionId to resume from persisted flow state
+        await safeExecuteCommand('texra.execute', [
+          { config: taskState.agentConfig, executionId },
+        ]);
+        return;
+      }
     }
 
-    // Handle both workflow and tool-use sessions
-    // Both task state types have agentConfig which is all we need for resume
-    await safeExecuteCommand('texra.execute', [
-      {
-        config: taskState.agentConfig,
-        executionId,
-        stream: message.stream,
-        resume: true,
-      },
-    ]);
+    // Defensive fallback: start fresh if no executionId available.
+    // Tool-use agents shouldn't reach here (Resume button not in their toolbar).
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
   private async handleRunNew(message: any): Promise<void> {
@@ -238,9 +239,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     if (!taskState) {
       return;
     }
-
-    // Handle both workflow and tool-use sessions
-    // Both task state types have agentConfig which is all we need to start new run
     await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
