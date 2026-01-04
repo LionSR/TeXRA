@@ -9,7 +9,7 @@ function sanitizeDirectories(directories: string[]): string[] {
     .map((dir) => dir.trim())
     .filter((dir) => dir.length > 0)
     .map((dir) =>
-      dir.replace(/\\/g, '/').replace(/^\//, '').replace(/\/$/, ''),
+      dir.replaceAll('\\', '/').replace(/^\//, '').replace(/\/$/, ''),
     );
 }
 

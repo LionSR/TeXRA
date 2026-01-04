@@ -77,7 +77,7 @@ class StorageFSKVStore implements ExecutionKVStore {
 
   private keyToPath(key: string): string {
     // Sanitize key to prevent path traversal
-    const sanitized = key.replace(/\.\./g, '_').replace(/[<>:"|?*]/g, '_');
+    const sanitized = key.replaceAll('..', '_').replace(/[<>:"|?*]/g, '_');
     return path.join(EXECUTIONS_DIR, this.executionId, `${sanitized}.json`);
   }
 
