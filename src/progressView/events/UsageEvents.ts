@@ -1,19 +1,25 @@
 // Type imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
 import {
   createStatefulEventDisposable,
   sendIfActive,
-  type BaseEventShared,
+  type ProgressEventBusLike,
   type StatefulEventModule,
 } from './types';
+import { withEventErrorHandling } from './errorHandling';
+
+const MODULE = 'UsageEvents';
 
 export type UsageEventsModule = StatefulEventModule;
 
-export function createUsageEvents(shared: BaseEventShared): UsageEventsModule {
-  const { withErrorBoundary } = shared;
-
+/**
+ * Create usage event module for registration.
+ */
+export function createUsageEvents(_shared: unknown = {}): UsageEventsModule {
   return {
     register(bus, state, updater) {
       return [
@@ -23,7 +29,8 @@ export function createUsageEvents(shared: BaseEventShared): UsageEventsModule {
           state,
           updater,
           ({ stream, usage, storageKey }) => {
-            withErrorBoundary(
+            withEventErrorHandling(
+              MODULE,
               'failed to handle updateStreamUsage',
               async () => {
                 const normalizedUsage: TokenUsageStats = {
