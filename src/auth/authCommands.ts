@@ -2,12 +2,7 @@ import * as vscode from 'vscode';
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
-import {
-  OAUTH_PROVIDERS,
-  OAUTH_PROVIDER_LABELS,
-  type OAuthProvider,
-  getExternalAuthCallbackUri,
-} from './config';
+import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
 
 /**
  * Command identifiers for auth-related commands.
@@ -35,8 +30,8 @@ export function initializeProfileViewProvider(
   return profileViewProvider;
 }
 
-/** Auth method type including OAuth providers and email */
-type AuthMethod = OAuthProvider | 'email';
+/** Auth method type including OAuth providers, browser variants, and email */
+type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
 /** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
@@ -72,11 +67,16 @@ export async function signIn(): Promise<void> {
 
     // Build sign-in options from enabled auth methods
     const signInOptions: SignInOption[] = [
-      ...OAUTH_PROVIDERS.map((provider) => ({
-        label: `${OAUTH_PROVIDER_LABELS[provider].icon} ${OAUTH_PROVIDER_LABELS[provider].label}`,
-        description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
-        method: provider as AuthMethod,
-      })),
+      {
+        label: '$(globe) Google',
+        description: 'Sign in with Google',
+        method: 'google' as AuthMethod,
+      },
+      {
+        label: '$(github) GitHub',
+        description: 'Sign in with GitHub via web browser',
+        method: 'github-browser' as AuthMethod,
+      },
       ...(EMAIL_LOGIN_ENABLED
         ? [
             {
@@ -86,6 +86,11 @@ export async function signIn(): Promise<void> {
             },
           ]
         : []),
+      {
+        label: '$(github) GitHub (VS Code)',
+        description: 'Sign in using VS Code GitHub authentication',
+        method: 'github' as AuthMethod,
+      },
     ];
 
     const selected = await vscode.window.showQuickPick(signInOptions, {

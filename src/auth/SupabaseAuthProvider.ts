@@ -431,17 +431,30 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * and avoids OAuth callback complexity. The GitHub token is exchanged for a
    * Supabase session via Edge Function.
    *
+   * For GitHub (Browser): Uses traditional Supabase OAuth flow via web browser.
+   * This is an alternative when VS Code's built-in auth is not preferred.
+   *
    * For other providers (Google): Uses traditional Supabase OAuth flow with
    * environment-appropriate callback URIs.
    *
-   * @param scopes - Scopes array, may contain provider hint as "provider:github"
+   * @param scopes - Scopes array, may contain provider hint as "provider:github", "provider:github-browser", or "provider:google"
    */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
-    // Extract provider from scopes (format: "provider:github" or "provider:google")
+    // Extract provider from scopes (format: "provider:github", "provider:github-browser", or "provider:google")
     const providerScope = scopes.find((s) => s.startsWith('provider:'));
     const requestedProvider = providerScope?.split(':')[1];
+
+    // Handle github-browser as a special case - use browser OAuth flow for GitHub
+    if (requestedProvider === 'github-browser') {
+      logger.info(
+        'SupabaseAuthProvider',
+        'Using browser-based GitHub auth (Supabase OAuth flow)',
+      );
+      return this.createSessionViaSupabaseOAuth('github');
+    }
+
     const provider = isOAuthProvider(requestedProvider)
       ? requestedProvider
       : DEFAULT_OAUTH_PROVIDER;
