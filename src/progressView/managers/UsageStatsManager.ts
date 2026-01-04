@@ -188,20 +188,6 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Get streams with usage statistics
-   */
-  getStreamsWithUsage(): StreamTabId[] {
-    return this.keys();
-  }
-
-  /**
-   * Check if stream has usage statistics
-   */
-  hasUsage(stream: StreamTabId): boolean {
-    return this.has(stream);
-  }
-
-  /**
    * Load usage statistics from persistence
    */
   async load(): Promise<void> {
