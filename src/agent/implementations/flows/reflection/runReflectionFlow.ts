@@ -22,7 +22,7 @@
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   registerInterruptible,
@@ -30,7 +30,6 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
@@ -76,8 +75,13 @@ export interface RunReflectionFlowInput<
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
-  /** Execution context for storage key management */
-  executionContext: AgentExecutionContext;
+  // Storage key management (flattened from executionContext)
+  /** Get current storage key for file operations */
+  getStorageKey: () => StorageKey;
+  /** Check if storage key is still initial (new run, not resumed) */
+  hasInitialStorageKey: () => boolean;
+  /** Update storage key to match run stage ID */
+  updateStorageKey: (key: StorageKey) => void;
 
   /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
@@ -123,7 +127,9 @@ export async function runReflectionFlow<C = unknown>(
     logger,
     streamId,
     executionId,
-    executionContext,
+    getStorageKey,
+    hasInitialStorageKey,
+    updateStorageKey,
     userVarChannels,
     checkInterruption,
     setAbortController,
@@ -235,16 +241,12 @@ export async function runReflectionFlow<C = unknown>(
   createdRunStage = !parentStage;
 
   // For new runs, update storage key to match the run stage ID
-  if (
-    createdRunStage &&
-    runStage.id &&
-    executionContext.hasInitialStorageKey()
-  ) {
+  if (createdRunStage && runStage.id && hasInitialStorageKey()) {
     const runStorageKey = normalizeRunId(runStage.id);
-    executionContext.updateStorageKey(runStorageKey);
+    updateStorageKey(runStorageKey);
   }
 
-  const storageKey = executionContext.storageKey;
+  const storageKey = getStorageKey();
 
   // Set active run for output handler
   outputHandler.setActiveRun(storageKey);
