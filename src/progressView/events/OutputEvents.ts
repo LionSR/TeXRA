@@ -1,25 +1,12 @@
-// Type imports
-import type { WebviewUpdater } from '@progressView/managers';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-
 // Local file imports
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
-/**
- * OutputEvents module interface.
- * Uses StatefulEventModule pattern for state/updater access.
- */
 export type OutputEventsModule = StatefulEventModule;
-
-/**
- * Shared context for OutputEvents module.
- * Uses BaseEventShared which provides withErrorBoundary.
- */
-type OutputEventsShared = BaseEventShared;
 
 /** Convert Map<number, T[]> to Record<number, T[]> for webview. */
 const toRoundRecord = <T>(
@@ -27,9 +14,7 @@ const toRoundRecord = <T>(
 ): Record<number, T[]> | undefined =>
   rounds && rounds.size > 0 ? Object.fromEntries(rounds.entries()) : undefined;
 
-export function createOutputEvents(
-  shared: OutputEventsShared,
-): OutputEventsModule {
+export function createOutputEvents(shared: BaseEventShared): OutputEventsModule {
   const { withErrorBoundary } = shared;
 
   return {
@@ -94,15 +79,12 @@ export function createOutputEvents(
           state,
           updater,
           (stream) => {
-            withErrorBoundary(
-              'failed to handle clearMissingOutputs',
-              async () => {
-                await state.outputFiles.clearMissingOutputs(stream);
-                if (state.activeStream === stream && updater.isAvailable()) {
-                  updater.updateMissingOutputs(stream, { reset: true });
-                }
-              },
-            );
+            withErrorBoundary('failed to handle clearMissingOutputs', async () => {
+              await state.outputFiles.clearMissingOutputs(stream);
+              sendIfActive(stream, state, updater, () => {
+                updater.updateMissingOutputs(stream, { reset: true });
+              });
+            });
           },
         ),
       ];
