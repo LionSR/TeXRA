@@ -28,7 +28,6 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
   assertCycleFieldsPopulated,
@@ -37,7 +36,7 @@ import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { finalizeRound } from '@agent/core/flows/CycleServices';
+import { finalizeRound, type CycleStateSlices } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -54,16 +53,6 @@ import type {
 // ============================================================================
 // Types
 // ============================================================================
-
-/**
- * State slices for cycle execution.
- * Using slices directly instead of AgentSharedStore wrapper.
- */
-interface CycleStateSlices {
-  round: ConversationRoundState;
-  run: AgentRunState;
-  workspace: AgentWorkspaceState;
-}
 
 interface CyclePrepInput extends CycleStateSlices {
   context: RoundContext;
