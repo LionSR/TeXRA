@@ -29,13 +29,11 @@ const ActiveFilesSchema = z.record(
 ) as z.ZodType<Record<FileType, boolean>>;
 
 /** Minimal agentConfig schema - just validates the discriminator exists */
-const AgentConfigWithSessionSchema = z
-  .object({
-    session: z.object({
-      agentCategory: z.enum(AgentCategory),
-    }),
-  })
-  .passthrough();
+const AgentConfigWithSessionSchema = z.looseObject({
+  session: z.object({
+    agentCategory: z.enum(AgentCategory),
+  }),
+});
 
 /** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({
