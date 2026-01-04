@@ -1,13 +1,13 @@
 // Local imports - webview
 import { ELEMENT_IDS, BASE_FILE, EDITED_FILE } from '../constants.js';
-import { BaseUIManager } from '@common/BaseUIManager.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { collectCurrentContext } from '../state/currentContext.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
-export class ActionButtonManager extends BaseUIManager {
+export class ActionButtonManager extends BaseDomHandler {
   constructor(vscodeInstance = vscode, fileList, state) {
     super();
     this.vscode = vscodeInstance;
