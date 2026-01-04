@@ -51,16 +51,17 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     return false;
   }
 
-  // Validate task state
+  // Validate task state structure
+  // Note: TaskStateSchema is loose (passthrough on agentConfig), so we cast
+  // the validated result to TaskState which has the full AgentConfig type
   const parseResult = TaskStateSchema.safeParse(rawTaskState);
   if (!parseResult.success) {
     logger.warn(`Invalid task state for stream: ${streamId}`);
     return false;
   }
+  const taskState = parseResult.data as TaskState;
 
-  const taskState = rawTaskState as TaskState;
-
-  // Retrieve the snapshot
+  // Retrieve the snapshot (also validates it's a tool-use task)
   const snapshot = await retrieveToolUseSnapshot(
     streamId,
     executionId,
@@ -68,18 +69,23 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   );
 
   if (!snapshot) {
-    logger.warn(`Failed to retrieve snapshot for stream: ${streamId}`);
+    // retrieveToolUseSnapshot logs specific failure reason
     return false;
   }
 
   // Trigger resume (follow-up is already queued, don't pass it again)
   logger.info(`Auto-resuming tool-use session for stream: ${streamId}`);
-  const result = await vscode.commands.executeCommand('texra.resumeAgent', {
-    snapshot,
-    // No followUp parameter - it's already in the queue
-  });
-
-  return (result as { success?: boolean })?.success === true;
+  try {
+    const result = await vscode.commands.executeCommand('texra.resumeAgent', {
+      snapshot,
+    });
+    return (result as { success?: boolean })?.success === true;
+  } catch (error) {
+    logger.error(`Failed to execute resume command for stream: ${streamId}`, {
+      data: error,
+    });
+    return false;
+  }
 }
 
 /**

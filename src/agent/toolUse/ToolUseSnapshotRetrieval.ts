@@ -8,7 +8,6 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { FlowRecord } from '@agent/node/persisted-flow';
-import type { ToolUseRunShared } from '@agent/implementations/flows/ToolUseRunFlow';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   type ToolUseSessionSnapshot,
@@ -54,17 +53,31 @@ export async function retrieveToolUseSnapshot(
       return null;
     }
 
-    const shared = flowRecord.shared as unknown as ToolUseRunShared;
-
-    if (!shared.state) {
+    // Runtime validation of shared structure (avoids unsafe type casting)
+    const shared = flowRecord.shared as Record<string, unknown>;
+    if (!shared.state || typeof shared.state !== 'object') {
       logger.warn(`Flow record has no state for execution: ${executionId}`);
       return null;
     }
 
-    const { conversation, stateSlices } = shared.state;
+    const state = shared.state as Record<string, unknown>;
+    const conversation = state.conversation;
+    const stateSlices = state.stateSlices as Record<string, unknown> | undefined;
 
-    if (!stateSlices) {
+    if (!Array.isArray(conversation)) {
+      logger.warn(`Flow record has invalid conversation for execution: ${executionId}`);
+      return null;
+    }
+
+    if (!stateSlices || typeof stateSlices !== 'object') {
       logger.warn(`Flow record has no state slices for execution: ${executionId}`);
+      return null;
+    }
+
+    // Validate required state slice fields
+    const { runStateSnapshot, workspaceSnapshot, userChannels } = stateSlices;
+    if (!runStateSnapshot || !workspaceSnapshot || !userChannels) {
+      logger.warn(`Flow record has incomplete state slices for execution: ${executionId}`);
       return null;
     }
 
@@ -78,10 +91,10 @@ export async function retrieveToolUseSnapshot(
       executionId,
       streamId,
       agentConfig: taskState.agentConfig,
-      messages: conversation,
-      run: stateSlices.runStateSnapshot,
-      workspace: stateSlices.workspaceSnapshot,
-      user: stateSlices.userChannels,
+      messages: conversation as ToolUseSessionSnapshot['messages'],
+      run: runStateSnapshot as ToolUseSessionSnapshot['run'],
+      workspace: workspaceSnapshot as ToolUseSessionSnapshot['workspace'],
+      user: userChannels as ToolUseSessionSnapshot['user'],
       lastUpdated: Date.now(),
     };
 
