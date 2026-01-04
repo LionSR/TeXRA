@@ -66,8 +66,11 @@ export class FileSelect {
         this.addOption(selectDiv, f, f, f === restoredValue),
       );
 
-      // Only update state if we successfully restored a value.
+      // Explicitly set .value for synchronous access by callers.
+      // Setting selected=true on options works for slotchange (async), but callers
+      // reading selectDiv.value immediately after update() need the value set now.
       if (restoredValue) {
+        selectDiv.value = restoredValue;
         mainViewState.update({ [id]: restoredValue });
       }
     } finally {
@@ -96,9 +99,8 @@ export class FileSelect {
    * @param {string} value - The option value
    * @param {string} text - The option display text
    * @param {boolean} [selected=false] - Whether this option should be selected.
-   *   Setting this is critical for vscode-single-select because its
-   *   _setStateFromSlottedElements reads this property during slot change
-   *   and defaults to index 0 if none found.
+   *   Must set both attribute AND property for vscode-single-select to pick it up
+   *   during slotchange (_setStateFromSlottedElements reads the selected attribute).
    */
   addOption(select, value, text, selected = false) {
     if (!select) {
@@ -108,6 +110,8 @@ export class FileSelect {
     option.value = value;
     option.textContent = text;
     if (selected) {
+      // Set both attribute and property for vscode-single-select compatibility
+      option.setAttribute('selected', '');
       option.selected = true;
     }
     select.appendChild(option);
