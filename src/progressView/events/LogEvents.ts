@@ -4,28 +4,26 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import {
-  sendIfActive,
-  type ProgressEventBusLike,
-  type Unsubscribe,
-} from './types';
+import { sendIfActive, type ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'LogEvents';
 
 /**
  * Register log event handlers.
- * Returns unsubscribe functions - caller handles VSCode Disposable wrapping.
+ * Cleanup is automatic via AbortSignal.
  */
 export function registerLogEvents(
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
-): Unsubscribe[] {
-  return [
-    // Note: Debug level and INTERNAL message filtering is done at the source
-    // in VSCodeTransport.emitLogEvent() before events reach this handler.
-    bus.on('addLogMessage', ({ stream, logMessage }) => {
+  signal: AbortSignal,
+): void {
+  // Note: Debug level and INTERNAL message filtering is done at the source
+  // in VSCodeTransport.emitLogEvent() before events reach this handler.
+  bus.on(
+    'addLogMessage',
+    ({ stream, logMessage }) => {
       withEventErrorHandling(
         MODULE,
         'failed to handle addLogMessage',
@@ -37,8 +35,13 @@ export function registerLogEvents(
           }
         },
       );
-    }),
-    bus.on('updateLogMessage', ({ stream, logMessage }) => {
+    },
+    { signal },
+  );
+
+  bus.on(
+    'updateLogMessage',
+    ({ stream, logMessage }) => {
       withEventErrorHandling(
         MODULE,
         'failed to handle updateLogMessage',
@@ -76,6 +79,7 @@ export function registerLogEvents(
           });
         },
       );
-    }),
-  ];
+    },
+    { signal },
+  );
 }
