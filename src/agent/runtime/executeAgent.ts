@@ -93,7 +93,6 @@ interface FlowExecutionContext {
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
-  agentPath: string;
   executionContext: AgentExecutionContext;
   streamTabId: StreamTabId;
   userVarChannels: UserVariableChannels;
@@ -284,7 +283,6 @@ async function prepareFlowExecution(
     config,
     setting,
     prompt,
-    agentPath,
     executionContext,
     streamTabId,
     userVarChannels,
