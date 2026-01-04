@@ -169,7 +169,7 @@ export class ArxivSourceProcessor {
     }
 
     // Create project directory for the arXiv paper (sanitize ID to avoid path issues)
-    const sanitizedId = id.replace(/\//g, '_');
+    const sanitizedId = id.replaceAll('/', '_');
     const paperDirRelative = sanitizedId;
     await WorkspaceFS.ensureDir(paperDirRelative);
 

@@ -789,7 +789,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
   for (const [, roundOutputs] of inputToOutputsMap.entries()) {
     totalOperations += roundOutputs.size;
 
-    const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
+    const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
     if (generateBetweenRoundDiffs && rounds.length > 1) {
       totalOperations += rounds.length - 1;
     }
@@ -810,7 +810,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
       message: `Running diffs for ${path.basename(baseFile)}...`,
     });
 
-    const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
+    const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
 
     for (const round of rounds) {
       const outputFile = roundOutputs.get(round)!;

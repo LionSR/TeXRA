@@ -634,7 +634,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       }
     }
 
-    const outputFilesArray = Array.from(allFiles);
+    const outputFilesArray = [...allFiles];
     const useMultipleOutputs =
       taskState.agentConfig.useMultipleOutputs ??
       taskState.activeFiles.output ??

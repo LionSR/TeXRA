@@ -49,7 +49,7 @@ export function resolveWorkspaceRelativePath(
 
   // Use centralized path segment extraction
   const segments = getPathSegments(normalizedRelative);
-  if (segments.some((segment) => segment === '..')) {
+  if (segments.includes('..')) {
     throw new ToolError('Path must stay within the workspace.');
   }
 
@@ -83,7 +83,7 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
     nocase: false,
   });
 
-  return (value: string) => matcher.match(value.replace(/\\/g, '/'));
+  return (value: string) => matcher.match(value.replaceAll('\\', '/'));
 }
 
 // Re-export gitignore utilities from standalone module

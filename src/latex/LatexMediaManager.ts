@@ -70,7 +70,7 @@ export class LatexMediaManager {
       return;
     }
 
-    const tasks = Array.from(targetLocations).map(async (targetLocation) => {
+    const tasks = [...targetLocations].map(async (targetLocation) => {
       try {
         await this.fileService!.mirrorWorkspaceFile(targetLocation);
       } catch (error) {

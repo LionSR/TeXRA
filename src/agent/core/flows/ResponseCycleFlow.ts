@@ -16,7 +16,6 @@ import {
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 // Type imports
 import { type ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -38,6 +37,7 @@ import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
+import { RetryErrorInfoSchema, type RetryErrorInfo } from './RetryState';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';

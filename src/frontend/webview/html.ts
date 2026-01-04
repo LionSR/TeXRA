@@ -25,7 +25,7 @@ export function buildWebviewHtml(
       value instanceof vscode.Uri
         ? webview.asWebviewUri(value).toString()
         : value;
-    result = result.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), replaced);
+    result = result.replaceAll(new RegExp(`\\$\\{${key}\\}`, 'g'), replaced);
   }
 
   return result;
