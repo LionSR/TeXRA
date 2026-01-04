@@ -82,7 +82,8 @@ export async function buildUserVars(
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
-    logger.fileList(allLoadedFiles);
+    const groupId = logger.withCurrentGroup((id) => id);
+    logger.fileList(allLoadedFiles, groupId);
   }
 
   return userVars;
@@ -216,9 +217,10 @@ async function logFileCategoriesWithExistence(
   );
 
   // Log sequentially to preserve UI display order
+  const groupId = logger.withCurrentGroup((id) => id);
   for (const { category, entries } of results) {
     if (entries.length > 0) {
-      logger.logFileCategory(category, entries);
+      logger.logFileCategory(category, entries, groupId);
     }
   }
 }
