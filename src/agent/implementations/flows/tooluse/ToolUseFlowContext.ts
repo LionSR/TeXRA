@@ -154,14 +154,19 @@ export async function applyFollowUpMessage<C>(
 export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
 ): ToolUseFlowContext<C> {
-  const { setting, toolRegistry: customRegistry, resumeSnapshot } = init;
+  const {
+    setting,
+    toolRegistry: customRegistry,
+    resumeSnapshot,
+    executionContext,
+  } = init;
+  const { logger } = executionContext;
 
   // Single source of truth: get streamTabId from execution context
-  const streamTabId = init.executionContext.streamId;
+  const streamTabId = executionContext.streamId;
 
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
-  const logger = init.executionContext.logger;
 
   // Resolve tools once at construction time
   const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
@@ -176,10 +181,9 @@ export function createToolUseFlowContext<C = unknown>(
   }
 
   // Spread init directly - it already contains setting, etc.
-  // Note: executionContext is accessed via services.executionContext (single source of truth)
   const services: ToolUseServices<C> = {
     ...init,
-    logger, // Convenience accessor for executionContext.logger
+    logger,
     toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,
