@@ -1,12 +1,12 @@
 // Local imports - webview
 import { safeGetElementById } from '@common/domUtils.js';
 import { ELEMENT_IDS } from '../constants.js';
-import { BaseUIManager } from '@common/BaseUIManager.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 /**
  * Manages display and configuration of notification banners.
  */
-export class BannerManager extends BaseUIManager {
+export class BannerManager extends BaseDomHandler {
   /**
    * Show a banner by element id.
    * @param {string} id - DOM element id of banner

@@ -20,7 +20,6 @@ import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 // Local file imports
 import {
-  SettingsManager,
   RecordingManager,
   FileManager,
   ExecutionManager,
@@ -29,7 +28,6 @@ import {
 } from './managers';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
-  private readonly settingsManager: SettingsManager;
   private readonly recordingManager: RecordingManager;
   private readonly fileManager: FileManager;
   private readonly executionManager: ExecutionManager;
@@ -38,7 +36,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
-    this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
@@ -155,16 +152,28 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
-        this.settingsManager.openSettings(),
+        safeExecuteCommand(
+          'workbench.action.openSettings',
+          [SETTINGS_QUERY.EXTENSION],
+          this.viewName,
+        ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
         const query =
           m?.sessionType === 'toolUse'
             ? SETTINGS_QUERY.TOOL_USE_AGENTS
             : SETTINGS_QUERY.WORKFLOW_AGENTS;
-        return this.settingsManager.openSettings(query);
+        return safeExecuteCommand(
+          'workbench.action.openSettings',
+          [query],
+          this.viewName,
+        );
       },
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
-        this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
+        safeExecuteCommand(
+          'workbench.action.openSettings',
+          [SETTINGS_QUERY.MODELS],
+          this.viewName,
+        ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
           const dir = await agentDirectories.custom();
