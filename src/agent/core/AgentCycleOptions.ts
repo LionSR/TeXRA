@@ -2,10 +2,9 @@
 import { z } from 'zod';
 
 // Local imports - agent configuration
-import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { AgentPrompt, AgentSetting } from './AgentDataclass';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 
 /**
  * User variable channels for template rendering.
@@ -24,17 +23,25 @@ export const UserVariableChannelsSchema = z.object({
 /** Derived from UserVariableChannelsSchema - single source of truth */
 export type UserVariableChannels = z.infer<typeof UserVariableChannelsSchema>;
 
-export interface AgentCycleBaseOptions<C = unknown> {
-  modelHandler: IModelHandler<any, any, any, any, C>;
-  /** Agent settings - uses original field name from BaseFlowContextInit */
-  setting: AgentSetting;
-  /** Agent prompt templates - uses original field name from BaseFlowContextInit */
-  prompt: AgentPrompt;
-  /** User variable channels - uses original field from BaseFlowContextInit (no extraction) */
-  userVarChannels: UserVariableChannels;
-  logger: AgentLogger;
-  context: AgentExecutionContext;
+/**
+ * Base options for cycle flows.
+ *
+ * Uses Pick from BaseFlowContextInit to avoid field duplication.
+ * Adds cycle-specific fields: client, logger, context.
+ */
+export type AgentCycleBaseOptions<C = unknown> = Pick<
+  BaseFlowContextInit<C>,
+  | 'modelHandler'
+  | 'setting'
+  | 'prompt'
+  | 'userVarChannels'
+  | 'checkInterruption'
+  | 'setAbortController'
+> & {
+  /** Fresh API client for this cycle */
   client: C;
-  checkInterruption: () => Promise<boolean> | boolean;
-  setAbortController: (ctrl: AbortController | null) => void;
-}
+  /** Logger (alias for executionContext.logger) */
+  logger: AgentLogger;
+  /** Execution context (alias for executionContext) */
+  context: AgentExecutionContext;
+};
