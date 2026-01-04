@@ -106,6 +106,12 @@ export function toErrorMessage(err: unknown): string {
  * Use this to differentiate between expected "file doesn't exist" errors and
  * actual filesystem failures (permissions, disk issues, etc.).
  *
+ * Note: This function imports vscode for FileSystemError checks. While this
+ * creates a VS Code dependency, it's acceptable because:
+ * 1. This module runs in VS Code extension context
+ * 2. The Node.js ENOENT check provides fallback for non-VS Code errors
+ * 3. Callers like ExecutionKVStore benefit from not importing vscode directly
+ *
  * @param err - The error to check
  * @returns true if the error indicates the file was not found
  *
