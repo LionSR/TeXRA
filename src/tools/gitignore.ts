@@ -40,14 +40,14 @@ function createGlobMatcher(pattern: string): (value: string) => boolean {
     nocase: false,
   });
 
-  return (value: string) => matcher.match(value.replace(/\\/g, '/'));
+  return (value: string) => matcher.match(value.replaceAll('\\', '/'));
 }
 
 function expandGitignorePattern(
   pattern: string,
   options: { anchored: boolean; dirOnly: boolean },
 ): string[] {
-  const normalized = pattern.replace(/\\/g, '/');
+  const normalized = pattern.replaceAll('\\', '/');
   const basePattern = options.anchored
     ? normalized.replace(/^\/+/, '')
     : normalized.startsWith('**/')
@@ -104,8 +104,8 @@ function parseGitignore(content: string): GitignoreRule[] {
       continue;
     }
 
-    line = line.replace(/\\ /g, ' ');
-    line = line.replace(/\\#/g, '#').replace(/\\!/g, '!');
+    line = line.replaceAll('\\ ', ' ');
+    line = line.replaceAll('\\#', '#').replaceAll('\\!', '!');
 
     const patterns = expandGitignorePattern(line, { anchored, dirOnly });
     for (const pattern of patterns) {

@@ -155,7 +155,7 @@ export async function runCleanBuild(): Promise<void> {
     return;
   }
 
-  const ignorePatterns = Array.from(EXCLUDED_DIRS)
+  const ignorePatterns = [...EXCLUDED_DIRS]
     .filter((dir) => dir !== 'build')
     .map((dir) => `**/${dir}/**`);
 
@@ -195,7 +195,7 @@ export async function runCleanOutput(): Promise<void> {
   }
 
   const modelsPattern = MODELS.join(',');
-  const ignorePatterns = Array.from(EXCLUDED_DIRS).map((d) => `**/${d}/**`);
+  const ignorePatterns = [...EXCLUDED_DIRS].map((d) => `**/${d}/**`);
 
   const files = globSync(`**/*_{${modelsPattern}}*.{tex,pdf,xml}`, {
     cwd: workspacePath,
