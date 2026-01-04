@@ -8,16 +8,45 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatus>();
 
+/** Options for setting stream status */
+interface SetOptions {
+  /**
+   * Whether to emit an updateStreamStatus event.
+   * Set to false when handling an event to avoid re-emission.
+   * @default true
+   */
+  emit?: boolean;
+}
+
 /**
  * Single source of truth for stream status.
  * Maintains synchronous access for reads while emitting events for UI updates.
  */
 export const StreamStatusService = {
-  get(stream: StreamTabId): StreamStatus {
-    return statusMemory.get(stream) ?? STREAM_STATUS.READY;
+  /**
+   * Get the status for a stream.
+   * @returns The stream's status, or undefined if no status has been set.
+   */
+  get(stream: StreamTabId): StreamStatus | undefined {
+    return statusMemory.get(stream);
   },
 
-  set(stream: StreamTabId, status: StreamStatus): void {
+  /**
+   * Set the status for a stream.
+   * @param stream - Stream identifier
+   * @param status - New status (READY clears the status)
+   * @param options - Set options
+   * @param options.emit - Whether to emit event (default: true). Set false when
+   *                       handling an event to avoid re-emission, or during batch
+   *                       operations like reload recovery.
+   */
+  set(
+    stream: StreamTabId,
+    status: StreamStatus,
+    options: SetOptions = {},
+  ): void {
+    const { emit = true } = options;
+
     // Capture previous status BEFORE mutation for event payload
     const previousStatus = statusMemory.get(stream) ?? STREAM_STATUS.READY;
 
@@ -27,21 +56,12 @@ export const StreamStatusService = {
       statusMemory.set(stream, status);
     }
 
-    bus.emit('updateStreamStatus', { stream, status, previousStatus });
-  },
-
-  /**
-   * Update status locally without emitting an event.
-   * Used by ProgressEventHandler for batch updates during reload recovery.
-   */
-  setLocal(stream: StreamTabId, status: StreamStatus): void {
-    if (status === STREAM_STATUS.READY) {
-      statusMemory.delete(stream);
-    } else {
-      statusMemory.set(stream, status);
+    if (emit) {
+      bus.emit('updateStreamStatus', { stream, status, previousStatus });
     }
   },
 
+  /** Clear a stream's status (sets to READY and emits event) */
   clear(stream: StreamTabId): void {
     this.set(stream, STREAM_STATUS.READY);
   },
