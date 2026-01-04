@@ -1,5 +1,4 @@
 // Third-party imports
-import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - agent metadata
@@ -608,9 +607,7 @@ export class ProgressViewState {
    * Load task states from persistence
    */
   private async loadTaskStates(): Promise<void> {
-    const raw = await this.loadRecordWithLegacyFallback(
-      WorkspaceStateKey.TASK_STATES,
-    );
+    const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
 
     this.taskStates.clear();
 
@@ -674,9 +671,7 @@ export class ProgressViewState {
    * Load execution IDs from persistence
    */
   private async loadExecutionIds(): Promise<void> {
-    const savedIdsRecord = await this.loadRecordWithLegacyFallback(
-      WorkspaceStateKey.EXECUTION_IDS,
-    );
+    const savedIdsRecord = this.loadRecord(WorkspaceStateKey.EXECUTION_IDS);
 
     const entries = Object.entries(savedIdsRecord).filter(
       (entry): entry is [StreamTabId, ExecutionId] =>
@@ -691,42 +686,11 @@ export class ProgressViewState {
     }
   }
 
-  private async loadRecordWithLegacyFallback(
-    key: WorkspaceStateKey,
-    legacyRoots: string[] = [],
-  ): Promise<Record<string, unknown>> {
+  private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
     const current = this.storage.get<unknown>(key);
-    if (
-      current &&
-      typeof current === 'object' &&
-      !Array.isArray(current) &&
-      Object.keys(current as Record<string, unknown>).length > 0
-    ) {
-      return current as Record<string, unknown>;
-    }
-
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (workspacePath) {
-      for (const root of [key as string, ...legacyRoots]) {
-        const legacyKey = `${root}.${workspacePath}`;
-        const legacy = this.storage.get<unknown>(legacyKey);
-        if (
-          legacy &&
-          typeof legacy === 'object' &&
-          !Array.isArray(legacy) &&
-          Object.keys(legacy as Record<string, unknown>).length > 0
-        ) {
-          await this.storage.update(key, legacy as Record<string, unknown>);
-          await this.storage.update(legacyKey, undefined as never);
-          return legacy as Record<string, unknown>;
-        }
-      }
-    }
-
     if (current && typeof current === 'object' && !Array.isArray(current)) {
       return current as Record<string, unknown>;
     }
-
     return {};
   }
 
