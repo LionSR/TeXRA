@@ -69,7 +69,7 @@ export class UsageStatsManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.USAGE_STATS, storage, ['texra.usageStats']);
+    super(WorkspaceStateKey.USAGE_STATS, storage);
     this.logger = new AgentLogger('UsageStatsManager');
   }
 
