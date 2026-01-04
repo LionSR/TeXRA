@@ -23,9 +23,9 @@ import type { ModelConfig, ModelCapabilities } from 'llm-zoo';
 // Zod v4 Schemas - Local (avoids moduleResolution issues with subpath imports)
 // ============================================================================
 
-export const ReasoningEffortSchema = z.nativeEnum(ReasoningEffort);
+export const ReasoningEffortSchema = z.enum(ReasoningEffort);
 
-export const ModelProviderSchema = z.nativeEnum(ModelProvider);
+export const ModelProviderSchema = z.enum(ModelProvider);
 
 /** Feature flags defining model's supported capabilities and behaviors. */
 export const ModelCapabilitiesSchema = z.object({
