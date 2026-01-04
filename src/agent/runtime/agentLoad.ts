@@ -3,7 +3,6 @@ import * as path from 'path';
 
 // Third-party imports
 import deepmerge from 'deepmerge';
-import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - agent components
@@ -181,10 +180,9 @@ export async function loadAgentSettingAndPrompts(
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
     return [settings as AgentSetting, prompts as AgentPrompt];
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Error loading agent settings and prompts: ${toErrorMessage(err)}`,
-    );
-    throw err;
+    // Wrap the error with context for callers to display appropriate UI
+    const message = `Error loading agent settings and prompts: ${toErrorMessage(err)}`;
+    throw new Error(message, { cause: err });
   }
 }
 
