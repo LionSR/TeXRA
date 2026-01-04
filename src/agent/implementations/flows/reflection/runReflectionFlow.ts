@@ -19,20 +19,26 @@
  * - PersistedFlow handles persistence transparently
  */
 
-import type { RoundOutput } from '@agent/output';
+import type { RoundOutput, IOutputHandler } from '@agent/output';
+import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   registerInterruptible,
   unregisterInterruptible,
+  type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 import {
   AgentWorkspaceState,
   AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
@@ -44,6 +50,9 @@ import {
 } from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
+import { PromptBuilder } from '@utils/prompt';
+import { TaskRunFileService, type AgentFileLocation } from '@utils/files';
+import { LatexMediaManager } from '@latex';
 
 import {
   createReflectionFlow,
@@ -53,11 +62,7 @@ import {
   createFreshWorkspaceSnapshot,
   createInitialReflectionState,
 } from './ReflectionFlowState';
-import {
-  createReflectionFlowContext,
-  ReflectionFlowContext,
-  type ReflectionFlowContextInit,
-} from './ReflectionFlowContext';
+import { createBaseFileLocations } from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -66,27 +71,24 @@ import type { ReflectionServices } from './ReflectionServices';
 
 /**
  * Input for running a reflection flow.
+ * Extends BaseFlowContextInit with reflection-specific fields.
  */
-export interface RunReflectionFlowInput<C = unknown> extends Omit<
-  ReflectionFlowContextInit<C>,
-  'getUsageRecorder'
-> {
-  /**
-   * Stream tab ID for interrupt registration.
-   * Required for the flow runner to manage interrupt handling.
-   */
+export interface RunReflectionFlowInput<C = unknown>
+  extends BaseFlowContextInit<C> {
+  /** Narrow setting to workflow-specific type */
+  setting: AgentWorkflowSetting;
+
+  /** Stream tab ID for interrupt registration */
   streamTabId: StreamTabId;
 
-  /**
-   * Usage recorder callback. If not provided, usage is not tracked.
-   */
+  /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
 
-  /**
-   * Optional: Parent log stage for creating round stages.
-   * If not provided, a new stage will be created.
-   */
+  /** Optional: Parent log stage for creating round stages. */
   parentStage?: AgentLogStage;
+
+  /** Optional custom output file location getter (used by merge). */
+  getOutputFileLocation?: (round: number) => AgentFileLocation;
 }
 
 /**
@@ -107,8 +109,7 @@ export interface RunReflectionFlowResult {
 /**
  * Run a reflection flow.
  *
- * Interrupt registration is handled automatically - the flow context is
- * registered when created and unregistered on completion/error.
+ * Creates all services inline and manages interrupt registration.
  *
  * @param input - Flow configuration and dependencies
  * @returns Flow execution result
@@ -134,6 +135,96 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
   let createdRunStage = false;
+  let outputHandler: IOutputHandler | undefined;
+
+  // ========================================================================
+  // Create services inline (previously in createReflectionFlowContext)
+  // ========================================================================
+
+  const fileService = new TaskRunFileService(executionContext.executionId);
+  const baseFiles = createBaseFileLocations(config);
+
+  outputHandler = new OutputHandler(
+    setting,
+    config,
+    0, // logId
+    baseFiles,
+    executionContext.logger,
+    fileService,
+    executionContext.executionId,
+  );
+
+  const promptBuilder = new PromptBuilder(
+    prompt,
+    setting,
+    userVarChannels.transient,
+    executionContext.logger,
+  );
+
+  const latexMediaManager = new LatexMediaManager(
+    executionContext.logger,
+    fileService,
+  );
+
+  // Compute shouldEnsureXmlStructure from configuration
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+  let shouldEnsureXmlStructure = false;
+  if (setting.xmlStructureMode !== undefined) {
+    shouldEnsureXmlStructure =
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
+  } else if (setting.agentType === 'CoT') {
+    shouldEnsureXmlStructure = true;
+  } else if (setting.agentType === 'direct') {
+    shouldEnsureXmlStructure = useScratchpad;
+  }
+
+  // Compute totalRounds from configuration
+  let totalRounds: number;
+  if (setting.maxRounds !== undefined) {
+    totalRounds = setting.maxRounds;
+  } else if (setting.agentType === 'direct') {
+    totalRounds = 1;
+  } else {
+    const requestArray = Array.isArray(prompt.userRequest)
+      ? prompt.userRequest
+      : prompt.userRequest
+        ? [prompt.userRequest]
+        : [];
+    totalRounds = Math.max(setting.rounds ?? 2, requestArray.length);
+  }
+
+  // Use custom getter if provided, otherwise create default
+  const getOutputFileLocation =
+    input.getOutputFileLocation ??
+    ((currRound: number): AgentFileLocation => {
+      const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
+      const fileName = getOutputFileName(
+        config.inputFile,
+        config.agent,
+        modelHandler.config.name,
+        fileExtension,
+        currRound,
+        config.editedFile || undefined,
+      );
+      return (
+        useScratchpad
+          ? fileService.createRawOutputLocation(fileName)
+          : fileService.createLocation(fileName)
+      ) as AgentFileLocation;
+    });
+
+  // Create interruptible object for registration
+  const interruptible: IInterruptible = {
+    interrupt(): void {
+      input.onInterrupt?.();
+      retryCoordinator.clearRequest(executionContext.streamId);
+    },
+  };
+
+  // ========================================================================
+  // Run stage and storage key setup
+  // ========================================================================
 
   // Create or use provided run stage FIRST - we need its ID for storage key
   const runStage =
@@ -142,14 +233,9 @@ export async function runReflectionFlow<C = unknown>(
       skip: false,
     }));
 
-  // Track if we created the stage internally
   createdRunStage = !parentStage;
 
-  // For new runs, update storage key to match the run stage ID.
-  // This ensures output files, usage, and other storage operations use
-  // the same key as the task group that the frontend uses for filtering.
-  // For resumed runs where a parent stage is provided, we trust the existing
-  // storage key since the parent stage ID should already match.
+  // For new runs, update storage key to match the run stage ID
   if (
     createdRunStage &&
     runStage.id &&
@@ -161,23 +247,12 @@ export async function runReflectionFlow<C = unknown>(
 
   const storageKey = executionContext.storageKey;
 
-  // Create flow context and set active run for output handler
-  const flowContext = createReflectionFlowContext({
-    modelHandler,
-    config,
-    setting,
-    prompt,
-    executionContext,
-    userVarChannels,
-    checkInterruption,
-    setAbortController,
-    getUsageRecorder,
-  });
-  flowContext.setActiveRun(storageKey);
+  // Set active run for output handler
+  outputHandler.setActiveRun(storageKey);
 
   try {
-    // Register for interrupt handling (inside try to ensure finally runs)
-    registerInterruptible(streamTabId, flowContext);
+    // Register for interrupt handling
+    registerInterruptible(streamTabId, interruptible);
 
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
@@ -194,15 +269,11 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
-        // Flat structure: shared.workspaceSnapshot, shared.lastError
         const persistedShared = flowRecord.shared as {
           workspaceSnapshot?: unknown;
           lastError?: RetryErrorInfo;
         };
         if (persistedShared.workspaceSnapshot) {
-          // Validate and normalize persisted snapshot using Zod schema.
-          // Schema's .prefault() handles legacy formats and missing fields.
-          // No class instantiation needed - direct schema parse is sufficient.
           initialWorkspaceSnapshot = AgentWorkspaceStateSnapshotSchema.parse(
             persistedShared.workspaceSnapshot,
           );
@@ -214,7 +285,6 @@ export async function runReflectionFlow<C = unknown>(
           initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         }
 
-        // Restore retry error if present (for proper error classification on resume)
         if (persistedShared.lastError) {
           restoredRetryError = persistedShared.lastError;
           executionContext.logger.debug(
@@ -225,26 +295,18 @@ export async function runReflectionFlow<C = unknown>(
         initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
       }
     } catch {
-      // No persisted flow - fresh start
       initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
     }
 
-    // Create shared state for the flow (natively serializable, flat structure)
-    shared = createInitialReflectionState(
-      flowContext.totalRounds,
-      initialWorkspaceSnapshot,
-    );
+    // Create shared state for the flow
+    shared = createInitialReflectionState(totalRounds, initialWorkspaceSnapshot);
 
-    // Restore retry error if present
     if (restoredRetryError) {
       shared.lastError = restoredRetryError;
     }
 
     // Create RoundPersistedFlow with the start node
-    // Round stage management is now handled by the flow, not by nodes
     const startNode = createReflectionFlow<C>().start;
-    // Track flow completion status from onFlowEnd hook
-    // Use object wrapper to avoid TypeScript narrowing issues with closure mutation
     const flowResult = {
       status: EXECUTION_STATUS.COMPLETED as ExecutionStatus,
     };
@@ -255,29 +317,40 @@ export async function runReflectionFlow<C = unknown>(
     >(startNode, kv, {
       parentStage: runStage,
       hooks: {
-        // Create round stages (r0, r1, r2, ...)
         createRoundStage: async (roundIndex, parent) => {
           return await executionContext.logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
         },
-        // Reset workspace state for new round (managed at flow level, not node level)
         resetForNextRound: (s) => {
           s.workspaceSnapshot = createFreshWorkspaceSnapshot();
         },
-        // Check for interruption (for status detection)
         checkInterruption,
-        // Capture flow completion status
         onFlowEnd: (_shared, flowEndStatus) => {
           flowResult.status = flowEndStatus;
         },
       },
     });
 
-    // Build services - round stages are managed by RoundPersistedFlow
-    // Keep reference to services for finally block access
+    // Build services - all fields inline
     services = {
-      ...flowContext.services,
+      modelHandler,
+      config,
+      setting,
+      prompt,
+      executionContext,
+      userVarChannels,
+      checkInterruption,
+      setAbortController,
+      logger: executionContext.logger,
+      context: executionContext,
+      outputHandler,
+      latexMediaManager,
+      promptBuilder,
+      fileService,
+      getOutputFileLocation,
+      shouldEnsureXmlStructure,
+      getUsageRecorder,
       runStage,
     };
     pf.setServices(services);
@@ -288,42 +361,28 @@ export async function runReflectionFlow<C = unknown>(
       );
     }
 
-    // Run the persisted flow - errors throw directly
-    // RoundPersistedFlow automatically manages round stages
     await pf.run(shared);
-
-    // Get final shared state with all mutations (including roundOutputs)
     shared = await pf.getShared();
-
-    // Map ExecutionStatus to EndGroupStatus using transformation function
     status = executionToEndStatus(flowResult.status) as EndGroupStatus;
   } catch (error) {
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Clean up flow record on completion.
-    // When VS Code reloads mid-execution, this block never runs, preserving
-    // the record for sessions that were genuinely interrupted mid-wait.
+    // Clean up flow record on completion
     try {
       const kv = getExecutionStore(executionContext.executionId);
       await kv.delete(`flow:${executionContext.executionId}`);
     } catch {
-      // Ignore cleanup errors - non-critical
+      // Ignore cleanup errors
     }
 
-    // Round stages are finalized by RoundPersistedFlow - no need to end them here
-
-    // Finalize run stage if we created it internally.
-    // Prefer services.runStage (may have been updated) but fall back to runStage
-    // if services wasn't assigned (error before services creation).
     if (createdRunStage) {
       (services?.runStage ?? runStage)?.end(status);
     }
 
-    // Clean up context resources (defensive check in case of early failure)
-    flowContext?.dispose();
+    // Clean up retry coordinator
+    retryCoordinator.clearRequest(executionContext.streamId);
 
-    // Unregister from interrupt handling (moved from executeAgent callbacks)
     unregisterInterruptible(streamTabId);
   }
 
