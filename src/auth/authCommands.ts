@@ -71,10 +71,17 @@ export async function signIn(): Promise<void> {
     }
 
     // Check if VS Code's native GitHub auth is available (user already logged in to GitHub in VS Code)
-    const hasNativeGitHubAuth = await vscode.authentication
-      .getSession('github', ['user:email'], { silent: true })
-      .then((session) => session !== undefined)
-      .catch(() => false);
+    let hasNativeGitHubAuth = false;
+    try {
+      const githubSession = await vscode.authentication.getSession(
+        'github',
+        ['user:email'],
+        { silent: true },
+      );
+      hasNativeGitHubAuth = githubSession !== undefined;
+    } catch {
+      // Native GitHub auth not available
+    }
 
     // Build sign-in options from enabled auth methods
     // Browser-based OAuth options first (Google, then GitHub), native GitHub option at the bottom if available
