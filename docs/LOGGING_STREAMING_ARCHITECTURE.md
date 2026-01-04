@@ -77,14 +77,15 @@ ProgressEventHandler.setStreamStatus()
 
 **Problem**: Two paths to progress view with different behavior.
 
-| Aspect | Path A: createStream() | Path B: logger methods |
-|--------|------------------------|----------------------|
-| Target | Progress view only | OutputChannel + Progress view |
-| Filtering | None | Debug/Internal filtered |
-| Type Validation | None | Validated |
-| ID Generation | Caller-provided | Sink generates UUID |
+| Aspect          | Path A: createStream() | Path B: logger methods        |
+| --------------- | ---------------------- | ----------------------------- |
+| Target          | Progress view only     | OutputChannel + Progress view |
+| Filtering       | None                   | Debug/Internal filtered       |
+| Type Validation | None                   | Validated                     |
+| ID Generation   | Caller-provided        | Sink generates UUID           |
 
 **Files**:
+
 - `src/logger/AgentLogger.ts` (createStream: lines 509-596)
 - `src/logger/sinks/ProgressViewSink.ts` (filtering: lines 26-38)
 
@@ -133,7 +134,9 @@ const messages = state.streamTabs.getMessages(stream);
 const groups = state.taskGroups.getStreamGroups(stream);
 const runInstructions = state.runInstructions.getInstructions(stream);
 const filesByRun = nestedMapToRecord(state.outputFiles.getFiles(stream));
-const missingByRun = nestedMapToRecord(state.outputFiles.getMissingOutputs(stream));
+const missingByRun = nestedMapToRecord(
+  state.outputFiles.getMissingOutputs(stream),
+);
 const usageByRun = state.usageStats.getRunUsage(stream);
 const todos = state.getTodos(stream);
 ```
@@ -154,13 +157,13 @@ the frontend has `state.activeStream` set when `addTaskGroup` arrives.
 
 ### Historical Init Group Issues (FIXED)
 
-| Issue | Commit | Root Cause | Fix |
-|-------|--------|------------|-----|
-| Stream not activated first | `59d84b5` | setActiveStream after Init | Moved emission order |
-| Race in ensureStream | `da11dda` | Async timing with activeStream check | Await ensureStream |
-| Stale groups on session switch | `509592a` | Groups not cleared | Clear on switch |
-| Groups dropped before activation | `87679a4` | addTaskGroup before setActiveStream | Backend buffering |
-| Source ordering incorrect | (latest) | prepareFlowExecution order | Emit before Init |
+| Issue                            | Commit    | Root Cause                           | Fix                  |
+| -------------------------------- | --------- | ------------------------------------ | -------------------- |
+| Stream not activated first       | `59d84b5` | setActiveStream after Init           | Moved emission order |
+| Race in ensureStream             | `da11dda` | Async timing with activeStream check | Await ensureStream   |
+| Stale groups on session switch   | `509592a` | Groups not cleared                   | Clear on switch      |
+| Groups dropped before activation | `87679a4` | addTaskGroup before setActiveStream  | Backend buffering    |
+| Source ordering incorrect        | (latest)  | prepareFlowExecution order           | Emit before Init     |
 
 ### Current Session Kind Switching
 
@@ -197,13 +200,13 @@ StreamStatusEvents.handleSetActiveStream()
 
 ## Round Trip Analysis
 
-| Operation | Layers | Events | Redundancy |
-|-----------|--------|--------|------------|
-| Log message (Path B) | 5 | 1-2 | None |
-| Log message (Path A) | 2 | 1 | Bypasses filters |
-| Stream status | 4 | 1-2 | Potential double updateAll |
-| Stream switch | 4 | 3-4 | Triple update possible |
-| Task group add | 4 | 1-3 | Full refresh if new stream |
+| Operation            | Layers | Events | Redundancy                 |
+| -------------------- | ------ | ------ | -------------------------- |
+| Log message (Path B) | 5      | 1-2    | None                       |
+| Log message (Path A) | 2      | 1      | Bypasses filters           |
+| Stream status        | 4      | 1-2    | Potential double updateAll |
+| Stream switch        | 4      | 3-4    | Triple update possible     |
+| Task group add       | 4      | 1-3    | Full refresh if new stream |
 
 ## Recommendations
 
@@ -228,6 +231,7 @@ StreamStatusEvents.handleSetActiveStream()
 ## Files Reference
 
 ### Logging
+
 - `src/logger/AgentLogger.ts` - Main logger interface
 - `src/logger/logUtils.ts` - Low-level utilities + AsyncLocalStorage
 - `src/logger/LogChannelRegistry.ts` - Channel lifecycle
@@ -235,10 +239,12 @@ StreamStatusEvents.handleSetActiveStream()
 - `src/logger/sinks/ProgressViewSink.ts` - Progress view event emission
 
 ### Event Bus
+
 - `src/eventBus/ProgressEventBus.ts` - Central event hub with buffering
 - `src/eventBus/schemas.ts` - Event payload schemas
 
 ### Progress View
+
 - `src/progressView/events/ProgressEventHandler.ts` - Event orchestration
 - `src/progressView/events/StreamStatusEvents.ts` - Status event handling
 - `src/progressView/events/TaskGroupEvents.ts` - Task group handling
@@ -249,6 +255,7 @@ StreamStatusEvents.handleSetActiveStream()
 - `src/progressView/state/ProgressViewState.ts` - Combined state
 
 ### Runtime
+
 - `src/agent/runtime/StreamStatusService.ts` - Status service (duplicate state!)
 - `src/agent/runtime/executeAgent.ts` - Agent execution entry point
 - `src/agent/core/flows/RetryState.ts` - Bypasses StreamStatusService
