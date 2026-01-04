@@ -26,7 +26,7 @@ interface TaskGroupEventsShared {
 export type TaskGroupEventsModule = StatefulEventModule;
 
 export function createTaskGroupEvents(
-  shared: TaskGroupEventsShared & { withErrorBoundary?: unknown },
+  shared: TaskGroupEventsShared,
 ): TaskGroupEventsModule {
   const { debugLog } = shared;
 
