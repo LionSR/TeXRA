@@ -32,12 +32,12 @@ import {
   type TaskGroupEventsModule,
 } from './TaskGroupEvents';
 import {
-  createRetryEventsModule,
+  createRetryEvents,
   type RetryEventsModule,
   type RetryEventsShared,
 } from './RetryEvents';
 import {
-  createApprovalEventsModule,
+  createApprovalEvents,
   type ApprovalEventsModule,
   type ApprovalEventsShared,
 } from './ApprovalEvents';
@@ -113,12 +113,12 @@ export class ProgressEventHandler {
       withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
       debugLog: this.logger.debug.bind(this.logger),
     });
-    this.retryEvents = createRetryEventsModule({
+    this.retryEvents = createRetryEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
       showRetryRequest: callbacks.showRetryRequest,
       resolveRetryRequest: callbacks.resolveRetryRequest,
     });
-    this.approvalEvents = createApprovalEventsModule({
+    this.approvalEvents = createApprovalEvents({
       withErrorBoundary: createErrorBoundary(this.logger, 'ApprovalEvents'),
       showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
       resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,

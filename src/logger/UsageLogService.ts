@@ -256,7 +256,6 @@ class UsageLogServiceImpl {
 
     logger.debug(CHANNEL, 'UsageLogService disposed');
   }
-
 }
 
 /** Singleton instance */
