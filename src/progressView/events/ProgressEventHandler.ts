@@ -123,7 +123,8 @@ export class ProgressEventHandler {
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
-        const status = StreamStatusService.get(stream);
+        // Default to RUNNING for new streams without explicit status
+        const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
 
         if (this.webviewUpdater.isAvailable()) {
           this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
@@ -261,7 +262,7 @@ export class ProgressEventHandler {
   private markAllRunningTasksAsCancelled = (): void => {
     for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
-        StreamStatusService.setLocal(stream, STREAM_STATUS.STOPPED);
+        StreamStatusService.set(stream, STREAM_STATUS.STOPPED, { emit: false });
       }
     }
   };
@@ -575,8 +576,8 @@ export class ProgressEventHandler {
 
     // Update status for current stream - default to RUNNING for new streams without explicit status
     // (matches old behavior and avoids flash of STOPPED before setupFlowUIState sets RUNNING)
-    const status = StreamStatusService.get(stream);
-    this.webviewUpdater.updateStatus(status === STREAM_STATUS.READY ? STREAM_STATUS.RUNNING : status);
+    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
+    this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
@@ -590,8 +591,7 @@ export class ProgressEventHandler {
    * Delegates to StreamStatusService as the single source of truth.
    */
   getStreamStatus(stream: string): StreamStatus | undefined {
-    const status = StreamStatusService.get(stream);
-    return status === STREAM_STATUS.READY ? undefined : status;
+    return StreamStatusService.get(stream);
   }
 
   /**
@@ -610,12 +610,14 @@ export class ProgressEventHandler {
     previousStatus?: StreamStatus,
   ): void {
     // Use provided previousStatus from event payload, or read from service for direct calls
+    // Note: previousStatus from event is always defined (defaults to READY in service)
+    // but direct reads from service may return undefined for new streams
     const prevStatus = previousStatus ?? StreamStatusService.get(stream);
-    const hadPreviousStatus = prevStatus !== STREAM_STATUS.READY;
+    const hadPreviousStatus = prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
 
     // Update StreamStatusService (single source of truth) without emitting event
     // since we're already handling the event that triggered this call
-    StreamStatusService.setLocal(stream, status);
+    StreamStatusService.set(stream, status, { emit: false });
 
     if (this.webviewUpdater.isAvailable()) {
       const streamExists = this.state.streamTabs.has(stream);
@@ -714,8 +716,8 @@ export class ProgressEventHandler {
 
     // Set status directly without triggering webview update - we do a single
     // coordinated updateAll below to avoid multiple redundant updates.
-    if (existingStatus === STREAM_STATUS.READY) {
-      StreamStatusService.setLocal(stream, STREAM_STATUS.RUNNING);
+    if (existingStatus === undefined) {
+      StreamStatusService.set(stream, STREAM_STATUS.RUNNING, { emit: false });
     }
 
     this.state.updateStreamHints(stream, {
@@ -757,12 +759,12 @@ export class ProgressEventHandler {
     for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
-          StreamStatusService.setLocal(stream, STREAM_STATUS.WAITING);
+          StreamStatusService.set(stream, STREAM_STATUS.WAITING, { emit: false });
           this.logger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
         } else {
-          StreamStatusService.setLocal(stream, STREAM_STATUS.ERROR);
+          StreamStatusService.set(stream, STREAM_STATUS.ERROR, { emit: false });
           affectedStreams.push(stream);
           this.logger.debug(
             `Stream ${stream} set to ERROR due to webview reload`,
