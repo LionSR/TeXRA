@@ -194,7 +194,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
 
   // Actions
-  RUN_AGAIN: 'runAgain',
+  RESUME: 'resume',
   RUN_NEW: 'runNew',
   RETRY_STREAM_REQUEST: 'retryStreamRequest',
   CANCEL_RETRY_REQUEST: 'cancelRetryRequest',
