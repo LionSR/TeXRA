@@ -257,20 +257,6 @@ class UsageLogServiceImpl {
     logger.debug(CHANNEL, 'UsageLogService disposed');
   }
 
-  /**
-   * Get current queue size (for testing/monitoring).
-   */
-  getQueueSize(): number {
-    return this.queue.length;
-  }
-
-  /**
-   * Enable or disable logging at runtime.
-   */
-  setEnabled(enabled: boolean): void {
-    this.config.enabled = enabled;
-    logger.info(CHANNEL, `Usage logging ${enabled ? 'enabled' : 'disabled'}`);
-  }
 }
 
 /** Singleton instance */

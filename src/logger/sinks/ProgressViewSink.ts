@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import type { LogMessageData } from '@logger/LogTypes';
 // Internal imports
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
+import { shouldEmitToProgressView } from '@logger/filterUtils';
 
 // Type imports
 import type {
@@ -25,15 +26,12 @@ function isValidMessageType(type: unknown): type is MessageType {
 export class ProgressViewSink implements LogEventSink {
   handleLogMessage(event: LogMessageEvent): void {
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-    if (event.level === 'debug' && !debugMode) {
-      return;
-    }
-
     const messageType: MessageType = isValidMessageType(event.messageType)
       ? event.messageType
       : MESSAGE_TYPES.DEFAULT;
 
-    if (messageType === MESSAGE_TYPES.INTERNAL) {
+    // Apply shared filtering logic (debug mode + INTERNAL message filtering)
+    if (!shouldEmitToProgressView({ level: event.level, messageType })) {
       return;
     }
     const id = randomUUID();

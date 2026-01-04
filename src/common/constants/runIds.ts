@@ -32,18 +32,3 @@ export const DEFAULT_RUN_ID: StorageKey = '__default__' as StorageKey;
 export function normalizeRunId(runId: string | null | undefined): StorageKey {
   return (runId ?? DEFAULT_RUN_ID) as StorageKey;
 }
-
-/**
- * Check if a value is a valid UUID-format identifier (ExecutionId or task group RunId).
- *
- * Useful for distinguishing between UUID-based IDs and the DEFAULT_RUN_ID sentinel.
- */
-export function isUuidRunId(runId: string | null | undefined): boolean {
-  if (!runId || runId === DEFAULT_RUN_ID) {
-    return false;
-  }
-  // UUID pattern: 8-4-4-4-12 hex digits (any version)
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidPattern.test(runId);
-}

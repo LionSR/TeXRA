@@ -16,6 +16,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
 import * as logger from './logUtils';
 import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
+import { shouldEmitToProgressView } from './filterUtils';
 
 // Type imports
 import type {
@@ -518,6 +519,11 @@ export class AgentLogger {
     const progressEnabled = options.progressViewEnabled ?? true;
     const groupId = options.groupId ?? this.resolveActiveGroupId();
 
+    // Apply the same filtering logic as ProgressViewSink
+    // This ensures debug mode and INTERNAL message filtering work consistently
+    const shouldEmit =
+      progressEnabled && shouldEmitToProgressView({ level, messageType: type });
+
     return {
       append: (text: string) => {
         if (!text) {
@@ -526,7 +532,7 @@ export class AgentLogger {
 
         buffer += text;
 
-        if (!progressEnabled) {
+        if (!shouldEmit) {
           return;
         }
 
@@ -560,7 +566,7 @@ export class AgentLogger {
           buffer = finalText;
         }
 
-        if (!progressEnabled) {
+        if (!shouldEmit) {
           this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
           return buffer;
         }
