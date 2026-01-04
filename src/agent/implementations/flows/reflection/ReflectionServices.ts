@@ -85,15 +85,6 @@ export interface ReflectionServices<C = unknown>
 }
 
 /**
- * Partial services type for createReflectionFlowContext output.
- * Excludes runStage since it's set by runReflectionFlow after creation.
- */
-export type ReflectionServicesPartial<C = unknown> = Omit<
-  ReflectionServices<C>,
-  'runStage'
->;
-
-/**
  * Flow params type for reflection flows.
  * Alias for base FlowParams - reserved for future use.
  */
