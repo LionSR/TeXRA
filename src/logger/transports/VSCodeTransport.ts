@@ -19,10 +19,6 @@ interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   includeStructuredData?: () => boolean;
 }
 
-function isValidMessageType(type: unknown): type is MessageType {
-  return Object.values(MESSAGE_TYPES).includes(type as MessageType);
-}
-
 interface TransportGroup {
   id: string;
   name: string;
@@ -46,6 +42,10 @@ export class VSCodeTransport extends Transport {
     this.streamName = options.streamName;
     this.isAgentChannel = options.isAgentChannel;
     this.includeStructuredData = options.includeStructuredData;
+  }
+
+  private isValidMessageType(type: unknown): type is MessageType {
+    return Object.values(MESSAGE_TYPES).includes(type as MessageType);
   }
 
   log(info: any, callback: () => void): void {
@@ -140,7 +140,7 @@ export class VSCodeTransport extends Transport {
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
     if (event.level === 'debug' && !debugMode) return;
 
-    const validatedMessageType: MessageType = isValidMessageType(
+    const validatedMessageType: MessageType = this.isValidMessageType(
       event.messageType,
     )
       ? event.messageType
