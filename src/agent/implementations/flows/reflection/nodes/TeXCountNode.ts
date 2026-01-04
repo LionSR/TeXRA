@@ -1,16 +1,5 @@
 /**
  * TeXCountNode - Computes TeXCount statistics and adds to messages.
- *
- * Single responsibility: Run TeXCount and prepend stats to user message.
- * Uses shared helper for file determination (DRY).
- *
- * PocketFlow pattern:
- * - prep(): Determine files to count, get context
- * - exec(): Run TeXCount (can fail gracefully)
- * - post(): Prepend stats to messages via modelHandler
- *
- * Services accessed via native `this.services`:
- * - config, fileService, modelHandler, logger
  */
 
 import { Node } from '@agent/node';
@@ -19,7 +8,6 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
-import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
@@ -34,21 +22,11 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface TeXCountPrepInput {
   files: FileLocation[];
   attachTeXCount: boolean;
   context: RoundContext | null;
 }
-
-type TeXCountExecResult = string | null;
-
-// ============================================================================
-// Node Implementation
-// ============================================================================
 
 export class TeXCountNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -59,76 +37,40 @@ export class TeXCountNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Determine which files to count using shared helper.
-   */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
     const { config, fileService } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
-    // Use shared helper for file determination (DRY)
-    const files = getFilesForRound(
-      currentRound,
-      roundOutputs,
-      config,
-      fileService,
-    );
-
     return {
-      files,
+      files: getFilesForRound(currentRound, roundOutputs, config, fileService),
       attachTeXCount: config.toolConfig.attachTeXCount,
       context,
     };
   }
 
-  /**
-   * Run TeXCount.
-   * Throws on error - execFallback() handles graceful degradation.
-   */
-  async exec(prepRes: TeXCountPrepInput): Promise<TeXCountExecResult> {
-    const { logger } = this.services;
-
-    // Skip if not enabled or no files
+  async exec(prepRes: TeXCountPrepInput): Promise<string | null> {
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
-      logger.debug('TeXCount skipped: not enabled or no files');
       return null;
     }
-
-    const stats = await getTeXCountStats(
-      prepRes.files.map((f) => f.absolutePath),
-    );
-    logger.debug(`TeXCount computed for ${prepRes.files.length} files`);
-    return stats ?? null;
+    return getTeXCountStats(prepRes.files.map((f) => f.absolutePath));
   }
 
-  /**
-   * Handle total failure - log warning and continue without stats.
-   */
-  async execFallback(
-    _prepRes: TeXCountPrepInput,
-    error: Error,
-  ): Promise<TeXCountExecResult> {
-    this.services.logger.warn(`TeXCount failed: ${error.message}`);
+  async execFallback(_prepRes: TeXCountPrepInput, error: Error): Promise<string | null> {
+    this.services.logger.debug(`TeXCount skipped: ${error.message}`);
     return null;
   }
 
-  /**
-   * Prepend stats to messages via modelHandler and continue.
-   */
   async post(
     shared: ReflectionFlowShared,
-    prepRes: TeXCountPrepInput,
-    execRes: TeXCountExecResult,
+    _prepRes: TeXCountPrepInput,
+    execRes: string | null,
   ): Promise<string | undefined> {
-    const { modelHandler, logger } = this.services;
-
-    // Prepend stats to messages if we have stats and context
     if (execRes && shared.context) {
-      modelHandler.prependTextToUserMessage(shared.context.messages, execRes);
-      logger.debug('TeXCount stats prepended to user message');
+      this.services.modelHandler.prependTextToUserMessage(
+        shared.context.messages,
+        execRes,
+      );
     }
-
-    // Continue to next node
     return FlowTransition.DEFAULT;
   }
 }
