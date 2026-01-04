@@ -7,6 +7,7 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -36,7 +37,6 @@ export type { UICallbacks };
  */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
-  private _streamStatus: Map<string, StreamStatus> = new Map();
   /**
    * Buffer for task groups that arrive before their stream is activated.
    * Key: stream ID, Value: array of groups waiting to be sent to frontend.
@@ -123,10 +123,11 @@ export class ProgressEventHandler {
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
-        const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+        // Default to RUNNING for new streams without explicit status
+        const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
 
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(this.state, this._streamStatus);
+          this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
         }
 
         this.setStreamStatus(stream, status);
@@ -148,7 +149,12 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'StreamStatus',
       'failed to handle updateStreamStatus',
-      () => this.setStreamStatus(payload.stream, payload.status),
+      () =>
+        this.setStreamStatus(
+          payload.stream,
+          payload.status,
+          payload.previousStatus,
+        ),
     );
   };
 
@@ -183,7 +189,7 @@ export class ProgressEventHandler {
         if (this.webviewUpdater.isAvailable()) {
           const infos = buildStreamInfos(
             this.state,
-            this._streamStatus,
+            StreamStatusService.getAll(),
             this.state.agentTypeFilter,
           );
           this.webviewUpdater.updateStreams(
@@ -254,9 +260,9 @@ export class ProgressEventHandler {
   };
 
   private markAllRunningTasksAsCancelled = (): void => {
-    for (const [stream, status] of this._streamStatus.entries()) {
+    for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
-        this._streamStatus.set(stream, STREAM_STATUS.STOPPED);
+        StreamStatusService.set(stream, STREAM_STATUS.STOPPED, { emit: false });
       }
     }
   };
@@ -596,8 +602,9 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateTodos(stream, todos);
     }
 
-    // Update status for current stream - default to STOPPED when stream exists but no status is set
-    const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;
+    // Update status for current stream - default to RUNNING for new streams without explicit status
+    // (matches old behavior and avoids flash of STOPPED before setupFlowUIState sets RUNNING)
+    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
@@ -608,23 +615,37 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get current stream status
+   * Get current stream status.
+   * Delegates to StreamStatusService as the single source of truth.
    */
   getStreamStatus(stream: string): StreamStatus | undefined {
-    return this._streamStatus.get(stream);
+    return StreamStatusService.get(stream);
   }
 
   /**
    * Set the status for a specific stream synchronously.
+   * Updates StreamStatusService (single source of truth) and triggers webview updates.
+   * Note: StreamStatusService.set() already emits the event, so this method is for
+   * webview update logic only - called from handleUpdateStreamStatus event handler.
+   *
+   * @param stream - Stream identifier
+   * @param status - New status to set
+   * @param previousStatus - Previous status from event payload (avoids race condition)
    */
-  setStreamStatus(stream: string, status: StreamStatus): void {
-    const previousStatus = this._streamStatus.get(stream);
+  setStreamStatus(
+    stream: string,
+    status: StreamStatus,
+    previousStatus?: StreamStatus,
+  ): void {
+    // Use previousStatus from event payload (avoids race condition) or read from service
+    // for direct calls. Treat both undefined and READY as "no meaningful previous status".
+    const prevStatus = previousStatus ?? StreamStatusService.get(stream);
+    const hadPreviousStatus = prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
 
-    // Update the persistent status map first
-    if (status === STREAM_STATUS.READY) {
-      this._streamStatus.delete(stream);
-    } else {
-      this._streamStatus.set(stream, status);
+    // Only update service for direct calls - event-triggered calls already mutated the service
+    // before emitting (previousStatus is defined when coming from event payload)
+    if (previousStatus === undefined) {
+      StreamStatusService.set(stream, status, { emit: false });
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -636,12 +657,11 @@ export class ProgressEventHandler {
       const needsFullRefresh =
         !streamExists ||
         (this.state.streamSortOrder === 'time' &&
-          this.mightAffectTabOrder(previousStatus, status));
+          this.mightAffectTabOrder(hadPreviousStatus ? prevStatus : undefined, status));
 
       if (needsFullRefresh) {
         // Include current status in refresh map so frontend displays it correctly.
-        // READY is deleted from _streamStatus but should still be shown to user.
-        const statusesForRefresh = new Map(this._streamStatus);
+        const statusesForRefresh = StreamStatusService.getAll();
         statusesForRefresh.set(stream, status);
         this.webviewUpdater.updateAll(this.state, statusesForRefresh);
       } else {
@@ -679,10 +699,11 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get a copy of all stream statuses
+   * Get a copy of all stream statuses.
+   * Delegates to StreamStatusService as the single source of truth.
    */
   getAllStreamStatuses(): Map<string, StreamStatus> {
-    return new Map(this._streamStatus);
+    return StreamStatusService.getAll();
   }
 
   /**
@@ -718,14 +739,14 @@ export class ProgressEventHandler {
    * status or activation events, preserving any existing status metadata.
    */
   private async initializeStreamForTaskGroup(stream: string): Promise<void> {
-    const existingStatus = this._streamStatus.get(stream);
+    const existingStatus = StreamStatusService.get(stream);
 
     await this.state.streamTabs.ensureStream(stream);
 
     // Set status directly without triggering webview update - we do a single
     // coordinated updateAll below to avoid multiple redundant updates.
-    if (!existingStatus) {
-      this._streamStatus.set(stream, STREAM_STATUS.RUNNING);
+    if (existingStatus === undefined) {
+      StreamStatusService.set(stream, STREAM_STATUS.RUNNING, { emit: false });
     }
 
     this.state.updateStreamHints(stream, {
@@ -742,7 +763,7 @@ export class ProgressEventHandler {
     if (this.webviewUpdater.isAvailable()) {
       // Single coordinated update - send UPDATE_STREAMS first so frontend
       // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
-      this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
       // Force rebuild to clear any previous stream's content. The new task
       // group must be added to state BEFORE this call (in TaskGroupEvents)
@@ -764,15 +785,15 @@ export class ProgressEventHandler {
     const affectedStreams: string[] = [];
     const waitingSet = waitingStreams ?? new Set<string>();
 
-    for (const [stream, status] of this._streamStatus.entries()) {
+    for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
-          this._streamStatus.set(stream, STREAM_STATUS.WAITING);
+          StreamStatusService.set(stream, STREAM_STATUS.WAITING, { emit: false });
           this.logger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
         } else {
-          this._streamStatus.set(stream, STREAM_STATUS.ERROR);
+          StreamStatusService.set(stream, STREAM_STATUS.ERROR, { emit: false });
           affectedStreams.push(stream);
           this.logger.debug(
             `Stream ${stream} set to ERROR due to webview reload`,
