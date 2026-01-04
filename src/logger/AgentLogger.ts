@@ -411,6 +411,14 @@ export class AgentLogger {
     });
   }
 
+  /**
+   * Returns the currently active group ID, or undefined if no group is active.
+   * Convenience method to avoid the `withCurrentGroup((id) => id)` boilerplate.
+   */
+  getCurrentGroupId(): string | undefined {
+    return this.resolveActiveGroupId();
+  }
+
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
     if (!groupId) {
@@ -454,21 +462,6 @@ export class AgentLogger {
     options: AgentLoggerStageOptions = {},
   ): Promise<AgentLogStage> {
     return this.createStageHandle(groupName, options);
-  }
-
-  async withExistingGroup<T>(
-    groupId: string,
-    fn: () => Promise<T>,
-    options: { label?: string } = {},
-  ): Promise<T> {
-    const stage = await this.stage(options.label ?? 'Existing group', {
-      skip: true,
-      parentGroupId: groupId,
-      successStatus: 'stopped',
-      errorStatus: 'error',
-    });
-
-    return stage.run(fn);
   }
 
   private async createStageHandle(
