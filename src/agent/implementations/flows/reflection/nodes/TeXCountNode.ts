@@ -15,11 +15,11 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { SkippableNodeResult } from '@agent/core/flows/CommonCycleTypes';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
-import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
@@ -44,7 +44,7 @@ interface TeXCountPrepInput {
   context: RoundContext | null;
 }
 
-type TeXCountExecResult = string | null;
+type TeXCountExecResult = SkippableNodeResult<string>;
 
 // ============================================================================
 // Node Implementation
@@ -59,14 +59,10 @@ export class TeXCountNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Determine which files to count using shared helper.
-   */
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
     const { config, fileService } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
-    // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
       currentRound,
       roundOutputs,
@@ -81,54 +77,46 @@ export class TeXCountNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Run TeXCount.
-   * Throws on error - execFallback() handles graceful degradation.
-   */
   async exec(prepRes: TeXCountPrepInput): Promise<TeXCountExecResult> {
-    const { logger } = this.services;
-
     // Skip if not enabled or no files
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
-      logger.debug('TeXCount skipped: not enabled or no files');
-      return null;
+      return { kind: 'skipped' };
     }
 
     const stats = await getTeXCountStats(
       prepRes.files.map((f) => f.absolutePath),
     );
-    logger.debug(`TeXCount computed for ${prepRes.files.length} files`);
-    return stats ?? null;
-  }
 
-  /**
-   * Handle total failure - log warning and continue without stats.
-   */
-  async execFallback(
-    _prepRes: TeXCountPrepInput,
-    error: Error,
-  ): Promise<TeXCountExecResult> {
-    this.services.logger.warn(`TeXCount failed: ${error.message}`);
-    return null;
-  }
-
-  /**
-   * Prepend stats to messages via modelHandler and continue.
-   */
-  async post(
-    shared: ReflectionFlowShared,
-    prepRes: TeXCountPrepInput,
-    execRes: TeXCountExecResult,
-  ): Promise<string | undefined> {
-    const { modelHandler, logger } = this.services;
-
-    // Prepend stats to messages if we have stats and context
-    if (execRes && shared.context) {
-      modelHandler.prependTextToUserMessage(shared.context.messages, execRes);
-      logger.debug('TeXCount stats prepended to user message');
+    if (!stats) {
+      return { kind: 'skipped' };
     }
 
-    // Continue to next node
+    return { kind: 'success', value: stats };
+  }
+
+  async execFallback(
+    _prepRes: TeXCountPrepInput,
+    _error: Error,
+  ): Promise<TeXCountExecResult> {
+    return { kind: 'skipped' };
+  }
+
+  async post(
+    shared: ReflectionFlowShared,
+    _prepRes: TeXCountPrepInput,
+    execRes: TeXCountExecResult,
+  ): Promise<string | undefined> {
+    if (execRes.kind === 'skipped') {
+      return FlowTransition.DEFAULT;
+    }
+
+    if (shared.context) {
+      this.services.modelHandler.prependTextToUserMessage(
+        shared.context.messages,
+        execRes.value,
+      );
+    }
+
     return FlowTransition.DEFAULT;
   }
 }

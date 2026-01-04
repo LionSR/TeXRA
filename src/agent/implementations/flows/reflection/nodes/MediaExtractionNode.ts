@@ -18,6 +18,7 @@
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import type { SkippableNodeResult } from '@agent/core/flows/CommonCycleTypes';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -51,9 +52,11 @@ interface MediaPrepInput {
   context: RoundContext | null;
 }
 
-interface MediaExecResult {
+interface MediaExecSuccess {
   mediaFiles: FileLocation[];
 }
+
+type MediaExecResult = SkippableNodeResult<MediaExecSuccess>;
 
 // ============================================================================
 // Node Implementation
@@ -68,17 +71,12 @@ export class MediaExtractionNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Determine files and reconstruct workspace from snapshot.
-   */
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
-    // Reconstruct workspace state from snapshot
     const workspaceState = getWorkspaceState(shared);
 
-    // Use shared helper for file determination (DRY)
     const files = getFilesForRound(
       currentRound,
       roundOutputs,
@@ -86,7 +84,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
       fileService,
     );
 
-    // Collect extra media files for first round
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
       if (config.mediaFile) {
@@ -107,20 +104,14 @@ export class MediaExtractionNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Extract media from files.
-   * Mutates workspaceState via latexMediaManager to collect media files.
-   */
   async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
-    const { latexMediaManager, config, logger } = this.services;
+    const { latexMediaManager, config } = this.services;
 
     // Skip if model doesn't support vision or no files
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
-      logger.debug('Media extraction skipped: no vision support or no files');
-      return { mediaFiles: [] };
+      return { kind: 'skipped' };
     }
 
-    // Different processing for first round vs subsequent rounds
     if (prepRes.currentRound === 0) {
       await latexMediaManager.processInputFiles(
         prepRes.files,
@@ -138,50 +129,39 @@ export class MediaExtractionNode<C = unknown> extends Node<
       );
     }
 
-    // Collect media files from workspaceState
     const mediaFiles = prepRes.workspaceState.media.files;
-    logger.debug(
-      `Media extracted from ${prepRes.files.length} files: ${mediaFiles.length} media items`,
-    );
-    return { mediaFiles };
+    return { kind: 'success', value: { mediaFiles } };
   }
 
-  /**
-   * Handle total failure - log warning and continue without media.
-   */
   async execFallback(
     _prepRes: MediaPrepInput,
-    error: Error,
+    _error: Error,
   ): Promise<MediaExecResult> {
-    this.services.logger.warn(`Media extraction failed: ${error.message}`);
-    return { mediaFiles: [] };
+    return { kind: 'skipped' };
   }
 
-  /**
-   * Update snapshot and add media to messages.
-   */
   async post(
     shared: ReflectionFlowShared,
     prepRes: MediaPrepInput,
     execRes: MediaExecResult,
   ): Promise<string | undefined> {
-    const { modelHandler, logger } = this.services;
+    const { modelHandler } = this.services;
 
-    // Update workspace snapshot (exec mutated workspaceState)
+    // Always update workspace snapshot since prep() reconstructed it
     updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
-    // Add media to messages if we have files and context
-    if (execRes.mediaFiles.length > 0 && shared.context) {
+    if (execRes.kind === 'skipped') {
+      return FlowTransition.DEFAULT;
+    }
+
+    const { mediaFiles } = execRes.value;
+    if (mediaFiles.length > 0 && shared.context) {
       await modelHandler.addMediaToUserMessage(
         shared.context.messages,
-        execRes.mediaFiles,
-      );
-      logger.debug(
-        `${execRes.mediaFiles.length} media files added to user message`,
+        mediaFiles,
       );
     }
 
-    // Continue to next node
     return FlowTransition.DEFAULT;
   }
 }
