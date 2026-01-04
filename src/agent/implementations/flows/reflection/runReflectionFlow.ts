@@ -73,8 +73,9 @@ import type { ReflectionServices } from './ReflectionServices';
  * Input for running a reflection flow.
  * Extends BaseFlowContextInit with reflection-specific fields.
  */
-export interface RunReflectionFlowInput<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface RunReflectionFlowInput<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
@@ -299,7 +300,10 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Create shared state for the flow
-    shared = createInitialReflectionState(totalRounds, initialWorkspaceSnapshot);
+    shared = createInitialReflectionState(
+      totalRounds,
+      initialWorkspaceSnapshot,
+    );
 
     if (restoredRetryError) {
       shared.lastError = restoredRetryError;
