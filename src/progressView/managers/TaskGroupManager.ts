@@ -4,6 +4,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { AgentLogger } from '@logger/AgentLogger';
 import { TaskGroup } from '@logger/LogTypes';
 import {
   PersistentMapManager,
@@ -11,7 +12,6 @@ import {
 } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import type { UpdateTaskGroupPayload } from '@eventBus/schemas';
-import { ManagerLogger } from './ManagerLogger';
 
 /**
  * Manages task groups collection with persistence.
@@ -21,8 +21,11 @@ export class TaskGroupManager extends PersistentMapManager<
   StreamTabId,
   Map<string, TaskGroup>
 > {
+  private readonly logger: AgentLogger;
+
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.TASK_GROUPS, storage, ['texra.logGroups']);
+    this.logger = new AgentLogger('TaskGroupManager');
   }
 
   /**
@@ -54,13 +57,13 @@ export class TaskGroupManager extends PersistentMapManager<
   }: UpdateTaskGroupPayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
-      ManagerLogger.warn(`Cannot update group ${id}: stream ${stream} not found`);
+      this.logger.warn(`Cannot update group ${id}: stream ${stream} not found`);
       return;
     }
 
     const group = streamGroups.get(id);
     if (!group) {
-      ManagerLogger.warn(
+      this.logger.warn(
         `Cannot update group ${id}: group not found in stream ${stream}`,
       );
       return;
@@ -91,7 +94,7 @@ export class TaskGroupManager extends PersistentMapManager<
 
       if (updated) {
         affected.push(streamId);
-        ManagerLogger.debug(
+        this.logger.debug(
           `Marked running task groups in stream ${streamId} as ERROR after reload`,
         );
       }
@@ -125,7 +128,7 @@ export class TaskGroupManager extends PersistentMapManager<
   async load(): Promise<void> {
     await super.load();
     if (this.items.size > 0) {
-      ManagerLogger.debug(`Loaded task groups for ${this.items.size} streams`);
+      this.logger.debug(`Loaded task groups for ${this.items.size} streams`);
     }
   }
 

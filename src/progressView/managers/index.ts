@@ -4,7 +4,6 @@ export { TaskGroupManager } from './TaskGroupManager';
 export { UsageStatsManager } from './UsageStatsManager';
 export { RunInstructionManager } from './RunInstructionManager';
 export { WebviewUpdater } from './WebviewUpdater';
-export { ManagerLogger } from './ManagerLogger';
 
 // Re-export UpdateTaskGroupPayload from single source of truth
 export type { UpdateTaskGroupPayload } from '@eventBus/schemas';

@@ -7,13 +7,13 @@ import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import { type TokenUsageStats } from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import { ManagerLogger } from './ManagerLogger';
 
 // --- Zod Schemas for Usage Stats ---
 
@@ -66,8 +66,11 @@ export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
   RunUsageMap
 > {
+  private readonly logger: AgentLogger;
+
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.USAGE_STATS, storage, ['texra.usageStats']);
+    this.logger = new AgentLogger('UsageStatsManager');
   }
 
   /**
@@ -183,7 +186,7 @@ export class UsageStatsManager extends PersistentMapManager<
     await super.load();
 
     if (this.items.size > 0) {
-      ManagerLogger.debug(
+      this.logger.debug(
         `Loaded usage statistics for ${this.items.size} streams`,
       );
     }
