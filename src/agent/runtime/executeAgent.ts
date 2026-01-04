@@ -14,6 +14,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { ZodError } from 'zod';
 
 // Local imports - flows (primary execution path)
 
@@ -54,6 +55,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
@@ -461,8 +463,10 @@ export async function executeAgent(
       executionId,
     );
   } catch (err) {
-    // Show error to user - loadAgentSettingAndPrompts errors need to be visible
-    vscode.window.showErrorMessage(toErrorMessage(err));
+    // Show error to user unless it's a ZodError (handled by executeCommand.ts)
+    if (!(err instanceof ZodError)) {
+      void showErrorMessage(toErrorMessage(err));
+    }
     throw err;
   }
 
@@ -597,7 +601,9 @@ export async function executeMergeAgent(
       editedFile,
     });
   } catch (err) {
-    vscode.window.showErrorMessage(toErrorMessage(err));
+    if (!(err instanceof ZodError)) {
+      void showErrorMessage(toErrorMessage(err));
+    }
     throw err;
   }
 
@@ -682,7 +688,9 @@ export async function resumeToolUseFromSnapshot(
       { streamTabIdOverride: streamTabId },
     );
   } catch (err) {
-    vscode.window.showErrorMessage(toErrorMessage(err));
+    if (!(err instanceof ZodError)) {
+      void showErrorMessage(toErrorMessage(err));
+    }
     throw err;
   }
   const { setting, executionContext, config } = ctx;
