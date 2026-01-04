@@ -1,13 +1,22 @@
 -- Migration: Create relay spending analytics views
 --
 -- These views provide pre-computed spending summaries for relay usage.
--- They are automatically exposed via Supabase REST API for admin dashboards.
+-- ADMIN ONLY: Accessed via service role key, not exposed to regular users.
+--
+-- IMPORTANT: This migration requires the profiles table to exist.
+-- Run after the initial schema setup that creates profiles.
 
 -- ============================================================================
--- STEP 1: Add index for relay filtering (improves view performance)
+-- STEP 1: Add indexes for relay spending queries
 -- ============================================================================
+-- Partial index for relay-only filtering
 CREATE INDEX IF NOT EXISTS idx_usage_logs_used_relay
 ON public.usage_logs(used_relay)
+WHERE used_relay = TRUE;
+
+-- Compound index for spending limit checks (user + time range + relay filter)
+CREATE INDEX IF NOT EXISTS idx_usage_logs_user_relay_logged
+ON public.usage_logs(user_id, logged_at)
 WHERE used_relay = TRUE;
 
 -- ============================================================================
@@ -34,7 +43,7 @@ LEFT JOIN public.usage_logs u
 GROUP BY p.user_id, p.email, p.tier;
 
 COMMENT ON VIEW public.relay_spending_summary IS
-'Per-user relay spending totals including tokens, cost, and request counts';
+'Per-user relay spending totals (ADMIN ONLY - access via service role)';
 
 -- ============================================================================
 -- STEP 3: Create relay_spending_by_model view
@@ -59,17 +68,17 @@ INNER JOIN public.usage_logs u
 GROUP BY p.user_id, p.email, p.tier, u.model, u.provider;
 
 COMMENT ON VIEW public.relay_spending_by_model IS
-'Relay spending breakdown by user and model/provider combination';
+'Relay spending by user and model (ADMIN ONLY - access via service role)';
 
 -- ============================================================================
 -- STEP 4: Create relay_spending_daily view
 -- ============================================================================
--- Daily aggregates for trend analysis
+-- Daily aggregates for trend analysis (UTC timezone for consistency)
 CREATE OR REPLACE VIEW public.relay_spending_daily AS
 SELECT
     p.user_id,
     p.email,
-    DATE_TRUNC('day', u.logged_at)::DATE AS day,
+    DATE_TRUNC('day', u.logged_at AT TIME ZONE 'UTC')::DATE AS day,
     COUNT(u.id) AS request_count,
     COALESCE(SUM(u.input_tokens), 0) AS input_tokens,
     COALESCE(SUM(u.output_tokens), 0) AS output_tokens,
@@ -78,21 +87,21 @@ FROM public.profiles p
 INNER JOIN public.usage_logs u
     ON p.user_id = u.user_id
     AND u.used_relay = TRUE
-GROUP BY p.user_id, p.email, DATE_TRUNC('day', u.logged_at)::DATE;
+GROUP BY p.user_id, p.email, DATE_TRUNC('day', u.logged_at AT TIME ZONE 'UTC')::DATE;
 
 COMMENT ON VIEW public.relay_spending_daily IS
-'Daily relay spending aggregates per user for trend analysis';
+'Daily relay spending per user in UTC (ADMIN ONLY - access via service role)';
 
 -- ============================================================================
 -- STEP 5: Create relay_spending_monthly view
 -- ============================================================================
--- Monthly summaries for billing cycles
+-- Monthly summaries for billing cycles (UTC timezone for consistent billing)
 CREATE OR REPLACE VIEW public.relay_spending_monthly AS
 SELECT
     p.user_id,
     p.email,
     p.tier,
-    DATE_TRUNC('month', u.logged_at)::DATE AS month,
+    DATE_TRUNC('month', u.logged_at AT TIME ZONE 'UTC')::DATE AS month,
     COUNT(u.id) AS request_count,
     COALESCE(SUM(u.input_tokens), 0) AS input_tokens,
     COALESCE(SUM(u.output_tokens), 0) AS output_tokens,
@@ -105,18 +114,18 @@ FROM public.profiles p
 INNER JOIN public.usage_logs u
     ON p.user_id = u.user_id
     AND u.used_relay = TRUE
-GROUP BY p.user_id, p.email, p.tier, DATE_TRUNC('month', u.logged_at)::DATE;
+GROUP BY p.user_id, p.email, p.tier, DATE_TRUNC('month', u.logged_at AT TIME ZONE 'UTC')::DATE;
 
 COMMENT ON VIEW public.relay_spending_monthly IS
-'Monthly relay spending summaries per user for billing and quota tracking';
+'Monthly relay spending per user in UTC for billing (ADMIN ONLY - access via service role)';
 
 -- ============================================================================
--- STEP 6: Create relay_spending_totals view (admin overview)
+-- STEP 6: Create relay_spending_totals view (global admin overview)
 -- ============================================================================
--- Global totals across all users (useful for admin dashboards)
+-- Global totals across all users (UTC timezone for consistency)
 CREATE OR REPLACE VIEW public.relay_spending_totals AS
 SELECT
-    DATE_TRUNC('day', u.logged_at)::DATE AS day,
+    DATE_TRUNC('day', u.logged_at AT TIME ZONE 'UTC')::DATE AS day,
     COUNT(DISTINCT u.user_id) AS active_users,
     COUNT(u.id) AS total_requests,
     COALESCE(SUM(u.input_tokens), 0) AS total_input_tokens,
@@ -125,26 +134,23 @@ SELECT
     COUNT(DISTINCT u.model) AS models_used
 FROM public.usage_logs u
 WHERE u.used_relay = TRUE
-GROUP BY DATE_TRUNC('day', u.logged_at)::DATE
+GROUP BY DATE_TRUNC('day', u.logged_at AT TIME ZONE 'UTC')::DATE
 ORDER BY day DESC;
 
 COMMENT ON VIEW public.relay_spending_totals IS
-'Daily global relay spending totals across all users (admin overview)';
+'Daily global relay spending totals in UTC (ADMIN ONLY - access via service role)';
 
 -- ============================================================================
--- STEP 7: Grant permissions
+-- STEP 7: Permissions - ADMIN ONLY via service role
 -- ============================================================================
--- Views inherit RLS from underlying tables, but we need SELECT grants
--- Service role can access all data; authenticated users see filtered results
+-- These views are NOT granted to authenticated users.
+-- Access them only via service role key in Edge Functions or admin scripts.
+-- This prevents regular users from seeing other users' spending data.
 
-GRANT SELECT ON public.relay_spending_summary TO authenticated;
-GRANT SELECT ON public.relay_spending_by_model TO authenticated;
-GRANT SELECT ON public.relay_spending_daily TO authenticated;
-GRANT SELECT ON public.relay_spending_monthly TO authenticated;
-GRANT SELECT ON public.relay_spending_totals TO authenticated;
+-- No GRANT statements - service role has implicit access to all objects.
 
 -- ============================================================================
--- VERIFICATION QUERIES (run manually to test)
+-- VERIFICATION QUERIES (run with service role key)
 -- ============================================================================
 --
 -- -- Top spenders overall:
