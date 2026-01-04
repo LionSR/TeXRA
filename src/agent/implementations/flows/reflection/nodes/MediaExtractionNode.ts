@@ -1,24 +1,12 @@
 /**
  * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
  *
- * Single responsibility: Extract media from input/output files and add to user message.
- * Uses shared helper for file determination (DRY).
- *
- * PocketFlow pattern:
- * - prep(): Determine files, reconstruct workspace from snapshot
- * - exec(): Extract media via latexMediaManager (mutates workspace)
- * - post(): Update snapshot, add media to messages
- *
  * Note: exec() mutates workspaceState via latexMediaManager. This is acceptable
  * because NODE_NO_RETRY means no retries, so no duplicate mutations possible.
- *
- * Services accessed via native `this.services`:
- * - latexMediaManager, config, fileService, modelHandler, logger
  */
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import type { SkippableNodeResult } from '@agent/core/flows/CommonCycleTypes';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
@@ -39,10 +27,6 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface MediaPrepInput {
   files: FileLocation[];
   currentRound: number;
@@ -51,16 +35,6 @@ interface MediaPrepInput {
   workspaceState: AgentWorkspaceState;
   context: RoundContext | null;
 }
-
-interface MediaExecSuccess {
-  mediaFiles: FileLocation[];
-}
-
-type MediaExecResult = SkippableNodeResult<MediaExecSuccess>;
-
-// ============================================================================
-// Node Implementation
-// ============================================================================
 
 export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -76,13 +50,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     const { currentRound, roundOutputs, context } = shared;
 
     const workspaceState = getWorkspaceState(shared);
-
-    const files = getFilesForRound(
-      currentRound,
-      roundOutputs,
-      config,
-      fileService,
-    );
+    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
@@ -104,13 +72,12 @@ export class MediaExtractionNode<C = unknown> extends Node<
     };
   }
 
-  async exec(prepRes: MediaPrepInput): Promise<MediaExecResult> {
-    const { latexMediaManager, config } = this.services;
-
-    // Skip if model doesn't support vision or no files
+  async exec(prepRes: MediaPrepInput): Promise<FileLocation[] | null> {
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
-      return { kind: 'skipped' };
+      return null;
     }
+
+    const { latexMediaManager, config } = this.services;
 
     if (prepRes.currentRound === 0) {
       await latexMediaManager.processInputFiles(
@@ -129,34 +96,23 @@ export class MediaExtractionNode<C = unknown> extends Node<
       );
     }
 
-    const mediaFiles = prepRes.workspaceState.media.files;
-    return { kind: 'success', value: { mediaFiles } };
+    return prepRes.workspaceState.media.files;
   }
 
-  async execFallback(
-    _prepRes: MediaPrepInput,
-    _error: Error,
-  ): Promise<MediaExecResult> {
-    return { kind: 'skipped' };
+  async execFallback(): Promise<FileLocation[] | null> {
+    return null;
   }
 
   async post(
     shared: ReflectionFlowShared,
     prepRes: MediaPrepInput,
-    execRes: MediaExecResult,
+    mediaFiles: FileLocation[] | null,
   ): Promise<string | undefined> {
-    const { modelHandler } = this.services;
-
     // Always update workspace snapshot since prep() reconstructed it
     updateWorkspaceSnapshot(shared, prepRes.workspaceState);
 
-    if (execRes.kind === 'skipped') {
-      return FlowTransition.DEFAULT;
-    }
-
-    const { mediaFiles } = execRes.value;
-    if (mediaFiles.length > 0 && shared.context) {
-      await modelHandler.addMediaToUserMessage(
+    if (mediaFiles && mediaFiles.length > 0 && shared.context) {
+      await this.services.modelHandler.addMediaToUserMessage(
         shared.context.messages,
         mediaFiles,
       );
