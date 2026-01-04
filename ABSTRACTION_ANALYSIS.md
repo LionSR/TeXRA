@@ -117,12 +117,12 @@ Property "modelHandler" journey:
 
 ### Quantified Overhead
 
-| Layer | Operation | Properties Copied |
-|-------|-----------|-------------------|
-| Layer 1 | FlowExecutionContext packaging | 9 properties |
-| Layer 2 | executeAgent spread to runXxxFlow | 12+ properties |
-| Layer 3 | Context factory spread to services | 10+ properties |
-| Layer 4 | Cycle node spread to cycle services | 8+ properties |
+| Layer     | Operation                             | Properties Copied |
+| --------- | ------------------------------------- | ----------------- |
+| Layer 1   | FlowExecutionContext packaging        | 9 properties      |
+| Layer 2   | executeAgent spread to runXxxFlow     | 12+ properties    |
+| Layer 3   | Context factory spread to services    | 10+ properties    |
+| Layer 4   | Cycle node spread to cycle services   | 8+ properties     |
 | **Total** | **~40 property copies per execution** |
 
 ---
@@ -183,12 +183,12 @@ Property "modelHandler" journey:
 
 ### Redundancy Analysis
 
-| Field | Defined In | Also Appears In |
-|-------|------------|-----------------|
-| `logger` | `executionContext.logger` | FlowServiceAccessors, ReflectionServices, ToolUseServices, AgentCycleBaseOptions |
-| `context` | `executionContext` | FlowServiceAccessors, ReflectionServices, ToolUseServices, AgentCycleBaseOptions |
-| `modelHandler` | BaseFlowContextInit | AgentCycleBaseOptions, ResponseCycleServices, ToolUseCycleServices |
-| `setting` | BaseFlowContextInit | AgentCycleBaseOptions, CycleServices |
+| Field          | Defined In                | Also Appears In                                                                  |
+| -------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `logger`       | `executionContext.logger` | FlowServiceAccessors, ReflectionServices, ToolUseServices, AgentCycleBaseOptions |
+| `context`      | `executionContext`        | FlowServiceAccessors, ReflectionServices, ToolUseServices, AgentCycleBaseOptions |
+| `modelHandler` | BaseFlowContextInit       | AgentCycleBaseOptions, ResponseCycleServices, ToolUseCycleServices               |
+| `setting`      | BaseFlowContextInit       | AgentCycleBaseOptions, CycleServices                                             |
 
 **Result**: 4 fields appear in 4+ interfaces each = **pure type duplication**
 
@@ -227,6 +227,7 @@ ResponseCycleFinalizeNode         ≠   (Inline in ProcessNode.post())
 ```
 
 **Duplication Stats**:
+
 - ~280 lines of duplicated/similar code (14% of combined total)
 - 3 of 4 node types share 60-95% logic
 
@@ -236,24 +237,24 @@ ResponseCycleFinalizeNode         ≠   (Inline in ProcessNode.post())
 
 ### Dead Weight
 
-| Item | Location | Status |
-|------|----------|--------|
-| `agentPath` | FlowExecutionContext | **Never used** after creation |
-| `usageMonitor` | FlowExecutionContext | Only used to create callback wrapper |
-| `buildBaseCycleOptions()` | BaseFlowServices | Called 1-2 times, just renames fields |
-| `FlowServiceAccessors` | Interface | Pure type aliasing, manually extracted |
+| Item                      | Location             | Status                                 |
+| ------------------------- | -------------------- | -------------------------------------- |
+| `agentPath`               | FlowExecutionContext | **Never used** after creation          |
+| `usageMonitor`            | FlowExecutionContext | Only used to create callback wrapper   |
+| `buildBaseCycleOptions()` | BaseFlowServices     | Called 1-2 times, just renames fields  |
+| `FlowServiceAccessors`    | Interface            | Pure type aliasing, manually extracted |
 
 ### Unnecessary Wrappers
 
 ```typescript
 // Wrapper pattern (executeAgent.ts line 557):
-getClient: () => ctx.modelHandler.getClient()
+getClient: () => ctx.modelHandler.getClient();
 
 // Already exists as:
-ctx.modelHandler.getClient()
+ctx.modelHandler.getClient();
 
 // Could just pass:
-modelHandler: ctx.modelHandler  // Let node call getClient()
+modelHandler: ctx.modelHandler; // Let node call getClient()
 ```
 
 ---
@@ -277,7 +278,7 @@ Total per round:       8 conversions
 // runReflectionFlow.ts lines 206-208
 initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
   persistedShared.workspaceSnapshot,
-).toSnapshot();  // ← Converts back to same type (UNNECESSARY)
+).toSnapshot(); // ← Converts back to same type (UNNECESSARY)
 ```
 
 ---
@@ -287,11 +288,13 @@ initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
 ### Priority 1: Eliminate FlowExecutionContext Wrapper (HIGH IMPACT)
 
 **Current**:
+
 ```
 prepareFlowExecution() → FlowExecutionContext → spread → runXxxFlow
 ```
 
 **Proposed**:
+
 ```
 prepareReflectionFlowInput() → RunReflectionFlowInput (direct)
 prepareToolUseFlowInput() → RunToolUseFlowInput (direct)
@@ -301,12 +304,12 @@ prepareToolUseFlowInput() → RunToolUseFlowInput (direct)
 
 ### Priority 2: Remove Dead Properties
 
-| Property | Action |
-|----------|--------|
-| `agentPath` | Delete from FlowExecutionContext |
-| `usageMonitor` | Capture in closure, don't pass through |
-| `buildBaseCycleOptions()` | Inline at call sites |
-| `FlowServiceAccessors` | Remove, extract fields in BaseFlowContextInit directly |
+| Property                  | Action                                                 |
+| ------------------------- | ------------------------------------------------------ |
+| `agentPath`               | Delete from FlowExecutionContext                       |
+| `usageMonitor`            | Capture in closure, don't pass through                 |
+| `buildBaseCycleOptions()` | Inline at call sites                                   |
+| `FlowServiceAccessors`    | Remove, extract fields in BaseFlowContextInit directly |
 
 ### Priority 3: Extract Common Cycle Node Base Classes
 
@@ -356,25 +359,25 @@ BaseFlowServices (with logger/context extracted) → FlowSpecificServices
 
 ## Summary: Abstraction Overhead vs DRY
 
-| Category | Issue | Is it DRY Violation? | Action |
-|----------|-------|----------------------|--------|
-| FlowExecutionContext | Intermediate packaging | No, pure overhead | Eliminate |
-| agentPath property | Never used | No, dead code | Delete |
-| Field extraction 4x | logger, context aliases | No, type proliferation | Consolidate |
-| buildBaseCycleOptions | Thin wrapper function | No, trivial wrapper | Inline |
-| Cycle node patterns | 60-85% similar | Yes, DRY opportunity | Extract base class |
-| Startup round-trip | Unnecessary conversion | No, bug | Fix |
+| Category              | Issue                   | Is it DRY Violation?   | Action             |
+| --------------------- | ----------------------- | ---------------------- | ------------------ |
+| FlowExecutionContext  | Intermediate packaging  | No, pure overhead      | Eliminate          |
+| agentPath property    | Never used              | No, dead code          | Delete             |
+| Field extraction 4x   | logger, context aliases | No, type proliferation | Consolidate        |
+| buildBaseCycleOptions | Thin wrapper function   | No, trivial wrapper    | Inline             |
+| Cycle node patterns   | 60-85% similar          | Yes, DRY opportunity   | Extract base class |
+| Startup round-trip    | Unnecessary conversion  | No, bug                | Fix                |
 
 ### Estimated Impact
 
-| Refactoring | Lines Saved | Complexity Reduction |
-|-------------|-------------|----------------------|
-| Remove FlowExecutionContext | ~50 | High |
-| Delete dead properties | ~20 | Medium |
-| Consolidate service types | ~80 | Medium |
-| Extract cycle base classes | ~100 | Medium |
-| Fix snapshot round-trip | ~3 | Low |
-| **Total** | **~250 lines** | **Significant** |
+| Refactoring                 | Lines Saved    | Complexity Reduction |
+| --------------------------- | -------------- | -------------------- |
+| Remove FlowExecutionContext | ~50            | High                 |
+| Delete dead properties      | ~20            | Medium               |
+| Consolidate service types   | ~80            | Medium               |
+| Extract cycle base classes  | ~100           | Medium               |
+| Fix snapshot round-trip     | ~3             | Low                  |
+| **Total**                   | **~250 lines** | **Significant**      |
 
 ---
 
@@ -389,6 +392,7 @@ BaseFlowServices (with logger/context extracted) → FlowSpecificServices
 ## Files to Modify
 
 Primary targets:
+
 - `src/agent/runtime/executeAgent.ts` (FlowExecutionContext removal)
 - `src/agent/implementations/flows/reflection/runReflectionFlow.ts` (snapshot fix)
 - `src/agent/implementations/flows/common/BaseFlowServices.ts` (remove buildBaseCycleOptions)
