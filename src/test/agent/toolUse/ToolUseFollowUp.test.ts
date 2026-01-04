@@ -55,9 +55,10 @@ describe('ToolUseFollowUp', () => {
       },
     });
 
-    await sendFollowUp(streamId, 'hello');
+    const result = await sendFollowUp(streamId, 'hello');
 
     assert.deepEqual(calls, ['hello']);
+    assert.deepEqual(result, { status: 'sent' });
   });
 
   it('creates valid snapshot structure', () => {
