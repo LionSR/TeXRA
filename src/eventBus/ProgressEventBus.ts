@@ -50,7 +50,12 @@ export interface ProgressEventPayloads {
   addTaskGroup: AddTaskGroupPayload;
   updateTaskGroup: UpdateTaskGroupPayload;
   setActiveStream: SetActiveStreamPayload;
-  updateStreamStatus: { stream: StreamTabId; status: StreamStatus };
+  updateStreamStatus: {
+    stream: StreamTabId;
+    status: StreamStatus;
+    /** Previous status before this update, for detecting transitions */
+    previousStatus: StreamStatus;
+  };
   addOutputFiles: RunScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
