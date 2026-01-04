@@ -19,6 +19,13 @@ export interface TierModelsConfig {
   models: '*' | string[];
 }
 
+/** Monthly spending limits by tier (in USD) */
+export interface TierSpendingLimits {
+  free: number;
+  Max: number;
+  Ultra: number;
+}
+
 export interface TierModelConfig {
   /** All supported providers (same for all tiers) */
   providers: string[];
@@ -115,6 +122,27 @@ export const TIER_CONFIG: TierModelConfig = {
     Ultra: { models: '*' },
   },
 };
+
+/**
+ * Monthly spending limits by tier (in USD).
+ *
+ * These limits apply to relay usage only. Users can always use their own
+ * API keys without any limits. Adjust these values based on fair use policy.
+ */
+export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
+  free: 5, // $5/month - trial/evaluation access
+  Max: 50, // $50/month - researcher access
+  Ultra: 500, // $500/month - sponsor access
+};
+
+/**
+ * Get the monthly spending limit for a tier.
+ */
+export function getSpendingLimit(tier: string): number {
+  if (tier === ULTRA_TIER) return TIER_SPENDING_LIMITS.Ultra;
+  if (tier === MAX_TIER) return TIER_SPENDING_LIMITS.Max;
+  return TIER_SPENDING_LIMITS.free;
+}
 
 // =============================================================================
 // Validation Functions
