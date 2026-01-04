@@ -86,8 +86,8 @@ export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
  * Single usage log entry sent to the backend.
  * Composed from metadata + stats + timestamp/version fields.
  */
-export const UsageLogEntrySchema = UsageLogMetadataSchema.merge(
-  UsageLogStatsSchema,
+export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
+  UsageLogStatsSchema.shape
 ).extend({
   /** Timestamp when the API call completed (ISO 8601) */
   timestamp: z.iso.datetime(),
