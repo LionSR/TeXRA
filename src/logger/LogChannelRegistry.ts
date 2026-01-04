@@ -22,10 +22,6 @@ export class LogChannelRegistry {
   private mainOutputChannel: vscode.OutputChannel | null = null;
   private readonly channels = new Map<string, ChannelEntry>();
 
-  ensure(channel: string, options: ChannelOptions): ChannelEntry {
-    return this.getOrCreate(channel, options);
-  }
-
   getTransport(
     channel: string,
     options?: ChannelOptions,
@@ -34,7 +30,7 @@ export class LogChannelRegistry {
     return this.channels.get(key)?.transport;
   }
 
-  private getOrCreate(channel: string, options: ChannelOptions): ChannelEntry {
+  ensure(channel: string, options: ChannelOptions): ChannelEntry {
     const key = this.getKey(channel, options.isAgent);
     const existing = this.channels.get(key);
     if (existing) {
