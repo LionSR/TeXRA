@@ -35,8 +35,8 @@ export function initializeProfileViewProvider(
   return profileViewProvider;
 }
 
-/** Auth method type including OAuth providers and email */
-type AuthMethod = OAuthProvider | 'email';
+/** Auth method type including OAuth providers, browser variants, and email */
+type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
 /** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
@@ -77,6 +77,12 @@ export async function signIn(): Promise<void> {
         description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
         method: provider as AuthMethod,
       })),
+      // Add browser-based GitHub option as alternative
+      {
+        label: '$(globe) GitHub (Browser)',
+        description: 'Sign in with GitHub via web browser',
+        method: 'github-browser' as AuthMethod,
+      },
       ...(EMAIL_LOGIN_ENABLED
         ? [
             {
