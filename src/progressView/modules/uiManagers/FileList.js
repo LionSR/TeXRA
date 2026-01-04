@@ -42,17 +42,8 @@ export class FileList {
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
 
-    // Tool-use mode: create a single flat container without round headers
-    // Workflow mode: each round gets its own container with a header
-    let flatGroup = null;
-    if (!showRoundHeaders) {
-      flatGroup = createFromTemplate('roundHeaderTemplate');
-      if (!flatGroup) return;
-      const roundHeader = flatGroup.querySelector('.round-header');
-      if (roundHeader) {
-        roundHeader.remove();
-      }
-    }
+    // Tool-use mode: files append directly to container without round headers
+    // Workflow mode: each round gets its own collapsible details with a header
 
     let hasFiles = false;
     rounds.forEach((round) => {
@@ -72,31 +63,26 @@ export class FileList {
       hasFiles = true;
 
       if (showRoundHeaders) {
-        // Workflow mode: create new round group with header for each round
+        // Workflow mode: create collapsible round group for each round
         const roundGroup = createFromTemplate('roundHeaderTemplate');
         if (!roundGroup) return;
-        const roundHeader = roundGroup.querySelector('.round-header');
-        if (roundHeader) {
-          roundHeader.textContent = `r${round}`;
-        }
+        // roundGroup is the vscode-collapsible root element
+        roundGroup.setAttribute('title', `r${round}`);
+        const roundContent = roundGroup.querySelector('.round-content');
+        if (!roundContent) return;
 
         files.forEach((file) => {
-          this._renderFileItem(template, roundGroup, file, round);
+          this._renderFileItem(template, roundContent, file, round);
         });
 
         container.appendChild(roundGroup);
       } else {
-        // Tool-use mode: append directly to flat group
+        // Tool-use mode: append files directly to container
         files.forEach((file) => {
-          this._renderFileItem(template, flatGroup, file, round);
+          this._renderFileItem(template, container, file, round);
         });
       }
     });
-
-    // Append flat group only if it has files
-    if (!showRoundHeaders && flatGroup && hasFiles) {
-      container.appendChild(flatGroup);
-    }
 
     // Show/hide collapsible based on whether files were actually rendered
     setVisibilityState(collapsible, hasFiles);
