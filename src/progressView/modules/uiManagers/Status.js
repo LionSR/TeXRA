@@ -28,7 +28,7 @@ export class Status {
         label: 'Error',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
-          ELEMENT_IDS.RUN_AGAIN_BTN,
+          ELEMENT_IDS.RESUME_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
@@ -41,7 +41,7 @@ export class Status {
         label: 'Stopped',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
-          ELEMENT_IDS.RUN_AGAIN_BTN,
+          ELEMENT_IDS.RESUME_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
@@ -92,7 +92,7 @@ export class Status {
     const storageButton = document.getElementById(
       ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
     );
-    const resumeButton = document.getElementById(ELEMENT_IDS.RUN_AGAIN_BTN);
+    const resumeButton = document.getElementById(ELEMENT_IDS.RESUME_BTN);
 
     const isAvailable = this._executionAvailable;
 
@@ -167,7 +167,7 @@ export class Status {
             return false;
           }
           if (
-            el.id === ELEMENT_IDS.RUN_AGAIN_BTN &&
+            el.id === ELEMENT_IDS.RESUME_BTN &&
             !this._executionAvailable
           ) {
             return false;

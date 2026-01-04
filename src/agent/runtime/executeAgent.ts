@@ -5,7 +5,8 @@
  * Flows run directly, bypassing the agent class hierarchy entirely.
  *
  * Entry points:
- * - executeAgent: Execute a new agent run (or resume with { resume: true })
+ * - executeAgent: Execute a new agent run
+ * - resumeToolUseFromSnapshot: Resume a paused tool-use session from snapshot
  * - executeMergeAgent: Execute the merge agent (flow-first with custom file naming)
  */
 
@@ -81,9 +82,6 @@ export interface AgentResolveOptions {
   preferMultiple?: boolean;
 }
 
-export interface ExecuteAgentOptions {
-  resume?: boolean;
-}
 
 /**
  * Common base for flow inputs after agent resolution.
@@ -450,23 +448,18 @@ async function handleFlowError(
 // ============================================================================
 
 /**
- * Execute an agent with the provided configuration.
- *
- * ## Flow-First Architecture
+ * Execute an agent with the given configuration.
  *
  * This function runs flows directly without instantiating agent classes.
- * The flow contexts create all necessary services internally.
+ * For resuming paused tool-use sessions, use resumeToolUseFromSnapshot instead.
  */
 export async function executeAgent(
   configPayload: Partial<AgentConfig>,
   executionId?: ExecutionId,
-  options?: ExecuteAgentOptions,
 ): Promise<void> {
   if (!configPayload.model || !configPayload.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
-
-  const isResume = options?.resume ?? false;
 
   // Resolve agent and prepare base context
   // Wrapped in try-catch to display agent loading errors to users
@@ -494,20 +487,10 @@ export async function executeAgent(
 
   // Check if already running before any state modifications
   const currentStatus = StreamStatusService.get(streamTabId);
-  if (!isResume && currentStatus === STREAM_STATUS.RUNNING) {
+  if (currentStatus === STREAM_STATUS.RUNNING) {
     throw new Error(
       `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
     );
-  }
-  if (isResume && currentStatus === STREAM_STATUS.RESUMING) {
-    throw new Error(`Task "${streamTabId}" is already being resumed.`);
-  }
-
-  // Handle resume state
-  // Note: Full resume hydration is handled internally by agents/flows
-  // Here we just set the status for UI feedback
-  if (isResume && setting.agentType !== 'toolUse' && executionId) {
-    StreamStatusService.set(streamTabId, STREAM_STATUS.RESUMING);
   }
 
   try {
@@ -518,29 +501,27 @@ export async function executeAgent(
     // Setup UI state
     setupFlowUIState(ctx);
 
-    if (!isResume) {
-      logger.info(`Starting task execution for ${streamTabId}`);
-      logger.info(`Input file: ${config.inputFile}`);
-      logger.debug(
-        `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
-      );
-      logger.debug(
-        `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-      );
+    logger.info(`Starting task execution for ${streamTabId}`);
+    logger.info(`Input file: ${config.inputFile}`);
+    logger.debug(
+      `Stream ID: ${streamTabId}, Agent: ${agentName}, Model: ${config.model}`,
+    );
+    logger.debug(
+      `Output files: ${config.outputFiles?.length ?? 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+    );
 
-      // Try to show progress view
-      if (!runStorage.isViewVisible()) {
-        await vscode.commands.executeCommand('texra.showProgressView');
-      }
-      if (!runStorage.isViewVisible()) {
-        showAgentNotification(config);
-      }
-      bus.emit('setTaskState', {
-        streamTabId,
-        executionId,
-        taskState: agentConfigToTaskState(config),
-      });
+    // Try to show progress view
+    if (!runStorage.isViewVisible()) {
+      await vscode.commands.executeCommand('texra.showProgressView');
     }
+    if (!runStorage.isViewVisible()) {
+      showAgentNotification(config);
+    }
+    bus.emit('setTaskState', {
+      streamTabId,
+      executionId,
+      taskState: agentConfigToTaskState(config),
+    });
 
     // Log multi-output warning
     const { outputFiles, useMultipleOutputs } = config;
@@ -586,7 +567,6 @@ export async function executeAgent(
         updateFlowStatus(streamTabId, flowStatus);
         logger.debug(`Task completed with status: ${flowStatus}`);
       },
-      { skip: isResume },
     );
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
