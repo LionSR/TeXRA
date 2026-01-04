@@ -72,6 +72,34 @@ This document tracks the consolidation of the progress view streaming system to 
 
 ---
 
+## Bug Fixes (Post-Refactor)
+
+### Fix 1: Race Condition in previousStatus Detection
+**Status:** ✅ Fixed
+
+**Problem:** `StreamStatusService.set()` mutates the Map BEFORE emitting `updateStreamStatus` event. By the time the handler runs, reading `previousStatus` from the service returns the NEW value, breaking `mightAffectTabOrder` detection for time-sorted tabs.
+
+**Solution:** Include `previousStatus` in the event payload, captured BEFORE mutation.
+
+**Files modified:**
+- `src/eventBus/ProgressEventBus.ts` - Added `previousStatus` to `updateStreamStatus` payload
+- `src/agent/runtime/StreamStatusService.ts` - Capture previousStatus before mutation
+- `src/progressView/events/ProgressEventHandler.ts` - Use event payload's previousStatus
+
+---
+
+### Fix 2: READY→STOPPED Flash for New Streams
+**Status:** ✅ Fixed
+
+**Problem:** Old code defaulted to `RUNNING` for new streams (`?? STREAM_STATUS.RUNNING`). After refactor, `StreamStatusService.get()` returns `READY` which was mapped to `STOPPED` for display, causing a visible flash before `setupFlowUIState` sets `RUNNING`.
+
+**Solution:** Map `READY` to `RUNNING` (not `STOPPED`) in `refreshStreamSurface`.
+
+**Files modified:**
+- `src/progressView/events/ProgressEventHandler.ts` - Changed default from STOPPED to RUNNING
+
+---
+
 ## Progress Log
 
 ### 2026-01-04
@@ -80,6 +108,8 @@ This document tracks the consolidation of the progress view streaming system to 
 - ✅ Phase 1.1: Made StreamStatusService single source of truth
 - ✅ Phase 2.2: Simplified context stack management
 - ⏭️ Skipped Phases 1.2, 1.3, 2.1 (minimal benefit, added complexity)
+- ✅ Fixed race condition: previousStatus now in event payload
+- ✅ Fixed READY→STOPPED flash: new streams default to RUNNING
 
 ---
 

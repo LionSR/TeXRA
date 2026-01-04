@@ -148,7 +148,12 @@ export class ProgressEventHandler {
     withEventErrorHandling(
       'StreamStatus',
       'failed to handle updateStreamStatus',
-      () => this.setStreamStatus(payload.stream, payload.status),
+      () =>
+        this.setStreamStatus(
+          payload.stream,
+          payload.status,
+          payload.previousStatus,
+        ),
     );
   };
 
@@ -568,9 +573,10 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateTodos(stream, todos);
     }
 
-    // Update status for current stream - default to STOPPED when stream exists but no status is set
+    // Update status for current stream - default to RUNNING for new streams without explicit status
+    // (matches old behavior and avoids flash of STOPPED before setupFlowUIState sets RUNNING)
     const status = StreamStatusService.get(stream);
-    this.webviewUpdater.updateStatus(status === STREAM_STATUS.READY ? STREAM_STATUS.STOPPED : status);
+    this.webviewUpdater.updateStatus(status === STREAM_STATUS.READY ? STREAM_STATUS.RUNNING : status);
 
     if (updateInstruction) {
       this.sendInstructionUpdate(stream, activeRunId);
@@ -593,10 +599,19 @@ export class ProgressEventHandler {
    * Updates StreamStatusService (single source of truth) and triggers webview updates.
    * Note: StreamStatusService.set() already emits the event, so this method is for
    * webview update logic only - called from handleUpdateStreamStatus event handler.
+   *
+   * @param stream - Stream identifier
+   * @param status - New status to set
+   * @param previousStatus - Previous status from event payload (avoids race condition)
    */
-  setStreamStatus(stream: string, status: StreamStatus): void {
-    const previousStatus = StreamStatusService.get(stream);
-    const hadPreviousStatus = previousStatus !== STREAM_STATUS.READY;
+  setStreamStatus(
+    stream: string,
+    status: StreamStatus,
+    previousStatus?: StreamStatus,
+  ): void {
+    // Use provided previousStatus from event payload, or read from service for direct calls
+    const prevStatus = previousStatus ?? StreamStatusService.get(stream);
+    const hadPreviousStatus = prevStatus !== STREAM_STATUS.READY;
 
     // Update StreamStatusService (single source of truth) without emitting event
     // since we're already handling the event that triggered this call
@@ -611,7 +626,7 @@ export class ProgressEventHandler {
       const needsFullRefresh =
         !streamExists ||
         (this.state.streamSortOrder === 'time' &&
-          this.mightAffectTabOrder(hadPreviousStatus ? previousStatus : undefined, status));
+          this.mightAffectTabOrder(hadPreviousStatus ? prevStatus : undefined, status));
 
       if (needsFullRefresh) {
         // Include current status in refresh map so frontend displays it correctly.
