@@ -186,7 +186,6 @@ export abstract class BaseViewContentProvider {
         webview,
         'modules/BaseDomHandler.js',
       ),
-      baseUIManagerUri: this.getCommonUri(webview, 'modules/BaseUIManager.js'),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
       debounceUri: this.getCommonUri(webview, 'modules/debounce.js'),
