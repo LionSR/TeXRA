@@ -30,8 +30,8 @@ export interface AgentCycleBaseOptions<C = unknown> {
   setting: AgentSetting;
   /** Agent prompt templates - uses original field name from BaseFlowContextInit */
   prompt: AgentPrompt;
-  /** User variables for template rendering (merged from channels) */
-  userVars: Record<string, any>;
+  /** User variable channels - uses original field from BaseFlowContextInit (no extraction) */
+  userVarChannels: UserVariableChannels;
   logger: AgentLogger;
   context: AgentExecutionContext;
   client: C;
