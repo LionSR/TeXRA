@@ -35,7 +35,6 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
@@ -108,33 +107,3 @@ export interface FlowServiceAccessors {
   readonly context: AgentExecutionContext;
 }
 
-// ============================================================================
-// Cycle Options Builder
-// ============================================================================
-
-/**
- * Build AgentCycleBaseOptions from flow services or initialization config.
- *
- * Field names now match between BaseFlowContextInit and AgentCycleBaseOptions,
- * so most fields are direct passthroughs. The only transformations:
- * - getClient() → client (awaited to get fresh auth tokens)
- * - executionContext → context (via services.context if available)
- *
- * @param services - Flow services or initialization config
- * @returns Base cycle options ready for extension
- */
-export async function buildBaseCycleOptions<C>(
-  services: BaseFlowContextInit<C> & Partial<FlowServiceAccessors>,
-): Promise<AgentCycleBaseOptions<C>> {
-  return {
-    modelHandler: services.modelHandler,
-    setting: services.setting,
-    prompt: services.prompt,
-    userVarChannels: services.userVarChannels,
-    logger: services.logger ?? services.executionContext.logger,
-    context: services.context ?? services.executionContext,
-    client: await services.getClient(),
-    checkInterruption: services.checkInterruption,
-    setAbortController: services.setAbortController,
-  };
-}
