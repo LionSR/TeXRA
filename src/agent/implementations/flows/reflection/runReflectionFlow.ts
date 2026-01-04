@@ -117,6 +117,8 @@ export async function runReflectionFlow<C = unknown>(
     setting,
     prompt,
     logger,
+    streamId,
+    executionId,
     executionContext,
     userVarChannels,
     checkInterruption,
@@ -124,9 +126,6 @@ export async function runReflectionFlow<C = unknown>(
     getUsageRecorder = () => async () => {},
     parentStage,
   } = input;
-
-  // Single source of truth: get streamTabId from execution context
-  const streamTabId = executionContext.streamId;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
@@ -137,7 +136,7 @@ export async function runReflectionFlow<C = unknown>(
   // Create services inline (previously in createReflectionFlowContext)
   // ========================================================================
 
-  const fileService = new TaskRunFileService(executionContext.executionId);
+  const fileService = new TaskRunFileService(executionId);
   const baseFiles = createBaseFileLocations(config);
 
   const outputHandler: IOutputHandler = new OutputHandler(
@@ -147,7 +146,7 @@ export async function runReflectionFlow<C = unknown>(
     baseFiles,
     logger,
     fileService,
-    executionContext.executionId,
+    executionId,
   );
 
   const promptBuilder = new PromptBuilder(
@@ -214,7 +213,7 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      retryCoordinator.clearRequest(executionContext.streamId);
+      retryCoordinator.clearRequest(streamId);
     },
   };
 
@@ -248,11 +247,11 @@ export async function runReflectionFlow<C = unknown>(
 
   try {
     // Register for interrupt handling
-    registerInterruptible(streamTabId, interruptible);
+    registerInterruptible(streamId, interruptible);
 
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
-      executionContext.executionId,
+      executionId,
     );
 
     // Try to restore full state from persisted flow (resume scenario)
@@ -260,7 +259,7 @@ export async function runReflectionFlow<C = unknown>(
 
     try {
       const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionContext.executionId}`,
+        `flow:${executionId}`,
       );
       if (flowRecord?.shared) {
         // Validate and use persisted shared state directly
@@ -349,8 +348,8 @@ export async function runReflectionFlow<C = unknown>(
     // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
     if (status === END_GROUP_STATUS.STOPPED) {
       try {
-        const kv = getExecutionStore(executionContext.executionId);
-        await kv.delete(`flow:${executionContext.executionId}`);
+        const kv = getExecutionStore(executionId);
+        await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors
       }
@@ -361,9 +360,9 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Clean up retry coordinator
-    retryCoordinator.clearRequest(executionContext.streamId);
+    retryCoordinator.clearRequest(streamId);
 
-    unregisterInterruptible(streamTabId);
+    unregisterInterruptible(streamId);
   }
 
   return {

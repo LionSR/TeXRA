@@ -118,7 +118,7 @@ export interface CycleDebugContext {
  */
 export interface DebugContextServices {
   logger: AgentLogger;
-  executionContext: { executionId?: ExecutionId };
+  executionId?: ExecutionId;
 }
 
 /**
@@ -146,7 +146,7 @@ export function getDebugContext(
 ): CycleDebugContext {
   return {
     logger: services.logger,
-    executionId: services.executionContext.executionId,
+    executionId: services.executionId,
     modelName: params.modelName,
     isRemote: params.isRemote,
   };

@@ -56,9 +56,6 @@ export interface ToolUseFlowContextInit<
 /**
  * Tool-use flow context returned by factory function.
  * Contains services and lifecycle methods.
- *
- * Note: streamTabId is accessed via services.executionContext.streamId
- * (single source of truth).
  */
 export interface ToolUseFlowContext<C = unknown> {
   /** Services for flow execution */
@@ -157,16 +154,13 @@ export function createToolUseFlowContext<C = unknown>(
   const {
     setting,
     logger,
+    streamId,
     toolRegistry: customRegistry,
     resumeSnapshot,
-    executionContext,
   } = init;
 
-  // Single source of truth: get streamTabId from execution context
-  const streamTabId = executionContext.streamId;
-
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
-  const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
+  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
   // Resolve tools once at construction time
   const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
@@ -196,7 +190,7 @@ export function createToolUseFlowContext<C = unknown>(
 
     interrupt(): void {
       init.onInterrupt?.();
-      retryCoordinator.clearRequest(streamTabId);
+      retryCoordinator.clearRequest(streamId);
       sessionLifecycle.interrupt();
     },
 
