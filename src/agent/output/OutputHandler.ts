@@ -142,7 +142,7 @@ export class OutputHandler implements IOutputHandler {
     add(cfg.inputFile ?? undefined);
     cfg.inputFiles.forEach((file) => add(file));
 
-    return Array.from(extras.values());
+    return [...extras.values()];
   }
 
   public setActiveRun(storageKey: StorageKey): void {

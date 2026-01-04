@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 // Local imports - agent configuration
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * User variable channels for template rendering.

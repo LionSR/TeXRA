@@ -54,7 +54,7 @@ export interface BibliographyEntriesResult {
 }
 
 function stripComments(content: string): string {
-  return content.replace(COMMENT_PATTERN, '$1');
+  return content.replaceAll(COMMENT_PATTERN, '$1');
 }
 
 function normalizeBibPath(baseDir: string, target: string): string {
@@ -82,7 +82,7 @@ function collectBibliographyPaths(baseDir: string, content: string): string[] {
     }
   }
 
-  return Array.from(paths);
+  return [...paths];
 }
 
 function collectCitationKeys(content: string): string[] {
@@ -99,7 +99,7 @@ function collectCitationKeys(content: string): string[] {
     }
   }
 
-  return Array.from(keys);
+  return [...keys];
 }
 
 export async function extractBibliographyContext(
@@ -264,7 +264,7 @@ export function summarizeBibliographyEntries(
   entries: Map<string, string>,
   limit: number,
 ): string[] {
-  const values = Array.from(entries.values());
+  const values = [...entries.values()];
   const limited = values.slice(0, limit);
   const lines: string[] = [];
 

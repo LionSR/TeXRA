@@ -224,7 +224,7 @@ export class OutputFilesManager extends PersistentMapManager<
     const targetRunIds =
       options.storageKey !== undefined && options.storageKey !== null
         ? [options.storageKey]
-        : Array.from(runs.keys());
+        : [...runs.keys()];
 
     for (const target of targetRunIds) {
       const runRounds = runs.get(target);
