@@ -77,10 +77,9 @@ export async function sendFollowUp(
 
   // Queue if session is resuming
   if (ToolUseFollowUpQueue.isResuming(streamId)) {
-    if (ToolUseFollowUpQueue.enqueue(streamId, text)) {
-      logger.debug(`Queued follow-up while stream ${streamId} is resuming.`);
-      return { status: 'queued', reason: 'resuming' };
-    }
+    ToolUseFollowUpQueue.enqueue(streamId, text);
+    logger.debug(`Queued follow-up while stream ${streamId} is resuming.`);
+    return { status: 'queued', reason: 'resuming' };
   }
 
   // Queue if session is waiting (paused, can be resumed)
@@ -89,14 +88,11 @@ export async function sendFollowUp(
     `StreamStatusService status for ${streamId}: ${status ?? 'undefined'}`,
   );
   if (status === STREAM_STATUS.WAITING) {
-    // Ensure queue exists and enqueue
-    ToolUseFollowUpQueue.acquire(streamId);
-    if (ToolUseFollowUpQueue.enqueue(streamId, text)) {
-      logger.debug(
-        `Queued follow-up for waiting stream ${streamId}. Resume to process.`,
-      );
-      return { status: 'queued', reason: 'waiting' };
-    }
+    ToolUseFollowUpQueue.enqueue(streamId, text);
+    logger.debug(
+      `Queued follow-up for waiting stream ${streamId}. Resume to process.`,
+    );
+    return { status: 'queued', reason: 'waiting' };
   }
 
   // No active/waiting session found - caller should handle UI notification

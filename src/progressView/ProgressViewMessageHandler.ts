@@ -212,25 +212,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
 
-    const executionId = this.provider.state.getExecutionId(message.stream);
-    if (!executionId) {
-      this.logger.warn(
-        this.channel,
-        `Resume requested for ${message.stream} without an execution ID`,
-      );
-      return;
-    }
-
-    // Handle both workflow and tool-use sessions
-    // Both task state types have agentConfig which is all we need for resume
-    await safeExecuteCommand('texra.execute', [
-      {
-        config: taskState.agentConfig,
-        executionId,
-        stream: message.stream,
-        resume: true,
-      },
-    ]);
+    // Start a new execution with the same config
+    // For resuming paused tool-use sessions, use texra.resumeAgent instead
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
   private async handleRunNew(message: any): Promise<void> {
