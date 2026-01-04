@@ -8,14 +8,13 @@ import {
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
 import { retrieveSessionResumeData } from '@agent/toolUse/SessionResumeRetrieval';
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import {
   showErrorMessage,
   showWarningMessage,
   showInfoMessage,
 } from '@frontend/ui/messageUtils';
-import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 import { AgentLogger } from '@logger/AgentLogger';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const logger = new AgentLogger('followUpCommand');
 
@@ -29,37 +28,26 @@ const logger = new AgentLogger('followUpCommand');
  * @returns true if resume was triggered, false otherwise
  */
 async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
-  // Get execution ID from persisted state
-  const executionIds =
-    workspaceSM.get<Record<string, string>>(WorkspaceStateKey.EXECUTION_IDS) ??
-    {};
-  const executionId = executionIds[streamId] as ExecutionId | undefined;
+  // Use ProgressViewState for task state and execution ID access.
+  // This handles legacy storage structure (workflow/toolUse buckets) and
+  // provides already-validated task states, avoiding parallel access patterns.
+  const progressState = ProgressViewProvider.getInstance()?.state;
+  if (!progressState) {
+    logger.warn(`ProgressViewProvider not available for stream: ${streamId}`);
+    return false;
+  }
 
+  const executionId = progressState.getExecutionId(streamId);
   if (!executionId) {
     logger.warn(`No execution ID found for stream: ${streamId}`);
     return false;
   }
 
-  // Get task state from persisted state
-  const taskStates =
-    workspaceSM.get<Record<string, unknown>>(WorkspaceStateKey.TASK_STATES) ??
-    {};
-  const rawTaskState = taskStates[streamId];
-
-  if (!rawTaskState) {
+  const taskState = progressState.getTaskState(streamId);
+  if (!taskState) {
     logger.warn(`No task state found for stream: ${streamId}`);
     return false;
   }
-
-  // Validate task state structure
-  // Note: TaskStateSchema is loose (passthrough on agentConfig), so we cast
-  // the validated result to TaskState which has the full AgentConfig type
-  const parseResult = TaskStateSchema.safeParse(rawTaskState);
-  if (!parseResult.success) {
-    logger.warn(`Invalid task state for stream: ${streamId}`);
-    return false;
-  }
-  const taskState = parseResult.data as TaskState;
 
   // Retrieve resume data for the session type
   const resumeData = await retrieveSessionResumeData(
