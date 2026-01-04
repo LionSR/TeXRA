@@ -1095,7 +1095,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
-      this.logger.logScratchpad(scratchpad);
+      const groupId = this.logger.withCurrentGroup((id) => id);
+      this.logger.logScratchpad(scratchpad, groupId);
     }
 
     await flexibleFS.write(outputLocation, fileContent);

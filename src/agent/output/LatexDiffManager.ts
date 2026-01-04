@@ -153,6 +153,9 @@ export class LatexDiffManager {
     const aggregated: DiffOperationResult[] = [];
 
     const execute = async () => {
+      // Capture group context for logging
+      const groupId = this.logger.withCurrentGroup((id) => id);
+
       if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
@@ -340,7 +343,7 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.latexDiff(aggregated);
+        this.logger.latexDiff(aggregated, groupId);
       } else {
         this.logger.debug('No latexdiff results to report');
       }
