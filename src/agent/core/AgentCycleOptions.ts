@@ -35,7 +35,6 @@ export type AgentCycleBaseOptions<C = unknown> = Pick<
   | 'logger'
   | 'streamId'
   | 'executionId'
-  | 'executionContext'
   | 'userVarChannels'
   | 'checkInterruption'
   | 'setAbortController'
