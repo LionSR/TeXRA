@@ -609,9 +609,6 @@ class ResponseProcessNode<C> extends BaseNode<
   ): Promise<string | undefined> {
     const { round, workspace, logger, modelHandler } = this.services;
 
-    // Capture the current group ID for logging (matches exec() pattern)
-    const groupId = logger.withCurrentGroup((id) => id);
-
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;
       return FlowTransition.COMPLETE;
@@ -679,7 +676,6 @@ class ResponseProcessNode<C> extends BaseNode<
     logger.debug(`Usage summary: ${usageSummary}`);
 
     logger.info(`Stop reason: ${result.stopReason}`, {
-      groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
@@ -869,9 +865,6 @@ class ResponseContinuationNode<C> extends BaseNode<
     const { round, workspace, logger, modelHandler, setting, config } =
       this.services;
 
-    // Capture the current group ID for logging
-    const groupId = logger.withCurrentGroup((id) => id);
-
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;
       shared.shouldStop = true;
@@ -896,19 +889,16 @@ class ResponseContinuationNode<C> extends BaseNode<
 
     round.incrementContinuation();
     logger.info(`Starting continuation #${round.continuationCount}`, {
-      groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
     if (reachedTokenLimit) {
       logger.info('Continuing after hitting the model token limit', {
-        groupId,
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
     }
 
     logger.info('🧵 Added continuation prompt from partial XML output', {
-      groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 

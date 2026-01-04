@@ -1229,8 +1229,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Extract any existing scratchpad content
     const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
     if (scratchpad) {
-      const groupId = this.logger.withCurrentGroup((id) => id);
-      this.logger.logScratchpad(scratchpad, groupId);
+      this.logger.logScratchpad(scratchpad);
     }
 
     await flexibleFS.write(outputLocation, fileContent);
