@@ -316,25 +316,18 @@ export async function runReflectionFlow<C = unknown>(
       },
     });
 
-    // Build services - all fields inline
-    // Note: executionContext accessed directly (single source of truth, no context alias)
+    // Build services: spread input + add computed fields
+    // Note: getUsageRecorder must override input's optional value with the destructured default
     services = {
-      modelHandler,
-      config,
-      setting,
-      prompt,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      logger: executionContext.logger, // Convenience accessor for high-frequency usage
+      ...input,
+      logger: executionContext.logger,
+      getUsageRecorder,
       outputHandler,
       latexMediaManager,
       promptBuilder,
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      getUsageRecorder,
       runStage,
     };
     pf.setServices(services);
