@@ -339,45 +339,22 @@
   margin-left: var(--spacing-tiny);
 }
 
-/* Round group - collapsible details for workflow mode */
-.round-group {
-  margin: 0;
+/* Round collapsible - vscode-collapsible for workflow mode */
+.round-collapsible {
   border-top: 1px solid var(--color-border);
 }
 
-.round-group:first-child {
+.round-collapsible:first-child {
   border-top: none;
 }
 
-.round-header {
-  font-weight: 600;
-  font-size: var(--font-size-sm);
+.round-collapsible::part(header) {
   padding: var(--spacing-tiny) 0;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
-.round-header::-webkit-details-marker {
-  display: none;
-}
-
-.round-header::before {
-  content: '';
-  display: inline-block;
-  width: 0;
-  height: 0;
-  border-left: 4px solid currentColor;
-  border-top: 3px solid transparent;
-  border-bottom: 3px solid transparent;
-  transition: transform 0.15s ease;
-}
-
-.round-group[open] > .round-header::before {
-  transform: rotate(90deg);
+.round-collapsible::part(body) {
+  padding: 0;
 }
 
 .added {
