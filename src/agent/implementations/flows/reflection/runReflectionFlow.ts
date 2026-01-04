@@ -264,7 +264,9 @@ export async function runReflectionFlow<C = unknown>(
       );
       if (flowRecord?.shared) {
         // Validate and use persisted shared state directly
-        const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
+        const validated = ReflectionFlowStateSchema.safeParse(
+          flowRecord.shared,
+        );
         if (validated.success) {
           shared = validated.data as ReflectionFlowShared;
           isResume = true;

@@ -166,10 +166,7 @@ export class Status {
           ) {
             return false;
           }
-          if (
-            el.id === ELEMENT_IDS.RESUME_BTN &&
-            !this._executionAvailable
-          ) {
+          if (el.id === ELEMENT_IDS.RESUME_BTN && !this._executionAvailable) {
             return false;
           }
           return true;
