@@ -100,6 +100,32 @@ This document tracks the consolidation of the progress view streaming system to 
 
 ---
 
+### Fix 3: API Cleanup - Consolidate set/setLocal
+**Status:** ✅ Fixed
+
+**Problem:** Dual write paths (`set()` vs `setLocal()`) created confusion. Names didn't convey intent.
+
+**Solution:** Single `set()` method with `{ emit: boolean }` option (default: `true`).
+
+**Files modified:**
+- `src/agent/runtime/StreamStatusService.ts` - Removed `setLocal()`, added `emit` option to `set()`
+- `src/progressView/events/ProgressEventHandler.ts` - Updated all calls to use `{ emit: false }`
+
+---
+
+### Fix 4: Consistent Return Type for get()
+**Status:** ✅ Fixed
+
+**Problem:** Service returned `READY` as default but handler converted back to `undefined`, adding cognitive load.
+
+**Solution:** `get()` now returns `undefined` for missing streams. Callers use explicit defaults where needed.
+
+**Files modified:**
+- `src/agent/runtime/StreamStatusService.ts` - `get()` returns `undefined` for missing
+- `src/progressView/events/ProgressEventHandler.ts` - Simplified `getStreamStatus()`, added explicit defaults
+
+---
+
 ## Progress Log
 
 ### 2026-01-04
@@ -110,6 +136,8 @@ This document tracks the consolidation of the progress view streaming system to 
 - ⏭️ Skipped Phases 1.2, 1.3, 2.1 (minimal benefit, added complexity)
 - ✅ Fixed race condition: previousStatus now in event payload
 - ✅ Fixed READY→STOPPED flash: new streams default to RUNNING
+- ✅ API cleanup: consolidated set/setLocal into set() with emit option
+- ✅ API cleanup: get() returns undefined for missing (cleaner semantics)
 
 ---
 
