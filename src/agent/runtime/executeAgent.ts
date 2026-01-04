@@ -86,14 +86,14 @@ export interface ExecuteAgentOptions {
 }
 
 /**
- * Prepared execution context for flow-first execution.
+ * Common base for flow inputs after agent resolution.
+ * This is NOT passed to flows - it's used to build flow-specific inputs.
  */
-interface FlowExecutionContext {
+interface ResolvedAgentBase {
   modelHandler: IModelHandler<any, any, any, any, any>;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
-  agentPath: string;
   executionContext: AgentExecutionContext;
   streamTabId: StreamTabId;
   userVarChannels: UserVariableChannels;
@@ -139,9 +139,9 @@ async function validateAndGetModelConfig(modelName: string): Promise<void> {
 }
 
 /**
- * Options for prepareFlowExecution.
+ * Options for resolveAgentBase.
  */
-interface PrepareFlowOptions {
+interface ResolveAgentOptions {
   /**
    * Override the stream tab ID for UI state.
    * Used in resume scenarios where the snapshot's stream ID should be used.
@@ -150,18 +150,21 @@ interface PrepareFlowOptions {
 }
 
 /**
- * Prepare execution context for flow-first execution.
- * Creates all dependencies needed to run flows directly without agent classes.
+ * Resolve agent and create base dependencies for flow execution.
+ * Creates all common dependencies needed by both tool-use and reflection flows.
  *
  * IMPORTANT: This function emits setActiveStream BEFORE creating the Init stage,
  * ensuring task groups appear correctly in the progress board.
+ *
+ * Returns base components without usage monitor - callers create flow-specific
+ * usage monitors with the appropriate runKind.
  */
-async function prepareFlowExecution(
+async function resolveAgentBase(
   agentName: string,
   configPayload: Partial<AgentConfig>,
   executionId?: ExecutionId,
-  options?: PrepareFlowOptions,
-): Promise<FlowExecutionContext> {
+  options?: ResolveAgentOptions,
+): Promise<ResolvedAgentBase> {
   // 1. Resolve agent definition
   const fullConfig = AgentConfigSchema.parse({
     agent: agentName,
@@ -284,7 +287,6 @@ async function prepareFlowExecution(
     config,
     setting,
     prompt,
-    agentPath,
     executionContext,
     streamTabId,
     userVarChannels,
@@ -315,16 +317,16 @@ function createUsageRecorder(
  * Setup UI state for flow execution.
  *
  * Sets the stream status to RUNNING. Note: setActiveStream is emitted
- * in prepareFlowExecution BEFORE Init stage creation to ensure correct
+ * in resolveAgentBase BEFORE Init stage creation to ensure correct
  * ordering of task group events.
  *
- * @param ctx - Flow execution context
+ * @param ctx - Resolved agent base containing stream ID
  * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
  *                              where the snapshot's stream ID should be used instead of
  *                              the regenerated one from ctx)
  */
 function setupFlowUIState(
-  ctx: FlowExecutionContext,
+  ctx: ResolvedAgentBase,
   streamTabIdOverride?: StreamTabId,
 ): void {
   const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
@@ -466,11 +468,11 @@ export async function executeAgent(
 
   const isResume = options?.resume ?? false;
 
-  // Prepare flow execution context
+  // Resolve agent and prepare base context
   // Wrapped in try-catch to display agent loading errors to users
-  let ctx: FlowExecutionContext;
+  let ctx: ResolvedAgentBase;
   try {
-    ctx = await prepareFlowExecution(
+    ctx = await resolveAgentBase(
       configPayload.agent,
       configPayload,
       executionId,
@@ -566,7 +568,6 @@ export async function executeAgent(
           const result = await runToolUseFlow({
             ...ctx,
             ...interruptManager.asFlowInput(),
-            getClient: () => ctx.modelHandler.getClient(),
             getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
             setting: ctx.setting as AgentToolUseSetting,
           });
@@ -576,7 +577,6 @@ export async function executeAgent(
           const result = await runReflectionFlow({
             ...ctx,
             ...interruptManager.asFlowInput(),
-            getClient: () => ctx.modelHandler.getClient(),
             getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
             setting: ctx.setting as AgentWorkflowSetting,
           });
@@ -606,7 +606,7 @@ export async function executeMergeAgent(
   editedFile: string,
 ): Promise<void> {
   // Caller (mergeCommands.ts) handles error display via showLoggedErrorMessage
-  const ctx = await prepareFlowExecution('merge', {
+  const ctx = await resolveAgentBase('merge', {
     agent: 'merge',
     model,
     inputFile,
@@ -647,7 +647,6 @@ export async function executeMergeAgent(
       const result = await runReflectionFlow({
         ...ctx,
         ...interruptManager.asFlowInput(),
-        getClient: () => ctx.modelHandler.getClient(),
         getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
         setting: ctx.setting as AgentWorkflowSetting,
         getOutputFileLocation,
@@ -684,9 +683,9 @@ export async function resumeToolUseFromSnapshot(
   const executionId = snapshot.executionId as ExecutionId;
   const streamTabId = snapshot.streamId as StreamTabId;
 
-  // Prepare flow execution context with snapshot's stream ID for correct UI state
+  // Resolve agent base with snapshot's stream ID for correct UI state
   // Caller (resumeCommand.ts) handles error display via showWarningMessage
-  const ctx = await prepareFlowExecution(
+  const ctx = await resolveAgentBase(
     snapshotConfig.agent,
     snapshotConfig,
     executionId,
@@ -716,7 +715,6 @@ export async function resumeToolUseFromSnapshot(
       {
         ...ctx,
         ...interruptManager.asFlowInput(),
-        getClient: () => ctx.modelHandler.getClient(),
         getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
         setting: setting as AgentToolUseSetting,
         streamTabId,

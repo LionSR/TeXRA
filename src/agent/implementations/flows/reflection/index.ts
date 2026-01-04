@@ -6,7 +6,7 @@
  * ## Flow-First Architecture
  *
  * The flow operates independently of the agent:
- * - Services are injected via ReflectionFlowContext
+ * - Services are created inline in runReflectionFlow
  * - Polymorphic behavior uses configuration, not agent subclasses
  * - No agent reference in flow shared state
  *
@@ -21,6 +21,7 @@
  *   prompt: agentPrompt,
  *   executionContext,
  *   userVarChannels,
+ *   streamTabId,
  * });
  * ```
  */
@@ -34,14 +35,7 @@ export {
   type ReflectionFlowParams,
 } from './ReflectionFlow';
 
-// Flow context (self-contained, creates own services)
-export {
-  ReflectionFlowContext,
-  createReflectionFlowContext,
-  type ReflectionFlowContextInit,
-} from './ReflectionFlowContext';
-
-// Direct flow execution (bypasses agent classes)
+// Direct flow execution (creates services inline)
 export {
   runReflectionFlow,
   type RunReflectionFlowInput,
