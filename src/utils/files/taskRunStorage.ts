@@ -442,7 +442,7 @@ export class TaskRunFileService {
     await Promise.all(captureTasks);
 
     if (linkTargets.size > 0) {
-      const candidates = Array.from(linkTargets);
+      const candidates = [...linkTargets];
       await Promise.all(
         candidates.map(async (candidate) => {
           try {

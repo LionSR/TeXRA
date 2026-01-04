@@ -155,7 +155,7 @@ export const ReflectionFlowStateSchema = z
     // Note: lastError is inherited from OptionalCycleFieldsSchema (via BaseCycleFieldsSchema).
     // Used to distinguish failure from cancellation during resume.
   })
-  .merge(OptionalCycleFieldsSchema);
+  .extend(OptionalCycleFieldsSchema.shape);
 
 /** Derived type from schema (serializable fields only) */
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;

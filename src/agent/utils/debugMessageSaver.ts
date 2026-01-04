@@ -92,7 +92,7 @@ export async function maybeSaveDebugObject({
       : baseName;
   const cont =
     continuationCount !== undefined ? `_cont${continuationCount}` : '';
-  const modelPart = modelName ? `_${modelName.replace(/[\\/]/g, '_')}` : '';
+  const modelPart = modelName ? `_${modelName.replaceAll(/[\\/]/g, '_')}` : '';
   const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
   try {

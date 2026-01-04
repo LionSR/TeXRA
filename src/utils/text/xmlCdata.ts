@@ -26,7 +26,7 @@ const CDATA_PATTERN = /<!\[CDATA\[([\s\S]*?)\]\]>/g;
  * @returns Content with CDATA wrappers removed
  */
 export function removeCDATA(content: string): string {
-  return content.replace(CDATA_PATTERN, '$1');
+  return content.replaceAll(CDATA_PATTERN, '$1');
 }
 
 /**

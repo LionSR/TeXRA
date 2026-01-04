@@ -20,8 +20,8 @@ import {
 import { fileLister } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
-import { uncapitalize } from '@utils/text/stringUtils';
 import { WorkspaceFS } from '@utils/files';
+import { uncapitalize } from '@utils/text/stringUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 // Local imports - types

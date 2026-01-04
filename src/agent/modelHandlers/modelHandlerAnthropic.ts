@@ -866,7 +866,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const withoutControlChars = Array.from(trimmed, (char) =>
       char.charCodeAt(0) < 32 ? '_' : char,
     ).join('');
-    const withoutForbidden = withoutControlChars.replace(/[:<>"|?*\\/]/g, '_');
+    const withoutForbidden = withoutControlChars.replaceAll(
+      /[:<>"|?*\\/]/g,
+      '_',
+    );
     // Use || here (not ??) because we need to catch empty strings, not just null/undefined
     const sanitized = withoutForbidden || 'document.pdf';
     // Removing directory information avoids Anthropic rejecting names that contain

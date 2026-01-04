@@ -15,6 +15,7 @@ import * as difflib from 'difflib';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
+import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type ToolResult, type LineChanges } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
@@ -22,7 +23,6 @@ import { getConfig } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -591,7 +591,7 @@ function finalizeApprovalResult(
   request: ToolEditApprovalRequest,
 ): ToolEditApprovalResult {
   if (!result.accepted) {
-    return { ...result };
+    return result;
   }
 
   const appliedContent = result.appliedContent ?? request.proposedContent;

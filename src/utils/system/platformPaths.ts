@@ -126,7 +126,7 @@ export function getExtraDirs(): string[] {
 
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   if (homeDir) {
-    const normalized = homeDir.replace(/\\/g, '/');
+    const normalized = homeDir.replaceAll('\\', '/');
     texDistPatterns.push(`${normalized}/texlive/*/bin/*`);
     texDistPatterns.push(`${normalized}/TinyTeX/bin/*`);
     for (const tool of TEX_TOOLS) {
@@ -158,7 +158,7 @@ export function getExtraDirs(): string[] {
   }
 
   // Cache and return the unique directories
-  cachedExtraDirs = Array.from(new Set(dirs));
+  cachedExtraDirs = [...new Set(dirs)];
   return cachedExtraDirs;
 }
 

@@ -116,43 +116,43 @@ export function convertHtmlToMarkdown(html: string): string {
  */
 function normalizePandocReferences(text: string): string {
   // Handle markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
-  text = text.replace(
+  text = text.replaceAll(
     /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
     '\\ref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
     '\\eqref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
     '\\cref{$2}',
   );
 
   // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
     '\\ref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
     '\\eqref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
     '\\cref{$2}',
   );
 
   // Handle simple Pandoc format: [label]{reference-type="ref" reference="label"}
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\]]+)\]\{reference-type="ref"\s+reference="([^"]+)"\}/g,
     '\\ref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\]]+)\]\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
     '\\eqref{$2}',
   );
-  text = text.replace(
+  text = text.replaceAll(
     /\[([^\]]+)\]\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
     '\\cref{$2}',
   );

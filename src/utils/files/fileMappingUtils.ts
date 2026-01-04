@@ -178,9 +178,7 @@ export async function replaceInputCommands(
   }
 
   logger?.debug(
-    `File mappings for input replacement: ${Array.from(
-      baseToOutputMap.entries(),
-    )
+    `File mappings for input replacement: ${[...baseToOutputMap.entries()]
       .map(
         ([basePath, outputLoc]) =>
           `${path.basename(basePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
@@ -203,7 +201,7 @@ export async function replaceInputCommands(
 
     try {
       const content = await flexibleFS.read(outputLocation);
-      const newContent = content.replace(
+      const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
           const normalizedPath = normalizeLatexPath(rawPath);
