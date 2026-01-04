@@ -39,9 +39,6 @@ export interface ToolUseFlowContextInit<
   /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
 
-  /** Stream tab ID for registry tracking */
-  streamTabId: StreamTabId;
-
   /** Optional tool registry override */
   toolRegistry?: IToolRegistry;
 
@@ -59,13 +56,13 @@ export interface ToolUseFlowContextInit<
 /**
  * Tool-use flow context returned by factory function.
  * Contains services and lifecycle methods.
+ *
+ * Note: streamTabId is accessed via services.executionContext.streamId
+ * (single source of truth).
  */
 export interface ToolUseFlowContext<C = unknown> {
   /** Services for flow execution */
   services: ToolUseServices<C>;
-
-  /** Stream tab ID for this session */
-  streamTabId: StreamTabId;
 
   /** Session lifecycle manager */
   session: ToolUseSessionLifecycle;
@@ -157,12 +154,10 @@ export async function applyFollowUpMessage<C>(
 export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
 ): ToolUseFlowContext<C> {
-  const {
-    setting,
-    streamTabId,
-    toolRegistry: customRegistry,
-    resumeSnapshot,
-  } = init;
+  const { setting, toolRegistry: customRegistry, resumeSnapshot } = init;
+
+  // Single source of truth: get streamTabId from execution context
+  const streamTabId = init.executionContext.streamId;
 
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
@@ -181,10 +176,10 @@ export function createToolUseFlowContext<C = unknown>(
   }
 
   // Spread init directly - it already contains setting, etc.
+  // Note: executionContext is accessed via services.executionContext (single source of truth)
   const services: ToolUseServices<C> = {
     ...init,
-    logger, // Use already-extracted variable from line 169
-    context: init.executionContext,
+    logger, // Convenience accessor for executionContext.logger
     toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,
@@ -194,7 +189,6 @@ export function createToolUseFlowContext<C = unknown>(
 
   return {
     services,
-    streamTabId,
     session: sessionLifecycle,
 
     interrupt(): void {
