@@ -33,6 +33,8 @@ export type AgentCycleBaseOptions<C = unknown> = Pick<
   | 'setting'
   | 'prompt'
   | 'logger'
+  | 'streamId'
+  | 'executionId'
   | 'executionContext'
   | 'userVarChannels'
   | 'checkInterruption'
