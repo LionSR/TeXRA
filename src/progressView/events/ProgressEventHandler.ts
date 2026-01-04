@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent and usage types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
@@ -19,28 +18,19 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import type { StreamStatus } from '@eventBus/ProgressEventBus';
-import {
-  createStreamStatusEvents,
-  type StreamStatusEventModule,
-} from './StreamStatusEvents';
-import { createOutputEvents, type OutputEventsModule } from './OutputEvents';
-import { createUsageEvents, type UsageEventsModule } from './UsageEvents';
-import { createLogEvents, type LogEventsModule } from './LogEvents';
-import {
-  createTaskGroupEvents,
-  type TaskGroupEventsModule,
-} from './TaskGroupEvents';
-import {
-  createRetryEvents,
-  type RetryEventsModule,
-  type RetryEventsShared,
-} from './RetryEvents';
-import {
-  createApprovalEvents,
-  type ApprovalEventsModule,
-  type ApprovalEventsShared,
-} from './ApprovalEvents';
-import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
+import { registerStreamStatusEvents } from './StreamStatusEvents';
+import { registerOutputEvents } from './OutputEvents';
+import { registerUsageEvents } from './UsageEvents';
+import { registerLogEvents } from './LogEvents';
+import { registerTaskGroupEvents } from './TaskGroupEvents';
+import { registerRetryEvents, type RetryCallbacks } from './RetryEvents';
+import { registerApprovalEvents, type ApprovalCallbacks } from './ApprovalEvents';
+import { registerTodoEvents } from './TodoEvents';
+
+/**
+ * Callbacks for UI interactions (retry/approval dialogs).
+ */
+export type UICallbacks = RetryCallbacks & ApprovalCallbacks;
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -56,99 +46,59 @@ export class ProgressEventHandler {
    * Groups are replayed when setActiveStream is processed for the stream.
    */
   private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
-  private readonly streamStatusEvents: StreamStatusEventModule;
-  private readonly outputEvents: OutputEventsModule;
-  private readonly logEvents: LogEventsModule;
-  private readonly usageEvents: UsageEventsModule;
-  private readonly taskGroupEvents: TaskGroupEventsModule;
-  private readonly todoEvents: TodoEventsModule;
-  private readonly retryEvents: RetryEventsModule;
-  private readonly approvalEvents: ApprovalEventsModule;
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    callbacks: Pick<
-      RetryEventsShared,
-      'showRetryRequest' | 'resolveRetryRequest'
-    > &
-      Pick<
-        ApprovalEventsShared,
-        | 'showToolEditApprovalPrompt'
-        | 'resolveToolEditApprovalPrompt'
-        | 'updateToolEditApprovalBypassState'
-      >,
+    private readonly uiCallbacks: UICallbacks,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
-
-    // Modules now use withEventErrorHandling() directly - no error boundary injection needed
-    this.streamStatusEvents = createStreamStatusEvents({
-      streamStatus: this._streamStatus,
-      setStreamStatus: this.setStreamStatus.bind(this),
-      sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
-      refreshStreamSurface: this.refreshStreamSurface.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
-      replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
-    });
-    this.outputEvents = createOutputEvents({});
-    this.usageEvents = createUsageEvents({});
-    this.logEvents = createLogEvents({});
-    this.taskGroupEvents = createTaskGroupEvents({
-      initializeStreamForTaskGroup:
-        this.initializeStreamForTaskGroup.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
-      bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
-    });
-    this.todoEvents = createTodoEvents({});
-    this.retryEvents = createRetryEvents({
-      showRetryRequest: callbacks.showRetryRequest,
-      resolveRetryRequest: callbacks.resolveRetryRequest,
-    });
-    this.approvalEvents = createApprovalEvents({
-      showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
-      resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
-      updateToolEditApprovalBypassState:
-        callbacks.updateToolEditApprovalBypassState,
-    });
   }
 
   /**
    * Setup all event bus listeners
    */
   setupEventListeners(): vscode.Disposable[] {
-    const disposables: vscode.Disposable[] = [];
-    disposables.push(
-      ...this.streamStatusEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.outputEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.usageEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    // Task group events must be registered before log events so buffered group
-    // replays run first. Otherwise replayed thinking logs land before their
-    // containers exist, leaving the progress board with orphaned banners.
-    disposables.push(
-      ...this.taskGroupEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.logEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.todoEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(...this.retryEvents.register(bus));
-    disposables.push(...this.approvalEvents.register(bus));
-    disposables.push(
+    const { state, webviewUpdater } = this;
+
+    return [
+      // Stream status events (setActiveStream, updateStreamStatus, setTaskState)
+      ...registerStreamStatusEvents(bus, state, webviewUpdater, {
+        streamStatus: this._streamStatus,
+        setStreamStatus: this.setStreamStatus.bind(this),
+        sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
+        refreshStreamSurface: this.refreshStreamSurface.bind(this),
+        debugLog: this.logger.debug.bind(this.logger),
+        replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
+      }),
+      // Output file events
+      ...registerOutputEvents(bus, state, webviewUpdater),
+      // Usage stats events
+      ...registerUsageEvents(bus, state, webviewUpdater),
+      // Task group events must be registered before log events so buffered group
+      // replays run first. Otherwise replayed thinking logs land before their
+      // containers exist, leaving the progress board with orphaned banners.
+      ...registerTaskGroupEvents(bus, state, webviewUpdater, {
+        initializeStreamForTaskGroup:
+          this.initializeStreamForTaskGroup.bind(this),
+        debugLog: this.logger.debug.bind(this.logger),
+        bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
+      }),
+      // Log message events
+      ...registerLogEvents(bus, state, webviewUpdater),
+      // Todo events
+      ...registerTodoEvents(bus, state, webviewUpdater),
+      // Retry dialog events
+      ...registerRetryEvents(bus, this.uiCallbacks),
+      // Approval dialog events
+      ...registerApprovalEvents(bus, this.uiCallbacks),
+      // Extension lifecycle event
       new vscode.Disposable(
         bus.on('extensionDeactivating', () =>
           this.markAllRunningTasksAsCancelled(),
         ),
       ),
-    );
-
-    return disposables;
+    ];
   }
 
   /**
