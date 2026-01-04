@@ -182,7 +182,7 @@ export class OutputFileProcessor {
         xmlFile: outputLocation.absolutePath,
         documentTag: agentSetting.documentTag,
       };
-      logger.missingOutputs(missingOutputsData);
+      logger.missingOutputs(missingOutputsData, storagePayload.storageKey);
       bus.emit('updateMissingOutputs', {
         stream: channel,
         ...storagePayload,
