@@ -1,3 +1,11 @@
+/**
+ * UI event handlers for retry and approval dialogs.
+ *
+ * These are callback-only handlers that simply delegate to UI callbacks
+ * with error handling. Consolidated from RetryEvents.ts and ApprovalEvents.ts
+ * to reduce module fragmentation.
+ */
+
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
@@ -5,7 +13,17 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
-const MODULE = 'ApprovalEvents';
+const MODULE = 'UIEvents';
+
+/**
+ * Callbacks for retry event handling.
+ */
+export interface RetryCallbacks {
+  showRetryRequest: (
+    payload: ProgressEventPayloads['showRetryRequest'],
+  ) => void;
+  resolveRetryRequest: (streamId: string) => void;
+}
 
 /**
  * Callbacks for approval event handling.
@@ -19,14 +37,39 @@ export interface ApprovalCallbacks {
 }
 
 /**
- * Register approval event handlers.
+ * Combined UI callbacks interface.
+ */
+export type UICallbacks = RetryCallbacks & ApprovalCallbacks;
+
+/**
+ * Register all UI event handlers (retry and approval).
  * Cleanup is automatic via AbortSignal.
  */
-export function registerApprovalEvents(
+export function registerUIEvents(
   bus: ProgressEventBusLike,
-  callbacks: ApprovalCallbacks,
+  callbacks: UICallbacks,
   signal: AbortSignal,
 ): void {
+  // Retry events
+  bus.on(
+    'showRetryRequest',
+    (payload) =>
+      withEventErrorHandling(MODULE, 'failed to show retry request', () =>
+        callbacks.showRetryRequest(payload),
+      ),
+    { signal },
+  );
+
+  bus.on(
+    'resolveRetryRequest',
+    (payload) =>
+      withEventErrorHandling(MODULE, 'failed to resolve retry request', () =>
+        callbacks.resolveRetryRequest(payload.streamId),
+      ),
+    { signal },
+  );
+
+  // Approval events
   bus.on(
     'showToolEditApprovalPrompt',
     (payload) =>
