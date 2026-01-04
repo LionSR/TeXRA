@@ -1,50 +1,34 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Type imports
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import {
-  createStatefulEventDisposable,
-  sendIfActive,
-  type ProgressEventBusLike,
-  type StatefulEventModule,
-} from './types';
+import { sendIfActive, type ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'TodoEvents';
 
-export type TodoEventsModule = StatefulEventModule;
-
-const handleUpdateTodos = (
-  data: ProgressEventPayloads['updateTodos'],
+/**
+ * Register todo event handlers.
+ */
+export function registerTodoEvents(
+  bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
-): void => {
-  withEventErrorHandling(MODULE, 'failed to handle updateTodos', () => {
-    const { stream, todos } = data;
-    state.setTodos(stream, todos);
-    sendIfActive(stream, state, updater, () => {
-      updater.updateTodos(stream, todos);
-    });
-  });
-};
-
-/**
- * Create todo event module for registration.
- */
-export function createTodoEvents(_shared: unknown = {}): TodoEventsModule {
-  return {
-    register(bus, state, updater) {
-      return [
-        createStatefulEventDisposable(
-          bus,
-          'updateTodos',
-          state,
-          updater,
-          handleUpdateTodos,
-        ),
-      ];
-    },
-  };
+): vscode.Disposable[] {
+  return [
+    new vscode.Disposable(
+      bus.on('updateTodos', ({ stream, todos }) => {
+        withEventErrorHandling(MODULE, 'failed to handle updateTodos', () => {
+          state.setTodos(stream, todos);
+          sendIfActive(stream, state, updater, () => {
+            updater.updateTodos(stream, todos);
+          });
+        });
+      }),
+    ),
+  ];
 }
