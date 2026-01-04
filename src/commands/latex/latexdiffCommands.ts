@@ -746,7 +746,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
 
     const roundOutputsMap = new Map<number, string>();
     const outputFilePattern = new RegExp(
-      `${baseInputName}_${agentNameChunk}_r(\\d+)_${model.replace(/\./g, '')}`,
+      `${baseInputName}_${agentNameChunk}_r(\\d+)_${model.replaceAll('.', '')}`,
     );
 
     for (const [fileName, fileType] of dirEntries) {

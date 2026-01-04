@@ -17,8 +17,8 @@ export function buildWebviewHtml(
   const nonce = nanoid(32);
 
   let result = htmlContent
-    .replace(/\${nonce}/g, nonce)
-    .replace(/\${cspSource}/g, webview.cspSource);
+    .replaceAll('${nonce}', nonce)
+    .replaceAll('${cspSource}', webview.cspSource);
 
   for (const [key, value] of Object.entries(replacements)) {
     const replaced =
