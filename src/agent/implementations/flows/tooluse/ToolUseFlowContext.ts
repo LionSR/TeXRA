@@ -156,11 +156,11 @@ export function createToolUseFlowContext<C = unknown>(
 ): ToolUseFlowContext<C> {
   const {
     setting,
+    logger,
     toolRegistry: customRegistry,
     resumeSnapshot,
     executionContext,
   } = init;
-  const { logger } = executionContext;
 
   // Single source of truth: get streamTabId from execution context
   const streamTabId = executionContext.streamId;
@@ -180,10 +180,9 @@ export function createToolUseFlowContext<C = unknown>(
     resolvedTools.push(def);
   }
 
-  // Spread init directly - it already contains setting, etc.
+  // Spread init directly - it already contains setting, logger, etc.
   const services: ToolUseServices<C> = {
     ...init,
-    logger,
     toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,

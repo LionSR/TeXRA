@@ -116,6 +116,7 @@ export async function runReflectionFlow<C = unknown>(
     config,
     setting,
     prompt,
+    logger,
     executionContext,
     userVarChannels,
     checkInterruption,
@@ -123,9 +124,6 @@ export async function runReflectionFlow<C = unknown>(
     getUsageRecorder = () => async () => {},
     parentStage,
   } = input;
-
-  // Destructure logger early - use throughout instead of logger
-  const { logger } = executionContext;
 
   // Single source of truth: get streamTabId from execution context
   const streamTabId = executionContext.streamId;
@@ -322,7 +320,6 @@ export async function runReflectionFlow<C = unknown>(
     // Build services: spread input + add computed fields
     services = {
       ...input,
-      logger: logger,
       getUsageRecorder,
       outputHandler,
       latexMediaManager,
