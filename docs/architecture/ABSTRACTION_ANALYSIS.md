@@ -188,12 +188,14 @@ const round = ConversationRoundState.fromSnapshot(context.stateRoundSnapshot);
 
 ### 4. Skip Pattern Variations - ✅ RESOLVED
 
-Previously had 5 different patterns - now unified on `{ kind: 'skipped' } | { kind: 'success', value: T }`:
+Previously had 5 different patterns - now simplified:
 
-**Refactored nodes**:
-- `TeXCountNode`: `return null` → `return { kind: 'skipped' }`
-- `MediaExtractionNode`: `{ mediaFiles: [] }` → `{ kind: 'skipped' }`
-- `ToolUseProcessNode`: `{ kind: 'skipped', endTurn: false }` → `{ kind: 'skipped' }`
+**Reflection nodes** (skip = continue, use `T | null`):
+- `TeXCountNode`: Returns `string | null`
+- `MediaExtractionNode`: Returns `FileLocation[] | null`
+
+**Cycle nodes** (need to distinguish skip reason, use discriminated union):
+- `ToolUseProcessNode`: `{ kind: 'skipped' } | { kind: 'success', ... }`
 - `ToolUseDispatchNode`: keeps `interrupted` flag for special handling
 
 ---
