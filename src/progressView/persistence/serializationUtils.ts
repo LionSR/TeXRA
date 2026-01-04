@@ -4,13 +4,39 @@
  */
 
 /**
+ * Recursively serialize nested Maps to nested Records.
+ *
+ * @param value - A Map (possibly containing nested Maps) or a leaf value
+ * @param depth - Maximum depth to recurse (1 = single Map, 2 = Map of Maps, etc.)
+ * @returns Plain object structure with all Maps converted to Records
+ *
+ * @example
+ * // Depth 1: Map → Record
+ * mapsToRecords(new Map([['a', 1]]), 1) // { a: 1 }
+ *
+ * // Depth 2: Map<K, Map<K, V>> → Record<K, Record<K, V>>
+ * mapsToRecords(new Map([['run1', new Map([[1, 'v']])]]), 2) // { run1: { '1': 'v' } }
+ */
+function mapsToRecords(value: unknown, depth: number): unknown {
+  if (depth <= 0 || !(value instanceof Map)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Array.from((value as Map<unknown, unknown>).entries(), ([k, v]) => [
+      String(k),
+      mapsToRecords(v, depth - 1),
+    ]),
+  );
+}
+
+/**
  * Serialize a Map to a plain Record object.
  * @example mapToRecord(new Map([['a', 1]])) // { a: 1 }
  */
 export function mapToRecord<K extends string | number, V>(
   map: Map<K, V>,
 ): Record<string, V> {
-  return Object.fromEntries(map.entries()) as Record<string, V>;
+  return mapsToRecords(map, 1) as Record<string, V>;
 }
 
 /**
@@ -23,12 +49,7 @@ export function nestedMapToRecord<
   K2 extends string | number,
   V,
 >(outer: Map<K1, Map<K2, V>>): Record<string, Record<string, V>> {
-  return Object.fromEntries(
-    Array.from(outer.entries(), ([key, inner]) => [
-      key,
-      Object.fromEntries(inner.entries()),
-    ]),
-  ) as Record<string, Record<string, V>>;
+  return mapsToRecords(outer, 2) as Record<string, Record<string, V>>;
 }
 
 /**
@@ -43,15 +64,8 @@ export function tripleNestedMapToRecord<
 >(
   outer: Map<K1, Map<K2, Map<K3, V>>>,
 ): Record<string, Record<string, Record<string, V>>> {
-  return Object.fromEntries(
-    Array.from(outer.entries(), ([stream, runs]) => [
-      stream,
-      Object.fromEntries(
-        Array.from(runs.entries(), ([runId, rounds]) => [
-          runId,
-          Object.fromEntries(rounds.entries()),
-        ]),
-      ),
-    ]),
-  ) as Record<string, Record<string, Record<string, V>>>;
+  return mapsToRecords(outer, 3) as Record<
+    string,
+    Record<string, Record<string, V>>
+  >;
 }
