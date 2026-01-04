@@ -20,7 +20,6 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
@@ -55,9 +54,6 @@ export interface PrepareStateResult {
  */
 export interface ToolUseServices<C = unknown>
   extends BaseFlowContextInit<C> {
-  /** Logger for flow nodes */
-  readonly logger: AgentLogger;
-
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 

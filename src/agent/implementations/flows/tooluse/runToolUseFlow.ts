@@ -92,9 +92,7 @@ export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
-  // Destructure early - use logger throughout instead of executionContext.logger
-  const { executionContext } = input;
-  const { logger } = executionContext;
+  const { logger, executionContext } = input;
 
   // Create the flow context (owns all services including session lifecycle)
   const flowContext = createToolUseFlowContext<C>({
@@ -126,7 +124,7 @@ export async function runToolUseFlow<C = unknown>(
       );
       if (flowRecord?.shared) {
         isResume = true;
-        executionContext.logger.debug(
+        logger.debug(
           'Resuming tool-use flow from persistence',
         );
       }
@@ -151,7 +149,7 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(flowContext.services);
 
     if (isResume) {
-      executionContext.logger.debug(
+      logger.debug(
         'PersistedFlow will resume from last node',
       );
     }
