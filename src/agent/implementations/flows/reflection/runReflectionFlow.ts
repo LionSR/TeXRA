@@ -30,6 +30,7 @@ import {
 
 import {
   AgentWorkspaceState,
+  AgentWorkspaceStateSnapshotSchema,
   type AgentWorkspaceSnapshot,
 } from '@agent/core/AgentWorkspaceState';
 import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
@@ -201,11 +202,12 @@ export async function runReflectionFlow<C = unknown>(
           lastError?: RetryErrorInfo;
         };
         if (persistedShared.workspaceSnapshot) {
-          // Restore workspace state from persisted snapshot - PRESERVES THINKING BLOCKS!
-          // Round-trip through class normalizes/validates the snapshot structure
-          initialWorkspaceSnapshot = AgentWorkspaceState.fromSnapshot(
+          // Validate and normalize persisted snapshot using Zod schema.
+          // Schema's .prefault() handles legacy formats and missing fields.
+          // No class instantiation needed - direct schema parse is sufficient.
+          initialWorkspaceSnapshot = AgentWorkspaceStateSnapshotSchema.parse(
             persistedShared.workspaceSnapshot,
-          ).toSnapshot();
+          );
           isResume = true;
           executionContext.logger.debug(
             'Restored workspace snapshot from persisted flow',
