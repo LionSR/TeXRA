@@ -10,10 +10,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - frontend
 import { getMainWebview } from '@frontend/system/commandUtils';
-import {
-  showInfoMessage,
-  showWarningMessage,
-} from '@frontend/ui/messageUtils';
+import { showInfoMessage, showWarningMessage } from '@frontend/ui/messageUtils';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
