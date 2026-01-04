@@ -2,12 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { retrieveSessionResumeData } from '@agent/toolUse/SessionResumeRetrieval';
+import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import {
   showErrorMessage,
   showWarningMessage,
@@ -15,6 +17,7 @@ import {
 } from '@frontend/ui/messageUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
 
@@ -28,6 +31,17 @@ const logger = new AgentLogger('followUpCommand');
  * @returns true if resume was triggered, false otherwise
  */
 async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
+  // Guard against concurrent resume attempts.
+  // If already resuming or running, don't trigger another resume.
+  const currentStatus = StreamStatusService.get(streamId);
+  if (
+    currentStatus === STREAM_STATUS.RESUMING ||
+    currentStatus === STREAM_STATUS.RUNNING
+  ) {
+    logger.debug(`Stream ${streamId} already ${currentStatus}, skipping auto-resume`);
+    return false;
+  }
+
   // Use ProgressViewState for task state and execution ID access.
   // This handles legacy storage structure (workflow/toolUse buckets) and
   // provides already-validated task states, avoiding parallel access patterns.
@@ -68,11 +82,12 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   logger.info(`Auto-resuming ${resumeData.type} session for stream: ${streamId}`);
   try {
     if (resumeData.type === 'toolUse') {
-      // Tool-use: pass snapshot to resumeAgent command, check explicit result
-      const result = await vscode.commands.executeCommand('texra.resumeAgent', {
+      // Tool-use: pass snapshot to resumeAgent command, validate result with schema
+      const rawResult = await vscode.commands.executeCommand('texra.resumeAgent', {
         snapshot: resumeData.snapshot,
       });
-      return (result as { success?: boolean })?.success === true;
+      const parseResult = ResumeAgentResultSchema.safeParse(rawResult);
+      return parseResult.success && parseResult.data.success;
     } else {
       // Workflow: pass config and executionId to execute command.
       // Execute returns void - success if no exception thrown.
