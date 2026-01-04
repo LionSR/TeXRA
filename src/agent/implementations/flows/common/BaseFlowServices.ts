@@ -93,13 +93,14 @@ export interface FlowParams {
 // ============================================================================
 
 /**
- * Convenience accessors that child service interfaces define inline.
+ * Convenience accessor for logger.
  *
  * ToolUseServices and ReflectionServices extend BaseFlowContextInit and add:
- * - logger: Direct access to executionContext.logger
- * - context: Alias for executionContext (used by cycle options)
+ * - logger: Direct access to executionContext.logger (high-frequency usage)
+ *
+ * Note: executionContext itself is accessed directly via services.executionContext
+ * (single source of truth, no alias).
  */
 export interface FlowServiceAccessors {
   readonly logger: AgentLogger;
-  readonly context: AgentExecutionContext;
 }

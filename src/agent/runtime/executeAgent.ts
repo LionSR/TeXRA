@@ -85,6 +85,9 @@ export interface AgentResolveOptions {
 /**
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
+ *
+ * Note: Stream ID is accessed via executionContext.streamId (single source of truth).
+ * Resume scenarios use snapshot.streamId directly, not from this context.
  */
 interface ResolvedAgentBase {
   modelHandler: IModelHandler<any, any, any, any, any>;
@@ -92,7 +95,6 @@ interface ResolvedAgentBase {
   setting: AgentSetting;
   prompt: AgentPrompt;
   executionContext: AgentExecutionContext;
-  streamTabId: StreamTabId;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
 }
@@ -196,7 +198,8 @@ async function resolveAgentBase(
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
   // 3. Create execution context
-  const streamTabId = getStreamTabId(
+  // Compute stream ID, applying override for resume scenarios
+  const computedStreamTabId = getStreamTabId(
     config.agent,
     fullConfig.model,
     config.inputFile,
@@ -206,6 +209,9 @@ async function resolveAgentBase(
       useMultipleOutputs: config.useMultipleOutputs,
     },
   );
+  // Use override if provided (resume uses snapshot's streamId)
+  const streamTabId = options?.streamTabIdOverride ?? computedStreamTabId;
+
   const executionContext = new AgentExecutionContext({
     streamId: streamTabId,
     executionId,
@@ -218,14 +224,11 @@ async function resolveAgentBase(
   modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(executionContext.logger);
 
-  // Determine effective stream ID (may be overridden for resume scenarios)
-  const effectiveStreamTabId = options?.streamTabIdOverride ?? streamTabId;
-
   // Emit setActiveStream BEFORE Init stage creation.
   // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
   // preventing the race condition where Init groups are dropped.
   bus.emit('setActiveStream', {
-    stream: effectiveStreamTabId,
+    stream: streamTabId,
     session: sessionDescriptor,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
@@ -285,7 +288,6 @@ async function resolveAgentBase(
     setting,
     prompt,
     executionContext,
-    streamTabId,
     userVarChannels,
     usageMonitor,
   };
@@ -317,7 +319,7 @@ function createUsageRecorder(
  * in resolveAgentBase BEFORE Init stage creation to ensure correct
  * ordering of task group events.
  *
- * @param ctx - Resolved agent base containing stream ID
+ * @param ctx - Resolved agent base containing execution context
  * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
  *                              where the snapshot's stream ID should be used instead of
  *                              the regenerated one from ctx)
@@ -326,7 +328,7 @@ function setupFlowUIState(
   ctx: ResolvedAgentBase,
   streamTabIdOverride?: StreamTabId,
 ): void {
-  const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
+  const streamTabId = streamTabIdOverride ?? ctx.executionContext.streamId;
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
@@ -477,7 +479,8 @@ export async function executeAgent(
     throw err;
   }
 
-  const { streamTabId, setting, executionContext, config } = ctx;
+  const { setting, executionContext, config } = ctx;
+  const streamTabId = executionContext.streamId;
   const agentName = config.agent;
 
   if (!config.session) {
@@ -589,7 +592,8 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, executionContext, config } = ctx;
+  const { executionContext, config } = ctx;
+  const streamTabId = executionContext.streamId;
 
   if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
@@ -657,17 +661,18 @@ export async function resumeToolUseFromSnapshot(
 ): Promise<void> {
   const snapshotConfig = snapshot.agentConfig;
   const executionId = snapshot.executionId as ExecutionId;
-  const streamTabId = snapshot.streamId as StreamTabId;
 
   // Resolve agent base with snapshot's stream ID for correct UI state
+  // The streamTabIdOverride ensures executionContext.streamId matches the snapshot
   // Caller (resumeCommand.ts) handles error display via showWarningMessage
   const ctx = await resolveAgentBase(
     snapshotConfig.agent,
     snapshotConfig,
     executionId,
-    { streamTabIdOverride: streamTabId },
+    { streamTabIdOverride: snapshot.streamId as StreamTabId },
   );
   const { setting, executionContext, config } = ctx;
+  const streamTabId = executionContext.streamId; // Single source of truth
 
   // Validate agent type and session
   if (setting.agentType !== 'toolUse') {
@@ -683,17 +688,15 @@ export async function resumeToolUseFromSnapshot(
   const interruptManager = new InterruptManager();
 
   try {
-    // Use snapshot's stream ID for UI state to maintain consistency
-    setupFlowUIState(ctx, streamTabId);
+    setupFlowUIState(ctx);
 
-    // Run the flow with resume snapshot
+    // Run the flow with resume snapshot - streamTabId comes from executionContext
     const result = await runToolUseFlow(
       {
         ...ctx,
         ...interruptManager.asFlowInput(),
         getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
         setting: setting as AgentToolUseSetting,
-        streamTabId,
         resumeSnapshot: snapshot,
       },
       setupSession ? (context) => setupSession(context.session) : undefined,
