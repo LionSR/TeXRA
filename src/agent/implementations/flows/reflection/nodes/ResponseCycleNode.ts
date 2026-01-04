@@ -36,7 +36,10 @@ import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { finalizeRound, type CycleStateSlices } from '@agent/core/flows/CycleServices';
+import {
+  finalizeRound,
+  type CycleStateSlices,
+} from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
