@@ -237,12 +237,16 @@ export class ProgressEventHandler {
           await this.initializeStreamForTaskGroup(stream);
         }
 
-        if (this.webviewUpdater.isAvailable()) {
-          if (stream === this.state.activeStream) {
-            this.webviewUpdater.addTaskGroup(stream, group);
-          } else {
-            this.bufferTaskGroupForReplay(stream, group);
-          }
+        // Send to webview if available and stream is active, otherwise buffer.
+        // IMPORTANT: Always buffer when webview unavailable to prevent groups
+        // from being dropped during initialization (e.g., Init stage).
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.addTaskGroup(stream, group);
+        } else {
+          this.bufferTaskGroupForReplay(stream, group);
         }
 
         await addGroupPromise;
@@ -578,6 +582,11 @@ export class ProgressEventHandler {
     const usageByRun = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
+
+    // Clear pending task groups buffer BEFORE update to prevent race condition.
+    // If new groups arrive during updateLogContent, they'll be buffered fresh.
+    // Groups already in state will be sent via updateLogContent.
+    this.pendingTaskGroups.delete(stream);
 
     this.webviewUpdater.updateLogContent(
       stream,
