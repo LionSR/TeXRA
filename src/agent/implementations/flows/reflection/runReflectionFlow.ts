@@ -274,8 +274,11 @@ export async function runReflectionFlow<C = unknown>(
           );
         }
       }
-    } catch {
-      // Parsing failed, start fresh
+    } catch (error) {
+      // Log parse failures to help diagnose resume issues
+      executionContext.logger.debug(
+        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
     }
 
     // Create fresh state if not resuming
