@@ -33,7 +33,7 @@ export type ApprovalEventsModule = EventModuleBase;
  * Creates a module for handling tool edit approval events.
  * Follows the established event module pattern used by RetryEvents.
  */
-export function createApprovalEventsModule(
+export function createApprovalEvents(
   shared: ApprovalEventsShared,
 ): ApprovalEventsModule {
   const { withErrorBoundary } = shared;

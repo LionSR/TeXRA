@@ -243,4 +243,3 @@ export function error(
 ): void {
   logWithGroup(channel, 'error', message, options);
 }
-
