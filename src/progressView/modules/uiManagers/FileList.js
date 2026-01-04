@@ -66,13 +66,13 @@ export class FileList {
         // Workflow mode: create collapsible round group for each round
         const roundGroup = createFromTemplate('roundHeaderTemplate');
         if (!roundGroup) return;
-        const roundHeader = roundGroup.querySelector('.round-header');
-        if (roundHeader) {
-          roundHeader.textContent = `r${round}`;
-        }
+        // roundGroup is the vscode-collapsible root element
+        roundGroup.setAttribute('title', `r${round}`);
+        const roundContent = roundGroup.querySelector('.round-content');
+        if (!roundContent) return;
 
         files.forEach((file) => {
-          this._renderFileItem(template, roundGroup, file, round);
+          this._renderFileItem(template, roundContent, file, round);
         });
 
         container.appendChild(roundGroup);
