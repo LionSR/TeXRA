@@ -183,7 +183,7 @@ export function createToolUseFlowContext<C = unknown>(
   // Spread init directly - it already contains setting, etc.
   const services: ToolUseServices<C> = {
     ...init,
-    logger: init.executionContext.logger,
+    logger, // Use already-extracted variable from line 169
     context: init.executionContext,
     toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,

@@ -45,12 +45,16 @@ function getStore(): Map<ChannelKey, ChannelContext> {
   return store;
 }
 
+function getContextByKey(key: ChannelKey): ChannelContext | undefined {
+  const store = getStore();
+  return store.get(key);
+}
+
 function getContext(
   channel: string,
   isAgent: boolean,
 ): ChannelContext | undefined {
-  const store = getStore();
-  return store.get(getChannelKey(channel, isAgent));
+  return getContextByKey(getChannelKey(channel, isAgent));
 }
 
 function setContext(
@@ -108,21 +112,34 @@ function popGroupContext(
   contextStorage.enterWith(store);
 }
 
-function resolveActiveGroup(
-  channel: string,
+function resolveActiveGroupByKey(
+  key: ChannelKey,
   groupId: string | undefined,
-  isAgent: boolean,
 ): string | undefined {
   if (groupId) {
     return groupId;
   }
 
-  const context = getContext(channel, isAgent);
-  if (!context) {
-    return undefined;
-  }
+  const context = getContextByKey(key);
+  return context?.stack.at(-1);
+}
 
-  return context.stack.at(-1);
+function resolveActiveGroup(
+  channel: string,
+  groupId: string | undefined,
+  isAgent: boolean,
+): string | undefined {
+  return resolveActiveGroupByKey(getChannelKey(channel, isAgent), groupId);
+}
+
+/**
+ * Get a cached channel entry by pre-computed key.
+ * Returns undefined if the entry doesn't exist.
+ */
+function getCachedEntryByKey(
+  key: ChannelKey,
+): ReturnType<typeof registry.ensure> | undefined {
+  return initializedChannels.get(key);
 }
 
 /**
@@ -167,10 +184,12 @@ function logWithGroup(
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  const { logger } = getCachedEntry(channel, isAgent);
-  const activeGroupId = resolveActiveGroup(channel, options.groupId, isAgent);
+  // Compute key once and reuse for both entry lookup and group resolution
+  const key = getChannelKey(channel, isAgent);
+  const entry = getCachedEntryByKey(key) ?? getCachedEntry(channel, isAgent);
+  const activeGroupId = resolveActiveGroupByKey(key, options.groupId);
 
-  logger.log(level, message, {
+  entry.logger.log(level, message, {
     groupId: activeGroupId,
     messageType: options.messageType,
     data: options.data,
