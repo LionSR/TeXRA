@@ -404,20 +404,17 @@ interface ToolUseProcessPrepResult {
  * PocketFlow compliance: exec() returns computation results, post() applies side effects.
  */
 type ToolUseProcessExecResult =
-  | { kind: 'skipped'; endTurn: false }
+  | { kind: 'skipped' }
   | {
       kind: 'success';
-      // Core results
       toolCalls?: SdkToolCall[];
       stopReason?: ProviderStopReason;
       text?: string;
       endTurn: boolean;
-      // Data for side effects in post()
       serverToolContentBlocks?: ServerToolContentBlock[];
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
       responseTimeMs?: number;
-      // Message to create if endTurn
       createAssistantMessage?: boolean;
       lastResponseUpdate?: string;
     };
@@ -458,7 +455,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
-      return { kind: 'skipped', endTurn: false };
+      return { kind: 'skipped' };
     }
 
     const services = this.services;
@@ -667,7 +664,7 @@ interface ToolUseDispatchPrepResult {
  * PocketFlow compliance: exec() executes tools and returns results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
-  | { kind: 'skipped'; interrupted: boolean }
+  | { kind: 'skipped'; interrupted?: boolean }
   | {
       kind: 'success';
       execResults: ToolExecutionResult[];
@@ -727,7 +724,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     prepRes: ToolUseDispatchPrepResult,
   ): Promise<ToolUseDispatchExecResult> {
     if (prepRes.shouldSkip) {
-      return { kind: 'skipped', interrupted: false };
+      return { kind: 'skipped' };
     }
 
     if (prepRes.interrupted) {
@@ -898,7 +895,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const groupId = services.logger.withCurrentGroup((id) => id);
 
     if (execRes.kind === 'skipped') {
-      // Apply interrupted side effect if needed
       if (execRes.interrupted) {
         shared.shouldStop = true;
       }
