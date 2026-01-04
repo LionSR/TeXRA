@@ -236,22 +236,48 @@ h2 {
   color: var(--color-text-secondary);
 }
 
-.enabled-providers-info,
-.allowed-models-info {
+/* Model access info card - unified providers and models display */
+.model-access-info {
   margin-top: var(--spacing-medium);
-  padding: var(--spacing-small) var(--spacing-medium);
+  padding: var(--spacing-medium);
   background: var(--vscode-textBlockQuote-background);
   border-radius: var(--border-radius);
   font-size: var(--font-size-sm);
+}
+
+.model-access-row {
+  display: flex;
+  gap: var(--spacing-medium);
+  padding: var(--spacing-small) 0;
+}
+
+.model-access-row:first-child {
+  padding-top: 0;
+}
+
+.model-access-row:not(:last-child) {
+  border-bottom: var(--border-thin) solid var(--color-border);
+}
+
+.model-access-label {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.model-access-value {
   color: var(--color-text-secondary);
 }
 
-.models-list {
+.models-list-container {
   margin-top: var(--spacing-small);
-  padding: var(--spacing-small) var(--spacing-medium);
-  background: var(--vscode-textBlockQuote-background);
-  border-radius: var(--border-radius);
-  font-size: var(--font-size-sm);
+  padding-top: var(--spacing-small);
+  border-top: var(--border-thin) solid var(--color-border);
   color: var(--color-text-secondary);
   line-height: 1.5;
+}
+
+.models-list-container:empty {
+  display: none;
 }
