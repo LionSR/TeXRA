@@ -123,8 +123,12 @@ export class ProgressEventHandler {
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
-        // Default to RUNNING for new streams without explicit status
-        const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
+        // Get current status without defaulting to RUNNING.
+        // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
+        // not here. Defaulting to RUNNING here causes a race condition where the
+        // "already running" check in executeAgent fails because this event handler
+        // runs synchronously before the check.
+        const status = StreamStatusService.get(stream);
 
         if (this.webviewUpdater.isAvailable()) {
           this.webviewUpdater.updateAll(
@@ -133,7 +137,10 @@ export class ProgressEventHandler {
           );
         }
 
-        this.setStreamStatus(stream, status);
+        // Only update stream status if explicitly set (not for new streams)
+        if (status !== undefined) {
+          this.setStreamStatus(stream, status);
+        }
 
         if (this.webviewUpdater.isAvailable()) {
           const activeRunId = this.refreshStreamSurface(stream, {
@@ -230,12 +237,16 @@ export class ProgressEventHandler {
           await this.initializeStreamForTaskGroup(stream);
         }
 
-        if (this.webviewUpdater.isAvailable()) {
-          if (stream === this.state.activeStream) {
-            this.webviewUpdater.addTaskGroup(stream, group);
-          } else {
-            this.bufferTaskGroupForReplay(stream, group);
-          }
+        // Send to webview if available and stream is active, otherwise buffer.
+        // IMPORTANT: Always buffer when webview unavailable to prevent groups
+        // from being dropped during initialization (e.g., Init stage).
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.addTaskGroup(stream, group);
+        } else {
+          this.bufferTaskGroupForReplay(stream, group);
         }
 
         await addGroupPromise;
@@ -572,6 +583,11 @@ export class ProgressEventHandler {
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
+    // Clear pending task groups buffer BEFORE update to prevent race condition.
+    // If new groups arrive during updateLogContent, they'll be buffered fresh.
+    // Groups already in state will be sent via updateLogContent.
+    this.pendingTaskGroups.delete(stream);
+
     this.webviewUpdater.updateLogContent(
       stream,
       messages,
@@ -605,9 +621,10 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateTodos(stream, todos);
     }
 
-    // Update status for current stream - default to RUNNING for new streams without explicit status
-    // (matches old behavior and avoids flash of STOPPED before setupFlowUIState sets RUNNING)
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
+    // Update status for current stream. Don't default to RUNNING - that causes a race
+    // condition where the "already running" check in executeAgent fails. Let setupFlowUIState
+    // be the only place that sets RUNNING. Use READY as fallback for uninitialized streams.
+    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
