@@ -75,9 +75,6 @@ export interface RunReflectionFlowInput<
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
-  /** Stream tab ID for interrupt registration */
-  streamTabId: StreamTabId;
-
   /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
 
@@ -125,8 +122,10 @@ export async function runReflectionFlow<C = unknown>(
     setAbortController,
     getUsageRecorder = () => async () => {},
     parentStage,
-    streamTabId,
   } = input;
+
+  // Single source of truth: get streamTabId from execution context
+  const streamTabId = executionContext.streamId;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let shared: ReflectionFlowShared | undefined;
@@ -318,6 +317,7 @@ export async function runReflectionFlow<C = unknown>(
     });
 
     // Build services - all fields inline
+    // Note: executionContext accessed directly (single source of truth, no context alias)
     services = {
       modelHandler,
       config,
@@ -327,8 +327,7 @@ export async function runReflectionFlow<C = unknown>(
       userVarChannels,
       checkInterruption,
       setAbortController,
-      logger: executionContext.logger,
-      context: executionContext,
+      logger: executionContext.logger, // Convenience accessor for high-frequency usage
       outputHandler,
       latexMediaManager,
       promptBuilder,
