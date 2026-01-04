@@ -376,11 +376,10 @@ class ToolUseCycleNode<C> extends Node<
     });
 
     // Set up todo update callback to emit changes to the progress view
-    const { executionContext } = this.services;
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
       bus.emit('updateTodos', {
-        stream: executionContext.streamId,
-        executionId: executionContext.executionId,
+        stream: this.services.streamId,
+        executionId: this.services.executionId,
         todos,
       });
     });
