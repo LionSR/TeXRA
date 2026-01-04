@@ -9,7 +9,6 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 import { type StreamStatus } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
@@ -24,9 +23,7 @@ import type {
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
-
-// Logger imports
-// Type imports
+import { ManagerLogger } from './ManagerLogger';
 
 /**
  * Manages webview updates for the progress view.
@@ -34,11 +31,8 @@ import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
  * without coupling business logic to DOM operations.
  */
 export class WebviewUpdater {
-  private readonly logger: AgentLogger;
+  constructor(private getWebview: () => vscode.Webview | undefined) {}
 
-  constructor(private getWebview: () => vscode.Webview | undefined) {
-    this.logger = new AgentLogger('WebviewUpdater');
-  }
 
   /** Helper to send messages to webview, eliminating repetitive null checks */
   private sendMessage(message: any): void {
@@ -371,7 +365,7 @@ export class WebviewUpdater {
 
     this.updateStreams(streams, activeStream, state.agentTypeFilter);
 
-    this.logger.debug(
+    ManagerLogger.debug(
       `Updated webview streams (${streams.length}) active: ${activeStream}`,
     );
 

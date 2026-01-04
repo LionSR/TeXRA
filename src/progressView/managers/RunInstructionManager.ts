@@ -3,7 +3,6 @@ import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
 import type { InstructionUpdate } from '@progressView/types';
@@ -14,6 +13,7 @@ import {
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import { ManagerLogger } from './ManagerLogger';
 
 type InstructionMap = Map<string, InstructionUpdate>;
 
@@ -24,11 +24,8 @@ export class RunInstructionManager extends PersistentMapManager<
   StreamTabId,
   InstructionMap
 > {
-  private readonly logger: AgentLogger;
-
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.RUN_INSTRUCTIONS, storage);
-    this.logger = new AgentLogger('RunInstructionManager');
   }
 
   getInstructions(stream: StreamTabId): InstructionMap {
@@ -98,7 +95,7 @@ export class RunInstructionManager extends PersistentMapManager<
       const entries = Object.entries(data as Record<string, InstructionUpdate>);
       return new Map(entries as [string, InstructionUpdate][]);
     } catch (error) {
-      this.logger.warn(
+      ManagerLogger.warn(
         `Failed to deserialize run instructions for ${stream}: ${String(error)}`,
       );
       return new Map();

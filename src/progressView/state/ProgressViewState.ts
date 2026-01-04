@@ -17,7 +17,6 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
@@ -32,6 +31,7 @@ import {
   OutputFilesManager,
   UsageStatsManager,
   RunInstructionManager,
+  ManagerLogger,
 } from '@progressView/managers';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
@@ -83,7 +83,6 @@ export class ProgressViewState {
    */
   private _todos: Map<StreamTabId, TodoItem[]> = new Map();
   private readonly storage: StateStorage;
-  private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
     const resolvedStorage = storage ?? workspaceSM;
@@ -92,7 +91,6 @@ export class ProgressViewState {
     }
 
     this.storage = resolvedStorage;
-    this.logger = new AgentLogger('ProgressViewState');
     // Initialize focused managers
     this._streamTabs = new StreamTabsManager(resolvedStorage);
     this._taskGroups = new TaskGroupManager(resolvedStorage);
@@ -177,7 +175,7 @@ export class ProgressViewState {
 
   set agentTypeFilter(filter: AgentFilter) {
     if (!isAgentTypeFilter(filter)) {
-      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
+      ManagerLogger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
       filter = 'all';
     }
     this._agentTypeFilter = filter;
@@ -647,7 +645,7 @@ export class ProgressViewState {
         // Validate against TaskState schema to catch corrupted/malformed state
         const parseResult = TaskStateSchema.safeParse(rawState);
         if (!parseResult.success) {
-          this.logger.debug(
+          ManagerLogger.debug(
             `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
           );
           continue;
@@ -664,7 +662,7 @@ export class ProgressViewState {
     }
 
     if (loaded > 0) {
-      this.logger.debug(`Loaded task states for ${loaded} streams`);
+      ManagerLogger.debug(`Loaded task states for ${loaded} streams`);
     }
 
     this.cleanupToolUseAgentRegistry();
@@ -685,7 +683,7 @@ export class ProgressViewState {
 
     if (entries.length > 0) {
       this._executionIds = new Map(entries);
-      this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
+      ManagerLogger.debug(`Loaded execution IDs for ${entries.length} streams`);
     } else {
       this._executionIds.clear();
     }
