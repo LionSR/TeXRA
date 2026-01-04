@@ -34,7 +34,7 @@ export type RetryEventsModule = EventModuleBase;
  * Creates a module for handling retry request events.
  * Follows the established event module pattern used by StreamStatusEvents, LogEvents, etc.
  */
-export function createRetryEventsModule(
+export function createRetryEvents(
   shared: RetryEventsShared,
 ): RetryEventsModule {
   const { withErrorBoundary } = shared;

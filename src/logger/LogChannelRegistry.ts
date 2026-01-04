@@ -6,11 +6,7 @@ import * as vscode from 'vscode';
 import { getConfig } from '@utils/config';
 
 // Local imports - logger
-import { ProgressViewSink } from './sinks/ProgressViewSink';
 import { VSCodeTransport } from './transports/VSCodeTransport';
-
-// Type imports
-import type { LogEventSink } from './types/LogEventSink';
 
 interface ChannelEntry {
   logger: winston.Logger;
@@ -49,14 +45,9 @@ export class LogChannelRegistry {
       ? vscode.window.createOutputChannel(`TeXRA ${channel}`)
       : this.getMainOutputChannel();
 
-    const sink: LogEventSink | undefined = options.isAgent
-      ? new ProgressViewSink()
-      : undefined;
-
     const transport = new VSCodeTransport({
       channel: outputChannel,
       streamName: channel,
-      sink,
       isAgentChannel: options.isAgent,
       includeStructuredData: () =>
         getConfig<boolean>('texra.logger.debugMode', false),

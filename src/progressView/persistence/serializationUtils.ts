@@ -18,9 +18,11 @@ export function mapToRecord<K extends string | number, V>(
  * Used for run-scoped data like output files by round, usage stats.
  * @example nestedMapToRecord(new Map([['run1', new Map([[1, 'v']])]])) // { run1: { 1: 'v' } }
  */
-export function nestedMapToRecord<K1 extends string, K2 extends string | number, V>(
-  outer: Map<K1, Map<K2, V>>,
-): Record<string, Record<string, V>> {
+export function nestedMapToRecord<
+  K1 extends string,
+  K2 extends string | number,
+  V,
+>(outer: Map<K1, Map<K2, V>>): Record<string, Record<string, V>> {
   return Object.fromEntries(
     Array.from(outer.entries(), ([key, inner]) => [
       key,

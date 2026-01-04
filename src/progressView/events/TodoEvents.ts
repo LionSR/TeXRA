@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -10,11 +7,11 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { TODO_STATUS } from '@eventBus/schemas';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  ProgressEventBusLike,
-  StatefulEventModule,
+import {
+  createStatefulEventDisposable,
+  type ProgressEventBusLike,
 } from './types';
+import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * Shared context for TodoEvents module.
@@ -66,16 +63,14 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
   };
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      state: ProgressViewState,
-      updater: WebviewUpdater,
-    ): vscode.Disposable[] {
+    register(bus, state, updater) {
       return [
-        new vscode.Disposable(
-          bus.on('updateTodos', (payload) =>
-            handleUpdateTodos(payload, state, updater),
-          ),
+        createStatefulEventDisposable(
+          bus,
+          'updateTodos',
+          state,
+          updater,
+          handleUpdateTodos,
         ),
       ];
     },
