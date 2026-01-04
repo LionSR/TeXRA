@@ -146,10 +146,14 @@ export class AgentsTable {
   renderApiAccessSection(apiAccessMode, enabledProviders, allowedModels) {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
+    const modelAccessInfo = safeGetElementById(ELEMENT_IDS.MODEL_ACCESS_INFO);
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
     const modelsInfo = safeGetElementById(ELEMENT_IDS.ALLOWED_MODELS_INFO);
+    const modelsListContainer = safeGetElementById(
+      ELEMENT_IDS.MODELS_LIST_CONTAINER,
+    );
     const resolvedAllowedModels = Array.isArray(allowedModels)
       ? allowedModels
       : allowedModels === null
@@ -164,27 +168,29 @@ export class AgentsTable {
       personalRadio.checked = apiAccessMode === 'personal';
     }
 
-    // Show enabled providers info when using included access
-    if (providersInfo) {
-      if (
-        apiAccessMode === 'included' &&
-        enabledProviders &&
-        enabledProviders.length > 0
-      ) {
-        const providerNames = enabledProviders
-          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-          .join(', ');
-        providersInfo.textContent = `Providers: ${providerNames}`;
-        providersInfo.style.display = 'block';
-      } else {
-        providersInfo.style.display = 'none';
-      }
+    // Show model access info card when using included access with providers
+    const showModelAccessInfo =
+      apiAccessMode === 'included' &&
+      enabledProviders &&
+      enabledProviders.length > 0;
+
+    if (modelAccessInfo) {
+      modelAccessInfo.style.display = showModelAccessInfo ? 'block' : 'none';
+    }
+
+    // Update providers info
+    if (providersInfo && showModelAccessInfo) {
+      const providerNames = enabledProviders
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(', ');
+      providersInfo.textContent = providerNames;
     }
 
     // Render model display section
-    if (modelsInfo) {
+    if (modelsInfo && modelsListContainer) {
       this.renderModelsDisplay(
         modelsInfo,
+        modelsListContainer,
         apiAccessMode,
         resolvedAllowedModels,
         enabledProviders,
@@ -215,13 +221,15 @@ export class AgentsTable {
 
   /**
    * Render the models display section based on access mode and allowed models.
-   * @param {HTMLElement} modelsInfo - The models info container element
+   * @param {HTMLElement} modelsInfo - The models info value element
+   * @param {HTMLElement} modelsListContainer - The container for the models list
    * @param {string} apiAccessMode - 'included' or 'personal'
    * @param {string[]|null} allowedModels - Array of model names, or null for all models
    * @param {string[]} enabledProviders - Array of enabled provider names (for error detection)
    */
   renderModelsDisplay(
     modelsInfo,
+    modelsListContainer,
     apiAccessMode,
     allowedModels,
     enabledProviders,
@@ -233,63 +241,30 @@ export class AgentsTable {
     if (apiAccessMode === 'included') {
       if (allowedModels === null) {
         // null means all models are allowed (Ultra tier)
-        modelsInfo.textContent = 'All models included';
+        modelsInfo.textContent = 'All included';
         modelsInfo.title = '';
-        modelsInfo.style.display = 'block';
-        this.clearModelsList(modelsInfo);
+        modelsListContainer.textContent = '';
       } else if (allowedModels.length > 0) {
         // Specific models allowed - display count and list
-        modelsInfo.textContent = `Models: ${allowedModels.length} included`;
+        modelsInfo.textContent = `${allowedModels.length} included`;
         modelsInfo.title = '';
-        modelsInfo.style.display = 'block';
-        this.renderModelsList(modelsInfo, allowedModels);
+        modelsListContainer.textContent = allowedModels.join(', ');
       } else {
         // Empty array - config fetch failed or no models configured
         const configFetchFailed = enabledProviders.length === 0;
         modelsInfo.textContent = configFetchFailed
-          ? 'Unable to load models'
-          : 'No models configured';
+          ? 'Unable to load'
+          : 'None configured';
         modelsInfo.title = configFetchFailed
           ? 'Try signing out and back in to refresh'
           : '';
-        modelsInfo.style.display = 'block';
-        this.clearModelsList(modelsInfo);
+        modelsListContainer.textContent = '';
       }
     } else {
-      // Personal mode - hide models info and clean up
-      modelsInfo.style.display = 'none';
-      this.clearModelsList(modelsInfo);
+      // Personal mode - clear content (card is hidden by parent)
+      modelsInfo.textContent = '';
+      modelsListContainer.textContent = '';
     }
-  }
-
-  /**
-   * Clear any existing models list from the DOM.
-   * @param {HTMLElement} container - The container element near the models list
-   */
-  clearModelsList(container) {
-    const existingList =
-      container?.parentElement?.querySelector('.models-list');
-    if (existingList) {
-      existingList.remove();
-    }
-  }
-
-  /**
-   * Render the list of allowed models as a formatted list.
-   * @param {HTMLElement} container - The container element to append the list to
-   * @param {string[]} models - Array of model names
-   */
-  renderModelsList(container, models) {
-    // Remove any existing models list first
-    this.clearModelsList(container);
-
-    // Create the models list element
-    const modelsList = document.createElement('div');
-    modelsList.className = 'models-list';
-    modelsList.textContent = models.join(', ');
-
-    // Insert after the container (modelsInfo element)
-    container.parentElement?.insertBefore(modelsList, container.nextSibling);
   }
 
   /**
