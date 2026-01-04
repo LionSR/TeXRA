@@ -36,16 +36,23 @@ class TestBus implements ProgressEventBusLike {
   on<K extends keyof any>(
     event: K,
     listener: (payload: any) => void,
+    options?: { signal?: AbortSignal },
   ): () => void {
+    if (options?.signal?.aborted) return () => {};
+
     const existing = this.listeners[event as string] ?? [];
     existing.push(listener);
     this.listeners[event as string] = existing;
 
-    return () => {
+    const cleanup = () => {
       this.listeners[event as string] = (
         this.listeners[event as string] ?? []
       ).filter((handler) => handler !== listener);
     };
+
+    options?.signal?.addEventListener('abort', cleanup, { once: true });
+
+    return cleanup;
   }
 
   emit<K extends keyof any>(event: K, payload: any): void {
@@ -78,7 +85,8 @@ describe('LogEvents', () => {
     } as unknown as WebviewUpdater;
 
     const bus = new TestBus();
-    const unsubscribes = registerLogEvents(bus, state, updater);
+    const controller = new AbortController();
+    registerLogEvents(bus, state, updater, controller.signal);
 
     const thinkingMessage: LogMessageData = {
       id: 'log-1',
@@ -114,6 +122,6 @@ describe('LogEvents', () => {
     assert.equal(updated.length, 1);
     assert.equal(updated[0].text, 'finished thinking');
 
-    unsubscribes.forEach((unsubscribe) => unsubscribe());
+    controller.abort();
   });
 });

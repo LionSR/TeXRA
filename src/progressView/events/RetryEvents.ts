@@ -2,7 +2,7 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type { ProgressEventBusLike, Unsubscribe } from './types';
+import type { ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'RetryEvents';
@@ -19,22 +19,28 @@ export interface RetryCallbacks {
 
 /**
  * Register retry event handlers.
- * Returns unsubscribe functions - caller handles VSCode Disposable wrapping.
+ * Cleanup is automatic via AbortSignal.
  */
 export function registerRetryEvents(
   bus: ProgressEventBusLike,
   callbacks: RetryCallbacks,
-): Unsubscribe[] {
-  return [
-    bus.on('showRetryRequest', (payload) =>
+  signal: AbortSignal,
+): void {
+  bus.on(
+    'showRetryRequest',
+    (payload) =>
       withEventErrorHandling(MODULE, 'failed to show retry request', () =>
         callbacks.showRetryRequest(payload),
       ),
-    ),
-    bus.on('resolveRetryRequest', (payload) =>
+    { signal },
+  );
+
+  bus.on(
+    'resolveRetryRequest',
+    (payload) =>
       withEventErrorHandling(MODULE, 'failed to resolve retry request', () =>
         callbacks.resolveRetryRequest(payload.streamId),
       ),
-    ),
-  ];
+    { signal },
+  );
 }

@@ -97,8 +97,20 @@ class ProgressEventBus {
   on<K extends ProgressEvent>(
     event: K,
     listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
   ): () => void {
+    // If already aborted, don't register
+    if (options?.signal?.aborted) {
+      return () => {};
+    }
+
     this.emitter.on(event, listener);
+
+    // Auto-cleanup when signal aborts
+    const cleanup = () => this.emitter.off(event, listener);
+    options?.signal?.addEventListener('abort', cleanup, { once: true });
+
+    // Replay buffered events for this event type
     const remaining: typeof this.buffer = [];
     for (const item of this.buffer) {
       if (item.event === event) {
@@ -108,7 +120,8 @@ class ProgressEventBus {
       }
     }
     this.buffer = remaining;
-    return () => this.emitter.off(event, listener);
+
+    return cleanup;
   }
 }
 

@@ -7,13 +7,6 @@ import type {
 } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
-// Types
-// ============================================================================
-
-/** Cleanup function returned by event subscriptions. */
-export type Unsubscribe = () => void;
-
-// ============================================================================
 // Event Bus Interface
 // ============================================================================
 
@@ -21,6 +14,7 @@ export interface ProgressEventBusLike {
   on<K extends ProgressEvent>(
     event: K,
     listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
   ): () => void;
   emit<K extends ProgressEvent>(
     event: K,
