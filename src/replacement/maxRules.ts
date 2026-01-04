@@ -219,7 +219,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Examples:
     // \vec{p} -> \vp (momentum vector)
     // \vec{x} -> \vx (position vector)
-    const vectorLetters = 'pqvxyz'.split('');
+    const vectorLetters = [...'pqvxyz'];
     patterns = { ...patterns, ...generateVectorShortcuts(vectorLetters) };
 
     // Greek Letters (Regular)
@@ -248,7 +248,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Mathcal Letters
     // Map \mathcal{X} to shorter \cX versions for all uppercase letters
-    const upperLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
     patterns = {
       ...patterns,
       ...generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
@@ -256,7 +256,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Mathbb Letters
     // Map \mathbb{X} to shorter \eX versions for specific letters
-    const mathbbLetters = 'CEINPQRTV'.split('');
+    const mathbbLetters = [...'CEINPQRTV'];
     patterns = {
       ...patterns,
       ...generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
@@ -264,7 +264,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Mathbf Letters (Lowercase)
     // Map \mathbf{x} to shorter \bx versions
-    const lowerLetters = 'abcdefghjnpqrsuvwxyz'.split('');
+    const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
     patterns = {
       ...patterns,
       ...generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
@@ -272,15 +272,16 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Mathbf Letters (Uppercase)
     // Map \mathbf{X} to shorter \bX versions for uppercase letters
-    const mathbfUpperLetters = 'ABCDEFGIJKMQRUVWXYZ'.split('');
+    const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
     patterns = {
       ...patterns,
       ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
     };
 
     // Normalize legacy font commands {\rm X}, {\bf X} and {\cal X}
-    const alphabetLetters =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
+    const alphabetLetters = [
+      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+    ];
     patterns = {
       ...patterns,
       ...generateLegacyTextCommandNormalization(
@@ -308,7 +309,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Tilde variables - simple letters
     // Examples: \tilde{x} -> \tx, \tilde{B} -> \tB
-    const tildeLetters = 'xzpqBFJMPTZ'.split('');
+    const tildeLetters = [...'xzpqBFJMPTZ'];
     patterns = {
       ...patterns,
       ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
@@ -316,7 +317,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Tilde with mathbf - lowercase
     // Example: \tilde{\mathbf{x}} -> \tbx
-    const tildeLettersMathbf = 'axpvwz'.split('');
+    const tildeLettersMathbf = [...'axpvwz'];
     patterns = {
       ...patterns,
       ...generateNestedDecoratorShortcuts(
@@ -330,7 +331,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Tilde with mathbf - uppercase
     // Example: \tilde{\mathbf{M}} -> \tbM
-    const tildeLettersMathbfUppercase = 'MTX'.split('');
+    const tildeLettersMathbfUppercase = [...'MTX'];
     patterns = {
       ...patterns,
       ...generateNestedDecoratorShortcuts(
@@ -344,7 +345,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Tilde with mathcal - uppercase
     // Example: \tilde{\mathcal{H}} -> \tcH
-    const tildeLettersMathcal = 'HQSW'.split('');
+    const tildeLettersMathcal = [...'HQSW'];
     patterns = {
       ...patterns,
       ...generateNestedDecoratorShortcuts(
@@ -388,7 +389,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Hat variables
     // Example: \hat{H} -> \hH
-    const hatLetters = 'HFP'.split('');
+    const hatLetters = [...'HFP'];
     patterns = {
       ...patterns,
       ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
@@ -409,7 +410,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Hat with mathbf
     // Example: \hat{\mathbf{n}} -> \hbn
-    const hatMathbfLetters = 'nv'.split('');
+    const hatMathbfLetters = [...'nv'];
     patterns = {
       ...patterns,
       ...generateNestedDecoratorShortcuts(

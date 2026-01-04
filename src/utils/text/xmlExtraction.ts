@@ -58,7 +58,7 @@ export function extractTextFromTag(
 ): string {
   // Find all matches and get the last one using matchAll
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
-  const matches = Array.from(inputContent.matchAll(regex));
+  const matches = [...inputContent.matchAll(regex)];
   const lastContent = matches.at(-1)?.[1] ?? '';
 
   // Use centralized CDATA removal

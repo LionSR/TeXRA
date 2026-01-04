@@ -34,7 +34,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     const figurePaths = await extractFigurePathsFromLatex(
       pathToLocation(resolved.absolute),
     );
-    const uniqueFigures = Array.from(new Set(figurePaths));
+    const uniqueFigures = [...new Set(figurePaths)];
 
     if (uniqueFigures.length === 0) {
       const summary = `No figures found in ${display}.`;

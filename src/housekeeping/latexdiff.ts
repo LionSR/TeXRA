@@ -66,7 +66,10 @@ export async function runPackLatexdiffvc(
       vscode.window.showInformationMessage('LaTeXdiff files cleaned');
     } else {
       // Move files to output folder only when needed
-      const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+      const now = new Date()
+        .toISOString()
+        .replaceAll(/[-:]/g, '')
+        .split('.')[0];
       const outputFolder = path.join(
         inputDir,
         'Diffs',

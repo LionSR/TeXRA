@@ -39,15 +39,15 @@ import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
-import type { TodoItem } from '@eventBus/schemas';
-import { bus } from '@eventBus/ProgressEventBus';
-
-// Internal imports
 import {
   type NodeExecResult,
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
+import type { TodoItem } from '@eventBus/schemas';
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
 
 // Service types and helper functions (direct calls, no closures)
 import {

@@ -23,19 +23,18 @@ function parseGraphicspath(content: string): string[] {
   const pathPattern = /\{([^{}]+)\}/g;
 
   // Use flatMap to process outer matches and extract inner paths
-  const extractedPaths = Array.from(
-    content.matchAll(graphicspathPattern),
-  ).flatMap((outerMatch) =>
-    Array.from(outerMatch[1].matchAll(pathPattern))
-      .map((pathMatch) => {
-        let p = pathMatch[1].trim();
-        // Ensure path has trailing slash
-        if (p && !p.endsWith('/')) {
-          p += '/';
-        }
-        return p;
-      })
-      .filter(Boolean),
+  const extractedPaths = [...content.matchAll(graphicspathPattern)].flatMap(
+    (outerMatch) =>
+      [...outerMatch[1].matchAll(pathPattern)]
+        .map((pathMatch) => {
+          let p = pathMatch[1].trim();
+          // Ensure path has trailing slash
+          if (p && !p.endsWith('/')) {
+            p += '/';
+          }
+          return p;
+        })
+        .filter(Boolean),
   );
 
   paths.push(...extractedPaths);
@@ -70,7 +69,7 @@ export async function extractFigurePathsFromLatex(
     const paths = parseGraphicspath(content);
     for (const p of paths) {
       const normalizedPath = path.normalize(
-        path.join(latexDir, p.replace(/^\/+|\/+$/g, '')),
+        path.join(latexDir, p.replaceAll(/^\/+|\/+$/g, '')),
       );
       graphicspaths.push(normalizedPath);
     }

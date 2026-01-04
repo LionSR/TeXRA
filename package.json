@@ -1595,6 +1595,7 @@
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unicorn": "^62.0.0",
     "globals": "^17.0.0",
     "jsdom": "^27.4.0",
     "node-loader": "^2.1.0",
@@ -1607,7 +1608,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.51.0",
     "webpack": "^5.104.1",
-    "webpack-cli": "^6.0.1"
+    "webpack-cli": "^6.0.1",
+    "zod-v3-to-v4": "^1.11.0"
   },
   "repository": {
     "type": "git",

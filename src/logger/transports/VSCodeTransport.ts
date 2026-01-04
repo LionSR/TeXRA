@@ -4,12 +4,12 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
-import { bus } from '@eventBus/ProgressEventBus';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
@@ -146,5 +146,4 @@ export class VSCodeTransport extends Transport {
       logMessage,
     });
   }
-
 }
