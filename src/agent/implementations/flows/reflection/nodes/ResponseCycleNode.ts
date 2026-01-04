@@ -185,8 +185,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
       // Spread parent services directly - no intermediate cycleOptions object
       const flow = createResponseCycleFlow<C>();
       flow.setServices({
-        ...services,  // Parent ReflectionServices has all needed fields
-        client: await services.getClient(),  // Only transformation: await fresh client
+        ...services, // Parent ReflectionServices has all needed fields
+        client: await services.modelHandler.getClient(), // Get fresh client from handler
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,

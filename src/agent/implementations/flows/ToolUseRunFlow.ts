@@ -364,9 +364,9 @@ class ToolUseCycleNode<C> extends Node<
     const flow = createToolUseCycleFlow<C>();
     const onRoundFinalized = services.getUsageRecorder();
     flow.setServices({
-      ...services,  // Parent ToolUseServices has most needed fields
-      setting: { ...services.setting, tools: services.resolvedTools },  // Override with resolved tools
-      client: await services.getClient(),  // Only transformation: await fresh client
+      ...services, // Parent ToolUseServices has most needed fields
+      setting: { ...services.setting, tools: services.resolvedTools }, // Override with resolved tools
+      client: await services.modelHandler.getClient(), // Get fresh client from handler
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
       onRoundFinalized,
