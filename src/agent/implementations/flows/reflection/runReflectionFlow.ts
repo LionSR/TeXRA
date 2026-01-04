@@ -30,6 +30,7 @@ import {
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
@@ -74,6 +75,9 @@ export interface RunReflectionFlowInput<
 > extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
+
+  /** Execution context for storage key management */
+  executionContext: AgentExecutionContext;
 
   /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
