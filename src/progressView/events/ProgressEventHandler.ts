@@ -576,6 +576,11 @@ export class ProgressEventHandler {
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
+    // Clear pending task groups buffer BEFORE update to prevent race condition.
+    // If new groups arrive during updateLogContent, they'll be buffered fresh.
+    // Groups already in state will be sent via updateLogContent.
+    this.pendingTaskGroups.delete(stream);
+
     this.webviewUpdater.updateLogContent(
       stream,
       messages,
@@ -588,10 +593,6 @@ export class ProgressEventHandler {
       },
       { forceRebuild },
     );
-
-    // Clear pending task groups buffer after full refresh.
-    // All groups are now in state and sent via updateLogContent.
-    this.pendingTaskGroups.delete(stream);
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
     // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
