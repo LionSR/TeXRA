@@ -230,12 +230,16 @@ export class ProgressEventHandler {
           await this.initializeStreamForTaskGroup(stream);
         }
 
-        if (this.webviewUpdater.isAvailable()) {
-          if (stream === this.state.activeStream) {
-            this.webviewUpdater.addTaskGroup(stream, group);
-          } else {
-            this.bufferTaskGroupForReplay(stream, group);
-          }
+        // Send to webview if available and stream is active, otherwise buffer.
+        // IMPORTANT: Always buffer when webview unavailable to prevent groups
+        // from being dropped during initialization (e.g., Init stage).
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.addTaskGroup(stream, group);
+        } else {
+          this.bufferTaskGroupForReplay(stream, group);
         }
 
         await addGroupPromise;
@@ -584,6 +588,10 @@ export class ProgressEventHandler {
       },
       { forceRebuild },
     );
+
+    // Clear pending task groups buffer after full refresh.
+    // All groups are now in state and sent via updateLogContent.
+    this.pendingTaskGroups.delete(stream);
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
     // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
