@@ -185,17 +185,17 @@ for a stream, the group is buffered in `ProgressEventHandler.pendingTaskGroups`.
 When `setActiveStream` is processed, buffered groups are replayed.
 
 ```
-TaskGroupEvents.handleAddTaskGroup()
+ProgressEventHandler.handleAddTaskGroup()
     │
     ├─ stream === state.activeStream?
-    │     ├─ YES: updater.addTaskGroup() immediately
+    │     ├─ YES: webviewUpdater.addTaskGroup() immediately
     │     └─ NO:  bufferTaskGroupForReplay(stream, group)
     │
-StreamStatusEvents.handleSetActiveStream()
+ProgressEventHandler.handleSetActiveStream()
     │
     ├─ state.activeStream = stream
-    └─ replayPendingTaskGroups(stream, updater)
-          └─ sends buffered groups via updater.addTaskGroup()
+    └─ replayPendingTaskGroups(stream)
+          └─ sends buffered groups via this.webviewUpdater.addTaskGroup()
 ```
 
 ## Round Trip Analysis
