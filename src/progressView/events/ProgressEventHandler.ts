@@ -123,8 +123,12 @@ export class ProgressEventHandler {
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
-        // Default to RUNNING for new streams without explicit status
-        const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
+        // Get current status without defaulting to RUNNING.
+        // Status should only be set to RUNNING by setupFlowUIState in executeAgent,
+        // not here. Defaulting to RUNNING here causes a race condition where the
+        // "already running" check in executeAgent fails because this event handler
+        // runs synchronously before the check.
+        const status = StreamStatusService.get(stream);
 
         if (this.webviewUpdater.isAvailable()) {
           this.webviewUpdater.updateAll(
@@ -133,7 +137,10 @@ export class ProgressEventHandler {
           );
         }
 
-        this.setStreamStatus(stream, status);
+        // Only update stream status if explicitly set (not for new streams)
+        if (status !== undefined) {
+          this.setStreamStatus(stream, status);
+        }
 
         if (this.webviewUpdater.isAvailable()) {
           const activeRunId = this.refreshStreamSurface(stream, {
@@ -605,9 +612,10 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateTodos(stream, todos);
     }
 
-    // Update status for current stream - default to RUNNING for new streams without explicit status
-    // (matches old behavior and avoids flash of STOPPED before setupFlowUIState sets RUNNING)
-    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
+    // Update status for current stream. Don't default to RUNNING - that causes a race
+    // condition where the "already running" check in executeAgent fails. Let setupFlowUIState
+    // be the only place that sets RUNNING. Use READY as fallback for uninitialized streams.
+    const status = StreamStatusService.get(stream) ?? STREAM_STATUS.READY;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
