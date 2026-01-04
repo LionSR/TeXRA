@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'fs';
 import * as path from 'path';
 
 // Third-party imports
@@ -36,20 +35,14 @@ function containsHiddenSegment(relativePath: string): boolean {
 }
 
 /**
- * Compute relative path with symlink awareness.
- * Uses real paths to avoid incorrect `../../../...` results when
- * either path contains a symlink.
+ * Get workspace-relative path, preserving symlink structure.
+ * Falls back to path.relative() for non-workspace paths.
  */
-function safeRelativePath(from: string, to: string): string {
-  try {
-    // Resolve symlinks in both paths before computing relative
-    const realFrom = fs.realpathSync(from);
-    const realTo = fs.realpathSync(to);
-    return path.relative(realFrom, realTo);
-  } catch {
-    // Fallback to direct comparison if realpath fails (e.g., file doesn't exist)
-    return path.relative(from, to);
-  }
+function getWorkspaceRelativePath(absolutePath: string): string {
+  // asRelativePath preserves symlink paths within workspace
+  const relative = vscode.workspace.asRelativePath(absolutePath, false);
+  // asRelativePath returns the original if outside workspace
+  return relative !== absolutePath ? relative : path.basename(absolutePath);
 }
 
 function containsExcludedDirectory(
@@ -122,7 +115,7 @@ export async function getFilesInDirectory(
   return files
     .filter((uri) => {
       // Check if the file is inside an excluded directory (for symlinks, case-insensitive)
-      const relativePath = safeRelativePath(dir, uri.fsPath);
+      const relativePath = getWorkspaceRelativePath(uri.fsPath);
       return !containsExcludedDirectory(relativePath, filters.excludeDirs);
     })
     .map((uri) => path.basename(uri.fsPath))
@@ -160,7 +153,7 @@ export async function getFilesRecursively(
   );
 
   return files
-    .map((uri) => safeRelativePath(root, uri.fsPath))
+    .map((uri) => getWorkspaceRelativePath(uri.fsPath))
     .filter((relativePath) => {
       if (!relativePath) {
         return false;
