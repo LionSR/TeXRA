@@ -166,9 +166,8 @@ function logWithGroup(
   // DEBUG: trace groupId resolution for file loading messages
   if (message.includes('Loading') && message.includes('Files')) {
     const context = contextStorage.getStore()?.get(key);
-    console.log(
-      `[DEBUG logWithGroup] message="${message}" key="${key}" activeGroupId=${activeGroupId} contextStack=${JSON.stringify(context?.stack)}`,
-    );
+    // Use warn level to ensure visibility in Output channel
+    entry.logger.log('warn', `[DEBUG-TRACE] logWithGroup: msg="${message}" activeGroupId=${activeGroupId} stack=${JSON.stringify(context?.stack)}`, {});
   }
 
   entry.logger.log(level, message, {
@@ -194,9 +193,8 @@ export function startGroup(
   // DEBUG: trace Init group creation
   if (groupName === 'Init') {
     const key = getChannelKey(channel, isAgent);
-    console.log(
-      `[DEBUG startGroup] groupName="${groupName}" groupId=${groupId} key="${key}" channel="${channel}" isAgent=${isAgent}`,
-    );
+    const entry = getCachedEntry(channel, isAgent);
+    entry.logger.log('warn', `[DEBUG-TRACE] startGroup: name="${groupName}" groupId=${groupId} key="${key}"`, {});
   }
   pushGroupContext(channel, groupId, isAgent);
   return transport.startGroup(groupName, groupId, parentGroupId);
@@ -228,15 +226,12 @@ export async function runWithGroupContext<T>(
 ): Promise<T> {
   // DEBUG: trace runWithGroupContext calls
   const key = getChannelKey(channel, isAgent);
+  const entry = getCachedEntry(channel, isAgent);
   const contextBefore = contextStorage.getStore()?.get(key);
-  console.log(
-    `[DEBUG runWithGroupContext] ENTER groupId=${groupId} key="${key}" stackBefore=${JSON.stringify(contextBefore?.stack)}`,
-  );
+  entry.logger.log('warn', `[DEBUG-TRACE] runWithGroupContext ENTER: groupId=${groupId} stackBefore=${JSON.stringify(contextBefore?.stack)}`, {});
   pushGroupContext(channel, groupId, isAgent);
   const contextAfter = contextStorage.getStore()?.get(key);
-  console.log(
-    `[DEBUG runWithGroupContext] AFTER PUSH stackAfter=${JSON.stringify(contextAfter?.stack)}`,
-  );
+  entry.logger.log('warn', `[DEBUG-TRACE] runWithGroupContext AFTER PUSH: stackAfter=${JSON.stringify(contextAfter?.stack)}`, {});
   try {
     return await fn();
   } finally {
