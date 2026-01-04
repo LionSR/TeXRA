@@ -32,7 +32,7 @@ import type { BaseFlowContextInit } from '../common/BaseFlowServices';
  */
 export interface ReflectionServices<C = unknown>
   extends BaseFlowContextInit<C> {
-  /** Logger (executionContext.logger) */
+  /** Logger for flow nodes */
   readonly logger: AgentLogger;
 
   /** Narrow setting to workflow-specific type */
