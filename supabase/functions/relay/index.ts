@@ -255,16 +255,21 @@ function jsonError(
 }
 
 /**
- * Get the start of the current month in ISO format.
+ * Get the start of the current month in UTC.
+ * Uses UTC for consistency with billing views.
  */
-function getCurrentMonthStart(): string {
+function getCurrentMonthStartUTC(): string {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
 /**
  * Check if user has exceeded their monthly spending limit.
  * Returns { allowed: true } or { allowed: false, currentSpend, limit, remaining }.
+ *
+ * NOTE: This fetches individual cost rows and sums client-side.
+ * For high-volume users, consider adding a database function to compute
+ * the sum server-side for better performance.
  */
 async function checkSpendingLimit(
   supabaseUrl: string,
@@ -278,7 +283,7 @@ async function checkSpendingLimit(
   remaining: number;
 }> {
   const limit = getSpendingLimit(tier);
-  const monthStart = getCurrentMonthStart();
+  const monthStart = getCurrentMonthStartUTC();
 
   // Use service role to bypass RLS for admin query
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -292,7 +297,7 @@ async function checkSpendingLimit(
 
   if (error) {
     console.error('[RELAY] Failed to check spending:', error.message);
-    // Allow request on error (fail open) but log it
+    // Fail open: allow request on error but log it
     return { allowed: true, currentSpend: 0, limit, remaining: limit };
   }
 
@@ -407,7 +412,9 @@ app.get('/tier-config', async (c) => {
               currentSpend: spending.currentSpend,
               limit: spending.limit,
               remaining: spending.remaining,
-              percentUsed: Math.round((spending.currentSpend / spending.limit) * 100),
+              percentUsed: spending.limit > 0
+                ? Math.round((spending.currentSpend / spending.limit) * 100)
+                : 100,
             };
           }
 
