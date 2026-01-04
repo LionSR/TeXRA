@@ -24,16 +24,29 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 
 /**
  * Execute an agent with the given configuration.
- * Always starts a new execution - for resuming paused sessions, use texra.resumeAgent.
+ *
+ * Supports two modes:
+ * - Fresh execution: Pass raw config or { config } - creates new executionId
+ * - Resume workflow: Pass { config, executionId } - reuses executionId to resume
+ *
+ * For tool-use sessions, use texra.resumeAgent with a snapshot instead.
  */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
-    // Support both raw config and wrapped { config } format
-    const rawConfig = isWrappedConfig(input) ? input.config : input;
+    // Support both raw config and wrapped { config, executionId? } format
+    const wrapped = isWrappedConfig(input) ? input : null;
+    const rawConfig = wrapped ? wrapped.config : input;
     const config = AgentConfigSchema.parse(rawConfig);
 
-    const executionId = randomUUID() as ExecutionId;
-    await AgentHistoryManager.addToHistory(executionId, config);
+    // Use provided executionId (resume) or create new one (fresh)
+    const executionId =
+      (wrapped?.executionId as ExecutionId | undefined) ??
+      (randomUUID() as ExecutionId);
+    const isResume = wrapped?.executionId !== undefined;
+
+    if (!isResume) {
+      await AgentHistoryManager.addToHistory(executionId, config);
+    }
     await executeAgent(config, executionId);
   } catch (error) {
     if (error instanceof ZodError) {
@@ -54,7 +67,9 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
   }
 }
 
-/** Check if input is wrapped in { config } format */
-function isWrappedConfig(input: unknown): input is { config: unknown } {
+/** Check if input is wrapped in { config, executionId? } format */
+function isWrappedConfig(
+  input: unknown,
+): input is { config: unknown; executionId?: unknown } {
   return input !== null && typeof input === 'object' && 'config' in input;
 }
