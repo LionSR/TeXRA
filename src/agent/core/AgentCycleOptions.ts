@@ -26,10 +26,12 @@ export type UserVariableChannels = z.infer<typeof UserVariableChannelsSchema>;
 
 export interface AgentCycleBaseOptions<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;
-  agentSetting: AgentSetting;
-  agentPrompt: AgentPrompt;
-  /** User variables for template rendering (merged from channels) */
-  userVars: Record<string, any>;
+  /** Agent settings - uses original field name from BaseFlowContextInit */
+  setting: AgentSetting;
+  /** Agent prompt templates - uses original field name from BaseFlowContextInit */
+  prompt: AgentPrompt;
+  /** User variable channels - uses original field from BaseFlowContextInit (no extraction) */
+  userVarChannels: UserVariableChannels;
   logger: AgentLogger;
   context: AgentExecutionContext;
   client: C;

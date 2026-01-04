@@ -21,7 +21,6 @@ export {
   type ToolUseFlowContextInit,
   // Helper functions for direct use by nodes (no closure wrappers)
   prepareInitialState,
-  buildCycleOptions,
   applyFollowUpMessage,
 } from './ToolUseFlowContext';
 
