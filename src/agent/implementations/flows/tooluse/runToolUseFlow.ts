@@ -92,6 +92,10 @@ export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   onSetup?: ToolUseFlowSetupCallback,
 ): Promise<RunToolUseFlowResult> {
+  // Destructure early - use logger throughout instead of executionContext.logger
+  const { executionContext } = input;
+  const { logger } = executionContext;
+
   // Create the flow context (owns all services including session lifecycle)
   const flowContext = createToolUseFlowContext<C>({
     ...input,
@@ -99,7 +103,7 @@ export async function runToolUseFlow<C = unknown>(
   });
 
   // Single source of truth: get streamTabId from execution context
-  const streamTabId = input.executionContext.streamId;
+  const streamTabId = executionContext.streamId;
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
@@ -111,18 +115,18 @@ export async function runToolUseFlow<C = unknown>(
 
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(
-      input.executionContext.executionId,
+      executionContext.executionId,
     );
 
     // Try to restore from persisted flow (resume scenario)
     let isResume = false;
     try {
       const flowRecord = await kv.read<FlowRecord>(
-        `flow:${input.executionContext.executionId}`,
+        `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
         isResume = true;
-        input.executionContext.logger.debug(
+        executionContext.logger.debug(
           'Resuming tool-use flow from persistence',
         );
       }
@@ -147,7 +151,7 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(flowContext.services);
 
     if (isResume) {
-      input.executionContext.logger.debug(
+      executionContext.logger.debug(
         'PersistedFlow will resume from last node',
       );
     }
@@ -169,8 +173,8 @@ export async function runToolUseFlow<C = unknown>(
     // When VS Code reloads mid-execution, this block never runs, preserving
     // the record for sessions that were genuinely interrupted mid-wait.
     try {
-      const kv = getExecutionStore(input.executionContext.executionId);
-      await kv.delete(`flow:${input.executionContext.executionId}`);
+      const kv = getExecutionStore(executionContext.executionId);
+      await kv.delete(`flow:${executionContext.executionId}`);
     } catch {
       // Ignore cleanup errors - non-critical
     }

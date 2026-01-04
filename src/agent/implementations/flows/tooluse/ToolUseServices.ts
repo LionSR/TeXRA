@@ -55,7 +55,7 @@ export interface PrepareStateResult {
  */
 export interface ToolUseServices<C = unknown>
   extends BaseFlowContextInit<C> {
-  /** Logger (executionContext.logger) */
+  /** Logger for flow nodes */
   readonly logger: AgentLogger;
 
   /** Narrow setting to tool-use specific type */
