@@ -101,7 +101,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
 
       // Actions
-      [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RESUME]: this.handleResume.bind(this),
       [PROGRESS_VIEW_COMMANDS.RUN_NEW]: this.handleRunNew.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
@@ -210,7 +210,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
    * Reuses the executionId so the flow picks up persisted state.
    * Tool-use agents use the follow-up mechanism instead.
    */
-  private async handleRunAgain(message: any): Promise<void> {
+  private async handleResume(message: any): Promise<void> {
     const streamId = message.stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
     if (!taskState) {
