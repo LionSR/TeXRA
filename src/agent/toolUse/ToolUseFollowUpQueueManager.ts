@@ -46,14 +46,14 @@ export class ToolUseFollowUpQueue {
     return StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING;
   }
 
-  static enqueue(streamId: StreamTabId, followUp: string): boolean {
-    const queue = this.queues.get(streamId);
-    if (!queue) {
-      return false;
-    }
+  /**
+   * Enqueue a follow-up message for a stream.
+   * Auto-creates the queue if it doesn't exist.
+   */
+  static enqueue(streamId: StreamTabId, followUp: string): void {
+    const queue = this.acquire(streamId);
     queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
-    return true;
   }
 
   static drain(streamId: StreamTabId): string[] {

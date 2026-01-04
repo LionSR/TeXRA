@@ -127,7 +127,10 @@ export class ProgressEventHandler {
         const status = StreamStatusService.get(stream) ?? STREAM_STATUS.RUNNING;
 
         if (this.webviewUpdater.isAvailable()) {
-          this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
+          this.webviewUpdater.updateAll(
+            this.state,
+            StreamStatusService.getAll(),
+          );
         }
 
         this.setStreamStatus(stream, status);
@@ -640,7 +643,8 @@ export class ProgressEventHandler {
     // Use previousStatus from event payload (avoids race condition) or read from service
     // for direct calls. Treat both undefined and READY as "no meaningful previous status".
     const prevStatus = previousStatus ?? StreamStatusService.get(stream);
-    const hadPreviousStatus = prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
+    const hadPreviousStatus =
+      prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
 
     // Only update service for direct calls - event-triggered calls already mutated the service
     // before emitting (previousStatus is defined when coming from event payload)
@@ -657,7 +661,10 @@ export class ProgressEventHandler {
       const needsFullRefresh =
         !streamExists ||
         (this.state.streamSortOrder === 'time' &&
-          this.mightAffectTabOrder(hadPreviousStatus ? prevStatus : undefined, status));
+          this.mightAffectTabOrder(
+            hadPreviousStatus ? prevStatus : undefined,
+            status,
+          ));
 
       if (needsFullRefresh) {
         // Include current status in refresh map so frontend displays it correctly.
@@ -788,7 +795,9 @@ export class ProgressEventHandler {
     for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
-          StreamStatusService.set(stream, STREAM_STATUS.WAITING, { emit: false });
+          StreamStatusService.set(stream, STREAM_STATUS.WAITING, {
+            emit: false,
+          });
           this.logger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
