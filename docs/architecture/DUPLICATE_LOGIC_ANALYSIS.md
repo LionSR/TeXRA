@@ -4,19 +4,20 @@ This document details the findings from a comprehensive analysis of code duplica
 
 ## Executive Summary
 
-- **Total duplicated/extractable code:** ~250-290 lines (12-15% of cycle flows)
-- **Dead code identified:** 57 lines (BatchNode variants, completely unused)
-- **Primary overlap:** ResponseCycleFlow vs ToolUseCycleFlow (89% overlap in invocation nodes)
+- **Total duplicated/extractable code:** ~150-200 lines (~10% of cycle flows)
+- **Reserved classes:** 57 lines (BatchNode variants - keep for future)
+- **Primary overlap:** Invocation nodes (89% similar) - could share base class
+- **Verified non-issues:** CycleStateSlices (different interfaces), FlowServiceAccessors (intentional)
 - **Architectural inconsistency:** Native nesting vs separate state patterns
 
-## 1. Dead Code (Immediate Removal)
+## 1. Reserved Classes (Keep for Future)
 
 ### Location: `src/agent/node/index.ts`
 
-Four batch-related classes that are exported but never used:
+Four batch-related classes are exported but not currently used:
 
 ```typescript
-// Lines ~214-302 - DEAD CODE
+// Lines ~214-302 - Reserved for future use
 BatchNode<S, P, Svc>        // 12 lines
 ParallelBatchNode<S, P, Svc> // 9 lines
 BatchFlow<S, P, Svc>         // 19 lines
@@ -24,9 +25,7 @@ ParallelBatchFlow<S, P, Svc> // 17 lines
 // Total: 57 lines
 ```
 
-**Evidence:** Zero imports or instantiations found anywhere in codebase.
-
-**Recommendation:** Delete these classes.
+**Status:** Keep for future parallel execution patterns.
 
 ## 2. High-Overlap Duplication: Cycle Flows
 
@@ -94,50 +93,63 @@ Duplicated patterns:
 1. Move `ToolUseRunFlow.ts` into `tooluse/` directory
 2. Adopt native nesting pattern for consistency
 
-## 4. Services Pattern Redundancy
+## 4. Services Pattern Analysis
 
-### Duplicated State Slices
+### CycleStateSlices - NOT a Duplicate (Verified)
 
 **Core definition (CycleServices.ts:59-83):**
 ```typescript
+export interface BaseCycleStateSlices {
+  readonly run: AgentRunState;
+  readonly workspace: AgentWorkspaceState;
+  readonly onRoundFinalized?: RoundFinalizedCallback;  // ← Has callback
+}
 export interface CycleStateSlices extends BaseCycleStateSlices {
   round: ConversationRoundState;
 }
 ```
 
-**Local copy (ResponseCycleNode.ts:63-67):**
+**Local definition (ResponseCycleNode.ts:63-67):**
 ```typescript
-interface CycleStateSlices {  // Duplicate definition
+interface CycleStateSlices {  // Private (not exported)
   round: ConversationRoundState;
   run: AgentRunState;
   workspace: AgentWorkspaceState;
+  // ← No onRoundFinalized callback
 }
 ```
 
-**Recommendation:** Remove local copy, import from CycleServices.
+**Verdict:** These are **different interfaces** with the same name:
+- Local one is a **private helper type** for `CyclePrepInput` (bundles 3 objects)
+- Core one is the **services contract** (includes callback)
+- Name collision is unfortunate but they serve different purposes
 
-### FlowServiceAccessors Redundancy
+**Recommendation:** Rename local interface to `CyclePrepSlices` for clarity.
 
-Creates dual access paths to the same data:
+### FlowServiceAccessors - Intentional Convenience Layer
+
+Creates shorter access paths:
 ```typescript
 services.logger  // via FlowServiceAccessors shortcut
-services.executionContext.logger  // original path
+services.executionContext.logger  // original nested path
 ```
 
-**Recommendation:** Consider removing shortcuts in favor of explicit paths.
+**Verdict:** This is an **intentional ergonomic choice**:
+- Nodes frequently access logger/context
+- The `buildBaseCycleOptions()` function handles both patterns via `??` fallback
+- Not a redundancy issue, just API convenience
+
+**Recommendation:** Keep as-is (minor stylistic preference).
 
 ## 5. Refactoring Plan
 
 ### Phase 1: Quick Wins (Immediate)
 
-1. **Delete dead Batch classes** - 57 lines saved
-   - Location: `src/agent/node/index.ts:214-302`
-
-2. **Remove duplicate CycleStateSlices** - 5 lines saved
+1. **Rename local CycleStateSlices** - Clarity improvement
    - Location: `src/agent/implementations/flows/reflection/nodes/ResponseCycleNode.ts:63-67`
-   - Import from `@agent/core/flows/CycleServices` instead
+   - Rename to `CyclePrepSlices` to avoid name collision with core type
 
-3. **Move ToolUseRunFlow.ts** - 0 lines, better structure
+2. **Move ToolUseRunFlow.ts** - Better structure
    - From: `src/agent/implementations/flows/ToolUseRunFlow.ts`
    - To: `src/agent/implementations/flows/tooluse/ToolUseRunFlow.ts`
 
@@ -187,14 +199,36 @@ services.executionContext.logger  // original path
 - `src/agent/node/round-persisted-flow.ts` (407 lines)
 - `src/agent/core/flows/RetryState.ts` (559 lines)
 
-## 7. Summary Statistics
+## 7. Why Invocation Nodes Duplicate (Root Cause)
+
+Both `ResponseModelInvocationNode` and `ToolUseCallNode` call `modelHandler.createResponse()` but with different parameters:
+
+| Parameter | ResponseModelInvocationNode | ToolUseCallNode |
+|-----------|---------------------------|-----------------|
+| streaming | `false` | `true` |
+| systemPrompt | ✅ Passed | ❌ Not used |
+| endTag | ✅ Passed | ❌ Not used |
+| tools | Conditional on capabilities | Always required |
+| logger stage | Wraps in stage | No stage |
+| isBackgroundModeActive | Overrides | Uses default |
+
+**The flows** (ResponseCycleFlow vs ToolUseCycleFlow) are correctly separate:
+- ResponseCycle: Text generation → file output → continuations
+- ToolUseCycle: Model call → tool extraction → tool dispatch
+
+**The invocation nodes** should share a common base because:
+- Both wrap `modelHandler.createResponse()` with identical retry/abort boilerplate
+- Only 6 parameters differ between them
+- Could parameterize: `{ streaming, systemPrompt?, endTag?, toolsMode, useStage }`
+
+## 8. Summary Statistics
 
 | Category | Lines | Notes |
 |----------|-------|-------|
-| Dead code (Batch classes) | 57 | Safe to delete |
-| Invocation node overlap | 75-80 | 89% similarity |
+| Batch classes | 57 | Reserved for future (keep) |
+| Invocation node overlap | 75-80 | 89% similarity - extractable |
 | Process node overlap | 90-100 | 65% similarity |
 | Prep node overlap | 20 | 55% similarity |
 | Debug pattern duplication | 20-25 | 4 nodes |
-| Services redundancy | 15-20 | Multiple files |
-| **Total Extractable** | **~250-290** | 12-15% of flows |
+| Services redundancy | 0 | Verified as intentional |
+| **Total Extractable** | **~150-200** | ~10% of flows |
