@@ -2,29 +2,17 @@
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-
-// Local imports
-import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
-/**
- * Shared context for LogEvents module.
- * Uses BaseEventShared which provides withErrorBoundary.
- */
-type LogEventsShared = BaseEventShared;
-
-/**
- * LogEvents module interface.
- * Uses StatefulEventModule pattern for state/updater access.
- */
 export type LogEventsModule = StatefulEventModule;
 
-export function createLogEvents(shared: LogEventsShared): LogEventsModule {
+export function createLogEvents(shared: BaseEventShared): LogEventsModule {
   const { withErrorBoundary } = shared;
 
   const handleAddLogMessage = (
@@ -32,19 +20,10 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
+    // Note: Debug level and INTERNAL message filtering is done at the source
+    // in VSCodeTransport.emitLogEvent() before events reach this handler.
     withErrorBoundary('failed to handle addLogMessage', async () => {
       const { stream, logMessage } = data;
-
-      if (
-        logMessage.level === 'debug' &&
-        !getConfig<boolean>('texra.logger.debugMode', false)
-      ) {
-        return;
-      }
-
-      if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) {
-        return;
-      }
 
       const isNew = await state.streamTabs.addMessage(stream, logMessage);
 
@@ -90,9 +69,9 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       await state.streamTabs.save();
 
-      if (updater.isAvailable() && stream === state.activeStream) {
+      sendIfActive(stream, state, updater, () => {
         updater.updateLogMessage(stream, existing);
-      }
+      });
     });
   };
 
