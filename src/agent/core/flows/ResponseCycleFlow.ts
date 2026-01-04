@@ -497,10 +497,7 @@ class ResponseProcessNode<C> extends BaseNode<
         response: newResponse,
         usage: responseUsage,
         stopReason,
-      } = modelHandler.extractResponse(
-        prepRes.responseObject,
-        setting.endTag,
-      );
+      } = modelHandler.extractResponse(prepRes.responseObject, setting.endTag);
 
       if (newResponse) {
         logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
@@ -865,14 +862,8 @@ class ResponseContinuationNode<C> extends BaseNode<
     prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const {
-      round,
-      workspace,
-      logger,
-      modelHandler,
-      setting,
-      config,
-    } = this.services;
+    const { round, workspace, logger, modelHandler, setting, config } =
+      this.services;
 
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;
