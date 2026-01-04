@@ -106,12 +106,14 @@
             </span>
           </label>
         </div>
-        <p id="enabledProvidersInfo" class="enabled-providers-info"></p>
-        <p
-          id="allowedModelsInfo"
-          class="allowed-models-info"
-          style="display: none"
-        ></p>
+        <details id="modelAccessInfo" class="model-access-info" style="display: none">
+          <summary class="model-access-summary">
+            <span id="enabledProvidersInfo"></span>
+            <span class="separator">·</span>
+            <span id="allowedModelsInfo"></span>
+          </summary>
+          <div id="modelsListContainer" class="models-list-container"></div>
+        </details>
       </div>
 
       <div
