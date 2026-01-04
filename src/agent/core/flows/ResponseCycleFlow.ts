@@ -181,14 +181,16 @@ class ResponsePrepNode<C> extends BaseNode<
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { agentPrompt, userVars } = services;
+    const { prompt, userVarChannels } = services;
     const interrupted = Boolean(await services.checkInterruption());
     // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
+    // Merge input + transient channels for template rendering
+    const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
+      : await getSystemPromptWithRules(prompt.systemPrompt, userVars);
 
     return {
       interrupted,
@@ -213,7 +215,7 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { agentConfig, round } = this.services;
+    const { config, round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
     shared.outputLocation = prepRes.outputLocation;
@@ -224,8 +226,8 @@ class ResponsePrepNode<C> extends BaseNode<
       object: shared.messages,
       objectType: 'messages',
       context: getDebugContext(this.services, {
-        modelName: agentConfig.model,
-        isRemote: isRemoteAgent(agentConfig.agent),
+        modelName: config.model,
+        isRemote: isRemoteAgent(config.agent),
       }),
       fileOptions: {
         continuationCount: round.continuationCount,
@@ -316,12 +318,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.agentSetting.temperature || 0.0,
+          temperature: services.setting.temperature || 0.0,
           systemPrompt: prepRes.systemPrompt,
-          endTag: services.agentSetting.endTag,
+          endTag: services.setting.endTag,
           signal,
           tools: services.modelHandler.capabilities.supportsFunctionCalling
-            ? services.agentSetting.tools
+            ? services.setting.tools
             : undefined,
         });
 
@@ -352,7 +354,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { logger, agentConfig, round } = this.services;
+    const { logger, config, round } = this.services;
 
     // Handle non-success cases (returns null) or get narrowed success result
     // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
@@ -374,8 +376,8 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       object: successRes.response,
       objectType: 'response',
       context: getDebugContext(this.services, {
-        modelName: agentConfig.model,
-        isRemote: isRemoteAgent(agentConfig.agent),
+        modelName: config.model,
+        isRemote: isRemoteAgent(config.agent),
       }),
       fileOptions: {
         continuationCount: round.continuationCount,
@@ -477,7 +479,7 @@ class ResponseProcessNode<C> extends BaseNode<
   }
 
   async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
-    const { workspace, logger, modelHandler, agentSetting } = this.services;
+    const { workspace, logger, modelHandler, setting } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
@@ -497,7 +499,7 @@ class ResponseProcessNode<C> extends BaseNode<
         stopReason,
       } = modelHandler.extractResponse(
         prepRes.responseObject,
-        agentSetting.endTag,
+        setting.endTag,
       );
 
       if (newResponse) {
@@ -817,7 +819,7 @@ class ResponseContinuationNode<C> extends BaseNode<
    * PocketFlow compliance: Pure computation, no side effects.
    */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
-    const { round, run, modelHandler, agentSetting } = this.services;
+    const { round, run, modelHandler, setting } = this.services;
 
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -843,13 +845,13 @@ class ResponseContinuationNode<C> extends BaseNode<
         processedResponse,
         round,
         run,
-        agentSetting,
+        setting,
       );
 
     const shouldContinue = modelHandler.shouldContinue(
       stopReason,
       processedResponse,
-      agentSetting,
+      setting,
     );
 
     return {
@@ -868,8 +870,8 @@ class ResponseContinuationNode<C> extends BaseNode<
       workspace,
       logger,
       modelHandler,
-      agentSetting,
-      agentConfig,
+      setting,
+      config,
     } = this.services;
 
     if (execRes.kind === 'skipped') {
@@ -914,16 +916,16 @@ class ResponseContinuationNode<C> extends BaseNode<
         shared.messages,
         round,
         workspace,
-        agentSetting,
-        agentConfig,
+        setting,
+        config,
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
         shared.messages,
         round,
         workspace,
-        agentSetting,
-        agentConfig,
+        setting,
+        config,
       );
     }
 

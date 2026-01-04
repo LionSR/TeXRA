@@ -37,7 +37,6 @@ import {
 import { interpretCycleCompletion } from '@agent/core/flows/CommonCycleTypes';
 
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { TodoItem } from '@eventBus/schemas';
@@ -53,7 +52,6 @@ import {
 // Service types and helper functions (direct calls, no closures)
 import {
   prepareInitialState,
-  buildCycleOptions,
   applyFollowUpMessage,
   type ToolUseServices,
   type ToolUseFlowParams,
@@ -134,19 +132,16 @@ export interface ToolUseRunShared {
  * Result of prepare execution.
  *
  * Contains individual state slices directly (no AgentSharedStore wrapper).
- * cycleOptions is only used within the same node (exec → post),
- * NOT persisted to state (non-serializable).
  */
-interface ToolUsePrepareResult<C> {
+interface ToolUsePrepareResult {
   messages: ProviderMessage[];
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
   userChannels: UserVariableChannels;
   shouldSkipCycle: boolean;
-  cycleOptions: ToolUseCycleOptions<C>;
 }
 
-type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
+type ToolUsePrepareExecResult = NodeExecResult<ToolUsePrepareResult>;
 
 /**
  * Result of a single cycle execution.
@@ -170,9 +165,8 @@ type WaitExecResult =
  *
  * Contains individual state slices directly (no AgentSharedStore wrapper).
  */
-interface CycleNodePrepResult<C> {
+interface CycleNodePrepResult {
   shouldSkip: boolean;
-  cycleOptions: ToolUseCycleOptions<C>;
   conversation: ProviderMessage[];
   runState: AgentRunState;
   workspaceState: AgentWorkspaceState;
@@ -230,8 +224,8 @@ function assertPreparedState(
  * 2. All initialization happens via this.services, not shared state
  * 3. The work done in exec() uses services, not shared state access
  *
- * cycleOptions is NOT stored in state (non-serializable). It's rebuilt
- * by CycleNode using buildCycleOptions().
+ * Cycle options are NOT stored in state (non-serializable). CycleNode
+ * spreads parent services directly when creating the cycle flow.
  */
 class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
@@ -253,17 +247,13 @@ class ToolUsePrepareNode<C> extends Node<
 
   async exec(
     _prepRes: void,
-  ): Promise<{ kind: 'success'; result: ToolUsePrepareResult<C> }> {
+  ): Promise<{ kind: 'success'; result: ToolUsePrepareResult }> {
     // Call helper functions directly (no closure wrappers)
     // prepareInitialState returns individual slices directly (no store wrapper)
     const prepared = await prepareInitialState(this.services);
-    const cycleOptions = await buildCycleOptions(this.services);
     return {
       kind: 'success',
-      result: {
-        ...prepared,
-        cycleOptions,
-      } satisfies ToolUsePrepareResult<C>,
+      result: prepared,
     };
   }
 
@@ -277,7 +267,7 @@ class ToolUsePrepareNode<C> extends Node<
   async post(
     shared: ToolUseRunShared,
     _prepRes: void,
-    execRes: ToolUsePrepareExecResult<C>,
+    execRes: ToolUsePrepareExecResult,
   ): Promise<string | undefined> {
     if (execRes.kind === 'error') {
       // Throw error - agent.run() catches and handles cleanup
@@ -324,7 +314,7 @@ class ToolUseCycleNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult<C>> {
+  async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult> {
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
 
@@ -335,12 +325,8 @@ class ToolUseCycleNode<C> extends Node<
       stateSlices.workspaceSnapshot,
     );
 
-    // Rebuild cycleOptions directly (no closure wrapper, no store param)
-    const cycleOptions = await buildCycleOptions(this.services);
-
     return {
       shouldSkip: shared.state.shouldSkipCycle,
-      cycleOptions,
       conversation: shared.state.conversation,
       runState,
       workspaceState,
@@ -348,7 +334,7 @@ class ToolUseCycleNode<C> extends Node<
     };
   }
 
-  async exec(prepRes: CycleNodePrepResult<C>): Promise<CycleExecResult> {
+  async exec(prepRes: CycleNodePrepResult): Promise<CycleExecResult> {
     // Handle skip (resume case) - pure decision, no side effects
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -373,15 +359,20 @@ class ToolUseCycleNode<C> extends Node<
     };
 
     // Create and run the flow directly (like ResponseCycleNode)
-    // Note: Tool-use cycles track metrics in flow state (cycleIndex, etc.)
-    // instead of a round object, so we only pass run/workspace/onRoundFinalized.
+    // Spread parent services directly - no intermediate cycleOptions object
+    const services = this.services;
     const flow = createToolUseCycleFlow<C>();
-    const onRoundFinalized = this.services.getUsageRecorder();
+    const onRoundFinalized = services.getUsageRecorder();
     flow.setServices({
-      ...prepRes.cycleOptions,
+      ...services,  // Parent ToolUseServices has most needed fields
+      setting: { ...services.setting, tools: services.resolvedTools },  // Override with resolved tools
+      client: await services.getClient(),  // Only transformation: await fresh client
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
       onRoundFinalized,
+      // Model/agent identifiers for debug gating (isRemoteAgent check)
+      modelName: services.config.model,
+      agentName: services.config.agent,
     });
 
     // Set up todo update callback to emit changes to the progress view
@@ -422,7 +413,7 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async execFallback(
-    _prepRes: CycleNodePrepResult<C>,
+    _prepRes: CycleNodePrepResult,
     error: Error,
   ): Promise<CycleExecResult> {
     return { kind: 'failed', message: error.message };
@@ -430,7 +421,7 @@ class ToolUseCycleNode<C> extends Node<
 
   async post(
     shared: ToolUseRunShared,
-    prepRes: CycleNodePrepResult<C>,
+    prepRes: CycleNodePrepResult,
     execRes: CycleExecResult,
   ): Promise<string | undefined> {
     // Clear skip flag for next iteration (side effect in post)
