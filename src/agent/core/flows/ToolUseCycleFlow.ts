@@ -11,7 +11,6 @@ import {
   resetCycleState,
   getDebugContext,
 } from '@agent/core/flows/CommonCycleTypes';
-import { createRetryState, type RetryState } from './RetryState';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -40,6 +39,7 @@ import type { ToolDefinition } from '@model';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
+import { createRetryState, type RetryState } from './RetryState';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';

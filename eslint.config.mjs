@@ -3,6 +3,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
 import importPlugin from 'eslint-plugin-import';
+import unicorn from 'eslint-plugin-unicorn';
 import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,8 +70,20 @@ export default tseslint.config(
     plugins: {
       '@stylistic': stylistic,
       import: importPlugin,
+      unicorn,
     },
     rules: {
+      // --- Unicorn modernization rules (ES2023+) ---
+      'unicorn/prefer-string-replace-all': 'warn',
+      'unicorn/prefer-at': 'warn',
+      'unicorn/prefer-array-flat-map': 'warn',
+      'unicorn/prefer-includes': 'warn',
+      'unicorn/prefer-array-find': 'warn',
+      'unicorn/no-array-push-push': 'warn',
+      'unicorn/prefer-spread': 'warn',
+      'unicorn/prefer-ternary': 'off', // Often less readable
+      'unicorn/no-null': 'off', // null is valid in this codebase
+      'unicorn/prevent-abbreviations': 'off', // Too strict
       // --- Migrated rules from .eslintrc.json ---
       '@typescript-eslint/naming-convention': [
         'warn',

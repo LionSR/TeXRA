@@ -83,7 +83,7 @@ class BaseNode<
       next = this._successors.get(nextAction);
     if (!next && this._successors.size > 0)
       console.warn(
-        `Flow ends: '${nextAction}' not found in [${Array.from(this._successors.keys())}]`,
+        `Flow ends: '${nextAction}' not found in [${[...this._successors.keys()]}]`,
       );
     return next;
   }

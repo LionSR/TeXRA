@@ -84,8 +84,8 @@ export class FileInteractionState {
   /** Serialize to a snapshot. */
   toSnapshot(): FileInteractionStateSnapshot {
     return {
-      readFiles: Array.from(this.readFiles),
-      edits: Array.from(this.edits.entries()).map(([path, diff]) => ({
+      readFiles: [...this.readFiles],
+      edits: [...this.edits.entries()].map(([path, diff]) => ({
         path,
         added: diff.added,
         removed: diff.removed,
@@ -144,7 +144,7 @@ export class FileInteractionState {
       removed += deltaRemoved;
     }
 
-    const editsForCall = Array.from(perCallEdits.entries()).map(
+    const editsForCall = [...perCallEdits.entries()].map(
       ([path, diff]) => ({
         path,
         lineChanges:
