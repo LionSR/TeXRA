@@ -78,7 +78,7 @@ export function createOutputEvents(shared: BaseEventShared): OutputEventsModule 
           'clearMissingOutputs',
           state,
           updater,
-          (stream) => {
+          ({ stream }) => {
             withErrorBoundary('failed to handle clearMissingOutputs', async () => {
               await state.outputFiles.clearMissingOutputs(stream);
               sendIfActive(stream, state, updater, () => {
