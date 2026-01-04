@@ -24,7 +24,7 @@ export class TaskGroupManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.TASK_GROUPS, storage, ['texra.logGroups']);
+    super(WorkspaceStateKey.TASK_GROUPS, storage);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
