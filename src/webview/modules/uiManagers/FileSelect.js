@@ -66,8 +66,11 @@ export class FileSelect {
         this.addOption(selectDiv, f, f, f === restoredValue),
       );
 
-      // Only update state if we successfully restored a value.
+      // Explicitly set .value for synchronous access by callers.
+      // Setting selected=true on options works for slotchange (async), but callers
+      // reading selectDiv.value immediately after update() need the value set now.
       if (restoredValue) {
+        selectDiv.value = restoredValue;
         mainViewState.update({ [id]: restoredValue });
       }
     } finally {
