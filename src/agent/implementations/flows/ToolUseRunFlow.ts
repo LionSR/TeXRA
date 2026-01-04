@@ -370,6 +370,9 @@ class ToolUseCycleNode<C> extends Node<
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
       onRoundFinalized,
+      // Model/agent identifiers for debug gating (isRemoteAgent check)
+      modelName: services.config.model,
+      agentName: services.config.agent,
     });
 
     // Set up todo update callback to emit changes to the progress view
