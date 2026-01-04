@@ -98,7 +98,8 @@ export async function runToolUseFlow<C = unknown>(
     resumeSnapshot: input.resumeSnapshot ?? null,
   });
 
-  const streamTabId = flowContext.streamTabId;
+  // Single source of truth: get streamTabId from execution context
+  const streamTabId = input.executionContext.streamId;
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
