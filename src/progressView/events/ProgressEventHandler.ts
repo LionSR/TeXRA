@@ -10,45 +10,53 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import { WebviewUpdater } from '@progressView/managers';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import type { StreamStatus } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { createStatefulEventDisposable, createEventDisposable } from './types';
+import { withEventErrorHandling } from './errorHandling';
 import {
-  createStreamStatusEvents,
-  type StreamStatusEventModule,
-} from './StreamStatusEvents';
-import { createOutputEvents, type OutputEventsModule } from './OutputEvents';
-import { createUsageEvents, type UsageEventsModule } from './UsageEvents';
-import { createLogEvents, type LogEventsModule } from './LogEvents';
-import {
-  createTaskGroupEvents,
-  type TaskGroupEventsModule,
-} from './TaskGroupEvents';
-import {
-  createRetryEvents,
-  type RetryEventsModule,
-  type RetryEventsShared,
-} from './RetryEvents';
-import {
-  createApprovalEvents,
-  type ApprovalEventsModule,
-  type ApprovalEventsShared,
-} from './ApprovalEvents';
-import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
+  handleAddLogMessage,
+  handleUpdateLogMessage,
+  handleAddOutputFiles,
+  handleUpdateMissingOutputs,
+  handleClearMissingOutputs,
+  handleUpdateStreamUsage,
+  handleUpdateTodos,
+  handleSetActiveStream,
+  handleUpdateStreamStatus,
+  handleSetTaskState,
+  handleAddTaskGroup,
+  handleUpdateTaskGroup,
+} from './handlers';
+
+/**
+ * Callbacks for approval and retry events.
+ */
+export interface ProgressEventHandlerCallbacks {
+  showRetryRequest: (
+    payload: ProgressEventPayloads['showRetryRequest'],
+  ) => void;
+  resolveRetryRequest: (streamId: string) => void;
+  showToolEditApprovalPrompt: (
+    payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
+  ) => void;
+  resolveToolEditApprovalPrompt: (requestId: string) => void;
+  updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
+}
 
 /**
  * Handles progress event bus subscriptions for the progress view.
- * Provides a clean separation between event handling and business logic
- * by delegating to the state manager and webview updater.
+ * Registers all event handlers directly without factory pattern overhead.
  */
 export class ProgressEventHandler {
-  private readonly logger: AgentLogger;
   private _streamStatus: Map<string, StreamStatus> = new Map();
   /**
    * Buffer for task groups that arrive before their stream is activated.
@@ -56,90 +64,219 @@ export class ProgressEventHandler {
    * Groups are replayed when setActiveStream is processed for the stream.
    */
   private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
-  private readonly streamStatusEvents: StreamStatusEventModule;
-  private readonly outputEvents: OutputEventsModule;
-  private readonly logEvents: LogEventsModule;
-  private readonly usageEvents: UsageEventsModule;
-  private readonly taskGroupEvents: TaskGroupEventsModule;
-  private readonly todoEvents: TodoEventsModule;
-  private readonly retryEvents: RetryEventsModule;
-  private readonly approvalEvents: ApprovalEventsModule;
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    callbacks: Pick<
-      RetryEventsShared,
-      'showRetryRequest' | 'resolveRetryRequest'
-    > &
-      Pick<
-        ApprovalEventsShared,
-        | 'showToolEditApprovalPrompt'
-        | 'resolveToolEditApprovalPrompt'
-        | 'updateToolEditApprovalBypassState'
-      >,
-  ) {
-    this.logger = new AgentLogger('ProgressEventHandler');
+    private callbacks: ProgressEventHandlerCallbacks,
+  ) {}
 
-    // Modules now use withEventErrorHandling() directly - no error boundary injection needed
-    this.streamStatusEvents = createStreamStatusEvents({
+  /**
+   * Setup all event bus listeners - registers all handlers directly inline.
+   */
+  setupEventListeners(): vscode.Disposable[] {
+    const disposables: vscode.Disposable[] = [];
+
+    // Shared state for stream status handlers
+    const streamStatusShared = {
       streamStatus: this._streamStatus,
       setStreamStatus: this.setStreamStatus.bind(this),
       sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
       refreshStreamSurface: this.refreshStreamSurface.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
+      debugLog: progressViewLogger.debug.bind(progressViewLogger),
       replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
-    });
-    this.outputEvents = createOutputEvents({});
-    this.usageEvents = createUsageEvents({});
-    this.logEvents = createLogEvents({});
-    this.taskGroupEvents = createTaskGroupEvents({
+    };
+
+    // Shared state for task group handlers
+    const taskGroupShared = {
       initializeStreamForTaskGroup:
         this.initializeStreamForTaskGroup.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
+      debugLog: progressViewLogger.debug.bind(progressViewLogger),
       bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
-    });
-    this.todoEvents = createTodoEvents({});
-    this.retryEvents = createRetryEvents({
-      showRetryRequest: callbacks.showRetryRequest,
-      resolveRetryRequest: callbacks.resolveRetryRequest,
-    });
-    this.approvalEvents = createApprovalEvents({
-      showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
-      resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
-      updateToolEditApprovalBypassState:
-        callbacks.updateToolEditApprovalBypassState,
-    });
-  }
+    };
 
-  /**
-   * Setup all event bus listeners
-   */
-  setupEventListeners(): vscode.Disposable[] {
-    const disposables: vscode.Disposable[] = [];
+    // Stream status events
     disposables.push(
-      ...this.streamStatusEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'setActiveStream',
+        this.state,
+        this.webviewUpdater,
+        (payload, state, updater) =>
+          handleSetActiveStream(payload, state, updater, streamStatusShared),
+      ),
     );
     disposables.push(
-      ...this.outputEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'updateStreamStatus',
+        this.state,
+        this.webviewUpdater,
+        (payload) => handleUpdateStreamStatus(payload, streamStatusShared),
+      ),
     );
     disposables.push(
-      ...this.usageEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'setTaskState',
+        this.state,
+        this.webviewUpdater,
+        (payload, state, updater) =>
+          handleSetTaskState(payload, state, updater, streamStatusShared),
+      ),
     );
+
+    // Output events
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'addOutputFiles',
+        this.state,
+        this.webviewUpdater,
+        handleAddOutputFiles,
+      ),
+    );
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'updateMissingOutputs',
+        this.state,
+        this.webviewUpdater,
+        handleUpdateMissingOutputs,
+      ),
+    );
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'clearMissingOutputs',
+        this.state,
+        this.webviewUpdater,
+        handleClearMissingOutputs,
+      ),
+    );
+
+    // Usage events
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'updateStreamUsage',
+        this.state,
+        this.webviewUpdater,
+        handleUpdateStreamUsage,
+      ),
+    );
+
     // Task group events must be registered before log events so buffered group
     // replays run first. Otherwise replayed thinking logs land before their
     // containers exist, leaving the progress board with orphaned banners.
     disposables.push(
-      ...this.taskGroupEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'addTaskGroup',
+        this.state,
+        this.webviewUpdater,
+        (payload, state, updater) =>
+          handleAddTaskGroup(payload, state, updater, taskGroupShared),
+      ),
     );
     disposables.push(
-      ...this.logEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'updateTaskGroup',
+        this.state,
+        this.webviewUpdater,
+        (payload, state, updater) =>
+          handleUpdateTaskGroup(payload, state, updater, taskGroupShared),
+      ),
+    );
+
+    // Log events
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'addLogMessage',
+        this.state,
+        this.webviewUpdater,
+        handleAddLogMessage,
+      ),
     );
     disposables.push(
-      ...this.todoEvents.register(bus, this.state, this.webviewUpdater),
+      createStatefulEventDisposable(
+        bus,
+        'updateLogMessage',
+        this.state,
+        this.webviewUpdater,
+        handleUpdateLogMessage,
+      ),
     );
-    disposables.push(...this.retryEvents.register(bus));
-    disposables.push(...this.approvalEvents.register(bus));
+
+    // Todo events
+    disposables.push(
+      createStatefulEventDisposable(
+        bus,
+        'updateTodos',
+        this.state,
+        this.webviewUpdater,
+        handleUpdateTodos,
+      ),
+    );
+
+    // Retry events
+    disposables.push(
+      createEventDisposable(bus, 'showRetryRequest', (payload) =>
+        withEventErrorHandling(
+          'RetryEvents',
+          'failed to show retry request',
+          () => this.callbacks.showRetryRequest(payload),
+        ),
+      ),
+    );
+    disposables.push(
+      createEventDisposable(bus, 'resolveRetryRequest', (payload) =>
+        withEventErrorHandling(
+          'RetryEvents',
+          'failed to resolve retry request',
+          () => this.callbacks.resolveRetryRequest(payload.streamId),
+        ),
+      ),
+    );
+
+    // Approval events
+    disposables.push(
+      createEventDisposable(bus, 'showToolEditApprovalPrompt', (payload) =>
+        withEventErrorHandling(
+          'ApprovalEvents',
+          'failed to show approval prompt',
+          () => this.callbacks.showToolEditApprovalPrompt(payload),
+        ),
+      ),
+    );
+    disposables.push(
+      createEventDisposable(bus, 'resolveToolEditApprovalPrompt', (payload) =>
+        withEventErrorHandling(
+          'ApprovalEvents',
+          'failed to resolve approval prompt',
+          () => this.callbacks.resolveToolEditApprovalPrompt(payload.requestId),
+        ),
+      ),
+    );
+    disposables.push(
+      createEventDisposable(
+        bus,
+        'updateToolEditApprovalBypassState',
+        (payload) =>
+          withEventErrorHandling(
+            'ApprovalEvents',
+            'failed to update approval bypass state',
+            () =>
+              this.callbacks.updateToolEditApprovalBypassState(
+                payload.bypassActive,
+              ),
+          ),
+      ),
+    );
+
+    // Extension lifecycle
     disposables.push(
       new vscode.Disposable(
         bus.on('extensionDeactivating', () =>
@@ -392,7 +529,7 @@ export class ProgressEventHandler {
       return;
     }
 
-    this.logger.debug(
+    progressViewLogger.debug(
       `Replaying ${pending.length} buffered task groups for stream ${stream}`,
     );
     for (const group of pending) {
@@ -467,13 +604,13 @@ export class ProgressEventHandler {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
           this._streamStatus.set(stream, STREAM_STATUS.WAITING);
-          this.logger.debug(
+          progressViewLogger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
         } else {
           this._streamStatus.set(stream, STREAM_STATUS.ERROR);
           affectedStreams.push(stream);
-          this.logger.debug(
+          progressViewLogger.debug(
             `Stream ${stream} set to ERROR due to webview reload`,
           );
         }

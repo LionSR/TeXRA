@@ -185,7 +185,7 @@ export function createToolUseFlowContext<C = unknown>(
     ...init,
     logger: init.executionContext.logger,
     context: init.executionContext,
-    toolRegistry,  // May differ from init if defaulted
+    toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,
     snapshot: resumeSnapshot ?? null,

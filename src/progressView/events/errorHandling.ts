@@ -1,5 +1,5 @@
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import { serializeError } from '@utils/core';
 
 /** Serialize an error for logging, preserving original error reference. */
@@ -10,8 +10,8 @@ function serializeErrorForLog(error: unknown): Record<string, unknown> {
   return { error };
 }
 
-// Shared logger for all event handlers - eliminates per-module logger instances
-const eventLogger = new AgentLogger('ProgressEvents');
+// Re-export shared logger for backward compatibility
+export { progressViewLogger as eventLogger };
 
 /**
  * Wraps an async event handler with error logging.
@@ -30,13 +30,13 @@ export function withEventErrorHandling(
     const result = fn();
     if (result && typeof (result as Promise<unknown>).catch === 'function') {
       void (result as Promise<unknown>).catch((error) => {
-        eventLogger.error(`[${moduleName}] ${context}`, {
+        progressViewLogger.error(`[${moduleName}] ${context}`, {
           data: serializeErrorForLog(error),
         });
       });
     }
   } catch (error) {
-    eventLogger.error(`[${moduleName}] ${context}`, {
+    progressViewLogger.error(`[${moduleName}] ${context}`, {
       data: serializeErrorForLog(error),
     });
   }

@@ -7,7 +7,7 @@ import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import { type TokenUsageStats } from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import {
   PersistentMapManager,
   type StateStorage,
@@ -66,11 +66,8 @@ export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
   RunUsageMap
 > {
-  private readonly logger: AgentLogger;
-
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.USAGE_STATS, storage, ['texra.usageStats']);
-    this.logger = new AgentLogger('UsageStatsManager');
   }
 
   /**
@@ -186,7 +183,7 @@ export class UsageStatsManager extends PersistentMapManager<
     await super.load();
 
     if (this.items.size > 0) {
-      this.logger.debug(
+      progressViewLogger.debug(
         `Loaded usage statistics for ${this.items.size} streams`,
       );
     }

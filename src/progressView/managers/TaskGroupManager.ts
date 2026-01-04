@@ -4,8 +4,8 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
 import { TaskGroup } from '@logger/LogTypes';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import {
   PersistentMapManager,
   type StateStorage,
@@ -21,11 +21,8 @@ export class TaskGroupManager extends PersistentMapManager<
   StreamTabId,
   Map<string, TaskGroup>
 > {
-  private readonly logger: AgentLogger;
-
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.TASK_GROUPS, storage, ['texra.logGroups']);
-    this.logger = new AgentLogger('TaskGroupManager');
   }
 
   /**
@@ -57,13 +54,15 @@ export class TaskGroupManager extends PersistentMapManager<
   }: UpdateTaskGroupPayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
-      this.logger.warn(`Cannot update group ${id}: stream ${stream} not found`);
+      progressViewLogger.warn(
+        `Cannot update group ${id}: stream ${stream} not found`,
+      );
       return;
     }
 
     const group = streamGroups.get(id);
     if (!group) {
-      this.logger.warn(
+      progressViewLogger.warn(
         `Cannot update group ${id}: group not found in stream ${stream}`,
       );
       return;
@@ -94,7 +93,7 @@ export class TaskGroupManager extends PersistentMapManager<
 
       if (updated) {
         affected.push(streamId);
-        this.logger.debug(
+        progressViewLogger.debug(
           `Marked running task groups in stream ${streamId} as ERROR after reload`,
         );
       }
@@ -128,7 +127,9 @@ export class TaskGroupManager extends PersistentMapManager<
   async load(): Promise<void> {
     await super.load();
     if (this.items.size > 0) {
-      this.logger.debug(`Loaded task groups for ${this.items.size} streams`);
+      progressViewLogger.debug(
+        `Loaded task groups for ${this.items.size} streams`,
+      );
     }
   }
 

@@ -3,8 +3,8 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import {
   PersistentMapManager,
   type StateStorage,
@@ -19,11 +19,9 @@ export class StreamTabsManager extends PersistentMapManager<
   LogMessageData[]
 > {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
-  private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.STREAM_TABS, storage, ['texra.logStreams']);
-    this.logger = new AgentLogger('StreamTabsManager');
   }
 
   /**
@@ -100,7 +98,9 @@ export class StreamTabsManager extends PersistentMapManager<
   async load(): Promise<void> {
     await super.load();
     if (this.items.size > 0) {
-      this.logger.debug(`Loaded ${this.items.size} streams from storage`);
+      progressViewLogger.debug(
+        `Loaded ${this.items.size} streams from storage`,
+      );
     }
   }
 

@@ -12,7 +12,7 @@ import {
 } from '@agent/output/types';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { progressViewLogger } from '@progressView/progressViewLogger';
 import {
   PersistentMapManager,
   type StateStorage,
@@ -76,11 +76,9 @@ export class OutputFilesManager extends PersistentMapManager<
   > = new Map();
   private missingOutputsLoaded = false;
   private missingOutputsLoadPromise: Promise<void> | null = null;
-  private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
-    this.logger = new AgentLogger('OutputFilesManager');
   }
 
   /**
@@ -111,7 +109,7 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = Number.parseInt(round, 10);
       if (Number.isNaN(roundNum)) {
-        this.logger.warn(
+        progressViewLogger.warn(
           `Invalid round number '${round}' for stream ${stream}`,
         );
         continue;
@@ -160,7 +158,7 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = Number.parseInt(round, 10);
       if (Number.isNaN(roundNum)) {
-        this.logger.warn(
+        progressViewLogger.warn(
           `Invalid missing-output round '${round}' for stream ${stream}`,
         );
         continue;
@@ -350,7 +348,9 @@ export class OutputFilesManager extends PersistentMapManager<
           this.missingOutputsLoaded = true;
         })
         .catch((error) => {
-          this.logger.error('Failed to load missing outputs', { data: error });
+          progressViewLogger.error('Failed to load missing outputs', {
+            data: error,
+          });
           this.missingOutputsLoadPromise = null;
           throw error;
         });
