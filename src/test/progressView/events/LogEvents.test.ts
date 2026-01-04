@@ -2,12 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - progress view
-import { createErrorBoundary } from '@progressView/events/errorHandling';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import type { ProgressEventBusLike } from '@progressView/events/types';
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
@@ -80,9 +78,7 @@ describe('LogEvents', () => {
     } as unknown as WebviewUpdater;
 
     const bus = new TestBus();
-    const logger = new AgentLogger('LogEventsTest');
-    const withErrorBoundary = createErrorBoundary(logger, 'LogEventsTest');
-    const { register } = createLogEvents({ withErrorBoundary });
+    const { register } = createLogEvents();
     const disposables = register(bus, state, updater);
 
     const thinkingMessage: LogMessageData = {
