@@ -14,7 +14,7 @@ import {
   BASE_FILE,
 } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from '@common/BaseUIManager.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
@@ -24,7 +24,7 @@ import { debounce } from '@common/debounce.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
-export class FileInputManager extends BaseUIManager {
+export class FileInputManager extends BaseDomHandler {
   constructor(
     vscodeInstance = vscode,
     state = mainViewState,
