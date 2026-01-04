@@ -59,6 +59,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     // Attach webview to managers that need it for message posting
     this.fileManager.attachWebview(webviewView);
     this.instructionManager.attachWebview(webviewView);
+    this.diffManager.attachWebview(webviewView);
 
     // Base class handles activeView tracking when trackActiveView is enabled
     await super.handleMessage(message, webviewView);
@@ -307,20 +308,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleUpdateFiles(m),
 
       // Git/diff operations
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m) => {
-        const view = this.getActiveView();
-        if (!view) {
-          return;
-        }
-        await this.diffManager.handleRequestRecentCommits(m, view);
-      },
-      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async () => {
-        const view = this.getActiveView();
-        if (!view) {
-          return;
-        }
-        await this.diffManager.handleRefreshCommits(view);
-      },
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m) =>
+        this.diffManager.handleRequestRecentCommits(m),
+      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async () =>
+        this.diffManager.handleRefreshCommits(),
       [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
         this.diffManager.handleLatexdiff(m),
       [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: async (m) =>

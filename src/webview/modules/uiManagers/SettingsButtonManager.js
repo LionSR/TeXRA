@@ -12,7 +12,7 @@ import {
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
-import { BaseUIManager } from '@common/BaseUIManager.js';
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
 import { updateModelApiKeyBanner } from './apiKeyBannerUtils.js';
@@ -26,7 +26,7 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
-export class SettingsButtonManager extends BaseUIManager {
+export class SettingsButtonManager extends BaseDomHandler {
   constructor(
     vscodeInstance = vscode,
     latexdiffManager,

@@ -58,7 +58,7 @@ When updating CHANGELOG.md:
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds backend-only helpers (errors, state, files, base webview classes). Import them through the `@common/*` alias for clarity.
   - `common/state/` - State managers including `pendingStateManager`
-  - `common/modules/` - Shared webview modules (`BaseUIManager`, `domUtils`, `templateUtils`)
+  - `common/modules/` - Shared webview modules (`BaseDomHandler`, `domUtils`, `templateUtils`)
   - `common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), theme handlers
 - `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
   - `utils/core/` - Async utilities (`debounce`, `withTimeout`, `delay`)
@@ -280,7 +280,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews (webview, progressView, historyView, profileView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` for consistent error handling, logging, URI generation, and cleanup. Complex UI managers can extend `BaseUIManager` from `src/common/modules/BaseUIManager.js`.
+- **Base Classes**: All webviews (webview, progressView, historyView, profileView) extend `BaseViewContentProvider`, `BaseViewMessageHandler`, and use DOM managers built on `BaseDomHandler` from `src/common/modules/BaseDomHandler.js` for consistent error handling, logging, and cleanup.
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `HistoryViewMessageHandler`, `ProfileViewDomHandler`)
 - **Command Constants**: Define all commands in `src/common/webview/commands.js` and `.ts` - use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
