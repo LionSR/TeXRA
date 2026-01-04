@@ -14,7 +14,7 @@ export function toPosixPath(relativePath: string): string {
   }
   return relativePath
     .trim()
-    .replace(/\\/g, '/')
+    .replaceAll('\\', '/')
     .split(PATH_SEPARATORS)
     .filter(Boolean)
     .join('/');

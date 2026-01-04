@@ -23,25 +23,25 @@ const ToolSessionStateSchema = z.object({
 });
 
 /** Active files record schema */
-const ActiveFilesSchema = z.record(
+const ActiveFilesSchema = z.partialRecord(
   z.enum(FILE_TYPES),
   z.boolean(),
 ) as z.ZodType<Record<FileType, boolean>>;
 
 /** Minimal agentConfig schema - just validates the discriminator exists */
-const AgentConfigWithSessionSchema = z
-  .object({
-    session: z.object({
-      agentCategory: z.enum(AgentCategory),
-    }),
-  })
-  .passthrough();
+const AgentConfigWithSessionSchema = z.looseObject({
+  session: z.object({
+    agentCategory: z.enum(AgentCategory),
+  }),
+});
 
 /** Schema for workflow task state */
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.Workflow,
-    { message: 'Expected Workflow category' },
+    {
+      error: 'Expected Workflow category',
+    },
   ),
   activeFiles: ActiveFilesSchema,
 });
@@ -50,7 +50,9 @@ const WorkflowTaskStateSchema = z.object({
 const ToolUseTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.ToolUse,
-    { message: 'Expected ToolUse category' },
+    {
+      error: 'Expected ToolUse category',
+    },
   ),
   toolSessionState: ToolSessionStateSchema.optional(),
 });

@@ -49,7 +49,7 @@ export const MATH_OPERATORS = [
 ];
 
 const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const FENCED_LATEX_ENVIRONMENTS = [
   'align',

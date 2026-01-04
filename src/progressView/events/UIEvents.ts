@@ -10,8 +10,8 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type { ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
+import type { ProgressEventBusLike } from './types';
 
 const MODULE = 'UIEvents';
 
