@@ -20,7 +20,7 @@ export async function openFile(file: string): Promise<void> {
 }
 
 export async function openLabel(label: string): Promise<void> {
-  const escape = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
     ...(await fileLister.list('input')),

@@ -1,6 +1,6 @@
 // Local imports
-import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 import { getConfig } from '@utils/config';
+import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 
 export interface FilterOptions {
   level: 'debug' | 'info' | 'warn' | 'error';
@@ -49,4 +49,3 @@ export function getEmitFilter(options: FilterOptions): FilterResult {
 
   return { shouldEmit: true, debugMode };
 }
-
