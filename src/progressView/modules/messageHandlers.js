@@ -475,14 +475,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         return;
       }
       if (existing.status !== group.status) {
-        state.taskGroups.update({
-          groupId: group.id,
-          updates: { status: group.status, endTime: group.endTime },
-        });
-        dom.taskGroups.updateGroup({
-          groupId: group.id,
-          updates: { status: group.status, endTime: group.endTime },
-        });
+        const updatePayload = {
+          id: group.id,
+          status: group.status,
+          endTime: group.endTime,
+        };
+        state.taskGroups.update(updatePayload);
+        dom.taskGroups.updateGroup(updatePayload);
       }
     });
 

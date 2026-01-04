@@ -11,12 +11,7 @@ import {
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
-
-export interface TaskGroupUpdatePayload {
-  stream: StreamTabId;
-  groupId: string;
-  updates: Partial<TaskGroup>;
-}
+import type { UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 /**
  * Manages task groups collection with persistence.
@@ -51,31 +46,35 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
-   * Update an existing task group
+   * Update an existing task group.
+   * Uses UpdateTaskGroupPayload from event bus schema as single source of truth.
    */
   async updateGroup({
     stream,
-    groupId,
-    updates,
-  }: TaskGroupUpdatePayload): Promise<void> {
+    id,
+    status,
+    endTime,
+  }: UpdateTaskGroupPayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
-      this.logger.warn(
-        `Cannot update group ${groupId}: stream ${stream} not found`,
-      );
+      this.logger.warn(`Cannot update group ${id}: stream ${stream} not found`);
       return;
     }
 
-    const group = streamGroups.get(groupId);
+    const group = streamGroups.get(id);
     if (!group) {
       this.logger.warn(
-        `Cannot update group ${groupId}: group not found in stream ${stream}`,
+        `Cannot update group ${id}: group not found in stream ${stream}`,
       );
       return;
     }
 
-    // Apply updates
-    streamGroups.set(groupId, { ...group, ...updates });
+    // Apply updates - only include endTime if explicitly provided
+    const updated: TaskGroup = { ...group, status };
+    if (endTime !== undefined) {
+      updated.endTime = endTime;
+    }
+    streamGroups.set(id, updated);
     await this.save();
   }
 
@@ -121,34 +120,6 @@ export class TaskGroupManager extends PersistentMapManager<
    */
   getStreamGroups(stream: StreamTabId): Map<string, TaskGroup> {
     return this.get(stream) || new Map();
-  }
-
-  /**
-   * Check if a stream has groups
-   */
-  hasStream(stream: StreamTabId): boolean {
-    return this.has(stream);
-  }
-
-  /**
-   * Delete all groups for a stream
-   */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    await this.delete(stream);
-  }
-
-  /**
-   * Clear all groups
-   */
-  async clear(): Promise<void> {
-    await super.clear();
-  }
-
-  /**
-   * Set all groups (used during loading)
-   */
-  setAll(groups: Map<StreamTabId, Map<string, TaskGroup>>): void {
-    super.setAll(groups);
   }
 
   /**

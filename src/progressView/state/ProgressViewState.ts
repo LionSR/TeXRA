@@ -518,9 +518,9 @@ export class ProgressViewState {
   async clearStream(stream: StreamTabId): Promise<void> {
     await Promise.all([
       this._streamTabs.delete(stream),
-      this._taskGroups.deleteStream(stream),
+      this._taskGroups.delete(stream),
       this._outputFiles.deleteStream(stream),
-      this._usageStats.deleteStream(stream),
+      this._usageStats.delete(stream),
       this._runInstructions.clearStream(stream),
     ]);
     const removedState = this.taskStates.delete(stream);
