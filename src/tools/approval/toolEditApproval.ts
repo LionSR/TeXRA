@@ -591,7 +591,7 @@ function finalizeApprovalResult(
   request: ToolEditApprovalRequest,
 ): ToolEditApprovalResult {
   if (!result.accepted) {
-    return { ...result };
+    return result;
   }
 
   const appliedContent = result.appliedContent ?? request.proposedContent;
