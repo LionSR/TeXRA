@@ -61,6 +61,9 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Agent prompt templates */
   prompt: AgentPrompt;
 
+  /** Logger for flow operations */
+  logger: AgentLogger;
+
   /** Execution context (IDs, storage key, etc.) */
   executionContext: AgentExecutionContext;
 

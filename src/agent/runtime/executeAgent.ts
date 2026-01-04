@@ -94,6 +94,7 @@ interface ResolvedAgentBase {
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
+  logger: AgentLogger;
   executionContext: AgentExecutionContext;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
@@ -287,6 +288,7 @@ async function resolveAgentBase(
     config,
     setting,
     prompt,
+    logger: executionContext.logger,
     executionContext,
     userVarChannels,
     usageMonitor,
