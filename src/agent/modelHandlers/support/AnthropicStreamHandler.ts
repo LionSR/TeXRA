@@ -346,7 +346,9 @@ export class AnthropicStreamHandler {
     if (!this.config.progressViewEnabled) {
       return;
     }
+    const groupId = this.logger.withCurrentGroup((id) => id);
     this.logger.info('', {
+      groupId,
       messageType: MESSAGE_TYPES.WEB_SEARCH,
       data: result,
     });
