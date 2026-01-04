@@ -125,7 +125,6 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     checkInterruption,
     setAbortController,
-    getClient,
     getUsageRecorder = () => async () => {},
     parentStage,
     streamTabId,
@@ -172,7 +171,6 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     checkInterruption,
     setAbortController,
-    getClient,
     getUsageRecorder,
   });
   flowContext.setActiveRun(storageKey);
