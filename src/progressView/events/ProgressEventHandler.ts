@@ -614,9 +614,11 @@ export class ProgressEventHandler {
     const prevStatus = previousStatus ?? StreamStatusService.get(stream);
     const hadPreviousStatus = prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
 
-    // Update StreamStatusService (single source of truth) without emitting event
-    // since we're already handling the event that triggered this call
-    StreamStatusService.set(stream, status, { emit: false });
+    // Only update service for direct calls - event-triggered calls already mutated the service
+    // before emitting (previousStatus is defined when coming from event payload)
+    if (previousStatus === undefined) {
+      StreamStatusService.set(stream, status, { emit: false });
+    }
 
     if (this.webviewUpdater.isAvailable()) {
       const streamExists = this.state.streamTabs.has(stream);
