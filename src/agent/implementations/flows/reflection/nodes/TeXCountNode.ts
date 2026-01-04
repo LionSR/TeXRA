@@ -55,7 +55,8 @@ export class TeXCountNode<C = unknown> extends Node<
     return getTeXCountStats(prepRes.files.map((f) => f.absolutePath));
   }
 
-  async execFallback(): Promise<string | null> {
+  async execFallback(_prepRes: TeXCountPrepInput, error: Error): Promise<string | null> {
+    this.services.logger.debug(`TeXCount skipped: ${error.message}`);
     return null;
   }
 

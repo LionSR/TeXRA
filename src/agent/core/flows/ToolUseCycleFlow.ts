@@ -664,7 +664,7 @@ interface ToolUseDispatchPrepResult {
  * PocketFlow compliance: exec() executes tools and returns results, post() applies side effects.
  */
 type ToolUseDispatchExecResult =
-  | { kind: 'skipped'; interrupted?: boolean }
+  | { kind: 'skipped'; interrupted: boolean }
   | {
       kind: 'success';
       execResults: ToolExecutionResult[];
@@ -724,7 +724,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     prepRes: ToolUseDispatchPrepResult,
   ): Promise<ToolUseDispatchExecResult> {
     if (prepRes.shouldSkip) {
-      return { kind: 'skipped' };
+      return { kind: 'skipped', interrupted: false };
     }
 
     if (prepRes.interrupted) {

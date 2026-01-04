@@ -99,7 +99,8 @@ export class MediaExtractionNode<C = unknown> extends Node<
     return prepRes.workspaceState.media.files;
   }
 
-  async execFallback(): Promise<FileLocation[] | null> {
+  async execFallback(_prepRes: MediaPrepInput, error: Error): Promise<FileLocation[] | null> {
+    this.services.logger.debug(`Media extraction skipped: ${error.message}`);
     return null;
   }
 
