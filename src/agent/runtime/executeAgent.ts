@@ -14,6 +14,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { ZodError } from 'zod';
 
 // Local imports - flows (primary execution path)
 
@@ -54,6 +55,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
@@ -465,11 +467,21 @@ export async function executeAgent(
   const isResume = options?.resume ?? false;
 
   // Prepare flow execution context
-  const ctx = await prepareFlowExecution(
-    configPayload.agent,
-    configPayload,
-    executionId,
-  );
+  // Wrapped in try-catch to display agent loading errors to users
+  let ctx: FlowExecutionContext;
+  try {
+    ctx = await prepareFlowExecution(
+      configPayload.agent,
+      configPayload,
+      executionId,
+    );
+  } catch (err) {
+    // Show error to user unless it's a ZodError (handled by executeCommand.ts)
+    if (!(err instanceof ZodError)) {
+      void showErrorMessage(toErrorMessage(err));
+    }
+    throw err;
+  }
 
   const { streamTabId, setting, executionContext, config } = ctx;
   const agentName = config.agent;
@@ -593,6 +605,7 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
+  // Caller (mergeCommands.ts) handles error display via showLoggedErrorMessage
   const ctx = await prepareFlowExecution('merge', {
     agent: 'merge',
     model,
@@ -672,6 +685,7 @@ export async function resumeToolUseFromSnapshot(
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context with snapshot's stream ID for correct UI state
+  // Caller (resumeCommand.ts) handles error display via showWarningMessage
   const ctx = await prepareFlowExecution(
     snapshotConfig.agent,
     snapshotConfig,

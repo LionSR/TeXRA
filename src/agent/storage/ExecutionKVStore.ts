@@ -8,13 +8,16 @@
  * - ExecutionKVStore: Consumer-facing interface, auto-scoped to execution
  * - ExecutionStorageRegistry: Internal factory and lifecycle manager
  * - StorageFSKVStore: VS Code storage backend implementation
+ *
+ * Note: This module is platform-agnostic - it uses helpers from @common/errors
+ * instead of importing vscode directly for error handling and file type checks.
  */
 
 import * as path from 'path';
 
-import * as vscode from 'vscode';
-
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { isFileNotFoundError } from '@common/errors';
+import { isFile, isDirectory } from '@common/files/fsEntryType';
 
 import { StorageFS } from '@utils/files';
 
@@ -82,10 +85,7 @@ class StorageFSKVStore implements ExecutionKVStore {
     try {
       return await StorageFS.readJson<T>(this.keyToPath(key));
     } catch (error) {
-      if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
-      ) {
+      if (isFileNotFoundError(error)) {
         return undefined;
       }
       throw error;
@@ -102,10 +102,7 @@ class StorageFSKVStore implements ExecutionKVStore {
     try {
       await StorageFS.delete(this.keyToPath(key));
     } catch (error) {
-      if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
-      ) {
+      if (isFileNotFoundError(error)) {
         return; // Already deleted, no-op
       }
       throw error;
@@ -122,17 +119,14 @@ class StorageFSKVStore implements ExecutionKVStore {
       const entries = await StorageFS.readDir(dir);
       return entries
         .filter(([name, type]) => {
-          if (type !== vscode.FileType.File) return false;
+          if (!isFile(type)) return false;
           if (!name.endsWith('.json')) return false;
           const key = name.replace(/\.json$/, '');
           return !prefix || key.startsWith(prefix);
         })
         .map(([name]) => name.replace(/\.json$/, ''));
     } catch (error) {
-      if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
-      ) {
+      if (isFileNotFoundError(error)) {
         return []; // Directory doesn't exist yet
       }
       throw error;
@@ -144,10 +138,7 @@ class StorageFSKVStore implements ExecutionKVStore {
     try {
       await StorageFS.delete(dir);
     } catch (error) {
-      if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
-      ) {
+      if (isFileNotFoundError(error)) {
         return; // Already cleared
       }
       throw error;
@@ -185,10 +176,7 @@ class StorageFSRegistry implements ExecutionStorageRegistry {
       try {
         await StorageFS.delete(dir);
       } catch (error) {
-        if (
-          error instanceof vscode.FileSystemError &&
-          error.code === 'FileNotFound'
-        ) {
+        if (isFileNotFoundError(error)) {
           return;
         }
         throw error;
@@ -200,13 +188,10 @@ class StorageFSRegistry implements ExecutionStorageRegistry {
     try {
       const entries = await StorageFS.readDir(EXECUTIONS_DIR);
       return entries
-        .filter(([, type]) => type === vscode.FileType.Directory)
+        .filter(([, type]) => isDirectory(type))
         .map(([name]) => name as ExecutionId);
     } catch (error) {
-      if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
-      ) {
+      if (isFileNotFoundError(error)) {
         return [];
       }
       throw error;
