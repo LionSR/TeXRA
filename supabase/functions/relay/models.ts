@@ -130,7 +130,7 @@ export const TIER_CONFIG: TierModelConfig = {
  * API keys without any limits. Adjust these values based on fair use policy.
  */
 export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
-  free: 5, // $5/month - trial/evaluation access
+  free: 10, // $10/month - trial/evaluation access (temporarily increased)
   Max: 50, // $50/month - researcher access
   Ultra: 500, // $500/month - sponsor access
 };
