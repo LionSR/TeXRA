@@ -71,17 +71,17 @@ export async function signIn(): Promise<void> {
     }
 
     // Build sign-in options from enabled auth methods
+    // Browser-based OAuth options first (GitHub and Google), native GitHub option at the bottom
     const signInOptions: SignInOption[] = [
-      ...OAUTH_PROVIDERS.map((provider) => ({
-        label: `${OAUTH_PROVIDER_LABELS[provider].icon} ${OAUTH_PROVIDER_LABELS[provider].label}`,
-        description: `Sign in with ${OAUTH_PROVIDER_LABELS[provider].label}`,
-        method: provider as AuthMethod,
-      })),
-      // Add browser-based GitHub option as alternative
       {
-        label: '$(globe) GitHub (Browser)',
+        label: '$(github) GitHub',
         description: 'Sign in with GitHub via web browser',
         method: 'github-browser' as AuthMethod,
+      },
+      {
+        label: '$(globe) Google',
+        description: 'Sign in with Google',
+        method: 'google' as AuthMethod,
       },
       ...(EMAIL_LOGIN_ENABLED
         ? [
@@ -92,6 +92,12 @@ export async function signIn(): Promise<void> {
             },
           ]
         : []),
+      // Native GitHub auth at the bottom (still being tested)
+      {
+        label: '$(github) GitHub (Native)',
+        description: 'Sign in using VS Code GitHub authentication',
+        method: 'github' as AuthMethod,
+      },
     ];
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
