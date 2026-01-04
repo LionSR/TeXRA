@@ -18,13 +18,16 @@ export const StreamStatusService = {
   },
 
   set(stream: StreamTabId, status: StreamStatus): void {
+    // Capture previous status BEFORE mutation for event payload
+    const previousStatus = statusMemory.get(stream) ?? STREAM_STATUS.READY;
+
     if (status === STREAM_STATUS.READY) {
       statusMemory.delete(stream);
     } else {
       statusMemory.set(stream, status);
     }
 
-    bus.emit('updateStreamStatus', { stream, status });
+    bus.emit('updateStreamStatus', { stream, status, previousStatus });
   },
 
   /**
