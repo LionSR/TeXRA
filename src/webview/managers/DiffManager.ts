@@ -4,11 +4,13 @@ import * as vscode from 'vscode';
 // Local imports - webview commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
+import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'DiffManager';
 logger.initialize(CHANNEL);
 
-export class DiffManager {
+export class DiffManager extends BaseWebviewManager {
+  protected readonly channel = CHANNEL;
   handleLatexdiff(message: any): void {
     void vscode.commands.executeCommand(
       'texra.latexdiff',
@@ -53,21 +55,18 @@ export class DiffManager {
     return { commits, isGitRepo: true };
   }
 
-  async handleRequestRecentCommits(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestRecentCommits(message: any): Promise<void> {
     const result = await this._fetchRecentCommits();
     this._notifyWhenEmpty(message, result);
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       ...result,
     });
   }
 
-  async handleRefreshCommits(webviewView: vscode.WebviewView): Promise<void> {
+  async handleRefreshCommits(): Promise<void> {
     const result = await this._fetchRecentCommits();
-    webviewView.webview.postMessage({
+    this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       ...result,
     });
