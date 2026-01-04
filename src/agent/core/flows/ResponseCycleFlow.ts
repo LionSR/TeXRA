@@ -181,11 +181,13 @@ class ResponsePrepNode<C> extends BaseNode<
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { prompt, userVars } = services;
+    const { prompt, userVarChannels } = services;
     const interrupted = Boolean(await services.checkInterruption());
     // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
+    // Merge input + transient channels for template rendering
+    const userVars = { ...userVarChannels.input, ...userVarChannels.transient };
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, userVars);
@@ -213,7 +215,7 @@ class ResponsePrepNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { agentConfig, round } = this.services;
+    const { config, round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
     shared.outputLocation = prepRes.outputLocation;
@@ -224,8 +226,8 @@ class ResponsePrepNode<C> extends BaseNode<
       object: shared.messages,
       objectType: 'messages',
       context: getDebugContext(this.services, {
-        modelName: agentConfig.model,
-        isRemote: isRemoteAgent(agentConfig.agent),
+        modelName: config.model,
+        isRemote: isRemoteAgent(config.agent),
       }),
       fileOptions: {
         continuationCount: round.continuationCount,
@@ -352,7 +354,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
     _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { logger, agentConfig, round } = this.services;
+    const { logger, config, round } = this.services;
 
     // Handle non-success cases (returns null) or get narrowed success result
     // Pass shared directly since it's now flat (has shouldStop, endTurn, lastError)
@@ -374,8 +376,8 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
       object: successRes.response,
       objectType: 'response',
       context: getDebugContext(this.services, {
-        modelName: agentConfig.model,
-        isRemote: isRemoteAgent(agentConfig.agent),
+        modelName: config.model,
+        isRemote: isRemoteAgent(config.agent),
       }),
       fileOptions: {
         continuationCount: round.continuationCount,
@@ -869,7 +871,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       logger,
       modelHandler,
       setting,
-      agentConfig,
+      config,
     } = this.services;
 
     if (execRes.kind === 'skipped') {
@@ -915,7 +917,7 @@ class ResponseContinuationNode<C> extends BaseNode<
         round,
         workspace,
         setting,
-        agentConfig,
+        config,
       );
     } else {
       modelHandler.addContinueMessageWithoutPrefill(
@@ -923,7 +925,7 @@ class ResponseContinuationNode<C> extends BaseNode<
         round,
         workspace,
         setting,
-        agentConfig,
+        config,
       );
     }
 

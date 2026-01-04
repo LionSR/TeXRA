@@ -26,7 +26,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
-  buildBaseCycleOptions,
 } from '@agent/implementations/flows/common';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -166,15 +165,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
       };
     }
 
-    // Build ResponseCycleOptions from services
-    const { userVarChannels } = services;
-    const cycleOptions = {
-      ...(await buildBaseCycleOptions(services)),
-      userVars: { ...userVarChannels.input, ...userVarChannels.transient },
-      agentConfig: services.config,
-      fileService: services.fileService,
-    };
-
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
@@ -192,9 +182,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
       shared.lastError = undefined;
 
       // Create and run the flow directly on shared (native nesting)
+      // Spread parent services directly - no intermediate cycleOptions object
       const flow = createResponseCycleFlow<C>();
       flow.setServices({
-        ...cycleOptions,
+        ...services,  // Parent ReflectionServices has all needed fields
+        client: await services.getClient(),  // Only transformation: await fresh client
         round: prepRes.round,
         run: prepRes.run,
         workspace: prepRes.workspace,

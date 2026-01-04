@@ -116,10 +116,7 @@ export interface FlowServiceAccessors {
  * Build AgentCycleBaseOptions from flow services or initialization config.
  *
  * Field names now match between BaseFlowContextInit and AgentCycleBaseOptions,
- * eliminating the previous rename overhead (setting→agentSetting, prompt→agentPrompt).
- *
- * The only transformations:
- * - userVarChannels.transient → userVars (extracts transient channel)
+ * so most fields are direct passthroughs. The only transformations:
  * - getClient() → client (awaited to get fresh auth tokens)
  * - executionContext → context (via services.context if available)
  *
@@ -133,7 +130,7 @@ export async function buildBaseCycleOptions<C>(
     modelHandler: services.modelHandler,
     setting: services.setting,
     prompt: services.prompt,
-    userVars: services.userVarChannels.transient,
+    userVarChannels: services.userVarChannels,
     logger: services.logger ?? services.executionContext.logger,
     context: services.context ?? services.executionContext,
     client: await services.getClient(),

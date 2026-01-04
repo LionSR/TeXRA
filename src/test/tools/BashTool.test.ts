@@ -164,7 +164,7 @@ describe('BashTool', () => {
         userPrefix: '',
         userRequest: '',
       } satisfies AgentPrompt,
-      userVars: {},
+      userVarChannels: { input: {}, transient: {} },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
       toolRegistry: createToolRegistry({ bash: bashTool }),
