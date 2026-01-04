@@ -609,9 +609,8 @@ export class ProgressEventHandler {
     status: StreamStatus,
     previousStatus?: StreamStatus,
   ): void {
-    // Use provided previousStatus from event payload, or read from service for direct calls
-    // Note: previousStatus from event is always defined (defaults to READY in service)
-    // but direct reads from service may return undefined for new streams
+    // Use previousStatus from event payload (avoids race condition) or read from service
+    // for direct calls. Treat both undefined and READY as "no meaningful previous status".
     const prevStatus = previousStatus ?? StreamStatusService.get(stream);
     const hadPreviousStatus = prevStatus !== undefined && prevStatus !== STREAM_STATUS.READY;
 
