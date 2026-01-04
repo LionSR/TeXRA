@@ -60,33 +60,33 @@ export class ProgressEventHandler {
 
   /**
    * Setup all event bus listeners.
-   * All VSCode Disposable wrapping is centralized here.
+   * Uses AbortController for cleanup - single dispose aborts all listeners.
    */
   setupEventListeners(): vscode.Disposable[] {
+    const controller = new AbortController();
+    const { signal } = controller;
     const { state, webviewUpdater } = this;
 
-    // Collect all unsubscribe functions from all sources
-    const unsubscribes = [
-      // Stream status events - tightly coupled to this class
-      bus.on('setActiveStream', this.handleSetActiveStream),
-      bus.on('updateStreamStatus', this.handleUpdateStreamStatus),
-      bus.on('setTaskState', this.handleSetTaskState),
-      // Task group events - must register before log events
-      bus.on('addTaskGroup', this.handleAddTaskGroup),
-      bus.on('updateTaskGroup', this.handleUpdateTaskGroup),
-      // Extension lifecycle
-      bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled),
-      // Delegate to specialized modules (all return Unsubscribe[])
-      ...registerOutputEvents(bus, state, webviewUpdater),
-      ...registerUsageEvents(bus, state, webviewUpdater),
-      ...registerLogEvents(bus, state, webviewUpdater),
-      ...registerTodoEvents(bus, state, webviewUpdater),
-      ...registerRetryEvents(bus, this.uiCallbacks),
-      ...registerApprovalEvents(bus, this.uiCallbacks),
-    ];
+    // Register all handlers with shared signal - cleanup is automatic on abort
+    bus.on('setActiveStream', this.handleSetActiveStream, { signal });
+    bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
+    bus.on('setTaskState', this.handleSetTaskState, { signal });
+    bus.on('addTaskGroup', this.handleAddTaskGroup, { signal });
+    bus.on('updateTaskGroup', this.handleUpdateTaskGroup, { signal });
+    bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
+      signal,
+    });
 
-    // Single place for VSCode Disposable wrapping
-    return unsubscribes.map((fn) => new vscode.Disposable(fn));
+    // Delegate to specialized modules
+    registerOutputEvents(bus, state, webviewUpdater, signal);
+    registerUsageEvents(bus, state, webviewUpdater, signal);
+    registerLogEvents(bus, state, webviewUpdater, signal);
+    registerTodoEvents(bus, state, webviewUpdater, signal);
+    registerRetryEvents(bus, this.uiCallbacks, signal);
+    registerApprovalEvents(bus, this.uiCallbacks, signal);
+
+    // Single disposable that cleans up everything
+    return [new vscode.Disposable(() => controller.abort())];
   }
 
   // Event handlers - arrow functions to preserve `this`

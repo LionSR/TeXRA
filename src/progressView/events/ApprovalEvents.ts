@@ -2,7 +2,7 @@
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type { ProgressEventBusLike, Unsubscribe } from './types';
+import type { ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'ApprovalEvents';
@@ -20,29 +20,39 @@ export interface ApprovalCallbacks {
 
 /**
  * Register approval event handlers.
- * Returns unsubscribe functions - caller handles VSCode Disposable wrapping.
+ * Cleanup is automatic via AbortSignal.
  */
 export function registerApprovalEvents(
   bus: ProgressEventBusLike,
   callbacks: ApprovalCallbacks,
-): Unsubscribe[] {
-  return [
-    bus.on('showToolEditApprovalPrompt', (payload) =>
+  signal: AbortSignal,
+): void {
+  bus.on(
+    'showToolEditApprovalPrompt',
+    (payload) =>
       withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
         callbacks.showToolEditApprovalPrompt(payload),
       ),
-    ),
-    bus.on('resolveToolEditApprovalPrompt', (payload) =>
+    { signal },
+  );
+
+  bus.on(
+    'resolveToolEditApprovalPrompt',
+    (payload) =>
       withEventErrorHandling(MODULE, 'failed to resolve approval prompt', () =>
         callbacks.resolveToolEditApprovalPrompt(payload.requestId),
       ),
-    ),
-    bus.on('updateToolEditApprovalBypassState', (payload) =>
+    { signal },
+  );
+
+  bus.on(
+    'updateToolEditApprovalBypassState',
+    (payload) =>
       withEventErrorHandling(
         MODULE,
         'failed to update approval bypass state',
         () => callbacks.updateToolEditApprovalBypassState(payload.bypassActive),
       ),
-    ),
-  ];
+    { signal },
+  );
 }

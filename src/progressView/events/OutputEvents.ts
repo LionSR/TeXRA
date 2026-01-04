@@ -3,11 +3,7 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import {
-  sendIfActive,
-  type ProgressEventBusLike,
-  type Unsubscribe,
-} from './types';
+import { sendIfActive, type ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'OutputEvents';
@@ -20,15 +16,17 @@ const toRoundRecord = <T>(
 
 /**
  * Register output event handlers.
- * Returns unsubscribe functions - caller handles VSCode Disposable wrapping.
+ * Cleanup is automatic via AbortSignal.
  */
 export function registerOutputEvents(
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
-): Unsubscribe[] {
-  return [
-    bus.on('addOutputFiles', ({ stream, storageKey, filesByRound }) => {
+  signal: AbortSignal,
+): void {
+  bus.on(
+    'addOutputFiles',
+    ({ stream, storageKey, filesByRound }) => {
       withEventErrorHandling(
         MODULE,
         'failed to handle addOutputFiles',
@@ -43,8 +41,13 @@ export function registerOutputEvents(
           );
         },
       );
-    }),
-    bus.on('updateMissingOutputs', ({ stream, storageKey, filesByRound }) => {
+    },
+    { signal },
+  );
+
+  bus.on(
+    'updateMissingOutputs',
+    ({ stream, storageKey, filesByRound }) => {
       withEventErrorHandling(
         MODULE,
         'failed to handle updateMissingOutputs',
@@ -65,8 +68,13 @@ export function registerOutputEvents(
           );
         },
       );
-    }),
-    bus.on('clearMissingOutputs', ({ stream }) => {
+    },
+    { signal },
+  );
+
+  bus.on(
+    'clearMissingOutputs',
+    ({ stream }) => {
       withEventErrorHandling(
         MODULE,
         'failed to handle clearMissingOutputs',
@@ -77,6 +85,7 @@ export function registerOutputEvents(
           });
         },
       );
-    }),
-  ];
+    },
+    { signal },
+  );
 }
