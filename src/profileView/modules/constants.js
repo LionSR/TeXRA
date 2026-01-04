@@ -23,7 +23,6 @@ export const ELEMENT_IDS = {
   API_ACCESS_INCLUDED: 'apiAccessIncluded',
   API_ACCESS_PERSONAL: 'apiAccessPersonal',
   MODEL_ACCESS_INFO: 'modelAccessInfo',
-  MODEL_ACCESS_SUMMARY: 'modelAccessSummary',
   ENABLED_PROVIDERS_INFO: 'enabledProvidersInfo',
   ALLOWED_MODELS_INFO: 'allowedModelsInfo',
   MODELS_LIST_CONTAINER: 'modelsListContainer',
