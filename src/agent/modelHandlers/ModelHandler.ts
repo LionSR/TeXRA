@@ -213,9 +213,7 @@ export abstract class ModelHandler<
     if (!this.progressViewEnabled) {
       return;
     }
-    const groupId = this.logger.withCurrentGroup((id) => id);
     this.logger.info('', {
-      groupId,
       messageType: MESSAGE_TYPES.WEB_SEARCH,
       data: result,
     });

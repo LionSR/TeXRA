@@ -335,7 +335,7 @@ export class OutputHandler implements IOutputHandler {
             documentTag: this.agentSetting.documentTag,
           };
 
-          this.logger.missingOutputs(missingOutputsData, this.getStorageKey());
+          this.logger.missingOutputs(missingOutputsData);
           await showInstructionWithSuppress(
             'missingOutputsInfo',
             'Missing output files detected',
