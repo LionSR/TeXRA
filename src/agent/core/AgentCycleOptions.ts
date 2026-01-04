@@ -2,9 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent configuration
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * User variable channels for template rendering.
@@ -27,21 +25,19 @@ export type UserVariableChannels = z.infer<typeof UserVariableChannelsSchema>;
  * Base options for cycle flows.
  *
  * Uses Pick from BaseFlowContextInit to avoid field duplication.
- * Adds cycle-specific fields: client, logger, context.
+ * Adds cycle-specific field: client (fresh API client for each cycle).
  */
 export type AgentCycleBaseOptions<C = unknown> = Pick<
   BaseFlowContextInit<C>,
   | 'modelHandler'
   | 'setting'
   | 'prompt'
+  | 'logger'
+  | 'executionContext'
   | 'userVarChannels'
   | 'checkInterruption'
   | 'setAbortController'
 > & {
   /** Fresh API client for this cycle */
   client: C;
-  /** Logger (alias for executionContext.logger) */
-  logger: AgentLogger;
-  /** Execution context (alias for executionContext) */
-  context: AgentExecutionContext;
 };

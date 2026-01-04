@@ -171,7 +171,7 @@ describe('BashTool', () => {
       checkInterruption: () => false,
       setAbortController: () => {},
       modelName: 'test',
-      context: new AgentExecutionContext({
+      executionContext: new AgentExecutionContext({
         streamId: 'bash-tool' as StreamTabId,
       }),
     };
