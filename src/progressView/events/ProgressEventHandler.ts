@@ -514,9 +514,7 @@ export class ProgressEventHandler {
     }
 
     const messages = this.state.streamTabs.getMessages(stream);
-    const groups = Array.from(
-      this.state.taskGroups.getStreamGroups(stream).values(),
-    );
+    const groups = [...this.state.taskGroups.getStreamGroups(stream).values()];
     const activeRunId = this.state.resolveRunId(stream, undefined, {
       persist: false,
     });

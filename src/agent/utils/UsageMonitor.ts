@@ -11,11 +11,11 @@ import type {
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
-import type { ModelCapabilities, ModelConfig } from '@model';
 
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { UsageLogService } from '@logger/UsageLogService';
+import type { ModelCapabilities, ModelConfig } from '@model';
 
 /**
  * Optional metadata for usage logging.

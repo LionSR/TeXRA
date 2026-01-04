@@ -176,7 +176,7 @@ export class LatexDiffManager {
       );
       this.logger.debug(`r${currRound} output files: ${outputPaths}`);
 
-      const basePairs = Array.from(mapping.baseToOutput.entries());
+      const basePairs = [...mapping.baseToOutput.entries()];
       if (basePairs.length > 0) {
         this.logger.debug(
           `Matched base files to output files: ${basePairs
@@ -257,7 +257,7 @@ export class LatexDiffManager {
 
       if (generateBetweenRoundDiffs && currRound > 0) {
         this.logger.debug('Running between-rounds latexdiff operations');
-        const prevPairs = Array.from(mapping.prevToOutput.entries());
+        const prevPairs = [...mapping.prevToOutput.entries()];
 
         if (prevPairs.length > 0) {
           this.logger.debug(
