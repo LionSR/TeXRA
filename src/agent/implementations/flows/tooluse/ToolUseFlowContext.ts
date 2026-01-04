@@ -7,7 +7,6 @@ import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -22,7 +21,6 @@ import {
   type IToolUseSession,
 } from './ToolUseSessionLifecycle';
 
-import { buildBaseCycleOptions } from '../common';
 import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
@@ -138,28 +136,6 @@ export async function prepareInitialState<C>(
   };
 }
 
-/**
- * Build cycle options for tool-use execution.
- *
- * Note: Previous signature took `store: AgentSharedStore` but that parameter
- * was never used. Removed to eliminate abstraction overhead.
- */
-export async function buildCycleOptions<C>(
-  services: ToolUseServices<C>,
-): Promise<ToolUseCycleOptions<C>> {
-  const { setting, toolRegistry, resolvedTools, config } = services;
-  const resolvedSetting = { ...setting, tools: resolvedTools };
-
-  // Await to get fresh client with refreshed auth tokens for each response round
-  return {
-    ...(await buildBaseCycleOptions(services)),
-    setting: resolvedSetting,  // Override with resolved tools
-    toolRegistry,
-    modelName: config.model,
-    agentName: config.agent,
-  };
-}
-
 /** Apply a follow-up message to the conversation. */
 export async function applyFollowUpMessage<C>(
   services: ToolUseServices<C>,
@@ -204,12 +180,12 @@ export function createToolUseFlowContext<C = unknown>(
     resolvedTools.push(def);
   }
 
+  // Spread init directly - it already contains setting, etc.
   const services: ToolUseServices<C> = {
     ...init,
     logger: init.executionContext.logger,
     context: init.executionContext,
-    setting,
-    toolRegistry,
+    toolRegistry,  // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,
     snapshot: resumeSnapshot ?? null,
