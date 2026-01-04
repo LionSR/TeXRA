@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { z, ZodError } from 'zod';
+import { ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
@@ -14,41 +14,6 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
 
-// --- Schema ---
-
-/**
- * Explicit wrapper format: { config, executionId?, resume? }
- *
- * Note: `config` is z.unknown() because validation is handled by AgentConfigSchema.parse(),
- * which owns AgentConfigSchema. Errors will surface as ZodError in the catch block.
- */
-const ExplicitWrapperSchema = z.object({
-  config: z.unknown(),
-  executionId: z.string().optional(),
-  resume: z.boolean().prefault(false),
-});
-
-type ParsedInput = z.infer<typeof ExplicitWrapperSchema>;
-
-/** Check if input looks like an explicit wrapper (has 'config' property) */
-function hasConfigProperty(input: unknown): input is { config: unknown } {
-  return input !== null && typeof input === 'object' && 'config' in input;
-}
-
-/**
- * Parse execute input: explicit wrapper or raw config.
- *
- * Discrimination logic:
- * - If input has 'config' property → parse as explicit wrapper (fail if malformed)
- * - Otherwise → treat entire input as raw config
- */
-function parseExecuteInput(input: unknown): ParsedInput {
-  if (hasConfigProperty(input)) {
-    return ExplicitWrapperSchema.parse(input);
-  }
-  return { config: input, resume: false };
-}
-
 // --- Command ---
 
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
@@ -57,26 +22,32 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
   );
 }
 
+/**
+ * Execute an agent with the given configuration.
+ *
+ * Supports two modes:
+ * - Fresh execution: Pass raw config or { config } - creates new executionId
+ * - Resume workflow: Pass { config, executionId } - reuses executionId to resume
+ *
+ * For tool-use sessions, use texra.resumeAgent with a snapshot instead.
+ */
 export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
-    const { config, executionId, resume } = parseExecuteInput(input);
-    const normalizedConfig = AgentConfigSchema.parse(config);
+    // Support both raw config and wrapped { config, executionId? } format
+    const wrapped = isWrappedConfig(input) ? input : null;
+    const rawConfig = wrapped ? wrapped.config : input;
+    const config = AgentConfigSchema.parse(rawConfig);
 
-    if (resume && executionId) {
-      await executeAgent(normalizedConfig, executionId, { resume: true });
-      return;
+    // Use provided executionId (resume) or create new one (fresh)
+    const executionId =
+      (wrapped?.executionId as ExecutionId | undefined) ??
+      (randomUUID() as ExecutionId);
+    const isResume = wrapped?.executionId !== undefined;
+
+    if (!isResume) {
+      await AgentHistoryManager.addToHistory(executionId, config);
     }
-
-    if (resume) {
-      logger.warn(
-        CHANNEL,
-        'Resume requested without execution ID; starting new run.',
-      );
-    }
-
-    const newExecutionId = randomUUID() as ExecutionId;
-    await AgentHistoryManager.addToHistory(newExecutionId, normalizedConfig);
-    await executeAgent(normalizedConfig, newExecutionId);
+    await executeAgent(config, executionId);
   } catch (error) {
     if (error instanceof ZodError) {
       const detail = error.issues.map((i) => i.message).join('; ');
@@ -94,4 +65,11 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     });
     throw error;
   }
+}
+
+/** Check if input is wrapped in { config, executionId? } format */
+function isWrappedConfig(
+  input: unknown,
+): input is { config: unknown; executionId?: unknown } {
+  return input !== null && typeof input === 'object' && 'config' in input;
 }

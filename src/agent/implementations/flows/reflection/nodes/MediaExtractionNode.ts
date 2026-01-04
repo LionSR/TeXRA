@@ -50,7 +50,12 @@ export class MediaExtractionNode<C = unknown> extends Node<
     const { currentRound, roundOutputs, context } = shared;
 
     const workspaceState = getWorkspaceState(shared);
-    const files = getFilesForRound(currentRound, roundOutputs, config, fileService);
+    const files = getFilesForRound(
+      currentRound,
+      roundOutputs,
+      config,
+      fileService,
+    );
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
@@ -99,7 +104,10 @@ export class MediaExtractionNode<C = unknown> extends Node<
     return prepRes.workspaceState.media.files;
   }
 
-  async execFallback(_prepRes: MediaPrepInput, error: Error): Promise<FileLocation[] | null> {
+  async execFallback(
+    _prepRes: MediaPrepInput,
+    error: Error,
+  ): Promise<FileLocation[] | null> {
     this.services.logger.debug(`Media extraction skipped: ${error.message}`);
     return null;
   }

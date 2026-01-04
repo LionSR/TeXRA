@@ -24,9 +24,20 @@ export const LogLevelSchema = z.enum([
  * End group status - terminal states used when finalizing log groups.
  * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
  * This is a strict subset of TaskGroupStatus (only terminal states).
+ *
+ * ## Status Semantics
+ *
+ * - **STOPPED**: Flow completed successfully (all rounds finished normally).
+ *   Despite the name, this does NOT mean "user stopped" - it means "finished".
+ *   This naming comes from the UI status indicator showing "Stopped" when done.
+ *
+ * - **ERROR**: Flow terminated due to an error OR was interrupted by user.
+ *   Use this for any non-successful termination.
  */
 export const END_GROUP_STATUS = {
+  /** Flow terminated due to error or user interruption */
   ERROR: 'error',
+  /** Flow completed successfully (all rounds finished) */
   STOPPED: 'stopped',
 } as const;
 
