@@ -147,9 +147,6 @@ export class AgentsTable {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const modelAccessInfo = safeGetElementById(ELEMENT_IDS.MODEL_ACCESS_INFO);
-    const modelAccessSummary = safeGetElementById(
-      ELEMENT_IDS.MODEL_ACCESS_SUMMARY,
-    );
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
@@ -196,14 +193,6 @@ export class AgentsTable {
         resolvedAllowedModels,
         enabledProviders,
       );
-    }
-
-    // Add toggle listener for expanding/collapsing models list
-    if (modelAccessSummary && !this._modelsToggleListenerAdded) {
-      this._modelsToggleListenerAdded = true;
-      modelAccessSummary.addEventListener('click', () => {
-        modelAccessInfo?.classList.toggle('expanded');
-      });
     }
 
     // Add event listeners (only once)
