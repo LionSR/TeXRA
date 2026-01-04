@@ -135,6 +135,14 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
   Ultra: 500, // $500/month - sponsor access
 };
 
+// =============================================================================
+// Tier Constants
+// =============================================================================
+
+const ULTRA_TIER = 'Ultra';
+const MAX_TIER = 'Max';
+const FREE_TIER = 'free';
+
 /**
  * Get the monthly spending limit for a tier.
  */
@@ -147,10 +155,6 @@ export function getSpendingLimit(tier: string): number {
 // =============================================================================
 // Validation Functions
 // =============================================================================
-
-const ULTRA_TIER = 'Ultra';
-const MAX_TIER = 'Max';
-const FREE_TIER = 'free';
 
 /**
  * Check if a model is allowed for a given tier.
