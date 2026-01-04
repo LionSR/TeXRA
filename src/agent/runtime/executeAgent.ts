@@ -592,20 +592,13 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  let ctx: FlowExecutionContext;
-  try {
-    ctx = await prepareFlowExecution('merge', {
-      agent: 'merge',
-      model,
-      inputFile,
-      editedFile,
-    });
-  } catch (err) {
-    if (!(err instanceof ZodError)) {
-      void showErrorMessage(toErrorMessage(err));
-    }
-    throw err;
-  }
+  // Caller (mergeCommands.ts) handles error display via showLoggedErrorMessage
+  const ctx = await prepareFlowExecution('merge', {
+    agent: 'merge',
+    model,
+    inputFile,
+    editedFile,
+  });
 
   const { streamTabId, executionContext, config } = ctx;
 
@@ -679,20 +672,13 @@ export async function resumeToolUseFromSnapshot(
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context with snapshot's stream ID for correct UI state
-  let ctx: FlowExecutionContext;
-  try {
-    ctx = await prepareFlowExecution(
-      snapshotConfig.agent,
-      snapshotConfig,
-      executionId,
-      { streamTabIdOverride: streamTabId },
-    );
-  } catch (err) {
-    if (!(err instanceof ZodError)) {
-      void showErrorMessage(toErrorMessage(err));
-    }
-    throw err;
-  }
+  // Caller (resumeCommand.ts) handles error display via showWarningMessage
+  const ctx = await prepareFlowExecution(
+    snapshotConfig.agent,
+    snapshotConfig,
+    executionId,
+    { streamTabIdOverride: streamTabId },
+  );
   const { setting, executionContext, config } = ctx;
 
   // Validate agent type and session
