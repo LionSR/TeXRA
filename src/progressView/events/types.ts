@@ -106,3 +106,18 @@ export function createStatefulEventDisposable<K extends ProgressEvent>(
     bus.on(event, (payload) => handler(payload, state, updater)),
   );
 }
+
+/**
+ * Send update to webview only if stream is active and webview is available.
+ * Eliminates repetitive isAvailable/activeStream checks in every handler.
+ */
+export function sendIfActive(
+  stream: string,
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+  send: () => void,
+): void {
+  if (updater.isAvailable() && stream === state.activeStream) {
+    send();
+  }
+}
