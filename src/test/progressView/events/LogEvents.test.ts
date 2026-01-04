@@ -6,7 +6,7 @@ import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - progress view
-import { createLogEvents } from '@progressView/events/LogEvents';
+import { registerLogEvents } from '@progressView/events/LogEvents';
 import type { ProgressEventBusLike } from '@progressView/events/types';
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
 import type { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
@@ -78,8 +78,7 @@ describe('LogEvents', () => {
     } as unknown as WebviewUpdater;
 
     const bus = new TestBus();
-    const { register } = createLogEvents();
-    const disposables = register(bus, state, updater);
+    const disposables = registerLogEvents(bus, state, updater);
 
     const thinkingMessage: LogMessageData = {
       id: 'log-1',
