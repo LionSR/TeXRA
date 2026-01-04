@@ -1,30 +1,17 @@
 // Type imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { WebviewUpdater } from '@progressView/managers';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
-/**
- * UsageEvents module interface.
- * Uses StatefulEventModule pattern for state/updater access.
- */
 export type UsageEventsModule = StatefulEventModule;
 
-/**
- * Shared context for UsageEvents module.
- * Uses BaseEventShared which provides withErrorBoundary.
- */
-type UsageEventsShared = BaseEventShared;
-
-export function createUsageEvents(
-  shared: UsageEventsShared,
-): UsageEventsModule {
+export function createUsageEvents(shared: BaseEventShared): UsageEventsModule {
   const { withErrorBoundary } = shared;
 
   return {
@@ -51,9 +38,9 @@ export function createUsageEvents(
                   normalizedUsage,
                 );
 
-                if (state.activeStream === stream && updater.isAvailable()) {
+                sendIfActive(stream, state, updater, () => {
                   updater.updateRunUsage(stream, storageKey, normalizedUsage);
-                }
+                });
               },
             );
           },
