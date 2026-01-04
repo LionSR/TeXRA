@@ -192,15 +192,11 @@ export class XmlOutputManager {
         (_, i) => `<unextracted document ${i + 1}>`,
       );
 
-      const groupId = this.logger.withCurrentGroup((id) => id);
-      this.logger.missingOutputs(
-        {
-          missing,
-          xmlFile: outputLocation.absolutePath,
-          documentTag: this.agentSetting.documentTag,
-        },
-        groupId,
-      );
+      this.logger.missingOutputs({
+        missing,
+        xmlFile: outputLocation.absolutePath,
+        documentTag: this.agentSetting.documentTag,
+      });
     }
   }
 

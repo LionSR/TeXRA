@@ -425,9 +425,7 @@ export abstract class RetryableInvocationNode<
     }
 
     // User cancelled or timeout
-    const groupId = logger.withCurrentGroup((id) => id);
     logger.info('Retry cancelled by user', {
-      groupId,
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
