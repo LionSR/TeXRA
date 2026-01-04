@@ -75,31 +75,28 @@ class TaskGroups {
 
   /**
    * Update an existing log group with a structured payload.
-   * @param {{ groupId: string, updates?: Object }} payload
+   * Payload uses flat structure: { id, status, endTime } matching UpdateTaskGroupPayload.
+   * @param {{ id: string, status?: string, endTime?: number }} payload
    */
   update(payload) {
     if (!payload) {
       return;
     }
 
-    const { groupId, updates = {} } = payload;
-    const group = this.groups.get(groupId);
+    const { id, status, endTime } = payload;
+    const group = this.groups.get(id);
     if (!group) {
       return;
     }
 
-    if (Object.hasOwn(updates, 'status') && updates.status) {
-      group.status = updates.status;
+    if (status) {
+      group.status = status;
     }
-    if (
-      Object.hasOwn(updates, 'endTime') &&
-      updates.endTime !== undefined &&
-      updates.endTime !== null
-    ) {
-      group.endTime = updates.endTime;
+    if (endTime !== undefined && endTime !== null) {
+      group.endTime = endTime;
     }
 
-    this.set(groupId, group);
+    this.set(id, group);
   }
 
   getChildIds(parentId) {
