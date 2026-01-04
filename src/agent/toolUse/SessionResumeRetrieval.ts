@@ -89,7 +89,7 @@ const ToolUseFlowRecordStateSchema = z.object({
  * - Tool-use: Full snapshot with messages and state
  * - Workflow: Minimal data (agentConfig + executionId)
  *
- * @param streamId - The stream tab ID
+ * @param streamId - Stream tab ID (used for logging and tool-use snapshot)
  * @param executionId - The execution ID for the stream
  * @param taskState - The persisted task state
  * @returns The resume data, or null if retrieval fails
@@ -104,7 +104,7 @@ export async function retrieveSessionResumeData(
   }
 
   if (isWorkflowTaskState(taskState)) {
-    return retrieveWorkflowResumeData(executionId, taskState);
+    return retrieveWorkflowResumeData(streamId, executionId, taskState);
   }
 
   logger.warn(`Unknown task state type for stream: ${streamId}`);
@@ -176,11 +176,14 @@ async function retrieveToolUseResumeData(
 /**
  * Retrieve resume data for a workflow session.
  * Workflow flows read persisted state via executionId, so no full snapshot needed.
+ * Async for API consistency with retrieveToolUseResumeData.
  */
-function retrieveWorkflowResumeData(
+async function retrieveWorkflowResumeData(
+  streamId: StreamTabId,
   executionId: ExecutionId,
   taskState: TaskState,
-): WorkflowResumeData {
+): Promise<WorkflowResumeData> {
+  logger.debug(`Retrieved workflow resume data for stream: ${streamId}`);
   return {
     type: 'workflow',
     agentConfig: taskState.agentConfig,

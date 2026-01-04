@@ -61,17 +61,21 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     return false;
   }
 
-  // Trigger resume based on session type
+  // Trigger resume based on session type.
+  // Note: Tool-use and workflow have different resume semantics:
+  // - Tool-use: resumeAgent returns { success: boolean } for explicit result checking
+  // - Workflow: execute returns void and throws on failure (async fire-and-forget)
   logger.info(`Auto-resuming ${resumeData.type} session for stream: ${streamId}`);
   try {
     if (resumeData.type === 'toolUse') {
-      // Tool-use: pass snapshot to resumeAgent command
+      // Tool-use: pass snapshot to resumeAgent command, check explicit result
       const result = await vscode.commands.executeCommand('texra.resumeAgent', {
         snapshot: resumeData.snapshot,
       });
       return (result as { success?: boolean })?.success === true;
     } else {
-      // Workflow: pass config and executionId to execute command
+      // Workflow: pass config and executionId to execute command.
+      // Execute returns void - success if no exception thrown.
       await vscode.commands.executeCommand('texra.execute', {
         config: resumeData.agentConfig,
         executionId: resumeData.executionId,
