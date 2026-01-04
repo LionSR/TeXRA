@@ -136,7 +136,6 @@ export async function runReflectionFlow<C = unknown>(
   let shared: ReflectionFlowShared | undefined;
   let services: ReflectionServices<C> | undefined;
   let createdRunStage = false;
-  let outputHandler: IOutputHandler | undefined;
 
   // ========================================================================
   // Create services inline (previously in createReflectionFlowContext)
@@ -145,7 +144,7 @@ export async function runReflectionFlow<C = unknown>(
   const fileService = new TaskRunFileService(executionContext.executionId);
   const baseFiles = createBaseFileLocations(config);
 
-  outputHandler = new OutputHandler(
+  const outputHandler: IOutputHandler = new OutputHandler(
     setting,
     config,
     0, // logId
