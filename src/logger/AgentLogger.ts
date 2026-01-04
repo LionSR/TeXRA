@@ -16,7 +16,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
 import * as logger from './logUtils';
 import { END_GROUP_STATUS, MESSAGE_TYPES } from './messageTypes';
-import { shouldEmitToProgressView } from './filterUtils';
+import { getEmitFilter } from './filterUtils';
 
 // Type imports
 import type {
@@ -519,80 +519,49 @@ export class AgentLogger {
     const progressEnabled = options.progressViewEnabled ?? true;
     const groupId = options.groupId ?? this.resolveActiveGroupId();
 
-    // Apply the same filtering logic as ProgressViewSink
-    // This ensures debug mode and INTERNAL message filtering work consistently
-    const shouldEmit =
-      progressEnabled && shouldEmitToProgressView({ level, messageType: type });
+    // Apply filtering - get both shouldEmit and debugMode for verbose flag
+    // Matches VSCodeTransport.emitLogEvent() behavior for consistency
+    const { shouldEmit, debugMode } = progressEnabled
+      ? getEmitFilter({ level, messageType: type })
+      : { shouldEmit: false, debugMode: false };
+
+    // Helper to emit log message (reduces duplication between append/finalize)
+    const emitMessage = (isNew: boolean, text: string): void => {
+      if (isNew) {
+        bus.emit('addLogMessage', {
+          stream: streamId,
+          logMessage: {
+            id,
+            text,
+            level,
+            timestamp: Date.now(),
+            groupId,
+            messageType: type,
+            verbose: debugMode, // Now included for consistency with VSCodeTransport
+          },
+        });
+      } else {
+        bus.emit('updateLogMessage', {
+          stream: streamId,
+          logMessage: { id, text, groupId, messageType: type },
+        });
+      }
+    };
 
     return {
       append: (text: string) => {
-        if (!text) {
-          return;
-        }
-
+        if (!text) return;
         buffer += text;
+        if (!shouldEmit) return;
 
-        if (!shouldEmit) {
-          return;
-        }
-
-        if (isFirstUpdate) {
-          bus.emit('addLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              level,
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-            },
-          });
-          isFirstUpdate = false;
-        } else {
-          bus.emit('updateLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              groupId,
-              messageType: type,
-            },
-          });
-        }
+        emitMessage(isFirstUpdate, buffer);
+        isFirstUpdate = false;
       },
       finalize: (finalText?: string) => {
-        if (typeof finalText === 'string') {
-          buffer = finalText;
-        }
+        if (typeof finalText === 'string') buffer = finalText;
 
-        if (!shouldEmit) {
-          this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
-          return buffer;
-        }
-
-        if (isFirstUpdate) {
-          bus.emit('addLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              level,
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-            },
-          });
-        } else {
-          bus.emit('updateLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: buffer,
-              groupId,
-              messageType: type,
-            },
-          });
+        if (shouldEmit) {
+          emitMessage(isFirstUpdate, buffer);
         }
 
         this.debug(`Final ${type} length: ${buffer.length}`, { groupId });

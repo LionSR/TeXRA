@@ -10,7 +10,10 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import {
+  mapToRecord,
+  recordToMap,
+} from '@progressView/persistence/serializationUtils';
 import type { UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 /**
@@ -145,11 +148,6 @@ export class TaskGroupManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<Map<string, TaskGroup>> {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const entries = Object.entries(data as Record<string, TaskGroup>);
-    return new Map(entries as [string, TaskGroup][]);
+    return recordToMap<TaskGroup>(data);
   }
 }

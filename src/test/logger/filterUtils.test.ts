@@ -3,10 +3,10 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports
-import { shouldEmitToProgressView } from '@logger/filterUtils';
+import { getEmitFilter } from '@logger/filterUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
-describe('shouldEmitToProgressView', () => {
+describe('getEmitFilter', () => {
   let originalConfig: any;
 
   beforeEach(() => {
@@ -21,48 +21,48 @@ describe('shouldEmitToProgressView', () => {
   describe('debug mode filtering', () => {
     it('filters debug-level messages when debug mode is off', () => {
       // Mock debug mode off (default)
-      const result = shouldEmitToProgressView({
+      const result = getEmitFilter({
         level: 'debug',
         messageType: MESSAGE_TYPES.DEFAULT,
       });
       assert.equal(
-        result,
+        result.shouldEmit,
         false,
         'Debug messages should be filtered when debug mode is off',
       );
     });
 
     it('allows info-level messages when debug mode is off', () => {
-      const result = shouldEmitToProgressView({
+      const result = getEmitFilter({
         level: 'info',
         messageType: MESSAGE_TYPES.DEFAULT,
       });
       assert.equal(
-        result,
+        result.shouldEmit,
         true,
         'Info messages should pass through when debug mode is off',
       );
     });
 
     it('allows warn-level messages when debug mode is off', () => {
-      const result = shouldEmitToProgressView({
+      const result = getEmitFilter({
         level: 'warn',
         messageType: MESSAGE_TYPES.DEFAULT,
       });
       assert.equal(
-        result,
+        result.shouldEmit,
         true,
         'Warn messages should pass through when debug mode is off',
       );
     });
 
     it('allows error-level messages when debug mode is off', () => {
-      const result = shouldEmitToProgressView({
+      const result = getEmitFilter({
         level: 'error',
         messageType: MESSAGE_TYPES.DEFAULT,
       });
       assert.equal(
-        result,
+        result.shouldEmit,
         true,
         'Error messages should pass through when debug mode is off',
       );
@@ -79,12 +79,12 @@ describe('shouldEmitToProgressView', () => {
       ];
 
       for (const level of levels) {
-        const result = shouldEmitToProgressView({
+        const result = getEmitFilter({
           level,
           messageType: MESSAGE_TYPES.INTERNAL,
         });
         assert.equal(
-          result,
+          result.shouldEmit,
           false,
           `INTERNAL messages at ${level} level should always be filtered`,
         );
@@ -106,12 +106,12 @@ describe('shouldEmitToProgressView', () => {
 
     it('allows all non-debug level messages for normal message types', () => {
       for (const messageType of normalTypes) {
-        const result = shouldEmitToProgressView({
+        const result = getEmitFilter({
           level: 'info',
           messageType,
         });
         assert.equal(
-          result,
+          result.shouldEmit,
           true,
           `${messageType} messages at info level should pass through`,
         );
@@ -120,16 +120,30 @@ describe('shouldEmitToProgressView', () => {
 
     it('filters debug level messages for normal message types when debug mode is off', () => {
       for (const messageType of normalTypes) {
-        const result = shouldEmitToProgressView({
+        const result = getEmitFilter({
           level: 'debug',
           messageType,
         });
         assert.equal(
-          result,
+          result.shouldEmit,
           false,
           `${messageType} messages at debug level should be filtered when debug mode is off`,
         );
       }
+    });
+  });
+
+  describe('debugMode flag', () => {
+    it('returns debugMode false when debug mode is off', () => {
+      const result = getEmitFilter({
+        level: 'info',
+        messageType: MESSAGE_TYPES.DEFAULT,
+      });
+      assert.equal(
+        result.debugMode,
+        false,
+        'debugMode should be false when debug mode is off',
+      );
     });
   });
 });
