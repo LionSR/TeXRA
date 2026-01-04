@@ -56,6 +56,8 @@ export class FileSelect {
       (currentValue && sortedFiles.includes(currentValue) && currentValue) ||
       null;
 
+    console.log(`[FileSelect.update] id=${id}, files=${sortedFiles.length}, storedValue=${storedValue}, currentValue=${currentValue}, restoredValue=${restoredValue}`);
+
     // Block saves during option updates - vscode-single-select fires change events
     // when innerHTML is cleared, which would trigger save() with temporary "None" state
     mainViewState.blockSave();
@@ -66,11 +68,13 @@ export class FileSelect {
         this.addOption(selectDiv, f, f, f === restoredValue),
       );
 
-      // Explicitly set .value for synchronous access by callers.
+      // Always set .value for synchronous access by callers.
       // Setting selected=true on options works for slotchange (async), but callers
       // reading selectDiv.value immediately after update() need the value set now.
+      // Use restoredValue if available, otherwise default to empty string (None).
+      selectDiv.value = restoredValue ?? '';
+      console.log(`[FileSelect.update] after setting value: selectDiv.value=${selectDiv.value}`);
       if (restoredValue) {
-        selectDiv.value = restoredValue;
         mainViewState.update({ [id]: restoredValue });
       }
     } finally {
