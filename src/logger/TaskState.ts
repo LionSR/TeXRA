@@ -23,7 +23,7 @@ const ToolSessionStateSchema = z.object({
 });
 
 /** Active files record schema */
-const ActiveFilesSchema = z.record(
+const ActiveFilesSchema = z.partialRecord(
   z.enum(FILE_TYPES),
   z.boolean(),
 ) as z.ZodType<Record<FileType, boolean>>;
@@ -39,7 +39,9 @@ const AgentConfigWithSessionSchema = z.looseObject({
 const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.Workflow,
-    { message: 'Expected Workflow category' },
+    {
+        error: 'Expected Workflow category'
+    },
   ),
   activeFiles: ActiveFilesSchema,
 });
@@ -48,7 +50,9 @@ const WorkflowTaskStateSchema = z.object({
 const ToolUseTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.ToolUse,
-    { message: 'Expected ToolUse category' },
+    {
+        error: 'Expected ToolUse category'
+    },
   ),
   toolSessionState: ToolSessionStateSchema.optional(),
 });
