@@ -7,7 +7,10 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { showErrorMessage, showWarningMessage } from '@frontend/ui/messageUtils';
+import {
+  showErrorMessage,
+  showWarningMessage,
+} from '@frontend/ui/messageUtils';
 
 /**
  * Handle follow-up result and show appropriate UI notifications.
