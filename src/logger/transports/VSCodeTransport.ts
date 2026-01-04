@@ -54,12 +54,28 @@ export class VSCodeTransport extends Transport {
   }
 
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
-    this.emitGroupStarted(id, groupName, Date.now(), parentGroupId);
+    if (this.isAgentChannel) {
+      bus.emit('addTaskGroup', {
+        stream: this.streamName,
+        id,
+        name: groupName,
+        startTime: Date.now(),
+        status: 'running',
+        endTime: undefined,
+        parentGroupId,
+      });
+    }
     return id;
   }
 
   endGroup(groupId: string, status: EndGroupStatus): void {
-    this.emitGroupFinished(groupId, status, Date.now());
+    if (!this.isAgentChannel) return;
+    bus.emit('updateTaskGroup', {
+      stream: this.streamName,
+      id: groupId,
+      status,
+      endTime: Date.now(),
+    });
   }
 
   private writeToChannel(
@@ -131,43 +147,4 @@ export class VSCodeTransport extends Transport {
     });
   }
 
-  /**
-   * Emit task group started to progress view event bus.
-   */
-  private emitGroupStarted(
-    id: string,
-    name: string,
-    startTime: number,
-    parentGroupId?: string,
-  ): void {
-    if (!this.isAgentChannel) return;
-
-    bus.emit('addTaskGroup', {
-      stream: this.streamName,
-      id,
-      name,
-      startTime,
-      status: 'running',
-      endTime: undefined,
-      parentGroupId,
-    });
-  }
-
-  /**
-   * Emit task group finished to progress view event bus.
-   */
-  private emitGroupFinished(
-    id: string,
-    status: EndGroupStatus,
-    endTime: number,
-  ): void {
-    if (!this.isAgentChannel) return;
-
-    bus.emit('updateTaskGroup', {
-      stream: this.streamName,
-      id,
-      status,
-      endTime,
-    });
-  }
 }
