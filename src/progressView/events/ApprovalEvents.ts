@@ -1,11 +1,8 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type { ProgressEventBusLike } from './types';
+import type { ProgressEventBusLike, Unsubscribe } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'ApprovalEvents';
@@ -23,35 +20,28 @@ export interface ApprovalCallbacks {
 
 /**
  * Register approval event handlers.
+ * Returns unsubscribe functions - caller handles VSCode Disposable wrapping.
  */
 export function registerApprovalEvents(
   bus: ProgressEventBusLike,
   callbacks: ApprovalCallbacks,
-): vscode.Disposable[] {
+): Unsubscribe[] {
   return [
-    new vscode.Disposable(
-      bus.on('showToolEditApprovalPrompt', (payload) =>
-        withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
-          callbacks.showToolEditApprovalPrompt(payload),
-        ),
+    bus.on('showToolEditApprovalPrompt', (payload) =>
+      withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
+        callbacks.showToolEditApprovalPrompt(payload),
       ),
     ),
-    new vscode.Disposable(
-      bus.on('resolveToolEditApprovalPrompt', (payload) =>
-        withEventErrorHandling(
-          MODULE,
-          'failed to resolve approval prompt',
-          () => callbacks.resolveToolEditApprovalPrompt(payload.requestId),
-        ),
+    bus.on('resolveToolEditApprovalPrompt', (payload) =>
+      withEventErrorHandling(MODULE, 'failed to resolve approval prompt', () =>
+        callbacks.resolveToolEditApprovalPrompt(payload.requestId),
       ),
     ),
-    new vscode.Disposable(
-      bus.on('updateToolEditApprovalBypassState', (payload) =>
-        withEventErrorHandling(
-          MODULE,
-          'failed to update approval bypass state',
-          () => callbacks.updateToolEditApprovalBypassState(payload.bypassActive),
-        ),
+    bus.on('updateToolEditApprovalBypassState', (payload) =>
+      withEventErrorHandling(
+        MODULE,
+        'failed to update approval bypass state',
+        () => callbacks.updateToolEditApprovalBypassState(payload.bypassActive),
       ),
     ),
   ];

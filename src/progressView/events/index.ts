@@ -6,6 +6,6 @@ export { ProgressEventHandler, type UICallbacks } from './ProgressEventHandler';
 export { registerRetryEvents, type RetryCallbacks } from './RetryEvents';
 export { registerApprovalEvents, type ApprovalCallbacks } from './ApprovalEvents';
 export { registerTodoEvents } from './TodoEvents';
-export { type ProgressEventBusLike, sendIfActive } from './types';
+export { type ProgressEventBusLike, type Unsubscribe, sendIfActive } from './types';
 export type { StreamStatus } from '@eventBus/ProgressEventBus';
 export { registerUsageEvents } from './UsageEvents';
