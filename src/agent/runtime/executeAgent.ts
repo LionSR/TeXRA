@@ -452,11 +452,19 @@ export async function executeAgent(
   const isResume = options?.resume ?? false;
 
   // Prepare flow execution context
-  const ctx = await prepareFlowExecution(
-    configPayload.agent,
-    configPayload,
-    executionId,
-  );
+  // Wrapped in try-catch to display agent loading errors to users
+  let ctx: FlowExecutionContext;
+  try {
+    ctx = await prepareFlowExecution(
+      configPayload.agent,
+      configPayload,
+      executionId,
+    );
+  } catch (err) {
+    // Show error to user - loadAgentSettingAndPrompts errors need to be visible
+    vscode.window.showErrorMessage(toErrorMessage(err));
+    throw err;
+  }
 
   const { streamTabId, setting, executionContext, config } = ctx;
   const agentName = config.agent;
@@ -580,12 +588,18 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  const ctx = await prepareFlowExecution('merge', {
-    agent: 'merge',
-    model,
-    inputFile,
-    editedFile,
-  });
+  let ctx: FlowExecutionContext;
+  try {
+    ctx = await prepareFlowExecution('merge', {
+      agent: 'merge',
+      model,
+      inputFile,
+      editedFile,
+    });
+  } catch (err) {
+    vscode.window.showErrorMessage(toErrorMessage(err));
+    throw err;
+  }
 
   const { streamTabId, executionContext, config } = ctx;
 
@@ -659,12 +673,18 @@ export async function resumeToolUseFromSnapshot(
   const streamTabId = snapshot.streamId as StreamTabId;
 
   // Prepare flow execution context with snapshot's stream ID for correct UI state
-  const ctx = await prepareFlowExecution(
-    snapshotConfig.agent,
-    snapshotConfig,
-    executionId,
-    { streamTabIdOverride: streamTabId },
-  );
+  let ctx: FlowExecutionContext;
+  try {
+    ctx = await prepareFlowExecution(
+      snapshotConfig.agent,
+      snapshotConfig,
+      executionId,
+      { streamTabIdOverride: streamTabId },
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(toErrorMessage(err));
+    throw err;
+  }
   const { setting, executionContext, config } = ctx;
 
   // Validate agent type and session
