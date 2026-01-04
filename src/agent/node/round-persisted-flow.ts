@@ -247,6 +247,21 @@ export class RoundPersistedFlow<
   }
 
   /**
+   * Execute an async operation within the current round stage's context.
+   *
+   * This ensures the AsyncLocalStorage context is properly set so that
+   * logger.withCurrentGroup() can resolve the active group ID for logging.
+   * Without this wrapper, logs emitted during node execution would not
+   * be associated with the r0/r1/etc. groups in the progress view.
+   */
+  private async runWithinStageContext<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.currentRoundStage) {
+      return this.currentRoundStage.within(fn);
+    }
+    return fn();
+  }
+
+  /**
    * Run the flow with automatic round management.
    *
    * Uses stepWithResult() to efficiently get both action and shared state
@@ -274,38 +289,47 @@ export class RoundPersistedFlow<
         );
       }
 
-      // Hook: Initial round start
+      // Hook: Initial round start (within stage context for proper logging)
       if (hooks?.onRoundStart) {
-        await hooks.onRoundStart(
-          this.createHookContext(currentShared),
-          this._services as Svc,
-        );
+        await this.runWithinStageContext(async () => {
+          await hooks.onRoundStart!(
+            this.createHookContext(currentShared),
+            this._services as Svc,
+          );
+        });
       }
 
       // Execute nodes via stepWithResult() - single read per step
-      let stepResult = await this.stepWithResult();
+      // Each step runs within the current stage context for proper log grouping
+      let stepResult = await this.runWithinStageContext(() =>
+        this.stepWithResult(),
+      );
       while (stepResult.hasMore) {
         // Use the shared state returned by stepWithResult (authoritative)
         currentShared = stepResult.shared;
 
-        // Handle round transition if signaled
+        // Handle round transition if signaled (manages stage context internally)
         if (stepResult.action === FlowTransition.CONTINUE_NEXT_ROUND) {
           await this.handleContinueToNextRound(currentShared);
         }
 
-        // Execute next step
-        stepResult = await this.stepWithResult();
+        // Execute next step within current stage context
+        stepResult = await this.runWithinStageContext(() =>
+          this.stepWithResult(),
+        );
       }
 
       // Get final shared state from last step
       currentShared = stepResult.shared;
 
-      // Hook: Final round end
+      // Hook: Final round end (within stage context for proper logging)
       if (hooks?.onRoundEnd) {
-        await hooks.onRoundEnd(
-          this.createHookContext(currentShared),
-          this._services as Svc,
-        );
+        await this.runWithinStageContext(async () => {
+          await hooks.onRoundEnd!(
+            this.createHookContext(currentShared),
+            this._services as Svc,
+          );
+        });
       }
 
       // Determine final status: interrupted if stopped before completing all rounds
@@ -350,12 +374,14 @@ export class RoundPersistedFlow<
   private async handleContinueToNextRound(shared: S): Promise<void> {
     const { hooks } = this.config;
 
-    // Hook: Previous round end (called before increment, so shared.currentRound is still old value)
+    // Hook: Previous round end (within OLD stage context for proper logging)
     if (hooks?.onRoundEnd) {
-      await hooks.onRoundEnd(
-        this.createHookContext(shared),
-        this._services as Svc,
-      );
+      await this.runWithinStageContext(async () => {
+        await hooks.onRoundEnd!(
+          this.createHookContext(shared),
+          this._services as Svc,
+        );
+      });
     }
 
     // End previous round stage
@@ -385,12 +411,14 @@ export class RoundPersistedFlow<
         );
       }
 
-      // Hook: New round start
+      // Hook: New round start (within NEW stage context for proper logging)
       if (hooks?.onRoundStart) {
-        await hooks.onRoundStart(
-          this.createHookContext(shared),
-          this._services as Svc,
-        );
+        await this.runWithinStageContext(async () => {
+          await hooks.onRoundStart!(
+            this.createHookContext(shared),
+            this._services as Svc,
+          );
+        });
       }
     }
   }
