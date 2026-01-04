@@ -448,16 +448,9 @@ async function handleFlowError(
 // ============================================================================
 
 /**
- * Execute an agent with the provided configuration.
- *
- * ## Flow-First Architecture
- *
- * This function runs flows directly without instantiating agent classes.
- * The flow contexts create all necessary services internally.
- */
-/**
  * Execute an agent with the given configuration.
  *
+ * This function runs flows directly without instantiating agent classes.
  * For resuming paused tool-use sessions, use resumeToolUseFromSnapshot instead.
  */
 export async function executeAgent(
