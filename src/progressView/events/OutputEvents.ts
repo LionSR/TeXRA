@@ -14,7 +14,9 @@ const toRoundRecord = <T>(
 ): Record<number, T[]> | undefined =>
   rounds && rounds.size > 0 ? Object.fromEntries(rounds.entries()) : undefined;
 
-export function createOutputEvents(shared: BaseEventShared): OutputEventsModule {
+export function createOutputEvents(
+  shared: BaseEventShared,
+): OutputEventsModule {
   const { withErrorBoundary } = shared;
 
   return {
@@ -79,12 +81,15 @@ export function createOutputEvents(shared: BaseEventShared): OutputEventsModule 
           state,
           updater,
           ({ stream }) => {
-            withErrorBoundary('failed to handle clearMissingOutputs', async () => {
-              await state.outputFiles.clearMissingOutputs(stream);
-              sendIfActive(stream, state, updater, () => {
-                updater.updateMissingOutputs(stream, { reset: true });
-              });
-            });
+            withErrorBoundary(
+              'failed to handle clearMissingOutputs',
+              async () => {
+                await state.outputFiles.clearMissingOutputs(stream);
+                sendIfActive(stream, state, updater, () => {
+                  updater.updateMissingOutputs(stream, { reset: true });
+                });
+              },
+            );
           },
         ),
       ];
