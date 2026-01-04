@@ -115,16 +115,13 @@ export interface FlowServiceAccessors {
 /**
  * Build AgentCycleBaseOptions from flow services or initialization config.
  *
- * Eliminates manual field copying by mapping service fields to cycle option fields:
- * - setting -> agentSetting
- * - prompt -> agentPrompt
- * - userVarChannels.transient -> userVars
- * - executionContext -> context (via services.context if available)
- * - getClient() -> client (awaited to get fresh auth tokens)
+ * Field names now match between BaseFlowContextInit and AgentCycleBaseOptions,
+ * eliminating the previous rename overhead (setting→agentSetting, prompt→agentPrompt).
  *
- * Accepts either:
- * - BaseFlowContextInit (raw config, uses executionContext.logger)
- * - Services with FlowServiceAccessors (uses .logger and .context directly)
+ * The only transformations:
+ * - userVarChannels.transient → userVars (extracts transient channel)
+ * - getClient() → client (awaited to get fresh auth tokens)
+ * - executionContext → context (via services.context if available)
  *
  * @param services - Flow services or initialization config
  * @returns Base cycle options ready for extension
@@ -134,8 +131,8 @@ export async function buildBaseCycleOptions<C>(
 ): Promise<AgentCycleBaseOptions<C>> {
   return {
     modelHandler: services.modelHandler,
-    agentSetting: services.setting,
-    agentPrompt: services.prompt,
+    setting: services.setting,
+    prompt: services.prompt,
     userVars: services.userVarChannels.transient,
     logger: services.logger ?? services.executionContext.logger,
     context: services.context ?? services.executionContext,

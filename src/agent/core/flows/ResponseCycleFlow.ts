@@ -181,14 +181,14 @@ class ResponsePrepNode<C> extends BaseNode<
     outputLocation: AgentFileLocation;
   }> {
     const services = this.services;
-    const { agentPrompt, userVars } = services;
+    const { prompt, userVars } = services;
     const interrupted = Boolean(await services.checkInterruption());
     // Non-null assertion: outputLocation is set by caller before cycle starts
     const outputLocation = shared.outputLocation!;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
+      : await getSystemPromptWithRules(prompt.systemPrompt, userVars);
 
     return {
       interrupted,
@@ -316,12 +316,12 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.agentSetting.temperature || 0.0,
+          temperature: services.setting.temperature || 0.0,
           systemPrompt: prepRes.systemPrompt,
-          endTag: services.agentSetting.endTag,
+          endTag: services.setting.endTag,
           signal,
           tools: services.modelHandler.capabilities.supportsFunctionCalling
-            ? services.agentSetting.tools
+            ? services.setting.tools
             : undefined,
         });
 
@@ -477,7 +477,7 @@ class ResponseProcessNode<C> extends BaseNode<
   }
 
   async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
-    const { workspace, logger, modelHandler, agentSetting } = this.services;
+    const { workspace, logger, modelHandler, setting } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
       return { kind: 'skipped' };
@@ -497,7 +497,7 @@ class ResponseProcessNode<C> extends BaseNode<
         stopReason,
       } = modelHandler.extractResponse(
         prepRes.responseObject,
-        agentSetting.endTag,
+        setting.endTag,
       );
 
       if (newResponse) {
@@ -817,7 +817,7 @@ class ResponseContinuationNode<C> extends BaseNode<
    * PocketFlow compliance: Pure computation, no side effects.
    */
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
-    const { round, run, modelHandler, agentSetting } = this.services;
+    const { round, run, modelHandler, setting } = this.services;
 
     if (prepRes.shouldSkip) {
       return { kind: 'skipped' };
@@ -843,13 +843,13 @@ class ResponseContinuationNode<C> extends BaseNode<
         processedResponse,
         round,
         run,
-        agentSetting,
+        setting,
       );
 
     const shouldContinue = modelHandler.shouldContinue(
       stopReason,
       processedResponse,
-      agentSetting,
+      setting,
     );
 
     return {
@@ -868,7 +868,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       workspace,
       logger,
       modelHandler,
-      agentSetting,
+      setting,
       agentConfig,
     } = this.services;
 
@@ -914,7 +914,7 @@ class ResponseContinuationNode<C> extends BaseNode<
         shared.messages,
         round,
         workspace,
-        agentSetting,
+        setting,
         agentConfig,
       );
     } else {
@@ -922,7 +922,7 @@ class ResponseContinuationNode<C> extends BaseNode<
         shared.messages,
         round,
         workspace,
-        agentSetting,
+        setting,
         agentConfig,
       );
     }
