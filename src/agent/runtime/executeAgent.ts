@@ -240,10 +240,10 @@ async function resolveAgentBase(
   // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
   const initStage = await executionContext.logger.stage('Init');
-  let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
-  try {
-    // Extract just the provider flags needed for prompt variables
-    baseVars = await buildUserVars(
+  // Use initStage.run() to ensure buildUserVars executes within the stage's
+  // group context - this makes file loading logs appear under the Init group
+  const baseVars = await initStage.run(() =>
+    buildUserVars(
       config,
       setting,
       prompt,
@@ -254,12 +254,8 @@ async function resolveAgentBase(
         isGoogle: modelHandler.isGoogle,
       },
       executionContext.logger,
-    );
-    initStage.end('stopped');
-  } catch (err) {
-    initStage.end('error');
-    throw err;
-  }
+    ),
+  );
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze({ ...baseVars }),
     transient: { ...baseVars },
