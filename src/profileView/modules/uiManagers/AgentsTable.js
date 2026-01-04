@@ -147,6 +147,9 @@ export class AgentsTable {
     const includedRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_INCLUDED);
     const personalRadio = safeGetElementById(ELEMENT_IDS.API_ACCESS_PERSONAL);
     const modelAccessInfo = safeGetElementById(ELEMENT_IDS.MODEL_ACCESS_INFO);
+    const modelAccessSummary = safeGetElementById(
+      ELEMENT_IDS.MODEL_ACCESS_SUMMARY,
+    );
     const providersInfo = safeGetElementById(
       ELEMENT_IDS.ENABLED_PROVIDERS_INFO,
     );
@@ -178,12 +181,10 @@ export class AgentsTable {
       modelAccessInfo.style.display = showModelAccessInfo ? 'block' : 'none';
     }
 
-    // Update providers info
+    // Update providers info with count format
     if (providersInfo && showModelAccessInfo) {
-      const providerNames = enabledProviders
-        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-        .join(', ');
-      providersInfo.textContent = providerNames;
+      const count = enabledProviders.length;
+      providersInfo.textContent = `${count} provider${count !== 1 ? 's' : ''}`;
     }
 
     // Render model display section
@@ -195,6 +196,14 @@ export class AgentsTable {
         resolvedAllowedModels,
         enabledProviders,
       );
+    }
+
+    // Add toggle listener for expanding/collapsing models list
+    if (modelAccessSummary && !this._modelsToggleListenerAdded) {
+      this._modelsToggleListenerAdded = true;
+      modelAccessSummary.addEventListener('click', () => {
+        modelAccessInfo?.classList.toggle('expanded');
+      });
     }
 
     // Add event listeners (only once)
@@ -241,20 +250,21 @@ export class AgentsTable {
     if (apiAccessMode === 'included') {
       if (allowedModels === null) {
         // null means all models are allowed (Ultra tier)
-        modelsInfo.textContent = 'All included';
+        modelsInfo.textContent = 'all models';
         modelsInfo.title = '';
         modelsListContainer.textContent = '';
       } else if (allowedModels.length > 0) {
         // Specific models allowed - display count and list
-        modelsInfo.textContent = `${allowedModels.length} included`;
+        const count = allowedModels.length;
+        modelsInfo.textContent = `${count} model${count !== 1 ? 's' : ''}`;
         modelsInfo.title = '';
         modelsListContainer.textContent = allowedModels.join(', ');
       } else {
         // Empty array - config fetch failed or no models configured
         const configFetchFailed = enabledProviders.length === 0;
         modelsInfo.textContent = configFetchFailed
-          ? 'Unable to load'
-          : 'None configured';
+          ? 'unable to load'
+          : 'no models';
         modelsInfo.title = configFetchFailed
           ? 'Try signing out and back in to refresh'
           : '';
