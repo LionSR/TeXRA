@@ -50,13 +50,3 @@ export function getEmitFilter(options: FilterOptions): FilterResult {
   return { shouldEmit: true, debugMode };
 }
 
-/**
- * Determines whether a log message should be emitted to the progress view
- * based on debug mode settings and message type.
- *
- * @param options - The log level and message type to filter
- * @returns true if the message should be emitted to the progress view, false otherwise
- */
-export function shouldEmitToProgressView(options: FilterOptions): boolean {
-  return getEmitFilter(options).shouldEmit;
-}
