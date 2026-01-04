@@ -67,6 +67,8 @@ import {
   TIER_SPENDING_LIMITS,
   isModelAllowedForTier,
   getSpendingLimit,
+  ULTRA_TIER,
+  FREE_TIER,
 } from './models.ts';
 
 // =============================================================================
@@ -75,16 +77,10 @@ import {
 
 const RELAY_VERSION = '1.8.0';
 
-/**
- * Tier values - MUST match constants in src/auth/config.ts
- *
- * CROSS-REFERENCE: These are duplicated because the relay runs in Deno
- * and cannot import from the TypeScript source. Keep in sync with:
- * - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
- * - Database: profiles.tier column values
- */
-const ULTRA_TIER = 'Ultra';
-const FREE_TIER = 'free';
+// Tier constants imported from models.ts (single source of truth)
+// CROSS-REFERENCE: Keep models.ts in sync with:
+// - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
+// - Database: profiles.tier column values
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
@@ -267,9 +263,11 @@ function getCurrentMonthStartUTC(): string {
  * Check if user has exceeded their monthly spending limit.
  * Returns { allowed: true } or { allowed: false, currentSpend, limit, remaining }.
  *
- * NOTE: This fetches individual cost rows and sums client-side.
- * For high-volume users, consider adding a database function to compute
- * the sum server-side for better performance.
+ * Uses database function for server-side aggregation (efficient).
+ *
+ * RACE CONDITION NOTE: Usage is logged asynchronously after requests complete.
+ * Concurrent requests may pass this check before their costs are logged.
+ * This is acceptable for soft limits. See migration for mitigation options.
  */
 async function checkSpendingLimit(
   supabaseUrl: string,
@@ -288,12 +286,11 @@ async function checkSpendingLimit(
   // Use service role to bypass RLS for admin query
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data, error } = await adminClient
-    .from('usage_logs')
-    .select('cost')
-    .eq('user_id', userId)
-    .eq('used_relay', true)
-    .gte('logged_at', monthStart);
+  // Call database function for efficient server-side aggregation
+  const { data, error } = await adminClient.rpc('get_user_monthly_relay_spend', {
+    p_user_id: userId,
+    p_month_start: monthStart,
+  });
 
   if (error) {
     console.error('[RELAY] Failed to check spending:', error.message);
@@ -301,7 +298,7 @@ async function checkSpendingLimit(
     return { allowed: true, currentSpend: 0, limit, remaining: limit };
   }
 
-  const currentSpend = data?.reduce((sum, row) => sum + Number(row.cost), 0) ?? 0;
+  const currentSpend = Number(data) || 0;
   const remaining = Math.max(0, limit - currentSpend);
 
   return {
