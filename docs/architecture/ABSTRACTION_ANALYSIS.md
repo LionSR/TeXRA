@@ -186,22 +186,15 @@ const round = ConversationRoundState.fromSnapshot(context.stateRoundSnapshot);
 
 ## Medium Duplication Areas
 
-### 4. Skip Pattern Variations (5 different patterns!)
+### 4. Skip Pattern Variations - ✅ RESOLVED
 
-| Pattern | Usage | Type Safety |
-|---------|-------|-------------|
-| `{ kind: 'skipped' }` | Cycle nodes | ✓ Good |
-| `return null` | TeXCountNode | ✗ Falsy coercion |
-| `{ mediaFiles: [] }` | MediaExtractionNode | ✗ Length check |
-| `shouldSkipCycle` flag | ToolUseRunFlow | ✓ Boolean |
-| Extra fields in skipped | ToolUseDispatchNode | ✗ Breaks pattern |
+Previously had 5 different patterns - now unified on `{ kind: 'skipped' } | { kind: 'success', value: T }`:
 
-**Problems**:
-1. Same condition checked in prep() AND exec()
-2. State mutations happen in post() after skip decision
-3. `SkippableNodeResult` type inconsistently used
-
-**Fix**: Unify on discriminated union with reason enum.
+**Refactored nodes**:
+- `TeXCountNode`: `return null` → `return { kind: 'skipped' }`
+- `MediaExtractionNode`: `{ mediaFiles: [] }` → `{ kind: 'skipped' }`
+- `ToolUseProcessNode`: `{ kind: 'skipped', endTurn: false }` → `{ kind: 'skipped' }`
+- `ToolUseDispatchNode`: keeps `interrupted` flag for special handling
 
 ---
 
@@ -262,16 +255,16 @@ These are just re-exports of `executionContext` properties.
 
 ## Quantified Impact
 
-| Refactoring | Lines Saved | Risk | Priority |
-|-------------|------------|------|----------|
-| Finalization consistency | ~20 | Low | **HIGH** (bug) |
-| Model invocation base class | ~60 | Medium | **HIGH** |
-| Debug saving helpers | ~60 | Low | MEDIUM |
-| Interruption check helper | ~30 | Low | MEDIUM |
-| State reconstruction helpers | ~40 | Low | MEDIUM |
-| Skip pattern unification | ~50 | Medium | LOW |
-| Service creation simplification | ~30 | Medium | LOW |
-| **TOTAL** | **~290 lines** | | |
+| Refactoring | Lines Saved | Risk | Priority | Status |
+|-------------|------------|------|----------|--------|
+| Skip pattern unification | ~50 | Medium | LOW | ✅ DONE |
+| Finalization consistency | ~20 | Low | **HIGH** (bug) | Pending |
+| Model invocation base class | ~60 | Medium | **HIGH** | Pending |
+| Debug saving helpers | ~60 | Low | MEDIUM | Pending |
+| Interruption check helper | ~30 | Low | MEDIUM | Pending |
+| State reconstruction helpers | ~40 | Low | MEDIUM | Pending |
+| Service creation simplification | ~30 | Medium | LOW | Pending |
+| **TOTAL** | **~290 lines** | | | |
 
 ---
 
@@ -286,8 +279,8 @@ These are just re-exports of `executionContext` properties.
 4. Add interruption check helper
 5. Add run/round state reconstruction helpers
 
-### Phase 3: Pattern Cleanup
-6. Unify skip patterns on discriminated union
+### Phase 3: Pattern Cleanup - PARTIALLY COMPLETE
+6. ~~Unify skip patterns on discriminated union~~ ✅ DONE
 7. Simplify ToolUseFlowContext to direct services
 8. Move FlowServiceAccessors to BaseFlowContextInit
 
