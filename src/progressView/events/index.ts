@@ -1,5 +1,5 @@
 // Barrel export for progress view events
-export { createErrorBoundary } from './errorHandling';
+export { withEventErrorHandling } from './errorHandling';
 export { LogEventsModule, createLogEvents } from './LogEvents';
 export { OutputEventsModule, createOutputEvents } from './OutputEvents';
 export { ProgressEventHandler } from './ProgressEventHandler';
