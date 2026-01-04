@@ -174,11 +174,9 @@ export class TaskGroupDomManager {
       progressViewState.taskGroups.set(group.id, group);
       if (group.parentGroupId) {
         this.updateGroup({
-          groupId: group.id,
-          updates: {
-            status: group.status,
-            endTime: group.endTime,
-          },
+          id: group.id,
+          status: group.status,
+          endTime: group.endTime,
         });
       }
       return;
