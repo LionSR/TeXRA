@@ -123,8 +123,7 @@ export class ProgressEventHandler {
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
-        const status =
-          this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+        const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
 
         if (this.webviewUpdater.isAvailable()) {
           this.webviewUpdater.updateAll(this.state, this._streamStatus);
@@ -146,94 +145,112 @@ export class ProgressEventHandler {
   private handleUpdateStreamStatus = (
     payload: ProgressEventPayloads['updateStreamStatus'],
   ): void => {
-    withEventErrorHandling('StreamStatus', 'failed to handle updateStreamStatus', () =>
-      this.setStreamStatus(payload.stream, payload.status),
+    withEventErrorHandling(
+      'StreamStatus',
+      'failed to handle updateStreamStatus',
+      () => this.setStreamStatus(payload.stream, payload.status),
     );
   };
 
   private handleSetTaskState = (
     data: ProgressEventPayloads['setTaskState'],
   ): void => {
-    withEventErrorHandling('StreamStatus', 'failed to handle setTaskState', () => {
-      const { streamTabId, executionId, taskState } = data;
+    withEventErrorHandling(
+      'StreamStatus',
+      'failed to handle setTaskState',
+      () => {
+        const { streamTabId, executionId, taskState } = data;
 
-      this.state.setTaskState(streamTabId, taskState);
-      const sessionKind = taskState.agentConfig.session.agentCategory;
+        this.state.setTaskState(streamTabId, taskState);
+        const sessionKind = taskState.agentConfig.session.agentCategory;
 
-      if (
-        this.state.activeStream === streamTabId &&
-        this.state.agentTypeFilter !== 'all' &&
-        this.state.agentTypeFilter !== sessionKind
-      ) {
-        this.state.agentTypeFilter = sessionKind;
-      }
+        if (
+          this.state.activeStream === streamTabId &&
+          this.state.agentTypeFilter !== 'all' &&
+          this.state.agentTypeFilter !== sessionKind
+        ) {
+          this.state.agentTypeFilter = sessionKind;
+        }
 
-      if (executionId) {
-        this.state.setExecutionId(streamTabId, executionId);
-      }
+        if (executionId) {
+          this.state.setExecutionId(streamTabId, executionId);
+        }
 
-      if (this.state.activeStream === streamTabId) {
-        this.sendInstructionUpdate(streamTabId);
-      }
+        if (this.state.activeStream === streamTabId) {
+          this.sendInstructionUpdate(streamTabId);
+        }
 
-      if (this.webviewUpdater.isAvailable()) {
-        const infos = buildStreamInfos(
-          this.state,
-          this._streamStatus,
-          this.state.agentTypeFilter,
-        );
-        this.webviewUpdater.updateStreams(
-          infos,
-          this.state.activeStream,
-          this.state.agentTypeFilter,
-        );
-      }
-    });
+        if (this.webviewUpdater.isAvailable()) {
+          const infos = buildStreamInfos(
+            this.state,
+            this._streamStatus,
+            this.state.agentTypeFilter,
+          );
+          this.webviewUpdater.updateStreams(
+            infos,
+            this.state.activeStream,
+            this.state.agentTypeFilter,
+          );
+        }
+      },
+    );
   };
 
   private handleAddTaskGroup = (
     data: ProgressEventPayloads['addTaskGroup'],
   ): void => {
-    withEventErrorHandling('TaskGroup', 'failed to handle addTaskGroup', async () => {
-      const { stream, ...group } = data;
-      const { id, parentGroupId } = group;
+    withEventErrorHandling(
+      'TaskGroup',
+      'failed to handle addTaskGroup',
+      async () => {
+        const { stream, ...group } = data;
+        const { id, parentGroupId } = group;
 
-      const hasStream = this.state.streamTabs.has(stream);
-      const addGroupPromise = this.state.taskGroups.addGroup(stream, id, group);
+        const hasStream = this.state.streamTabs.has(stream);
+        const addGroupPromise = this.state.taskGroups.addGroup(
+          stream,
+          id,
+          group,
+        );
 
-      if (!parentGroupId) {
-        this.state.setActiveRunId(stream, id);
-      }
-
-      if (!hasStream) {
-        await this.initializeStreamForTaskGroup(stream);
-      }
-
-      if (this.webviewUpdater.isAvailable()) {
-        if (stream === this.state.activeStream) {
-          this.webviewUpdater.addTaskGroup(stream, group);
-        } else {
-          this.bufferTaskGroupForReplay(stream, group);
+        if (!parentGroupId) {
+          this.state.setActiveRunId(stream, id);
         }
-      }
 
-      await addGroupPromise;
-    });
+        if (!hasStream) {
+          await this.initializeStreamForTaskGroup(stream);
+        }
+
+        if (this.webviewUpdater.isAvailable()) {
+          if (stream === this.state.activeStream) {
+            this.webviewUpdater.addTaskGroup(stream, group);
+          } else {
+            this.bufferTaskGroupForReplay(stream, group);
+          }
+        }
+
+        await addGroupPromise;
+      },
+    );
   };
 
   private handleUpdateTaskGroup = (
     data: ProgressEventPayloads['updateTaskGroup'],
   ): void => {
-    withEventErrorHandling('TaskGroup', 'failed to handle updateTaskGroup', async () => {
-      await this.state.taskGroups.updateGroup(data);
+    withEventErrorHandling(
+      'TaskGroup',
+      'failed to handle updateTaskGroup',
+      async () => {
+        await this.state.taskGroups.updateGroup(data);
 
-      if (
-        this.webviewUpdater.isAvailable() &&
-        data.stream === this.state.activeStream
-      ) {
-        this.webviewUpdater.updateTaskGroup(data);
-      }
-    });
+        if (
+          this.webviewUpdater.isAvailable() &&
+          data.stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateTaskGroup(data);
+        }
+      },
+    );
   };
 
   private markAllRunningTasksAsCancelled = (): void => {
