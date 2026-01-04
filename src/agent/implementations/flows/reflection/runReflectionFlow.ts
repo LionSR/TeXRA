@@ -317,7 +317,6 @@ export async function runReflectionFlow<C = unknown>(
     });
 
     // Build services: spread input + add computed fields
-    // Note: getUsageRecorder must override input's optional value with the destructured default
     services = {
       ...input,
       logger: executionContext.logger,
