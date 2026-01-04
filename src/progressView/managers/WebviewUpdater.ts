@@ -256,11 +256,12 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update instruction panel content
+   * Update or clear instruction panel content.
+   * Pass null for instruction to clear the panel.
    */
   updateInstruction(
-    stream: StreamTabId,
-    instruction: InstructionUpdate,
+    stream: StreamTabId | '',
+    instruction: InstructionUpdate | null,
     sessionKind?: string,
   ): void {
     this.sendMessage({
@@ -268,17 +269,6 @@ export class WebviewUpdater {
       stream,
       instruction,
       sessionKind,
-    });
-  }
-
-  /**
-   * Clear instruction panel content
-   */
-  clearInstruction(stream: StreamTabId | ''): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_INSTRUCTION,
-      stream,
-      instruction: null,
     });
   }
 
