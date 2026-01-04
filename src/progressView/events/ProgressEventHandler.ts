@@ -23,14 +23,11 @@ import type {
   StreamStatus,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { registerRetryEvents, type RetryCallbacks } from './RetryEvents';
-import { registerApprovalEvents, type ApprovalCallbacks } from './ApprovalEvents';
+import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { withEventErrorHandling } from './errorHandling';
 
-/**
- * Callbacks for UI interactions (retry/approval dialogs).
- */
-export type UICallbacks = RetryCallbacks & ApprovalCallbacks;
+// Re-export for consumers
+export type { UICallbacks };
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -88,9 +85,8 @@ export class ProgressEventHandler {
     // Todo events (inlined from TodoEvents.ts)
     bus.on('updateTodos', this.handleUpdateTodos, { signal });
 
-    // UI callback events (kept as separate modules - different signature)
-    registerRetryEvents(bus, this.uiCallbacks, signal);
-    registerApprovalEvents(bus, this.uiCallbacks, signal);
+    // UI callback events (consolidated from RetryEvents + ApprovalEvents)
+    registerUIEvents(bus, this.uiCallbacks, signal);
 
     // Single disposable that cleans up everything
     return [new vscode.Disposable(() => controller.abort())];
