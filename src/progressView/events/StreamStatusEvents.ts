@@ -38,7 +38,7 @@ export interface StreamStatusEventShared {
 export type StreamStatusEventModule = StatefulEventModule;
 
 export function createStreamStatusEvents(
-  shared: StreamStatusEventShared & { withErrorBoundary?: unknown },
+  shared: StreamStatusEventShared,
 ): StreamStatusEventModule {
   const { debugLog } = shared;
 
