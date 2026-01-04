@@ -82,7 +82,6 @@ export interface AgentResolveOptions {
   preferMultiple?: boolean;
 }
 
-
 /**
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
@@ -536,38 +535,35 @@ export async function executeAgent(
     }
 
     // Execute the appropriate flow based on agent type
-    await logger.withScope(
-      `Task: ${agentName}@${config.model}`,
-      async () => {
-        logger.info(`Executing ${agentName} with model ${config.model}`);
+    await logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
+      logger.info(`Executing ${agentName} with model ${config.model}`);
 
-        const interruptManager = new InterruptManager();
-        let flowStatus: 'error' | 'stopped';
+      const interruptManager = new InterruptManager();
+      let flowStatus: 'error' | 'stopped';
 
-        if (setting.agentType === 'toolUse') {
-          // Tool-use flow execution
-          const result = await runToolUseFlow({
-            ...ctx,
-            ...interruptManager.asFlowInput(),
-            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-            setting: ctx.setting as AgentToolUseSetting,
-          });
-          flowStatus = result.status;
-        } else {
-          // Reflection flow execution (direct/CoT/workflow)
-          const result = await runReflectionFlow({
-            ...ctx,
-            ...interruptManager.asFlowInput(),
-            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-            setting: ctx.setting as AgentWorkflowSetting,
-          });
-          flowStatus = result.status;
-        }
+      if (setting.agentType === 'toolUse') {
+        // Tool-use flow execution
+        const result = await runToolUseFlow({
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          setting: ctx.setting as AgentToolUseSetting,
+        });
+        flowStatus = result.status;
+      } else {
+        // Reflection flow execution (direct/CoT/workflow)
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+          setting: ctx.setting as AgentWorkflowSetting,
+        });
+        flowStatus = result.status;
+      }
 
-        updateFlowStatus(streamTabId, flowStatus);
-        logger.debug(`Task completed with status: ${flowStatus}`);
-      },
-    );
+      updateFlowStatus(streamTabId, flowStatus);
+      logger.debug(`Task completed with status: ${flowStatus}`);
+    });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(err, agentName, streamTabId, executionContext);
