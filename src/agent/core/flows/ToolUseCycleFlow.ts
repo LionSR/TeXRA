@@ -320,9 +320,9 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       const response = await services.modelHandler.createResponse({
         client: services.client,
         messages: prepRes.messages,
-        temperature: services.agentSetting.temperature ?? 0,
+        temperature: services.setting.temperature ?? 0,
         signal,
-        tools: services.agentSetting.tools as ToolDefinition[] | undefined,
+        tools: services.setting.tools as ToolDefinition[] | undefined,
       });
 
       const responseTimeMs = Date.now() - start;

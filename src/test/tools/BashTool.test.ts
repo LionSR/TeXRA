@@ -147,7 +147,7 @@ describe('BashTool', () => {
     const workspaceState = AgentWorkspaceState.create();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
-      agentSetting: {
+      setting: {
         agentType: AgentType.ToolUse,
         agentCategory: AgentCategory.ToolUse,
         documentTag: 'doc',
@@ -159,12 +159,12 @@ describe('BashTool', () => {
         filePatternsContain: [],
         tools: [{ name: 'bash' }],
       } satisfies AgentSetting,
-      agentPrompt: {
+      prompt: {
         systemPrompt: '',
         userPrefix: '',
         userRequest: '',
       } satisfies AgentPrompt,
-      userVars: {},
+      userVarChannels: { input: {}, transient: {} },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
       toolRegistry: createToolRegistry({ bash: bashTool }),

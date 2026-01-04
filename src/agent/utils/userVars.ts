@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Local imports - agent
-import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import {
@@ -33,6 +32,16 @@ export type LoadedFileEntry = FileListEntry & {
 };
 
 /**
+ * Minimal provider info needed for prompt variable rendering.
+ * Eliminates the need to pass a full IModelHandler reference.
+ */
+export interface ModelProviderFlags {
+  isOpenai: boolean;
+  isAnthropic: boolean;
+  isGoogle: boolean;
+}
+
+/**
  * Result of loading file-based variables
  */
 type FileVarsResult = {
@@ -48,7 +57,7 @@ export async function buildUserVars(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
   agentPath: string,
-  modelHandler: IModelHandler,
+  providerFlags: ModelProviderFlags,
   logger: AgentLogger,
 ): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -63,7 +72,7 @@ export async function buildUserVars(
 
   // Merge all variable sources using spread operator
   const userVars: UserVars = {
-    ...getBasicVars(agentConfig, modelHandler),
+    ...getBasicVars(agentConfig, providerFlags),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
     ...patternVars,
@@ -81,14 +90,14 @@ export async function buildUserVars(
 
 function getBasicVars(
   agentConfig: AgentConfig,
-  modelHandler: IModelHandler,
+  providerFlags: ModelProviderFlags,
 ): UserVars {
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
-    IS_OPENAI_MODEL: modelHandler.isOpenai,
-    IS_ANTHROPIC_MODEL: modelHandler.isAnthropic,
-    IS_GOOGLE_MODEL: modelHandler.isGoogle,
+    IS_OPENAI_MODEL: providerFlags.isOpenai,
+    IS_ANTHROPIC_MODEL: providerFlags.isAnthropic,
+    IS_GOOGLE_MODEL: providerFlags.isGoogle,
   };
 }
 

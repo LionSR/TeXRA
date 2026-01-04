@@ -1,9 +1,6 @@
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
 
-// Type imports - agent
-import type { IModelHandler } from '@agent/modelHandlers';
-
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
@@ -14,6 +11,7 @@ import type {
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import type { ModelCapabilities, ModelConfig } from '@model';
 
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
@@ -29,6 +27,21 @@ export interface UsageMonitorMetadata {
   agentCategory?: `${AgentCategory}`;
   /** Whether this is a multiple-output workflow agent */
   isMultipleOutput?: boolean;
+}
+
+/**
+ * Minimal model info needed for usage tracking.
+ *
+ * This interface captures only the fields UsageMonitor actually uses,
+ * eliminating the need to store a full IModelHandler reference.
+ * Fields are directly from ModelCapabilities and ModelConfig.
+ */
+export interface UsageMonitorModelInfo {
+  capabilities: Pick<
+    ModelCapabilities,
+    'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
+  >;
+  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName'>;
 }
 
 /**
@@ -48,7 +61,7 @@ type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
 export class UsageMonitor {
   constructor(
-    private readonly modelHandler: IModelHandler,
+    private readonly modelInfo: UsageMonitorModelInfo,
     private readonly context: AgentExecutionContext,
     private readonly metadata?: UsageMonitorMetadata,
   ) {}
@@ -67,11 +80,11 @@ export class UsageMonitor {
       const cost = totals.totalCost;
 
       const cachingStats =
-        this.modelHandler.capabilities.supportsPromptCaching ||
-        this.modelHandler.capabilities.supportsAutoPromptCaching;
+        this.modelInfo.capabilities.supportsPromptCaching ||
+        this.modelInfo.capabilities.supportsAutoPromptCaching;
 
       const totalCacheableTokens = cachingStats
-        ? this.modelHandler.capabilities.supportsPromptCaching
+        ? this.modelInfo.capabilities.supportsPromptCaching
           ? totals.totalCacheCreationInputTokens +
             totals.totalCacheReadInputTokens
           : totals.totalInputTokens
@@ -96,12 +109,12 @@ export class UsageMonitor {
         ),
         ...(cachingStats && {
           cacheReadInputTokens: totals.totalCacheReadInputTokens,
-          ...(this.modelHandler.capabilities.supportsPromptCaching && {
+          ...(this.modelInfo.capabilities.supportsPromptCaching && {
             cacheCreationInputTokens: totals.totalCacheCreationInputTokens,
           }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
-        ...(this.modelHandler.capabilities.supportsReasoning && {
+        ...(this.modelInfo.capabilities.supportsReasoning && {
           reasoningTokens: totals.totalReasoningTokens,
         }),
         // Include tool usage if any is present
@@ -131,21 +144,21 @@ export class UsageMonitor {
     totalResponseTimeMs: number,
   ): void {
     try {
-      const modelConfig = this.modelHandler.config;
+      const { config } = this.modelInfo;
 
       // Validate provider against schema, fallback to 'unknown' if invalid
-      const providerLower = modelConfig.provider.toLowerCase();
+      const providerLower = config.provider.toLowerCase();
       const provider =
         UsageProviderSchema.catch('unknown').parse(providerLower);
 
       // Check if server-side keys (relay) were used for this request
       const usedRelay = getServerSideKeyService().shouldUseServerSideKeysSync(
-        modelConfig.provider,
-        modelConfig.name,
+        config.provider,
+        config.name,
       );
 
       UsageLogService.log({
-        model: modelConfig.fullName,
+        model: config.fullName,
         provider,
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,

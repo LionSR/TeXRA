@@ -89,11 +89,13 @@ export interface CycleStateSlices extends BaseCycleStateSlices {
 /**
  * Options for response cycle execution.
  * Used by workflow flows for turn-based generation.
+ * Field names match parent services (no renames).
  */
 export interface ResponseCycleOptions<
   C = unknown,
 > extends AgentCycleBaseOptions<C> {
-  agentConfig: AgentConfig;
+  /** Agent config - uses original field name from parent services */
+  config: AgentConfig;
   fileService: TaskRunFileService;
 }
 
