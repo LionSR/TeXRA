@@ -234,12 +234,17 @@ async function prepareFlowExecution(
   const initStage = await executionContext.logger.stage('Init');
   let baseVars: Awaited<ReturnType<typeof buildUserVars>>;
   try {
+    // Extract just the provider flags needed for prompt variables
     baseVars = await buildUserVars(
       config,
       setting,
       prompt,
       agentPath,
-      modelHandler,
+      {
+        isOpenai: modelHandler.isOpenai,
+        isAnthropic: modelHandler.isAnthropic,
+        isGoogle: modelHandler.isGoogle,
+      },
       executionContext.logger,
     );
     initStage.end('stopped');
@@ -253,16 +258,24 @@ async function prepareFlowExecution(
   };
 
   // 5. Create usage monitor for tracking API usage
+  // Pass only the minimal model info needed (capabilities + config subset)
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
       ? (setting as AgentWorkflowSetting).isMultipleOutput
       : undefined;
 
-  const usageMonitor = new UsageMonitor(modelHandler, executionContext, {
-    agentName: config.agent,
-    agentCategory: setting.agentCategory,
-    isMultipleOutput,
-  });
+  const usageMonitor = new UsageMonitor(
+    {
+      capabilities: modelHandler.capabilities,
+      config: modelHandler.config,
+    },
+    executionContext,
+    {
+      agentName: config.agent,
+      agentCategory: setting.agentCategory,
+      isMultipleOutput,
+    },
+  );
 
   return {
     modelHandler,
