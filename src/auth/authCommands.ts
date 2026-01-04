@@ -70,18 +70,24 @@ export async function signIn(): Promise<void> {
       return;
     }
 
+    // Check if VS Code's native GitHub auth is available (user already logged in to GitHub in VS Code)
+    const hasNativeGitHubAuth = await vscode.authentication
+      .getSession('github', ['user:email'], { silent: true })
+      .then((session) => session !== undefined)
+      .catch(() => false);
+
     // Build sign-in options from enabled auth methods
-    // Browser-based OAuth options first (GitHub and Google), native GitHub option at the bottom
+    // Browser-based OAuth options first (Google, then GitHub), native GitHub option at the bottom if available
     const signInOptions: SignInOption[] = [
-      {
-        label: '$(github) GitHub',
-        description: 'Sign in with GitHub via web browser',
-        method: 'github-browser' as AuthMethod,
-      },
       {
         label: '$(globe) Google',
         description: 'Sign in with Google',
         method: 'google' as AuthMethod,
+      },
+      {
+        label: '$(github) GitHub',
+        description: 'Sign in with GitHub via web browser',
+        method: 'github-browser' as AuthMethod,
       },
       ...(EMAIL_LOGIN_ENABLED
         ? [
@@ -92,12 +98,16 @@ export async function signIn(): Promise<void> {
             },
           ]
         : []),
-      // Native GitHub auth at the bottom (still being tested)
-      {
-        label: '$(github) GitHub (Native)',
-        description: 'Sign in using VS Code GitHub authentication',
-        method: 'github' as AuthMethod,
-      },
+      // Native GitHub auth only shown if user has working VS Code GitHub authentication
+      ...(hasNativeGitHubAuth
+        ? [
+            {
+              label: '$(github) GitHub (Native)',
+              description: 'Sign in using VS Code GitHub authentication',
+              method: 'github' as AuthMethod,
+            },
+          ]
+        : []),
     ];
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
