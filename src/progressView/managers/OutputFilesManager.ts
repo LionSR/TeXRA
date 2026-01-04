@@ -201,27 +201,6 @@ export class OutputFilesManager extends PersistentMapManager<
     return new Map(entries);
   }
 
-  getRunMissingOutputs(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-  ): Map<number, string[]> | undefined {
-    if (!this.missingOutputsLoaded) {
-      throw new Error('Missing outputs requested before load completed');
-    }
-
-    const runs = this._missingOutputs.get(stream);
-    if (!runs) {
-      return undefined;
-    }
-
-    const target = runs.get(storageKey);
-    if (!target) {
-      return undefined;
-    }
-
-    return new Map(target);
-  }
-
   /**
    * Return a flattened set of file paths known for the provided stream.
    * When workspaceOnly is true, only workspace-scoped paths are returned so
@@ -311,36 +290,6 @@ export class OutputFilesManager extends PersistentMapManager<
     return missing ? new Map(missing) : new Map();
   }
 
-  /** Clear output files for a stream */
-  async clearFiles(stream: StreamTabId): Promise<void> {
-    await this.delete(stream);
-  }
-
-  /**
-   * Clear output files for a specific run within a stream.
-   *
-   * @param stream - The stream tab ID
-   * @param storageKey - THE key for storage operations
-   */
-  async clearRunFiles(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-  ): Promise<void> {
-    const runs = this.items.get(stream);
-    if (!runs) {
-      return;
-    }
-
-    const removed = runs.delete(storageKey);
-    if (runs.size === 0) {
-      this.items.delete(stream);
-    }
-
-    if (removed) {
-      await this.save();
-    }
-  }
-
   /** Clear missing outputs for a stream */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     await this.ensureMissingOutputsLoaded();
@@ -348,32 +297,6 @@ export class OutputFilesManager extends PersistentMapManager<
       return;
     }
     await this.saveMissingOutputs();
-  }
-
-  /**
-   * Clear missing output records for a specific run within a stream.
-   *
-   * @param stream - The stream tab ID
-   * @param storageKey - THE key for storage operations
-   */
-  async clearRunMissingOutputs(
-    stream: StreamTabId,
-    storageKey: StorageKey,
-  ): Promise<void> {
-    await this.ensureMissingOutputsLoaded();
-    const runs = this._missingOutputs.get(stream);
-    if (!runs) {
-      return;
-    }
-
-    const removed = runs.delete(storageKey);
-    if (runs.size === 0) {
-      this._missingOutputs.delete(stream);
-    }
-
-    if (removed) {
-      await this.saveMissingOutputs();
-    }
   }
 
   /** Delete all files for a stream */
@@ -390,34 +313,6 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.ensureMissingOutputsLoaded();
     this._missingOutputs.clear();
     await this.saveMissingOutputs();
-  }
-
-  /** Get all output files */
-  getAllFiles(): Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>> {
-    return this.getAll();
-  }
-
-  /** Get all missing outputs */
-  getAllMissingOutputs(): Map<StreamTabId, Map<string, Map<number, string[]>>> {
-    if (!this.missingOutputsLoaded) {
-      throw new Error('Missing outputs requested before load completed');
-    }
-    return new Map(this._missingOutputs);
-  }
-
-  /** Set all output files (used during loading) */
-  setAllFiles(
-    files: Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>>,
-  ): void {
-    this.setAll(files);
-  }
-
-  /** Set all missing outputs (used during loading) */
-  setAllMissingOutputs(
-    missing: Map<StreamTabId, Map<string, Map<number, string[]>>>,
-  ): void {
-    this._missingOutputs = new Map(missing);
-    this.missingOutputsLoaded = true;
   }
 
   /** Load output files from persistence and clean up missing files */
