@@ -124,6 +124,9 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
   } = input;
 
+  // Destructure logger early - use throughout instead of logger
+  const { logger } = executionContext;
+
   // Single source of truth: get streamTabId from execution context
   const streamTabId = executionContext.streamId;
 
@@ -144,7 +147,7 @@ export async function runReflectionFlow<C = unknown>(
     config,
     0, // logId
     baseFiles,
-    executionContext.logger,
+    logger,
     fileService,
     executionContext.executionId,
   );
@@ -153,11 +156,11 @@ export async function runReflectionFlow<C = unknown>(
     prompt,
     setting,
     userVarChannels.transient,
-    executionContext.logger,
+    logger,
   );
 
   const latexMediaManager = new LatexMediaManager(
-    executionContext.logger,
+    logger,
     fileService,
   );
 
@@ -224,7 +227,7 @@ export async function runReflectionFlow<C = unknown>(
   // Create or use provided run stage FIRST - we need its ID for storage key
   const runStage =
     parentStage ??
-    (await executionContext.logger.stage(`Run: ${config.agent}`, {
+    (await logger.stage(`Run: ${config.agent}`, {
       skip: false,
     }));
 
@@ -269,14 +272,14 @@ export async function runReflectionFlow<C = unknown>(
         if (validated.success) {
           shared = validated.data as ReflectionFlowShared;
           isResume = true;
-          executionContext.logger.debug(
+          logger.debug(
             `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
           );
         }
       }
     } catch (error) {
       // Log parse failures to help diagnose resume issues
-      executionContext.logger.debug(
+      logger.debug(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
@@ -302,7 +305,7 @@ export async function runReflectionFlow<C = unknown>(
       parentStage: runStage,
       hooks: {
         createRoundStage: async (roundIndex, parent) => {
-          return await executionContext.logger.stage(`r${roundIndex}`, {
+          return await logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
         },
@@ -319,7 +322,7 @@ export async function runReflectionFlow<C = unknown>(
     // Build services: spread input + add computed fields
     services = {
       ...input,
-      logger: executionContext.logger,
+      logger: logger,
       getUsageRecorder,
       outputHandler,
       latexMediaManager,
@@ -332,7 +335,7 @@ export async function runReflectionFlow<C = unknown>(
     pf.setServices(services);
 
     if (isResume) {
-      executionContext.logger.debug(
+      logger.debug(
         'Resuming reflection flow from persistence',
       );
     }
