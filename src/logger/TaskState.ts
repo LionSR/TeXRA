@@ -40,7 +40,7 @@ const WorkflowTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.Workflow,
     {
-        error: 'Expected Workflow category'
+      error: 'Expected Workflow category',
     },
   ),
   activeFiles: ActiveFilesSchema,
@@ -51,7 +51,7 @@ const ToolUseTaskStateSchema = z.object({
   agentConfig: AgentConfigWithSessionSchema.refine(
     (c) => c.session.agentCategory === AgentCategory.ToolUse,
     {
-        error: 'Expected ToolUse category'
+      error: 'Expected ToolUse category',
     },
   ),
   toolSessionState: ToolSessionStateSchema.optional(),

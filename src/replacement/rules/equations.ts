@@ -48,7 +48,8 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Use the new grouped helper to organize the backslash fixes logically
     const groupedBackslashPatterns = generateGroupedBackslashFixes({
       mathOperators: [...MATH_OPERATORS, 'pi', 'bna'],
-      greekLetters: [...GREEK_LETTERS, 
+      greekLetters: [
+        ...GREEK_LETTERS,
         'partial',
         'Delta',
         'Gamma',

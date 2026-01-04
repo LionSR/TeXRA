@@ -279,8 +279,9 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     };
 
     // Normalize legacy font commands {\rm X}, {\bf X} and {\cal X}
-    const alphabetLetters =
-      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'];
+    const alphabetLetters = [
+      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+    ];
     patterns = {
       ...patterns,
       ...generateLegacyTextCommandNormalization(

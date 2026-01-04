@@ -7,8 +7,7 @@ export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
   isRegex: false,
   patterns: (() => {
     const patterns: { [key: string]: string } = {};
-    const letters =
-      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'];
+    const letters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'];
     letters.forEach((letter) => {
       patterns[`{\\rm ${letter}}`] = `\\mathrm{${letter}}`;
       patterns[`{\\bf ${letter}}`] = `\\mathbf{${letter}}`;

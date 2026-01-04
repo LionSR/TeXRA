@@ -49,4 +49,3 @@ export function getEmitFilter(options: FilterOptions): FilterResult {
 
   return { shouldEmit: true, debugMode };
 }
-
