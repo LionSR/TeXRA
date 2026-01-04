@@ -322,7 +322,7 @@ export function registerWolframScriptCommands(
             <div class="file-info">File: ${filePath}</div>
             <div class="input">
               <h3>File Content (sample):</h3>
-              <pre>${sampleContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+              <pre>${sampleContent.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre>
             </div>
             ${outputContent}
             ${errorContent}
