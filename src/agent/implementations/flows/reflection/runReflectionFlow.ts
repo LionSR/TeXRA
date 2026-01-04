@@ -33,13 +33,8 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
-import {
-  AgentWorkspaceState,
-  AgentWorkspaceStateSnapshotSchema,
-  type AgentWorkspaceSnapshot,
-} from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import type { RetryErrorInfo } from '@agent/core/flows/RetryState';
 import { type FlowRecord } from '@agent/node/persisted-flow';
 import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -61,6 +56,7 @@ import {
 import {
   createFreshWorkspaceSnapshot,
   createInitialReflectionState,
+  ReflectionFlowStateSchema,
 } from './ReflectionFlowState';
 import { createBaseFileLocations } from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
@@ -259,9 +255,7 @@ export async function runReflectionFlow<C = unknown>(
       executionContext.executionId,
     );
 
-    // Try to restore state from persisted flow (resume scenario)
-    let initialWorkspaceSnapshot: AgentWorkspaceSnapshot;
-    let restoredRetryError: RetryErrorInfo | undefined;
+    // Try to restore full state from persisted flow (resume scenario)
     let isResume = false;
 
     try {
@@ -269,43 +263,31 @@ export async function runReflectionFlow<C = unknown>(
         `flow:${executionContext.executionId}`,
       );
       if (flowRecord?.shared) {
-        const persistedShared = flowRecord.shared as {
-          workspaceSnapshot?: unknown;
-          lastError?: RetryErrorInfo;
-        };
-        if (persistedShared.workspaceSnapshot) {
-          initialWorkspaceSnapshot = AgentWorkspaceStateSnapshotSchema.parse(
-            persistedShared.workspaceSnapshot,
-          );
+        // Validate and use persisted shared state directly
+        const validated = ReflectionFlowStateSchema.safeParse(
+          flowRecord.shared,
+        );
+        if (validated.success) {
+          shared = validated.data as ReflectionFlowShared;
           isResume = true;
           executionContext.logger.debug(
-            'Restored workspace snapshot from persisted flow',
-          );
-        } else {
-          initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
-        }
-
-        if (persistedShared.lastError) {
-          restoredRetryError = persistedShared.lastError;
-          executionContext.logger.debug(
-            `Restored lastError from persisted flow: ${restoredRetryError.message}`,
+            `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
           );
         }
-      } else {
-        initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
       }
-    } catch {
-      initialWorkspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
+    } catch (error) {
+      // Log parse failures to help diagnose resume issues
+      executionContext.logger.debug(
+        `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
     }
 
-    // Create shared state for the flow
-    shared = createInitialReflectionState(
-      totalRounds,
-      initialWorkspaceSnapshot,
-    );
-
-    if (restoredRetryError) {
-      shared.lastError = restoredRetryError;
+    // Create fresh state if not resuming
+    if (!shared) {
+      shared = createInitialReflectionState(
+        totalRounds,
+        AgentWorkspaceState.create().toSnapshot(),
+      );
     }
 
     // Create RoundPersistedFlow with the start node
@@ -371,12 +353,16 @@ export async function runReflectionFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Clean up flow record on completion
-    try {
-      const kv = getExecutionStore(executionContext.executionId);
-      await kv.delete(`flow:${executionContext.executionId}`);
-    } catch {
-      // Ignore cleanup errors
+    // Only delete flow record on successful completion
+    // Keep it for interrupted/error flows to enable resume
+    // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
+    if (status === END_GROUP_STATUS.STOPPED) {
+      try {
+        const kv = getExecutionStore(executionContext.executionId);
+        await kv.delete(`flow:${executionContext.executionId}`);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
 
     if (createdRunStage) {
