@@ -87,7 +87,7 @@ export type UsageLogStats = z.infer<typeof UsageLogStatsSchema>;
  * Composed from metadata + stats + timestamp/version fields.
  */
 export const UsageLogEntrySchema = UsageLogMetadataSchema.extend(
-  UsageLogStatsSchema.shape
+  UsageLogStatsSchema.shape,
 ).extend({
   /** Timestamp when the API call completed (ISO 8601) */
   timestamp: z.iso.datetime(),

@@ -144,15 +144,13 @@ export class FileInteractionState {
       removed += deltaRemoved;
     }
 
-    const editsForCall = [...perCallEdits.entries()].map(
-      ([path, diff]) => ({
-        path,
-        lineChanges:
-          diff.added || diff.removed
-            ? { added: diff.added, removed: diff.removed }
-            : undefined,
-      }),
-    );
+    const editsForCall = [...perCallEdits.entries()].map(([path, diff]) => ({
+      path,
+      lineChanges:
+        diff.added || diff.removed
+          ? { added: diff.added, removed: diff.removed }
+          : undefined,
+    }));
 
     const lineChanges = added || removed ? { added, removed } : undefined;
     return { edits: editsForCall, lineChanges };
