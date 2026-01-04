@@ -1,14 +1,12 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  EventModuleBase,
-  ProgressEventBusLike,
+import {
+  createEventDisposable,
+  type BaseEventShared,
+  type EventModuleBase,
+  type ProgressEventBusLike,
 } from './types';
 
 /**
@@ -39,28 +37,28 @@ export function createApprovalEvents(
   const { withErrorBoundary } = shared;
 
   return {
-    register(bus: ProgressEventBusLike): vscode.Disposable[] {
+    register(bus: ProgressEventBusLike) {
       return [
-        new vscode.Disposable(
-          bus.on('showToolEditApprovalPrompt', (payload) =>
-            withErrorBoundary('failed to show approval prompt', () =>
-              shared.showToolEditApprovalPrompt(payload),
-            ),
+        createEventDisposable(bus, 'showToolEditApprovalPrompt', (payload) =>
+          withErrorBoundary('failed to show approval prompt', () =>
+            shared.showToolEditApprovalPrompt(payload),
           ),
         ),
-        new vscode.Disposable(
-          bus.on('resolveToolEditApprovalPrompt', (payload) =>
+        createEventDisposable(
+          bus,
+          'resolveToolEditApprovalPrompt',
+          (payload) =>
             withErrorBoundary('failed to resolve approval prompt', () =>
               shared.resolveToolEditApprovalPrompt(payload.requestId),
             ),
-          ),
         ),
-        new vscode.Disposable(
-          bus.on('updateToolEditApprovalBypassState', (payload) =>
+        createEventDisposable(
+          bus,
+          'updateToolEditApprovalBypassState',
+          (payload) =>
             withErrorBoundary('failed to update approval bypass state', () =>
               shared.updateToolEditApprovalBypassState(payload.bypassActive),
             ),
-          ),
         ),
       ];
     },
