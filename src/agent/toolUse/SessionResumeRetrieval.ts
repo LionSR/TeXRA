@@ -21,6 +21,7 @@ import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
+  ToolUseSessionSnapshotSchema,
   type ToolUseSessionSnapshot,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { TaskState } from '@logger/TaskState';
@@ -139,7 +140,10 @@ async function retrieveToolUseResumeData(
 
     const { conversation, stateSlices } = parseResult.data.state;
 
-    const snapshot: ToolUseSessionSnapshot = {
+    // Construct and validate the complete snapshot.
+    // Validation provides defense-in-depth: even if flow record is valid,
+    // we ensure the assembled snapshot matches the expected schema.
+    const rawSnapshot = {
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId,
       streamId,
@@ -151,8 +155,16 @@ async function retrieveToolUseResumeData(
       lastUpdated: Date.now(),
     };
 
+    const snapshotResult = ToolUseSessionSnapshotSchema.safeParse(rawSnapshot);
+    if (!snapshotResult.success) {
+      logger.warn(
+        `Invalid snapshot structure for stream: ${streamId}: ${snapshotResult.error.message}`,
+      );
+      return null;
+    }
+
     logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
-    return { type: 'toolUse', snapshot };
+    return { type: 'toolUse', snapshot: snapshotResult.data };
   } catch (error) {
     logger.error(`Failed to retrieve tool-use resume data for stream: ${streamId}`, {
       data: error,
