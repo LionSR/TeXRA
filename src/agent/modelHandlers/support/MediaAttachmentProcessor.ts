@@ -201,8 +201,7 @@ export class MediaAttachmentProcessor {
       this.logger.warn('Some media files failed to load');
     }
 
-    const groupId = this.logger.withCurrentGroup((id) => id);
-    this.logger.fileList(results, groupId);
+    this.logger.fileList(results);
   }
 
   private async loadMediaEntry(
