@@ -1,12 +1,11 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import {
-  createEventDisposable,
-  type EventModuleBase,
-  type ProgressEventBusLike,
-} from './types';
+import type { ProgressEventBusLike } from './types';
 import { withEventErrorHandling } from './errorHandling';
 
 const MODULE = 'ApprovalEvents';
@@ -14,7 +13,7 @@ const MODULE = 'ApprovalEvents';
 /**
  * Callbacks for approval event handling.
  */
-export interface ApprovalEventsShared {
+export interface ApprovalCallbacks {
   showToolEditApprovalPrompt: (
     payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
   ) => void;
@@ -22,43 +21,38 @@ export interface ApprovalEventsShared {
   updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
 }
 
-export type ApprovalEventsModule = EventModuleBase;
-
 /**
- * Create approval event module for registration.
+ * Register approval event handlers.
  */
-export function createApprovalEvents(
-  callbacks: ApprovalEventsShared,
-): ApprovalEventsModule {
-  return {
-    register(bus) {
-      return [
-        createEventDisposable(bus, 'showToolEditApprovalPrompt', (payload) =>
-          withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
-            callbacks.showToolEditApprovalPrompt(payload),
-          ),
+export function registerApprovalEvents(
+  bus: ProgressEventBusLike,
+  callbacks: ApprovalCallbacks,
+): vscode.Disposable[] {
+  return [
+    new vscode.Disposable(
+      bus.on('showToolEditApprovalPrompt', (payload) =>
+        withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
+          callbacks.showToolEditApprovalPrompt(payload),
         ),
-        createEventDisposable(bus, 'resolveToolEditApprovalPrompt', (payload) =>
-          withEventErrorHandling(
-            MODULE,
-            'failed to resolve approval prompt',
-            () => callbacks.resolveToolEditApprovalPrompt(payload.requestId),
-          ),
+      ),
+    ),
+    new vscode.Disposable(
+      bus.on('resolveToolEditApprovalPrompt', (payload) =>
+        withEventErrorHandling(
+          MODULE,
+          'failed to resolve approval prompt',
+          () => callbacks.resolveToolEditApprovalPrompt(payload.requestId),
         ),
-        createEventDisposable(
-          bus,
-          'updateToolEditApprovalBypassState',
-          (payload) =>
-            withEventErrorHandling(
-              MODULE,
-              'failed to update approval bypass state',
-              () =>
-                callbacks.updateToolEditApprovalBypassState(
-                  payload.bypassActive,
-                ),
-            ),
+      ),
+    ),
+    new vscode.Disposable(
+      bus.on('updateToolEditApprovalBypassState', (payload) =>
+        withEventErrorHandling(
+          MODULE,
+          'failed to update approval bypass state',
+          () => callbacks.updateToolEditApprovalBypassState(payload.bypassActive),
         ),
-      ];
-    },
-  };
+      ),
+    ),
+  ];
 }
