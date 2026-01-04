@@ -78,7 +78,7 @@ describe('LogEvents', () => {
     } as unknown as WebviewUpdater;
 
     const bus = new TestBus();
-    const disposables = registerLogEvents(bus, state, updater);
+    const unsubscribes = registerLogEvents(bus, state, updater);
 
     const thinkingMessage: LogMessageData = {
       id: 'log-1',
@@ -114,6 +114,6 @@ describe('LogEvents', () => {
     assert.equal(updated.length, 1);
     assert.equal(updated[0].text, 'finished thinking');
 
-    disposables.forEach((disposable) => disposable.dispose());
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
   });
 });
