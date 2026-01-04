@@ -188,18 +188,17 @@ export function createReflectionFlowContext<C = unknown>(
     });
 
   // Build partial services (missing runStage - added by runReflectionFlow)
+  // Spread init directly - it already contains setting, getUsageRecorder, etc.
   const services: ReflectionServicesPartial<C> = {
     ...init,
     logger: executionContext.logger,
     context: executionContext,
-    setting,
     outputHandler,
     latexMediaManager,
     promptBuilder,
     fileService,
     getOutputFileLocation,
     shouldEnsureXmlStructure,
-    getUsageRecorder,
   };
 
   return {
