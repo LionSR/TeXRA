@@ -32,7 +32,11 @@ export function createUsageEvents(shared: BaseEventShared): UsageEventsModule {
                   cost: Number(usage.cost ?? 0),
                 };
 
-                await state.usageStats.setRunUsage(stream, storageKey, normalizedUsage);
+                await state.usageStats.setRunUsage(
+                  stream,
+                  storageKey,
+                  normalizedUsage,
+                );
 
                 sendIfActive(stream, state, updater, () => {
                   updater.updateRunUsage(stream, storageKey, normalizedUsage);
