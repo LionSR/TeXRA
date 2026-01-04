@@ -85,11 +85,7 @@ export class UsageStatsManager extends PersistentMapManager<
     const normalized = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
-    if (
-      normalized.inputTokens === 0 &&
-      normalized.outputTokens === 0 &&
-      normalized.cost === 0
-    ) {
+    if (isEmptyUsage(normalized)) {
       current.delete(storageKey);
     } else {
       current.set(storageKey, normalized);
@@ -152,11 +148,7 @@ export class UsageStatsManager extends PersistentMapManager<
       }
 
       const usage = TokenUsageStatsParsingSchema.parse(value);
-      if (
-        usage.inputTokens === 0 &&
-        usage.outputTokens === 0 &&
-        usage.cost === 0
-      ) {
+      if (isEmptyUsage(usage)) {
         continue;
       }
 
