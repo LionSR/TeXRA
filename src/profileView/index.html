@@ -107,14 +107,12 @@
           </label>
         </div>
         <div id="modelAccessInfo" class="model-access-info" style="display: none">
-          <div class="model-access-row">
-            <span class="model-access-label">Providers</span>
-            <span id="enabledProvidersInfo" class="model-access-value"></span>
-          </div>
-          <div class="model-access-row">
-            <span class="model-access-label">Models</span>
-            <span id="allowedModelsInfo" class="model-access-value"></span>
-          </div>
+          <button type="button" id="modelAccessSummary" class="model-access-summary">
+            <span id="enabledProvidersInfo"></span>
+            <span class="separator">·</span>
+            <span id="allowedModelsInfo"></span>
+            <span id="modelsToggle" class="models-toggle codicon codicon-chevron-down"></span>
+          </button>
           <div id="modelsListContainer" class="models-list-container"></div>
         </div>
       </div>
