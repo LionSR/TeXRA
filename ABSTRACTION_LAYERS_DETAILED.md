@@ -114,21 +114,21 @@ Let's trace `modelHandler` through every layer from creation to final use:
 
 ## Property Copy Count Summary
 
-| Property | Layer 1 | Layer 2 | Layer 3 | Layer 4 | Layer 5 | Total Copies |
-|----------|---------|---------|---------|---------|---------|--------------|
-| modelHandler | ✓ | spread | spread | spread | spread | **5** |
-| config | ✓ | spread | spread | spread | spread | **5** |
-| setting | ✓ | spread+cast | spread | spread | spread+modify | **5** |
-| prompt | ✓ | spread | spread | spread | spread | **5** |
-| executionContext | ✓ | spread | spread | spread+extract | spread | **5** |
-| logger | - | - | - | extracted | spread | **2** |
-| context | - | - | - | extracted | spread | **2** |
-| streamTabId | ✓ | spread | spread | - | - | **3** |
-| userVarChannels | ✓ | spread | spread | spread | spread | **5** |
-| usageMonitor | ✓ | wrapped | - | - | - | **2** |
-| checkInterruption | - | added | spread | spread | spread | **4** |
-| setAbortController | - | added | spread | spread | spread | **4** |
-| getClient | - | wrapper | spread | spread | awaited | **4** |
+| Property           | Layer 1 | Layer 2     | Layer 3 | Layer 4        | Layer 5       | Total Copies |
+| ------------------ | ------- | ----------- | ------- | -------------- | ------------- | ------------ |
+| modelHandler       | ✓       | spread      | spread  | spread         | spread        | **5**        |
+| config             | ✓       | spread      | spread  | spread         | spread        | **5**        |
+| setting            | ✓       | spread+cast | spread  | spread         | spread+modify | **5**        |
+| prompt             | ✓       | spread      | spread  | spread         | spread        | **5**        |
+| executionContext   | ✓       | spread      | spread  | spread+extract | spread        | **5**        |
+| logger             | -       | -           | -       | extracted      | spread        | **2**        |
+| context            | -       | -           | -       | extracted      | spread        | **2**        |
+| streamTabId        | ✓       | spread      | spread  | -              | -             | **3**        |
+| userVarChannels    | ✓       | spread      | spread  | spread         | spread        | **5**        |
+| usageMonitor       | ✓       | wrapped     | -       | -              | -             | **2**        |
+| checkInterruption  | -       | added       | spread  | spread         | spread        | **4**        |
+| setAbortController | -       | added       | spread  | spread         | spread        | **4**        |
+| getClient          | -       | wrapper     | spread  | spread         | awaited       | **4**        |
 
 ---
 
@@ -280,11 +280,11 @@ The interface just bundles properties that are immediately spread. Delete it.
 
 ```typescript
 // Before (wrapper):
-getClient: () => ctx.modelHandler.getClient()
+getClient: () => ctx.modelHandler.getClient();
 
 // After (direct):
 // Don't wrap - let the flow call modelHandler.getClient() directly
-modelHandler: ctx.modelHandler
+modelHandler: ctx.modelHandler;
 ```
 
 **Step 4: Simplify service construction**
@@ -312,16 +312,16 @@ interface ToolUseFlowContextInit {
 
 ### Current Duplication Map
 
-| Field | BaseFlowContextInit | FlowServiceAccessors | AgentCycleBaseOptions | Total Definitions |
-|-------|---------------------|---------------------|----------------------|-------------------|
-| modelHandler | ✓ | - | ✓ | 2 |
-| setting | ✓ | - | ✓ | 2 |
-| prompt | ✓ | - | ✓ | 2 |
-| userVarChannels | ✓ | - | ✓ | 2 |
-| checkInterruption | ✓ | - | ✓ | 2 |
-| setAbortController | ✓ | - | ✓ | 2 |
-| logger | - | ✓ | ✓ | 2 |
-| context | - | ✓ | ✓ | 2 |
+| Field              | BaseFlowContextInit | FlowServiceAccessors | AgentCycleBaseOptions | Total Definitions |
+| ------------------ | ------------------- | -------------------- | --------------------- | ----------------- |
+| modelHandler       | ✓                   | -                    | ✓                     | 2                 |
+| setting            | ✓                   | -                    | ✓                     | 2                 |
+| prompt             | ✓                   | -                    | ✓                     | 2                 |
+| userVarChannels    | ✓                   | -                    | ✓                     | 2                 |
+| checkInterruption  | ✓                   | -                    | ✓                     | 2                 |
+| setAbortController | ✓                   | -                    | ✓                     | 2                 |
+| logger             | -                   | ✓                    | ✓                     | 2                 |
+| context            | -                   | ✓                    | ✓                     | 2                 |
 
 ### Proposed Consolidation
 
@@ -366,14 +366,14 @@ interface ResponseCycleServices {
 
 ## Impact Summary
 
-| Change | Lines Removed | Complexity Reduction | Risk |
-|--------|---------------|---------------------|------|
-| Eliminate FlowExecutionContext | ~30-50 | High (1 layer removed) | Medium |
-| Create direct input builders | +40 (net: -10) | Medium (clearer intent) | Low |
-| Remove wrapper functions | ~10 | Low (cleaner code) | Low |
-| Merge FlowServiceAccessors | ~15 | Medium (fewer types) | Low |
-| Remove AgentCycleBaseOptions | ~20 | Medium (fewer types) | Medium |
-| **Total** | **~80-100 lines** | **High** | **Medium** |
+| Change                         | Lines Removed     | Complexity Reduction    | Risk       |
+| ------------------------------ | ----------------- | ----------------------- | ---------- |
+| Eliminate FlowExecutionContext | ~30-50            | High (1 layer removed)  | Medium     |
+| Create direct input builders   | +40 (net: -10)    | Medium (clearer intent) | Low        |
+| Remove wrapper functions       | ~10               | Low (cleaner code)      | Low        |
+| Merge FlowServiceAccessors     | ~15               | Medium (fewer types)    | Low        |
+| Remove AgentCycleBaseOptions   | ~20               | Medium (fewer types)    | Medium     |
+| **Total**                      | **~80-100 lines** | **High**                | **Medium** |
 
 ---
 

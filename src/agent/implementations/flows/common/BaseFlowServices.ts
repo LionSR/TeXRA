@@ -73,9 +73,6 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Set abort controller for cancellation */
   setAbortController: (ctrl: AbortController | null) => void;
 
-  /** Get the API client instance (async to allow auth token refresh) */
-  getClient: () => Promise<C>;
-
   /** Callback invoked when interrupt() is called on the flow context */
   onInterrupt?: () => void;
 }
