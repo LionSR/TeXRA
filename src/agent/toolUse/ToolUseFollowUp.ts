@@ -37,11 +37,15 @@ export async function sendFollowUp(
   streamId: StreamTabId,
   text: string,
 ): Promise<void> {
+  logger.debug(`sendFollowUp called for stream: ${streamId}`);
+
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
+    logger.debug(`Found active flow context for stream: ${streamId}`);
     try {
       flowContext.session.appendFollowUp(text);
+      logger.debug(`Follow-up appended successfully to stream: ${streamId}`);
     } catch (error) {
       logger.error('Failed to send follow-up to active session.', {
         data: error,
@@ -53,6 +57,8 @@ export async function sendFollowUp(
     return;
   }
 
+  logger.debug(`No active flow context found for stream: ${streamId}`);
+
   // Queue if session is resuming
   if (ToolUseFollowUpQueue.isResuming(streamId)) {
     if (ToolUseFollowUpQueue.enqueue(streamId, text)) {
@@ -63,6 +69,9 @@ export async function sendFollowUp(
 
   // Queue if session is waiting (paused, can be resumed)
   const status = StreamStatusService.get(streamId);
+  logger.debug(
+    `StreamStatusService status for ${streamId}: ${status ?? 'undefined'}`,
+  );
   if (status === STREAM_STATUS.WAITING) {
     // Ensure queue exists and enqueue
     ToolUseFollowUpQueue.acquire(streamId);
@@ -75,7 +84,9 @@ export async function sendFollowUp(
   }
 
   // No active/waiting session found - user can resume via UI command
-  logger.debug(`No active session found for follow-up on stream ${streamId}.`);
+  logger.warn(
+    `No active/waiting session found for follow-up on stream ${streamId}. Status: ${status ?? 'undefined'}`,
+  );
   void vscode.window.showWarningMessage(
     'No active tool-use session found. Use the Resume button to continue.',
   );
