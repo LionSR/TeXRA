@@ -193,24 +193,24 @@
 
 ### NECESSARY (Keep As-Is)
 
-| Pattern                      | Why Necessary                                       |
-| ---------------------------- | --------------------------------------------------- |
-| resolveAgentBase()           | Single place for agent resolution + validation     |
-| Services spread at Layer 2   | Creates new objects (outputHandler, etc.)          |
-| client = await getClient()   | Fresh client per cycle (auth token refresh)        |
-| State slices (round/run/ws)  | Mutable state for cycle execution                  |
-| PersistedFlow snapshots      | Required for resume/recovery                       |
-| PocketFlow node pattern      | Framework requirement for flow execution           |
+| Pattern                     | Why Necessary                                  |
+| --------------------------- | ---------------------------------------------- |
+| resolveAgentBase()          | Single place for agent resolution + validation |
+| Services spread at Layer 2  | Creates new objects (outputHandler, etc.)      |
+| client = await getClient()  | Fresh client per cycle (auth token refresh)    |
+| State slices (round/run/ws) | Mutable state for cycle execution              |
+| PersistedFlow snapshots     | Required for resume/recovery                   |
+| PocketFlow node pattern     | Framework requirement for flow execution       |
 
 ### OVERHEAD (Could Simplify)
 
-| Pattern                          | Issue                           | Potential Fix                       |
-| -------------------------------- | ------------------------------- | ----------------------------------- |
-| `logger` + `context` aliases     | Duplicates executionContext     | Access via `services.executionContext.logger` |
-| AgentCycleBaseOptions interface  | Duplicates 6 fields from Base   | Extend BaseFlowContextInit instead  |
-| getUsageRecorder factory         | Returns same callback each time | Pass callback directly              |
-| Services spread at Layer 3       | Redundant if no transform       | Could pass parent services + extras |
-| FlowServiceAccessors interface   | Only 2 fields, adds indirection | Inline in child interfaces          |
+| Pattern                         | Issue                           | Potential Fix                                 |
+| ------------------------------- | ------------------------------- | --------------------------------------------- |
+| `logger` + `context` aliases    | Duplicates executionContext     | Access via `services.executionContext.logger` |
+| AgentCycleBaseOptions interface | Duplicates 6 fields from Base   | Extend BaseFlowContextInit instead            |
+| getUsageRecorder factory        | Returns same callback each time | Pass callback directly                        |
+| Services spread at Layer 3      | Redundant if no transform       | Could pass parent services + extras           |
+| FlowServiceAccessors interface  | Only 2 fields, adds indirection | Inline in child interfaces                    |
 
 ---
 
@@ -328,20 +328,24 @@ Have nodes access `this.services.executionContext.logger` directly.
 ## 7. Verdict: Is It Still Spaghetti?
 
 ### No Longer Spaghetti:
+
 - Call chain is clear: resolveAgentBase → runFlow → CycleNode → ModelInvocation
 - Data flows unidirectionally
 - Services spread is shallow (references, not deep copies)
 - No circular dependencies
 
 ### Still Messy:
+
 - **3 interfaces define overlapping fields** (Base, CycleBase, Accessors)
 - **Aliases add cognitive load** (logger vs executionContext.logger)
 - **getUsageRecorder factory** is unnecessary indirection
 
 ### Honest Assessment:
+
 The current state is **maintainable but not minimal**. The interface duplication adds ~30 lines of type definitions that could be eliminated. The runtime overhead is negligible (spread syntax is cheap), but the type complexity makes the codebase harder to understand.
 
 **Recommended Priority:**
+
 1. Delete AgentCycleBaseOptions → use Pick from BaseFlowContextInit
 2. Inline FlowServiceAccessors → 2 fields don't need their own interface
 3. Keep logger/context aliases → changing would touch too many files
