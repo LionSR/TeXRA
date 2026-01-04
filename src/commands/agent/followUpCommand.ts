@@ -7,7 +7,7 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { retrieveToolUseSnapshot } from '@agent/toolUse/ToolUseSnapshotRetrieval';
+import { retrieveSessionResumeData } from '@agent/toolUse/SessionResumeRetrieval';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import {
   showErrorMessage,
@@ -61,25 +61,35 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   }
   const taskState = parseResult.data as TaskState;
 
-  // Retrieve the snapshot (also validates it's a tool-use task)
-  const snapshot = await retrieveToolUseSnapshot(
+  // Retrieve resume data for the session type
+  const resumeData = await retrieveSessionResumeData(
     streamId,
     executionId,
     taskState,
   );
 
-  if (!snapshot) {
-    // retrieveToolUseSnapshot logs specific failure reason
+  if (!resumeData) {
+    // retrieveSessionResumeData logs specific failure reason
     return false;
   }
 
-  // Trigger resume (follow-up is already queued, don't pass it again)
-  logger.info(`Auto-resuming tool-use session for stream: ${streamId}`);
+  // Trigger resume based on session type
+  logger.info(`Auto-resuming ${resumeData.type} session for stream: ${streamId}`);
   try {
-    const result = await vscode.commands.executeCommand('texra.resumeAgent', {
-      snapshot,
-    });
-    return (result as { success?: boolean })?.success === true;
+    if (resumeData.type === 'toolUse') {
+      // Tool-use: pass snapshot to resumeAgent command
+      const result = await vscode.commands.executeCommand('texra.resumeAgent', {
+        snapshot: resumeData.snapshot,
+      });
+      return (result as { success?: boolean })?.success === true;
+    } else {
+      // Workflow: pass config and executionId to execute command
+      await vscode.commands.executeCommand('texra.execute', {
+        config: resumeData.agentConfig,
+        executionId: resumeData.executionId,
+      });
+      return true;
+    }
   } catch (error) {
     logger.error(`Failed to execute resume command for stream: ${streamId}`, {
       data: error,
