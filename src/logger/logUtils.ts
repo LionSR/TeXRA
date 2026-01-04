@@ -23,7 +23,6 @@ interface ChannelContext {
 }
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
-const previousStacks = new Map<string, string[]>();
 
 // Cache for initialized channels to avoid repeated registry.ensure() calls
 // This eliminates the overhead of Map lookup + string interpolation on every log
@@ -50,30 +49,6 @@ function getContextByKey(key: ChannelKey): ChannelContext | undefined {
   return store.get(key);
 }
 
-function getContext(
-  channel: string,
-  isAgent: boolean,
-): ChannelContext | undefined {
-  return getContextByKey(getChannelKey(channel, isAgent));
-}
-
-function setContext(
-  channel: string,
-  isAgent: boolean,
-  context: ChannelContext | undefined,
-): void {
-  const store = getStore();
-  const key = getChannelKey(channel, isAgent);
-
-  if (context) {
-    store.set(key, context);
-  } else {
-    store.delete(key);
-  }
-
-  contextStorage.enterWith(store);
-}
-
 function pushGroupContext(
   channel: string,
   groupId: string,
@@ -83,13 +58,7 @@ function pushGroupContext(
   const key = getChannelKey(channel, isAgent);
   const context = store.get(key) ?? { stack: [] };
 
-  previousStacks.set(`${key}:${groupId}`, [...context.stack]);
-
-  const nextContext: ChannelContext = {
-    stack: [...context.stack, groupId],
-  };
-
-  store.set(key, nextContext);
+  store.set(key, { stack: [...context.stack, groupId] });
   contextStorage.enterWith(store);
 }
 
@@ -100,13 +69,18 @@ function popGroupContext(
 ): void {
   const store = getStore();
   const key = getChannelKey(channel, isAgent);
-  const previous = previousStacks.get(`${key}:${groupId}`);
-  previousStacks.delete(`${key}:${groupId}`);
+  const context = store.get(key);
 
-  if (!previous || previous.length === 0) {
+  if (!context?.stack.length) {
     store.delete(key);
   } else {
-    store.set(key, { stack: [...previous] });
+    // Remove the specific groupId from stack (supports non-LIFO group endings)
+    const newStack = context.stack.filter((id) => id !== groupId);
+    if (newStack.length === 0) {
+      store.delete(key);
+    } else {
+      store.set(key, { stack: newStack });
+    }
   }
 
   contextStorage.enterWith(store);
