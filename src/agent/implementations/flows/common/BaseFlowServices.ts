@@ -35,8 +35,8 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
 // Context Initialization
