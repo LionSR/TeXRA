@@ -78,6 +78,15 @@ const ToolUseFlowRecordStateSchema = z.object({
   }),
 });
 
+/**
+ * Minimal schema for validating workflow flow record exists and has resumable state.
+ * Full validation happens when the flow actually resumes.
+ */
+const WorkflowFlowRecordStateSchema = z.object({
+  currentRound: z.number(),
+  totalRounds: z.number(),
+});
+
 // =============================================================================
 // Public API
 // =============================================================================
@@ -175,18 +184,43 @@ async function retrieveToolUseResumeData(
 
 /**
  * Retrieve resume data for a workflow session.
- * Workflow flows read persisted state via executionId, so no full snapshot needed.
- * Async for API consistency with retrieveToolUseResumeData.
+ * Verifies flow record exists before returning resume data.
+ * Workflow flows read full persisted state via executionId during resume.
  */
 async function retrieveWorkflowResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
   taskState: TaskState,
-): Promise<WorkflowResumeData> {
-  logger.debug(`Retrieved workflow resume data for stream: ${streamId}`);
-  return {
-    type: 'workflow',
-    agentConfig: taskState.agentConfig,
-    executionId,
-  };
+): Promise<WorkflowResumeData | null> {
+  try {
+    const kv = getExecutionStore(executionId);
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+
+    if (!flowRecord?.shared) {
+      logger.warn(`No flow record found for workflow execution: ${executionId}`);
+      return null;
+    }
+
+    // Minimal validation - just verify essential fields exist.
+    // Full state validation happens when the flow actually resumes.
+    const parseResult = WorkflowFlowRecordStateSchema.safeParse(flowRecord.shared);
+    if (!parseResult.success) {
+      logger.warn(`Invalid workflow flow record for execution: ${executionId}`);
+      return null;
+    }
+
+    logger.debug(
+      `Retrieved workflow resume data for stream: ${streamId} (round ${parseResult.data.currentRound}/${parseResult.data.totalRounds})`,
+    );
+    return {
+      type: 'workflow',
+      agentConfig: taskState.agentConfig,
+      executionId,
+    };
+  } catch (error) {
+    logger.error(`Failed to retrieve workflow resume data for stream: ${streamId}`, {
+      data: error,
+    });
+    return null;
+  }
 }
