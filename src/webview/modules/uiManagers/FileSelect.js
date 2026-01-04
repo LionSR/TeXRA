@@ -35,12 +35,13 @@ export class FileSelect {
    * @param {Object} [options] - Restoration options
    * @param {string} [options.storedValue] - Value from saved state (highest priority)
    * @param {string} [options.currentValue] - Current UI value (fallback priority)
+   * @returns {string|null} The restored value, or null if no restoration was possible
    */
   update(id, files, options = {}) {
     const selectDiv = document.getElementById(id);
     if (!selectDiv) {
       console.warn(`[FileSelect] Element with id '${id}' not found`);
-      return;
+      return null;
     }
 
     const normalizedFiles = Array.isArray(files) ? files : [];
@@ -73,13 +74,16 @@ export class FileSelect {
       // reading selectDiv.value immediately after update() need the value set now.
       // Use restoredValue if available, otherwise default to empty string (None).
       selectDiv.value = restoredValue ?? '';
-      console.log(`[FileSelect.update] after setting value: selectDiv.value=${selectDiv.value}`);
       if (restoredValue) {
         mainViewState.update({ [id]: restoredValue });
       }
     } finally {
       mainViewState.unblockSave();
     }
+
+    // Return the restored value so callers don't need to read from DOM
+    // (vscode-single-select doesn't reflect .value changes immediately)
+    return restoredValue;
   }
 
   updateEdited(baseFile) {
