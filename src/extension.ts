@@ -209,10 +209,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const executionIdMap = progressViewProvider.state.getAllExecutionIds();
   const waitingStreams = await detectWaitingStreams(executionIdMap);
 
-  // Set backend runtime status for waiting streams.
-  // StreamStatusService is used by ToolUseFollowUp to determine if follow-ups
-  // can be queued for a stream. This is separate from the UI state managed by
-  // ProgressEventHandler._streamStatus (updated via cleanupTasksAfterRestart).
+  // Set stream status for waiting streams.
+  // StreamStatusService is the single source of truth for stream status.
+  // It's used by ToolUseFollowUp to determine if follow-ups can be queued.
+  // The event emitted by set() will update ProgressEventHandler's webview.
   for (const streamId of waitingStreams) {
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
   }
