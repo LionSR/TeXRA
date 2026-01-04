@@ -6,7 +6,7 @@ import Transport from 'winston-transport';
 // Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 import { getEmitFilter } from '@logger/filterUtils';
-import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
@@ -23,8 +23,6 @@ export class VSCodeTransport extends Transport {
   private readonly streamName: string;
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
-  private readonly groups = new Map<string, TaskGroup>();
-  private activeGroupId?: string;
 
   constructor(options: VSCodeTransportOptions) {
     super(options);
@@ -39,9 +37,8 @@ export class VSCodeTransport extends Transport {
   }
 
   log(info: any, callback: () => void): void {
-    const { level, message, timestamp, messageType } = info;
+    const { level, message, timestamp, messageType, groupId } = info;
     const data = serializeLogData(info.data);
-    const groupId = info.groupId ?? this.activeGroupId;
 
     this.writeToChannel(level, message, timestamp, data);
     this.emitLogEvent({
@@ -57,36 +54,12 @@ export class VSCodeTransport extends Transport {
   }
 
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
-    const now = Date.now();
-    const group: TaskGroup = {
-      id,
-      name: groupName,
-      startTime: now,
-      status: 'running',
-      parentGroupId,
-    };
-    this.groups.set(id, group);
-    this.activeGroupId = id;
-
-    this.emitGroupStarted(id, groupName, now, parentGroupId);
-
+    this.emitGroupStarted(id, groupName, Date.now(), parentGroupId);
     return id;
   }
 
   endGroup(groupId: string, status: EndGroupStatus): void {
-    const group = this.groups.get(groupId);
-    if (!group) {
-      return;
-    }
-
-    group.endTime = Date.now();
-    group.status = status;
-
-    this.emitGroupFinished(groupId, status, group.endTime);
-
-    if (this.activeGroupId === groupId) {
-      this.activeGroupId = group.parentGroupId;
-    }
+    this.emitGroupFinished(groupId, status, Date.now());
   }
 
   private writeToChannel(

@@ -4,16 +4,17 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 // Local file imports
 import {
   createEventDisposable,
-  type BaseEventShared,
   type EventModuleBase,
   type ProgressEventBusLike,
 } from './types';
+import { withEventErrorHandling } from './errorHandling';
+
+const MODULE = 'ApprovalEvents';
 
 /**
- * Shared context for ApprovalEvents module.
- * Extends BaseEventShared with approval-specific callbacks.
+ * Callbacks for approval event handling.
  */
-export interface ApprovalEventsShared extends BaseEventShared {
+export interface ApprovalEventsShared {
   showToolEditApprovalPrompt: (
     payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
   ) => void;
@@ -21,40 +22,40 @@ export interface ApprovalEventsShared extends BaseEventShared {
   updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
 }
 
-/**
- * ApprovalEvents module interface.
- * Uses EventModuleBase pattern (bus only, no state/updater).
- */
 export type ApprovalEventsModule = EventModuleBase;
 
 /**
- * Creates a module for handling tool edit approval events.
- * Follows the established event module pattern used by RetryEvents.
+ * Create approval event module for registration.
  */
 export function createApprovalEvents(
-  shared: ApprovalEventsShared,
+  callbacks: ApprovalEventsShared,
 ): ApprovalEventsModule {
-  const { withErrorBoundary } = shared;
-
   return {
-    register(bus: ProgressEventBusLike) {
+    register(bus) {
       return [
         createEventDisposable(bus, 'showToolEditApprovalPrompt', (payload) =>
-          withErrorBoundary('failed to show approval prompt', () =>
-            shared.showToolEditApprovalPrompt(payload),
+          withEventErrorHandling(MODULE, 'failed to show approval prompt', () =>
+            callbacks.showToolEditApprovalPrompt(payload),
           ),
         ),
         createEventDisposable(bus, 'resolveToolEditApprovalPrompt', (payload) =>
-          withErrorBoundary('failed to resolve approval prompt', () =>
-            shared.resolveToolEditApprovalPrompt(payload.requestId),
+          withEventErrorHandling(
+            MODULE,
+            'failed to resolve approval prompt',
+            () => callbacks.resolveToolEditApprovalPrompt(payload.requestId),
           ),
         ),
         createEventDisposable(
           bus,
           'updateToolEditApprovalBypassState',
           (payload) =>
-            withErrorBoundary('failed to update approval bypass state', () =>
-              shared.updateToolEditApprovalBypassState(payload.bypassActive),
+            withEventErrorHandling(
+              MODULE,
+              'failed to update approval bypass state',
+              () =>
+                callbacks.updateToolEditApprovalBypassState(
+                  payload.bypassActive,
+                ),
             ),
         ),
       ];

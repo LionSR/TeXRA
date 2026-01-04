@@ -1,10 +1,17 @@
+// Type imports
+import type { WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+
 // Local file imports
 import {
   createStatefulEventDisposable,
   sendIfActive,
-  type BaseEventShared,
+  type ProgressEventBusLike,
   type StatefulEventModule,
 } from './types';
+import { withEventErrorHandling } from './errorHandling';
+
+const MODULE = 'OutputEvents';
 
 export type OutputEventsModule = StatefulEventModule;
 
@@ -14,11 +21,10 @@ const toRoundRecord = <T>(
 ): Record<number, T[]> | undefined =>
   rounds && rounds.size > 0 ? Object.fromEntries(rounds.entries()) : undefined;
 
-export function createOutputEvents(
-  shared: BaseEventShared,
-): OutputEventsModule {
-  const { withErrorBoundary } = shared;
-
+/**
+ * Create output event module for registration.
+ */
+export function createOutputEvents(_shared: unknown = {}): OutputEventsModule {
   return {
     register(bus, state, updater) {
       return [
@@ -28,22 +34,28 @@ export function createOutputEvents(
           state,
           updater,
           ({ stream, storageKey, filesByRound }) => {
-            withErrorBoundary('failed to handle addOutputFiles', async () => {
-              await state.outputFiles.addFiles(
-                stream,
-                storageKey,
-                filesByRound,
-              );
-              if (!updater.isAvailable()) return;
-              const runFiles = state.outputFiles
-                .getFiles(stream)
-                .get(storageKey);
-              const rounds = toRoundRecord(runFiles);
-              updater.updateFiles(
-                stream,
-                rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-              );
-            });
+            withEventErrorHandling(
+              MODULE,
+              'failed to handle addOutputFiles',
+              async () => {
+                await state.outputFiles.addFiles(
+                  stream,
+                  storageKey,
+                  filesByRound,
+                );
+                if (!updater.isAvailable()) return;
+                const runFiles = state.outputFiles
+                  .getFiles(stream)
+                  .get(storageKey);
+                const rounds = toRoundRecord(runFiles);
+                updater.updateFiles(
+                  stream,
+                  rounds
+                    ? { runId: storageKey, rounds }
+                    : { runId: storageKey },
+                );
+              },
+            );
           },
         ),
         createStatefulEventDisposable(
@@ -52,7 +64,8 @@ export function createOutputEvents(
           state,
           updater,
           ({ stream, storageKey, filesByRound }) => {
-            withErrorBoundary(
+            withEventErrorHandling(
+              MODULE,
               'failed to handle updateMissingOutputs',
               async () => {
                 await state.outputFiles.updateMissingOutputs(
@@ -81,7 +94,8 @@ export function createOutputEvents(
           state,
           updater,
           ({ stream }) => {
-            withErrorBoundary(
+            withEventErrorHandling(
+              MODULE,
               'failed to handle clearMissingOutputs',
               async () => {
                 await state.outputFiles.clearMissingOutputs(stream);

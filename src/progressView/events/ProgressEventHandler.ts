@@ -19,7 +19,6 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import type { StreamStatus } from '@eventBus/ProgressEventBus';
-import { createErrorBoundary } from './errorHandling';
 import {
   createStreamStatusEvents,
   type StreamStatusEventModule,
@@ -82,44 +81,30 @@ export class ProgressEventHandler {
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
 
-    // Create error boundaries centrally - modules receive pre-configured boundaries
+    // Modules now use withEventErrorHandling() directly - no error boundary injection needed
     this.streamStatusEvents = createStreamStatusEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'StreamStatusEvents'),
       streamStatus: this._streamStatus,
       setStreamStatus: this.setStreamStatus.bind(this),
       sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
       refreshStreamSurface: this.refreshStreamSurface.bind(this),
-      warnLog: this.logger.warn.bind(this.logger),
       debugLog: this.logger.debug.bind(this.logger),
       replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
     });
-    this.outputEvents = createOutputEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'OutputEvents'),
-    });
-    this.usageEvents = createUsageEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'UsageEvents'),
-    });
-    this.logEvents = createLogEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'LogEvents'),
-    });
+    this.outputEvents = createOutputEvents({});
+    this.usageEvents = createUsageEvents({});
+    this.logEvents = createLogEvents({});
     this.taskGroupEvents = createTaskGroupEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'TaskGroupEvents'),
       initializeStreamForTaskGroup:
         this.initializeStreamForTaskGroup.bind(this),
       debugLog: this.logger.debug.bind(this.logger),
       bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
     });
-    this.todoEvents = createTodoEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'TodoEvents'),
-      debugLog: this.logger.debug.bind(this.logger),
-    });
+    this.todoEvents = createTodoEvents({});
     this.retryEvents = createRetryEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
       showRetryRequest: callbacks.showRetryRequest,
       resolveRetryRequest: callbacks.resolveRetryRequest,
     });
     this.approvalEvents = createApprovalEvents({
-      withErrorBoundary: createErrorBoundary(this.logger, 'ApprovalEvents'),
       showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
       resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
       updateToolEditApprovalBypassState:
