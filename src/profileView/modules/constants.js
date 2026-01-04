@@ -22,8 +22,10 @@ export const ELEMENT_IDS = {
   API_ACCESS_SECTION: 'apiAccessSection',
   API_ACCESS_INCLUDED: 'apiAccessIncluded',
   API_ACCESS_PERSONAL: 'apiAccessPersonal',
+  MODEL_ACCESS_INFO: 'modelAccessInfo',
   ENABLED_PROVIDERS_INFO: 'enabledProvidersInfo',
   ALLOWED_MODELS_INFO: 'allowedModelsInfo',
+  MODELS_LIST_CONTAINER: 'modelsListContainer',
   // Access expiration
   ACCESS_EXPIRATION_ROW: 'accessExpirationRow',
   ACCESS_EXPIRATION: 'accessExpiration',
