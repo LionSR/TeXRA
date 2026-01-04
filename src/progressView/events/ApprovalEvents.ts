@@ -44,13 +44,10 @@ export function createApprovalEvents(
             shared.showToolEditApprovalPrompt(payload),
           ),
         ),
-        createEventDisposable(
-          bus,
-          'resolveToolEditApprovalPrompt',
-          (payload) =>
-            withErrorBoundary('failed to resolve approval prompt', () =>
-              shared.resolveToolEditApprovalPrompt(payload.requestId),
-            ),
+        createEventDisposable(bus, 'resolveToolEditApprovalPrompt', (payload) =>
+          withErrorBoundary('failed to resolve approval prompt', () =>
+            shared.resolveToolEditApprovalPrompt(payload.requestId),
+          ),
         ),
         createEventDisposable(
           bus,

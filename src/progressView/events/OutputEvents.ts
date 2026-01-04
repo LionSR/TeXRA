@@ -1,25 +1,12 @@
-// Type imports
-import type { WebviewUpdater } from '@progressView/managers';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-
 // Local file imports
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
-/**
- * OutputEvents module interface.
- * Uses StatefulEventModule pattern for state/updater access.
- */
 export type OutputEventsModule = StatefulEventModule;
-
-/**
- * Shared context for OutputEvents module.
- * Uses BaseEventShared which provides withErrorBoundary.
- */
-type OutputEventsShared = BaseEventShared;
 
 /** Convert Map<number, T[]> to Record<number, T[]> for webview. */
 const toRoundRecord = <T>(
@@ -28,7 +15,7 @@ const toRoundRecord = <T>(
   rounds && rounds.size > 0 ? Object.fromEntries(rounds.entries()) : undefined;
 
 export function createOutputEvents(
-  shared: OutputEventsShared,
+  shared: BaseEventShared,
 ): OutputEventsModule {
   const { withErrorBoundary } = shared;
 
@@ -93,14 +80,14 @@ export function createOutputEvents(
           'clearMissingOutputs',
           state,
           updater,
-          (stream) => {
+          ({ stream }) => {
             withErrorBoundary(
               'failed to handle clearMissingOutputs',
               async () => {
                 await state.outputFiles.clearMissingOutputs(stream);
-                if (state.activeStream === stream && updater.isAvailable()) {
+                sendIfActive(stream, state, updater, () => {
                   updater.updateMissingOutputs(stream, { reset: true });
-                }
+                });
               },
             );
           },

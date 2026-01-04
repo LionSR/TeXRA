@@ -4,13 +4,12 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
-import type { TaskGroupStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { LogMessageData } from '@logger/LogTypes';
+import { getEmitFilter } from '@logger/filterUtils';
+import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
-import { getConfig } from '@utils/config';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
@@ -19,21 +18,12 @@ interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   includeStructuredData?: () => boolean;
 }
 
-interface TransportGroup {
-  id: string;
-  name: string;
-  startTime: number;
-  status: TaskGroupStatus;
-  parentGroupId?: string;
-  endTime?: number;
-}
-
 export class VSCodeTransport extends Transport {
   private readonly channel: vscode.OutputChannel;
   private readonly streamName: string;
   private readonly isAgentChannel: boolean;
   private readonly includeStructuredData?: () => boolean;
-  private readonly groups = new Map<string, TransportGroup>();
+  private readonly groups = new Map<string, TaskGroup>();
   private activeGroupId?: string;
 
   constructor(options: VSCodeTransportOptions) {
@@ -68,7 +58,7 @@ export class VSCodeTransport extends Transport {
 
   startGroup(groupName: string, id: string, parentGroupId?: string): string {
     const now = Date.now();
-    const group: TransportGroup = {
+    const group: TaskGroup = {
       id,
       name: groupName,
       startTime: now,
@@ -125,7 +115,8 @@ export class VSCodeTransport extends Transport {
 
   /**
    * Emit log message to progress view event bus.
-   * Only emits for agent channels; filters debug and internal messages.
+   * Only emits for agent channels; filters debug and internal messages
+   * using shared filtering logic from filterUtils.
    */
   private emitLogEvent(event: {
     level: string;
@@ -137,21 +128,23 @@ export class VSCodeTransport extends Transport {
   }): void {
     if (!this.isAgentChannel) return;
 
-    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
-    if (event.level === 'debug' && !debugMode) return;
-
     const validatedMessageType: MessageType = this.isValidMessageType(
       event.messageType,
     )
       ? event.messageType
       : MESSAGE_TYPES.DEFAULT;
 
-    if (validatedMessageType === MESSAGE_TYPES.INTERNAL) return;
+    const level = event.level as 'debug' | 'info' | 'warn' | 'error';
+    const { shouldEmit, debugMode } = getEmitFilter({
+      level,
+      messageType: validatedMessageType,
+    });
+    if (!shouldEmit) return;
 
     const logMessage: LogMessageData = {
       id: randomUUID(),
       text: event.message,
-      level: event.level as LogMessageData['level'],
+      level,
       timestamp: new Date(event.timestamp).getTime(),
       groupId: event.groupId,
       messageType: validatedMessageType,
