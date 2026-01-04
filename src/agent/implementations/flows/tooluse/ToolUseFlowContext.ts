@@ -153,7 +153,7 @@ export async function buildCycleOptions<C>(
   // Await to get fresh client with refreshed auth tokens for each response round
   return {
     ...(await buildBaseCycleOptions(services)),
-    agentSetting: resolvedSetting,
+    setting: resolvedSetting,  // Override with resolved tools
     toolRegistry,
     modelName: config.model,
     agentName: config.agent,
