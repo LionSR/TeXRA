@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent and usage types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
@@ -13,34 +12,28 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import { WebviewUpdater } from '@progressView/managers';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type { StreamStatus } from '@eventBus/ProgressEventBus';
-import {
-  createStreamStatusEvents,
-  type StreamStatusEventModule,
-} from './StreamStatusEvents';
-import { createOutputEvents, type OutputEventsModule } from './OutputEvents';
-import { createUsageEvents, type UsageEventsModule } from './UsageEvents';
-import { createLogEvents, type LogEventsModule } from './LogEvents';
-import {
-  createTaskGroupEvents,
-  type TaskGroupEventsModule,
-} from './TaskGroupEvents';
-import {
-  createRetryEvents,
-  type RetryEventsModule,
-  type RetryEventsShared,
-} from './RetryEvents';
-import {
-  createApprovalEvents,
-  type ApprovalEventsModule,
-  type ApprovalEventsShared,
-} from './ApprovalEvents';
-import { createTodoEvents, type TodoEventsModule } from './TodoEvents';
+import type {
+  StreamStatus,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
+import { registerOutputEvents } from './OutputEvents';
+import { registerUsageEvents } from './UsageEvents';
+import { registerLogEvents } from './LogEvents';
+import { registerRetryEvents, type RetryCallbacks } from './RetryEvents';
+import { registerApprovalEvents, type ApprovalCallbacks } from './ApprovalEvents';
+import { registerTodoEvents } from './TodoEvents';
+import { withEventErrorHandling } from './errorHandling';
+
+/**
+ * Callbacks for UI interactions (retry/approval dialogs).
+ */
+export type UICallbacks = RetryCallbacks & ApprovalCallbacks;
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -56,100 +49,197 @@ export class ProgressEventHandler {
    * Groups are replayed when setActiveStream is processed for the stream.
    */
   private readonly pendingTaskGroups = new Map<string, TaskGroup[]>();
-  private readonly streamStatusEvents: StreamStatusEventModule;
-  private readonly outputEvents: OutputEventsModule;
-  private readonly logEvents: LogEventsModule;
-  private readonly usageEvents: UsageEventsModule;
-  private readonly taskGroupEvents: TaskGroupEventsModule;
-  private readonly todoEvents: TodoEventsModule;
-  private readonly retryEvents: RetryEventsModule;
-  private readonly approvalEvents: ApprovalEventsModule;
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    callbacks: Pick<
-      RetryEventsShared,
-      'showRetryRequest' | 'resolveRetryRequest'
-    > &
-      Pick<
-        ApprovalEventsShared,
-        | 'showToolEditApprovalPrompt'
-        | 'resolveToolEditApprovalPrompt'
-        | 'updateToolEditApprovalBypassState'
-      >,
+    private readonly uiCallbacks: UICallbacks,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
-
-    // Modules now use withEventErrorHandling() directly - no error boundary injection needed
-    this.streamStatusEvents = createStreamStatusEvents({
-      streamStatus: this._streamStatus,
-      setStreamStatus: this.setStreamStatus.bind(this),
-      sendInstructionUpdate: this.sendInstructionUpdate.bind(this),
-      refreshStreamSurface: this.refreshStreamSurface.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
-      replayPendingTaskGroups: this.replayPendingTaskGroups.bind(this),
-    });
-    this.outputEvents = createOutputEvents({});
-    this.usageEvents = createUsageEvents({});
-    this.logEvents = createLogEvents({});
-    this.taskGroupEvents = createTaskGroupEvents({
-      initializeStreamForTaskGroup:
-        this.initializeStreamForTaskGroup.bind(this),
-      debugLog: this.logger.debug.bind(this.logger),
-      bufferTaskGroupForReplay: this.bufferTaskGroupForReplay.bind(this),
-    });
-    this.todoEvents = createTodoEvents({});
-    this.retryEvents = createRetryEvents({
-      showRetryRequest: callbacks.showRetryRequest,
-      resolveRetryRequest: callbacks.resolveRetryRequest,
-    });
-    this.approvalEvents = createApprovalEvents({
-      showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
-      resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
-      updateToolEditApprovalBypassState:
-        callbacks.updateToolEditApprovalBypassState,
-    });
   }
 
   /**
-   * Setup all event bus listeners
+   * Setup all event bus listeners.
+   * Uses AbortController for cleanup - single dispose aborts all listeners.
    */
   setupEventListeners(): vscode.Disposable[] {
-    const disposables: vscode.Disposable[] = [];
-    disposables.push(
-      ...this.streamStatusEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.outputEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.usageEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    // Task group events must be registered before log events so buffered group
-    // replays run first. Otherwise replayed thinking logs land before their
-    // containers exist, leaving the progress board with orphaned banners.
-    disposables.push(
-      ...this.taskGroupEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.logEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(
-      ...this.todoEvents.register(bus, this.state, this.webviewUpdater),
-    );
-    disposables.push(...this.retryEvents.register(bus));
-    disposables.push(...this.approvalEvents.register(bus));
-    disposables.push(
-      new vscode.Disposable(
-        bus.on('extensionDeactivating', () =>
-          this.markAllRunningTasksAsCancelled(),
-        ),
-      ),
-    );
+    const controller = new AbortController();
+    const { signal } = controller;
+    const { state, webviewUpdater } = this;
 
-    return disposables;
+    // Register all handlers with shared signal - cleanup is automatic on abort
+    bus.on('setActiveStream', this.handleSetActiveStream, { signal });
+    bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
+    bus.on('setTaskState', this.handleSetTaskState, { signal });
+    bus.on('addTaskGroup', this.handleAddTaskGroup, { signal });
+    bus.on('updateTaskGroup', this.handleUpdateTaskGroup, { signal });
+    bus.on('extensionDeactivating', this.markAllRunningTasksAsCancelled, {
+      signal,
+    });
+
+    // Delegate to specialized modules
+    registerOutputEvents(bus, state, webviewUpdater, signal);
+    registerUsageEvents(bus, state, webviewUpdater, signal);
+    registerLogEvents(bus, state, webviewUpdater, signal);
+    registerTodoEvents(bus, state, webviewUpdater, signal);
+    registerRetryEvents(bus, this.uiCallbacks, signal);
+    registerApprovalEvents(bus, this.uiCallbacks, signal);
+
+    // Single disposable that cleans up everything
+    return [new vscode.Disposable(() => controller.abort())];
   }
+
+  // Event handlers - arrow functions to preserve `this`
+  private handleSetActiveStream = (
+    payload: ProgressEventPayloads['setActiveStream'],
+  ): void => {
+    withEventErrorHandling(
+      'StreamStatus',
+      'failed to handle setActiveStream',
+      async () => {
+        const { stream, session, isRemote, hasMultipleOutputs } = payload;
+        if (!stream) return;
+
+        const isStreamSwitch = this.state.activeStream !== stream;
+
+        await this.state.streamTabs.ensureStream(stream);
+        this.state.updateStreamHints(stream, {
+          sessionCategory: session?.agentCategory,
+          isRemote,
+          hasMultipleOutputs,
+        });
+
+        if (
+          session?.agentCategory &&
+          this.state.agentTypeFilter !== 'all' &&
+          this.state.agentTypeFilter !== session.agentCategory
+        ) {
+          this.state.agentTypeFilter = session.agentCategory;
+        }
+
+        this.state.activeStream = stream;
+        this.replayPendingTaskGroups(stream);
+
+        const status =
+          this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+
+        if (this.webviewUpdater.isAvailable()) {
+          this.webviewUpdater.updateAll(this.state, this._streamStatus);
+        }
+
+        this.setStreamStatus(stream, status);
+
+        if (this.webviewUpdater.isAvailable()) {
+          const activeRunId = this.refreshStreamSurface(stream, {
+            updateInstruction: false,
+            forceRebuild: isStreamSwitch,
+          });
+          this.sendInstructionUpdate(stream, activeRunId);
+        }
+      },
+    );
+  };
+
+  private handleUpdateStreamStatus = (
+    payload: ProgressEventPayloads['updateStreamStatus'],
+  ): void => {
+    withEventErrorHandling('StreamStatus', 'failed to handle updateStreamStatus', () =>
+      this.setStreamStatus(payload.stream, payload.status),
+    );
+  };
+
+  private handleSetTaskState = (
+    data: ProgressEventPayloads['setTaskState'],
+  ): void => {
+    withEventErrorHandling('StreamStatus', 'failed to handle setTaskState', () => {
+      const { streamTabId, executionId, taskState } = data;
+
+      this.state.setTaskState(streamTabId, taskState);
+      const sessionKind = taskState.agentConfig.session.agentCategory;
+
+      if (
+        this.state.activeStream === streamTabId &&
+        this.state.agentTypeFilter !== 'all' &&
+        this.state.agentTypeFilter !== sessionKind
+      ) {
+        this.state.agentTypeFilter = sessionKind;
+      }
+
+      if (executionId) {
+        this.state.setExecutionId(streamTabId, executionId);
+      }
+
+      if (this.state.activeStream === streamTabId) {
+        this.sendInstructionUpdate(streamTabId);
+      }
+
+      if (this.webviewUpdater.isAvailable()) {
+        const infos = buildStreamInfos(
+          this.state,
+          this._streamStatus,
+          this.state.agentTypeFilter,
+        );
+        this.webviewUpdater.updateStreams(
+          infos,
+          this.state.activeStream,
+          this.state.agentTypeFilter,
+        );
+      }
+    });
+  };
+
+  private handleAddTaskGroup = (
+    data: ProgressEventPayloads['addTaskGroup'],
+  ): void => {
+    withEventErrorHandling('TaskGroup', 'failed to handle addTaskGroup', async () => {
+      const { stream, ...group } = data;
+      const { id, parentGroupId } = group;
+
+      const hasStream = this.state.streamTabs.has(stream);
+      const addGroupPromise = this.state.taskGroups.addGroup(stream, id, group);
+
+      if (!parentGroupId) {
+        this.state.setActiveRunId(stream, id);
+      }
+
+      if (!hasStream) {
+        await this.initializeStreamForTaskGroup(stream);
+      }
+
+      if (this.webviewUpdater.isAvailable()) {
+        if (stream === this.state.activeStream) {
+          this.webviewUpdater.addTaskGroup(stream, group);
+        } else {
+          this.bufferTaskGroupForReplay(stream, group);
+        }
+      }
+
+      await addGroupPromise;
+    });
+  };
+
+  private handleUpdateTaskGroup = (
+    data: ProgressEventPayloads['updateTaskGroup'],
+  ): void => {
+    withEventErrorHandling('TaskGroup', 'failed to handle updateTaskGroup', async () => {
+      await this.state.taskGroups.updateGroup(data);
+
+      if (
+        this.webviewUpdater.isAvailable() &&
+        data.stream === this.state.activeStream
+      ) {
+        this.webviewUpdater.updateTaskGroup(data);
+      }
+    });
+  };
+
+  private markAllRunningTasksAsCancelled = (): void => {
+    for (const [stream, status] of this._streamStatus.entries()) {
+      if (status === STREAM_STATUS.RUNNING) {
+        this._streamStatus.set(stream, STREAM_STATUS.STOPPED);
+      }
+    }
+  };
 
   /**
    * Send instruction updates for the provided stream
@@ -381,24 +471,20 @@ export class ProgressEventHandler {
 
   /**
    * Replay any buffered task groups for a stream after it becomes active.
-   * Called by StreamStatusEvents after setActiveStream sets state.activeStream.
+   * Groups are only deleted after successful replay to preserve them if webview unavailable.
    */
-  private replayPendingTaskGroups(
-    stream: string,
-    updater: WebviewUpdater,
-  ): void {
+  private replayPendingTaskGroups(stream: string): void {
     const pending = this.pendingTaskGroups.get(stream);
     if (!pending || pending.length === 0) {
       return;
     }
 
-    this.logger.debug(
-      `Replaying ${pending.length} buffered task groups for stream ${stream}`,
-    );
-    for (const group of pending) {
-      updater.addTaskGroup(stream, group);
+    if (this.webviewUpdater.isAvailable()) {
+      for (const group of pending) {
+        this.webviewUpdater.addTaskGroup(stream, group);
+      }
+      this.pendingTaskGroups.delete(stream);
     }
-    this.pendingTaskGroups.delete(stream);
   }
 
   /**
@@ -441,17 +527,6 @@ export class ProgressEventHandler {
         forceRebuild: true,
       });
       this.sendInstructionUpdate(stream, activeRunId);
-    }
-  }
-
-  /**
-   * Mark all running tasks as cancelled (used during restart)
-   */
-  markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of this._streamStatus.entries()) {
-      if (status === STREAM_STATUS.RUNNING) {
-        this._streamStatus.set(stream, STREAM_STATUS.STOPPED);
-      }
     }
   }
 
