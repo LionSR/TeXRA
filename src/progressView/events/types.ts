@@ -9,9 +9,6 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 
-// Local imports
-import type { ErrorBoundaryFn } from './errorHandling';
-
 // ============================================================================
 // Event Bus Interface
 // ============================================================================
@@ -28,16 +25,8 @@ export interface ProgressEventBusLike {
 }
 
 // ============================================================================
-// Base Interfaces for Event Modules
+// Event Module Interfaces
 // ============================================================================
-
-/**
- * Base shared context for all event modules.
- * Provides pre-configured error boundary - modules don't need to create their own.
- */
-export interface BaseEventShared {
-  withErrorBoundary: ErrorBoundaryFn;
-}
 
 /**
  * Base event module interface for simple event handlers (bus only).
