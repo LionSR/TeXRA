@@ -11,6 +11,7 @@ import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -22,12 +23,8 @@ import type {
   StreamStatus,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
-import { registerOutputEvents } from './OutputEvents';
-import { registerUsageEvents } from './UsageEvents';
-import { registerLogEvents } from './LogEvents';
 import { registerRetryEvents, type RetryCallbacks } from './RetryEvents';
 import { registerApprovalEvents, type ApprovalCallbacks } from './ApprovalEvents';
-import { registerTodoEvents } from './TodoEvents';
 import { withEventErrorHandling } from './errorHandling';
 
 /**
@@ -65,9 +62,8 @@ export class ProgressEventHandler {
   setupEventListeners(): vscode.Disposable[] {
     const controller = new AbortController();
     const { signal } = controller;
-    const { state, webviewUpdater } = this;
 
-    // Register all handlers with shared signal - cleanup is automatic on abort
+    // Core stream/task events
     bus.on('setActiveStream', this.handleSetActiveStream, { signal });
     bus.on('updateStreamStatus', this.handleUpdateStreamStatus, { signal });
     bus.on('setTaskState', this.handleSetTaskState, { signal });
@@ -77,11 +73,22 @@ export class ProgressEventHandler {
       signal,
     });
 
-    // Delegate to specialized modules
-    registerOutputEvents(bus, state, webviewUpdater, signal);
-    registerUsageEvents(bus, state, webviewUpdater, signal);
-    registerLogEvents(bus, state, webviewUpdater, signal);
-    registerTodoEvents(bus, state, webviewUpdater, signal);
+    // Log events (inlined from LogEvents.ts)
+    bus.on('addLogMessage', this.handleAddLogMessage, { signal });
+    bus.on('updateLogMessage', this.handleUpdateLogMessage, { signal });
+
+    // Output events (inlined from OutputEvents.ts)
+    bus.on('addOutputFiles', this.handleAddOutputFiles, { signal });
+    bus.on('updateMissingOutputs', this.handleUpdateMissingOutputs, { signal });
+    bus.on('clearMissingOutputs', this.handleClearMissingOutputs, { signal });
+
+    // Usage events (inlined from UsageEvents.ts)
+    bus.on('updateStreamUsage', this.handleUpdateStreamUsage, { signal });
+
+    // Todo events (inlined from TodoEvents.ts)
+    bus.on('updateTodos', this.handleUpdateTodos, { signal });
+
+    // UI callback events (kept as separate modules - different signature)
     registerRetryEvents(bus, this.uiCallbacks, signal);
     registerApprovalEvents(bus, this.uiCallbacks, signal);
 
@@ -240,6 +247,184 @@ export class ProgressEventHandler {
       }
     }
   };
+
+  // ============================================================================
+  // Inlined Event Handlers (formerly separate modules)
+  // ============================================================================
+
+  /** Handle addLogMessage - inlined from LogEvents.ts */
+  private handleAddLogMessage = ({
+    stream,
+    logMessage,
+  }: ProgressEventPayloads['addLogMessage']): void => {
+    withEventErrorHandling('LogEvents', 'failed to handle addLogMessage', async () => {
+      const isNew = await this.state.streamTabs.addMessage(stream, logMessage);
+      if (isNew && this.webviewUpdater.isAvailable()) {
+        this.webviewUpdater.appendLogMessage(stream, logMessage);
+      }
+    });
+  };
+
+  /** Handle updateLogMessage - inlined from LogEvents.ts */
+  private handleUpdateLogMessage = ({
+    stream,
+    logMessage,
+  }: ProgressEventPayloads['updateLogMessage']): void => {
+    withEventErrorHandling('LogEvents', 'failed to handle updateLogMessage', async () => {
+      if (!this.state.streamTabs.has(stream)) return;
+
+      const messages = this.state.streamTabs.getMessages(stream);
+      const existing = messages.find((m) => m.id === logMessage.id);
+      if (!existing) return;
+
+      // Skip INTERNAL message updates
+      if (
+        existing.messageType === MESSAGE_TYPES.INTERNAL ||
+        logMessage.messageType === MESSAGE_TYPES.INTERNAL
+      ) {
+        return;
+      }
+
+      // Update fields if provided
+      if (logMessage.text !== undefined) existing.text = logMessage.text;
+      if (logMessage.messageType !== undefined)
+        existing.messageType = logMessage.messageType;
+      if (logMessage.level) existing.level = logMessage.level;
+      if (logMessage.timestamp !== undefined)
+        existing.timestamp = logMessage.timestamp;
+      if (logMessage.verbose !== undefined) existing.verbose = logMessage.verbose;
+      if (logMessage.data !== undefined) existing.data = logMessage.data;
+
+      await this.state.streamTabs.save();
+
+      if (
+        this.webviewUpdater.isAvailable() &&
+        stream === this.state.activeStream
+      ) {
+        this.webviewUpdater.updateLogMessage(stream, existing);
+      }
+    });
+  };
+
+  /** Handle addOutputFiles - inlined from OutputEvents.ts */
+  private handleAddOutputFiles = ({
+    stream,
+    storageKey,
+    filesByRound,
+  }: ProgressEventPayloads['addOutputFiles']): void => {
+    withEventErrorHandling('OutputEvents', 'failed to handle addOutputFiles', async () => {
+      await this.state.outputFiles.addFiles(stream, storageKey, filesByRound);
+      if (!this.webviewUpdater.isAvailable()) return;
+
+      const runFiles = this.state.outputFiles.getFiles(stream).get(storageKey);
+      const rounds = this.toRoundRecord(runFiles);
+      this.webviewUpdater.updateFiles(
+        stream,
+        rounds ? { runId: storageKey, rounds } : { runId: storageKey },
+      );
+    });
+  };
+
+  /** Handle updateMissingOutputs - inlined from OutputEvents.ts */
+  private handleUpdateMissingOutputs = ({
+    stream,
+    storageKey,
+    filesByRound,
+  }: ProgressEventPayloads['updateMissingOutputs']): void => {
+    withEventErrorHandling(
+      'OutputEvents',
+      'failed to handle updateMissingOutputs',
+      async () => {
+        await this.state.outputFiles.updateMissingOutputs(
+          stream,
+          storageKey,
+          filesByRound,
+        );
+        if (!this.webviewUpdater.isAvailable()) return;
+
+        const runMissing = this.state.outputFiles
+          .getMissingOutputs(stream)
+          .get(storageKey);
+        const rounds = this.toRoundRecord(runMissing);
+        this.webviewUpdater.updateMissingOutputs(
+          stream,
+          rounds ? { runId: storageKey, rounds } : { runId: storageKey },
+        );
+      },
+    );
+  };
+
+  /** Handle clearMissingOutputs - inlined from OutputEvents.ts */
+  private handleClearMissingOutputs = ({
+    stream,
+  }: ProgressEventPayloads['clearMissingOutputs']): void => {
+    withEventErrorHandling(
+      'OutputEvents',
+      'failed to handle clearMissingOutputs',
+      async () => {
+        await this.state.outputFiles.clearMissingOutputs(stream);
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
+        }
+      },
+    );
+  };
+
+  /** Handle updateStreamUsage - inlined from UsageEvents.ts */
+  private handleUpdateStreamUsage = ({
+    stream,
+    usage,
+    storageKey,
+  }: ProgressEventPayloads['updateStreamUsage']): void => {
+    withEventErrorHandling('UsageEvents', 'failed to handle updateStreamUsage', async () => {
+      const normalizedUsage: TokenUsageStats = {
+        inputTokens: Number(usage.inputTokens ?? 0),
+        outputTokens: Number(usage.outputTokens ?? 0),
+        cost: Number(usage.cost ?? 0),
+      };
+
+      await this.state.usageStats.setRunUsage(stream, storageKey, normalizedUsage);
+
+      if (
+        this.webviewUpdater.isAvailable() &&
+        stream === this.state.activeStream
+      ) {
+        this.webviewUpdater.updateRunUsage(stream, storageKey, normalizedUsage);
+      }
+    });
+  };
+
+  /** Handle updateTodos - inlined from TodoEvents.ts */
+  private handleUpdateTodos = ({
+    stream,
+    todos,
+  }: ProgressEventPayloads['updateTodos']): void => {
+    withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
+      this.state.setTodos(stream, todos);
+      if (
+        this.webviewUpdater.isAvailable() &&
+        stream === this.state.activeStream
+      ) {
+        this.webviewUpdater.updateTodos(stream, todos);
+      }
+    });
+  };
+
+  /** Convert Map<number, T[]> to Record<number, T[]> for webview (from OutputEvents.ts) */
+  private toRoundRecord<T>(
+    rounds?: Map<number, T[]>,
+  ): Record<number, T[]> | undefined {
+    return rounds && rounds.size > 0
+      ? Object.fromEntries(rounds.entries())
+      : undefined;
+  }
+
+  // ============================================================================
+  // Helper Methods
+  // ============================================================================
 
   /**
    * Send instruction updates for the provided stream
