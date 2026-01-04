@@ -12,7 +12,7 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
@@ -23,7 +23,6 @@ import { normalizeRunId } from '@common/constants/runIds';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
-  isToolUseTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
@@ -207,19 +206,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   /**
-   * Start a new execution with the same agent config.
-   * Note: For resuming paused tool-use sessions, use texra.resumeAgent instead.
+   * Resume a paused workflow/reflection session.
+   * Reuses the executionId so the flow picks up persisted state.
+   * Tool-use agents use the follow-up mechanism instead.
    */
   private async handleRunAgain(message: any): Promise<void> {
-    await this.startNewExecution(message.stream);
+    const streamId = message.stream as StreamTabId;
+    const taskState = this.provider.state.getTaskState(streamId);
+    if (!taskState) {
+      return;
+    }
+
+    // For workflow agents, resume by passing the same executionId
+    if (isWorkflowTaskState(taskState)) {
+      const executionId = this.provider.state.getExecutionId(streamId);
+      if (executionId) {
+        // Pass executionId to resume from persisted flow state
+        await safeExecuteCommand('texra.execute', [
+          { config: taskState.agentConfig, executionId },
+        ]);
+        return;
+      }
+    }
+
+    // Fall back to fresh execution (no executionId or tool-use agent)
+    await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
   }
 
   private async handleRunNew(message: any): Promise<void> {
-    await this.startNewExecution(message.stream);
-  }
-
-  private async startNewExecution(streamId: string): Promise<void> {
-    const taskState = this.provider.state.getTaskState(streamId);
+    const taskState = this.provider.state.getTaskState(message.stream);
     if (!taskState) {
       return;
     }
