@@ -25,6 +25,13 @@ interface ChannelContext {
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
 const previousStacks = new Map<string, string[]>();
 
+// Cache for initialized channels to avoid repeated registry.ensure() calls
+// This eliminates the overhead of Map lookup + string interpolation on every log
+const initializedChannels = new Map<
+  ChannelKey,
+  ReturnType<typeof registry.ensure>
+>();
+
 function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
   return `${isAgent ? 'agent' : 'default'}::${channel}`;
 }
@@ -118,19 +125,39 @@ function resolveActiveGroup(
   return context.stack.at(-1);
 }
 
+/**
+ * Get or create a cached channel entry.
+ * Single source of truth for channel initialization - eliminates repeated registry.ensure() calls.
+ */
+function getCachedEntry(
+  channel: string,
+  isAgent: boolean,
+): ReturnType<typeof registry.ensure> {
+  const key = getChannelKey(channel, isAgent);
+  let entry = initializedChannels.get(key);
+  if (!entry) {
+    entry = registry.ensure(channel, { isAgent });
+    initializedChannels.set(key, entry);
+  }
+  return entry;
+}
+
 function getTransport(
   channel: string,
   isAgent = false,
 ): VSCodeTransport | undefined {
-  return registry.getTransport(channel, { isAgent });
+  const key = getChannelKey(channel, isAgent);
+  return (
+    initializedChannels.get(key)?.transport ??
+    registry.getTransport(channel, { isAgent })
+  );
 }
 
 function getOrCreateTransport(
   channel: string,
   isAgent: boolean,
 ): VSCodeTransport {
-  const entry = registry.ensure(channel, { isAgent });
-  return entry.transport;
+  return getCachedEntry(channel, isAgent).transport;
 }
 
 function logWithGroup(
@@ -140,8 +167,7 @@ function logWithGroup(
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  const entry = registry.ensure(channel, { isAgent });
-  const { logger } = entry;
+  const { logger } = getCachedEntry(channel, isAgent);
   const activeGroupId = resolveActiveGroup(channel, options.groupId, isAgent);
 
   logger.log(level, message, {
@@ -152,7 +178,7 @@ function logWithGroup(
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  registry.ensure(channel, { isAgent });
+  getCachedEntry(channel, isAgent);
 }
 
 export function startGroup(
