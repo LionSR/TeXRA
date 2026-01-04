@@ -25,30 +25,6 @@ export interface ProgressEventBusLike {
 }
 
 // ============================================================================
-// Event Module Interfaces
-// ============================================================================
-
-/**
- * Base event module interface for simple event handlers (bus only).
- * Used by modules like ApprovalEvents, RetryEvents that don't need state/updater.
- */
-export interface EventModuleBase {
-  register(bus: ProgressEventBusLike): vscode.Disposable[];
-}
-
-/**
- * Stateful event module interface for handlers needing state and updater.
- * Used by modules like LogEvents, OutputEvents, UsageEvents, etc.
- */
-export interface StatefulEventModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
-
-// ============================================================================
 // Event Registration Helpers
 // ============================================================================
 

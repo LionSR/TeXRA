@@ -10,9 +10,6 @@ function serializeErrorForLog(error: unknown): Record<string, unknown> {
   return { error };
 }
 
-// Re-export shared logger for backward compatibility
-export { progressViewLogger as eventLogger };
-
 /**
  * Wraps an async event handler with error logging.
  * Single source of truth for event error handling.
