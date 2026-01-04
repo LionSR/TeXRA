@@ -133,11 +133,11 @@ async function handlePack(config: unknown) {
   showPackResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    bus.emit(
-      'clearMissingOutputs',
-      streamId ||
+    bus.emit('clearMissingOutputs', {
+      stream:
+        streamId ||
         getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
-    );
+    });
   }
 }
 
@@ -158,12 +158,11 @@ async function handlePackSingle(
   const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
   showPackResult(result, data.inputFile);
-  bus.emit(
-    'clearMissingOutputs',
-    getStreamTabId(data.agent, data.model, data.inputFile, {
+  bus.emit('clearMissingOutputs', {
+    stream: getStreamTabId(data.agent, data.model, data.inputFile, {
       useMultipleOutputs: false,
     }),
-  );
+  });
 }
 
 async function handlePackMultiple(
@@ -194,12 +193,11 @@ async function handlePackMultiple(
     data.outputFiles,
   );
   showPackResult(result, data.inputFile);
-  bus.emit(
-    'clearMissingOutputs',
-    getStreamTabId(data.agent, data.model, data.inputFile, {
+  bus.emit('clearMissingOutputs', {
+    stream: getStreamTabId(data.agent, data.model, data.inputFile, {
       useMultipleOutputs: true,
     }),
-  );
+  });
 }
 
 // --- Registration ---

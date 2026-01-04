@@ -178,7 +178,7 @@ export class ProgressEventHandler {
     }
 
     if (!stream) {
-      this.webviewUpdater.clearInstruction('');
+      this.webviewUpdater.updateInstruction('', null);
       return;
     }
 
@@ -205,15 +205,11 @@ export class ProgressEventHandler {
       void this.state.runInstructions.deleteRun(stream, normalizeRunId(runId));
     }
 
-    if (instructionUpdate) {
-      this.webviewUpdater.updateInstruction(
-        stream,
-        instructionUpdate,
-        sessionKind,
-      );
-    } else {
-      this.webviewUpdater.clearInstruction(stream);
-    }
+    this.webviewUpdater.updateInstruction(
+      stream,
+      instructionUpdate ?? null,
+      sessionKind,
+    );
   }
 
   /**
@@ -239,7 +235,7 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateUsage('', {});
       this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
       if (updateInstruction) {
-        this.webviewUpdater.clearInstruction('');
+        this.webviewUpdater.updateInstruction('', null);
       }
       return null;
     }

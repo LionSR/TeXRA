@@ -2,16 +2,15 @@
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-// Local imports - constants
 import { TODO_STATUS } from '@eventBus/schemas';
 
 // Local file imports
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
 /**
  * Shared context for TodoEvents module.
@@ -43,22 +42,12 @@ export function createTodoEvents(shared: TodoEventsShared): TodoEventsModule {
       `updateTodos: stream=${data.stream}, count=${todoCount}, inProgress=${inProgress}`,
     );
 
-    // Note: Unlike TaskGroupEvents which uses async handlers for stream initialization,
-    // TodoEvents uses sync handlers since there are no async operations needed.
-    // The error boundary still catches thrown errors synchronously.
     withErrorBoundary('failed to handle updateTodos', () => {
       const { stream, todos } = data;
-
-      // Always store todos in state for persistence across stream switches
       state.setTodos(stream, todos);
-
-      // Send to webview if it's the active stream and webview is available
-      const shouldSendToWebview =
-        updater.isAvailable() && stream === state.activeStream;
-
-      if (shouldSendToWebview) {
+      sendIfActive(stream, state, updater, () => {
         updater.updateTodos(stream, todos);
-      }
+      });
     });
   };
 
