@@ -86,8 +86,9 @@ export interface AgentResolveOptions {
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
  *
- * Note: Stream ID is accessed via executionContext.streamId (single source of truth).
- * Resume scenarios use snapshot.streamId directly, not from this context.
+ * Note: executionContext is included for flow runners that need its methods
+ * (updateStorageKey, hasInitialStorageKey, storageKey). Services/nodes use
+ * the flattened fields (logger, streamId, executionId) directly.
  */
 interface ResolvedAgentBase {
   modelHandler: IModelHandler<any, any, any, any, any>;
@@ -330,7 +331,7 @@ function setupFlowUIState(
   ctx: ResolvedAgentBase,
   streamTabIdOverride?: StreamTabId,
 ): void {
-  const streamTabId = streamTabIdOverride ?? ctx.executionContext.streamId;
+  const streamTabId = streamTabIdOverride ?? ctx.streamId;
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 

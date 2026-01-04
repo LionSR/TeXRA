@@ -34,7 +34,6 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
@@ -70,9 +69,6 @@ export interface BaseFlowContextInit<C = unknown> {
 
   /** Execution identifier */
   executionId: ExecutionId;
-
-  /** Execution context (for methods: updateStorageKey, hasInitialStorageKey) */
-  executionContext: AgentExecutionContext;
 
   /** User variable channels for template rendering */
   userVarChannels: UserVariableChannels;
