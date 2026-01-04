@@ -43,7 +43,7 @@ export function applyLatexQuotesFormatting(text: string): string {
     let tikzCounter = 0;
 
     // Replace tikzpicture environments with placeholders
-    const contentWithoutTikz = documentContent.replace(
+    const contentWithoutTikz = documentContent.replaceAll(
       tikzRegex,
       (tikzMatchStr: string) => {
         const placeholder = `__TIKZ_PLACEHOLDER_${tikzCounter++}__`;
@@ -56,7 +56,7 @@ export function applyLatexQuotesFormatting(text: string): string {
 
     // Process quotes in the remaining content
     let replacementCount = 0;
-    const processedContent = contentWithoutTikz.replace(
+    const processedContent = contentWithoutTikz.replaceAll(
       /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
       (_match, quotedText) => {
         replacementCount++;
@@ -110,13 +110,13 @@ export function escapeTextttUnderscores(text: string): string {
   const textttRegex = /\\texttt\{([^}]*)\}/g;
   let totalReplacements = 0;
 
-  const processedText = text.replace(
+  const processedText = text.replaceAll(
     textttRegex,
     (_match, rawContent: string) => {
       let replacementCount = 0;
       // (?<!\\)_ matches underscore not preceded by backslash
       // This ensures we don't double-escape already escaped underscores
-      const processedContent = rawContent.replace(/(?<!\\)_/g, () => {
+      const processedContent = rawContent.replaceAll(/(?<!\\)_/g, () => {
         replacementCount += 1;
         totalReplacements += 1;
         return '\\_';
@@ -337,13 +337,13 @@ export function replaceMathUnicode(text: string): string {
       const replacedContent = Object.entries(mathUnicodeMap)
         .reduce(
           (content, [unicode, latex]) =>
-            content.replace(new RegExp(unicode, 'g'), latex),
+            content.replaceAll(new RegExp(unicode, 'g'), latex),
           mathContent,
         )
         // Replace HTML subscript tags with LaTeX subscript syntax
-        .replace(/<sub>(.*?)<\/sub>/g, '_{$1}')
+        .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
         // Replace HTML superscript tags with LaTeX superscript syntax
-        .replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+        .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
 
       // Replace the original math content with the processed one
       if (replacedContent !== mathContent) {
@@ -360,17 +360,17 @@ export function replaceMathUnicode(text: string): string {
 
   // Also handle inline math with $ ... $
   const inlineMathPattern = /\$(.*?)\$/g;
-  text = text.replace(inlineMathPattern, (_match, p1) => {
+  text = text.replaceAll(inlineMathPattern, (_match, p1) => {
     // Replace Unicode characters with LaTeX commands, then HTML sub/sup tags
     const content = Object.entries(mathUnicodeMap)
       .reduce(
-        (c, [unicode, latex]) => c.replace(new RegExp(unicode, 'g'), latex),
+        (c, [unicode, latex]) => c.replaceAll(new RegExp(unicode, 'g'), latex),
         p1 as string,
       )
       // Replace HTML subscript tags with LaTeX subscript syntax
-      .replace(/<sub>(.*?)<\/sub>/g, '_{$1}')
+      .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
       // Replace HTML superscript tags with LaTeX superscript syntax
-      .replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
+      .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
 
     return `$${content}$`;
   });
@@ -385,17 +385,17 @@ export function replaceMathUnicode(text: string): string {
 export function fixLatexQuoteIssues(text: string): string {
   // ''text'' -> ``text''
   // But avoid modifying text that's already in the format ``text''
-  text = text.replace(/(?<!`)''([a-zA-Z\s]{3,16})''(?!`)/g, "``$1''");
+  text = text.replaceAll(/(?<!`)''([a-zA-Z\s]{3,16})''(?!`)/g, "``$1''");
 
   // 'text' -> `text'
   // Only for single quotes that aren't already in the format `text'
-  text = text.replace(/(?<![\w`])'([a-zA-Z\s]{3,16})'(?![\w'])/g, "`$1'");
+  text = text.replaceAll(/(?<![\w`])'([a-zA-Z\s]{3,16})'(?![\w'])/g, "`$1'");
 
   // Move punctuation outside closing double quotes
-  text = text.replace(/(``[a-zA-Z\s]{3,16})([.,;:])('')(.*)/g, "$1''$2$4");
+  text = text.replaceAll(/(``[a-zA-Z\s]{3,16})([.,;:])('')(.*)/g, "$1''$2$4");
 
   // Move punctuation outside closing single quotes
-  text = text.replace(/(`[a-zA-Z\s]{3,16})([.,;:])(')/g, "$1'$2");
+  text = text.replaceAll(/(`[a-zA-Z\s]{3,16})([.,;:])(')/g, "$1'$2");
 
   return text;
 }
@@ -421,5 +421,5 @@ export function wrapCritiqueInAlign(text: string): string {
     }
     return block;
   }
-  return text.replace(alignRegex, wrapCommands);
+  return text.replaceAll(alignRegex, wrapCommands);
 }

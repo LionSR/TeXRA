@@ -70,7 +70,7 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Get all keys */
   keys(): K[] {
-    return Array.from(this.items.keys());
+    return [...this.items.keys()];
   }
 
   /** Replace all entries (used during loading) */
@@ -110,7 +110,7 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Save current state to persistence */
   async save(): Promise<void> {
-    const serialized = Array.from(this.items.entries()).map(([key, value]) => [
+    const serialized = [...this.items.entries()].map(([key, value]) => [
       key,
       this.serialize(value, key),
     ]);

@@ -81,7 +81,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
         `${fileBaseName}.tex.bak`,
         `${fileBaseName}.bak*`,
         `${fileBaseName}.bak`,
-      ].map((pattern) => path.join(fileDir, pattern).replace(/\\/g, '/'));
+      ].map((pattern) => path.join(fileDir, pattern).replaceAll('\\', '/'));
 
       logger.debug(
         CHANNEL,

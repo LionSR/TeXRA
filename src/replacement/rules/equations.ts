@@ -47,15 +47,15 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // ===== Grouped backslash fixes =====
     // Use the new grouped helper to organize the backslash fixes logically
     const groupedBackslashPatterns = generateGroupedBackslashFixes({
-      mathOperators: MATH_OPERATORS.concat(['pi', 'bna']),
-      greekLetters: GREEK_LETTERS.concat([
+      mathOperators: [...MATH_OPERATORS, 'pi', 'bna'],
+      greekLetters: [...GREEK_LETTERS, 
         'partial',
         'Delta',
         'Gamma',
         'Lambda',
         'Sigma',
         'Omega',
-      ]),
+      ],
       delimiters: 'left right left( right( left[ right['.split(' '),
       mathCommands: 'frac sum_ prod_ int_ oint_ nabla'.split(' '),
       integrals: 'int iint iiint oint ooint ooooint'.split(' '),
@@ -87,7 +87,7 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // \a_ -> a_
     // \a^ -> a^
     // \x^ -> x^ [this should not be included]
-    const letters = 'abcdefghijklmnopqrstuvwyz'.split('');
+    const letters = [...'abcdefghijklmnopqrstuvwyz'];
     letters.forEach((letter) => {
       patterns[`\\${letter}_`] = `${letter}_`;
       patterns[`\\${letter}^`] = `${letter}^`;

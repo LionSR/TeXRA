@@ -39,8 +39,8 @@ export class DiffFileProcessor {
       'g',
     );
 
-    return content.replace(starEnvRegex, (_match, envName, envContent) => {
-      const cleanContent = envContent.replace(/\\label\{[^}]*\}/g, '');
+    return content.replaceAll(starEnvRegex, (_match, envName, envContent) => {
+      const cleanContent = envContent.replaceAll(/\\label\{[^}]*\}/g, '');
       return `\\begin{${envName}}${cleanContent}\\end{${envName}}`;
     });
   }

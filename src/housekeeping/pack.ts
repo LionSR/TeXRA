@@ -99,7 +99,7 @@ export async function runPackSingle(
           : ''),
     );
 
-    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+    const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
     outputFolder =
       outputFolder ||
       path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
@@ -172,7 +172,7 @@ export async function runPackMultiple(
   const baseName = path.parse(fileToPack).name;
   const outputDir = path.dirname(fileToPack);
 
-  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+  const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
   const commonOutputFolder = path.join(
     outputDir,
     HISTORY_DIR,
