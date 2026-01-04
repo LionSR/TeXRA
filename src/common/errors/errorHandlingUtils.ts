@@ -30,6 +30,40 @@ import * as vscode from 'vscode';
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
+// ============================================================================
+// FileType Constants (platform-agnostic)
+// ============================================================================
+
+/**
+ * Platform-agnostic file type constants.
+ * Values match vscode.FileType for compatibility.
+ *
+ * Use these instead of importing vscode.FileType directly to keep
+ * agent core logic platform-agnostic.
+ */
+export const FileType = {
+  Unknown: 0,
+  File: 1,
+  Directory: 2,
+  SymbolicLink: 64,
+} as const;
+
+export type FileTypeValue = (typeof FileType)[keyof typeof FileType];
+
+/**
+ * Check if a file type value represents a regular file.
+ */
+export function isFile(type: number): boolean {
+  return type === FileType.File;
+}
+
+/**
+ * Check if a file type value represents a directory.
+ */
+export function isDirectory(type: number): boolean {
+  return type === FileType.Directory;
+}
+
 /**
  * Valid documentation identifiers for error messages.
  * This ensures type safety when referencing documentation sections.

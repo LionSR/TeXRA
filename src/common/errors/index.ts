@@ -9,6 +9,11 @@ export {
   showLoggedMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
+  // FileType utilities for platform-agnostic file operations
+  FileType,
+  FileTypeValue,
+  isFile,
+  isDirectory,
 } from './errorHandlingUtils';
 export {
   ProviderHttpErrorDetails,
