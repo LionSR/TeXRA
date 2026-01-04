@@ -5,23 +5,14 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   createStatefulEventDisposable,
-  type ProgressEventBusLike,
+  sendIfActive,
+  type BaseEventShared,
+  type StatefulEventModule,
 } from './types';
-import type { BaseEventShared, StatefulEventModule } from './types';
 
-/**
- * Shared context for LogEvents module.
- * Uses BaseEventShared which provides withErrorBoundary.
- */
-type LogEventsShared = BaseEventShared;
-
-/**
- * LogEvents module interface.
- * Uses StatefulEventModule pattern for state/updater access.
- */
 export type LogEventsModule = StatefulEventModule;
 
-export function createLogEvents(shared: LogEventsShared): LogEventsModule {
+export function createLogEvents(shared: BaseEventShared): LogEventsModule {
   const { withErrorBoundary } = shared;
 
   const handleAddLogMessage = (
@@ -78,9 +69,9 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       await state.streamTabs.save();
 
-      if (updater.isAvailable() && stream === state.activeStream) {
+      sendIfActive(stream, state, updater, () => {
         updater.updateLogMessage(stream, existing);
-      }
+      });
     });
   };
 
