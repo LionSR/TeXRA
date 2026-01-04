@@ -83,7 +83,7 @@ export async function maybeSaveDebugObject({
   }
 
   const { logger, modelName, executionId, groupId } = context;
-  const activeGroupId = groupId ?? logger.withCurrentGroup((id) => id);
+  const activeGroupId = groupId ?? logger.getCurrentGroupId();
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
   const fileBase =

@@ -460,7 +460,7 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     const services = this.services;
     const { workspace } = services;
-    const groupId = services.logger.withCurrentGroup((id) => id);
+    const groupId = services.logger.getCurrentGroupId();
 
     // Process thinking block (logging only, state stored in workspace)
     const thinking = services.modelHandler.processThinkingBlock(
@@ -892,7 +892,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
   ): Promise<string | undefined> {
     const services = this.services;
     const { workspace } = services;
-    const groupId = services.logger.withCurrentGroup((id) => id);
+    const groupId = services.logger.getCurrentGroupId();
 
     if (execRes.kind === 'skipped') {
       if (execRes.interrupted) {
