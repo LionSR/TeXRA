@@ -1,14 +1,12 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type {
-  BaseEventShared,
-  EventModuleBase,
-  ProgressEventBusLike,
+import {
+  createEventDisposable,
+  type BaseEventShared,
+  type EventModuleBase,
+  type ProgressEventBusLike,
 } from './types';
 
 /**
@@ -40,20 +38,16 @@ export function createRetryEvents(
   const { withErrorBoundary } = shared;
 
   return {
-    register(bus: ProgressEventBusLike): vscode.Disposable[] {
+    register(bus: ProgressEventBusLike) {
       return [
-        new vscode.Disposable(
-          bus.on('showRetryRequest', (payload) =>
-            withErrorBoundary('failed to show retry request', () =>
-              shared.showRetryRequest(payload),
-            ),
+        createEventDisposable(bus, 'showRetryRequest', (payload) =>
+          withErrorBoundary('failed to show retry request', () =>
+            shared.showRetryRequest(payload),
           ),
         ),
-        new vscode.Disposable(
-          bus.on('resolveRetryRequest', (payload) =>
-            withErrorBoundary('failed to resolve retry request', () =>
-              shared.resolveRetryRequest(payload.streamId),
-            ),
+        createEventDisposable(bus, 'resolveRetryRequest', (payload) =>
+          withErrorBoundary('failed to resolve retry request', () =>
+            shared.resolveRetryRequest(payload.streamId),
           ),
         ),
       ];
