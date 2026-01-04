@@ -42,9 +42,15 @@ export function createOutputEvents(
           updater,
           ({ stream, storageKey, filesByRound }) => {
             withErrorBoundary('failed to handle addOutputFiles', async () => {
-              await state.outputFiles.addFiles(stream, storageKey, filesByRound);
+              await state.outputFiles.addFiles(
+                stream,
+                storageKey,
+                filesByRound,
+              );
               if (!updater.isAvailable()) return;
-              const runFiles = state.outputFiles.getFiles(stream).get(storageKey);
+              const runFiles = state.outputFiles
+                .getFiles(stream)
+                .get(storageKey);
               const rounds = toRoundRecord(runFiles);
               updater.updateFiles(
                 stream,
@@ -59,22 +65,27 @@ export function createOutputEvents(
           state,
           updater,
           ({ stream, storageKey, filesByRound }) => {
-            withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-              await state.outputFiles.updateMissingOutputs(
-                stream,
-                storageKey,
-                filesByRound,
-              );
-              if (!updater.isAvailable()) return;
-              const runMissing = state.outputFiles
-                .getMissingOutputs(stream)
-                .get(storageKey);
-              const rounds = toRoundRecord(runMissing);
-              updater.updateMissingOutputs(
-                stream,
-                rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-              );
-            });
+            withErrorBoundary(
+              'failed to handle updateMissingOutputs',
+              async () => {
+                await state.outputFiles.updateMissingOutputs(
+                  stream,
+                  storageKey,
+                  filesByRound,
+                );
+                if (!updater.isAvailable()) return;
+                const runMissing = state.outputFiles
+                  .getMissingOutputs(stream)
+                  .get(storageKey);
+                const rounds = toRoundRecord(runMissing);
+                updater.updateMissingOutputs(
+                  stream,
+                  rounds
+                    ? { runId: storageKey, rounds }
+                    : { runId: storageKey },
+                );
+              },
+            );
           },
         ),
         createStatefulEventDisposable(
@@ -83,12 +94,15 @@ export function createOutputEvents(
           state,
           updater,
           (stream) => {
-            withErrorBoundary('failed to handle clearMissingOutputs', async () => {
-              await state.outputFiles.clearMissingOutputs(stream);
-              if (state.activeStream === stream && updater.isAvailable()) {
-                updater.updateMissingOutputs(stream, { reset: true });
-              }
-            });
+            withErrorBoundary(
+              'failed to handle clearMissingOutputs',
+              async () => {
+                await state.outputFiles.clearMissingOutputs(stream);
+                if (state.activeStream === stream && updater.isAvailable()) {
+                  updater.updateMissingOutputs(stream, { reset: true });
+                }
+              },
+            );
           },
         ),
       ];
