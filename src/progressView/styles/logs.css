@@ -261,7 +261,7 @@
 
 /* Generated files list - inside vscode-collapsible body */
 .files-container {
-  padding: var(--spacing-small);
+  padding: 0;
   font-size: var(--vscode-editor-font-size);
   overflow-y: auto;
   max-height: var(--height-large);
@@ -339,17 +339,22 @@
   margin-left: var(--spacing-tiny);
 }
 
-.round-group {
-  margin-bottom: var(--spacing-medium);
+/* Round collapsible - vscode-collapsible for workflow mode */
+.round-collapsible {
+  border-top: 1px solid var(--color-border);
 }
 
-.round-header {
-  font-weight: bold;
-  margin-top: var(--spacing-medium);
-  margin-bottom: var(--spacing-small);
-  padding: var(--spacing-tiny) var(--spacing-small);
-  background-color: var(--vscode-sideBarSectionHeader-background);
-  border-radius: var(--border-radius-small);
+.round-collapsible:first-child {
+  border-top: none;
+}
+
+.round-collapsible::part(header) {
+  padding: var(--spacing-tiny) 0;
+  font-size: var(--font-size-sm);
+}
+
+.round-collapsible::part(body) {
+  padding: 0;
 }
 
 .added {
