@@ -224,8 +224,8 @@ function assertPreparedState(
  * 2. All initialization happens via this.services, not shared state
  * 3. The work done in exec() uses services, not shared state access
  *
- * cycleOptions is NOT stored in state (non-serializable). It's rebuilt
- * by CycleNode using buildCycleOptions().
+ * Cycle options are NOT stored in state (non-serializable). CycleNode
+ * spreads parent services directly when creating the cycle flow.
  */
 class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
