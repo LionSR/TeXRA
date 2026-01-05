@@ -141,9 +141,13 @@ async function retrieveToolUseResumeData(
       return null;
     }
 
-    const parseResult = ToolUseFlowRecordStateSchema.safeParse(flowRecord.shared);
+    const parseResult = ToolUseFlowRecordStateSchema.safeParse(
+      flowRecord.shared,
+    );
     if (!parseResult.success) {
-      logger.warn(`Invalid flow record structure for execution: ${executionId}`);
+      logger.warn(
+        `Invalid flow record structure for execution: ${executionId}`,
+      );
       return null;
     }
 
@@ -175,9 +179,12 @@ async function retrieveToolUseResumeData(
     logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
     return { type: 'toolUse', snapshot: snapshotResult.data };
   } catch (error) {
-    logger.error(`Failed to retrieve tool-use resume data for stream: ${streamId}`, {
-      data: error,
-    });
+    logger.error(
+      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+      {
+        data: error,
+      },
+    );
     return null;
   }
 }
@@ -197,13 +204,17 @@ async function retrieveWorkflowResumeData(
     const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
 
     if (!flowRecord?.shared) {
-      logger.warn(`No flow record found for workflow execution: ${executionId}`);
+      logger.warn(
+        `No flow record found for workflow execution: ${executionId}`,
+      );
       return null;
     }
 
     // Minimal validation - just verify essential fields exist.
     // Full state validation happens when the flow actually resumes.
-    const parseResult = WorkflowFlowRecordStateSchema.safeParse(flowRecord.shared);
+    const parseResult = WorkflowFlowRecordStateSchema.safeParse(
+      flowRecord.shared,
+    );
     if (!parseResult.success) {
       logger.warn(`Invalid workflow flow record for execution: ${executionId}`);
       return null;
@@ -218,9 +229,12 @@ async function retrieveWorkflowResumeData(
       executionId,
     };
   } catch (error) {
-    logger.error(`Failed to retrieve workflow resume data for stream: ${streamId}`, {
-      data: error,
-    });
+    logger.error(
+      `Failed to retrieve workflow resume data for stream: ${streamId}`,
+      {
+        data: error,
+      },
+    );
     return null;
   }
 }

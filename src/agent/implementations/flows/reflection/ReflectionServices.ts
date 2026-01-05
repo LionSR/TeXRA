@@ -30,8 +30,9 @@ import type { BaseFlowContextInit } from '../common/BaseFlowServices';
  * - runStage: Parent logging stage for round stages (runtime-only)
  * - Configuration-driven behavior delegates
  */
-export interface ReflectionServices<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface ReflectionServices<
+  C = unknown,
+> extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
   /** Output handler for file processing and artifacts */

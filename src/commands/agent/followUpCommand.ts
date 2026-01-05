@@ -38,7 +38,9 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
     currentStatus === STREAM_STATUS.RESUMING ||
     currentStatus === STREAM_STATUS.RUNNING
   ) {
-    logger.debug(`Stream ${streamId} already ${currentStatus}, skipping auto-resume`);
+    logger.debug(
+      `Stream ${streamId} already ${currentStatus}, skipping auto-resume`,
+    );
     return false;
   }
 
@@ -79,13 +81,18 @@ async function tryAutoResume(streamId: StreamTabId): Promise<boolean> {
   // Note: Tool-use and workflow have different resume semantics:
   // - Tool-use: resumeAgent returns { success: boolean } for explicit result checking
   // - Workflow: execute returns void and throws on failure (async fire-and-forget)
-  logger.info(`Auto-resuming ${resumeData.type} session for stream: ${streamId}`);
+  logger.info(
+    `Auto-resuming ${resumeData.type} session for stream: ${streamId}`,
+  );
   try {
     if (resumeData.type === 'toolUse') {
       // Tool-use: pass snapshot to resumeAgent command, validate result with schema
-      const rawResult = await vscode.commands.executeCommand('texra.resumeAgent', {
-        snapshot: resumeData.snapshot,
-      });
+      const rawResult = await vscode.commands.executeCommand(
+        'texra.resumeAgent',
+        {
+          snapshot: resumeData.snapshot,
+        },
+      );
       const parseResult = ResumeAgentResultSchema.safeParse(rawResult);
       return parseResult.success && parseResult.data.success;
     } else {
@@ -125,9 +132,7 @@ async function handleFollowUpResult(
         const resumed = await tryAutoResume(streamId);
         if (!resumed) {
           // Fallback: show message if auto-resume fails
-          await showInfoMessage(
-            'Message queued. Click Resume to process it.',
-          );
+          await showInfoMessage('Message queued. Click Resume to process it.');
         }
       }
       // For 'resuming' reason, message is queued for the in-progress resume
