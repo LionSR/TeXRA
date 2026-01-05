@@ -184,7 +184,9 @@ export class UsageMonitor {
       );
 
       // Relay billing should only reflect the current round's net tokens and cost
-      // rather than cumulative history.
+      // rather than cumulative history. Downstream dashboards should treat each
+      // entry as a single round; if cumulative views are needed, aggregate by
+      // streamId/task.
       const roundInputTokens =
         latestUsage?.inputTokens ?? totals.totalInputTokens;
       const roundOutputTokens =
@@ -200,15 +202,9 @@ export class UsageMonitor {
         roundInputTokens - roundCachedInputTokens,
       );
 
-      const cachedTokenCost =
-        (roundCachedInputTokens *
-          this.modelInfo.config.inputPrice *
-          this.modelInfo.capabilities.cacheDiscountFactor) /
-        1e6;
-
-      const relayCost = usedRelay
-        ? Math.max(0, roundCost - cachedTokenCost)
-        : roundCost;
+      // roundCost already includes any cache discounts from the provider;
+      // avoid double-subtracting cached tokens here.
+      const relayCost = roundCost;
 
       UsageLogService.log({
         model: config.fullName,
