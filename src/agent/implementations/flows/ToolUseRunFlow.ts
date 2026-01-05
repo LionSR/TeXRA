@@ -335,8 +335,17 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CycleNodePrepResult): Promise<CycleExecResult> {
-    // Handle skip (resume case) - pure decision, no side effects
+    // Handle skip (resume case) - emit recovered todos before skipping
     if (prepRes.shouldSkip) {
+      // Emit recovered todos to restore progress view UI after reload
+      const recoveredTodos = prepRes.workspaceState.todos.todos;
+      if (recoveredTodos.length > 0) {
+        bus.emit('updateTodos', {
+          stream: this.services.streamId,
+          executionId: this.services.executionId,
+          todos: recoveredTodos,
+        });
+      }
       return { kind: 'skipped' };
     }
 
