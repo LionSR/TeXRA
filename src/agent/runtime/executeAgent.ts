@@ -64,8 +64,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
+import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
@@ -104,6 +106,8 @@ interface ResolvedAgentBase extends StorageKeyManager {
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
+  /** Parent stage for flow execution. Init stage is a child of this. */
+  runStage: AgentLogStage;
 }
 
 // ============================================================================
@@ -237,9 +241,9 @@ async function resolveAgentBase(
   modelHandler.setAgentType(setting.agentType);
   modelHandler.setLogger(agentLogger);
 
-  // Emit setActiveStream BEFORE Init stage creation.
+  // Emit setActiveStream BEFORE stage creation.
   // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
-  // preventing the race condition where Init groups are dropped.
+  // preventing the race condition where groups are dropped.
   bus.emit('setActiveStream', {
     stream: streamId,
     session: sessionDescriptor,
@@ -247,9 +251,34 @@ async function resolveAgentBase(
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
   });
 
-  // 4. Build user variable channels (replaces agent.init() logic)
-  // Wrap in "Init" stage so file loading logs are properly grouped
-  const initStage = await agentLogger.stage('Init');
+  // 4. Define mutable storage key with callbacks
+  // Initial value is executionId (normalized); updated to runStage.id after stage creation
+  const initialStorageKey = normalizeRunId(executionId);
+  let storageKey: StorageKey = initialStorageKey;
+  const getStorageKey = () => storageKey;
+  const hasInitialStorageKey = () => storageKey === initialStorageKey;
+  const updateStorageKey = (key: StorageKey) => {
+    if (!hasInitialStorageKey()) {
+      agentLogger.warn(
+        `Storage key already set to ${storageKey}, updating to ${key}. This may indicate a bug.`,
+      );
+    }
+    storageKey = key;
+  };
+
+  // 5. Create Run stage FIRST - this is the single top-level session group.
+  // Both Init and round stages (r0, r1, etc.) will be children of this stage.
+  // This ensures the Sessions dropdown shows only ONE entry per execution.
+  const runStage = await agentLogger.stage(`Run: ${config.agent}`);
+
+  // Update storage key to match the run stage ID (for file storage organization)
+  if (runStage.id && hasInitialStorageKey()) {
+    updateStorageKey(normalizeRunId(runStage.id));
+  }
+
+  // 6. Build user variable channels (replaces agent.init() logic)
+  // Init stage is a CHILD of runStage so it appears in the same session.
+  const initStage = await runStage.stage('Init');
   // Use initStage.run() to ensure buildUserVars executes within the stage's
   // group context - this makes file loading logs appear under the Init group
   const baseVars = await initStage.run(() =>
@@ -271,22 +300,7 @@ async function resolveAgentBase(
     transient: { ...baseVars },
   };
 
-  // 5. Define mutable storage key with callbacks
-  // Initial value is executionId (normalized); workflow agents update it to task group ID
-  const initialStorageKey = normalizeRunId(executionId);
-  let storageKey: StorageKey = initialStorageKey;
-  const getStorageKey = () => storageKey;
-  const hasInitialStorageKey = () => storageKey === initialStorageKey;
-  const updateStorageKey = (key: StorageKey) => {
-    if (!hasInitialStorageKey()) {
-      agentLogger.warn(
-        `Storage key already set to ${storageKey}, updating to ${key}. This may indicate a bug.`,
-      );
-    }
-    storageKey = key;
-  };
-
-  // 6. Create usage monitor for tracking API usage
+  // 7. Create usage monitor for tracking API usage
   // Pass only the minimal model info needed (capabilities + config subset)
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
@@ -324,6 +338,7 @@ async function resolveAgentBase(
     updateStorageKey,
     userVarChannels,
     usageMonitor,
+    runStage,
   };
 }
 
@@ -575,32 +590,42 @@ export async function executeAgent(
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
       const interruptManager = new InterruptManager();
-      let flowStatus: 'error' | 'stopped';
+      let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
-      if (setting.agentType === 'toolUse') {
-        // Tool-use flow execution
-        const result = await runToolUseFlow({
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-          setting: ctx.setting as AgentToolUseSetting,
-        });
-        flowStatus = result.status;
-      } else {
-        // Reflection flow execution (direct/CoT/workflow)
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-          setting: ctx.setting as AgentWorkflowSetting,
-        });
-        flowStatus = result.status;
+      try {
+        if (setting.agentType === 'toolUse') {
+          // Tool-use flow execution
+          const result = await runToolUseFlow({
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+            setting: ctx.setting as AgentToolUseSetting,
+          });
+          flowStatus = result.status;
+        } else {
+          // Reflection flow execution (direct/CoT/workflow)
+          // Pass runStage as parentStage so r0, r1 become children of it
+          const result = await runReflectionFlow({
+            ...ctx,
+            ...interruptManager.asFlowInput(),
+            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+            setting: ctx.setting as AgentWorkflowSetting,
+            parentStage: ctx.runStage,
+          });
+          flowStatus = result.status;
+        }
+      } finally {
+        // End the runStage since we created it in resolveAgentBase
+        // (runReflectionFlow won't end it when parentStage is provided)
+        ctx.runStage.end(flowStatus);
       }
 
       updateFlowStatus(streamTabId, flowStatus);
       logger.debug(`Task completed with status: ${flowStatus}`);
     });
   } catch (err) {
+    // End the runStage with error status on exception
+    ctx.runStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(err, agentName, streamTabId, agentLogger);
   }
@@ -651,6 +676,7 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const interruptManager = new InterruptManager();
+      let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
       // Create merge-specific output file location getter
       const fileService = new TaskRunFileService(executionId);
@@ -660,19 +686,29 @@ export async function executeMergeAgent(
         fileService,
       );
 
-      // Run reflection flow with custom file naming
-      const result = await runReflectionFlow({
-        ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-        setting: ctx.setting as AgentWorkflowSetting,
-        getOutputFileLocation,
-      });
+      try {
+        // Run reflection flow with custom file naming
+        // Pass runStage as parentStage so r0, r1 become children of it
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+          setting: ctx.setting as AgentWorkflowSetting,
+          getOutputFileLocation,
+          parentStage: ctx.runStage,
+        });
+        flowStatus = result.status;
+      } finally {
+        // End the runStage since we created it in resolveAgentBase
+        ctx.runStage.end(flowStatus);
+      }
 
-      updateFlowStatus(streamTabId, result.status);
-      logger.debug(`Task completed with status: ${result.status}`);
+      updateFlowStatus(streamTabId, flowStatus);
+      logger.debug(`Task completed with status: ${flowStatus}`);
     });
   } catch (err) {
+    // End the runStage with error status on exception
+    ctx.runStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(err, 'merge', streamTabId, agentLogger);
   }
@@ -722,24 +758,33 @@ export async function resumeToolUseFromSnapshot(
   }
 
   const interruptManager = new InterruptManager();
+  let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
     setupFlowUIState(ctx);
 
-    // Run the flow with resume snapshot
-    const result = await runToolUseFlow(
-      {
-        ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-        setting: setting as AgentToolUseSetting,
-        resumeSnapshot: snapshot,
-      },
-      setupSession ? (context) => setupSession(context.session) : undefined,
-    );
+    try {
+      // Run the flow with resume snapshot
+      const result = await runToolUseFlow(
+        {
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          setting: setting as AgentToolUseSetting,
+          resumeSnapshot: snapshot,
+        },
+        setupSession ? (context) => setupSession(context.session) : undefined,
+      );
+      flowStatus = result.status;
+    } finally {
+      // End the runStage since we created it in resolveAgentBase
+      ctx.runStage.end(flowStatus);
+    }
 
-    updateFlowStatus(streamTabId, result.status);
+    updateFlowStatus(streamTabId, flowStatus);
   } catch (error) {
+    // End the runStage with error status on exception
+    ctx.runStage.end(END_GROUP_STATUS.ERROR);
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
     await handleFlowError(
       error,
