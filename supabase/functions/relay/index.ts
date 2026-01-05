@@ -256,7 +256,9 @@ function jsonError(
  */
 function getCurrentMonthStartUTC(): string {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
 }
 
 /**
@@ -287,10 +289,13 @@ async function checkSpendingLimit(
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   // Call database function for efficient server-side aggregation
-  const { data, error } = await adminClient.rpc('get_user_monthly_relay_spend', {
-    p_user_id: userId,
-    p_month_start: monthStart,
-  });
+  const { data, error } = await adminClient.rpc(
+    'get_user_monthly_relay_spend',
+    {
+      p_user_id: userId,
+      p_month_start: monthStart,
+    },
+  );
 
   if (error) {
     console.error('[RELAY] Failed to check spending:', error.message);
@@ -409,9 +414,10 @@ app.get('/tier-config', async (c) => {
               currentSpend: spending.currentSpend,
               limit: spending.limit,
               remaining: spending.remaining,
-              percentUsed: spending.limit > 0
-                ? Math.round((spending.currentSpend / spending.limit) * 100)
-                : 100,
+              percentUsed:
+                spending.limit > 0
+                  ? Math.round((spending.currentSpend / spending.limit) * 100)
+                  : 100,
             };
           }
 

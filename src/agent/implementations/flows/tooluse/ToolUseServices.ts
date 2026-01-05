@@ -52,8 +52,7 @@ export interface PrepareStateResult {
  * Note: ToolUseCycleNode directly instantiates ToolUseCycleFlow (no runCycle indirection).
  * Persistence is handled automatically by PersistedFlow after each node.
  */
-export interface ToolUseServices<C = unknown>
-  extends BaseFlowContextInit<C> {
+export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 
