@@ -7,6 +7,13 @@
 -- Use GREATEST() to avoid negative values if cached_input_tokens exceeds input_tokens
 -- (possible with malformed data)
 
+-- Drop existing views so we can change column shapes without replacement conflicts
+DROP VIEW IF EXISTS public.relay_spending_totals CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_monthly CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_daily CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_by_model CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_summary CASCADE;
+
 -- ===========================================================================
 -- Update relay_spending_summary view
 -- ===========================================================================
