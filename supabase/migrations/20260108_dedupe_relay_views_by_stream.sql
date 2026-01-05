@@ -2,7 +2,9 @@
 -- Purpose: Recover accurate provider pricing when multiple usage_log rows
 -- are emitted for a single stream (with different batch_ids). We keep only
 -- the highest-cost entry per (user_id, stream_id) and fall back to batch
--- deduplication for streamless records.
+-- deduplication for streamless records. Also updates the monthly spending
+-- function used by the relay tier-limit edge function to match the
+-- deduplicated pricing.
 
 -- Drop existing views so column layout changes are accepted before rebuilding
 DROP VIEW IF EXISTS public.relay_spending_totals CASCADE;
@@ -10,6 +12,118 @@ DROP VIEW IF EXISTS public.relay_spending_monthly CASCADE;
 DROP VIEW IF EXISTS public.relay_spending_daily CASCADE;
 DROP VIEW IF EXISTS public.relay_spending_by_model CASCADE;
 DROP VIEW IF EXISTS public.relay_spending_summary CASCADE;
+
+-- ===========================================================================
+-- Update get_user_monthly_relay_spend to match deduplicated pricing
+-- ===========================================================================
+CREATE OR REPLACE FUNCTION get_user_monthly_relay_spend(
+  p_user_id UUID,
+  p_month_start TIMESTAMPTZ
+)
+RETURNS NUMERIC AS $$
+  WITH ranked_streams AS (
+    SELECT
+      u.*, 
+      ROW_NUMBER() OVER (
+        PARTITION BY u.user_id, u.stream_id
+        ORDER BY
+          COALESCE(u.cost, 0) DESC,
+          COALESCE(u.input_tokens, 0) DESC,
+          COALESCE(u.output_tokens, 0) DESC,
+          u.logged_at DESC,
+          u.created_at DESC,
+          u.id DESC
+      ) AS stream_rank
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.user_id = p_user_id
+      AND u.stream_id IS NOT NULL
+      AND u.logged_at >= p_month_start
+  ),
+  deduped_streams AS (
+    SELECT
+      rs.id,
+      rs.user_id,
+      rs.logged_at,
+      rs.created_at,
+      rs.model,
+      rs.provider,
+      rs.agent_name,
+      rs.agent_category,
+      rs.is_multiple_output,
+      rs.input_tokens,
+      rs.output_tokens,
+      rs.cached_input_tokens,
+      rs.reasoning_tokens,
+      rs.cost,
+      rs.response_time_ms,
+      rs.used_relay,
+      rs.stream_id,
+      rs.extension_version,
+      rs.batch_id
+    FROM ranked_streams rs
+    WHERE stream_rank = 1
+  ),
+  remaining_streamless AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.user_id = p_user_id
+      AND u.stream_id IS NULL
+      AND u.logged_at >= p_month_start
+  ),
+  ranked_batches AS (
+    SELECT
+      u.*, 
+      ROW_NUMBER() OVER (
+        PARTITION BY u.user_id, u.batch_id
+        ORDER BY
+          COALESCE(u.cost, 0) DESC,
+          COALESCE(u.input_tokens, 0) DESC,
+          COALESCE(u.output_tokens, 0) DESC,
+          u.logged_at DESC,
+          u.created_at DESC,
+          u.id DESC
+      ) AS batch_rank
+    FROM remaining_streamless u
+    WHERE u.batch_id IS NOT NULL
+  ),
+  deduped_batches AS (
+    SELECT
+      rb.id,
+      rb.user_id,
+      rb.logged_at,
+      rb.created_at,
+      rb.model,
+      rb.provider,
+      rb.agent_name,
+      rb.agent_category,
+      rb.is_multiple_output,
+      rb.input_tokens,
+      rb.output_tokens,
+      rb.cached_input_tokens,
+      rb.reasoning_tokens,
+      rb.cost,
+      rb.response_time_ms,
+      rb.used_relay,
+      rb.stream_id,
+      rb.extension_version,
+      rb.batch_id
+    FROM ranked_batches rb
+    WHERE batch_rank = 1
+  ),
+  relay_logs AS (
+    SELECT * FROM deduped_streams
+    UNION ALL
+    SELECT * FROM deduped_batches
+    UNION ALL
+    SELECT *
+    FROM remaining_streamless u
+    WHERE u.batch_id IS NULL
+  )
+  SELECT COALESCE(SUM(r.cost), 0)
+  FROM relay_logs r;
+$$ LANGUAGE SQL STABLE;
 
 -- Shared CTE pattern for relay views
 --   - deduped_streams: top-cost row per (user_id, stream_id)
