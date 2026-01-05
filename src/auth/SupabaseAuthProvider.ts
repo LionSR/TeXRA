@@ -490,13 +490,22 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         throw new Error('GitHub authentication was cancelled');
       }
 
+      // Log token format to help diagnose auth issues (token prefix indicates type)
+      const tokenPrefix = githubSession.accessToken.substring(0, 4);
+      const tokenType =
+        tokenPrefix === 'ghp_'
+          ? 'classic PAT'
+          : tokenPrefix === 'gho_'
+            ? 'OAuth token'
+            : tokenPrefix === 'ghu_'
+              ? 'user-to-server token'
+              : tokenPrefix === 'ghs_'
+                ? 'server-to-server token'
+                : 'unknown format';
+
       logger.info(
         'SupabaseAuthProvider',
-        `Got VS Code GitHub session for ${githubSession.account.label} (scopes: ${githubSession.scopes.join(', ') || 'default'})`,
-      );
-      logger.debug(
-        'SupabaseAuthProvider',
-        `GitHub token preview: ${githubSession.accessToken.substring(0, 10)}...`,
+        `Got VS Code GitHub session for ${githubSession.account.label} (scopes: ${githubSession.scopes.join(', ') || 'default'}, token type: ${tokenType})`,
       );
 
       // Exchange GitHub token for Supabase session via Edge Function
@@ -530,8 +539,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           errorData.error || `Token exchange failed: ${response.status}`;
         logger.error(
           'SupabaseAuthProvider',
-          `GitHub token exchange failed (${response.status}): ${errorMsg}`,
+          `GitHub token exchange failed (${response.status}): ${errorMsg} [token type: ${tokenType}]`,
         );
+        // Provide user-friendly error messages for common issues
+        if (response.status === 401) {
+          throw new Error(
+            'GitHub token validation failed. Please try signing out of GitHub in VS Code and signing in again.',
+          );
+        }
         throw new Error(errorMsg);
       }
 
