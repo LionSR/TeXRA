@@ -109,21 +109,15 @@ export async function runToolUseFlow<C = unknown>(
     onSetup?.(flowContext as ToolUseFlowContext<unknown>);
 
     // Get execution-scoped storage for persistence
-    const kv: ExecutionKVStore = getExecutionStore(
-      executionId,
-    );
+    const kv: ExecutionKVStore = getExecutionStore(executionId);
 
     // Try to restore from persisted flow (resume scenario)
     let isResume = false;
     try {
-      const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionId}`,
-      );
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
       if (flowRecord?.shared) {
         isResume = true;
-        logger.debug(
-          'Resuming tool-use flow from persistence',
-        );
+        logger.debug('Resuming tool-use flow from persistence');
       }
     } catch {
       // No persisted flow - fresh start
@@ -146,9 +140,7 @@ export async function runToolUseFlow<C = unknown>(
     pf.setServices(flowContext.services);
 
     if (isResume) {
-      logger.debug(
-        'PersistedFlow will resume from last node',
-      );
+      logger.debug('PersistedFlow will resume from last node');
     }
 
     // Run the persisted flow - errors throw directly
