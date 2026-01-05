@@ -176,10 +176,11 @@ export class AgentLogger {
 
   /**
    * Log a debug message with options object.
+   * Falls back to current group ID from AsyncLocalStorage if not specified.
    */
   debug(message: string, options: LogOptions = {}): void {
     logger.debug(this.channelId, message, {
-      groupId: options.groupId,
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
@@ -188,10 +189,11 @@ export class AgentLogger {
 
   /**
    * Log an info message with options object.
+   * Falls back to current group ID from AsyncLocalStorage if not specified.
    */
   info(message: string, options: LogOptions = {}): void {
     logger.info(this.channelId, message, {
-      groupId: options.groupId,
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
@@ -200,10 +202,11 @@ export class AgentLogger {
 
   /**
    * Log a warning message with options object.
+   * Falls back to current group ID from AsyncLocalStorage if not specified.
    */
   warn(message: string, options: LogOptions = {}): void {
     logger.warn(this.channelId, message, {
-      groupId: options.groupId,
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
@@ -212,10 +215,11 @@ export class AgentLogger {
 
   /**
    * Log an error message with options object.
+   * Falls back to current group ID from AsyncLocalStorage if not specified.
    */
   error(message: string, options: LogOptions = {}): void {
     logger.error(this.channelId, message, {
-      groupId: options.groupId,
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
