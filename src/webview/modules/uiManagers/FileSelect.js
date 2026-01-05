@@ -57,8 +57,6 @@ export class FileSelect {
       (currentValue && sortedFiles.includes(currentValue) && currentValue) ||
       null;
 
-    console.log(`[FileSelect.update] id=${id}, files=${sortedFiles.length}, storedValue=${storedValue}, currentValue=${currentValue}, restoredValue=${restoredValue}`);
-
     // Block saves during option updates - vscode-single-select fires change events
     // when innerHTML is cleared, which would trigger save() with temporary "None" state
     mainViewState.blockSave();
