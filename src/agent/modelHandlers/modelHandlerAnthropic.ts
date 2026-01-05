@@ -1800,8 +1800,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const textPieces: string[] = [];
     if (isNonEmptyString(result.output)) {
       textPieces.push(result.output);
+      // Remove output from JSON since it's already in textPieces - avoids token duplication
+      delete sanitizedResult.output;
     }
-    textPieces.push(JSON.stringify(sanitizedResult, null, 2));
+    // Only include JSON if there's meaningful structured data beyond output
+    const hasStructuredData = Object.keys(sanitizedResult).some(
+      (k) => !['summary', 'isError'].includes(k),
+    );
+    if (hasStructuredData) {
+      textPieces.push(JSON.stringify(sanitizedResult, null, 2));
+    }
 
     const toolResultContent: Array<
       TextBlockParam | ImageBlockParam | DocumentBlockParam

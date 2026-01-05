@@ -42,7 +42,7 @@ export abstract class BaseTool<T> implements ITool {
    *
    * Error handling behavior:
    * - ZodError: Returns error result with validation issues in diagnostics
-   * - ToolError or other Error: Returns error result with name and stack trace
+   * - ToolError or other Error: Returns error result with error name (stack traces excluded to save tokens)
    * - Other thrown values: Returns error result with string representation
    */
   async call(rawInput: unknown): Promise<ToolResult> {
@@ -58,8 +58,9 @@ export abstract class BaseTool<T> implements ITool {
         };
       }
       const message = toErrorMessage(err);
+      // Only include error name - stack traces waste tokens and aren't actionable by models
       const diagnostics =
-        err instanceof Error ? { name: err.name, stack: err.stack } : undefined;
+        err instanceof Error ? { name: err.name } : undefined;
       return {
         error: message,
         isError: true,
