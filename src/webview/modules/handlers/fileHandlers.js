@@ -40,7 +40,6 @@ export function createFileHandlers(ctx) {
   // 2. Calling restore() after would be redundant and could cause issues
   //    if the state was modified during the async file list refresh
   const createSetFileHandler = (fileType, domId) => (message) => {
-    console.log(`[createSetFileHandler] fileType=${fileType}, domId=${domId}, files=${message.files?.length}:`, message.files);
     const options = getRestorationOptions(domId);
     fileSelect.update(domId, message.files, options);
   };
@@ -151,7 +150,6 @@ export function createFileHandlers(ctx) {
     const currentBaseFileDiv = getElement(BASE_FILE);
     if (currentBaseFileDiv) {
       const options = getRestorationOptions(BASE_FILE);
-      console.log(`[handleSetBaseFile] files=${message.files?.length}, preserveBaseFile=${message.preserveBaseFile}, options=`, options);
       // Only restore currentValue if preserveBaseFile flag is set
       if (!message.preserveBaseFile) {
         options.currentValue = undefined;
@@ -159,7 +157,6 @@ export function createFileHandlers(ctx) {
       // Use returned value instead of reading from DOM
       // (vscode-single-select doesn't reflect .value changes immediately)
       const restoredValue = fileSelect.update(BASE_FILE, message.files, options);
-      console.log(`[handleSetBaseFile] after update, restoredValue=${restoredValue}`);
       fileSelect.updateEdited(restoredValue || '');
     }
     // No postHandle needed - fileSelect.update handles state

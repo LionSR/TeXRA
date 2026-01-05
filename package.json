@@ -560,7 +560,6 @@
             "default": [
               "Makefile",
               "template",
-              "_log",
               "_thinking",
               "_diff",
               "draw",
