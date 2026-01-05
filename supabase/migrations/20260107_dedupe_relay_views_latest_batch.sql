@@ -5,6 +5,13 @@
 -- where only the latest entry per (user_id, batch_id) is counted. Unbatched
 -- rows (batch_id IS NULL) are included as-is.
 
+-- Drop existing views so column layout changes are accepted before rebuilding
+DROP VIEW IF EXISTS public.relay_spending_totals CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_monthly CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_daily CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_by_model CASCADE;
+DROP VIEW IF EXISTS public.relay_spending_summary CASCADE;
+
 -- Helper CTE used in all relay spending views
 --   - deduped_batches: picks the latest row per (user_id, batch_id)
 --   - relay_logs: combines deduped batched rows with all unbatched rows
