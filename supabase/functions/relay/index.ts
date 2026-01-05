@@ -75,7 +75,7 @@ import {
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.8.0';
+const RELAY_VERSION = '1.8.1';
 
 // Tier constants imported from models.ts (single source of truth)
 // CROSS-REFERENCE: Keep models.ts in sync with:
@@ -289,6 +289,8 @@ async function checkSpendingLimit(
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   // Call database function for efficient server-side aggregation
+  // Aggregates deduplicated relay usage (by stream/batch) inside the database;
+  // keep in sync with migration 20260108_dedupe_relay_views_by_stream.sql.
   const { data, error } = await adminClient.rpc(
     'get_user_monthly_relay_spend',
     {
