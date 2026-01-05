@@ -232,8 +232,9 @@ export async function runReflectionFlow<C = unknown>(
   createdRunStage = !parentStage;
 
   // For new runs, update storage key to match the run stage ID
-  if (createdRunStage && runStage.id && hasInitialStorageKey()) {
-    const runStorageKey = normalizeRunId(runStage.id);
+  // Note: runStage.id is always defined for newly created stages
+  if (createdRunStage && hasInitialStorageKey()) {
+    const runStorageKey = normalizeRunId(runStage.id!);
     updateStorageKey(runStorageKey);
   }
 
