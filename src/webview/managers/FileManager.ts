@@ -140,12 +140,6 @@ export class FileManager extends BaseWebviewManager {
         path.extname(message.baseFile),
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
-      logger.debug(
-        CHANNEL,
-        `handleRequestEditedFile: baseFile=${message.baseFile}, baseName=${baseFileNameForEdited}, foundFiles=${allEditedFiles.length}: ${allEditedFiles.join(', ')}`,
-      );
-    } else {
-      logger.debug(CHANNEL, `handleRequestEditedFile: baseFile is empty`);
     }
     this.postFileUpdate('Edited', allEditedFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
