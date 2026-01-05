@@ -154,9 +154,10 @@ export function createFileHandlers(ctx) {
       if (!message.preserveBaseFile) {
         options.currentValue = undefined;
       }
-      fileSelect.update(BASE_FILE, message.files, options);
-      // Read value after update to get the actual restored value
-      fileSelect.updateEdited(currentBaseFileDiv.value);
+      // Use returned value instead of reading from DOM
+      // (vscode-single-select doesn't reflect .value changes immediately)
+      const restoredValue = fileSelect.update(BASE_FILE, message.files, options);
+      fileSelect.updateEdited(restoredValue || '');
     }
     // No postHandle needed - fileSelect.update handles state
   }
