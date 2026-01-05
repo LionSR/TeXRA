@@ -20,7 +20,9 @@ DROP VIEW IF EXISTS public.relay_spending_summary CASCADE;
 -- ===========================================================================
 -- Update relay_spending_summary view
 -- ===========================================================================
-CREATE OR REPLACE VIEW public.relay_spending_summary AS
+CREATE OR REPLACE VIEW public.relay_spending_summary
+WITH (security_invoker = on)
+AS
 WITH deduped_batches AS (
     SELECT DISTINCT ON (u.user_id, u.batch_id)
         u.*
@@ -62,7 +64,9 @@ COMMENT ON VIEW public.relay_spending_summary IS
 -- ===========================================================================
 -- Update relay_spending_by_model view
 -- ===========================================================================
-CREATE OR REPLACE VIEW public.relay_spending_by_model AS
+CREATE OR REPLACE VIEW public.relay_spending_by_model
+WITH (security_invoker = on)
+AS
 WITH deduped_batches AS (
     SELECT DISTINCT ON (u.user_id, u.batch_id)
         u.*
@@ -103,7 +107,9 @@ COMMENT ON VIEW public.relay_spending_by_model IS
 -- ===========================================================================
 -- Update relay_spending_daily view
 -- ===========================================================================
-CREATE OR REPLACE VIEW public.relay_spending_daily AS
+CREATE OR REPLACE VIEW public.relay_spending_daily
+WITH (security_invoker = on)
+AS
 WITH deduped_batches AS (
     SELECT DISTINCT ON (u.user_id, u.batch_id)
         u.*
@@ -141,7 +147,9 @@ COMMENT ON VIEW public.relay_spending_daily IS
 -- ===========================================================================
 -- Update relay_spending_monthly view
 -- ===========================================================================
-CREATE OR REPLACE VIEW public.relay_spending_monthly AS
+CREATE OR REPLACE VIEW public.relay_spending_monthly
+WITH (security_invoker = on)
+AS
 WITH deduped_batches AS (
     SELECT DISTINCT ON (u.user_id, u.batch_id)
         u.*
@@ -184,7 +192,9 @@ COMMENT ON VIEW public.relay_spending_monthly IS
 -- ===========================================================================
 -- Update relay_spending_totals view
 -- ===========================================================================
-CREATE OR REPLACE VIEW public.relay_spending_totals AS
+CREATE OR REPLACE VIEW public.relay_spending_totals
+WITH (security_invoker = on)
+AS
 WITH deduped_batches AS (
     SELECT DISTINCT ON (u.user_id, u.batch_id)
         u.*
