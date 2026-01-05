@@ -108,9 +108,21 @@ export class DiagnosticsTool extends defineTool({
       ...('messages' in args ? { messages: args.messages } : {}),
     };
 
+    // Human-readable output instead of JSON - diagnostics field carries structured data
+    const { errors = 0, warnings = 0, info = 0, hints = 0 } = args.severity;
+    const counts = [
+      errors > 0 && `${errors} error${errors === 1 ? '' : 's'}`,
+      warnings > 0 && `${warnings} warning${warnings === 1 ? '' : 's'}`,
+      info > 0 && `${info} info`,
+      hints > 0 && `${hints} hint${hints === 1 ? '' : 's'}`,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const output = counts || 'No issues found';
+
     return {
       summary: args.summary,
-      output: JSON.stringify(payload, null, 2),
+      output,
       diagnostics: payload,
     };
   }
