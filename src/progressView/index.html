@@ -92,11 +92,11 @@
     <div class="main-container">
       <vscode-split-layout initial-handle-position="80%">
         <div slot="start" class="content-area">
-          <div class="log-header">
-            <div class="log-header__primary">
-              <div class="header-left">
+          <div class="log-header view-header">
+            <div class="log-header__primary view-header__primary">
+              <div class="header-left view-header__title-group">
                 <div class="stream-header">
-                  <span id="activeStreamName"></span>
+                  <span id="activeStreamName" class="view-header__title"></span>
                 </div>
                 <span
                   id="statusIndicator"
@@ -106,16 +106,19 @@
               </div>
               <vscode-toolbar-container
                 id="toolbarContainer"
-                class="header-actions"
+                class="header-actions view-header__actions"
               ></vscode-toolbar-container>
             </div>
             <div
-              class="log-header__secondary"
+              class="log-header__secondary view-header__secondary"
               id="runSelectorRow"
               hidden
               aria-hidden="true"
             >
-              <div class="run-selector-title" aria-hidden="true">
+              <div
+                class="run-selector-title view-header__subtitle"
+                aria-hidden="true"
+              >
                 <i class="codicon codicon-history"></i>
                 <span>Sessions</span>
               </div>

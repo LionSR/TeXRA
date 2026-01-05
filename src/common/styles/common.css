@@ -83,6 +83,11 @@ body {
   --width-icon: 16px;
   --width-button-min: 80px;
   --width-dropdown: 160px;
+  --width-dropdown-wide-min: calc(var(--width-dropdown) + var(--spacing-large));
+  --width-dropdown-wide-max: calc(
+    var(--width-dropdown) + var(--spacing-xlarge)
+  );
+  --width-label-column: 12ch;
 
   /* Borders */
   --border-thin: 1px;
@@ -106,6 +111,66 @@ body {
   align-items: center;
   position: relative;
   top: 0;
+}
+
+/* Shared header layout for webviews */
+.view-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+  padding: var(--spacing-small) 0 var(--spacing-medium);
+  margin-bottom: var(--spacing-medium);
+  border-bottom: var(--border-thin) solid var(--color-border);
+}
+
+.view-header__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.view-header__titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+  min-width: 0;
+}
+
+.view-header__title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--vscode-editor-foreground);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.view-header__subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.view-header__title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 0;
+}
+
+.view-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  margin-left: auto;
+}
+
+.view-header__secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  flex-wrap: wrap;
 }
 
 /* VSCode Elements toolbar styling */

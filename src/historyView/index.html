@@ -54,17 +54,23 @@
   </head>
 
   <body>
-    <div>
-      <h2>Agent Execution History</h2>
-
-      <div id="searchContainer" class="search-container">
+    <div class="view-header">
+      <div class="view-header__primary">
+        <div class="view-header__titles">
+          <h2 class="view-header__title">Agent Execution History</h2>
+          <p class="view-header__subtitle">
+            Search and revisit your previous sessions
+          </p>
+        </div>
+      </div>
+      <div id="searchContainer" class="view-header__secondary search-container">
         <vscode-textfield
           id="searchInput"
           class="search-input"
           type="search"
           placeholder="Search history items..."
         ></vscode-textfield>
-        <vscode-toolbar-container class="search-controls">
+        <vscode-toolbar-container class="search-controls view-header__actions">
           <vscode-toolbar-button
             id="prevMatch"
             class="search-nav-btn"
@@ -82,14 +88,14 @@
           <span id="matchCount" class="match-count"></span>
         </vscode-toolbar-container>
       </div>
+    </div>
 
-      <div id="clearButtonContainer">
-        <!-- Clear button will be added here if history items exist -->
-      </div>
+    <div id="clearButtonContainer">
+      <!-- Clear button will be added here if history items exist -->
+    </div>
 
-      <div id="historyContainer" class="history-container">
-        <!-- History items will be inserted here -->
-      </div>
+    <div id="historyContainer" class="history-container">
+      <!-- History items will be inserted here -->
     </div>
     <template id="historyItemTemplate">
       <div class="history-item">

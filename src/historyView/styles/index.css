@@ -9,15 +9,10 @@ body {
   padding: var(--spacing-xlarge);
 }
 
-h2 {
-  margin-bottom: var(--spacing-xlarge);
-}
-
 /* Search container */
 .search-container {
   display: flex;
   align-items: center;
-  margin-bottom: var(--spacing-xlarge);
   gap: var(--spacing-medium);
   width: 100%;
 }
@@ -101,7 +96,7 @@ mark.current-match {
 
 .history-details {
   display: grid;
-  grid-template-columns: 100px 1fr;
+  grid-template-columns: var(--width-label-column) 1fr;
   gap: var(--spacing-small);
   margin-top: var(--spacing-medium);
 }
