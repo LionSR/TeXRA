@@ -277,11 +277,9 @@ async function resolveAgentBase(
   }
 
   // 6. Build user variable channels (replaces agent.init() logic)
-  // Init stage is a CHILD of runStage so it appears in the same session.
-  const initStage = await runStage.stage('Init');
-  // Use initStage.run() to ensure buildUserVars executes within the stage's
-  // group context - this makes file loading logs appear under the Init group
-  const baseVars = await initStage.run(() =>
+  // For workflow agents: wrap in Init stage so file loading logs are properly grouped.
+  // For tool-use agents: skip Init stage (no file loading to show).
+  const buildVars = () =>
     buildUserVars(
       config,
       setting,
@@ -293,8 +291,12 @@ async function resolveAgentBase(
         isGoogle: modelHandler.isGoogle,
       },
       agentLogger,
-    ),
-  );
+    );
+
+  const baseVars =
+    setting.agentType === AgentType.ToolUse
+      ? await buildVars()
+      : await (await runStage.stage('Init')).run(buildVars);
   const userVarChannels: UserVariableChannels = {
     input: Object.freeze({ ...baseVars }),
     transient: { ...baseVars },
@@ -590,36 +592,33 @@ export async function executeAgent(
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
       const interruptManager = new InterruptManager();
-      let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
+      let flowStatus: EndGroupStatus;
 
-      try {
-        if (setting.agentType === 'toolUse') {
-          // Tool-use flow execution
-          const result = await runToolUseFlow({
-            ...ctx,
-            ...interruptManager.asFlowInput(),
-            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-            setting: ctx.setting as AgentToolUseSetting,
-          });
-          flowStatus = result.status;
-        } else {
-          // Reflection flow execution (direct/CoT/workflow)
-          // Pass runStage as parentStage so r0, r1 become children of it
-          const result = await runReflectionFlow({
-            ...ctx,
-            ...interruptManager.asFlowInput(),
-            getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-            setting: ctx.setting as AgentWorkflowSetting,
-            parentStage: ctx.runStage,
-          });
-          flowStatus = result.status;
-        }
-      } finally {
-        // End the runStage since we created it in resolveAgentBase
-        // (runReflectionFlow won't end it when parentStage is provided)
-        ctx.runStage.end(flowStatus);
+      if (setting.agentType === 'toolUse') {
+        // Tool-use flow execution
+        const result = await runToolUseFlow({
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          setting: ctx.setting as AgentToolUseSetting,
+        });
+        flowStatus = result.status;
+      } else {
+        // Reflection flow execution (direct/CoT/workflow)
+        // Pass runStage as parentStage so r0, r1 become children of it
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+          setting: ctx.setting as AgentWorkflowSetting,
+          parentStage: ctx.runStage,
+        });
+        flowStatus = result.status;
       }
 
+      // End the runStage since we created it in resolveAgentBase
+      // (runReflectionFlow won't end it when parentStage is provided)
+      ctx.runStage.end(flowStatus);
       updateFlowStatus(streamTabId, flowStatus);
       logger.debug(`Task completed with status: ${flowStatus}`);
     });
@@ -676,7 +675,6 @@ export async function executeMergeAgent(
       logger.info(`Executing merge with model ${model}`);
 
       const interruptManager = new InterruptManager();
-      let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
       // Create merge-specific output file location getter
       const fileService = new TaskRunFileService(executionId);
@@ -686,25 +684,21 @@ export async function executeMergeAgent(
         fileService,
       );
 
-      try {
-        // Run reflection flow with custom file naming
-        // Pass runStage as parentStage so r0, r1 become children of it
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-          setting: ctx.setting as AgentWorkflowSetting,
-          getOutputFileLocation,
-          parentStage: ctx.runStage,
-        });
-        flowStatus = result.status;
-      } finally {
-        // End the runStage since we created it in resolveAgentBase
-        ctx.runStage.end(flowStatus);
-      }
+      // Run reflection flow with custom file naming
+      // Pass runStage as parentStage so r0, r1 become children of it
+      const result = await runReflectionFlow({
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        setting: ctx.setting as AgentWorkflowSetting,
+        getOutputFileLocation,
+        parentStage: ctx.runStage,
+      });
 
-      updateFlowStatus(streamTabId, flowStatus);
-      logger.debug(`Task completed with status: ${flowStatus}`);
+      // End the runStage since we created it in resolveAgentBase
+      ctx.runStage.end(result.status);
+      updateFlowStatus(streamTabId, result.status);
+      logger.debug(`Task completed with status: ${result.status}`);
     });
   } catch (err) {
     // End the runStage with error status on exception
@@ -758,30 +752,25 @@ export async function resumeToolUseFromSnapshot(
   }
 
   const interruptManager = new InterruptManager();
-  let flowStatus: EndGroupStatus = END_GROUP_STATUS.STOPPED;
 
   try {
     setupFlowUIState(ctx);
 
-    try {
-      // Run the flow with resume snapshot
-      const result = await runToolUseFlow(
-        {
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-          setting: setting as AgentToolUseSetting,
-          resumeSnapshot: snapshot,
-        },
-        setupSession ? (context) => setupSession(context.session) : undefined,
-      );
-      flowStatus = result.status;
-    } finally {
-      // End the runStage since we created it in resolveAgentBase
-      ctx.runStage.end(flowStatus);
-    }
+    // Run the flow with resume snapshot
+    const result = await runToolUseFlow(
+      {
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+        setting: setting as AgentToolUseSetting,
+        resumeSnapshot: snapshot,
+      },
+      setupSession ? (context) => setupSession(context.session) : undefined,
+    );
 
-    updateFlowStatus(streamTabId, flowStatus);
+    // End the runStage since we created it in resolveAgentBase
+    ctx.runStage.end(result.status);
+    updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     // End the runStage with error status on exception
     ctx.runStage.end(END_GROUP_STATUS.ERROR);

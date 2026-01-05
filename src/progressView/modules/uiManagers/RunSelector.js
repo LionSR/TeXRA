@@ -283,7 +283,7 @@ export class RunSelector {
 
   _formatRunLabel(group) {
     const timestamp = this._formatTimestamp(group.startTime);
-    const name = group.name || 'Session';
+    const name = group.name ?? 'Session';
     if (timestamp) {
       return `${name}: ${timestamp}`;
     }
