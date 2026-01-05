@@ -314,6 +314,15 @@ class ToolUseCycleNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
+  /** Emit todos update event to progress view. */
+  private emitTodosUpdate(todos: TodoItem[]): void {
+    bus.emit('updateTodos', {
+      stream: this.services.streamId,
+      executionId: this.services.executionId,
+      todos,
+    });
+  }
+
   async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult> {
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
@@ -335,8 +344,13 @@ class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CycleNodePrepResult): Promise<CycleExecResult> {
-    // Handle skip (resume case) - pure decision, no side effects
+    // Handle skip (resume case) - emit recovered todos before skipping
     if (prepRes.shouldSkip) {
+      // Emit recovered todos to restore progress view UI after reload
+      const recoveredTodos = prepRes.workspaceState.todos.todos;
+      if (recoveredTodos.length > 0) {
+        this.emitTodosUpdate(recoveredTodos);
+      }
       return { kind: 'skipped' };
     }
 
@@ -377,11 +391,7 @@ class ToolUseCycleNode<C> extends Node<
 
     // Set up todo update callback to emit changes to the progress view
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
-      bus.emit('updateTodos', {
-        stream: this.services.streamId,
-        executionId: this.services.executionId,
-        todos,
-      });
+      this.emitTodosUpdate(todos);
     });
 
     try {
