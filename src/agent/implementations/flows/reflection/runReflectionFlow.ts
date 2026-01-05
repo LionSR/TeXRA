@@ -22,7 +22,10 @@
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  StorageKeyManager,
+} from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   registerInterruptible,
@@ -67,21 +70,13 @@ import type { ReflectionServices } from './ReflectionServices';
 
 /**
  * Input for running a reflection flow.
- * Extends BaseFlowContextInit with reflection-specific fields.
+ * Extends BaseFlowContextInit with reflection-specific fields and StorageKeyManager.
  */
-export interface RunReflectionFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunReflectionFlowInput<C = unknown>
+  extends BaseFlowContextInit<C>,
+    StorageKeyManager {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
-
-  // Storage key management (flattened from executionContext)
-  /** Get current storage key for file operations */
-  getStorageKey: () => StorageKey;
-  /** Check if storage key is still initial (new run, not resumed) */
-  hasInitialStorageKey: () => boolean;
-  /** Update storage key to match run stage ID */
-  updateStorageKey: (key: StorageKey) => void;
 
   /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
@@ -166,10 +161,7 @@ export async function runReflectionFlow<C = unknown>(
     logger,
   );
 
-  const latexMediaManager = new LatexMediaManager(
-    logger,
-    fileService,
-  );
+  const latexMediaManager = new LatexMediaManager(logger, fileService);
 
   // Compute shouldEnsureXmlStructure from configuration
   const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
@@ -256,17 +248,13 @@ export async function runReflectionFlow<C = unknown>(
     registerInterruptible(streamId, interruptible);
 
     // Get execution-scoped storage for persistence
-    const kv: ExecutionKVStore = getExecutionStore(
-      executionId,
-    );
+    const kv: ExecutionKVStore = getExecutionStore(executionId);
 
     // Try to restore full state from persisted flow (resume scenario)
     let isResume = false;
 
     try {
-      const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionId}`,
-      );
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
       if (flowRecord?.shared) {
         // Validate and use persisted shared state directly
         const validated = ReflectionFlowStateSchema.safeParse(
@@ -337,9 +325,7 @@ export async function runReflectionFlow<C = unknown>(
     pf.setServices(services);
 
     if (isResume) {
-      logger.debug(
-        'Resuming reflection flow from persistence',
-      );
+      logger.debug('Resuming reflection flow from persistence');
     }
 
     await pf.run(shared);

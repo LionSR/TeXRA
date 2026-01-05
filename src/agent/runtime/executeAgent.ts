@@ -54,6 +54,7 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
+  StorageKeyManager,
 } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -64,6 +65,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
@@ -74,7 +76,6 @@ import { getStreamTabId } from '@/logger/streamUtils';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { InterruptManager } from './InterruptManager';
-import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -91,10 +92,9 @@ export interface AgentResolveOptions {
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
  *
- * Storage key management is provided as callbacks that delegate to
- * executionContext, keeping the interface clean for spreading into flows.
+ * Extends StorageKeyManager to provide storage key callbacks.
  */
-interface ResolvedAgentBase {
+interface ResolvedAgentBase extends StorageKeyManager {
   modelHandler: IModelHandler<any, any, any, any, any>;
   config: AgentConfig;
   setting: AgentSetting;
@@ -102,10 +102,6 @@ interface ResolvedAgentBase {
   logger: AgentLogger;
   streamId: StreamTabId;
   executionId: ExecutionId;
-  // Storage key management (flattened from executionContext)
-  getStorageKey: () => StorageKey;
-  hasInitialStorageKey: () => boolean;
-  updateStorageKey: (key: StorageKey) => void;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
 }
@@ -176,7 +172,8 @@ async function resolveAgentBase(
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
   // Generate executionId if not provided (always a UUID)
-  const executionId: ExecutionId = providedExecutionId ?? (randomUUID() as ExecutionId);
+  const executionId: ExecutionId =
+    providedExecutionId ?? (randomUUID() as ExecutionId);
 
   // 1. Resolve agent definition
   const fullConfig = AgentConfigSchema.parse({
@@ -628,8 +625,12 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamId: streamTabId, config, logger: agentLogger, executionId } =
-    ctx;
+  const {
+    streamId: streamTabId,
+    config,
+    logger: agentLogger,
+    executionId,
+  } = ctx;
 
   if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
@@ -740,6 +741,11 @@ export async function resumeToolUseFromSnapshot(
     updateFlowStatus(streamTabId, result.status);
   } catch (error) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(error, snapshotConfig.agent, streamTabId, agentLogger);
+    await handleFlowError(
+      error,
+      snapshotConfig.agent,
+      streamTabId,
+      agentLogger,
+    );
   }
 }
