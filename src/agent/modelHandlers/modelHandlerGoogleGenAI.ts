@@ -202,15 +202,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return undefined;
     }
 
-    if (requestedLevel === ReasoningEffort.MEDIUM) {
-      return ThinkingLevel.MEDIUM;
-    }
-
     if (requestedLevel === ReasoningEffort.LOW) {
       return ThinkingLevel.LOW;
     }
 
-    if (requestedLevel === ReasoningEffort.HIGH) {
+    if (requestedLevel === ReasoningEffort.MEDIUM) {
+      // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
+      if (isGemini3 && this.config.fullName.includes('-pro')) {
+        this.logger.debug(
+          'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
+        );
+        return ThinkingLevel.HIGH;
+      }
+      return ThinkingLevel.MEDIUM;
+    }
+
+    // HIGH and XHIGH both map to ThinkingLevel.HIGH (the maximum in Google's SDK)
+    if (
+      requestedLevel === ReasoningEffort.HIGH ||
+      requestedLevel === ReasoningEffort.XHIGH
+    ) {
       return ThinkingLevel.HIGH;
     }
 
