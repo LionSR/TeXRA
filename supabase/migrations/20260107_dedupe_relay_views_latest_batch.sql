@@ -23,13 +23,27 @@ DROP VIEW IF EXISTS public.relay_spending_summary CASCADE;
 CREATE OR REPLACE VIEW public.relay_spending_summary
 WITH (security_invoker = on)
 AS
-WITH deduped_batches AS (
-    SELECT DISTINCT ON (u.user_id, u.batch_id)
-        u.*
+WITH ranked_batches AS (
+    SELECT
+        u.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.user_id, u.batch_id
+            ORDER BY
+                COALESCE(u.cost, 0) DESC,
+                COALESCE(u.input_tokens, 0) DESC,
+                COALESCE(u.output_tokens, 0) DESC,
+                u.logged_at DESC,
+                u.created_at DESC,
+                u.id DESC
+        ) AS batch_rank
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.batch_id IS NOT NULL
-    ORDER BY u.user_id, u.batch_id, u.logged_at DESC, u.created_at DESC, u.id DESC
+),
+deduped_batches AS (
+    SELECT *
+    FROM ranked_batches
+    WHERE batch_rank = 1
 ),
 relay_logs AS (
     SELECT * FROM deduped_batches
@@ -67,13 +81,27 @@ COMMENT ON VIEW public.relay_spending_summary IS
 CREATE OR REPLACE VIEW public.relay_spending_by_model
 WITH (security_invoker = on)
 AS
-WITH deduped_batches AS (
-    SELECT DISTINCT ON (u.user_id, u.batch_id)
-        u.*
+WITH ranked_batches AS (
+    SELECT
+        u.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.user_id, u.batch_id
+            ORDER BY
+                COALESCE(u.cost, 0) DESC,
+                COALESCE(u.input_tokens, 0) DESC,
+                COALESCE(u.output_tokens, 0) DESC,
+                u.logged_at DESC,
+                u.created_at DESC,
+                u.id DESC
+        ) AS batch_rank
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.batch_id IS NOT NULL
-    ORDER BY u.user_id, u.batch_id, u.logged_at DESC, u.created_at DESC, u.id DESC
+),
+deduped_batches AS (
+    SELECT *
+    FROM ranked_batches
+    WHERE batch_rank = 1
 ),
 relay_logs AS (
     SELECT * FROM deduped_batches
@@ -110,13 +138,27 @@ COMMENT ON VIEW public.relay_spending_by_model IS
 CREATE OR REPLACE VIEW public.relay_spending_daily
 WITH (security_invoker = on)
 AS
-WITH deduped_batches AS (
-    SELECT DISTINCT ON (u.user_id, u.batch_id)
-        u.*
+WITH ranked_batches AS (
+    SELECT
+        u.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.user_id, u.batch_id
+            ORDER BY
+                COALESCE(u.cost, 0) DESC,
+                COALESCE(u.input_tokens, 0) DESC,
+                COALESCE(u.output_tokens, 0) DESC,
+                u.logged_at DESC,
+                u.created_at DESC,
+                u.id DESC
+        ) AS batch_rank
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.batch_id IS NOT NULL
-    ORDER BY u.user_id, u.batch_id, u.logged_at DESC, u.created_at DESC, u.id DESC
+),
+deduped_batches AS (
+    SELECT *
+    FROM ranked_batches
+    WHERE batch_rank = 1
 ),
 relay_logs AS (
     SELECT * FROM deduped_batches
@@ -150,13 +192,27 @@ COMMENT ON VIEW public.relay_spending_daily IS
 CREATE OR REPLACE VIEW public.relay_spending_monthly
 WITH (security_invoker = on)
 AS
-WITH deduped_batches AS (
-    SELECT DISTINCT ON (u.user_id, u.batch_id)
-        u.*
+WITH ranked_batches AS (
+    SELECT
+        u.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.user_id, u.batch_id
+            ORDER BY
+                COALESCE(u.cost, 0) DESC,
+                COALESCE(u.input_tokens, 0) DESC,
+                COALESCE(u.output_tokens, 0) DESC,
+                u.logged_at DESC,
+                u.created_at DESC,
+                u.id DESC
+        ) AS batch_rank
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.batch_id IS NOT NULL
-    ORDER BY u.user_id, u.batch_id, u.logged_at DESC, u.created_at DESC, u.id DESC
+),
+deduped_batches AS (
+    SELECT *
+    FROM ranked_batches
+    WHERE batch_rank = 1
 ),
 relay_logs AS (
     SELECT * FROM deduped_batches
@@ -195,13 +251,27 @@ COMMENT ON VIEW public.relay_spending_monthly IS
 CREATE OR REPLACE VIEW public.relay_spending_totals
 WITH (security_invoker = on)
 AS
-WITH deduped_batches AS (
-    SELECT DISTINCT ON (u.user_id, u.batch_id)
-        u.*
+WITH ranked_batches AS (
+    SELECT
+        u.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY u.user_id, u.batch_id
+            ORDER BY
+                COALESCE(u.cost, 0) DESC,
+                COALESCE(u.input_tokens, 0) DESC,
+                COALESCE(u.output_tokens, 0) DESC,
+                u.logged_at DESC,
+                u.created_at DESC,
+                u.id DESC
+        ) AS batch_rank
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.batch_id IS NOT NULL
-    ORDER BY u.user_id, u.batch_id, u.logged_at DESC, u.created_at DESC, u.id DESC
+),
+deduped_batches AS (
+    SELECT *
+    FROM ranked_batches
+    WHERE batch_rank = 1
 ),
 relay_logs AS (
     SELECT * FROM deduped_batches
