@@ -12,6 +12,7 @@
 
 // Standard library imports
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -49,7 +50,12 @@ import {
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+  StorageKeyManager,
+} from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -59,6 +65,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
@@ -69,7 +76,6 @@ import { getStreamTabId } from '@/logger/streamUtils';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { InterruptManager } from './InterruptManager';
-import { AgentExecutionContext } from './AgentExecutionContext';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -85,14 +91,17 @@ export interface AgentResolveOptions {
 /**
  * Common base for flow inputs after agent resolution.
  * This is NOT passed to flows - it's used to build flow-specific inputs.
+ *
+ * Extends StorageKeyManager to provide storage key callbacks.
  */
-interface ResolvedAgentBase {
+interface ResolvedAgentBase extends StorageKeyManager {
   modelHandler: IModelHandler<any, any, any, any, any>;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;
-  executionContext: AgentExecutionContext;
-  streamTabId: StreamTabId;
+  logger: AgentLogger;
+  streamId: StreamTabId;
+  executionId: ExecutionId;
   userVarChannels: UserVariableChannels;
   usageMonitor: UsageMonitor;
 }
@@ -159,9 +168,13 @@ interface ResolveAgentOptions {
 async function resolveAgentBase(
   agentName: string,
   configPayload: Partial<AgentConfig>,
-  executionId?: ExecutionId,
+  providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
+  // Generate executionId if not provided (always a UUID)
+  const executionId: ExecutionId =
+    providedExecutionId ?? (randomUUID() as ExecutionId);
+
   // 1. Resolve agent definition
   const fullConfig = AgentConfigSchema.parse({
     agent: agentName,
@@ -196,7 +209,8 @@ async function resolveAgentBase(
   const modelHandler = ModelFactory.createHandler(modelConfig);
 
   // 3. Create execution context
-  const streamTabId = getStreamTabId(
+  // Compute stream ID, applying override for resume scenarios
+  const computedStreamTabId = getStreamTabId(
     config.agent,
     fullConfig.model,
     config.inputFile,
@@ -206,26 +220,28 @@ async function resolveAgentBase(
       useMultipleOutputs: config.useMultipleOutputs,
     },
   );
-  const executionContext = new AgentExecutionContext({
-    streamId: streamTabId,
-    executionId,
-    agentCategory: sessionDescriptor.agentCategory,
-  });
+  // Use override if provided (resume uses snapshot's streamId)
+  const streamId = options?.streamTabIdOverride ?? computedStreamTabId;
+
+  // 3. Create logger and usage reporter directly (no AgentExecutionContext wrapper)
+  const agentLogger = new AgentLogger(streamId, true);
+  const usageReporter = new AgentUsageReporter(
+    agentLogger,
+    streamId,
+    sessionDescriptor.agentCategory,
+  );
 
   // Configure model handler with agent type and logger
   // This enables provider-specific behavior (e.g., Anthropic context management beta
   // for tool-use agents, OpenAI Response API background mode detection)
   modelHandler.setAgentType(setting.agentType);
-  modelHandler.setLogger(executionContext.logger);
-
-  // Determine effective stream ID (may be overridden for resume scenarios)
-  const effectiveStreamTabId = options?.streamTabIdOverride ?? streamTabId;
+  modelHandler.setLogger(agentLogger);
 
   // Emit setActiveStream BEFORE Init stage creation.
   // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
   // preventing the race condition where Init groups are dropped.
   bus.emit('setActiveStream', {
-    stream: effectiveStreamTabId,
+    stream: streamId,
     session: sessionDescriptor,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
@@ -233,7 +249,7 @@ async function resolveAgentBase(
 
   // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
-  const initStage = await executionContext.logger.stage('Init');
+  const initStage = await agentLogger.stage('Init');
   // Use initStage.run() to ensure buildUserVars executes within the stage's
   // group context - this makes file loading logs appear under the Init group
   const baseVars = await initStage.run(() =>
@@ -247,7 +263,7 @@ async function resolveAgentBase(
         isAnthropic: modelHandler.isAnthropic,
         isGoogle: modelHandler.isGoogle,
       },
-      executionContext.logger,
+      agentLogger,
     ),
   );
   const userVarChannels: UserVariableChannels = {
@@ -255,7 +271,22 @@ async function resolveAgentBase(
     transient: { ...baseVars },
   };
 
-  // 5. Create usage monitor for tracking API usage
+  // 5. Define mutable storage key with callbacks
+  // Initial value is executionId (normalized); workflow agents update it to task group ID
+  const initialStorageKey = normalizeRunId(executionId);
+  let storageKey: StorageKey = initialStorageKey;
+  const getStorageKey = () => storageKey;
+  const hasInitialStorageKey = () => storageKey === initialStorageKey;
+  const updateStorageKey = (key: StorageKey) => {
+    if (!hasInitialStorageKey()) {
+      agentLogger.warn(
+        `Storage key already set to ${storageKey}, updating to ${key}. This may indicate a bug.`,
+      );
+    }
+    storageKey = key;
+  };
+
+  // 6. Create usage monitor for tracking API usage
   // Pass only the minimal model info needed (capabilities + config subset)
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
@@ -267,7 +298,12 @@ async function resolveAgentBase(
       capabilities: modelHandler.capabilities,
       config: modelHandler.config,
     },
-    executionContext,
+    {
+      logger: agentLogger,
+      usageReporter,
+      getStorageKey,
+      streamId,
+    },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
@@ -280,8 +316,12 @@ async function resolveAgentBase(
     config,
     setting,
     prompt,
-    executionContext,
-    streamTabId,
+    logger: agentLogger,
+    streamId,
+    executionId,
+    getStorageKey,
+    hasInitialStorageKey,
+    updateStorageKey,
     userVarChannels,
     usageMonitor,
   };
@@ -313,7 +353,7 @@ function createUsageRecorder(
  * in resolveAgentBase BEFORE Init stage creation to ensure correct
  * ordering of task group events.
  *
- * @param ctx - Resolved agent base containing stream ID
+ * @param ctx - Resolved agent base containing execution context
  * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
  *                              where the snapshot's stream ID should be used instead of
  *                              the regenerated one from ctx)
@@ -322,7 +362,7 @@ function setupFlowUIState(
   ctx: ResolvedAgentBase,
   streamTabIdOverride?: StreamTabId,
 ): void {
-  const streamTabId = streamTabIdOverride ?? ctx.streamTabId;
+  const streamTabId = streamTabIdOverride ?? ctx.streamId;
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
@@ -406,12 +446,12 @@ async function logFlowError(
   err: unknown,
   agentName: string,
   streamId: StreamTabId,
-  context: AgentExecutionContext,
+  agentLogger: AgentLogger,
 ): Promise<void> {
   const errorContext = { operation: `execute ${agentName}` };
-  await context.logger.withScope(
+  await agentLogger.withScope(
     `Error: ${agentName}`,
-    async () => context.logger.logError(errorMsg, err, errorContext),
+    async () => agentLogger.logError(errorMsg, err, errorContext),
     { errorStatus: 'error' },
   );
 }
@@ -420,7 +460,7 @@ async function handleFlowError(
   err: unknown,
   agentName: string,
   streamId: StreamTabId,
-  context: AgentExecutionContext,
+  agentLogger: AgentLogger,
 ): Promise<never> {
   const rawMsg = toErrorMessage(err);
   const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
@@ -433,7 +473,7 @@ async function handleFlowError(
   }
 
   // Log with proper grouping
-  await logFlowError(errorMsg, err, agentName, streamId, context);
+  await logFlowError(errorMsg, err, agentName, streamId, agentLogger);
 
   throw new Error(errorMsg);
 }
@@ -473,7 +513,7 @@ export async function executeAgent(
     throw err;
   }
 
-  const { streamTabId, setting, executionContext, config } = ctx;
+  const { setting, streamId: streamTabId, config, logger: agentLogger } = ctx;
   const agentName = config.agent;
 
   if (!config.session) {
@@ -562,7 +602,7 @@ export async function executeAgent(
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(err, agentName, streamTabId, executionContext);
+    await handleFlowError(err, agentName, streamTabId, agentLogger);
   }
 }
 
@@ -585,7 +625,12 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const { streamTabId, executionContext, config } = ctx;
+  const {
+    streamId: streamTabId,
+    config,
+    logger: agentLogger,
+    executionId,
+  } = ctx;
 
   if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
@@ -608,7 +653,7 @@ export async function executeMergeAgent(
       const interruptManager = new InterruptManager();
 
       // Create merge-specific output file location getter
-      const fileService = new TaskRunFileService(executionContext.executionId);
+      const fileService = new TaskRunFileService(executionId);
       const getOutputFileLocation = createMergeOutputFileLocationGetter(
         inputFile,
         editedFile,
@@ -629,7 +674,7 @@ export async function executeMergeAgent(
     });
   } catch (err) {
     StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(err, 'merge', streamTabId, executionContext);
+    await handleFlowError(err, 'merge', streamTabId, agentLogger);
   }
 }
 
@@ -653,17 +698,17 @@ export async function resumeToolUseFromSnapshot(
 ): Promise<void> {
   const snapshotConfig = snapshot.agentConfig;
   const executionId = snapshot.executionId as ExecutionId;
-  const streamTabId = snapshot.streamId as StreamTabId;
 
   // Resolve agent base with snapshot's stream ID for correct UI state
+  // The streamTabIdOverride ensures ctx.streamId matches the snapshot
   // Caller (resumeCommand.ts) handles error display via showWarningMessage
   const ctx = await resolveAgentBase(
     snapshotConfig.agent,
     snapshotConfig,
     executionId,
-    { streamTabIdOverride: streamTabId },
+    { streamTabIdOverride: snapshot.streamId as StreamTabId },
   );
-  const { setting, executionContext, config } = ctx;
+  const { setting, streamId: streamTabId, config, logger: agentLogger } = ctx;
 
   // Validate agent type and session
   if (setting.agentType !== 'toolUse') {
@@ -679,8 +724,7 @@ export async function resumeToolUseFromSnapshot(
   const interruptManager = new InterruptManager();
 
   try {
-    // Use snapshot's stream ID for UI state to maintain consistency
-    setupFlowUIState(ctx, streamTabId);
+    setupFlowUIState(ctx);
 
     // Run the flow with resume snapshot
     const result = await runToolUseFlow(
@@ -689,7 +733,6 @@ export async function resumeToolUseFromSnapshot(
         ...interruptManager.asFlowInput(),
         getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
         setting: setting as AgentToolUseSetting,
-        streamTabId,
         resumeSnapshot: snapshot,
       },
       setupSession ? (context) => setupSession(context.session) : undefined,
@@ -702,7 +745,7 @@ export async function resumeToolUseFromSnapshot(
       error,
       snapshotConfig.agent,
       streamTabId,
-      executionContext,
+      agentLogger,
     );
   }
 }

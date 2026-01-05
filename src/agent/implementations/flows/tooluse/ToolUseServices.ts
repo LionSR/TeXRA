@@ -20,10 +20,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
-import type {
-  BaseFlowContextInit,
-  FlowServiceAccessors,
-} from '../common/BaseFlowServices';
+import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
@@ -56,7 +53,7 @@ export interface PrepareStateResult {
  * Persistence is handled automatically by PersistedFlow after each node.
  */
 export interface ToolUseServices<C = unknown>
-  extends BaseFlowContextInit<C>, FlowServiceAccessors {
+  extends BaseFlowContextInit<C> {
   /** Narrow setting to tool-use specific type */
   readonly setting: AgentToolUseSetting;
 

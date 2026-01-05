@@ -39,9 +39,6 @@ export interface ToolUseFlowContextInit<
   /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
 
-  /** Stream tab ID for registry tracking */
-  streamTabId: StreamTabId;
-
   /** Optional tool registry override */
   toolRegistry?: IToolRegistry;
 
@@ -63,9 +60,6 @@ export interface ToolUseFlowContextInit<
 export interface ToolUseFlowContext<C = unknown> {
   /** Services for flow execution */
   services: ToolUseServices<C>;
-
-  /** Stream tab ID for this session */
-  streamTabId: StreamTabId;
 
   /** Session lifecycle manager */
   session: ToolUseSessionLifecycle;
@@ -159,14 +153,14 @@ export function createToolUseFlowContext<C = unknown>(
 ): ToolUseFlowContext<C> {
   const {
     setting,
-    streamTabId,
+    logger,
+    streamId,
     toolRegistry: customRegistry,
     resumeSnapshot,
   } = init;
 
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
-  const sessionLifecycle = new ToolUseSessionLifecycle(streamTabId);
-  const logger = init.executionContext.logger;
+  const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
   // Resolve tools once at construction time
   const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
@@ -180,11 +174,9 @@ export function createToolUseFlowContext<C = unknown>(
     resolvedTools.push(def);
   }
 
-  // Spread init directly - it already contains setting, etc.
+  // Spread init directly - it already contains setting, logger, etc.
   const services: ToolUseServices<C> = {
     ...init,
-    logger, // Use already-extracted variable from line 169
-    context: init.executionContext,
     toolRegistry, // May differ from init if defaulted
     session: sessionLifecycle,
     resolvedTools,
@@ -194,12 +186,11 @@ export function createToolUseFlowContext<C = unknown>(
 
   return {
     services,
-    streamTabId,
     session: sessionLifecycle,
 
     interrupt(): void {
       init.onInterrupt?.();
-      retryCoordinator.clearRequest(streamTabId);
+      retryCoordinator.clearRequest(streamId);
       sessionLifecycle.interrupt();
     },
 
