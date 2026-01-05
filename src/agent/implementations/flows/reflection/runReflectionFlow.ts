@@ -22,7 +22,10 @@
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  StorageKeyManager,
+} from '@agent/types/IdentifierTypes';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   registerInterruptible,
@@ -67,16 +70,13 @@ import type { ReflectionServices } from './ReflectionServices';
 
 /**
  * Input for running a reflection flow.
- * Extends BaseFlowContextInit with reflection-specific fields.
+ * Extends BaseFlowContextInit with reflection-specific fields and StorageKeyManager.
  */
-export interface RunReflectionFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunReflectionFlowInput<C = unknown>
+  extends BaseFlowContextInit<C>,
+    StorageKeyManager {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
-
-  /** Stream tab ID for interrupt registration */
-  streamTabId: StreamTabId;
 
   /** Usage recorder callback. If not provided, usage is not tracked. */
   getUsageRecorder?: () => RoundFinalizedCallback;
@@ -119,13 +119,17 @@ export async function runReflectionFlow<C = unknown>(
     config,
     setting,
     prompt,
-    executionContext,
+    logger,
+    streamId,
+    executionId,
+    getStorageKey,
+    hasInitialStorageKey,
+    updateStorageKey,
     userVarChannels,
     checkInterruption,
     setAbortController,
     getUsageRecorder = () => async () => {},
     parentStage,
-    streamTabId,
   } = input;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
@@ -137,7 +141,7 @@ export async function runReflectionFlow<C = unknown>(
   // Create services inline (previously in createReflectionFlowContext)
   // ========================================================================
 
-  const fileService = new TaskRunFileService(executionContext.executionId);
+  const fileService = new TaskRunFileService(executionId);
   const baseFiles = createBaseFileLocations(config);
 
   const outputHandler: IOutputHandler = new OutputHandler(
@@ -145,22 +149,19 @@ export async function runReflectionFlow<C = unknown>(
     config,
     0, // logId
     baseFiles,
-    executionContext.logger,
+    logger,
     fileService,
-    executionContext.executionId,
+    executionId,
   );
 
   const promptBuilder = new PromptBuilder(
     prompt,
     setting,
     userVarChannels.transient,
-    executionContext.logger,
+    logger,
   );
 
-  const latexMediaManager = new LatexMediaManager(
-    executionContext.logger,
-    fileService,
-  );
+  const latexMediaManager = new LatexMediaManager(logger, fileService);
 
   // Compute shouldEnsureXmlStructure from configuration
   const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
@@ -214,7 +215,7 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      retryCoordinator.clearRequest(executionContext.streamId);
+      retryCoordinator.clearRequest(streamId);
     },
   };
 
@@ -225,43 +226,35 @@ export async function runReflectionFlow<C = unknown>(
   // Create or use provided run stage FIRST - we need its ID for storage key
   const runStage =
     parentStage ??
-    (await executionContext.logger.stage(`Run: ${config.agent}`, {
+    (await logger.stage(`Run: ${config.agent}`, {
       skip: false,
     }));
 
   createdRunStage = !parentStage;
 
   // For new runs, update storage key to match the run stage ID
-  if (
-    createdRunStage &&
-    runStage.id &&
-    executionContext.hasInitialStorageKey()
-  ) {
+  if (createdRunStage && runStage.id && hasInitialStorageKey()) {
     const runStorageKey = normalizeRunId(runStage.id);
-    executionContext.updateStorageKey(runStorageKey);
+    updateStorageKey(runStorageKey);
   }
 
-  const storageKey = executionContext.storageKey;
+  const storageKey = getStorageKey();
 
   // Set active run for output handler
   outputHandler.setActiveRun(storageKey);
 
   try {
     // Register for interrupt handling
-    registerInterruptible(streamTabId, interruptible);
+    registerInterruptible(streamId, interruptible);
 
     // Get execution-scoped storage for persistence
-    const kv: ExecutionKVStore = getExecutionStore(
-      executionContext.executionId,
-    );
+    const kv: ExecutionKVStore = getExecutionStore(executionId);
 
     // Try to restore full state from persisted flow (resume scenario)
     let isResume = false;
 
     try {
-      const flowRecord = await kv.read<FlowRecord>(
-        `flow:${executionContext.executionId}`,
-      );
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
       if (flowRecord?.shared) {
         // Validate and use persisted shared state directly
         const validated = ReflectionFlowStateSchema.safeParse(
@@ -270,14 +263,14 @@ export async function runReflectionFlow<C = unknown>(
         if (validated.success) {
           shared = validated.data as ReflectionFlowShared;
           isResume = true;
-          executionContext.logger.debug(
+          logger.debug(
             `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
           );
         }
       }
     } catch (error) {
       // Log parse failures to help diagnose resume issues
-      executionContext.logger.debug(
+      logger.debug(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
       );
     }
@@ -303,7 +296,7 @@ export async function runReflectionFlow<C = unknown>(
       parentStage: runStage,
       hooks: {
         createRoundStage: async (roundIndex, parent) => {
-          return await executionContext.logger.stage(`r${roundIndex}`, {
+          return await logger.stage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           });
         },
@@ -317,33 +310,22 @@ export async function runReflectionFlow<C = unknown>(
       },
     });
 
-    // Build services - all fields inline
+    // Build services: spread input + add computed fields
     services = {
-      modelHandler,
-      config,
-      setting,
-      prompt,
-      executionContext,
-      userVarChannels,
-      checkInterruption,
-      setAbortController,
-      logger: executionContext.logger,
-      context: executionContext,
+      ...input,
+      getUsageRecorder,
       outputHandler,
       latexMediaManager,
       promptBuilder,
       fileService,
       getOutputFileLocation,
       shouldEnsureXmlStructure,
-      getUsageRecorder,
       runStage,
     };
     pf.setServices(services);
 
     if (isResume) {
-      executionContext.logger.debug(
-        'Resuming reflection flow from persistence',
-      );
+      logger.debug('Resuming reflection flow from persistence');
     }
 
     await pf.run(shared);
@@ -358,8 +340,8 @@ export async function runReflectionFlow<C = unknown>(
     // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
     if (status === END_GROUP_STATUS.STOPPED) {
       try {
-        const kv = getExecutionStore(executionContext.executionId);
-        await kv.delete(`flow:${executionContext.executionId}`);
+        const kv = getExecutionStore(executionId);
+        await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors
       }
@@ -370,9 +352,9 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Clean up retry coordinator
-    retryCoordinator.clearRequest(executionContext.streamId);
+    retryCoordinator.clearRequest(streamId);
 
-    unregisterInterruptible(streamTabId);
+    unregisterInterruptible(streamId);
   }
 
   return {

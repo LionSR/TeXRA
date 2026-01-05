@@ -18,7 +18,6 @@ import {
 import type { ToolUseCycleOptions } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
-import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -171,9 +170,8 @@ describe('BashTool', () => {
       checkInterruption: () => false,
       setAbortController: () => {},
       modelName: 'test',
-      context: new AgentExecutionContext({
-        streamId: 'bash-tool' as StreamTabId,
-      }),
+      streamId: 'bash-tool' as StreamTabId,
+      executionId: 'test-execution-id',
     };
 
     const run = new AgentRunState();

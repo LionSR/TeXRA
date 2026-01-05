@@ -17,10 +17,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
 import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
 import type { LatexMediaManager } from '@latex';
-import type {
-  BaseFlowContextInit,
-  FlowServiceAccessors,
-} from '../common/BaseFlowServices';
+import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 
 /**
  * Services for reflection flow nodes.
@@ -34,7 +31,7 @@ import type {
  * - Configuration-driven behavior delegates
  */
 export interface ReflectionServices<C = unknown>
-  extends BaseFlowContextInit<C>, FlowServiceAccessors {
+  extends BaseFlowContextInit<C> {
   /** Narrow setting to workflow-specific type */
   readonly setting: AgentWorkflowSetting;
   /** Output handler for file processing and artifacts */
