@@ -10,11 +10,13 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports
-import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { UsageLogService } from '@logger/UsageLogService';
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import type { ModelCapabilities, ModelConfig } from '@model';
 
 /**
@@ -45,24 +47,38 @@ export interface UsageMonitorModelInfo {
 }
 
 /**
+ * Runtime dependencies for UsageMonitor.
+ *
+ * Takes individual fields instead of full AgentExecutionContext:
+ * - logger: For error logging
+ * - usageReporter: For reporting usage to UI
+ * - getStorageKey: Callback to get current storage key (handles mutable state)
+ * - streamId: For backend logging
+ */
+export interface UsageMonitorContext {
+  logger: AgentLogger;
+  usageReporter: AgentUsageReporter;
+  getStorageKey: () => StorageKey;
+  streamId: StreamTabId;
+}
+
+/**
  * Handles recording usage statistics to the log and progress view.
  *
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
  *
  * ## Storage Key Resolution
- * Uses context.storageKey which is already computed:
+ * Uses getStorageKey() callback which returns the correct key:
  * - Workflow agents: storageKey = task group ID
  * - Tool-use agents: storageKey = executionId
- *
- * @see ExecutionIdentity for the unified identity model
  */
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
 export class UsageMonitor {
   constructor(
     private readonly modelInfo: UsageMonitorModelInfo,
-    private readonly context: AgentExecutionContext,
+    private readonly context: UsageMonitorContext,
     private readonly metadata?: UsageMonitorMetadata,
   ) {}
 
@@ -123,9 +139,8 @@ export class UsageMonitor {
         }),
       };
 
-      // Use storageKey from context - already computed correctly for both
-      // workflow agents (task group ID) and tool-use agents (executionId)
-      const storageKey = this.context.storageKey;
+      // Get current storageKey via callback - handles mutable state correctly
+      const storageKey = this.context.getStorageKey();
       usageReporter.report(payload, storageKey);
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
