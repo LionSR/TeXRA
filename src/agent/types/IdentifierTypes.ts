@@ -46,3 +46,22 @@ export const ExecutionIdentitySchema = z.strictObject({
   streamTabId: StreamTabIdSchema,
 });
 export type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;
+
+/**
+ * Callbacks for managing mutable storage key state.
+ *
+ * The storage key is initially set to executionId, then updated to the
+ * task group ID when workflow agents create their primary task group.
+ * Tool-use agents never update the key, keeping it as executionId.
+ *
+ * This interface bundles the three related callbacks that are typically
+ * passed together through the flow execution hierarchy.
+ */
+export interface StorageKeyManager {
+  /** Get the current storage key */
+  getStorageKey: () => StorageKey;
+  /** Check if storage key is still initial (new run, not resumed) */
+  hasInitialStorageKey: () => boolean;
+  /** Update storage key to task group ID (called by workflow agents) */
+  updateStorageKey: (key: StorageKey) => void;
+}

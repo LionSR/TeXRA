@@ -168,7 +168,7 @@ export type InvocationResult<TSuccess> =
  * Uses flattened structure - options fields are directly on services.
  */
 interface RetryableNodeServices {
-  context: { streamId: string };
+  streamId: string;
   logger: AgentLogger;
   setAbortController: (ac: AbortController | null) => void;
 }
@@ -386,7 +386,7 @@ export abstract class RetryableInvocationNode<
   ): Promise<ManualRetryPromptResult> {
     const services = this.getServices();
     const operationName = this.getOperationName();
-    const streamId = services.context.streamId;
+    const streamId = services.streamId;
     const logger = services.logger;
 
     // Format error to check if retryable
