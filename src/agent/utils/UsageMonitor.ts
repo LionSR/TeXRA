@@ -11,7 +11,10 @@ import type {
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
+import {
+  UsageProviderSchema,
+  type NormalizedUsage,
+} from '@agent/types/NormalizedUsage';
 
 // Internal imports
 import { UsageLogService } from '@logger/UsageLogService';
@@ -41,9 +44,12 @@ export interface UsageMonitorMetadata {
 export interface UsageMonitorModelInfo {
   capabilities: Pick<
     ModelCapabilities,
-    'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
+    | 'supportsPromptCaching'
+    | 'supportsAutoPromptCaching'
+    | 'supportsReasoning'
+    | 'cacheDiscountFactor'
   >;
-  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName'>;
+  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName' | 'inputPrice'>;
 }
 
 /**
@@ -91,8 +97,12 @@ export class UsageMonitor {
 
     try {
       const totals = stateGlobal.usageAccumulator.getTotals();
+      const latestUsageSnapshot = stateGlobal.usageAccumulator
+        .getNormalizedSnapshots()
+        .at(-1);
+      const latestUsage = latestUsageSnapshot?.usage;
 
-      // Cost is already computed and stored in totals - no need to recompute!
+      // `totalCost` is the provider-computed charge (includes cache discounts).
       const cost = totals.totalCost;
 
       const cachingStats =
@@ -144,7 +154,7 @@ export class UsageMonitor {
       usageReporter.report(payload, storageKey);
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(totals, stateGlobal.totalResponseTimeMs);
+      this.logToBackend(totals, stateGlobal.totalResponseTimeMs, latestUsage);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
@@ -157,6 +167,7 @@ export class UsageMonitor {
   private logToBackend(
     totals: ReturnType<AgentRunState['usageAccumulator']['getTotals']>,
     totalResponseTimeMs: number,
+    latestUsage: NormalizedUsage | undefined,
   ): void {
     try {
       const { config } = this.modelInfo;
@@ -172,18 +183,45 @@ export class UsageMonitor {
         config.name,
       );
 
+      // Relay billing should only reflect the current round's net tokens and cost
+      // rather than cumulative history.
+      const roundInputTokens =
+        latestUsage?.inputTokens ?? totals.totalInputTokens;
+      const roundOutputTokens =
+        latestUsage?.outputTokens ?? totals.totalOutputTokens;
+      const roundCachedInputTokens =
+        latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens;
+      const roundReasoningTokens =
+        latestUsage?.reasoningTokens ?? totals.totalReasoningTokens;
+      const roundCost = latestUsage?.cost ?? totals.totalCost;
+
+      const netInputTokens = Math.max(
+        0,
+        roundInputTokens - roundCachedInputTokens,
+      );
+
+      const cachedTokenCost =
+        (roundCachedInputTokens *
+          this.modelInfo.config.inputPrice *
+          this.modelInfo.capabilities.cacheDiscountFactor) /
+        1e6;
+
+      const relayCost = usedRelay
+        ? Math.max(0, roundCost - cachedTokenCost)
+        : roundCost;
+
       UsageLogService.log({
         model: config.fullName,
         provider,
         agentName: this.metadata?.agentName,
         agentCategory: this.metadata?.agentCategory,
         isMultipleOutput: this.metadata?.isMultipleOutput,
-        inputTokens: totals.totalInputTokens,
-        outputTokens: totals.totalOutputTokens,
-        cost: Number(totals.totalCost.toFixed(6)),
+        inputTokens: netInputTokens,
+        outputTokens: roundOutputTokens,
+        cost: Number(relayCost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
-        cachedInputTokens: totals.totalCacheReadInputTokens,
-        reasoningTokens: totals.totalReasoningTokens,
+        cachedInputTokens: roundCachedInputTokens,
+        reasoningTokens: roundReasoningTokens,
         usedRelay,
         streamId: this.context.streamId,
       });
