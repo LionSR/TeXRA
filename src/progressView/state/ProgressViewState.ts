@@ -373,6 +373,15 @@ export class ProgressViewState {
       }
     }
 
+    // For tool-use sessions, there are no task groups - fall back to usage runs
+    if (!latest) {
+      const usageRuns = this._usageStats.getRunUsage(stream);
+      if (usageRuns.size > 0) {
+        // Return the last key (most recently added run)
+        return [...usageRuns.keys()].at(-1) ?? null;
+      }
+    }
+
     return latest?.id ?? null;
   }
 
