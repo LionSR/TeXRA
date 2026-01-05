@@ -35,8 +35,8 @@ describe('maybeSaveDebugObject', () => {
   let storageWrites: { relativePath: string; value: unknown }[];
   let ensured: string[];
   let workspaceWrites: { relativePath: string; value: unknown }[];
-  let infoLogs: { message: string; groupId: unknown }[];
-  let errorLogs: { message: string; groupId: unknown }[];
+  let infoLogs: string[];
+  let errorLogs: string[];
 
   beforeEach(() => {
     storageWrites = [];
@@ -88,14 +88,12 @@ describe('maybeSaveDebugObject', () => {
     const executionId = 'run-42' as ExecutionId;
 
     const logger = {
-      info: (message: string, groupId: unknown) => {
-        infoLogs.push({ message, groupId });
+      info: (message: string) => {
+        infoLogs.push(message);
       },
-      error: (message: string, groupId: unknown) => {
-        errorLogs.push({ message, groupId });
+      error: (message: string) => {
+        errorLogs.push(message);
       },
-      withCurrentGroup: (callback: (groupId: string) => string) =>
-        callback('logger-group'),
     } as unknown as import('@logger/AgentLogger').AgentLogger;
 
     await maybeSaveDebugObject({
@@ -104,7 +102,6 @@ describe('maybeSaveDebugObject', () => {
       context: {
         logger,
         executionId,
-        groupId: 'test-group',
       },
     });
 
@@ -117,10 +114,9 @@ describe('maybeSaveDebugObject', () => {
     assert.equal(workspaceWrites.length, 0);
 
     assert.equal(infoLogs.length, 1);
-    assert.equal(infoLogs[0].groupId, 'test-group');
     assert.equal(errorLogs.length, 0);
     assert.equal(
-      infoLogs[0].message,
+      infoLogs[0],
       `Saved response object to ${path.join(
         '/mock/storage',
         expectedRelativePath,

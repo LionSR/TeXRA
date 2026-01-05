@@ -34,7 +34,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // ============================================================================
@@ -45,7 +45,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
  * Base initialization config shared by all flow contexts.
  *
  * Flow-specific contexts extend this with additional fields:
- * - ToolUseFlowContextInit adds: streamTabId, toolRegistry, resumeSnapshot
+ * - ToolUseFlowContextInit adds: toolRegistry, resumeSnapshot
  * - ReflectionFlowContextInit adds: getUsageRecorder (required)
  */
 export interface BaseFlowContextInit<C = unknown> {
@@ -61,8 +61,14 @@ export interface BaseFlowContextInit<C = unknown> {
   /** Agent prompt templates */
   prompt: AgentPrompt;
 
-  /** Execution context (IDs, storage key, etc.) */
-  executionContext: AgentExecutionContext;
+  /** Logger for flow operations */
+  logger: AgentLogger;
+
+  /** Stream/tab identifier */
+  streamId: StreamTabId;
+
+  /** Execution identifier */
+  executionId: ExecutionId;
 
   /** User variable channels for template rendering */
   userVarChannels: UserVariableChannels;
@@ -88,18 +94,3 @@ export interface FlowParams {
   [key: string]: unknown;
 }
 
-// ============================================================================
-// Convenience Accessors
-// ============================================================================
-
-/**
- * Convenience accessors that child service interfaces define inline.
- *
- * ToolUseServices and ReflectionServices extend BaseFlowContextInit and add:
- * - logger: Direct access to executionContext.logger
- * - context: Alias for executionContext (used by cycle options)
- */
-export interface FlowServiceAccessors {
-  readonly logger: AgentLogger;
-  readonly context: AgentExecutionContext;
-}
