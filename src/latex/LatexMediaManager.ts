@@ -41,7 +41,6 @@ export class LatexMediaManager {
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
-    groupId: string | null | undefined,
   ): Promise<void> {
     if (!this.fileService?.hasRunDirectory()) {
       return;
@@ -77,7 +76,6 @@ export class LatexMediaManager {
         const message = toErrorMessage(error);
         this.logger.debug(
           `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
-          { groupId: groupId ?? undefined },
         );
       }
     });
@@ -92,7 +90,6 @@ export class LatexMediaManager {
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
-    const activeGroupId = this.logger.getCurrentGroupId();
     const texFiles = files.filter((file) =>
       file.absolutePath.toLowerCase().endsWith('.tex'),
     );
@@ -118,7 +115,6 @@ export class LatexMediaManager {
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-                  { groupId: activeGroupId },
                 );
                 return undefined;
               }
@@ -126,14 +122,12 @@ export class LatexMediaManager {
               const message = toErrorMessage(err);
               this.logger.error(
                 `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${message}`,
-                { groupId: activeGroupId },
               );
               return undefined;
             }
 
             this.logger.info(
               `Compiled PDF for ${file.absolutePath}: ${pdfLocation.absolutePath}`,
-              { groupId: activeGroupId },
             );
             return pdfLocation;
           }
@@ -152,7 +146,6 @@ export class LatexMediaManager {
     files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
-    const activeGroupId = this.logger.getCurrentGroupId();
     const figureResults = await Promise.allSettled(
       files.map((file) => extractFigurePathsFromLatex(file)),
     );
@@ -168,7 +161,6 @@ export class LatexMediaManager {
       const file = files[idx];
       this.logger.debug(
         `Extracted ${result.value.length} figures from ${file.absolutePath}`,
-        { groupId: activeGroupId },
       );
 
       // result.value contains paths relative to the LaTeX file's directory.
@@ -195,14 +187,11 @@ export class LatexMediaManager {
         .forEach(({ loc }) =>
           this.logger.debug(
             `Extracted figure path does not exist: ${loc.absolutePath} (from ${file.absolutePath})`,
-            { groupId: activeGroupId },
           ),
         );
 
       workspaceState.media.addMediaFiles(fileLocations);
-      mirrorTasks.push(
-        this.mirrorFigureDependencies(file, result.value, activeGroupId),
-      );
+      mirrorTasks.push(this.mirrorFigureDependencies(file, result.value));
     }
 
     if (mirrorTasks.length > 0) {
@@ -215,7 +204,6 @@ export class LatexMediaManager {
     workspaceState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
-    const activeGroupId = this.logger.getCurrentGroupId();
     const tikzResults = await Promise.allSettled(
       files.map((file) => tikzPictureManager.compile(file)),
     );
@@ -227,9 +215,7 @@ export class LatexMediaManager {
       )
       .forEach((r) => workspaceState.media.addMediaFiles(r.value));
     if (logSummary) {
-      this.logger.debug(`Extracted ${tikzResults.length} TikZ figures`, {
-        groupId: activeGroupId,
-      });
+      this.logger.debug(`Extracted ${tikzResults.length} TikZ figures`);
     }
   }
 

@@ -460,7 +460,6 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     const services = this.services;
     const { workspace } = services;
-    const groupId = services.logger.getCurrentGroupId();
 
     // Process thinking block (logging only, state stored in workspace)
     const thinking = services.modelHandler.processThinkingBlock(
@@ -472,7 +471,6 @@ class ToolUseProcessNode<C> extends BaseNode<
       const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
         services.logger.info(formatted, {
-          groupId,
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
@@ -495,7 +493,6 @@ class ToolUseProcessNode<C> extends BaseNode<
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
         services.logger.info('', {
-          groupId,
           messageType: MESSAGE_TYPES.WEB_SEARCH,
           data: searchResult,
         });
@@ -509,13 +506,10 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     // Log response text
     if (text) {
-      services.logger.debug(`Model response: ${text.slice(0, 100)}`, {
-        groupId,
-      });
+      services.logger.debug(`Model response: ${text.slice(0, 100)}`);
       if (!useStreaming) {
         const formatted = await formatContent(text);
         services.logger.info(formatted, {
-          groupId,
           messageType: MESSAGE_TYPES.MODEL_RESPONSE,
         });
       }
@@ -833,7 +827,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
     execResult: ToolExecutionResult,
     options: ToolUseCycleOptions<C>,
     workspace: ToolUseCycleServices<C>['workspace'],
-    groupId: string | undefined,
   ): Promise<void> {
     const { call, result, parsedInput, sanitizedOutput, editedFiles } =
       execResult;
@@ -846,7 +839,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       isError: Boolean(result.isError),
     };
     options.logger.info('', {
-      groupId,
       messageType: MESSAGE_TYPES.TOOL_USE,
       data: toolUseLog,
     });
@@ -892,7 +884,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
   ): Promise<string | undefined> {
     const services = this.services;
     const { workspace } = services;
-    const groupId = services.logger.getCurrentGroupId();
 
     if (execRes.kind === 'skipped') {
       if (execRes.interrupted) {
@@ -905,12 +896,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 1: Log each tool execution and process media files
     for (const execResult of execResults) {
-      await this.logAndProcessMediaFiles(
-        execResult,
-        services,
-        workspace,
-        groupId,
-      );
+      await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
 
     // Step 2: Create follow-up messages
