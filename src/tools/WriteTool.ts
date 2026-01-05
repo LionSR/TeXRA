@@ -89,7 +89,7 @@ export class WriteFileTool extends defineTool({
     return {
       summary: `Wrote ${input.path}`,
       output,
-      userPatch: approval.userPatch,
+      // userPatch omitted - userDiffNote in output already shows user adjustments
       edits: [{ path: input.path, lineChanges: approval.lineChanges }],
     };
   }
