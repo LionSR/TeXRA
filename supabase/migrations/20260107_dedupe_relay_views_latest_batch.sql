@@ -41,8 +41,27 @@ WITH ranked_batches AS (
       AND u.batch_id IS NOT NULL
 ),
 deduped_batches AS (
-    SELECT *
-    FROM ranked_batches
+    SELECT
+        rb.id,
+        rb.user_id,
+        rb.logged_at,
+        rb.created_at,
+        rb.model,
+        rb.provider,
+        rb.agent_name,
+        rb.agent_category,
+        rb.is_multiple_output,
+        rb.input_tokens,
+        rb.output_tokens,
+        rb.cached_input_tokens,
+        rb.reasoning_tokens,
+        rb.cost,
+        rb.response_time_ms,
+        rb.used_relay,
+        rb.stream_id,
+        rb.extension_version,
+        rb.batch_id
+    FROM ranked_batches rb
     WHERE batch_rank = 1
 ),
 relay_logs AS (
@@ -99,8 +118,27 @@ WITH ranked_batches AS (
       AND u.batch_id IS NOT NULL
 ),
 deduped_batches AS (
-    SELECT *
-    FROM ranked_batches
+    SELECT
+        rb.id,
+        rb.user_id,
+        rb.logged_at,
+        rb.created_at,
+        rb.model,
+        rb.provider,
+        rb.agent_name,
+        rb.agent_category,
+        rb.is_multiple_output,
+        rb.input_tokens,
+        rb.output_tokens,
+        rb.cached_input_tokens,
+        rb.reasoning_tokens,
+        rb.cost,
+        rb.response_time_ms,
+        rb.used_relay,
+        rb.stream_id,
+        rb.extension_version,
+        rb.batch_id
+    FROM ranked_batches rb
     WHERE batch_rank = 1
 ),
 relay_logs AS (
@@ -156,8 +194,27 @@ WITH ranked_batches AS (
       AND u.batch_id IS NOT NULL
 ),
 deduped_batches AS (
-    SELECT *
-    FROM ranked_batches
+    SELECT
+        rb.id,
+        rb.user_id,
+        rb.logged_at,
+        rb.created_at,
+        rb.model,
+        rb.provider,
+        rb.agent_name,
+        rb.agent_category,
+        rb.is_multiple_output,
+        rb.input_tokens,
+        rb.output_tokens,
+        rb.cached_input_tokens,
+        rb.reasoning_tokens,
+        rb.cost,
+        rb.response_time_ms,
+        rb.used_relay,
+        rb.stream_id,
+        rb.extension_version,
+        rb.batch_id
+    FROM ranked_batches rb
     WHERE batch_rank = 1
 ),
 relay_logs AS (
@@ -210,8 +267,27 @@ WITH ranked_batches AS (
       AND u.batch_id IS NOT NULL
 ),
 deduped_batches AS (
-    SELECT *
-    FROM ranked_batches
+    SELECT
+        rb.id,
+        rb.user_id,
+        rb.logged_at,
+        rb.created_at,
+        rb.model,
+        rb.provider,
+        rb.agent_name,
+        rb.agent_category,
+        rb.is_multiple_output,
+        rb.input_tokens,
+        rb.output_tokens,
+        rb.cached_input_tokens,
+        rb.reasoning_tokens,
+        rb.cost,
+        rb.response_time_ms,
+        rb.used_relay,
+        rb.stream_id,
+        rb.extension_version,
+        rb.batch_id
+    FROM ranked_batches rb
     WHERE batch_rank = 1
 ),
 relay_logs AS (
@@ -269,8 +345,27 @@ WITH ranked_batches AS (
       AND u.batch_id IS NOT NULL
 ),
 deduped_batches AS (
-    SELECT *
-    FROM ranked_batches
+    SELECT
+        rb.id,
+        rb.user_id,
+        rb.logged_at,
+        rb.created_at,
+        rb.model,
+        rb.provider,
+        rb.agent_name,
+        rb.agent_category,
+        rb.is_multiple_output,
+        rb.input_tokens,
+        rb.output_tokens,
+        rb.cached_input_tokens,
+        rb.reasoning_tokens,
+        rb.cost,
+        rb.response_time_ms,
+        rb.used_relay,
+        rb.stream_id,
+        rb.extension_version,
+        rb.batch_id
+    FROM ranked_batches rb
     WHERE batch_rank = 1
 ),
 relay_logs AS (
