@@ -62,24 +62,25 @@
 import { Hono } from 'jsr:@hono/hono@4.11.1';
 import { cors } from 'jsr:@hono/hono@4.11.1/cors';
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
-import { TIER_CONFIG, isModelAllowedForTier } from './models.ts';
+import {
+  TIER_CONFIG,
+  TIER_SPENDING_LIMITS,
+  isModelAllowedForTier,
+  getSpendingLimit,
+  ULTRA_TIER,
+  FREE_TIER,
+} from './models.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.7.0';
+const RELAY_VERSION = '1.8.0';
 
-/**
- * Tier values - MUST match constants in src/auth/config.ts
- *
- * CROSS-REFERENCE: These are duplicated because the relay runs in Deno
- * and cannot import from the TypeScript source. Keep in sync with:
- * - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
- * - Database: profiles.tier column values
- */
-const ULTRA_TIER = 'Ultra';
-const FREE_TIER = 'free';
+// Tier constants imported from models.ts (single source of truth)
+// CROSS-REFERENCE: Keep models.ts in sync with:
+// - src/auth/config.ts: ULTRA_TIER, MAX_TIER, FREE_TIER constants
+// - Database: profiles.tier column values
 
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
@@ -249,6 +250,65 @@ function jsonError(
   );
 }
 
+/**
+ * Get the start of the current month in UTC.
+ * Uses UTC for consistency with billing views.
+ */
+function getCurrentMonthStartUTC(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
+/**
+ * Check if user has exceeded their monthly spending limit.
+ * Returns { allowed: true } or { allowed: false, currentSpend, limit, remaining }.
+ *
+ * Uses database function for server-side aggregation (efficient).
+ *
+ * RACE CONDITION NOTE: Usage is logged asynchronously after requests complete.
+ * Concurrent requests may pass this check before their costs are logged.
+ * This is acceptable for soft limits. See migration for mitigation options.
+ */
+async function checkSpendingLimit(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  userId: string,
+  tier: string,
+): Promise<{
+  allowed: boolean;
+  currentSpend: number;
+  limit: number;
+  remaining: number;
+}> {
+  const limit = getSpendingLimit(tier);
+  const monthStart = getCurrentMonthStartUTC();
+
+  // Use service role to bypass RLS for admin query
+  const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+  // Call database function for efficient server-side aggregation
+  const { data, error } = await adminClient.rpc('get_user_monthly_relay_spend', {
+    p_user_id: userId,
+    p_month_start: monthStart,
+  });
+
+  if (error) {
+    console.error('[RELAY] Failed to check spending:', error.message);
+    // Fail open: allow request on error but log it
+    return { allowed: true, currentSpend: 0, limit, remaining: limit };
+  }
+
+  const currentSpend = Number(data) || 0;
+  const remaining = Math.max(0, limit - currentSpend);
+
+  return {
+    allowed: currentSpend < limit,
+    currentSpend,
+    limit,
+    remaining,
+  };
+}
+
 // =============================================================================
 // Hono App
 // =============================================================================
@@ -296,15 +356,21 @@ app.get('/providers', (c) => {
 /**
  * GET /relay/tier-config - Tier-based model access configuration
  * Returns enabled providers (with API keys) instead of all supported providers.
- * When authenticated, also includes user's access status.
+ * When authenticated, also includes user's access status and spending info.
  */
 app.get('/tier-config', async (c) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const jwtToken = extractJwtFromRequest(c.req.raw);
 
   // Override static providers list with actually enabled providers
-  const config = { ...TIER_CONFIG, providers: getEnabledProviders() };
+  // Include spending limits in the public config
+  const config = {
+    ...TIER_CONFIG,
+    providers: getEnabledProviders(),
+    spendingLimits: TIER_SPENDING_LIMITS,
+  };
 
   // Try to include user status if authenticated
   if (jwtToken && supabaseUrl && supabaseAnonKey) {
@@ -329,7 +395,27 @@ app.get('/tier-config', async (c) => {
             profile.tier,
             profile.access_expires_at,
           );
-          return c.json({ ...config, userStatus });
+
+          // Include current spending if service role key is available
+          let spendingStatus = null;
+          if (serviceRoleKey) {
+            const spending = await checkSpendingLimit(
+              supabaseUrl,
+              serviceRoleKey,
+              user.id,
+              profile.tier || FREE_TIER,
+            );
+            spendingStatus = {
+              currentSpend: spending.currentSpend,
+              limit: spending.limit,
+              remaining: spending.remaining,
+              percentUsed: spending.limit > 0
+                ? Math.round((spending.currentSpend / spending.limit) * 100)
+                : 100,
+            };
+          }
+
+          return c.json({ ...config, userStatus, spendingStatus });
         }
       }
     } catch {
@@ -410,6 +496,32 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   }
 
   const userTier = profile.tier || FREE_TIER;
+
+  // 5.5. Check monthly spending limit
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceRoleKey) {
+    const spending = await checkSpendingLimit(
+      supabaseUrl,
+      serviceRoleKey,
+      user.id,
+      userTier,
+    );
+
+    if (!spending.allowed) {
+      return jsonError(
+        `Monthly spending limit reached ($${spending.limit}). ` +
+          `Current usage: $${spending.currentSpend.toFixed(2)}. ` +
+          'You can continue using your own API keys, or wait for next month.',
+        429,
+        {
+          limitReached: true,
+          currentSpend: spending.currentSpend,
+          limit: spending.limit,
+          remaining: spending.remaining,
+        },
+      );
+    }
+  }
 
   // 6. Validate model for non-Ultra tiers
   let requestBody: string | null = null;
