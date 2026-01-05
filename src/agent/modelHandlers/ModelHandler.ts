@@ -265,6 +265,13 @@ export abstract class ModelHandler<
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
+    // Prime caches before using sync methods. This ensures that after reload/continue,
+    // the tier config and access status are fetched before shouldUseServerSideKeys() is called.
+    // Without this, sync methods return false due to empty caches, causing incorrect tier errors.
+    if (useIncludedAccess) {
+      await serverSideKeyService.canUseServerSideKeys();
+    }
+
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
       const accessToken = await SupabaseClient.getAccessToken();
