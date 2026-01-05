@@ -74,8 +74,19 @@ function popGroupContext(
   if (!context?.stack.length) {
     store.delete(key);
   } else {
-    // Remove the specific groupId from stack (supports non-LIFO group endings)
-    const newStack = context.stack.filter((id) => id !== groupId);
+    // Remove only the LAST occurrence of groupId from stack.
+    // This supports:
+    // 1. Non-LIFO group endings (different group IDs can end out of order)
+    // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
+    const lastIndex = context.stack.lastIndexOf(groupId);
+    if (lastIndex === -1) {
+      // groupId not found, nothing to pop
+      return;
+    }
+    const newStack = [
+      ...context.stack.slice(0, lastIndex),
+      ...context.stack.slice(lastIndex + 1),
+    ];
     if (newStack.length === 0) {
       store.delete(key);
     } else {
