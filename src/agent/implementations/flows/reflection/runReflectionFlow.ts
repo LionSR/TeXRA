@@ -73,8 +73,7 @@ import type { ReflectionServices } from './ReflectionServices';
  * Extends BaseFlowContextInit with reflection-specific fields and StorageKeyManager.
  */
 export interface RunReflectionFlowInput<C = unknown>
-  extends BaseFlowContextInit<C>,
-    StorageKeyManager {
+  extends BaseFlowContextInit<C>, StorageKeyManager {
   /** Narrow setting to workflow-specific type */
   setting: AgentWorkflowSetting;
 
