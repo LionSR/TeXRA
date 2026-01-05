@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.3] - 2026-01-05
+
+### Features
+
+- Added monthly spending limits for relay users.
+
+### Bug Fixes
+
+- Improved progress board layout with better log grouping and reduced whitespace.
+- Fixed relay authentication expiring during long-running sessions.
+
+### Improvements
+
+- Internal refactoring to reduce abstraction overhead and improve code organization.
+
 ## [0.35.2] - 2025-12-30
 
 ### Bug Fixes
