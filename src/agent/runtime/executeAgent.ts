@@ -12,6 +12,7 @@
 
 // Standard library imports
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -73,7 +74,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import { InterruptManager } from './InterruptManager';
-import { AgentExecutionContext } from './AgentExecutionContext';
+import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -171,9 +172,12 @@ interface ResolveAgentOptions {
 async function resolveAgentBase(
   agentName: string,
   configPayload: Partial<AgentConfig>,
-  executionId?: ExecutionId,
+  providedExecutionId?: ExecutionId,
   options?: ResolveAgentOptions,
 ): Promise<ResolvedAgentBase> {
+  // Generate executionId if not provided (always a UUID)
+  const executionId: ExecutionId = providedExecutionId ?? (randomUUID() as ExecutionId);
+
   // 1. Resolve agent definition
   const fullConfig = AgentConfigSchema.parse({
     agent: agentName,
@@ -220,25 +224,27 @@ async function resolveAgentBase(
     },
   );
   // Use override if provided (resume uses snapshot's streamId)
-  const streamTabId = options?.streamTabIdOverride ?? computedStreamTabId;
+  const streamId = options?.streamTabIdOverride ?? computedStreamTabId;
 
-  const executionContext = new AgentExecutionContext({
-    streamId: streamTabId,
-    executionId,
-    agentCategory: sessionDescriptor.agentCategory,
-  });
+  // 3. Create logger and usage reporter directly (no AgentExecutionContext wrapper)
+  const agentLogger = new AgentLogger(streamId, true);
+  const usageReporter = new AgentUsageReporter(
+    agentLogger,
+    streamId,
+    sessionDescriptor.agentCategory,
+  );
 
   // Configure model handler with agent type and logger
   // This enables provider-specific behavior (e.g., Anthropic context management beta
   // for tool-use agents, OpenAI Response API background mode detection)
   modelHandler.setAgentType(setting.agentType);
-  modelHandler.setLogger(executionContext.logger);
+  modelHandler.setLogger(agentLogger);
 
   // Emit setActiveStream BEFORE Init stage creation.
   // This ensures the frontend has state.activeStream set when addTaskGroup arrives,
   // preventing the race condition where Init groups are dropped.
   bus.emit('setActiveStream', {
-    stream: streamTabId,
+    stream: streamId,
     session: sessionDescriptor,
     isRemote: isRemoteAgent(fullConfig.agent),
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
@@ -246,7 +252,7 @@ async function resolveAgentBase(
 
   // 4. Build user variable channels (replaces agent.init() logic)
   // Wrap in "Init" stage so file loading logs are properly grouped
-  const initStage = await executionContext.logger.stage('Init');
+  const initStage = await agentLogger.stage('Init');
   // Use initStage.run() to ensure buildUserVars executes within the stage's
   // group context - this makes file loading logs appear under the Init group
   const baseVars = await initStage.run(() =>
@@ -260,7 +266,7 @@ async function resolveAgentBase(
         isAnthropic: modelHandler.isAnthropic,
         isGoogle: modelHandler.isGoogle,
       },
-      executionContext.logger,
+      agentLogger,
     ),
   );
   const userVarChannels: UserVariableChannels = {
@@ -268,7 +274,22 @@ async function resolveAgentBase(
     transient: { ...baseVars },
   };
 
-  // 5. Create usage monitor for tracking API usage
+  // 5. Define mutable storage key with callbacks
+  // Initial value is executionId (normalized); workflow agents update it to task group ID
+  const initialStorageKey = normalizeRunId(executionId);
+  let storageKey: StorageKey = initialStorageKey;
+  const getStorageKey = () => storageKey;
+  const hasInitialStorageKey = () => storageKey === initialStorageKey;
+  const updateStorageKey = (key: StorageKey) => {
+    if (!hasInitialStorageKey()) {
+      agentLogger.warn(
+        `Storage key already set to ${storageKey}, updating to ${key}. This may indicate a bug.`,
+      );
+    }
+    storageKey = key;
+  };
+
+  // 6. Create usage monitor for tracking API usage
   // Pass only the minimal model info needed (capabilities + config subset)
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
@@ -280,7 +301,12 @@ async function resolveAgentBase(
       capabilities: modelHandler.capabilities,
       config: modelHandler.config,
     },
-    executionContext,
+    {
+      logger: agentLogger,
+      usageReporter,
+      getStorageKey,
+      streamId,
+    },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
@@ -293,13 +319,12 @@ async function resolveAgentBase(
     config,
     setting,
     prompt,
-    logger: executionContext.logger,
-    streamId: streamTabId,
-    executionId: executionContext.executionId,
-    // Storage key management callbacks (close over executionContext)
-    getStorageKey: () => executionContext.storageKey,
-    hasInitialStorageKey: () => executionContext.hasInitialStorageKey(),
-    updateStorageKey: (key: StorageKey) => executionContext.updateStorageKey(key),
+    logger: agentLogger,
+    streamId,
+    executionId,
+    getStorageKey,
+    hasInitialStorageKey,
+    updateStorageKey,
     userVarChannels,
     usageMonitor,
   };
