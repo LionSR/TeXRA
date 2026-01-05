@@ -532,8 +532,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   // 6. Validate model for non-Ultra tiers
   // Skip model validation for endpoints that don't require a model (e.g., file uploads)
   // - OpenAI: /v1/files
+  // - Anthropic: /v1/files (same as OpenAI)
   // - Google: /upload/*, /v1beta/files
-  // - Anthropic: uses base64 in messages, no separate file API
   const MODEL_FREE_PATHS = ['/v1/files', '/files', '/upload', '/v1beta/files'];
   const isModelFreePath = MODEL_FREE_PATHS.some(
     (prefix) => apiPath === prefix || apiPath.startsWith(prefix + '/'),
