@@ -446,6 +446,13 @@ export class ProgressEventHandler {
           normalizedUsage,
         );
 
+        // For tool-use sessions (no task groups), set active run ID from usage
+        // so the frontend can resolve which run's usage to display.
+        // For workflow sessions, task group creation already set this.
+        if (!this.state.getActiveRunId(stream)) {
+          this.state.setActiveRunId(stream, storageKey);
+        }
+
         if (
           this.webviewUpdater.isAvailable() &&
           stream === this.state.activeStream
