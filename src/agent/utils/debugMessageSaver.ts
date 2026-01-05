@@ -21,8 +21,6 @@ export interface DebugContext {
   modelName?: string;
   /** Execution ID if part of a task run */
   executionId?: ExecutionId;
-  /** Group ID for log correlation */
-  groupId?: string;
   /** Whether this is a remote agent (don't save messages to avoid leaking prompts) */
   isRemote?: boolean;
 }
@@ -82,8 +80,7 @@ export async function maybeSaveDebugObject({
     return;
   }
 
-  const { logger, modelName, executionId, groupId } = context;
-  const activeGroupId = groupId ?? logger.getCurrentGroupId();
+  const { logger, modelName, executionId } = context;
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
   const fileBase =
@@ -101,19 +98,13 @@ export async function maybeSaveDebugObject({
       const relativePath = path.join(TASK_RUNS_DIR, executionId, debugFileName);
       await StorageFS.writeJson(relativePath, object);
       const debugFilePath = StorageFS.fullPath(relativePath);
-      logger.info(`Saved ${objectType} object to ${debugFilePath}`, {
-        groupId: activeGroupId,
-      });
+      logger.info(`Saved ${objectType} object to ${debugFilePath}`);
     } else {
       await WorkspaceFS.writeJson(debugFileName, object);
       const debugFilePath = WorkspaceFS.fullPath(debugFileName);
-      logger.info(`Saved ${objectType} object to ${debugFilePath}`, {
-        groupId: activeGroupId,
-      });
+      logger.info(`Saved ${objectType} object to ${debugFilePath}`);
     }
   } catch (error) {
-    logger.error(`Failed to save ${objectType} object: ${error}`, {
-      groupId: activeGroupId,
-    });
+    logger.error(`Failed to save ${objectType} object: ${error}`);
   }
 }
