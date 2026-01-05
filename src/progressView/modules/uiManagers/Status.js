@@ -54,7 +54,10 @@ export class Status {
         label: 'Ready',
         enable: [
           ELEMENT_IDS.RUN_NEW_BTN,
+          ELEMENT_IDS.PACK_STREAM_BTN,
+          ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
+          ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
