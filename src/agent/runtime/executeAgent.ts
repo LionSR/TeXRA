@@ -462,15 +462,13 @@ async function logFlowError(
   errorMsg: string,
   err: unknown,
   agentName: string,
-  streamId: StreamTabId,
   agentLogger: AgentLogger,
 ): Promise<void> {
+  // Log error directly without creating a new visible group.
+  // The error is already captured in the runStage (ended with ERROR status).
+  // Using skip: true prevents creating a separate "Error:" session entry.
   const errorContext = { operation: `execute ${agentName}` };
-  await agentLogger.withScope(
-    `Error: ${agentName}`,
-    async () => agentLogger.logError(errorMsg, err, errorContext),
-    { errorStatus: 'error' },
-  );
+  await agentLogger.logError(errorMsg, err, errorContext);
 }
 
 async function handleFlowError(
@@ -489,8 +487,8 @@ async function handleFlowError(
     vscode.window.showErrorMessage(errorMsg);
   }
 
-  // Log with proper grouping
-  await logFlowError(errorMsg, err, agentName, streamId, agentLogger);
+  // Log error (without creating a separate session group)
+  await logFlowError(errorMsg, err, agentName, agentLogger);
 
   throw new Error(errorMsg);
 }
