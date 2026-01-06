@@ -7,8 +7,9 @@ import type { IRunStorageService } from '@agent/runtime/RunStorageService';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import { BaseWebviewProvider } from '@common/webview';
-import { getSharedLocalResourceRoots } from '@common/webview';
+import { getSharedLocalResourceRoots, COMMON_COMMANDS } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
+import { watchConfig, getConfig } from '@utils/config';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -110,6 +111,13 @@ export class ProgressViewProvider
         // Force rebuild after state reload to ensure freshly loaded data is rendered
         this.updateWebview({ forceRebuild: true });
       }),
+    );
+
+    // Watch for debug mode changes - push to webview immediately
+    watchConfig(
+      this.context,
+      ['texra.logger.debugMode'],
+      this.refreshDebugMode.bind(this),
     );
   }
 
@@ -367,5 +375,20 @@ export class ProgressViewProvider
   public setActiveStream(stream: string): void {
     this.state.activeStream = stream;
     this.updateWebview();
+  }
+
+  /**
+   * Push debug mode to webview.
+   * Called when debug mode config changes (texra.logger.debugMode).
+   */
+  private refreshDebugMode(): void {
+    if (!this._view) {
+      return;
+    }
+    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
+    this._view.webview.postMessage({
+      command: COMMON_COMMANDS.DEBUG_MODE_SET,
+      debugMode,
+    });
   }
 }
