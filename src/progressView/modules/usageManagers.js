@@ -65,23 +65,36 @@ export class UsageSummary {
 
   /**
    * Compute total usage for the active session in the active stream.
-   * Each stream tab can have multiple sessions; this returns the current session's total.
+   * Sums usage across all runs (rounds) in the stream.
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
   computeTotal() {
     const stream = progressViewState.activeStream;
-    const activeRunId = progressViewState.resolveActiveRunId(stream);
-    if (stream && activeRunId) {
-      const usage = progressViewState.getRunUsage(stream, activeRunId);
+    if (!stream) {
+      return { inputTokens: 0, outputTokens: 0, cost: 0 };
+    }
+
+    const usageMap = progressViewState.runUsage.getStreamMap(stream);
+    if (!usageMap || usageMap.size === 0) {
+      return { inputTokens: 0, outputTokens: 0, cost: 0 };
+    }
+
+    let totalInput = 0;
+    let totalOutput = 0;
+    let totalCost = 0;
+
+    for (const usage of usageMap.values()) {
       if (usage) {
-        return {
-          inputTokens: usage.inputTokens || 0,
-          outputTokens: usage.outputTokens || 0,
-          cost: usage.cost || 0,
-        };
+        totalInput += usage.inputTokens || 0;
+        totalOutput += usage.outputTokens || 0;
+        totalCost += usage.cost || 0;
       }
     }
 
-    return { inputTokens: 0, outputTokens: 0, cost: 0 };
+    return {
+      inputTokens: totalInput,
+      outputTokens: totalOutput,
+      cost: totalCost,
+    };
   }
 }
