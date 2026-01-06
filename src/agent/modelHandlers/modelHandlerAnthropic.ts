@@ -1797,18 +1797,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...attachments);
     }
 
+    // Build tool result content - prefer plain text over JSON (Claude Code pattern)
+    // JSON adds token overhead without actionable value for the model
     const textPieces: string[] = [];
+
+    // Primary output is the human-readable result
     if (isNonEmptyString(result.output)) {
       textPieces.push(result.output);
-      // Remove output from JSON since it's already in textPieces - avoids token duplication
-      delete sanitizedResult.output;
     }
-    // Only include JSON if there's meaningful structured data beyond output
-    const hasStructuredData = Object.keys(sanitizedResult).some(
-      (k) => !['summary', 'isError'].includes(k),
-    );
-    if (hasStructuredData) {
-      textPieces.push(JSON.stringify(sanitizedResult, null, 2));
+
+    // Only include specific actionable fields as text, not JSON
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+
+    // For errors without output, include the error message
+    if (result.isError && !result.output && result.error) {
+      textPieces.push(result.error);
+    }
+
+    // Fallback: if nothing to show, use summary
+    if (textPieces.length === 0 && sanitizedResult.summary) {
+      textPieces.push(sanitizedResult.summary);
     }
 
     const toolResultContent: Array<
