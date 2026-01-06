@@ -162,8 +162,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * @returns true if background mode is eligible for this model and agent type
    */
   private isBackgroundModeEligible(): boolean {
-    // Check for GPT-5 models (handles both 'gpt52' and 'gpt-5.2' formats)
-    const isGpt5 = /^gpt-?5/i.test(this.config.name);
+    const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
     if (!isGpt5) {
       return false;
     }
@@ -584,19 +583,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (this.capabilities.supportsReasoning) {
-      // Check for GPT-5 models (handles both 'gpt52' and 'gpt-5.2' formats)
-      const isGpt5 = /^gpt-?5/i.test(this.config.name);
-      const gpt5ReasoningSummaryEnabled = getConfig<boolean>(
+      const isGpt5 = this.config.name.startsWith('gpt5');
+      const gpt5SummarySetting = getConfig<boolean>(
         'texra.model.gpt5ReasoningSummary',
         false,
       );
-      const includeSummary = !isGpt5 || gpt5ReasoningSummaryEnabled;
+      const includeSummary = !isGpt5 || gpt5SummarySetting;
+
+      this.logger.debug(
+        `Reasoning config: isGpt5=${isGpt5}, gpt5SummarySetting=${gpt5SummarySetting}, includeSummary=${includeSummary}`,
+      );
+
       const reasoning: Reasoning = {};
       if (includeSummary) {
         reasoning.summary = 'auto';
-      } else if (isGpt5) {
+        this.logger.debug('Requesting reasoning.summary = auto');
+      } else {
         this.logger.debug(
-          `GPT-5 reasoning summaries disabled for ${this.config.name}. Enable "texra.model.gpt5ReasoningSummary" to show thinking content.`,
+          `Reasoning summaries disabled for ${this.config.name}. Enable "texra.model.gpt5ReasoningSummary" to show thinking content.`,
         );
       }
       if (
@@ -632,8 +636,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         hasThinkingContent: false,
       };
 
+      let reasoningEventCount = 0;
+      let reasoningSummaryEventCount = 0;
       for await (const event of stream) {
         if (this.isReasoningDeltaEvent(event)) {
+          // Track event types for debugging
+          if (event.type === 'response.reasoning_summary_text.delta') {
+            reasoningSummaryEventCount++;
+          } else {
+            reasoningEventCount++;
+          }
           state.thinkingStream.append(event.delta);
           state.hasThinkingContent = true;
         } else if (this.isTextDeltaEvent(event)) {
@@ -668,6 +680,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const response = await stream.finalResponse();
+
+      // Log reasoning event counts for debugging
+      this.logger.debug(
+        `Streaming reasoning events: raw=${reasoningEventCount}, summary=${reasoningSummaryEventCount}, hasThinkingContent=${state.hasThinkingContent}`,
+      );
+
       // Finalize any remaining thinking content (only if there's actual content)
       if (state.hasThinkingContent) {
         state.thinkingStream.finalize();
@@ -1261,6 +1279,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       (item): item is ResponseReasoningItem => item?.type === 'reasoning',
     );
 
+    this.logger.debug(
+      `processThinkingBlock: found ${reasoningItems.length} reasoning items in response`,
+    );
+
     if (reasoningItems.length === 0) {
       return null;
     }
@@ -1270,7 +1292,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       (item) => item.summary ?? [],
     );
 
+    this.logger.debug(
+      `processThinkingBlock: found ${allSummaryParts.length} summary parts across ${reasoningItems.length} reasoning items`,
+    );
+
     if (allSummaryParts.length === 0) {
+      this.logger.debug(
+        'processThinkingBlock: No summary parts found - reasoning summaries may not have been requested or returned',
+      );
       return null;
     }
 
