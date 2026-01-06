@@ -100,6 +100,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     // Reconstruct state instances from snapshots
     const workspace = getWorkspaceState(shared);
     const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
+    // Reset usage accumulator so each round reports per-round usage, not cumulative
+    run.usageAccumulator.reset();
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
     );

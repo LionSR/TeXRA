@@ -139,4 +139,14 @@ export class RunUsageAccumulator {
   getNormalizedSnapshots(): readonly NormalizedUsageSnapshot[] {
     return this.normalizedSnapshots;
   }
+
+  /**
+   * Reset the accumulator to initial state.
+   * Used by workflow sessions to ensure each round reports per-round usage
+   * rather than cumulative totals.
+   */
+  reset(): void {
+    this.totals = { ...DEFAULT_TOTALS };
+    this.normalizedSnapshots.length = 0;
+  }
 }
