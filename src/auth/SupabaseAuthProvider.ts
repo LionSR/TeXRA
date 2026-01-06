@@ -43,6 +43,14 @@ type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
+/** GitHub token type prefixes for diagnostic logging. */
+const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
+  ghp_: 'classic PAT',
+  gho_: 'OAuth token',
+  ghu_: 'user-to-server token',
+  ghs_: 'server-to-server token',
+};
+
 /** Session data stored in VS Code SecretStorage. */
 interface SupabaseSession {
   id: string;
@@ -492,16 +500,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       // Log token format to help diagnose auth issues (token prefix indicates type)
       const tokenPrefix = githubSession.accessToken.substring(0, 4);
-      const tokenType =
-        tokenPrefix === 'ghp_'
-          ? 'classic PAT'
-          : tokenPrefix === 'gho_'
-            ? 'OAuth token'
-            : tokenPrefix === 'ghu_'
-              ? 'user-to-server token'
-              : tokenPrefix === 'ghs_'
-                ? 'server-to-server token'
-                : 'unknown format';
+      const tokenType = GITHUB_TOKEN_TYPE_MAP[tokenPrefix] ?? 'unknown format';
 
       logger.info(
         'SupabaseAuthProvider',
