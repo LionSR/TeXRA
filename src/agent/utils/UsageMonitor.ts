@@ -90,7 +90,12 @@ export class UsageMonitor {
     const runKind: UsageMonitorRunKind = options?.runKind ?? 'workflow';
 
     try {
-      const totals = stateGlobal.usageAccumulator.getTotals();
+      // Workflow sessions: Report per-round delta (each round has its own storageKey)
+      // Tool-use sessions: Report cumulative (same storageKey, each report overwrites)
+      const totals =
+        runKind === 'workflow'
+          ? stateGlobal.usageAccumulator.getDeltaSinceBaseline()
+          : stateGlobal.usageAccumulator.getTotals();
 
       // Cost is already computed and stored in totals - no need to recompute!
       const cost = totals.totalCost;

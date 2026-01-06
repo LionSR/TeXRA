@@ -141,12 +141,41 @@ export class RunUsageAccumulator {
   }
 
   /**
-   * Reset the accumulator to initial state.
-   * Used by workflow sessions to ensure each round reports per-round usage
-   * rather than cumulative totals.
+   * Capture current totals as baseline for delta computation.
+   * Called at the start of each workflow round to enable per-round reporting.
    */
-  reset(): void {
-    this.totals = { ...DEFAULT_TOTALS };
-    this.normalizedSnapshots.length = 0;
+  captureBaseline(): void {
+    this._baselineTotals = { ...this.totals };
   }
+
+  /**
+   * Get usage delta since the last captured baseline.
+   * Returns per-round values while preserving cumulative totals for safety checks.
+   */
+  getDeltaSinceBaseline(): RunUsageTotals {
+    const baseline = this._baselineTotals ?? DEFAULT_TOTALS;
+    return {
+      // Preserve firstInputTokens from actual first input (not delta)
+      firstInputTokens: this.totals.firstInputTokens,
+      totalInputTokens: this.totals.totalInputTokens - baseline.totalInputTokens,
+      totalOutputTokens:
+        this.totals.totalOutputTokens - baseline.totalOutputTokens,
+      totalCost: this.totals.totalCost - baseline.totalCost,
+      totalCacheReadInputTokens:
+        this.totals.totalCacheReadInputTokens -
+        baseline.totalCacheReadInputTokens,
+      totalCacheCreationInputTokens:
+        this.totals.totalCacheCreationInputTokens -
+        baseline.totalCacheCreationInputTokens,
+      totalReasoningTokens:
+        this.totals.totalReasoningTokens - baseline.totalReasoningTokens,
+      totalToolUsePromptTokens:
+        this.totals.totalToolUsePromptTokens - baseline.totalToolUsePromptTokens,
+      totalServerToolRequests:
+        this.totals.totalServerToolRequests - baseline.totalServerToolRequests,
+    };
+  }
+
+  /** Baseline totals for delta computation (null = start of run) */
+  private _baselineTotals: RunUsageTotals | null = null;
 }
