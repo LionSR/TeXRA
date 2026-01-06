@@ -25,12 +25,15 @@ export interface RequestExecutionOptions {
 }
 
 /**
- * Executes a request with error enrichment and abort handling.
+ * Executes a request with error enrichment.
  *
  * Error handling follows the "log at the boundary" principle:
  * - This function enriches errors with operation context (does NOT log)
  * - Errors propagate up to the fallback handler which logs once with full context
  * - This preserves where errors originated without duplicate logging
+ *
+ * Abort handling: SDKs throw their own APIUserAbortError when signal is aborted.
+ * We don't pre-check here to let the SDK handle it with proper error types.
  *
  * Retry logic is handled at the flow level, not here.
  */
@@ -39,10 +42,6 @@ export async function executeRequest<T>(
   request: () => Promise<T> | T,
 ): Promise<T> {
   options.onAttemptStart?.(1);
-
-  if (options.signal?.aborted) {
-    throw options.signal.reason ?? new Error('The request was aborted.');
-  }
 
   try {
     return await request();
