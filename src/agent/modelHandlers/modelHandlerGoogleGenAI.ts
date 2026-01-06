@@ -61,6 +61,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
+import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
@@ -1314,16 +1315,27 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    // Result is already sanitized by source - create mutable copy for adding attachmentSummary
-    const finalResult: ToolResultPayload = { ...result };
+    // Build simplified result object - avoid sending full ToolResultPayload to save tokens
+    // Google SDK will serialize this to JSON internally
+    const textPieces: string[] = [];
+    if (isNonEmptyString(result.output)) {
+      textPieces.push(result.output);
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+    if (result.isError && !result.output && result.error) {
+      textPieces.push(result.error);
+    }
+    if (textPieces.length === 0 && result.summary) {
+      textPieces.push(result.summary);
+    }
+
     let attachmentParts: FunctionResponsePart[] = [];
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      finalResult.attachmentSummary = formatAttachmentSummary(
-        attachments,
-        'included-inline',
-      );
+      textPieces.push(formatAttachmentSummary(attachments, 'included-inline'));
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
@@ -1342,12 +1354,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
+    // Pass simplified result - just the text content, not full metadata object
+    const simplifiedResult = { result: textPieces.join('\n\n') || 'OK' };
+
     // Use SDK's createPartFromFunctionResponse with native attachment support
     // The 4th parameter accepts FunctionResponsePart[] for media attachments
     return createPartFromFunctionResponse(
       call.callId,
       call.name,
-      finalResult,
+      simplifiedResult,
       attachmentParts.length > 0 ? attachmentParts : undefined,
     );
   }
