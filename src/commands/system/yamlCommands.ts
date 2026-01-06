@@ -16,7 +16,7 @@ import {
   logGuardFailure,
 } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -185,7 +185,7 @@ export async function handleTestYamlBrackets(
     logger.info(CHANNEL, 'Testing YAML parsing with angle brackets:');
 
     // Create a temporary test YAML file
-    await GlobalStorageFS.ensureDir('test_yaml');
+    await StorageFS.ensureDir('test_yaml');
 
     // Test YAML content with various angle bracket formats
     const testYaml = {
@@ -200,10 +200,10 @@ export async function handleTestYamlBrackets(
 
     // Write test YAML
     const yamlString = yaml.stringify(testYaml);
-    await GlobalStorageFS.write('test_yaml/test_brackets.yaml', yamlString);
+    await StorageFS.write('test_yaml/test_brackets.yaml', yamlString);
 
-    // Read and parse the YAML using GlobalStorageFS
-    const content = await GlobalStorageFS.read('test_yaml/test_brackets.yaml');
+    // Read and parse the YAML using StorageFS
+    const content = await StorageFS.read('test_yaml/test_brackets.yaml');
     logger.info(CHANNEL, '\nRaw YAML content:');
     logger.info(CHANNEL, content);
 
@@ -224,8 +224,8 @@ export async function handleTestYamlBrackets(
     logger.info(CHANNEL, `settings.endTag: "${parsed.settings.endTag}"`);
 
     // Cleanup
-    await GlobalStorageFS.delete('test_yaml/test_brackets.yaml');
-    await GlobalStorageFS.delete('test_yaml', {
+    await StorageFS.delete('test_yaml/test_brackets.yaml');
+    await StorageFS.delete('test_yaml', {
       recursive: true,
     });
 
