@@ -113,26 +113,51 @@ function jsonResponse(
 async function validateGitHubToken(
   token: string,
 ): Promise<{ user: GitHubUser; email: string } | { error: string }> {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/vnd.github+json',
-    'User-Agent': 'TeXRA-Auth',
-  };
+  // Try both authorization header formats since VS Code's GitHub auth
+  // provider returns different token types depending on the environment.
+  // Modern tokens use "Bearer", legacy/OAuth tokens may require "token".
+  const authFormats = [`Bearer ${token}`, `token ${token}`];
 
-  const userRes = await fetch('https://api.github.com/user', { headers });
-  if (!userRes.ok) {
+  let lastError = '';
+  let userRes: Response | null = null;
+  let workingHeaders: Record<string, string> | null = null;
+
+  for (const authHeader of authFormats) {
+    const headers = {
+      Authorization: authHeader,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'TeXRA-Auth',
+    };
+
+    userRes = await fetch('https://api.github.com/user', { headers });
+
+    if (userRes.ok) {
+      workingHeaders = headers;
+      break;
+    }
+
     const errorText = await userRes.text().catch(() => 'unknown');
-    console.error(
-      `[AUTH] GitHub /user API failed: ${userRes.status} - ${errorText}`,
+    lastError = `${userRes.status} - ${errorText}`;
+    console.warn(
+      `[AUTH] GitHub /user API failed with ${authHeader.split(' ')[0]} auth: ${lastError}`,
     );
-    return { error: `GitHub API rejected token (${userRes.status})` };
+
+    // Only retry with next format if we got 401 (unauthorized)
+    if (userRes.status !== 401) {
+      break;
+    }
+  }
+
+  if (!userRes || !userRes.ok || !workingHeaders) {
+    console.error(`[AUTH] GitHub token validation failed: ${lastError}`);
+    return { error: `GitHub API rejected token (${lastError.split(' - ')[0]})` };
   }
 
   const user: GitHubUser = await userRes.json();
   let primaryEmail = user.email;
 
   const emailsRes = await fetch('https://api.github.com/user/emails', {
-    headers,
+    headers: workingHeaders,
   });
   if (emailsRes.ok) {
     const emails = await emailsRes.json();
