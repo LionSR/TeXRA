@@ -120,6 +120,7 @@ async function validateGitHubToken(
 
   let lastError = '';
   let userRes: Response | null = null;
+  let workingHeaders: Record<string, string> | null = null;
 
   for (const authHeader of authFormats) {
     const headers = {
@@ -131,6 +132,7 @@ async function validateGitHubToken(
     userRes = await fetch('https://api.github.com/user', { headers });
 
     if (userRes.ok) {
+      workingHeaders = headers;
       break;
     }
 
@@ -146,7 +148,7 @@ async function validateGitHubToken(
     }
   }
 
-  if (!userRes || !userRes.ok) {
+  if (!userRes || !userRes.ok || !workingHeaders) {
     console.error(`[AUTH] GitHub token validation failed: ${lastError}`);
     return { error: `GitHub API rejected token (${lastError.split(' - ')[0]})` };
   }
@@ -155,7 +157,7 @@ async function validateGitHubToken(
   let primaryEmail = user.email;
 
   const emailsRes = await fetch('https://api.github.com/user/emails', {
-    headers,
+    headers: workingHeaders,
   });
   if (emailsRes.ok) {
     const emails = await emailsRes.json();
