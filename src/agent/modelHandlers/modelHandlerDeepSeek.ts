@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 // Local file imports
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolFileAttachment } from '@tools/result';
+import { isNonEmptyString } from '@utils/core';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
@@ -159,10 +160,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     );
 
     // Result is already sanitized by source - attachments are ignored
+    // Use plain text instead of JSON (Claude Code pattern) to save tokens
     const resultMsg = {
       role: 'tool' as const,
       tool_call_id: toolCall.id,
-      content: JSON.stringify(result),
+      content: this.formatToolResultAsText(result),
     };
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
@@ -220,14 +222,35 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
     // with reasoning_content field that OpenAI's types don't know about
-    // Build tool result messages (results are already sanitized by source)
+    // Build tool result messages - use plain text instead of JSON to save tokens
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
       tool_call_id: call.id,
-      content: JSON.stringify(results[i]),
+      content: this.formatToolResultAsText(results[i]),
     }));
 
     return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
+  }
+
+  /**
+   * Format tool result as plain text instead of JSON to save tokens.
+   * Follows Claude Code pattern of preferring human-readable output.
+   */
+  private formatToolResultAsText(result: ToolResultPayload): string {
+    const textPieces: string[] = [];
+    if (isNonEmptyString(result.output)) {
+      textPieces.push(result.output);
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+    if (result.isError && !result.output && result.error) {
+      textPieces.push(result.error);
+    }
+    if (textPieces.length === 0 && result.summary) {
+      textPieces.push(result.summary);
+    }
+    return textPieces.join('\n\n') || 'OK';
   }
 
   /**

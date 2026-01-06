@@ -1344,19 +1344,29 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Add attachment summary only if handler supports them and attachments exist
-    const finalResult =
-      this.canProcessToolResultAttachments && attachments.length > 0
-        ? {
-            ...result,
-            attachmentSummary: formatAttachmentSummary(attachments),
-          }
-        : result;
+    // Build tool result as plain text (Claude Code pattern) - JSON wastes tokens
+    const textPieces: string[] = [];
+    if (isNonEmptyString(result.output)) {
+      textPieces.push(result.output);
+    }
+    if (result.userInstruction) {
+      textPieces.push(`User feedback: ${result.userInstruction}`);
+    }
+    if (result.isError && !result.output && result.error) {
+      textPieces.push(result.error);
+    }
+    if (textPieces.length === 0 && result.summary) {
+      textPieces.push(result.summary);
+    }
+    // Add attachment summary if handler supports them
+    if (this.canProcessToolResultAttachments && attachments.length > 0) {
+      textPieces.push(formatAttachmentSummary(attachments));
+    }
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify(finalResult),
+      content: textPieces.join('\n\n') || 'OK',
     };
     return [callMsg, resultMsg];
   }
