@@ -98,6 +98,13 @@ export class MainViewProvider
 
     // Watch for file configuration changes - only refresh file list
     watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
+
+    // Watch for debug mode changes - push to webview immediately
+    watchConfig(
+      this.context,
+      ['texra.logger.debugMode'],
+      this.refreshDebugMode.bind(this),
+    );
   }
 
   private setupAuthListener() {
@@ -169,6 +176,21 @@ export class MainViewProvider
     this._view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       options: modelOptions,
+    });
+  }
+
+  /**
+   * Push debug mode to webview.
+   * Called when debug mode config changes (texra.logger.debugMode).
+   */
+  private refreshDebugMode() {
+    if (!this._view) {
+      return;
+    }
+    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
+    this._view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
+      debugMode,
     });
   }
 
