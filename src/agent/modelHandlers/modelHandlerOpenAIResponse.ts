@@ -162,7 +162,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * @returns true if background mode is eligible for this model and agent type
    */
   private isBackgroundModeEligible(): boolean {
-    const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
+    // Check for GPT-5 models (handles both 'gpt52' and 'gpt-5.2' formats)
+    const isGpt5 = /^gpt-?5/i.test(this.config.name);
     if (!isGpt5) {
       return false;
     }
@@ -583,13 +584,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (this.capabilities.supportsReasoning) {
-      const isGpt5 = this.config.name.startsWith('gpt5');
-      const includeSummary =
-        !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
+      // Check for GPT-5 models (handles both 'gpt52' and 'gpt-5.2' formats)
+      const isGpt5 = /^gpt-?5/i.test(this.config.name);
+      const gpt5ReasoningSummaryEnabled = getConfig<boolean>(
+        'texra.model.gpt5ReasoningSummary',
+        false,
+      );
+      const includeSummary = !isGpt5 || gpt5ReasoningSummaryEnabled;
       const reasoning: Reasoning = {};
       if (includeSummary) {
         reasoning.summary = 'auto';
+      } else if (isGpt5) {
+        this.logger.debug(
+          `GPT-5 reasoning summaries disabled for ${this.config.name}. Enable "texra.model.gpt5ReasoningSummary" to show thinking content.`,
+        );
       }
       if (
         this.capabilities.supportsReasoningEffort &&

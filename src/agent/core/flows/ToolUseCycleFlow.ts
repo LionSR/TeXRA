@@ -461,6 +461,11 @@ class ToolUseProcessNode<C> extends BaseNode<
     const services = this.services;
     const { workspace } = services;
 
+    // Capture the current group ID for logging thinking content.
+    // Explicit groupId is required because auto-resolution via resolveActiveGroupId()
+    // may not correctly associate content with the task group in the progress view.
+    const groupId = services.logger.getCurrentGroupId();
+
     // Process thinking block (logging only, state stored in workspace)
     const thinking = services.modelHandler.processThinkingBlock(
       prepRes.response,
@@ -471,6 +476,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       const formatted = await formatContent(thinking);
       if (isNonEmptyString(formatted)) {
         services.logger.info(formatted, {
+          groupId,
           messageType: MESSAGE_TYPES.THINKING,
         });
       }
