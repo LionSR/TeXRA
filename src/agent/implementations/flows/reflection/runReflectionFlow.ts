@@ -300,6 +300,14 @@ export async function runReflectionFlow<C = unknown>(
             parent: parent ?? undefined,
           });
         },
+        onRoundStart: (context) => {
+          // Update storageKey to round stage ID so each round has its own usage storage
+          // This ensures per-round usage values instead of cumulative totals
+          const roundStageId = context.roundStage?.id;
+          if (roundStageId) {
+            updateStorageKey(normalizeRunId(roundStageId));
+          }
+        },
         resetForNextRound: (s) => {
           s.workspaceSnapshot = createFreshWorkspaceSnapshot();
         },
