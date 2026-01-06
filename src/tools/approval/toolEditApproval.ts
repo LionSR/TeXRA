@@ -167,7 +167,7 @@ export function initializeToolEditApproval(
   if (initialized) {
     return;
   }
-  const baseDir = context.globalStorageUri ?? context.storageUri;
+  const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   initialized = true;
 }
