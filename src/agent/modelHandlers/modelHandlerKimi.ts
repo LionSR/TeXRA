@@ -150,6 +150,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         stream.on('chunk', onChunk);
 
         try {
+          // Usage is captured by the aggregator from choices[0].usage (Kimi's format)
           const finalResponse = await this.awaitFinalResponse(
             stream,
             streamingAggregator,
