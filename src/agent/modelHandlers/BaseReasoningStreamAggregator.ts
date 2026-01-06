@@ -45,11 +45,20 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
     if (chunk.choices.length > 0) {
       this.lastChunkWithChoices = chunk;
     }
+    // Check root-level usage (OpenAI format with stream_options.include_usage)
     if (chunk.usage) {
       this.usageChunk = chunk;
     }
 
     const choice = chunk.choices[0];
+
+    // Check choice-level usage (Kimi format - usage is inside the choice object)
+    const choiceUsage = (choice as { usage?: ChatCompletionChunk['usage'] })
+      ?.usage;
+    if (choiceUsage && !this.usageChunk) {
+      // Store as if it were root-level usage for consistency
+      this.usageChunk = { ...chunk, usage: choiceUsage };
+    }
     if (!choice) {
       return;
     }
