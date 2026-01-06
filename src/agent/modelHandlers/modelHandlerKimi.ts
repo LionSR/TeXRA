@@ -150,20 +150,11 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         stream.on('chunk', onChunk);
 
         try {
-          let finalResponse = await this.awaitFinalResponse(
+          // Usage is captured by the aggregator from choices[0].usage (Kimi's format)
+          const finalResponse = await this.awaitFinalResponse(
             stream,
             streamingAggregator,
           );
-
-          // Ensure usage is captured - use SDK's totalUsage() as fallback
-          if (!finalResponse.usage) {
-            try {
-              const totalUsage = await stream.totalUsage();
-              finalResponse = { ...finalResponse, usage: totalUsage };
-            } catch (_err) {
-              // totalUsage() may fail if stream ended abnormally
-            }
-          }
 
           const finalReasoning = this.processThinkingBlock(finalResponse);
           if (finalReasoning === null) {
