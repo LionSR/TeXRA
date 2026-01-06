@@ -1,8 +1,9 @@
 -- Migration: Deduplicate relay spending views by stream and batch
 -- Purpose: Recover accurate provider pricing when multiple usage_log rows
--- are emitted for a single stream (with different batch_ids). We keep only
--- the highest-cost entry per (user_id, stream_id) and fall back to batch
--- deduplication for streamless records. Also updates the monthly spending
+-- are emitted for a single stream (with different batch_ids). For
+-- non-workflow agents we keep only the highest-cost entry per (user_id,
+-- stream_id) and fall back to batch deduplication for streamless records;
+-- workflow agents are aggregated as-is. Also updates the monthly spending
 -- function used by the relay tier-limit edge function to match the
 -- deduplicated pricing.
 
@@ -21,9 +22,18 @@ CREATE OR REPLACE FUNCTION get_user_monthly_relay_spend(
   p_month_start TIMESTAMPTZ
 )
 RETURNS NUMERIC AS $$
-  WITH ranked_streams AS (
+  WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.user_id = p_user_id
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+      AND u.logged_at >= p_month_start
+  ),
+  ranked_streams AS (
     SELECT
-      u.*, 
+      u.*,
       ROW_NUMBER() OVER (
         PARTITION BY u.user_id, u.stream_id
         ORDER BY
@@ -38,6 +48,7 @@ RETURNS NUMERIC AS $$
     WHERE u.used_relay = TRUE
       AND u.user_id = p_user_id
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
       AND u.logged_at >= p_month_start
   ),
   deduped_streams AS (
@@ -74,7 +85,7 @@ RETURNS NUMERIC AS $$
   ),
   ranked_batches AS (
     SELECT
-      u.*, 
+      u.*,
       ROW_NUMBER() OVER (
         PARTITION BY u.user_id, u.batch_id
         ORDER BY
@@ -113,6 +124,8 @@ RETURNS NUMERIC AS $$
     WHERE batch_rank = 1
   ),
   relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
@@ -126,7 +139,8 @@ RETURNS NUMERIC AS $$
 $$ LANGUAGE SQL STABLE;
 
 -- Shared CTE pattern for relay views
---   - deduped_streams: top-cost row per (user_id, stream_id)
+--   - workflow_streams: workflow agent rows kept as-is per stream (no dedup)
+--   - deduped_streams: top-cost row per (user_id, stream_id) for non-workflow rows
 --   - remaining_streamless: relay rows without a stream_id
 --   - deduped_batches: top-cost row per (user_id, batch_id) among streamless rows
 --   - relay_logs: combined deduplicated set plus unbatched streamless rows
@@ -137,9 +151,16 @@ $$ LANGUAGE SQL STABLE;
 CREATE OR REPLACE VIEW public.relay_spending_summary
 WITH (security_invoker = on)
 AS
-WITH ranked_streams AS (
+WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+),
+ranked_streams AS (
     SELECT
-        u.*, 
+        u.*,
         ROW_NUMBER() OVER (
             PARTITION BY u.user_id, u.stream_id
             ORDER BY
@@ -153,6 +174,7 @@ WITH ranked_streams AS (
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
 ),
 deduped_streams AS (
     SELECT
@@ -225,6 +247,8 @@ deduped_batches AS (
     WHERE batch_rank = 1
 ),
 relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
@@ -261,9 +285,16 @@ COMMENT ON VIEW public.relay_spending_summary IS
 CREATE OR REPLACE VIEW public.relay_spending_by_model
 WITH (security_invoker = on)
 AS
-WITH ranked_streams AS (
+WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+),
+ranked_streams AS (
     SELECT
-        u.*, 
+        u.*,
         ROW_NUMBER() OVER (
             PARTITION BY u.user_id, u.stream_id
             ORDER BY
@@ -277,6 +308,7 @@ WITH ranked_streams AS (
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
 ),
 deduped_streams AS (
     SELECT
@@ -349,6 +381,8 @@ deduped_batches AS (
     WHERE batch_rank = 1
 ),
 relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
@@ -384,9 +418,16 @@ COMMENT ON VIEW public.relay_spending_by_model IS
 CREATE OR REPLACE VIEW public.relay_spending_daily
 WITH (security_invoker = on)
 AS
-WITH ranked_streams AS (
+WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+),
+ranked_streams AS (
     SELECT
-        u.*, 
+        u.*,
         ROW_NUMBER() OVER (
             PARTITION BY u.user_id, u.stream_id
             ORDER BY
@@ -400,6 +441,7 @@ WITH ranked_streams AS (
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
 ),
 deduped_streams AS (
     SELECT
@@ -472,6 +514,8 @@ deduped_batches AS (
     WHERE batch_rank = 1
 ),
 relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
@@ -504,9 +548,16 @@ COMMENT ON VIEW public.relay_spending_daily IS
 CREATE OR REPLACE VIEW public.relay_spending_monthly
 WITH (security_invoker = on)
 AS
-WITH ranked_streams AS (
+WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+),
+ranked_streams AS (
     SELECT
-        u.*, 
+        u.*,
         ROW_NUMBER() OVER (
             PARTITION BY u.user_id, u.stream_id
             ORDER BY
@@ -520,6 +571,7 @@ WITH ranked_streams AS (
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
 ),
 deduped_streams AS (
     SELECT
@@ -592,6 +644,8 @@ deduped_batches AS (
     WHERE batch_rank = 1
 ),
 relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
@@ -629,9 +683,16 @@ COMMENT ON VIEW public.relay_spending_monthly IS
 CREATE OR REPLACE VIEW public.relay_spending_totals
 WITH (security_invoker = on)
 AS
-WITH ranked_streams AS (
+WITH workflow_streams AS (
+    SELECT *
+    FROM public.usage_logs u
+    WHERE u.used_relay = TRUE
+      AND u.stream_id IS NOT NULL
+      AND u.agent_category = 'workflow'
+),
+ranked_streams AS (
     SELECT
-        u.*, 
+        u.*,
         ROW_NUMBER() OVER (
             PARTITION BY u.user_id, u.stream_id
             ORDER BY
@@ -645,6 +706,7 @@ WITH ranked_streams AS (
     FROM public.usage_logs u
     WHERE u.used_relay = TRUE
       AND u.stream_id IS NOT NULL
+      AND (u.agent_category IS NULL OR u.agent_category <> 'workflow')
 ),
 deduped_streams AS (
     SELECT
@@ -717,6 +779,8 @@ deduped_batches AS (
     WHERE batch_rank = 1
 ),
 relay_logs AS (
+    SELECT * FROM workflow_streams
+    UNION ALL
     SELECT * FROM deduped_streams
     UNION ALL
     SELECT * FROM deduped_batches
