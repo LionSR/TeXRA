@@ -488,9 +488,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Check if running through the server-side relay.
+   * When using relay, previous_response_id is disabled because:
+   * 1. Response storage may be unreliable through the proxy
+   * 2. Streaming responses may not finalize properly, causing "Previous response not found" errors
+   */
+  private isUsingRelay(): boolean {
+    return this.shouldUseServerSideKeys();
+  }
+
+  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
+   *
+   * Note: When using the server-side relay, previous_response_id is disabled
+   * because response storage is unreliable through the proxy.
    */
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
@@ -526,7 +539,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Background mode enabled; skipping streaming to avoid unstable behavior.',
       );
     }
-    const newMessages = messages.slice(this.sentMessages);
+
+    // When using relay, disable previous_response_id feature due to unreliable
+    // response storage through the proxy. This avoids "Previous response not found" errors.
+    const usingRelay = this.isUsingRelay();
+    if (usingRelay && this.previousResponseId) {
+      this.logger.debug(
+        'Using relay proxy - sending full message history instead of previous_response_id to avoid storage issues',
+      );
+    }
+    const newMessages = usingRelay ? messages : messages.slice(this.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
 
@@ -534,7 +556,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       model: this.config.fullName,
       input: newMessages,
       max_output_tokens: this.config.maxOutputTokens,
-      store: true,
+      store: !usingRelay, // Don't store responses when using relay (storage is unreliable)
     };
 
     if (useBackgroundResponses) {
@@ -554,7 +576,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.temperature = temperature;
     }
 
-    if (this.previousResponseId) {
+    // Only use previous_response_id when NOT using relay
+    // Relay proxies don't reliably store responses, causing "Previous response not found" errors
+    if (this.previousResponseId && !usingRelay) {
       params.previous_response_id = this.previousResponseId;
     }
 
