@@ -102,8 +102,6 @@ Best practices:
     // This triggers the onUpdate callback which emits events to the UI
     context.todoState.updateTodos(input.todos);
 
-    // Format output for the model
-    const output = this.formatTodoList(input.todos);
     const inProgressCount = input.todos.filter(
       (t) => t.status === TODO_STATUS.IN_PROGRESS,
     ).length;
@@ -116,9 +114,10 @@ Best practices:
 
     const summary = `Todo list updated: ${completedCount} completed, ${inProgressCount} in progress, ${pendingCount} pending`;
 
+    // Return minimal output - the UI already shows the input, no need to repeat the list
     return {
       summary,
-      output,
+      output: 'OK',
     };
   }
 
