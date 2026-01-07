@@ -3,7 +3,11 @@ import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
 // Third-party imports
-import { Anthropic, toFile } from '@anthropic-ai/sdk';
+import {
+  Anthropic,
+  APIUserAbortError as AnthropicUserAbortError,
+  toFile,
+} from '@anthropic-ai/sdk';
 
 /** Supported image media types from SDK's Base64ImageSource definition */
 const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
@@ -549,12 +553,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       if (signal?.aborted) {
         stream.controller.abort();
-        const abortError =
-          signal.reason ??
-          Object.assign(new Error('The operation was aborted.'), {
-            name: 'AbortError',
-          });
-        throw abortError;
+        throw new AnthropicUserAbortError();
       }
 
       let cleanupAbortListener: (() => void) | undefined;
