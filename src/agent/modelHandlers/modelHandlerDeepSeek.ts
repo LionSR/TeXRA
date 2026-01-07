@@ -4,11 +4,13 @@ import OpenAI from 'openai';
 // Local file imports
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolFileAttachment } from '@tools/result';
-import { isNonEmptyString } from '@utils/core';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import {
+  formatToolResultAsText,
+  type ToolResultPayload,
+} from './utils/toolAttachmentUtils';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
-import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 // Type imports
 import type { DeepSeekToolCall } from './types/IModelHandler';
@@ -164,7 +166,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     const resultMsg = {
       role: 'tool' as const,
       tool_call_id: toolCall.id,
-      content: this.formatToolResultAsText(result),
+      content: formatToolResultAsText(result),
     };
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
@@ -226,31 +228,10 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
       tool_call_id: call.id,
-      content: this.formatToolResultAsText(results[i]),
+      content: formatToolResultAsText(results[i]),
     }));
 
     return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
-  }
-
-  /**
-   * Format tool result as plain text instead of JSON to save tokens.
-   * Follows Claude Code pattern of preferring human-readable output.
-   */
-  private formatToolResultAsText(result: ToolResultPayload): string {
-    const textPieces: string[] = [];
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-    if (result.isError && !result.output && result.error) {
-      textPieces.push(result.error);
-    }
-    if (textPieces.length === 0 && result.summary) {
-      textPieces.push(result.summary);
-    }
-    return textPieces.join('\n\n') || 'OK';
   }
 
   /**

@@ -51,10 +51,13 @@ export abstract class BaseTool<T> implements ITool {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
+        // Include validation details in error message so model can self-correct
+        const issues = err.issues
+          .map((i) => `- ${i.path.join('.')}: ${i.message}`)
+          .join('\n');
         return {
-          error: 'Invalid input',
+          error: `Invalid input:\n${issues}`,
           isError: true,
-          diagnostics: err.issues,
         };
       }
       const message = toErrorMessage(err);
