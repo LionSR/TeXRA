@@ -40,6 +40,13 @@ export class VSCodeTransport extends Transport {
     const { level, message, timestamp, messageType, groupId } = info;
     const data = serializeLogData(info.data);
 
+    // Debug logging for tool use messages
+    if (messageType === MESSAGE_TYPES.TOOL_USE) {
+      console.log(
+        `[VSCodeTransport] TOOL_USE message - hasData: ${data !== undefined}, data keys: ${data ? Object.keys(data as object).join(', ') : 'none'}`,
+      );
+    }
+
     this.writeToChannel(level, message, timestamp, data);
     this.emitLogEvent({
       level,

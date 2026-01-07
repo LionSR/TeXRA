@@ -478,6 +478,9 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     // Extract response data
     const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
+    services.logger.debug(
+      `[ToolUseProcess] Extracted ${toolCalls.length} tool calls: ${toolCalls.map((c) => c.name).join(', ') || '(none)'}`,
+    );
     const {
       response: text,
       usage,
@@ -838,6 +841,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
       ...(editedFiles.length > 0 && { files: editedFiles }),
       isError: Boolean(result.isError),
     };
+    options.logger.debug(
+      `[ToolUseLog] Emitting TOOL_USE message for tool: ${call.name}`,
+    );
     options.logger.info('', {
       messageType: MESSAGE_TYPES.TOOL_USE,
       data: toolUseLog,
@@ -895,6 +901,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { execResults, assistantText } = execRes;
 
     // Step 1: Log each tool execution and process media files
+    services.logger.debug(
+      `[ToolUseDispatch] Processing ${execResults.length} tool execution results`,
+    );
     for (const execResult of execResults) {
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
