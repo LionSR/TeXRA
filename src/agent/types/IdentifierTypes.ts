@@ -62,6 +62,10 @@ export interface StorageKeyManager {
   getStorageKey: () => StorageKey;
   /** Check if storage key is still initial (new run, not resumed) */
   hasInitialStorageKey: () => boolean;
-  /** Update storage key to task group ID (called by workflow agents) */
-  updateStorageKey: (key: StorageKey) => void;
+  /**
+   * Update storage key to task group ID (called by workflow agents).
+   * @param key - New storage key
+   * @param silent - If true, suppress warning for expected updates (e.g., per-round keys)
+   */
+  updateStorageKey: (key: StorageKey, silent?: boolean) => void;
 }

@@ -257,8 +257,8 @@ async function resolveAgentBase(
   let storageKey: StorageKey = initialStorageKey;
   const getStorageKey = () => storageKey;
   const hasInitialStorageKey = () => storageKey === initialStorageKey;
-  const updateStorageKey = (key: StorageKey) => {
-    if (!hasInitialStorageKey()) {
+  const updateStorageKey = (key: StorageKey, silent?: boolean) => {
+    if (!hasInitialStorageKey() && !silent) {
       agentLogger.warn(
         `Storage key already set to ${storageKey}, updating to ${key}. This may indicate a bug.`,
       );

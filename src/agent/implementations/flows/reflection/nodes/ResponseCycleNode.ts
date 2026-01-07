@@ -101,7 +101,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const workspace = getWorkspaceState(shared);
     const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
     // Capture baseline so we can report per-round usage delta (preserves cumulative for safety checks)
-    run.usageAccumulator.captureBaseline();
+    run.usageAccumulator.captureBaseline(run.totalResponseTimeMs);
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
     );

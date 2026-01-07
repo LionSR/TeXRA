@@ -301,11 +301,16 @@ export async function runReflectionFlow<C = unknown>(
           });
         },
         onRoundStart: (context) => {
-          // Update storageKey to round stage ID so each round has its own usage storage
-          // This ensures per-round usage values instead of cumulative totals
+          // Update storageKey to round stage ID so each round has its own usage storage.
+          // This works in conjunction with captureBaseline() in ResponseCycleNode:
+          // - Per-round storageKey: Ensures each round stores usage under a unique key (r0, r1)
+          // - Delta computation: Ensures we report only this round's usage, not cumulative
+          // Both are needed because without deltas, cumulative values under separate keys
+          // would cause double-counting when summed in computeTotal().
           const roundStageId = context.roundStage?.id;
           if (roundStageId) {
-            updateStorageKey(normalizeRunId(roundStageId));
+            // Use silent=true since per-round key updates are expected, not bugs
+            updateStorageKey(normalizeRunId(roundStageId), true);
           } else {
             logger.warn(
               `Round ${context.shared.currentRound}: No round stage ID available, usage may accumulate under previous key`,

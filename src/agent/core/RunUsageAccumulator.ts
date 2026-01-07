@@ -44,6 +44,17 @@ export const RunUsageTotalsSchema = z.object({
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
+/**
+ * Type alias for per-round usage deltas.
+ * Structurally identical to RunUsageTotals but semantically represents
+ * the difference between current and baseline values.
+ *
+ * Note: Field names like "totalInputTokens" contain delta values, not cumulative totals.
+ * The "firstInputTokens" field is an exception - it always contains the actual first
+ * input tokens from the run, not a delta.
+ */
+export type RunUsageDelta = RunUsageTotals;
+
 /** Schema for normalized usage snapshot */
 export const NormalizedUsageSnapshotSchema = z.object({
   round: z.number(),
@@ -62,6 +73,8 @@ export const RunUsageAccumulatorJSONSchema = z.object({
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
   /** Baseline for delta computation - null means start of run */
   baselineTotals: RunUsageTotalsSchema.nullable().prefault(null),
+  /** Baseline response time in ms for delta computation */
+  baselineResponseTimeMs: z.number().nonnegative().prefault(0),
 });
 
 /**
@@ -77,6 +90,8 @@ export class RunUsageAccumulator {
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
   /** Baseline totals for delta computation (null = start of run) */
   private _baselineTotals: RunUsageTotals | null = null;
+  /** Baseline response time in ms for delta computation */
+  private _baselineResponseTimeMs: number = 0;
 
   /** Deserialize from a snapshot. Schema transform handles default merging. */
   static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
@@ -85,6 +100,7 @@ export class RunUsageAccumulator {
     acc.totals = parsed.totals;
     acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
     acc._baselineTotals = parsed.baselineTotals;
+    acc._baselineResponseTimeMs = parsed.baselineResponseTimeMs;
     return acc;
   }
 
@@ -94,6 +110,7 @@ export class RunUsageAccumulator {
       totals: this.totals,
       normalizedSnapshots: [...this.normalizedSnapshots],
       baselineTotals: this._baselineTotals,
+      baselineResponseTimeMs: this._baselineResponseTimeMs,
     };
   }
 
@@ -149,20 +166,30 @@ export class RunUsageAccumulator {
   /**
    * Capture current totals as baseline for delta computation.
    * Called at the start of each workflow round to enable per-round reporting.
+   * @param responseTimeMs - Current cumulative response time to use as baseline
    */
-  captureBaseline(): void {
+  captureBaseline(responseTimeMs: number = 0): void {
     this._baselineTotals = { ...this.totals };
+    this._baselineResponseTimeMs = responseTimeMs;
+  }
+
+  /**
+   * Get response time delta since the last captured baseline.
+   * @param currentResponseTimeMs - Current cumulative response time
+   * @returns Per-round response time in ms
+   */
+  getResponseTimeDelta(currentResponseTimeMs: number): number {
+    return currentResponseTimeMs - this._baselineResponseTimeMs;
   }
 
   /**
    * Get usage delta since the last captured baseline.
    * Returns per-round values while preserving cumulative totals for safety checks.
    *
-   * Note: Returns RunUsageTotals type for API compatibility, but values represent
-   * deltas (current - baseline), not cumulative totals. Field names like
-   * "totalInputTokens" contain per-round delta values in this context.
+   * @returns RunUsageDelta - Per-round delta values (not cumulative totals).
+   *          Exception: firstInputTokens always contains the actual first input tokens.
    */
-  getDeltaSinceBaseline(): RunUsageTotals {
+  getDeltaSinceBaseline(): RunUsageDelta {
     const baseline = this._baselineTotals ?? DEFAULT_TOTALS;
     return {
       // Preserve firstInputTokens from actual first input (not delta)

@@ -123,11 +123,18 @@ export class UsageMonitor {
         cost: Number(cost.toFixed(3)),
       };
 
+      // Workflow sessions: Use per-round elapsed time delta
+      // Tool-use sessions: Use cumulative elapsed time (same storageKey, overwrites)
+      const elapsedTimeMs =
+        runKind === 'workflow'
+          ? stateGlobal.usageAccumulator.getResponseTimeDelta(
+              stateGlobal.totalResponseTimeMs,
+            )
+          : stateGlobal.totalResponseTimeMs;
+
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number(
-          (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
-        ),
+        elapsedTime: Number((elapsedTimeMs / 1000).toFixed(1)),
         ...(cachingStats && {
           cacheReadInputTokens: totals.totalCacheReadInputTokens,
           ...(this.modelInfo.capabilities.supportsPromptCaching && {
