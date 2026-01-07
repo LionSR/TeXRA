@@ -13,6 +13,7 @@ import {
 } from '@tools/result';
 
 // Local imports - utils
+import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
@@ -217,4 +218,43 @@ export async function loadAttachmentBuffer(
   }
 
   throw new Error('Attachment did not include bytes, base64 data, or a path.');
+}
+
+/**
+ * Format tool result as plain text for sending to models.
+ * Extracts only actionable fields - avoids JSON serialization to save tokens.
+ *
+ * Priority order:
+ * 1. output (primary result content)
+ * 2. userInstruction (user feedback during approval)
+ * 3. error (for failed tools without output)
+ * 4. summary (fallback if nothing else)
+ *
+ * @param result - The tool result payload
+ * @param attachmentSummary - Optional attachment summary to append
+ * @returns Formatted plain text string
+ */
+export function formatToolResultAsText(
+  result: ToolResultPayload,
+  attachmentSummary?: string,
+): string {
+  const textPieces: string[] = [];
+
+  if (isNonEmptyString(result.output)) {
+    textPieces.push(result.output);
+  }
+  if (result.userInstruction) {
+    textPieces.push(`User feedback: ${result.userInstruction}`);
+  }
+  if (result.isError && !result.output && result.error) {
+    textPieces.push(result.error);
+  }
+  if (textPieces.length === 0 && result.summary) {
+    textPieces.push(result.summary);
+  }
+  if (attachmentSummary) {
+    textPieces.push(attachmentSummary);
+  }
+
+  return textPieces.join('\n\n') || 'OK';
 }

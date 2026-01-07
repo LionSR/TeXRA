@@ -69,6 +69,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1315,27 +1316,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    // Build simplified result object - avoid sending full ToolResultPayload to save tokens
-    // Google SDK will serialize this to JSON internally
-    const textPieces: string[] = [];
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-    if (result.isError && !result.output && result.error) {
-      textPieces.push(result.error);
-    }
-    if (textPieces.length === 0 && result.summary) {
-      textPieces.push(result.summary);
-    }
-
     let attachmentParts: FunctionResponsePart[] = [];
+    let attachmentSummary: string | undefined;
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      textPieces.push(formatAttachmentSummary(attachments, 'included-inline'));
+      attachmentSummary = formatAttachmentSummary(attachments, 'included-inline');
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
@@ -1354,8 +1340,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    // Pass simplified result - just the text content, not full metadata object
-    const simplifiedResult = { result: textPieces.join('\n\n') || 'OK' };
+    // Build simplified result - Google SDK will serialize this to JSON internally
+    const simplifiedResult = { result: formatToolResultAsText(result, attachmentSummary) };
 
     // Use SDK's createPartFromFunctionResponse with native attachment support
     // The 4th parameter accepts FunctionResponsePart[] for media attachments
