@@ -4,7 +4,8 @@
 
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
-import markdownItKatex from '@vscode/markdown-it-katex';
+import texmath from 'markdown-it-texmath';
+import katex from 'katex';
 import { katexMacros } from '../katexMacros.js';
 
 let markdownRenderer;
@@ -20,10 +21,14 @@ export const getMarkdownRenderer = () => {
       linkify: true,
       html: false,
     })
-      .use(markdownItKatex, {
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: katexMacros,
+      .use(texmath, {
+        engine: katex,
+        delimiters: ['dollars', 'brackets'],
+        katexOptions: {
+          throwOnError: false,
+          errorColor: '#cc0000',
+          macros: katexMacros,
+        },
       })
       .use(highlight);
   }
