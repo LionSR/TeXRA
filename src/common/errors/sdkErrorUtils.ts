@@ -423,9 +423,9 @@ function detectRequestId(err: unknown): string | undefined {
  * Google responses. When the error is not a known class, it inspects common
  * HTTP-shaped fields and falls back to a best-effort summary.
  *
- * Note: Abort/cancellation detection is handled at the flow level by checking
- * the AbortController signal directly (this.signal?.aborted). Native SDK abort
- * errors (OpenAI/Anthropic APIUserAbortError) are detected by matchNativeMessageError().
+ * Abort detection:
+ * - SDK-specific: OpenAI/Anthropic APIUserAbortError via matchNativeMessageError()
+ * - Generic: DOMException with name 'AbortError' (for providers without SDK abort errors)
  */
 export function formatProviderHttpError(
   err: unknown,
@@ -435,6 +435,15 @@ export function formatProviderHttpError(
     // Add requestId even for message-only errors
     const requestId = detectRequestId(err);
     return requestId ? { ...nativeMessage, requestId } : nativeMessage;
+  }
+
+  // Detect DOMException AbortError (from AbortController.abort())
+  // This covers providers without SDK-specific abort error classes (e.g., Google)
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return {
+      message: 'Request aborted',
+      retryable: false,
+    };
   }
 
   const nativeHttp = matchNativeHttpError(err);
