@@ -14,10 +14,17 @@ import { defineTool } from '@tools/core/define';
 
 const WebFetchInputSchema = z.strictObject({
   url: z
-    .url('Provide a valid absolute URL to fetch.')
+    .string()
     .refine(
-      (value) => value.startsWith('http://') || value.startsWith('https://'),
-      'URL must use HTTP or HTTPS protocol',
+      (value) => {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      },
+      'Provide a valid HTTP or HTTPS URL',
     ),
   prompt: z.string().min(1).nullish(),
 });
