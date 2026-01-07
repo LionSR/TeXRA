@@ -4,7 +4,8 @@
 
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
-import markdownItKatex from '@vscode/markdown-it-katex';
+import texmath from 'markdown-it-texmath';
+import katex from 'katex';
 import { katexMacros } from '../katexMacros.js';
 
 let markdownRenderer;
@@ -20,10 +21,14 @@ export const getMarkdownRenderer = () => {
       linkify: true,
       html: false,
     })
-      .use(markdownItKatex, {
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: katexMacros,
+      .use(texmath, {
+        engine: katex,
+        delimiters: ['dollars', 'brackets'],
+        katexOptions: {
+          throwOnError: false,
+          errorColor: '#cc0000',
+          macros: katexMacros,
+        },
       })
       .use(highlight);
   }
@@ -39,24 +44,6 @@ export const getMarkdownRenderer = () => {
  */
 export const createLatexReferenceHtml = (refType, label) => {
   return `<span class="latex-ref clickable-link" data-label="${label}">\\${refType}{${label}}</span>`;
-};
-
-/**
- * Convert LaTeX-style math delimiters to markdown-style for KaTeX rendering.
- * Converts \(...\) to $...$ (inline) and \[...\] to $$...$$ (display).
- * @param {string} content - Content with LaTeX math delimiters
- * @returns {string} Content with markdown math delimiters
- */
-export const convertMathDelimiters = (content) => {
-  // Convert display math \[...\] to $$...$$
-  // Use non-greedy match and handle multiline content
-  content = content.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
-
-  // Convert inline math \(...\) to $...$
-  // Pattern handles parentheses inside math: matches non-backslash chars or escaped chars
-  content = content.replace(/\\\(((?:[^\\]|\\.)*?)\\\)/g, '$$$1$$');
-
-  return content;
 };
 
 /**
@@ -96,12 +83,9 @@ export const restoreLatexReferences = (content) => {
  * @returns {string} Processed markdown HTML
  */
 export const processMarkdownContent = (content, renderer) => {
-  // Convert LaTeX-style math delimiters to markdown-style for KaTeX
-  const normalizedContent = convertMathDelimiters(content);
-
   // Pre-process LaTeX references to protect them from markdown parsing
   // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
-  const protectedContent = protectLatexReferences(normalizedContent);
+  const protectedContent = protectLatexReferences(content);
 
   const md = renderer || getMarkdownRenderer();
 
