@@ -295,8 +295,10 @@ export abstract class RetryableInvocationNode<
     try {
       return await operation(abortController.signal);
     } finally {
-      // Clear both references to allow GC and prevent stale state
-      this.signal = undefined;
+      // Clear service reference to allow GC and prevent stale abort calls.
+      // NOTE: We intentionally keep this.signal set so Node._exec() can check
+      // isAborted after the operation throws. Node.clone() resets signal for
+      // the next execution.
       services.setAbortController(null);
     }
   }
