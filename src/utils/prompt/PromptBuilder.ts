@@ -18,6 +18,7 @@ If you say you will perform an action, immediately call the corresponding tool.
 Never mention tool names when speaking to the user.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
+For math in responses, use $...$ for inline and $$...$$ for display math (not \\(...\\) or \\[...\\]).
 </tool_use_instructions>`;
 
 /**
