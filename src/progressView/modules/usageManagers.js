@@ -85,9 +85,9 @@ export class UsageSummary {
 
     for (const usage of usageMap.values()) {
       if (usage) {
-        totalInput += usage.inputTokens || 0;
-        totalOutput += usage.outputTokens || 0;
-        totalCost += usage.cost || 0;
+        totalInput += usage.inputTokens ?? 0;
+        totalOutput += usage.outputTokens ?? 0;
+        totalCost += usage.cost ?? 0;
       }
     }
 

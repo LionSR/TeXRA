@@ -306,6 +306,10 @@ export async function runReflectionFlow<C = unknown>(
           const roundStageId = context.roundStage?.id;
           if (roundStageId) {
             updateStorageKey(normalizeRunId(roundStageId));
+          } else {
+            logger.warn(
+              `Round ${context.shared.currentRound}: No round stage ID available, usage may accumulate under previous key`,
+            );
           }
         },
         resetForNextRound: (s) => {

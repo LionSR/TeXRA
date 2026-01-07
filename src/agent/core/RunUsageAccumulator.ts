@@ -60,6 +60,8 @@ export type NormalizedUsageSnapshot = z.infer<
 export const RunUsageAccumulatorJSONSchema = z.object({
   totals: RunUsageTotalsSchema.prefault(DEFAULT_TOTALS),
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
+  /** Baseline for delta computation - null means start of run */
+  baselineTotals: RunUsageTotalsSchema.nullable().prefault(null),
 });
 
 /**
@@ -73,6 +75,8 @@ export type RunUsageAccumulatorJSON = z.output<
 export class RunUsageAccumulator {
   private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
+  /** Baseline totals for delta computation (null = start of run) */
+  private _baselineTotals: RunUsageTotals | null = null;
 
   /** Deserialize from a snapshot. Schema transform handles default merging. */
   static fromSnapshot(snapshot: unknown): RunUsageAccumulator {
@@ -80,6 +84,7 @@ export class RunUsageAccumulator {
     const acc = new RunUsageAccumulator();
     acc.totals = parsed.totals;
     acc.normalizedSnapshots.push(...parsed.normalizedSnapshots);
+    acc._baselineTotals = parsed.baselineTotals;
     return acc;
   }
 
@@ -88,6 +93,7 @@ export class RunUsageAccumulator {
     return {
       totals: this.totals,
       normalizedSnapshots: [...this.normalizedSnapshots],
+      baselineTotals: this._baselineTotals,
     };
   }
 
@@ -151,6 +157,10 @@ export class RunUsageAccumulator {
   /**
    * Get usage delta since the last captured baseline.
    * Returns per-round values while preserving cumulative totals for safety checks.
+   *
+   * Note: Returns RunUsageTotals type for API compatibility, but values represent
+   * deltas (current - baseline), not cumulative totals. Field names like
+   * "totalInputTokens" contain per-round delta values in this context.
    */
   getDeltaSinceBaseline(): RunUsageTotals {
     const baseline = this._baselineTotals ?? DEFAULT_TOTALS;
@@ -175,7 +185,4 @@ export class RunUsageAccumulator {
         this.totals.totalServerToolRequests - baseline.totalServerToolRequests,
     };
   }
-
-  /** Baseline totals for delta computation (null = start of run) */
-  private _baselineTotals: RunUsageTotals | null = null;
 }
