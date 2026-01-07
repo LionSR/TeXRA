@@ -74,7 +74,18 @@ export class StreamTabs {
     );
     if (streamNameElem) {
       const label = activeInfo?.label || '';
-      streamNameElem.textContent = label;
+      const model = activeInfo?.model || '';
+      const agent = activeInfo?.agent || '';
+      // Build header: label · agent · model (skip duplicates)
+      const parts = [label];
+      // Only add agent if different from label (label may already contain agent name)
+      if (agent && !label.toLowerCase().startsWith(agent.toLowerCase())) {
+        parts.push(agent);
+      }
+      if (model) {
+        parts.push(model);
+      }
+      streamNameElem.textContent = parts.join(' · ');
       streamNameElem.title = activeInfo
         ? this._buildActiveTitle(activeInfo)
         : '';

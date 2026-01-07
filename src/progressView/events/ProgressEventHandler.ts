@@ -222,11 +222,19 @@ export class ProgressEventHandler {
         const { stream, ...group } = data;
         const { id, parentGroupId } = group;
 
+        // Enrich group with model/agent info from taskState for display
+        const taskState = this.state.getTaskState(stream);
+        const enrichedGroup: TaskGroup = {
+          ...group,
+          model: taskState?.agentConfig?.model,
+          agent: taskState?.agentConfig?.agent,
+        };
+
         const hasStream = this.state.streamTabs.has(stream);
         const addGroupPromise = this.state.taskGroups.addGroup(
           stream,
           id,
-          group,
+          enrichedGroup,
         );
 
         if (!parentGroupId) {
@@ -244,9 +252,9 @@ export class ProgressEventHandler {
           this.webviewUpdater.isAvailable() &&
           stream === this.state.activeStream
         ) {
-          this.webviewUpdater.addTaskGroup(stream, group);
+          this.webviewUpdater.addTaskGroup(stream, enrichedGroup);
         } else {
-          this.bufferTaskGroupForReplay(stream, group);
+          this.bufferTaskGroupForReplay(stream, enrichedGroup);
         }
 
         await addGroupPromise;

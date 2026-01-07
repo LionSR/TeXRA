@@ -26,6 +26,10 @@ export const TaskGroupSchema = z.strictObject({
   status: TaskGroupStatusSchema,
   /** Parent group ID for nested groups */
   parentGroupId: z.string().optional(),
+  /** Model identifier (enriched from taskState) */
+  model: z.string().optional(),
+  /** Agent identifier (enriched from taskState) */
+  agent: z.string().optional(),
 });
 
 export type TaskGroup = z.infer<typeof TaskGroupSchema>;

@@ -139,6 +139,8 @@ export class RunSelector {
       id: group.id,
       name: group.name,
       startTime: group.startTime,
+      model: group.model,
+      agent: group.agent,
     });
 
     if (this._ensureDropdown()) {
@@ -156,6 +158,8 @@ export class RunSelector {
           id: group.id,
           name: group.name,
           startTime: group.startTime,
+          model: group.model,
+          agent: group.agent,
         });
       }
     });
