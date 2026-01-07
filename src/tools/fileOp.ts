@@ -100,7 +100,7 @@ export class FileOpTool extends defineTool({
         return {
           summary: `Wrote ${path}`,
           output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
-          userPatch: approval.userPatch,
+          // userPatch omitted - userDiffNote in output already shows user adjustments
           edits: [{ path, lineChanges: approval.lineChanges }],
         };
       }
@@ -171,7 +171,7 @@ export class FileOpTool extends defineTool({
         return {
           summary: `Appended to ${path}`,
           output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
-          userPatch: approval.userPatch,
+          // userPatch omitted - userDiffNote in output already shows user adjustments
           edits: [{ path, lineChanges: approval.lineChanges }],
         };
       }
