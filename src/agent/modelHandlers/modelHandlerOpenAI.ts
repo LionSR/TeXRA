@@ -59,6 +59,7 @@ import {
 import { toOpenAITools } from './toolConversion';
 import {
   formatAttachmentSummary,
+  formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -1344,29 +1345,16 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Build tool result as plain text (Claude Code pattern) - JSON wastes tokens
-    const textPieces: string[] = [];
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-    if (result.isError && !result.output && result.error) {
-      textPieces.push(result.error);
-    }
-    if (textPieces.length === 0 && result.summary) {
-      textPieces.push(result.summary);
-    }
-    // Add attachment summary if handler supports them
-    if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      textPieces.push(formatAttachmentSummary(attachments));
-    }
+    // Build tool result as plain text - JSON wastes tokens
+    const attachmentSummary =
+      this.canProcessToolResultAttachments && attachments.length > 0
+        ? formatAttachmentSummary(attachments)
+        : undefined;
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: textPieces.join('\n\n') || 'OK',
+      content: formatToolResultAsText(result, attachmentSummary),
     };
     return [callMsg, resultMsg];
   }

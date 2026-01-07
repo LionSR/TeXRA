@@ -74,6 +74,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1797,33 +1798,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...attachments);
     }
 
-    // Build tool result content - prefer plain text over JSON (Claude Code pattern)
-    // JSON adds token overhead without actionable value for the model
-    const textPieces: string[] = [];
-
-    // Primary output is the human-readable result
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-
-    // Only include specific actionable fields as text, not JSON
-    if (result.userInstruction) {
-      textPieces.push(`User feedback: ${result.userInstruction}`);
-    }
-
-    // For errors without output, include the error message
-    if (result.isError && !result.output && result.error) {
-      textPieces.push(result.error);
-    }
-
-    // Fallback: if nothing to show, use summary
-    if (textPieces.length === 0 && sanitizedResult.summary) {
-      textPieces.push(sanitizedResult.summary);
-    }
-
+    // Build tool result as plain text - JSON wastes tokens
+    // Note: Anthropic handles attachments as separate content blocks, not in text
     const toolResultContent: Array<
       TextBlockParam | ImageBlockParam | DocumentBlockParam
-    > = [{ type: 'text', text: textPieces.join('\n\n') }];
+    > = [{ type: 'text', text: formatToolResultAsText(result) }];
 
     const unsupportedNotes: string[] = [];
 
