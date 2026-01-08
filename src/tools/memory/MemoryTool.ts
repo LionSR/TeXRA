@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - filesystem utilities
-import { GlobalStorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
@@ -29,10 +29,16 @@ const MemoryToolInputSchema = z.strictObject({
   ]),
   path: z.string().nullish(),
   file_text: z.string().nullish(),
-  view_range: z.tuple([z.number(), z.number()]).nullish(),
+  view_range: z
+    .tuple([z.int().min(1), z.int().min(1)])
+    .refine(([start, end]) => end >= start, {
+      error: 'view_range[1] must be greater than or equal to view_range[0]',
+    })
+    .nullish(),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
-  insert_line: z.number().nullish(),
+  insert_line: z.int().min(0).nullish(),
+  insert_text: z.string().nullish(),
   old_path: z.string().nullish(),
   new_path: z.string().nullish(),
 });
@@ -71,7 +77,11 @@ export class MemoryTool extends defineTool({
         return this.insert(
           this.requirePath(input.path, input.command),
           this.requireField(input.insert_line, 'insert_line', input.command),
-          this.requireField(input.new_str, 'new_str', input.command),
+          this.requireField(
+            input.insert_text ?? input.new_str,
+            'insert_text',
+            input.command,
+          ),
         );
       case 'delete':
         return this.delete(this.requirePath(input.path, input.command));
@@ -117,17 +127,20 @@ export class MemoryTool extends defineTool({
         `The path ${inputPath} does not exist. Please provide a valid path.`,
       );
     }
-    if (inputPath.split('/').includes('..')) {
-      throw new ToolError(
-        `The path ${inputPath} does not exist. Please provide a valid path.`,
-      );
-    }
     const suffix =
       inputPath === MEMORY_ROOT
         ? ''
         : inputPath.slice(`${MEMORY_ROOT}/`.length);
-    return suffix
-      ? path.join(MEMORY_STORAGE_ROOT, suffix)
+    const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
+    const base = path.resolve(MEMORY_STORAGE_ROOT);
+    if (!resolved.startsWith(`${base}${path.sep}`) && resolved !== base) {
+      throw new ToolError(
+        `The path ${inputPath} does not exist. Please provide a valid path.`,
+      );
+    }
+    const relative = path.relative(base, resolved);
+    return relative
+      ? path.join(MEMORY_STORAGE_ROOT, relative)
       : MEMORY_STORAGE_ROOT;
   }
 
@@ -145,14 +158,14 @@ export class MemoryTool extends defineTool({
     viewRange?: [number, number],
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await GlobalStorageFS.exists(resolvedPath);
+    const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
       throw new ToolError(
         `The path ${inputPath} does not exist. Please provide a valid path.`,
       );
     }
 
-    const stats = await GlobalStorageFS.stat(resolvedPath);
+    const stats = await StorageFS.stat(resolvedPath);
     if (stats.type === vscode.FileType.Directory) {
       const listing = await this.buildDirectoryListing(resolvedPath);
       return {
@@ -163,7 +176,7 @@ export class MemoryTool extends defineTool({
       };
     }
 
-    const content = await GlobalStorageFS.read(resolvedPath);
+    const content = await StorageFS.read(resolvedPath);
     const lines = content.split(/\r?\n/);
     if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
@@ -199,14 +212,14 @@ export class MemoryTool extends defineTool({
     fileText: string,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await GlobalStorageFS.exists(resolvedPath);
+    const exists = await StorageFS.exists(resolvedPath);
     if (exists) {
       throw new ToolError(`Error: File ${inputPath} already exists`);
     }
 
-    await GlobalStorageFS.ensureDir(MEMORY_STORAGE_ROOT);
-    await GlobalStorageFS.ensureDir(path.dirname(resolvedPath));
-    await GlobalStorageFS.write(resolvedPath, fileText);
+    await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
+    await StorageFS.ensureDir(path.dirname(resolvedPath));
+    await StorageFS.write(resolvedPath, fileText);
 
     return {
       output: `File created successfully at: ${inputPath}`,
@@ -219,21 +232,21 @@ export class MemoryTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await GlobalStorageFS.exists(resolvedPath);
+    const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
       throw new ToolError(
         `Error: The path ${inputPath} does not exist. Please provide a valid path.`,
       );
     }
 
-    const isDir = await GlobalStorageFS.isDir(resolvedPath);
+    const isDir = await StorageFS.isDir(resolvedPath);
     if (isDir) {
       throw new ToolError(
         `Error: The path ${inputPath} does not exist. Please provide a valid path.`,
       );
     }
 
-    const content = await GlobalStorageFS.read(resolvedPath);
+    const content = await StorageFS.read(resolvedPath);
     const occurrences = content.split(oldStr).length - 1;
     if (occurrences === 0) {
       throw new ToolError(
@@ -254,7 +267,7 @@ export class MemoryTool extends defineTool({
     }
 
     const updated = content.replace(oldStr, newStr);
-    await GlobalStorageFS.write(resolvedPath, updated);
+    await StorageFS.write(resolvedPath, updated);
 
     const updatedLines = updated.split(/\r?\n/);
     const numbered = updatedLines.map((line, index) => {
@@ -279,17 +292,17 @@ export class MemoryTool extends defineTool({
     insertText: string,
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await GlobalStorageFS.exists(resolvedPath);
+    const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
       throw new ToolError(`Error: The path ${inputPath} does not exist`);
     }
 
-    const isDir = await GlobalStorageFS.isDir(resolvedPath);
+    const isDir = await StorageFS.isDir(resolvedPath);
     if (isDir) {
       throw new ToolError(`Error: The path ${inputPath} does not exist`);
     }
 
-    const content = await GlobalStorageFS.read(resolvedPath);
+    const content = await StorageFS.read(resolvedPath);
     const lines = content.split(/\r?\n/);
     const totalLines = lines.length;
     if (insertLine < 0 || insertLine > totalLines) {
@@ -305,7 +318,7 @@ export class MemoryTool extends defineTool({
       ...lines.slice(insertLine),
     ];
 
-    await GlobalStorageFS.write(resolvedPath, updatedLines.join('\n'));
+    await StorageFS.write(resolvedPath, updatedLines.join('\n'));
 
     return {
       output: `The file ${inputPath} has been edited.`,
@@ -314,12 +327,12 @@ export class MemoryTool extends defineTool({
 
   private async delete(inputPath: string): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
-    const exists = await GlobalStorageFS.exists(resolvedPath);
+    const exists = await StorageFS.exists(resolvedPath);
     if (!exists) {
       throw new ToolError(`Error: The path ${inputPath} does not exist`);
     }
 
-    await GlobalStorageFS.delete(resolvedPath, { recursive: true });
+    await StorageFS.delete(resolvedPath, { recursive: true });
     return {
       output: `Successfully deleted ${inputPath}`,
     };
@@ -332,19 +345,19 @@ export class MemoryTool extends defineTool({
     const resolvedOldPath = this.resolveMemoryPath(oldPathInput);
     const resolvedNewPath = this.resolveMemoryPath(newPathInput);
 
-    const oldExists = await GlobalStorageFS.exists(resolvedOldPath);
+    const oldExists = await StorageFS.exists(resolvedOldPath);
     if (!oldExists) {
       throw new ToolError(`Error: The path ${oldPathInput} does not exist`);
     }
 
-    const newExists = await GlobalStorageFS.exists(resolvedNewPath);
+    const newExists = await StorageFS.exists(resolvedNewPath);
     if (newExists) {
       throw new ToolError(
         `Error: The destination ${newPathInput} already exists`,
       );
     }
 
-    await GlobalStorageFS.rename(resolvedOldPath, resolvedNewPath);
+    await StorageFS.rename(resolvedOldPath, resolvedNewPath);
     return {
       output: `Successfully renamed ${oldPathInput} to ${newPathInput}`,
     };
@@ -352,7 +365,7 @@ export class MemoryTool extends defineTool({
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
     const entries: Array<{ path: string; size: number }> = [];
-    const rootStats = await GlobalStorageFS.stat(resolvedPath);
+    const rootStats = await StorageFS.stat(resolvedPath);
     entries.push({ path: resolvedPath, size: rootStats.size });
 
     await this.walkDirectory(resolvedPath, 0, entries);
@@ -372,13 +385,13 @@ export class MemoryTool extends defineTool({
       return;
     }
 
-    const children = await GlobalStorageFS.readDir(currentPath);
+    const children = await StorageFS.readDir(currentPath);
     for (const [name, type] of children) {
       if (name.startsWith('.') || name === 'node_modules') {
         continue;
       }
       const childPath = path.join(currentPath, name);
-      const stats = await GlobalStorageFS.stat(childPath);
+      const stats = await StorageFS.stat(childPath);
       entries.push({ path: childPath, size: stats.size });
 
       if (
