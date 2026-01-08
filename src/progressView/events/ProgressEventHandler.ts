@@ -439,13 +439,14 @@ export class ProgressEventHandler {
           inputTokens: Number(usage.inputTokens ?? 0),
           outputTokens: Number(usage.outputTokens ?? 0),
           cost: Number(usage.cost ?? 0),
-          // Cache tokens for display (use ?? 0 for consistent falsy handling)
+          // Cache tokens for display (use ?? for nullish-only coalescing)
           cacheReadInputTokens: Number(usage.cacheReadInputTokens ?? 0),
           cacheCreationInputTokens: Number(usage.cacheCreationInputTokens ?? 0),
         };
 
-        // Backend accumulates the delta
-        await this.state.usageStats.setRunUsage(
+        // Backend accumulates the delta and returns the accumulated value
+        // This avoids race conditions from a separate read operation
+        const accumulatedUsage = await this.state.usageStats.setRunUsage(
           stream,
           storageKey,
           normalizedUsage,
@@ -460,19 +461,16 @@ export class ProgressEventHandler {
 
         if (
           this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
+          stream === this.state.activeStream &&
+          accumulatedUsage
         ) {
           // Send accumulated value to frontend (not the delta)
           // Frontend uses SET semantics to avoid double-counting
-          const runUsageMap = this.state.usageStats.getRunUsage(stream);
-          const accumulatedUsage = runUsageMap.get(storageKey);
-          if (accumulatedUsage) {
-            this.webviewUpdater.updateRunUsage(
-              stream,
-              storageKey,
-              accumulatedUsage,
-            );
-          }
+          this.webviewUpdater.updateRunUsage(
+            stream,
+            storageKey,
+            accumulatedUsage,
+          );
         }
       },
     );
