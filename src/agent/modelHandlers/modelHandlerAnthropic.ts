@@ -338,6 +338,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } = requestOptions;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
+    // Track input token count for client-side context management triggering
+    let measuredInputTokens: number | undefined;
     const useAnthropic1MBeta = getConfig<boolean>(
       'texra.model.useAnthropic1MBeta',
       false,
@@ -440,6 +442,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
             messages,
           };
 
+          // Include tools in token counting for accurate measurement.
+          // Tool schemas can be substantial and affect context utilization.
+          if (options.tools && options.tools.length > 0) {
+            countTokensParams.tools = options.tools;
+          }
+
           // If thinking is enabled, we need to pass it to countTokens as well
           // to ensure consistency with the actual message creation.
           // Without this, the API returns an error when messages contain thinking blocks.
@@ -465,6 +473,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             () => client.beta.messages.countTokens(countTokensParams),
           );
           const { input_tokens: inputTokens } = responseTokenCount;
+          measuredInputTokens = inputTokens;
           this.logger.debug(`Token count of message: ${inputTokens}`);
           if (inputTokens > effectiveContextWindow) {
             const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
@@ -545,11 +554,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
           ...(options.context_management?.edits ?? []),
         ];
 
+        const triggerTokens = Math.floor(
+          (thresholdPercent / 100) * this.config.contextWindow,
+        );
+
         // Add thinking block clearing strategy if reasoning is enabled
-        // NOTE: The Anthropic API doesn't support a trigger for thinking clearing -
-        // it's applied eagerly on every request, keeping only the last N thinking turns.
-        // This is by design to manage thinking token accumulation.
+        // NOTE: The Anthropic API doesn't support a trigger for thinking clearing,
+        // so we implement client-side triggering by only including the edit when
+        // token count exceeds the threshold (or when count is unavailable).
+        const shouldClearThinking =
+          measuredInputTokens === undefined ||
+          measuredInputTokens >= triggerTokens;
+
         if (
+          shouldClearThinking &&
           this.capabilities.supportsReasoning &&
           options.thinking &&
           !contextManagementEdits.some(
@@ -567,16 +585,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         // Add tool result clearing strategy
-        // Tool use clearing has a trigger - it only activates when input tokens exceed threshold
+        // Tool use clearing has a server-side trigger - it only activates when input tokens exceed threshold
         if (
           !contextManagementEdits.some(
             (edit) => edit.type === 'clear_tool_uses_20250919',
           )
         ) {
-          const triggerTokens = Math.floor(
-            (thresholdPercent / 100) * this.config.contextWindow,
-          );
-
           contextManagementEdits.push({
             type: 'clear_tool_uses_20250919' as const,
             trigger: {
