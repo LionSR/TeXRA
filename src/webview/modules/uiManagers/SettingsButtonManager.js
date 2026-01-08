@@ -8,7 +8,7 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   normalizeSessionType,
-  resolveRadioGroup,
+  VSCODE_RADIO_GROUP_TAG,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
@@ -267,82 +267,22 @@ export class SettingsButtonManager extends BaseDomHandler {
         }
       };
 
-      /**
-       * Gets the current session type from a vscode-radio-group element.
-       * @param {HTMLElement} group - The radio group element
-       * @returns {string|undefined} The session type, or undefined if not found
-       */
-      const getSessionTypeFromGroup = (group) => {
-        if (!(group instanceof HTMLElement)) {
-          return undefined;
-        }
-
-        const radios = Array.from(group.querySelectorAll('vscode-radio'));
-        if (radios.length === 0) {
-          return undefined;
-        }
-
-        /**
-         * Extract session type from a radio element
-         * @param {HTMLElement} radio - The radio button element
-         * @returns {string|undefined} The session type or undefined if not found
-         */
-        const findSessionType = (radio) => {
-          if (!(radio instanceof HTMLElement)) {
-            return undefined;
-          }
-
-          const sessionType =
-            radio.dataset.sessionType || radio.getAttribute('value');
-          return sessionType && sessionType.length > 0
-            ? sessionType
-            : undefined;
-        };
-
-        const checkedRadio = radios.find((radio) => {
-          if (!(radio instanceof HTMLElement)) {
-            return false;
-          }
-          const hasCheckedProperty =
-            'checked' in radio && Boolean(radio.checked);
-          return (
-            hasCheckedProperty ||
-            radio.hasAttribute('checked') ||
-            radio.getAttribute('aria-checked') === 'true'
-          );
-        });
-
-        if (checkedRadio) {
-          return findSessionType(checkedRadio);
-        }
-
-        return findSessionType(radios[0]);
-      };
-
-      const radioGroup = resolveRadioGroup(toggleContainer);
-      if (radioGroup) {
+      const radioGroup =
+        toggleContainer.tagName === VSCODE_RADIO_GROUP_TAG
+          ? toggleContainer
+          : toggleContainer.querySelector('vscode-radio-group');
+      if (radioGroup instanceof HTMLElement) {
         // Initialize last session type from radio group
         // Only set if we can determine a valid initial value to avoid masking the first user interaction
-        const initialSessionType = getSessionTypeFromGroup(radioGroup);
+        const initialSessionType = radioGroup.value;
         if (initialSessionType) {
           this._setLastRadioSessionType(
             normalizeSessionType(initialSessionType),
           );
         }
 
-        this.addListener(radioGroup, 'change', (event) => {
-          let sessionType;
-          const target = event?.target;
-          if (target instanceof HTMLElement) {
-            if (isTagName(target, 'vscode-radio')) {
-              sessionType =
-                target.dataset.sessionType || target.getAttribute('value');
-            }
-          }
-
-          if (!sessionType) {
-            sessionType = getSessionTypeFromGroup(radioGroup);
-          }
+        this.addListener(radioGroup, 'change', () => {
+          const sessionType = radioGroup.value;
           if (!sessionType) {
             return;
           }

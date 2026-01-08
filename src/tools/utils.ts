@@ -42,20 +42,23 @@ export function resolveWorkspaceRelativePath(
   }
 
   const trimmed = targetPath.trim();
-  const absoluteCandidate = path.resolve(workspacePath, trimmed);
-  const relativeCandidate = path.relative(workspacePath, absoluteCandidate);
-  const normalizedRelative =
-    relativeCandidate === '' ? '.' : path.normalize(relativeCandidate);
+  if (path.isAbsolute(trimmed)) {
+    const relative = WorkspaceFS.relativePath(trimmed);
+    if (relative === trimmed || relative.startsWith('..')) {
+      throw new ToolError('Path must stay within the workspace.');
+    }
+    return { relative: relative === '' ? '.' : relative, absolute: trimmed };
+  }
 
-  // Use centralized path segment extraction
-  const segments = getPathSegments(normalizedRelative);
+  const relative = trimmed === '' ? '.' : trimmed;
+  const segments = getPathSegments(relative);
   if (segments.includes('..')) {
     throw new ToolError('Path must stay within the workspace.');
   }
 
   return {
-    relative: normalizedRelative,
-    absolute: absoluteCandidate,
+    relative,
+    absolute: path.join(workspacePath, relative),
   };
 }
 

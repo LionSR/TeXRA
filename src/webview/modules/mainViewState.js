@@ -10,7 +10,7 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   normalizeSessionType,
-  resolveRadioGroup,
+  VSCODE_RADIO_GROUP_TAG,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -359,7 +359,10 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const radioGroup = resolveRadioGroup(toggleContainer);
+      const radioGroup =
+        toggleContainer.tagName === VSCODE_RADIO_GROUP_TAG
+          ? toggleContainer
+          : toggleContainer.querySelector('vscode-radio-group');
       if (radioGroup instanceof HTMLElement) {
         const radios = radioGroup.querySelectorAll('vscode-radio');
         radios.forEach((radio) => {
