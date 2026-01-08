@@ -508,29 +508,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
 
       // Exchange GitHub token for Supabase session via Edge Function
-      // Use AbortController for timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        EDGE_FUNCTION_TIMEOUT_MS,
-      );
-
-      let response: Response;
-      try {
-        response = await fetch(GITHUB_TOKEN_EXCHANGE_URL, {
+      const response = await this.fetchWithTimeout(
+        GITHUB_TOKEN_EXCHANGE_URL,
+        {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ github_token: githubSession.accessToken }),
-          signal: controller.signal,
-        });
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          throw new Error('Authentication server timeout. Please try again.');
-        }
-        throw fetchError;
-      }
-      clearTimeout(timeoutId);
+        },
+        EDGE_FUNCTION_TIMEOUT_MS,
+        'Authentication server timeout. Please try again.',
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -549,28 +536,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         throw new Error(errorMsg);
       }
 
-      // Parse and validate response with Zod schema
-      let data: GitHubTokenExchangeResponse;
-      try {
-        const rawData = await response.json();
-        const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
-        if (!parsed.success) {
-          logger.error(
-            'SupabaseAuthProvider',
-            `Token exchange response validation failed: ${parsed.error.message}`,
-          );
-          throw new Error('Invalid response format from authentication server');
-        }
-        data = parsed.data;
-      } catch (parseError) {
-        if (
-          parseError instanceof Error &&
-          parseError.message.includes('Invalid response')
-        ) {
-          throw parseError;
-        }
-        throw new Error('Invalid response format from authentication server');
-      }
+      const data = await this.parseTokenExchangeResponse(response);
 
       // Create session in same format as Supabase OAuth
       // Note: expires_at from Edge Function is in seconds, convert to milliseconds
@@ -621,6 +587,41 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       void vscode.window.showErrorMessage(`Authentication failed: ${message}`);
       throw error;
     }
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs: number,
+    timeoutMessage: string,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(timeoutMessage);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async parseTokenExchangeResponse(
+    response: Response,
+  ): Promise<GitHubTokenExchangeResponse> {
+    const rawData = await response.json();
+    const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
+    if (!parsed.success) {
+      logger.error(
+        'SupabaseAuthProvider',
+        `Token exchange response validation failed: ${parsed.error.message}`,
+      );
+      throw new Error('Invalid response format from authentication server');
+    }
+    return parsed.data;
   }
 
   /**
