@@ -73,6 +73,12 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
    * Returns a callback that will be invoked when a round finalizes.
    */
   readonly getUsageRecorder: () => RoundFinalizedCallback;
+
+  /**
+   * Callback invoked when a queued follow-up message is consumed.
+   * Used to update the UI (clear the queued message display).
+   */
+  readonly onFollowUpConsumed?: () => void;
 }
 
 /**
