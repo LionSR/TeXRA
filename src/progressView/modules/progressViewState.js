@@ -641,7 +641,9 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const delta = {
+    // SET semantics: backend sends accumulated values, we store directly
+    // (no accumulation here - backend handles accumulation in UsageStatsManager)
+    const normalized = {
       inputTokens: Number(usage?.inputTokens ?? 0),
       outputTokens: Number(usage?.outputTokens ?? 0),
       cost: Number(usage?.cost ?? 0),
@@ -650,25 +652,14 @@ export class ProgressViewState {
       cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
     };
     if (
-      delta.inputTokens === 0 &&
-      delta.outputTokens === 0 &&
-      delta.cost === 0
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0
     ) {
-      // Empty delta means nothing to add
+      // Empty usage means nothing to store
       return;
     }
-    // Accumulate: add delta to existing values
-    const existing = this.runUsage.get(targetStream, runId);
-    const accumulated = {
-      inputTokens: (existing?.inputTokens ?? 0) + delta.inputTokens,
-      outputTokens: (existing?.outputTokens ?? 0) + delta.outputTokens,
-      cost: (existing?.cost ?? 0) + delta.cost,
-      cacheReadInputTokens:
-        (existing?.cacheReadInputTokens ?? 0) + delta.cacheReadInputTokens,
-      cacheCreationInputTokens:
-        (existing?.cacheCreationInputTokens ?? 0) + delta.cacheCreationInputTokens,
-    };
-    this.runUsage.set(targetStream, runId, accumulated);
+    this.runUsage.set(targetStream, runId, normalized);
   }
 
   getRunUsage(streamId, runId) {
