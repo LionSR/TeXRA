@@ -46,6 +46,7 @@ export const ELEMENT_IDS = {
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
+  OPEN_MEMORY_VIEW_BTN: 'openMemoryViewBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
@@ -103,6 +104,15 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
+const OPEN_MEMORY_VIEW_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.OPEN_MEMORY_VIEW_BTN,
+  icon: 'database',
+  command: COMMANDS.OPEN_MEMORY_VIEW,
+  title: 'View and manage memory files',
+  className: 'memory-button',
+  disabled: false,
+});
+
 /** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
   STOP_STREAM_BUTTON,
@@ -155,6 +165,7 @@ const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
+  OPEN_MEMORY_VIEW_BUTTON,
 ];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
