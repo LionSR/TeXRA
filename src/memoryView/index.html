@@ -45,9 +45,9 @@
 
   <body>
     <div class="memory-view-container">
-      <header class="memory-header">
+      <header class="view-header">
         <h2>Agent Memory</h2>
-        <vscode-toolbar-container class="memory-toolbar">
+        <vscode-toolbar-container>
           <vscode-toolbar-button
             id="refreshMemoryBtn"
             icon="refresh"
@@ -63,7 +63,7 @@
         </vscode-toolbar-container>
       </header>
 
-      <p class="memory-description">
+      <p class="text-secondary memory-description">
         The AI assistant can save notes here to remember important information
         across conversations. These notes help the assistant provide more
         contextual and personalized help.
@@ -75,8 +75,8 @@
     </div>
 
     <template id="memoryItemTemplate">
-      <div class="memory-item">
-        <div class="memory-item-header">
+      <div class="list-item memory-item">
+        <div class="list-item-header">
           <div class="memory-path"></div>
           <vscode-toolbar-button
             class="open-memory-btn"
@@ -85,8 +85,8 @@
             title="Open in editor"
           ></vscode-toolbar-button>
         </div>
-        <div class="memory-meta"></div>
-        <vscode-collapsible class="memory-collapsible">
+        <div class="text-secondary memory-meta"></div>
+        <vscode-collapsible class="collapsible">
           <pre class="memory-preview"></pre>
         </vscode-collapsible>
       </div>
