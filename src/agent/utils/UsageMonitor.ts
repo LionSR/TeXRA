@@ -165,6 +165,7 @@ export class UsageMonitor {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
+        cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
       };
@@ -184,6 +185,7 @@ export class UsageMonitor {
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens?: number;
+      cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
     },
@@ -209,6 +211,7 @@ export class UsageMonitor {
       const roundInputTokens = usage.inputTokens;
       const roundOutputTokens = usage.outputTokens;
       const roundCachedInputTokens = usage.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = usage.cacheCreationInputTokens ?? 0;
       const roundReasoningTokens = usage.reasoningTokens ?? 0;
       const roundCost = usage.cost;
 
@@ -232,6 +235,7 @@ export class UsageMonitor {
         cost: Number(relayCost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens: roundCachedInputTokens,
+        cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         usedRelay,
         streamId: this.context.streamId,
