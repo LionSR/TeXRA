@@ -144,14 +144,15 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
         try {
           const resolvedPath = resolveMemoryStoragePath(storagePath);
           await StorageFS.delete(resolvedPath, { recursive: true });
-          // Refresh the memory list after deletion
-          await this.sendMemoryData(view.webview);
         } catch (error) {
           await showLoggedErrorMessage(
             this.channel,
             'Failed to delete memory',
             error,
           );
+        } finally {
+          // Always refresh the memory list to reflect current state
+          await this.sendMemoryData(view.webview);
         }
       },
     );
