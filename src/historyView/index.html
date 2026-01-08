@@ -55,7 +55,9 @@
 
   <body>
     <div>
-      <h2>Agent Execution History</h2>
+      <header class="view-header">
+        <h2>Agent Execution History</h2>
+      </header>
 
       <div id="searchContainer" class="search-container">
         <vscode-textfield
@@ -92,9 +94,9 @@
       </div>
     </div>
     <template id="historyItemTemplate">
-      <div class="history-item">
-        <div class="history-item-header">
-          <div class="history-timestamp"></div>
+      <div class="list-item history-item">
+        <div class="list-item-header">
+          <div class="text-secondary history-timestamp"></div>
           <vscode-toolbar-container class="history-actions">
             <vscode-toolbar-button
               class="delete-btn"
@@ -117,7 +119,7 @@
           </vscode-toolbar-container>
         </div>
         <div class="history-details basic-details"></div>
-        <vscode-collapsible class="history-collapsible">
+        <vscode-collapsible class="collapsible">
           <div class="history-details extra-details"></div>
         </vscode-collapsible>
       </div>
