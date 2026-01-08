@@ -4,6 +4,11 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
+import {
+  ContextManagementDataSchema,
+  ContextStateDataSchema,
+  type ContextStateData,
+} from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
@@ -144,6 +149,52 @@ export class VSCodeTransport extends Transport {
     bus.emit('addLogMessage', {
       stream: this.streamName,
       logMessage,
+    });
+
+    // Emit context state update for CONTEXT_MANAGEMENT messages
+    if (
+      validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
+      event.data
+    ) {
+      // Validate using Zod schema at system boundary (CLAUDE.md schema-first approach)
+      const parseResult = ContextManagementDataSchema.safeParse(event.data);
+      if (!parseResult.success) {
+        return; // Skip invalid context data
+      }
+
+      const contextData = parseResult.data;
+      const inputTokens =
+        contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
+      const utilizationPercent =
+        contextData.utilizationAfter ??
+        (inputTokens / contextData.contextWindow) * 100;
+
+      this.emitContextState({
+        inputTokens,
+        contextWindow: contextData.contextWindow,
+        utilizationPercent,
+      });
+    }
+
+    // Emit context state update for CONTEXT_STATE messages (from token counting)
+    if (validatedMessageType === MESSAGE_TYPES.CONTEXT_STATE && event.data) {
+      const parseResult = ContextStateDataSchema.safeParse(event.data);
+      if (!parseResult.success) {
+        return; // Skip invalid context state data
+      }
+
+      this.emitContextState(parseResult.data);
+    }
+  }
+
+  /**
+   * Emit context state to the progress view event bus.
+   * Shared helper for both CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
+   */
+  private emitContextState(contextState: ContextStateData): void {
+    bus.emit('updateContextState', {
+      stream: this.streamName,
+      contextState,
     });
   }
 }

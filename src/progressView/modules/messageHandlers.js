@@ -212,6 +212,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_STREAM_STATUS]: this.handleUpdateStreamStatus.bind(this),
       [COMMANDS.UPDATE_USAGE]: this.handleUpdateUsage.bind(this),
       [COMMANDS.UPDATE_RUN_USAGE]: this.handleUpdateRunUsage.bind(this),
+      [COMMANDS.UPDATE_CONTEXT_STATE]: this.handleUpdateContextState.bind(this),
       [COMMANDS.UPDATE_FILES]: this.handleUpdateFiles.bind(this),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]:
         this.handleUpdateMissingOutputs.bind(this),
@@ -235,6 +236,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.RECORDING_STOPPED]: this.handleRecordingStopped.bind(this),
       [COMMANDS.RECORDING_ERROR]: this.handleRecordingError.bind(this),
       [COMMANDS.UPDATE_TODOS]: this.handleUpdateTodos.bind(this),
+      [COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]:
+        this.handleUpdateQueuedFollowUps.bind(this),
     };
   }
 
@@ -297,13 +300,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = streams.find(
       (s) => s.name === message.activeStream,
     );
-    const sessionKind =
-      activeStreamInfo?.agentSessionKind ||
-      activeStreamInfo?.uiTraits?.sessionKind ||
-      'workflow'; // Default fallback
+    // Only determine session kind if we have stream info - avoid false 'workflow' default
+    // that would incorrectly clear tool-use log content
+    const sessionKind = activeStreamInfo
+      ? activeStreamInfo.agentSessionKind ||
+        activeStreamInfo.uiTraits?.sessionKind ||
+        'workflow'
+      : state.activeSessionKind || 'workflow';
     const isToolAgent = sessionKind === 'toolUse';
 
-    this._clearSessionKindState(sessionKind);
+    // Only clear session state if we have confirmed stream info for the session kind change
+    // This prevents clearing log content when stream info is temporarily unavailable
+    if (activeStreamInfo) {
+      this._clearSessionKindState(sessionKind);
+    }
     state.activeSessionKind = sessionKind;
 
     dom.runSelector.setDisplayEnabled(
@@ -331,17 +341,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       dom.todoList.clear();
+      dom.queuedFollowUps.clear();
       dom.fileList.clear();
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
       state.clearAllTodos();
+      state.clearAllQueuedFollowUps();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
       // Refresh todos for the active stream
       const todos = state.getTodos(message.activeStream);
       dom.todoList.update(todos ?? []);
+      // Refresh queued follow-ups for the active stream
+      const queuedFollowUps = state.getQueuedFollowUps(message.activeStream);
+      dom.queuedFollowUps.update(queuedFollowUps ?? []);
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
@@ -683,6 +698,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshUsageForActiveRun();
   }
 
+  /**
+   * Handle context state update (input tokens vs context window).
+   * Updates the context utilization display in the footer.
+   */
+  handleUpdateContextState(message) {
+    if (message.stream && !this._isActiveStream(message)) {
+      return;
+    }
+
+    const targetStream = this._getTargetStream(message);
+    if (!targetStream || !message.contextState) {
+      return;
+    }
+
+    state.setContextState(targetStream, message.contextState);
+    // Update the context display if this is the active stream
+    if (targetStream === state.activeStream) {
+      this.usageSummary?.updateContextDisplay?.(message.contextState);
+    }
+  }
+
   handleUpdateFiles(message) {
     const targetStream = this._getTargetStream(message);
     if (!targetStream) {
@@ -796,7 +832,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       message.sessionKind || state.activeSessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
-    this._clearSessionKindState(sessionKind);
+    // Only clear session state if message explicitly provides session kind
+    // This prevents clearing log content when session kind is derived from state fallback
+    if (message.sessionKind) {
+      this._clearSessionKindState(sessionKind);
+    }
     state.activeSessionKind = sessionKind;
 
     let activeRunId = state.getActiveRunId(activeStream);
@@ -894,6 +934,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
       state.clearTodos(message.stream);
+      state.clearQueuedFollowUps(message.stream);
+      state.clearContextState(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
@@ -901,7 +943,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.instructionPanel.hide();
         dom.runSelector.clear();
         dom.todoList.clear();
+        dom.queuedFollowUps.clear();
         dom.fileList.clear();
+        dom.usageSummary?.clearContextDisplay?.();
       }
     }
 
@@ -920,9 +964,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     state.clearAllTodos();
+    state.clearAllQueuedFollowUps();
+    state.clearContextState(); // Clear all context state entries
     dom.runSelector.clear();
     dom.todoList.clear();
+    dom.queuedFollowUps.clear();
     dom.fileList.clear();
+    dom.usageSummary?.clearContextDisplay?.();
     this._updatePlaceholderVisibility();
   }
 
@@ -971,6 +1019,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Only update DOM if this is the active stream
     if (stream === state.activeStream) {
       dom.todoList.update(todos);
+    }
+  }
+
+  /**
+   * Handle UPDATE_QUEUED_FOLLOW_UPS command from extension host.
+   * Updates the queued follow-ups display for the specified stream.
+   * @param {{ stream: string, messages: string[] }} message
+   */
+  handleUpdateQueuedFollowUps(message) {
+    const { stream, messages } = message;
+    if (!stream || !Array.isArray(messages)) {
+      return;
+    }
+
+    // Always store queued messages in state for persistence
+    state.setQueuedFollowUps(stream, messages);
+
+    // Only update DOM if this is the active stream
+    if (stream === state.activeStream) {
+      dom.queuedFollowUps.update(messages);
     }
   }
 }
