@@ -468,6 +468,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
+        // Emit context state for UI display
+        this.logger.logContextState(totalTokens, this.config.contextWindow);
         if (totalTokens > this.config.contextWindow) {
           this.logger.error(
             `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,

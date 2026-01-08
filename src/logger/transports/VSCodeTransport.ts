@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
-import { ContextManagementDataSchema } from '@logger/AgentLogger';
+import {
+  ContextManagementDataSchema,
+  ContextStateDataSchema,
+} from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
@@ -172,6 +175,20 @@ export class VSCodeTransport extends Transport {
           contextWindow: contextData.contextWindow,
           utilizationPercent,
         },
+      });
+    }
+
+    // Emit context state update for CONTEXT_STATE messages (from token counting)
+    if (validatedMessageType === MESSAGE_TYPES.CONTEXT_STATE && event.data) {
+      const parseResult = ContextStateDataSchema.safeParse(event.data);
+      if (!parseResult.success) {
+        return; // Skip invalid context state data
+      }
+
+      const contextState = parseResult.data;
+      bus.emit('updateContextState', {
+        stream: this.streamName,
+        contextState,
       });
     }
   }
