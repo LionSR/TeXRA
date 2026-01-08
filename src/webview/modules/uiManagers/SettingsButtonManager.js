@@ -1,14 +1,14 @@
 // Local imports - webview
 import {
+  AGENT_SELECT_IDS,
+  AGENT_SELECT_LIST,
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
+  parseSessionType,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
-  AGENT_SELECT_IDS,
-  AGENT_SELECT_LIST,
-  normalizeSessionType,
-  resolveRadioGroup,
+  VSCODE_RADIO_GROUP_TAG,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
@@ -166,7 +166,9 @@ export class SettingsButtonManager extends BaseDomHandler {
 
   _setupSettingsButtons() {
     this.addListener(ELEMENT_IDS.AGENT_SETTINGS_BUTTON, 'click', () => {
-      const sessionType = normalizeSessionType(this.state.get()?.sessionType);
+      const sessionType =
+        parseSessionType(this.state.get()?.sessionType) ??
+        SESSION_TYPES.WORKFLOW;
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
         sessionType,
@@ -202,7 +204,7 @@ export class SettingsButtonManager extends BaseDomHandler {
 
     this.eventBus.addEventListener('showDependencyBanner', (e) => {
       this._disposeDependencyInstallListeners();
-      const missing = e.detail?.missingTools || [];
+      const missing = e.detail?.missingTools ?? [];
       bannerManager.showBanner(ELEMENT_IDS.DEPENDENCY_BANNER, {
         missingTools: missing,
       });
@@ -250,7 +252,8 @@ export class SettingsButtonManager extends BaseDomHandler {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
       const handleSessionTypeSelection = (sessionType) => {
-        const normalized = normalizeSessionType(sessionType);
+        const normalized =
+          parseSessionType(sessionType) ?? SESSION_TYPES.WORKFLOW;
         this._setLastRadioSessionType(normalized);
         this.state.applySessionType(normalized);
         const selectId =
@@ -267,90 +270,27 @@ export class SettingsButtonManager extends BaseDomHandler {
         }
       };
 
-      /**
-       * Gets the current session type from a vscode-radio-group element.
-       * @param {HTMLElement} group - The radio group element
-       * @returns {string|undefined} The session type, or undefined if not found
-       */
-      const getSessionTypeFromGroup = (group) => {
-        if (!(group instanceof HTMLElement)) {
-          return undefined;
-        }
-
-        const radios = Array.from(group.querySelectorAll('vscode-radio'));
-        if (radios.length === 0) {
-          return undefined;
-        }
-
-        /**
-         * Extract session type from a radio element
-         * @param {HTMLElement} radio - The radio button element
-         * @returns {string|undefined} The session type or undefined if not found
-         */
-        const findSessionType = (radio) => {
-          if (!(radio instanceof HTMLElement)) {
-            return undefined;
-          }
-
-          const sessionType =
-            radio.dataset.sessionType || radio.getAttribute('value');
-          return sessionType && sessionType.length > 0
-            ? sessionType
-            : undefined;
-        };
-
-        const checkedRadio = radios.find((radio) => {
-          if (!(radio instanceof HTMLElement)) {
-            return false;
-          }
-          const hasCheckedProperty =
-            'checked' in radio && Boolean(radio.checked);
-          return (
-            hasCheckedProperty ||
-            radio.hasAttribute('checked') ||
-            radio.getAttribute('aria-checked') === 'true'
-          );
-        });
-
-        if (checkedRadio) {
-          return findSessionType(checkedRadio);
-        }
-
-        return findSessionType(radios[0]);
-      };
-
-      const radioGroup = resolveRadioGroup(toggleContainer);
+      const radioGroup =
+        toggleContainer.tagName === VSCODE_RADIO_GROUP_TAG
+          ? toggleContainer
+          : toggleContainer.querySelector('vscode-radio-group');
       if (radioGroup) {
         // Initialize last session type from radio group
         // Only set if we can determine a valid initial value to avoid masking the first user interaction
-        const initialSessionType = getSessionTypeFromGroup(radioGroup);
+        const initialSessionType = parseSessionType(radioGroup.value);
         if (initialSessionType) {
-          this._setLastRadioSessionType(
-            normalizeSessionType(initialSessionType),
-          );
+          this._setLastRadioSessionType(initialSessionType);
         }
 
-        this.addListener(radioGroup, 'change', (event) => {
-          let sessionType;
-          const target = event?.target;
-          if (target instanceof HTMLElement) {
-            if (isTagName(target, 'vscode-radio')) {
-              sessionType =
-                target.dataset.sessionType || target.getAttribute('value');
-            }
-          }
-
-          if (!sessionType) {
-            sessionType = getSessionTypeFromGroup(radioGroup);
-          }
+        this.addListener(radioGroup, 'change', () => {
+          const sessionType = parseSessionType(radioGroup.value);
           if (!sessionType) {
             return;
           }
-          const normalized = normalizeSessionType(sessionType);
-          if (normalized === this._lastRadioSessionType) {
+          if (sessionType === this._lastRadioSessionType) {
             return;
           }
-          handleSessionTypeSelection(normalized);
+          handleSessionTypeSelection(sessionType);
         });
       } else {
         const buttons = toggleContainer.querySelectorAll('[data-session-type]');
@@ -450,9 +390,9 @@ export class SettingsButtonManager extends BaseDomHandler {
 
     const sessionType =
       selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
-    const normalized = normalizeSessionType(sessionType);
-    this._setLastRadioSessionType(normalized);
-    this.state.applySessionType(normalized, { skipSave: true });
+    const parsed = parseSessionType(sessionType) ?? SESSION_TYPES.WORKFLOW;
+    this._setLastRadioSessionType(parsed);
+    this.state.applySessionType(parsed, { skipSave: true });
 
     const selectedAgent = selectElement.value;
     const selectedOption = getSelectedOptionElement(selectElement);
@@ -479,7 +419,7 @@ export class SettingsButtonManager extends BaseDomHandler {
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
-      sessionInput.value = normalized;
+      sessionInput.value = parsed;
     }
 
     this.state.save();

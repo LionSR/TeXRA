@@ -23,14 +23,40 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     this._onDidChangeTreeData.event;
 
   private builtInAgentsPath = '';
+  private builtInToolUsePath = '';
 
   constructor(
     _workspaceRoot: string | undefined,
     _context?: vscode.ExtensionContext,
   ) {
-    agentDirectories.builtIn().then((p) => {
-      this.builtInAgentsPath = p;
-    });
+    void this.loadBuiltInPaths();
+  }
+
+  private async loadBuiltInPaths(): Promise<void> {
+    const [builtInAgentsPath, builtInToolUsePath] = await Promise.all([
+      agentDirectories.builtIn(),
+      agentDirectories.builtInToolUse(),
+    ]);
+    this.builtInAgentsPath = builtInAgentsPath;
+    this.builtInToolUsePath = builtInToolUsePath;
+  }
+
+  private async ensureBuiltInPaths(): Promise<{
+    builtInAgentsPath: string;
+    builtInToolUsePath: string;
+  }> {
+    if (this.builtInAgentsPath && this.builtInToolUsePath) {
+      return {
+        builtInAgentsPath: this.builtInAgentsPath,
+        builtInToolUsePath: this.builtInToolUsePath,
+      };
+    }
+
+    await this.loadBuiltInPaths();
+    return {
+      builtInAgentsPath: this.builtInAgentsPath,
+      builtInToolUsePath: this.builtInToolUsePath,
+    };
   }
 
   refresh(): void {
@@ -61,12 +87,12 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       }
 
       const items: FileItem[] = [];
-      const builtInPath = await agentDirectories.builtIn();
-      const builtInToolUsePath = await agentDirectories.builtInToolUse();
+      const { builtInAgentsPath, builtInToolUsePath } =
+        await this.ensureBuiltInPaths();
       items.push(
         new FileItem(
           'Built-in Agents',
-          vscode.Uri.file(builtInPath),
+          vscode.Uri.file(builtInAgentsPath),
           vscode.TreeItemCollapsibleState.Collapsed,
         ),
       );
@@ -108,8 +134,10 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
         const resourceUri = vscode.Uri.file(path.join(dirPath, name));
         const isBuiltIn =
-          this.builtInAgentsPath &&
-          resourceUri.fsPath.startsWith(this.builtInAgentsPath);
+          (this.builtInAgentsPath &&
+            resourceUri.fsPath.startsWith(this.builtInAgentsPath)) ||
+          (this.builtInToolUsePath &&
+            resourceUri.fsPath.startsWith(this.builtInToolUsePath));
 
         if (type === vscode.FileType.Directory) {
           items.push(

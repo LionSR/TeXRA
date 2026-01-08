@@ -13,7 +13,6 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   CHECK_BOXES,
-  normalizeSessionType,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
@@ -1044,7 +1043,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
-    const activeFiles = state.activeFiles || {};
+    const activeFiles = state.activeFiles ?? {};
     // config.session is the single source of truth for session metadata
     const canonicalSession = config.session;
 
@@ -1179,7 +1178,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     safeSetElementValue(MEDIA_FILE, state.mediaFile || '');
 
     // Restore checkbox values
-    const toolConfig = state.toolConfig || {};
+    const toolConfig = state.toolConfig ?? {};
     CHECK_BOXES.forEach((id) => {
       const value = state[id] ?? toolConfig[id] ?? false;
       safeSetElementChecked(id, value);
