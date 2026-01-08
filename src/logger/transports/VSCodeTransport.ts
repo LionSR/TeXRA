@@ -153,24 +153,26 @@ export class VSCodeTransport extends Transport {
       event.data
     ) {
       // Use the proper ContextManagementData type from AgentLogger
-      const contextData = event.data as ContextManagementData;
-      const contextWindow = contextData.contextWindow ?? 0;
+      // Validate required fields before using to prevent runtime errors
+      const contextData = event.data as Partial<ContextManagementData>;
+      const contextWindow = contextData.contextWindow;
+      if (typeof contextWindow !== 'number' || contextWindow <= 0) {
+        return; // Skip invalid context data
+      }
+
       const inputTokens =
         contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
       const utilizationPercent =
-        contextData.utilizationAfter ??
-        (contextWindow > 0 ? (inputTokens / contextWindow) * 100 : 0);
+        contextData.utilizationAfter ?? (inputTokens / contextWindow) * 100;
 
-      if (contextWindow > 0) {
-        bus.emit('updateContextState', {
-          stream: this.streamName,
-          contextState: {
-            inputTokens,
-            contextWindow,
-            utilizationPercent,
-          },
-        });
-      }
+      bus.emit('updateContextState', {
+        stream: this.streamName,
+        contextState: {
+          inputTokens,
+          contextWindow,
+          utilizationPercent,
+        },
+      });
     }
   }
 }
