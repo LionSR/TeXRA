@@ -78,12 +78,20 @@
       <div class="list-item memory-item">
         <div class="list-item-header">
           <div class="memory-path"></div>
-          <vscode-toolbar-button
-            class="open-memory-btn"
-            icon="go-to-file"
-            label="Open"
-            title="Open in editor"
-          ></vscode-toolbar-button>
+          <vscode-toolbar-container>
+            <vscode-toolbar-button
+              class="open-memory-btn"
+              icon="go-to-file"
+              label="Open"
+              title="Open in editor"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
+              class="delete-memory-btn"
+              icon="trash"
+              label="Delete"
+              title="Delete this memory"
+            ></vscode-toolbar-button>
+          </vscode-toolbar-container>
         </div>
         <div class="text-secondary memory-meta"></div>
         <vscode-collapsible class="collapsible">
