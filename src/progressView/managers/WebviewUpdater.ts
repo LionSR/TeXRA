@@ -256,6 +256,25 @@ export class WebviewUpdater {
   }
 
   /**
+   * Update context utilization display in the footer.
+   * Shows "X% context left" based on current input tokens vs context window.
+   */
+  updateContextState(
+    stream: StreamTabId,
+    contextState: {
+      inputTokens: number;
+      contextWindow: number;
+      utilizationPercent: number;
+    },
+  ): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_CONTEXT_STATE,
+      stream,
+      contextState,
+    });
+  }
+
+  /**
    * Update or clear instruction panel content.
    * Pass null for instruction to clear the panel.
    */
