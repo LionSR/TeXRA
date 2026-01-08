@@ -16,24 +16,6 @@ body {
   gap: var(--spacing-medium);
 }
 
-/* Header */
-.memory-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-medium);
-}
-
-.memory-header h2 {
-  margin: 0;
-}
-
-.memory-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-}
-
 /* Description */
 .memory-description {
   color: var(--color-text-secondary);
