@@ -345,6 +345,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.todoList.clear();
       dom.queuedFollowUps.clear();
       dom.fileList.clear();
+      // Clear log content when no stream is active to avoid stale content
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
