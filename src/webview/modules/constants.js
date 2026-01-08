@@ -127,6 +127,7 @@ export const AGENT_SELECT_IDS = {
 };
 
 export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
+export const SESSION_TYPE_VALUES = new Set(Object.values(SESSION_TYPES));
 
 /**
  * Tag name constant for VS Code radio group web component
@@ -134,30 +135,10 @@ export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
 export const VSCODE_RADIO_GROUP_TAG = 'VSCODE-RADIO-GROUP';
 
 /**
- * Normalizes a session type value to ensure it's a valid SESSION_TYPE.
- * @param {string} sessionType - The session type to normalize
- * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
+ * Parse a session type value if it is one of the supported session types.
+ * @param {string | undefined | null} sessionType - The session type to validate
+ * @returns {string | undefined} The valid session type, or undefined if invalid
  */
-export function normalizeSessionType(sessionType) {
-  return sessionType === SESSION_TYPES.TOOL_USE
-    ? SESSION_TYPES.TOOL_USE
-    : SESSION_TYPES.WORKFLOW;
-}
-
-/**
- * Resolves a vscode-radio-group element from a container element.
- * If the element itself is a radio group, returns it directly.
- * Otherwise, searches for a radio group child element.
- * @param {HTMLElement|null|undefined} element - The container element
- * @returns {HTMLElement|null} The radio group element, or null if not found
- */
-export function resolveRadioGroup(element) {
-  if (!element) {
-    return null;
-  }
-  if (element.tagName === VSCODE_RADIO_GROUP_TAG) {
-    return element;
-  }
-  const radioGroup = element.querySelector('vscode-radio-group');
-  return radioGroup instanceof HTMLElement ? radioGroup : null;
+export function parseSessionType(sessionType) {
+  return SESSION_TYPE_VALUES.has(sessionType) ? sessionType : undefined;
 }
