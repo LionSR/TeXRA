@@ -563,6 +563,9 @@ class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
+    // Notify that follow-up was consumed (updates queued message UI)
+    this.services.onFollowUpConsumed?.();
+
     // Apply follow-up (state mutation in post - correct)
     const session = this.services.session;
     await session.markRunning();
