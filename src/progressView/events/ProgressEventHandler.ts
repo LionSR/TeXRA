@@ -477,6 +477,8 @@ export class ProgressEventHandler {
       'UsageEvents',
       'failed to handle updateContextState',
       () => {
+        // Store context state for replay when switching streams
+        this.state.setContextState(stream, contextState);
         if (
           this.webviewUpdater.isAvailable() &&
           stream === this.state.activeStream
@@ -646,6 +648,12 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream);
     if (todos !== undefined) {
       this.webviewUpdater.updateTodos(stream, todos);
+    }
+
+    // Refresh context state for the stream (ephemeral state)
+    const contextState = this.state.getContextState(stream);
+    if (contextState !== undefined) {
+      this.webviewUpdater.updateContextState(stream, contextState);
     }
 
     // Update status for current stream. Don't default to RUNNING - that causes a race

@@ -909,6 +909,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (response.usage?.input_tokens) {
         this.conversationState.cumulativeInputTokens =
           response.usage.input_tokens;
+        // Emit context state for UI display (no native pre-request token counting)
+        this.logger.logContextState(
+          response.usage.input_tokens,
+          this.config.contextWindow,
+        );
       }
       // Reset compacted flag after successful request (ready for next compaction if needed)
       this.conversationState.isCompacted = false;
@@ -967,6 +972,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
+      // Emit context state for UI display (no native pre-request token counting)
+      this.logger.logContextState(
+        response.usage.input_tokens,
+        this.config.contextWindow,
+      );
     }
     // Reset compacted flag after successful request (ready for next compaction if needed)
     this.conversationState.isCompacted = false;
