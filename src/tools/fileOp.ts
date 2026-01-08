@@ -48,7 +48,7 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'write': {
-        if (content == null) {
+        if (content === null || content === undefined) {
           return {
             error: 'content parameter is required for write',
             isError: true,
@@ -105,7 +105,7 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'append': {
-        if (content == null) {
+        if (content === null || content === undefined) {
           return {
             error: 'content parameter is required for append',
             isError: true,
