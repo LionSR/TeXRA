@@ -11,7 +11,7 @@ import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
-import { getPathSegments, isNonEmptyString, toPosixPath } from '@utils/core';
+import { isNonEmptyString, toPosixPath } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 export interface WorkspacePathResolution {
@@ -34,28 +34,33 @@ export function resolveWorkspaceRelativePath(
     throw new ToolError('Workspace path is not available.');
   }
 
-  if (!targetPath || targetPath.trim() === '' || targetPath === '.') {
+  const trimmed = targetPath?.trim();
+  if (!trimmed || trimmed === '.') {
     return {
       relative: '.',
       absolute: workspacePath,
     };
   }
 
-  const trimmed = targetPath.trim();
-  const absoluteCandidate = path.resolve(workspacePath, trimmed);
-  const relativeCandidate = path.relative(workspacePath, absoluteCandidate);
-  const normalizedRelative =
-    relativeCandidate === '' ? '.' : path.normalize(relativeCandidate);
+  if (path.isAbsolute(trimmed)) {
+    const relative = WorkspaceFS.relativePath(trimmed);
+    if (relative === trimmed || relative.startsWith('..')) {
+      throw new ToolError('Path must stay within the workspace.');
+    }
+    return {
+      relative: relative === '' ? '.' : relative,
+      absolute: trimmed,
+    };
+  }
 
-  // Use centralized path segment extraction
-  const segments = getPathSegments(normalizedRelative);
-  if (segments.includes('..')) {
+  const relative = path.normalize(trimmed);
+  if (relative.startsWith('..')) {
     throw new ToolError('Path must stay within the workspace.');
   }
 
   return {
-    relative: normalizedRelative,
-    absolute: absoluteCandidate,
+    relative,
+    absolute: path.join(workspacePath, relative),
   };
 }
 

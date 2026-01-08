@@ -322,9 +322,7 @@ export function applyReplacements(
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();
   cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
-  return shouldWrapCritiqueInAlign()
-    ? wrapCritiqueInAlign(cleaned)
-    : cleaned;
+  return shouldWrapCritiqueInAlign() ? wrapCritiqueInAlign(cleaned) : cleaned;
 }
 
 /**

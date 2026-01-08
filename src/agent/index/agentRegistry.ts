@@ -308,7 +308,7 @@ function groupByBaseName(
     const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
     const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
 
-    const group = groups.get(baseName) || {};
+    const group = groups.get(baseName) ?? {};
     if (isMultiple) {
       group.multiple = file;
     } else {
@@ -346,7 +346,7 @@ async function scanYaml(
     const validated = AgentDefinitionSchema.parse(parsed);
 
     // Extract lightweight metadata
-    const rawSettings = (validated.settings || {}) as Record<string, unknown>;
+    const rawSettings = (validated.settings ?? {}) as Record<string, unknown>;
     const agentType = mapAgentType(rawSettings.agentType as string | undefined);
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
       | string[]
@@ -403,7 +403,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const isMultiple = isMultipleVariant(r.name);
       const baseName = isMultiple ? getBaseName(r.name) : r.name;
 
-      const group = grouped.get(baseName) || {};
+      const group = grouped.get(baseName) ?? {};
       if (isMultiple) {
         group.multiple = r;
       } else {
