@@ -46,7 +46,10 @@ export interface UsageMonitorModelInfo {
     | 'supportsReasoning'
     | 'cacheDiscountFactor'
   >;
-  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName' | 'inputPrice'>;
+  config: Pick<
+    ModelConfig,
+    'provider' | 'name' | 'fullName' | 'inputPrice' | 'contextWindow'
+  >;
 }
 
 /**
@@ -163,6 +166,12 @@ export class UsageMonitor {
       // Get current storageKey via callback - handles mutable state correctly
       const storageKey = this.context.getStorageKey();
       usageReporter.report(payload, storageKey);
+
+      // Emit context state for UI display (based on actual response usage)
+      const contextWindow = this.modelInfo.config.contextWindow;
+      if (contextWindow > 0) {
+        logger.logContextState(roundUsage.inputTokens, contextWindow);
+      }
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
       this.logToBackend(stateGlobal.totalResponseTimeMs, roundUsage);
