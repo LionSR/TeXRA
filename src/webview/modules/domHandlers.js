@@ -173,4 +173,5 @@ export const mainViewDomHandler = new MainViewDomHandler();
 
 export function disposeManagers() {
   mainViewDomHandler.disposeUI();
+  instructionManager.dispose();
 }

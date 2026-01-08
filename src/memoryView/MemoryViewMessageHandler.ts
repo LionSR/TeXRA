@@ -60,8 +60,7 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenMemoryFile.bind(this),
       [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
         this.handleOpenMemoryFolder.bind(this),
-      [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]:
-        this.handleDeleteMemory.bind(this),
+      [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
     };
   }
 
