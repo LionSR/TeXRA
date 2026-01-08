@@ -10,6 +10,7 @@ import {
   FileReferenceSchema,
   LineChangesSchema,
   EditRecordSchema,
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
 } from '@tools/result';
 
 // Local imports - utils
@@ -111,12 +112,30 @@ export function extractToolAttachments(
   // Parse with Zod - passthrough() ensures this never fails
   const parsed = ToolResultPayloadSchema.parse(result);
 
-  // Build sanitized result, stripping binary data and undefined values
+  // Build sanitized result, stripping binary data, undefined values, and redundant error fields
   const sanitizedResult: ToolResultPayload = {};
+  const hasError = typeof parsed.error === 'string' && parsed.error.length > 0;
+
   for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
     // Skip binary fields (these belong in files array attachments)
     if (key === 'base64Data' || key === 'bytes') {
+      continue;
+    }
+    // Skip isError when error message is present (redundant)
+    if (key === 'isError' && hasError) {
+      continue;
+    }
+    // Simplify diagnostics: keep validation error details, remove verbose stack traces
+    if (key === 'diagnostics' && value && typeof value === 'object') {
+      const diag = value as Record<string, unknown>;
+      // For validation errors, keep the formatted details (useful for model)
+      if (diag.type === DIAGNOSTIC_TYPE_VALIDATION_ERROR && diag.formatted) {
+        sanitizedResult[key] = { type: diag.type, formatted: diag.formatted };
+        continue;
+      }
+      // For regular errors (ToolError), skip diagnostics entirely - the error
+      // message is already in the error field, and the stack trace just repeats it
       continue;
     }
     sanitizedResult[key] = value;
