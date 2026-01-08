@@ -12,16 +12,23 @@ import {
   MEMORY_VIEW_COMMANDS,
 } from '@common/webview';
 
+// Local imports - shared memory constants and utilities
+import {
+  MEMORY_STORAGE_ROOT,
+  MAX_PREVIEW_LINES,
+  MAX_PREVIEW_CHARS,
+  shouldSkipEntry,
+} from '@tools/memory/constants';
+import {
+  relativeToDisplayPath,
+  resolveMemoryStoragePath,
+} from '@tools/memory/memoryUtils';
+
 // Local imports - storage
 import { StorageFS } from '@utils/files';
 
 // Local imports - schemas
 import { MemoryPathMessageSchema } from '@webview/types/messages';
-
-const MEMORY_STORAGE_ROOT = 'memories';
-const MEMORY_DISPLAY_ROOT = '/memories';
-const MAX_PREVIEW_LINES = 120;
-const MAX_PREVIEW_CHARS = 8000;
 
 interface MemoryViewItem {
   displayPath: string;
@@ -78,7 +85,7 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
       'openMemoryFile',
       async ({ storagePath }) => {
         try {
-          const resolvedPath = this.resolveMemoryStoragePath(storagePath);
+          const resolvedPath = resolveMemoryStoragePath(storagePath);
           const absolutePath = StorageFS.fullPath(resolvedPath);
           const doc = await vscode.workspace.openTextDocument(absolutePath);
           await vscode.window.showTextDocument(doc, { preview: false });
@@ -110,15 +117,6 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private resolveMemoryStoragePath(storagePath: string): string {
-    const normalized = path.normalize(storagePath);
-    const relative = path.relative(MEMORY_STORAGE_ROOT, normalized);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error(`Invalid memory path: ${storagePath}`);
-    }
-    return path.join(MEMORY_STORAGE_ROOT, relative);
-  }
-
   private async loadMemoryItems(): Promise<MemoryViewItem[]> {
     const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
     if (!exists) {
@@ -137,7 +135,7 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     const results: MemoryViewItem[] = [];
 
     for (const [name, type] of entries) {
-      if (name.startsWith('.') || name === 'node_modules') {
+      if (shouldSkipEntry(name)) {
         continue;
       }
 
@@ -154,7 +152,7 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
       const stats = await StorageFS.stat(nextStoragePath);
       const content = await StorageFS.read(nextStoragePath);
       const previewData = this.buildPreview(content);
-      const displayPath = this.toDisplayPath(nextRelative);
+      const displayPath = relativeToDisplayPath(nextRelative);
 
       results.push({
         displayPath,
@@ -193,13 +191,5 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     }
 
     return { preview, lineCount };
-  }
-
-  private toDisplayPath(relativePath: string): string {
-    if (!relativePath) {
-      return MEMORY_DISPLAY_ROOT;
-    }
-    const normalized = relativePath.split(path.sep).join('/');
-    return `${MEMORY_DISPLAY_ROOT}/${normalized}`;
   }
 }

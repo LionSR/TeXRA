@@ -12,11 +12,16 @@ import { StorageFS } from '@utils/files';
 import { defineTool } from '../core/define';
 import { ToolError, type ToolResult } from '../result';
 
-const MEMORY_ROOT = '/memories';
-const MEMORY_STORAGE_ROOT = 'memories';
-const MAX_VIEW_LINES = 999_999;
-const LINE_NUMBER_WIDTH = 6;
-const DIRECTORY_LISTING_DEPTH = 2;
+// Local imports - shared memory constants and utilities
+import {
+  MEMORY_DISPLAY_ROOT,
+  MEMORY_STORAGE_ROOT,
+  MAX_VIEW_LINES,
+  LINE_NUMBER_WIDTH,
+  DIRECTORY_LISTING_DEPTH,
+  shouldSkipEntry,
+} from './constants';
+import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
 
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
@@ -122,35 +127,13 @@ export class MemoryTool extends defineTool({
   }
 
   private resolveMemoryPath(inputPath: string): string {
-    if (inputPath !== MEMORY_ROOT && !inputPath.startsWith(`${MEMORY_ROOT}/`)) {
+    try {
+      return displayToStoragePath(inputPath);
+    } catch {
       throw new ToolError(
         `The path ${inputPath} does not exist. Please provide a valid path.`,
       );
     }
-    const suffix =
-      inputPath === MEMORY_ROOT
-        ? ''
-        : inputPath.slice(`${MEMORY_ROOT}/`.length);
-    const resolved = path.resolve(MEMORY_STORAGE_ROOT, suffix);
-    const base = path.resolve(MEMORY_STORAGE_ROOT);
-    if (!resolved.startsWith(`${base}${path.sep}`) && resolved !== base) {
-      throw new ToolError(
-        `The path ${inputPath} does not exist. Please provide a valid path.`,
-      );
-    }
-    const relative = path.relative(base, resolved);
-    return relative
-      ? path.join(MEMORY_STORAGE_ROOT, relative)
-      : MEMORY_STORAGE_ROOT;
-  }
-
-  private toDisplayPath(storagePath: string): string {
-    const relative = path.relative(MEMORY_STORAGE_ROOT, storagePath);
-    if (!relative || relative === '') {
-      return MEMORY_ROOT;
-    }
-    const normalized = relative.split(path.sep).join('/');
-    return `${MEMORY_ROOT}/${normalized}`;
   }
 
   private async view(
@@ -371,8 +354,8 @@ export class MemoryTool extends defineTool({
     await this.walkDirectory(resolvedPath, 0, entries);
 
     return entries.map((entry) => {
-      const displayPath = this.toDisplayPath(entry.path);
-      return `${this.formatSize(entry.size)}\t${displayPath}`;
+      const display = toDisplayPath(entry.path);
+      return `${formatSize(entry.size)}\t${display}`;
     });
   }
 
@@ -387,7 +370,7 @@ export class MemoryTool extends defineTool({
 
     const children = await StorageFS.readDir(currentPath);
     for (const [name, type] of children) {
-      if (name.startsWith('.') || name === 'node_modules') {
+      if (shouldSkipEntry(name)) {
         continue;
       }
       const childPath = path.join(currentPath, name);
@@ -401,20 +384,5 @@ export class MemoryTool extends defineTool({
         await this.walkDirectory(childPath, depth + 1, entries);
       }
     }
-  }
-
-  private formatSize(bytes: number): string {
-    if (bytes < 1024) {
-      return `${bytes}B`;
-    }
-
-    const units = ['K', 'M', 'G', 'T'];
-    let value = bytes / 1024;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    return `${value.toFixed(1)}${units[unitIndex]}`;
   }
 }
