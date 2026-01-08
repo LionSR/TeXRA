@@ -84,6 +84,7 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
@@ -210,12 +211,6 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
 /** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
 const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
-/**
- * Default compaction threshold percentage (shared with OpenAI handler).
- * When context utilization exceeds this percentage, context management is triggered.
- * Must match texra.model.compactionThresholdPercent default in package.json.
- */
-const DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
