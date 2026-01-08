@@ -202,16 +202,26 @@ export const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  // Detect user feedback: when userInstruction is present, this is user-provided
+  // guidance rather than a system error, even if isError is true
+  const userInstructionText =
+    (typeof parsed.userInstruction === 'string' &&
+      parsed.userInstruction.trim()) ||
+    '';
+  const isUserFeedback = userInstructionText.length > 0;
+
   return {
     parsed,
     toolName,
     errorText,
     outputText,
+    userInstructionText,
     input: parsed.input,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
-    headerSummary: summaryText || errorText,
+    isUserFeedback,
+    headerSummary: summaryText || (isUserFeedback ? '' : errorText),
   };
 };
 
