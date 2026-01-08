@@ -466,6 +466,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           );
           const { input_tokens: inputTokens } = responseTokenCount;
           this.logger.debug(`Token count of message: ${inputTokens}`);
+          // Emit context state for UI display
+          this.logger.logContextState(inputTokens, effectiveContextWindow);
           if (inputTokens > effectiveContextWindow) {
             const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
             this.logger.error(errMsg);
