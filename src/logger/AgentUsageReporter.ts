@@ -40,11 +40,17 @@ export class AgentUsageReporter {
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
 
-    // Pass through usage without modification
+    // Pass through usage including cache tokens for display
     const usage = {
       inputTokens: stats.inputTokens,
       outputTokens: stats.outputTokens,
       cost: stats.cost,
+      ...(stats.cacheReadInputTokens && {
+        cacheReadInputTokens: stats.cacheReadInputTokens,
+      }),
+      ...(stats.cacheCreationInputTokens && {
+        cacheCreationInputTokens: stats.cacheCreationInputTokens,
+      }),
     };
 
     // storageKey is THE single source of truth - no fallbacks, no round-trips
