@@ -9,10 +9,6 @@ body {
   padding: var(--spacing-xlarge);
 }
 
-h2 {
-  margin-bottom: var(--spacing-xlarge);
-}
-
 /* Search container */
 .search-container {
   display: flex;
