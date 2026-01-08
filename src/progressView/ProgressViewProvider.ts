@@ -375,10 +375,11 @@ export class ProgressViewProvider
       viewPath: 'progressView',
     });
 
-    if (isNew) {
-      // For new panels, mark as ready and trigger initial update
-      // The panel's webview will signal ready via message, same as sidebar
-      this.logger.info('ProgressView opened in separate tab');
+    if (!isNew) {
+      // Refresh data when revealing existing panel
+      this.updateWebview({ forceRebuild: true });
     }
+    // For new panels, the webview will signal ready via WEBVIEW_READY message,
+    // which triggers markWebviewReady() and the initial updateWebview()
   }
 }
