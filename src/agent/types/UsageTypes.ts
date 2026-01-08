@@ -34,13 +34,6 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
   reasoningTokens: z.number().optional(),
   /** Tokens consumed by tool use */
   toolUseTokens: z.number().optional(),
-  // Context window tracking fields
-  /** Model's context window size in tokens */
-  contextWindow: z.number().optional(),
-  /** Cumulative input tokens across the conversation (effective context size) */
-  cumulativeInputTokens: z.number().optional(),
-  /** Percentage of context window utilized */
-  contextUtilizationPercent: z.number().optional(),
 });
 
 export type ExtendedTokenUsageStats = z.infer<
