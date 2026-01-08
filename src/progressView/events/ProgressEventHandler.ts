@@ -439,13 +439,9 @@ export class ProgressEventHandler {
           inputTokens: Number(usage.inputTokens ?? 0),
           outputTokens: Number(usage.outputTokens ?? 0),
           cost: Number(usage.cost ?? 0),
-          // Pass through cache tokens for display
-          ...(usage.cacheReadInputTokens && {
-            cacheReadInputTokens: Number(usage.cacheReadInputTokens),
-          }),
-          ...(usage.cacheCreationInputTokens && {
-            cacheCreationInputTokens: Number(usage.cacheCreationInputTokens),
-          }),
+          // Cache tokens for display (use ?? 0 for consistent falsy handling)
+          cacheReadInputTokens: Number(usage.cacheReadInputTokens ?? 0),
+          cacheCreationInputTokens: Number(usage.cacheCreationInputTokens ?? 0),
         };
 
         await this.state.usageStats.setRunUsage(

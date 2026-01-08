@@ -99,18 +99,15 @@ export class UsageMonitor {
         .at(-1);
       const latestUsage = latestUsageSnapshot?.usage;
 
-      const roundUsage = {
+      // Per-round usage for backend analytics only (not for UI display)
+      // Backend billing should reflect the current round's net tokens, not cumulative
+      const backendLogUsage = {
         inputTokens: latestUsage?.inputTokens ?? totals.totalInputTokens,
         outputTokens: latestUsage?.outputTokens ?? totals.totalOutputTokens,
         cachedInputTokens:
           latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens,
-        cacheCreationTokens:
-          latestUsage?.cacheCreationTokens ??
-          totals.totalCacheCreationInputTokens,
         reasoningTokens:
           latestUsage?.reasoningTokens ?? totals.totalReasoningTokens,
-        toolUsePromptTokens:
-          latestUsage?.toolUsePromptTokens ?? totals.totalToolUsePromptTokens,
         cost: latestUsage?.cost ?? totals.totalCost,
       };
 
@@ -166,19 +163,19 @@ export class UsageMonitor {
       usageReporter.report(payload, storageKey);
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(stateGlobal.totalResponseTimeMs, roundUsage);
+      this.logToBackend(stateGlobal.totalResponseTimeMs, backendLogUsage);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
   }
 
   /**
-   * Log usage to backend for analytics.
+   * Log per-round usage to backend for analytics/billing.
    * Non-blocking - errors are caught and logged, never thrown.
    */
   private logToBackend(
     totalResponseTimeMs: number,
-    roundUsage: {
+    usage: {
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens?: number;
@@ -204,11 +201,11 @@ export class UsageMonitor {
       // rather than cumulative history. Downstream dashboards should treat each
       // entry as a single round; if cumulative views are needed, aggregate by
       // streamId/task.
-      const roundInputTokens = roundUsage.inputTokens;
-      const roundOutputTokens = roundUsage.outputTokens;
-      const roundCachedInputTokens = roundUsage.cachedInputTokens ?? 0;
-      const roundReasoningTokens = roundUsage.reasoningTokens ?? 0;
-      const roundCost = roundUsage.cost;
+      const roundInputTokens = usage.inputTokens;
+      const roundOutputTokens = usage.outputTokens;
+      const roundCachedInputTokens = usage.cachedInputTokens ?? 0;
+      const roundReasoningTokens = usage.reasoningTokens ?? 0;
+      const roundCost = usage.cost;
 
       const netInputTokens = Math.max(
         0,
