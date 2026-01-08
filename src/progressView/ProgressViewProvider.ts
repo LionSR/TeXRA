@@ -144,6 +144,38 @@ export class ProgressViewProvider
     this.state.clearRenderedStreamTracking();
   }
 
+  /**
+   * Common setup for any webview (sidebar or panel).
+   * Sets HTML content, message handler, and theme listener.
+   * @returns disposables that should be cleaned up when the view is disposed
+   */
+  private setupWebviewContent(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): vscode.Disposable[] {
+    const disposables: vscode.Disposable[] = [];
+
+    // Set HTML content
+    view.webview.html = this.contentProvider.getHtmlContent(view.webview);
+
+    // Setup message handling
+    disposables.push(
+      view.webview.onDidReceiveMessage((message) =>
+        this.messageHandler.handleMessage(message, view),
+      ),
+    );
+
+    // Setup theme change listener
+    disposables.push(
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        if (view.visible) {
+          this.updateWebview();
+        }
+      }),
+    );
+
+    return disposables;
+  }
+
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     // Mark running tasks as cancelled on subsequent webview resolves
     if (this._hasResolved) {
@@ -155,6 +187,7 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     // Clear rendered stream tracking to force rebuild - DOM state is stale after resolve
     this.state.clearRenderedStreamTracking();
+
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -163,25 +196,24 @@ export class ProgressViewProvider
         'progressView',
       ),
     };
-
     webviewView.title = this._viewTitle;
 
-    // Call super first to set up base functionality and clean up old disposables
-    super.resolveWebviewViewInternal(webviewView);
+    // Clean up old view and set new one
+    this.cleanupView();
+    this._view = webviewView;
 
-    // Add visibility and theme listeners after super.resolveWebviewView
-    // This ensures they aren't cleared by the base class's cleanupView()
-    this.addViewDisposables(
+    // Setup content, message handler, and theme listener
+    const disposables = this.setupWebviewContent(webviewView);
+    this._viewDisposables.push(...disposables);
+
+    // Add visibility listener (specific to sidebar)
+    this._viewDisposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.updateWebview();
         }
       }),
-      vscode.window.onDidChangeActiveColorTheme(() => {
-        if (webviewView.visible) {
-          this.updateWebview();
-        }
-      }),
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
 
     this.updateWebview();
@@ -401,26 +433,8 @@ export class ProgressViewProvider
       },
     );
 
-    // Set panel HTML content
-    this._panelView.webview.html = this.contentProvider.getHtmlContent(
-      this._panelView.webview,
-    );
-
-    // Setup panel message handling
-    this._panelDisposables.push(
-      this._panelView.webview.onDidReceiveMessage((message) =>
-        this.messageHandler.handleMessage(message, this._panelView!),
-      ),
-    );
-
-    // Setup theme change listener for panel (uses shared updateWebview)
-    this._panelDisposables.push(
-      vscode.window.onDidChangeActiveColorTheme(() => {
-        if (this._panelView?.visible) {
-          this.updateWebview();
-        }
-      }),
-    );
+    // Setup content, message handler, and theme listener (shared with sidebar)
+    this._panelDisposables.push(...this.setupWebviewContent(this._panelView));
 
     // Cleanup on panel dispose
     this._panelView.onDidDispose(() => {
