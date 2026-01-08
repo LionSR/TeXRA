@@ -262,7 +262,8 @@ SELECT
     p.email,
     p.tier,
     COUNT(r.id) AS total_requests,
-    COALESCE(SUM(r.input_tokens), 0) AS total_input_tokens,
+    COALESCE(SUM(r.input_tokens + COALESCE(r.cached_input_tokens, 0)), 0)
+      AS total_input_tokens,
     COALESCE(SUM(r.input_tokens), 0) AS total_net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS total_output_tokens,
     COALESCE(SUM(r.cached_input_tokens), 0) AS total_cached_tokens,
@@ -397,7 +398,8 @@ SELECT
     r.model,
     r.provider,
     COUNT(r.id) AS request_count,
-    COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
+    COALESCE(SUM(r.input_tokens + COALESCE(r.cached_input_tokens, 0)), 0)
+      AS input_tokens,
     COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cost), 0) AS cost_usd,
@@ -527,7 +529,8 @@ SELECT
     p.email,
     DATE_TRUNC('day', r.logged_at AT TIME ZONE 'UTC')::DATE AS day,
     COUNT(r.id) AS request_count,
-    COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
+    COALESCE(SUM(r.input_tokens + COALESCE(r.cached_input_tokens, 0)), 0)
+      AS input_tokens,
     COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cost), 0) AS cost_usd
@@ -657,7 +660,8 @@ SELECT
     p.tier,
     DATE_TRUNC('month', r.logged_at AT TIME ZONE 'UTC')::DATE AS month,
     COUNT(r.id) AS request_count,
-    COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
+    COALESCE(SUM(r.input_tokens + COALESCE(r.cached_input_tokens, 0)), 0)
+      AS input_tokens,
     COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cached_input_tokens), 0) AS cached_tokens,
@@ -789,7 +793,8 @@ SELECT
     DATE_TRUNC('day', r.logged_at AT TIME ZONE 'UTC')::DATE AS day,
     COUNT(DISTINCT r.user_id) AS active_users,
     COUNT(r.id) AS total_requests,
-    COALESCE(SUM(r.input_tokens), 0) AS total_input_tokens,
+    COALESCE(SUM(r.input_tokens + COALESCE(r.cached_input_tokens, 0)), 0)
+      AS total_input_tokens,
     COALESCE(SUM(r.input_tokens), 0) AS total_net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS total_output_tokens,
     COALESCE(SUM(r.cost), 0) AS total_cost_usd,
