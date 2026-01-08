@@ -63,9 +63,12 @@ export class MemoryEventsManager {
       }
 
       const command = target.dataset.command;
-      const storagePath = target.dataset.path;
+      const storagePath = target.dataset.storagePath;
       if (command === COMMANDS.OPEN_MEMORY_FILE && storagePath) {
         vscode.postMessage({ command, storagePath });
+      } else if (command === COMMANDS.DELETE_MEMORY && storagePath) {
+        const displayPath = target.dataset.displayPath;
+        vscode.postMessage({ command, storagePath, displayPath });
       }
     };
 
