@@ -56,6 +56,11 @@ export class MemoryRenderer {
           command: COMMANDS.OPEN_MEMORY_FILE,
           path: item.storagePath,
         },
+        '.delete-memory-btn': {
+          command: COMMANDS.DELETE_MEMORY,
+          path: item.storagePath,
+          displayPath: item.displayPath,
+        },
       },
     });
 
