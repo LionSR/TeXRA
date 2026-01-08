@@ -450,14 +450,12 @@ export class ProgressViewProvider
       }),
     );
 
-    // Cleanup on panel dispose (added to disposables for consistency)
-    this._panelDisposables.push(
-      this._panelView.onDidDispose(() => {
-        this._panelDisposables.forEach((d) => d.dispose());
-        this._panelDisposables = [];
-        this._panelView = undefined;
-      }),
-    );
+    // Cleanup on panel dispose (not added to _panelDisposables to avoid self-disposal during iteration)
+    this._panelView.onDidDispose(() => {
+      this._panelDisposables.forEach((d) => d.dispose());
+      this._panelDisposables = [];
+      this._panelView = undefined;
+    });
 
     // Trigger initial update (webview will send WEBVIEW_READY when loaded)
     this.updateWebview();
