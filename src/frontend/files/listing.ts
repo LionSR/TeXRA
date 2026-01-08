@@ -29,16 +29,70 @@ function createExcludePattern(
 }
 
 function containsHiddenSegment(relativePath: string): boolean {
+  // Split on both separators for cross-platform compatibility
   return relativePath
-    .split(path.sep)
+    .split(/[/\\]/)
     .some((segment) => segment.startsWith('.') && segment.length > 1);
+}
+
+/**
+ * Get path relative to root, preserving symlink structure within workspace.
+ * Uses VS Code's asRelativePath for symlink awareness, then computes
+ * the path relative to the specified root.
+ *
+ * @param absolutePath - The absolute path to convert
+ * @param root - The base directory for relative path computation
+ * @returns Platform-native relative path
+ */
+function getRelativePathPreservingSymlinks(
+  absolutePath: string,
+  root: string,
+): string {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+  // Use asRelativePath for symlink awareness (returns forward slashes)
+  const wsRelative = vscode.workspace.asRelativePath(absolutePath, false);
+
+  // If outside workspace, asRelativePath returns the original absolute path
+  if (wsRelative === absolutePath) {
+    return path.relative(root, absolutePath);
+  }
+
+  // If root is the workspace root, return the workspace-relative path
+  if (workspaceRoot && path.normalize(root) === path.normalize(workspaceRoot)) {
+    // Normalize separators to platform-native
+    return wsRelative.split('/').join(path.sep);
+  }
+
+  // root is a subdirectory - compute path from workspace-relative path
+  // First get root relative to workspace
+  const rootRelative = vscode.workspace.asRelativePath(root, false);
+  if (rootRelative === root) {
+    // root is outside workspace, fall back to path.relative
+    return path.relative(root, absolutePath);
+  }
+
+  // Both paths are workspace-relative, compute relative path between them
+  // Normalize to forward slashes for consistent comparison
+  const wsRelativeNorm = wsRelative.split('\\').join('/');
+  const rootRelativeNorm = rootRelative.split('\\').join('/');
+
+  if (wsRelativeNorm.startsWith(rootRelativeNorm + '/')) {
+    // File is under root, strip the root prefix
+    const result = wsRelativeNorm.slice(rootRelativeNorm.length + 1);
+    return result.split('/').join(path.sep);
+  }
+
+  // File is not under root in workspace structure, use path.relative
+  return path.relative(root, absolutePath);
 }
 
 function containsExcludedDirectory(
   relativePath: string,
   normalizedExcludeDirs: string[],
 ): boolean {
-  const pathSegments = relativePath.split(path.sep).map((s) => s.toLowerCase());
+  // Split on both separators for cross-platform compatibility
+  const pathSegments = relativePath.split(/[/\\]/).map((s) => s.toLowerCase());
   return pathSegments.some((segment) =>
     normalizedExcludeDirs.includes(segment),
   );
@@ -103,7 +157,8 @@ export async function getFilesInDirectory(
 
   return files
     .filter((uri) => {
-      // Check if the file is inside an excluded directory (for symlinks, case-insensitive)
+      // For non-recursive search ('*'), relative path is just the filename.
+      // Use path.relative for filtering - symlink handling not needed here.
       const relativePath = path.relative(dir, uri.fsPath);
       return !containsExcludedDirectory(relativePath, filters.excludeDirs);
     })
@@ -142,7 +197,7 @@ export async function getFilesRecursively(
   );
 
   return files
-    .map((uri) => path.relative(root, uri.fsPath))
+    .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
     .filter((relativePath) => {
       if (!relativePath) {
         return false;

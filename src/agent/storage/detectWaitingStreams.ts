@@ -1,15 +1,40 @@
 /**
  * Detect waiting streams from persisted flow data.
  *
- * On extension startup, scans ExecutionKVStore for persisted tool-use flows
- * that were interrupted mid-session. These streams should be marked as WAITING
- * so users can send follow-ups and resume them.
+ * Provides lazy detection of persisted tool-use flows that were interrupted
+ * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { FlowRecord } from '@agent/node/persisted-flow';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { getExecutionStore } from './ExecutionKVStore';
+
+/**
+ * Check if a single stream has a valid, resumable flow record.
+ *
+ * Used for lazy detection when a user sends a follow-up to a stream
+ * that wasn't detected at startup (or when startup detection is skipped).
+ *
+ * Note: We read and validate the record rather than just checking existence,
+ * because a corrupted/truncated record (e.g., from a crash during write)
+ * would cause resume to fail, leaving the stream stuck in WAITING state.
+ *
+ * @returns true if a valid flow record exists (session can be resumed)
+ */
+export async function hasPersistedFlowRecord(
+  executionId: ExecutionId,
+): Promise<boolean> {
+  try {
+    const kv = getExecutionStore(executionId);
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    // Use truthy check to match resume logic in SessionResumeRetrieval.ts
+    // This rejects null, undefined, and empty objects consistently
+    return !!flowRecord?.shared;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Detect streams that have persisted flow state and should be marked as WAITING.
@@ -27,16 +52,8 @@ export async function detectWaitingStreams(
   const waitingStreams = new Set<StreamTabId>();
 
   for (const [streamId, executionId] of executionIdMap) {
-    try {
-      const kv = getExecutionStore(executionId);
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-
-      // If a flow record exists, this stream was mid-session and should be WAITING
-      if (flowRecord?.shared) {
-        waitingStreams.add(streamId);
-      }
-    } catch {
-      // Ignore errors - stream won't be marked as waiting
+    if (await hasPersistedFlowRecord(executionId)) {
+      waitingStreams.add(streamId);
     }
   }
 

@@ -79,13 +79,13 @@ export class HistoryRenderer {
         '.history-timestamp': date,
       },
       attributes: {
-        '.history-collapsible': { heading: LABELS.MORE_DETAILS },
+        '.collapsible': { heading: LABELS.MORE_DETAILS },
         '.delete-btn': { title: 'Delete this history item' },
         '.restore-btn': { title: 'Load configuration to main view' },
         '.rerun-btn': { title: 'Execute this configuration' },
       },
       dataset: {
-        '.history-collapsible': { id: item.id },
+        '.collapsible': { id: item.id },
         '.delete-btn': { id: item.id, command: COMMANDS.DELETE_AGENT },
         '.restore-btn': { id: item.id, command: COMMANDS.RESTORE_AGENT },
         '.rerun-btn': { id: item.id, command: COMMANDS.RERUN_AGENT },
@@ -95,9 +95,7 @@ export class HistoryRenderer {
     if (!container) return document.createElement('div');
 
     const basicDetails = container.querySelector('.basic-details');
-    const collapsible = container.querySelector(
-      `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`,
-    );
+    const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
     const detailsContainer = container.querySelector('.extra-details');
 
     if (!basicDetails || !collapsible || !detailsContainer) {
@@ -258,7 +256,7 @@ export class HistoryRenderer {
     });
 
     const collapsibles = container.querySelectorAll(
-      `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`,
+      `.${CLASS_NAMES.COLLAPSIBLE}`,
     );
     collapsibles.forEach((element) => {
       if (!(element instanceof HTMLElement)) {
@@ -285,7 +283,7 @@ export class HistoryRenderer {
     const entries = historyViewState.toggleStates.entries();
     for (const [id, expanded] of entries) {
       const collapsible = document.querySelector(
-        `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}[data-id="${id}"]`,
+        `.${CLASS_NAMES.COLLAPSIBLE}[data-id="${id}"]`,
       );
       if (!collapsible) {
         continue;

@@ -44,6 +44,7 @@ import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -64,8 +65,10 @@ import type {
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {
+  CompactedResponse,
   EasyInputMessage,
   Response,
+  ResponseCompactParams,
   ResponseUsage,
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
@@ -182,8 +185,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Statuses indicating the background response has finished (success or failure). */
   private static readonly BACKGROUND_TERMINAL_STATUSES: readonly ResponseStatus[] =
     ['completed', 'failed', 'cancelled', 'incomplete'];
+
   private previousResponseId: string | null = null;
-  private sentMessages = 0;
+
+  /**
+   * Conversation state for tracking messages, tokens, and compaction.
+   * Grouped together to ensure synchronized resets.
+   */
+  private conversationState = {
+    /** Number of messages already sent to the API */
+    sentMessages: 0,
+    /** Cumulative input tokens across the conversation (for compaction trigger) */
+    cumulativeInputTokens: 0,
+    /** Whether the conversation has been compacted */
+    isCompacted: false,
+    /** Whether we've logged the OpenRouter compaction skip message */
+    openRouterSkipLogged: false,
+  };
+
+  /** Reset conversation state to initial values. */
+  private resetConversationState(): void {
+    this.conversationState = {
+      sentMessages: 0,
+      cumulativeInputTokens: 0,
+      isCompacted: false,
+      openRouterSkipLogged: false,
+    };
+  }
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -191,12 +219,178 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
-    this.sentMessages = 0;
+    this.resetConversationState();
   }
 
   /** Retrieve the stored previous response ID. */
   getPreviousResponseId(): string | null {
     return this.previousResponseId;
+  }
+
+  /**
+   * Get the configured compaction threshold percentage.
+   * Returns 0 if compaction is disabled.
+   */
+  private getCompactionThresholdPercent(): number {
+    return getConfig<number>(
+      'texra.model.compactionThresholdPercent',
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+    );
+  }
+
+  /**
+   * Calculate the absolute token threshold based on the model's context window
+   * and the configured percentage threshold.
+   */
+  private getCompactionTokenThreshold(): number {
+    const percent = this.getCompactionThresholdPercent();
+    if (percent <= 0) {
+      return 0;
+    }
+    // Calculate threshold as percentage of context window
+    return Math.floor((percent / 100) * this.config.contextWindow);
+  }
+
+  /**
+   * Check if the conversation should be compacted based on cumulative input tokens.
+   * Compaction is only triggered when:
+   * - Threshold percentage is greater than 0 (not disabled)
+   * - Cumulative input tokens exceed the calculated threshold (percentage of context window)
+   * - Not running through OpenRouter (which may not support compaction)
+   */
+  private shouldCompact(): boolean {
+    const thresholdPercent = this.getCompactionThresholdPercent();
+    if (thresholdPercent <= 0) {
+      return false;
+    }
+    if (this.isOpenRouterRoutingEnabled()) {
+      if (!this.conversationState.openRouterSkipLogged) {
+        this.logger.debug('Skipping compaction: OpenRouter routing is enabled');
+        this.conversationState.openRouterSkipLogged = true;
+      }
+      return false;
+    }
+    const threshold = this.getCompactionTokenThreshold();
+    return this.conversationState.cumulativeInputTokens > threshold;
+  }
+
+  /**
+   * Result from compactConversation including messages and state updates.
+   * State updates are returned but not applied - caller is responsible for
+   * applying them only after successful API call to prevent stale state on retry.
+   */
+  private compactionResult?: {
+    compactedMessages: ResponseInputItem[];
+    tokensAfter: number;
+  };
+
+  /**
+   * Compact the conversation to reduce context size.
+   * Uses OpenAI's `/responses/compact` endpoint to replace prior assistant messages,
+   * tool calls, and results with a single encrypted compaction item.
+   *
+   * State updates are stored in compactionResult but NOT applied immediately.
+   * The caller must apply them only after successful API call to prevent
+   * stale state if the API call fails and needs to retry.
+   *
+   * @param client - OpenAI client instance
+   * @param messages - Current conversation messages
+   * @param systemPrompt - Optional system instructions
+   * @param signal - Optional abort signal
+   * @returns The compacted messages array, or original messages if compaction fails
+   */
+  private async compactConversation(
+    client: OpenAI,
+    messages: ResponseInputItem[],
+    systemPrompt?: string,
+    signal?: AbortSignal,
+  ): Promise<ResponseInputItem[]> {
+    const tokensBefore = this.conversationState.cumulativeInputTokens;
+    const contextWindow = this.config.contextWindow;
+    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+
+    this.logger.debug(
+      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
+    );
+
+    const compactParams: ResponseCompactParams = {
+      model: this.config.fullName,
+      input: messages,
+    };
+
+    if (systemPrompt) {
+      compactParams.instructions = systemPrompt;
+    }
+
+    if (this.previousResponseId) {
+      compactParams.previous_response_id = this.previousResponseId;
+    }
+
+    try {
+      const compactedResponse: CompactedResponse = await executeRequest(
+        {
+          model: this.config.name,
+          operation: 'openai.responses.compact',
+          signal,
+        },
+        () => client.responses.compact(compactParams),
+      );
+
+      const tokensAfter = compactedResponse.usage.input_tokens;
+      const utilizationAfter = (tokensAfter / contextWindow) * 100;
+      const reduction = tokensBefore - tokensAfter;
+      const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
+
+      // Log context management event with structured data
+      this.logger.logContextManagement(
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter,
+          contextWindow,
+          utilizationBefore: Number(utilizationBefore.toFixed(1)),
+          utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
+        },
+      );
+
+      // Store compacted messages for use in this request.
+      // Mark as pending compaction - state will be finalized after successful API call.
+      // This prevents stale state if API call fails and needs retry.
+      const compactedMessages =
+        compactedResponse.output as unknown as ResponseInputItem[];
+      this.compactionResult = { compactedMessages, tokensAfter };
+
+      return compactedMessages;
+    } catch (err) {
+      this.logger.warn(
+        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
+      );
+      this.compactionResult = undefined;
+      return messages;
+    }
+  }
+
+  /**
+   * Apply compaction state updates after successful API call.
+   * Clears the pending compaction result and updates conversation state.
+   *
+   * Note: cumulativeInputTokens is NOT updated here - it will be set from
+   * response.usage.input_tokens after the API call to reflect actual usage.
+   */
+  private applyCompactionState(): void {
+    if (!this.compactionResult) return;
+
+    // Reset sent messages counter since we're using compacted output
+    this.conversationState.sentMessages = 0;
+    // Mark as compacted so subsequent requests know to send all messages
+    this.conversationState.isCompacted = true;
+    // Clear previous_response_id - compacted output replaces server-side history
+    this.previousResponseId = null;
+
+    // Clear the pending result
+    this.compactionResult = undefined;
   }
 
   /** Creates a configured OpenAI client instance. */
@@ -222,7 +416,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
-    this.sentMessages = 0;
+    this.resetConversationState();
 
     const messages: ResponseInputItem[] = [];
 
@@ -491,10 +685,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
+   *
+   * Supports automatic conversation compaction when cumulative input tokens
+   * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
+    // Clear any stale compaction result from previous attempts (ensures clean state on retries)
+    this.compactionResult = undefined;
+
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
     const streamingToggleEnabled = this.getStreamingConfig();
@@ -526,7 +726,34 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Background mode enabled; skipping streaming to avoid unstable behavior.',
       );
     }
-    const newMessages = messages.slice(this.sentMessages);
+
+    // Check if compaction is needed before processing the request
+    let effectiveMessages = messages;
+    // Track if compaction happened in THIS call (not previous calls)
+    let compactedThisCall = false;
+    if (this.shouldCompact()) {
+      const threshold = this.getCompactionTokenThreshold();
+      this.logger.logProgress(
+        `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+      );
+      effectiveMessages = await this.compactConversation(
+        client,
+        messages,
+        systemPrompt,
+        signal,
+      );
+      // compactionResult is set if compaction succeeded
+      compactedThisCall = this.compactionResult !== undefined;
+    }
+
+    // After compaction in THIS call, send all compacted messages.
+    // If already compacted (from previous call), also send all messages.
+    // Otherwise, only send new messages since last request.
+    const shouldSendAll =
+      compactedThisCall || this.conversationState.isCompacted;
+    const newMessages = shouldSendAll
+      ? effectiveMessages
+      : effectiveMessages.slice(this.conversationState.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
 
@@ -670,8 +897,26 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Emit any web searches not yet emitted (fallback for edge cases)
       this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
+      // Apply compaction state if compaction happened this call
+      if (compactedThisCall) {
+        this.applyCompactionState();
+      }
+
       this.previousResponseId = response.id;
-      this.sentMessages = messages.length;
+      this.conversationState.sentMessages = effectiveMessages.length;
+      // Set cumulative input tokens from actual usage (not additive - this IS the total)
+      // The response's input_tokens reflects the full context including server-side history
+      if (response.usage?.input_tokens) {
+        this.conversationState.cumulativeInputTokens =
+          response.usage.input_tokens;
+        // Emit context state for UI display (no native pre-request token counting)
+        this.logger.logContextState(
+          response.usage.input_tokens,
+          this.config.contextWindow,
+        );
+      }
+      // Reset compacted flag after successful request (ready for next compaction if needed)
+      this.conversationState.isCompacted = false;
       return response;
     }
 
@@ -714,8 +959,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       );
     }
+
+    // Apply compaction state if compaction happened this call
+    if (compactedThisCall) {
+      this.applyCompactionState();
+    }
+
     this.previousResponseId = response.id;
-    this.sentMessages = messages.length;
+    this.conversationState.sentMessages = effectiveMessages.length;
+    // Set cumulative input tokens from actual usage (not additive - this IS the total)
+    // The response's input_tokens reflects the full context including server-side history
+    if (response.usage?.input_tokens) {
+      this.conversationState.cumulativeInputTokens =
+        response.usage.input_tokens;
+      // Emit context state for UI display (no native pre-request token counting)
+      this.logger.logContextState(
+        response.usage.input_tokens,
+        this.config.contextWindow,
+      );
+    }
+    // Reset compacted flag after successful request (ready for next compaction if needed)
+    this.conversationState.isCompacted = false;
     return response;
   }
 

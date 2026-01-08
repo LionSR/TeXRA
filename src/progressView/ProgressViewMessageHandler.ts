@@ -12,14 +12,17 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type {
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+} from '@agent/types/IdentifierTypes';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
-import { normalizeRunId } from '@common/constants/runIds';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isWorkflowTaskState,
@@ -134,6 +137,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
+
+      // Memory
+      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]:
+        this.handleOpenMemoryView.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -263,10 +270,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       // storageKey is for logical indexing (finding file metadata in progress view state).
       // For workflow agents: activeRunId = task group ID; for tool-use: executionId.
       // Note: Physical file paths use executionId (see runId below), not storageKey.
-      const storageKey = normalizeRunId(activeRunId ?? executionId);
-      const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
-        storageKey,
-      });
+      const storageKey: StorageKey | null =
+        activeRunId ?? (executionId as StorageKey | undefined) ?? null;
+      const runOutputs = storageKey
+        ? this.provider.state.getRunOutputFiles(message.stream, { storageKey })
+        : undefined;
       const outputsByRound = runOutputs
         ? Object.fromEntries(runOutputs.entries())
         : undefined;
@@ -423,7 +431,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       persist: false,
     });
     // Only fetch output files if we have a resolved run ID
-    const storageKey = resolvedRunId ? normalizeRunId(resolvedRunId) : null;
+    const storageKey = resolvedRunId ? (resolvedRunId as StorageKey) : null;
     const runOutputs = storageKey
       ? this.provider.state.getRunOutputFiles(stream, { storageKey })
       : undefined;
@@ -600,6 +608,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await vscode.commands.executeCommand('texra.auth.viewProfile');
   }
 
+  private async handleOpenMemoryView(): Promise<void> {
+    await vscode.commands.executeCommand('texra.showMemory');
+  }
+
   private async handleFileOperation(
     stream: string,
     taskState: WorkflowTaskState,
@@ -611,7 +623,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
       stream,
       {
-        storageKey: resolvedRunId ? normalizeRunId(resolvedRunId) : null,
+        storageKey: resolvedRunId ? (resolvedRunId as StorageKey) : null,
         workspaceOnly: true,
       },
     );

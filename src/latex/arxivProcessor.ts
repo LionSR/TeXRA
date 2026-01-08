@@ -52,6 +52,7 @@ export class ArxivSourceProcessor {
     timeout = 30000,
   ): Promise<string> {
     let destPath = destBasePath;
+    let shouldCleanup = true;
     try {
       const response = await axios.get(url, {
         responseType: 'stream',
@@ -101,17 +102,12 @@ export class ArxivSourceProcessor {
         response.data as NodeJS.ReadableStream,
         AbsoluteFS.createWriteStream(destPath),
       );
-
+      shouldCleanup = false;
       return destPath;
-    } catch (err) {
-      try {
-        if (destPath) {
-          await AbsoluteFS.delete(destPath);
-        }
-      } catch (_err) {
-        // ignore errors deleting destPath
+    } finally {
+      if (shouldCleanup && destPath) {
+        void AbsoluteFS.delete(destPath).catch(() => undefined);
       }
-      throw err;
     }
   }
 
