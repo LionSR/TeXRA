@@ -31,6 +31,8 @@ export class UsageSummary {
     const inputTokens = totals?.inputTokens ?? 0;
     const outputTokens = totals?.outputTokens ?? 0;
     const cost = totals?.cost ?? 0;
+    const cacheReadTokens = totals?.cacheReadInputTokens ?? 0;
+    const cacheCreationTokens = totals?.cacheCreationInputTokens ?? 0;
 
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
@@ -49,25 +51,41 @@ export class UsageSummary {
     const formattedOutput = formatTokens(outputTokens);
     const formattedCost = `$${cost.toFixed(3)}`;
 
+    // Build cache segments: placed after input since cache is conceptually related to input
+    // Cache read: tokens served from cache (discounted rate)
+    // Cache creation: tokens written to cache (Anthropic: 1.25x input price)
+    const cacheReadSegment = cacheReadTokens > 0
+      ? ` · <i class="codicon codicon-cloud-download" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
+      : '';
+    const cacheCreationSegment = cacheCreationTokens > 0
+      ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
+      : '';
+    const cacheReadAriaLabel = cacheReadTokens > 0
+      ? `, ${formatTokens(cacheReadTokens)} cache read tokens`
+      : '';
+    const cacheCreationAriaLabel = cacheCreationTokens > 0
+      ? `, ${formatTokens(cacheCreationTokens)} cache creation tokens`
+      : '';
+
     this._summaryElem.innerHTML = `
       <i class="codicon codicon-meter"></i>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
-        <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput} ·
+        <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput}${cacheReadSegment}${cacheCreationSegment} ·
         <i class="codicon codicon-arrow-down" title="Output tokens"></i>${formattedOutput} ·
         ${formattedCost}
       </span>
     `;
     this._summaryElem.setAttribute(
       'aria-label',
-      `Total usage: ${formattedInput} input tokens, ${formattedOutput} output tokens, ${formattedCost}`,
+      `Total usage: ${formattedInput} input tokens${cacheReadAriaLabel}${cacheCreationAriaLabel}, ${formattedOutput} output tokens, ${formattedCost}`,
     );
   }
 
   /**
    * Compute total usage for the active session in the active stream.
    * Each stream tab can have multiple sessions; this returns the current session's total.
-   * @returns {Object} Total usage with inputTokens, outputTokens, and cost
+   * @returns {Object} Total usage with inputTokens, outputTokens, cost, and cache token counts
    */
   computeTotal() {
     const stream = progressViewState.activeStream;
@@ -76,14 +94,22 @@ export class UsageSummary {
       const usage = progressViewState.getRunUsage(stream, activeRunId);
       if (usage) {
         return {
-          inputTokens: usage.inputTokens || 0,
-          outputTokens: usage.outputTokens || 0,
-          cost: usage.cost || 0,
+          inputTokens: usage.inputTokens ?? 0,
+          outputTokens: usage.outputTokens ?? 0,
+          cost: usage.cost ?? 0,
+          cacheReadInputTokens: usage.cacheReadInputTokens ?? 0,
+          cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         };
       }
     }
 
-    return { inputTokens: 0, outputTokens: 0, cost: 0 };
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    };
   }
 
   /**
