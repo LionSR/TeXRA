@@ -498,47 +498,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Check if a response is fully finalized and safe to use for previous_response_id.
-   * A response is considered finalized if:
-   * 1. Status is 'completed'
-   * 2. Usage data is present (indicates OpenAI fully processed the response)
-   *
-   * If not finalized, using previous_response_id may cause "Previous response not found" errors.
-   */
-  private isResponseFinalized(response: Response): boolean {
-    const hasCompletedStatus = response.status === 'completed';
-    const hasUsageData = response.usage !== null && response.usage !== undefined;
-
-    if (!hasCompletedStatus || !hasUsageData) {
-      this.logger.warn(
-        `Response ${response.id} not fully finalized (status: ${response.status ?? 'unknown'}, usage: ${hasUsageData ? 'present' : 'missing'}) - will not use for previous_response_id`,
-      );
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Update conversation state after a successful response.
-   * Only stores previousResponseId if the response is fully finalized.
-   */
-  private updateConversationState(
-    response: Response,
-    messages: ResponseInputItem[],
-  ): void {
-    // Only trust previous_response_id if response is fully finalized
-    // This prevents "Previous response not found" errors when OpenAI
-    // returns incomplete responses (missing usage, wrong status)
-    if (this.isResponseFinalized(response)) {
-      this.previousResponseId = response.id;
-    } else {
-      this.previousResponseId = null;
-    }
-    this.sentMessages = messages.length;
-  }
-
-  /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
    * request and relies on `previous_response_id` for conversation context.
@@ -735,7 +694,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Emit any web searches not yet emitted (fallback for edge cases)
       this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
-      this.updateConversationState(response, messages);
+      this.previousResponseId = response.id;
+      this.sentMessages = messages.length;
       return response;
     }
 
@@ -778,7 +738,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       );
     }
-    this.updateConversationState(response, messages);
+    this.previousResponseId = response.id;
+    this.sentMessages = messages.length;
     return response;
   }
 
