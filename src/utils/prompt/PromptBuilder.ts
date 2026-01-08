@@ -28,9 +28,10 @@ IMPORTANT: ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE.
 MEMORY PROTOCOL:
 1. Use the \`view\` command of your \`memory\` tool to check for earlier progress.
 2. ... (work on the task) ...
-   - As you make progress, record status / progress / thoughts etc in your memory.
+   - As you make progress, record status, progress, and thoughts in your memory.
+   - Record user preferences and general style guidelines from the user.
 
-ASSUME INTERRUPTION: Your context window might be reset at any moment, so you risk losing any progress that is not recorded in your memory directory.
+Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 
 Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
