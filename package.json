@@ -277,7 +277,7 @@
             "default": 75,
             "minimum": 0,
             "maximum": 100,
-            "description": "Percentage of context window to trigger automatic conversation compaction with OpenAI Responses API. When cumulative input tokens exceed this percentage of the model's context window, the conversation is compacted to reduce context size. Set to 0 to disable automatic compaction.",
+            "description": "Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction via /responses/compact. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.",
             "scope": "resource"
           },
           "texra.model.gpt5ReasoningSummary": {
