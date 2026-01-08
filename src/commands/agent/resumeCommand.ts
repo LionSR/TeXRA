@@ -17,6 +17,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Type imports
@@ -86,17 +87,26 @@ async function resumeFromSnapshot(
   try {
     // Drain queued follow-ups before starting the flow
     queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
+    // Update UI to show queue is now empty (messages are being processed)
+    updateQueuedFollowUpsUI(streamId);
 
     // Resume using flow-first execution
     await resumeToolUseFromSnapshot(snapshot, (session) => {
-      // Append any follow-up messages to the session
+      // Combine all follow-ups into a single message
+      const allFollowUps: string[] = [];
+
+      // Add explicit follow-up first if provided
       if (followUp !== undefined) {
-        session.appendFollowUp(followUp);
+        allFollowUps.push(followUp);
       }
 
-      // Append any queued follow-ups
-      for (const queuedFollowUp of queuedFollowUps) {
-        session.appendFollowUp(queuedFollowUp);
+      // Add queued follow-ups
+      allFollowUps.push(...queuedFollowUps);
+
+      // Send as single concatenated message
+      if (allFollowUps.length > 0) {
+        const combinedMessage = allFollowUps.join('\n\n');
+        session.appendFollowUp(combinedMessage);
       }
     });
 
