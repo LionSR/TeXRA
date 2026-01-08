@@ -14,6 +14,8 @@ export const TokenUsageStatsSchema = z.strictObject({
   outputTokens: z.number(),
   /** Total cost in USD for the request */
   cost: z.number(),
+  /** Tokens written to cache (Anthropic: charged at 1.25x input price) */
+  cacheCreationInputTokens: z.number().optional(),
 });
 
 export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
