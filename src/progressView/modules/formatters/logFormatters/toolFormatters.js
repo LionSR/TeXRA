@@ -68,8 +68,10 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   // Determine display state: user feedback takes precedence over error styling
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
 
-  // Use tool-specific icon
-  const iconClass = getToolIconClass(toolName, showAsError);
+  // Use appropriate icon: comment for user feedback, otherwise tool-specific
+  const iconClass = isUserFeedback
+    ? 'codicon-comment'
+    : getToolIconClass(toolName, showAsError);
 
   const toolElement = createToolElement(logId, groupId, timestamp, iconClass);
   if (!toolElement) return null;
@@ -111,19 +113,25 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
 
   // Note: File path is already in headerSummary, so we skip the Files section
 
-  // Show user feedback, error, or output (in priority order)
+  // Show output if present (primary result from tool)
+  if (outputText) {
+    sections.push(
+      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+    );
+  }
+
+  // Show error if present and not superseded by user feedback
+  if (errorText && !isUserFeedback) {
+    sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
+  }
+
+  // Show user instruction as supplementary note/warning if present
   if (isUserFeedback && userInstructionText) {
     sections.push(
       buildToolUseSection(
         'User Instruction:',
         wrapInPre(userInstructionText, 'tool-user-feedback'),
       ),
-    );
-  } else if (errorText) {
-    sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
-  } else if (outputText) {
-    sections.push(
-      buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
     );
   }
 
