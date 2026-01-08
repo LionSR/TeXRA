@@ -66,6 +66,7 @@ export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched
 
 // Tool-use persistence defaults
 export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
+export const DEFAULT_TOOL_USE_MEMORY_ENABLED = false;
 
 // Retry defaults
 // Default to 0 automatic retries - users must click retry button
@@ -93,6 +94,14 @@ export function getToolUsePersistenceTtlHours(): number {
     return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
   }
   return hours;
+}
+
+/** Determine whether the memory tool is enabled for tool-use sessions. */
+export function getToolUseMemoryEnabled(): boolean {
+  return getConfig<boolean>(
+    'texra.toolUse.memory.enabled',
+    DEFAULT_TOOL_USE_MEMORY_ENABLED,
+  );
 }
 
 export function getModelRetryMaxAttempts(): number {
