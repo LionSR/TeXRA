@@ -2,7 +2,7 @@
 import { setupPasteListener } from '../pasteHandler.js';
 import {
   ELEMENT_IDS,
-  normalizeSessionType,
+  parseSessionType,
   SESSION_TYPE_INPUT,
   SESSION_TYPES,
 } from '../constants.js';
@@ -16,6 +16,7 @@ import {
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
 
+// Rotate onboarding tips slowly so users can read one example at a time.
 const PLACEHOLDER_ROTATION_MS = 12000;
 const ONBOARDING_PLACEHOLDERS = {
   [SESSION_TYPES.WORKFLOW]: [
@@ -40,7 +41,7 @@ export class InstructionManager {
       [SESSION_TYPES.WORKFLOW]: 0,
       [SESSION_TYPES.TOOL_USE]: 0,
     };
-    this._currentSessionType = SESSION_TYPES.WORKFLOW;
+    this._target = null;
     this._textarea = null;
     this._sessionToggle = null;
     this._handleInput = null;
@@ -80,6 +81,7 @@ export class InstructionManager {
   }
 
   _setupPlaceholderRotation(target, textarea) {
+    this._target = target;
     this._textarea = textarea;
     this._sessionToggle = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
 
@@ -99,13 +101,12 @@ export class InstructionManager {
       if (!this._textarea) {
         return;
       }
-      this._currentSessionType = this._getSessionType();
       if (!this._textarea.value.trim()) {
         this._refreshPlaceholder(false);
       }
     };
 
-    target.addEventListener('input', this._handleInput);
+    this._target.addEventListener('input', this._handleInput);
     this._sessionToggle?.addEventListener(
       'change',
       this._handleSessionTypeChange,
@@ -143,9 +144,6 @@ export class InstructionManager {
       return;
     }
     const sessionType = this._getSessionType();
-    if (sessionType !== this._currentSessionType) {
-      this._currentSessionType = sessionType;
-    }
     const placeholder = this._getPlaceholder(sessionType, advance);
     if (placeholder) {
       this._textarea.setAttribute('placeholder', placeholder);
@@ -159,7 +157,7 @@ export class InstructionManager {
     if (!placeholders.length) {
       return '';
     }
-    const currentIndex = this._rotationIndex[sessionType] ?? 0;
+    const currentIndex = this._rotationIndex[sessionType];
     const index = currentIndex % placeholders.length;
     const nextIndex = (index + 1) % placeholders.length;
     if (advance) {
@@ -171,8 +169,26 @@ export class InstructionManager {
   _getSessionType() {
     const input = safeGetElementById(SESSION_TYPE_INPUT);
     if (input instanceof HTMLInputElement && input.value) {
-      return normalizeSessionType(input.value);
+      return parseSessionType(input.value);
     }
     return SESSION_TYPES.WORKFLOW;
+  }
+
+  dispose() {
+    this._stopRotation();
+    if (this._handleInput && this._target) {
+      this._target.removeEventListener('input', this._handleInput);
+    }
+    if (this._handleSessionTypeChange && this._sessionToggle) {
+      this._sessionToggle.removeEventListener(
+        'change',
+        this._handleSessionTypeChange,
+      );
+    }
+    this._target = null;
+    this._textarea = null;
+    this._sessionToggle = null;
+    this._handleInput = null;
+    this._handleSessionTypeChange = null;
   }
 }

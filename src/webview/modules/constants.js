@@ -145,6 +145,15 @@ export function normalizeSessionType(sessionType) {
 }
 
 /**
+ * Parse a session type value into a valid SESSION_TYPE.
+ * @param {string} sessionType - The session type to parse
+ * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
+ */
+export function parseSessionType(sessionType) {
+  return normalizeSessionType(sessionType);
+}
+
+/**
  * Resolves a vscode-radio-group element from a container element.
  * If the element itself is a radio group, returns it directly.
  * Otherwise, searches for a radio group child element.
