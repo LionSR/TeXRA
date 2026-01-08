@@ -62,6 +62,24 @@
   word-break: break-word;
 }
 
+/* User feedback styling - distinct from errors */
+.tool-use-user-feedback > .details-summary .tool-use-title,
+.tool-use-user-feedback > .details-summary .codicon {
+  color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+.tool-user-feedback {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--spacing-small);
+  background-color: var(
+    --vscode-inputValidation-infoBackground,
+    rgba(55, 148, 255, 0.1)
+  );
+  border-radius: var(--border-radius-small);
+  border-left: 3px solid var(--vscode-textLink-foreground, #3794ff);
+}
+
 .tool-output-full {
   white-space: pre-wrap;
   word-break: break-word;
