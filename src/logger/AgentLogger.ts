@@ -403,8 +403,9 @@ export class AgentLogger {
       contextWindow,
       utilizationPercent,
     };
-    // Use debug level since this is frequent and informational
-    this.debug(`Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`, {
+    // Use info level to ensure message reaches progress view (debug is filtered)
+    // The CONTEXT_STATE message type triggers UI update without cluttering logs
+    this.info(`Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`, {
       groupId,
       messageType: MESSAGE_TYPES.CONTEXT_STATE,
       data,
