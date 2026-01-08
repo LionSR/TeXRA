@@ -128,27 +128,30 @@ export class GlobTool extends defineTool({
         item !== null,
     );
 
-    // Count lines for all files in batch using wc -l (efficient, no memory issues)
-    const filePaths = statsOnly
-      .filter((item) => item.isFile)
-      .map((item) => item.relativePath);
-    const lineCounts = await countLinesForFiles(filePaths);
-
-    const decorated: GlobMatchInfo[] = statsOnly.map((item) => ({
-      relativePath: item.relativePath,
-      mtime: item.mtime,
-      lineCount: item.isFile ? (lineCounts.get(item.relativePath) ?? null) : null,
-    }));
-
-    const sorted = decorated.sort((a, b) => {
+    // Sort by mtime first, then count lines only for top N files
+    const sorted = statsOnly.sort((a, b) => {
       if (b.mtime !== a.mtime) {
         return b.mtime - a.mtime;
       }
       return a.relativePath.localeCompare(b.relativePath);
     });
 
+    // Count lines for files using wc -l, but limit to avoid slowdowns on large results
+    const LINE_COUNT_LIMIT = 50;
+    const filesToCount = sorted
+      .filter((item) => item.isFile)
+      .slice(0, LINE_COUNT_LIMIT)
+      .map((item) => item.relativePath);
+    const lineCounts = await countLinesForFiles(filesToCount);
+
+    const decorated: GlobMatchInfo[] = sorted.map((item) => ({
+      relativePath: item.relativePath,
+      mtime: item.mtime,
+      lineCount: item.isFile ? (lineCounts.get(item.relativePath) ?? null) : null,
+    }));
+
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
-    const lines = sorted.map((item) => {
+    const lines = decorated.map((item) => {
       const path = toPosixPath(item.relativePath);
       if (item.lineCount !== null) {
         return `${path} (${item.lineCount} lines)`;
