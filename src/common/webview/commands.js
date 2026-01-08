@@ -178,6 +178,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Todo List
   UPDATE_TODOS: 'updateTodos',
 
+  // Queued follow-ups
+  UPDATE_QUEUED_FOLLOW_UPS: 'updateQueuedFollowUps',
+
   // Status and files
   UPDATE_STATUS: 'updateStatus',
   UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs

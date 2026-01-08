@@ -18,6 +18,7 @@ import {
 } from '@frontend/ui/messageUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
@@ -175,8 +176,12 @@ async function handleFollowUpResult(
   switch (result.status) {
     case 'sent':
       // Silent success - no notification needed
+      // Also update queue display (message was sent, queue may be empty now)
+      updateQueuedFollowUpsUI(streamId);
       break;
     case 'queued':
+      // Update the queued follow-ups display
+      updateQueuedFollowUpsUI(streamId);
       if (result.reason === 'waiting') {
         // Auto-resume WAITING tool-use sessions
         const resumed = await tryAutoResume(streamId);

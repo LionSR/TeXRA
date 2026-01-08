@@ -204,6 +204,15 @@
             <span id="runSummary" class="run-summary"></span>
           </div>
           <div id="followUpContainer" class="follow-up-container">
+            <vscode-collapsible
+              id="queuedFollowUpsCollapsible"
+              title="Queued Messages"
+              class="queued-follow-ups-collapsible"
+              open
+              hidden
+            >
+              <div id="queuedFollowUpsList" class="queued-follow-ups-list"></div>
+            </vscode-collapsible>
             <vscode-textarea
               id="followUpInput"
               placeholder="Send follow-up message"
@@ -503,6 +512,12 @@
                   >Yolo</vscode-toolbar-button
                 >
               </vscode-toolbar-container>
+            </div>
+          </template>
+          <template id="queuedFollowUpTemplate">
+            <div class="queued-follow-up-item">
+              <i class="codicon codicon-comment queued-follow-up-icon"></i>
+              <span class="queued-follow-up-text"></span>
             </div>
           </template>
         </div>
