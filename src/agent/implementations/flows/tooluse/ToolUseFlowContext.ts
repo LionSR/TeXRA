@@ -48,6 +48,9 @@ export interface ToolUseFlowContextInit<
 
   /** Optional usage tracking callback */
   getUsageRecorder?: () => RoundFinalizedCallback;
+
+  /** Optional callback when a queued follow-up is consumed */
+  onFollowUpConsumed?: () => void;
 }
 
 // ============================================================================

@@ -68,6 +68,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -616,6 +617,7 @@ export async function executeAgent(
           ...interruptManager.asFlowInput(),
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
+          onFollowUpConsumed: () => updateQueuedFollowUpsUI(ctx.streamId),
         });
         return result.status;
       }
@@ -759,6 +761,7 @@ export async function resumeToolUseFromSnapshot(
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
+          onFollowUpConsumed: () => updateQueuedFollowUpsUI(ctx.streamId),
         },
         setupSession ? (context) => setupSession(context.session) : undefined,
       );
