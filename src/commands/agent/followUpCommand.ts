@@ -22,6 +22,9 @@ import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
 
+// Track in-flight lazy detection checks to prevent race conditions
+const inFlightDetections = new Set<StreamTabId>();
+
 /**
  * Lazily detect if a stream has a persisted flow record and set WAITING status.
  *
@@ -37,6 +40,11 @@ async function lazyDetectWaitingStatus(streamId: StreamTabId): Promise<boolean> 
     return currentStatus === STREAM_STATUS.WAITING;
   }
 
+  // Skip if detection is already in progress for this stream
+  if (inFlightDetections.has(streamId)) {
+    return false;
+  }
+
   // Get execution ID to check for persisted flow
   const progressState = ProgressViewProvider.getInstance()?.state;
   const executionId = progressState?.getExecutionId(streamId);
@@ -44,16 +52,21 @@ async function lazyDetectWaitingStatus(streamId: StreamTabId): Promise<boolean> 
     return false;
   }
 
-  // Check if a persisted flow record exists
-  const hasFlow = await hasPersistedFlowRecord(executionId);
-  if (hasFlow) {
-    // Set WAITING status so sendFollowUp will queue the message
-    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
-    logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
-    return true;
+  // Mark as in-flight to prevent duplicate checks
+  inFlightDetections.add(streamId);
+  try {
+    // Check if a persisted flow record exists
+    const hasFlow = await hasPersistedFlowRecord(executionId);
+    if (hasFlow) {
+      // Set WAITING status so sendFollowUp will queue the message
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
+      return true;
+    }
+    return false;
+  } finally {
+    inFlightDetections.delete(streamId);
   }
-
-  return false;
 }
 
 /**
