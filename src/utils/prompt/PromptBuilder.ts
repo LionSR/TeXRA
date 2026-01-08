@@ -21,6 +21,18 @@ Call tools sequentially and wait for the output before calling another.
 For math in responses, use $...$ for inline and $$...$$ for display math (not \\(...\\) or \\[...\\]).
 </tool_use_instructions>`;
 
+/** Instructions appended when memory tool is enabled */
+const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
+You have access to a persistent memory system under /memories for storing important information across sessions.
+Use the memory tool to:
+- Store key findings, decisions, or context that may be useful later
+- Organize notes by topic using subdirectories (e.g., /memories/project-notes/, /memories/references/)
+- Review existing memories before starting complex tasks to maintain continuity
+
+Memory commands: view (read file/directory), create (new file), str_replace (edit), insert (add lines), delete, rename.
+Keep memory files concise and well-organized. Prefer updating existing files over creating duplicates.
+</memory_tool_instructions>`;
+
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.
  *
@@ -152,10 +164,16 @@ export type InitialPrompts = Awaited<
   ReturnType<PromptBuilder['buildInitialPrompts']>
 >;
 
+export interface ToolUsePromptOptions {
+  /** Whether the memory tool is enabled for this session */
+  memoryEnabled?: boolean;
+}
+
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
+  options?: ToolUsePromptOptions,
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,
@@ -165,8 +183,15 @@ export async function buildInitialToolUsePrompts(
   );
   const initial = await builder.buildInitialPrompts();
 
+  // Build instruction suffix: always include tool-use instructions,
+  // optionally append memory instructions when enabled
+  const suffixParts = [TOOL_USE_INSTRUCTIONS];
+  if (options?.memoryEnabled) {
+    suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
+  }
+
   return {
     ...initial,
-    instructionSuffix: TOOL_USE_INSTRUCTIONS,
+    instructionSuffix: suffixParts.join('\n'),
   };
 }
