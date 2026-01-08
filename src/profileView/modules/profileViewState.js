@@ -80,7 +80,7 @@ class ProfileViewState {
     this._authenticated = data.authenticated;
     this._user = data.user;
     this._tier = data.tier;
-    this._remoteAgents = data.remoteAgents || [];
+    this._remoteAgents = data.remoteAgents ?? [];
     this.save();
   }
 }
