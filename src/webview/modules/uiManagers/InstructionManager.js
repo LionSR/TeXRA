@@ -9,6 +9,7 @@ import {
 } from '../constants.js';
 
 // Local imports - common
+import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import { debounce } from '@common/debounce.js';
 import {
@@ -32,8 +33,9 @@ const ONBOARDING_PLACEHOLDERS = {
   ],
 };
 
-export class InstructionManager {
+export class InstructionManager extends BaseDomHandler {
   constructor(textareaId, vscode, state) {
+    super();
     this.textareaId = textareaId;
     this.vscode = vscode;
     this.state = state;
@@ -42,11 +44,7 @@ export class InstructionManager {
       [SESSION_TYPES.WORKFLOW]: 0,
       [SESSION_TYPES.TOOL_USE]: 0,
     };
-    this._target = null;
     this._textarea = null;
-    this._sessionToggle = null;
-    this._handleInput = null;
-    this._handleSessionTypeChange = null;
   }
 
   setup() {
@@ -82,13 +80,9 @@ export class InstructionManager {
   }
 
   _setupPlaceholderRotation(target, textarea) {
-    this._target = target;
     this._textarea = textarea;
-    // Resolve the actual radio group element, not just the container
-    const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
-    this._sessionToggle = resolveRadioGroup(toggleContainer);
 
-    this._handleInput = () => {
+    const handleInput = () => {
       if (!this._textarea) {
         return;
       }
@@ -100,7 +94,7 @@ export class InstructionManager {
       this._refreshPlaceholder(false);
     };
 
-    this._handleSessionTypeChange = (event) => {
+    const handleSessionTypeChange = (event) => {
       if (!this._textarea) {
         return;
       }
@@ -113,13 +107,17 @@ export class InstructionManager {
       }
     };
 
-    this._target.addEventListener('input', this._handleInput);
-    this._sessionToggle?.addEventListener(
-      'change',
-      this._handleSessionTypeChange,
-    );
+    // Register listeners via BaseDomHandler for automatic cleanup
+    this.addListener(target, 'input', handleInput);
 
-    this._handleInput();
+    // Resolve the actual radio group element, not just the container
+    const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+    const sessionToggle = resolveRadioGroup(toggleContainer);
+    if (sessionToggle) {
+      this.addListener(sessionToggle, 'change', handleSessionTypeChange);
+    }
+
+    handleInput();
   }
 
   _startRotation() {
@@ -204,19 +202,7 @@ export class InstructionManager {
 
   dispose() {
     this._stopRotation();
-    if (this._handleInput && this._target) {
-      this._target.removeEventListener('input', this._handleInput);
-    }
-    if (this._handleSessionTypeChange && this._sessionToggle) {
-      this._sessionToggle.removeEventListener(
-        'change',
-        this._handleSessionTypeChange,
-      );
-    }
-    this._target = null;
     this._textarea = null;
-    this._sessionToggle = null;
-    this._handleInput = null;
-    this._handleSessionTypeChange = null;
+    super.dispose();
   }
 }
