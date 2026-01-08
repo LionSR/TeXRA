@@ -99,23 +99,19 @@ export class UsageMonitor {
         .at(-1);
       const latestUsage = latestUsageSnapshot?.usage;
 
-      // Per-round usage for backend analytics only (not for UI display)
-      // Backend billing should reflect the current round's net tokens, not cumulative
-      const backendLogUsage = {
-        inputTokens: latestUsage?.inputTokens ?? totals.totalInputTokens,
-        outputTokens: latestUsage?.outputTokens ?? totals.totalOutputTokens,
-        cachedInputTokens:
-          latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens,
-        reasoningTokens:
-          latestUsage?.reasoningTokens ?? totals.totalReasoningTokens,
-        cost: latestUsage?.cost ?? totals.totalCost,
-      };
+      // Per-round usage - sent to both UI (for accumulation) and backend analytics
+      const roundInputTokens = latestUsage?.inputTokens ?? 0;
+      const roundOutputTokens = latestUsage?.outputTokens ?? 0;
+      const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
+      const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
+      const roundCost = latestUsage?.cost ?? 0;
 
       const cachingStats =
         this.modelInfo.capabilities.supportsPromptCaching ||
         this.modelInfo.capabilities.supportsAutoPromptCaching;
 
-      // Use accumulated totals for cache percentage calculation
+      // Use accumulated totals for cache percentage calculation (for display)
       const totalCacheReadTokens = totals.totalCacheReadInputTokens;
       const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
 
@@ -131,16 +127,16 @@ export class UsageMonitor {
           : 0
         : undefined;
 
-      // Use accumulated totals for the UI display, not per-round usage
+      // Send per-round deltas - storage will accumulate them
       const baseStats: TokenUsageStats = {
-        inputTokens: totals.totalInputTokens,
-        outputTokens: totals.totalOutputTokens,
-        cost: Number(totals.totalCost.toFixed(3)),
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
+        cost: Number(roundCost.toFixed(3)),
         // Include cache tokens for display (only if > 0)
         cacheReadInputTokens:
-          totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined,
+          roundCacheReadTokens > 0 ? roundCacheReadTokens : undefined,
         cacheCreationInputTokens:
-          totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
+          roundCacheCreationTokens > 0 ? roundCacheCreationTokens : undefined,
       };
 
       const payload: ExtendedTokenUsageStats = {
@@ -152,11 +148,11 @@ export class UsageMonitor {
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
         ...(this.modelInfo.capabilities.supportsReasoning && {
-          reasoningTokens: totals.totalReasoningTokens,
+          reasoningTokens: roundReasoningTokens,
         }),
         // Include tool usage if any is present
-        ...(totals.totalToolUsePromptTokens > 0 && {
-          toolUseTokens: totals.totalToolUsePromptTokens,
+        ...((latestUsage?.toolUsePromptTokens ?? 0) > 0 && {
+          toolUseTokens: latestUsage?.toolUsePromptTokens ?? 0,
         }),
       };
 
@@ -165,6 +161,13 @@ export class UsageMonitor {
       usageReporter.report(payload, storageKey);
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
+      const backendLogUsage = {
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
+        cachedInputTokens: roundCacheReadTokens,
+        reasoningTokens: roundReasoningTokens,
+        cost: roundCost,
+      };
       this.logToBackend(stateGlobal.totalResponseTimeMs, backendLogUsage);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
