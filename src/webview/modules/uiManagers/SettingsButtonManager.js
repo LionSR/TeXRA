@@ -202,7 +202,7 @@ export class SettingsButtonManager extends BaseDomHandler {
 
     this.eventBus.addEventListener('showDependencyBanner', (e) => {
       this._disposeDependencyInstallListeners();
-      const missing = e.detail?.missingTools || [];
+      const missing = e.detail?.missingTools ?? [];
       bannerManager.showBanner(ELEMENT_IDS.DEPENDENCY_BANNER, {
         missingTools: missing,
       });
