@@ -61,6 +61,12 @@ export class ProgressViewState {
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = '';
+  /**
+   * Tracks the stream that was last rendered to the webview.
+   * Used as single source of truth for stream switch detection.
+   * Reset when webview is cleaned up to force rebuild on next render.
+   */
+  private _lastRenderedStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly taskStates = new Map<StreamTabId, TaskState>();
@@ -135,6 +141,32 @@ export class ProgressViewState {
   set activeStream(stream: StreamTabId) {
     this._activeStream = stream;
     this.saveActiveStream();
+  }
+
+  // Stream switch detection (single source of truth)
+
+  /**
+   * Check if rendering the given stream would be a stream switch.
+   * Uses lastRenderedStream as the single source of truth.
+   */
+  isStreamSwitch(stream: StreamTabId): boolean {
+    return this._lastRenderedStream !== stream;
+  }
+
+  /**
+   * Mark a stream as having been rendered.
+   * Called after successfully rendering stream content to webview.
+   */
+  markStreamRendered(stream: StreamTabId): void {
+    this._lastRenderedStream = stream;
+  }
+
+  /**
+   * Clear rendered stream tracking.
+   * Called when webview is cleaned up to force rebuild on next render.
+   */
+  clearRenderedStreamTracking(): void {
+    this._lastRenderedStream = '';
   }
 
   /**
