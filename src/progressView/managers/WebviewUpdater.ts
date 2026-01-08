@@ -362,6 +362,17 @@ export class WebviewUpdater {
   }
 
   /**
+   * Update the queued follow-ups display for a stream
+   */
+  updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+      stream,
+      messages,
+    });
+  }
+
+  /**
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
    *
