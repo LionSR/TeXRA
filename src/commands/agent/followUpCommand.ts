@@ -8,7 +8,6 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
@@ -19,22 +18,10 @@ import {
 } from '@frontend/ui/messageUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
-
-/**
- * Update the queued follow-ups display in the webview.
- */
-function updateQueuedFollowUpsUI(streamId: StreamTabId): void {
-  const provider = ProgressViewProvider.getInstance();
-  if (!provider) {
-    return;
-  }
-
-  const messages = ToolUseFollowUpQueue.getAll(streamId);
-  provider.webviewUpdater.updateQueuedFollowUps(streamId, messages);
-}
 
 // Track in-flight lazy detection checks to prevent race conditions
 const inFlightDetections = new Set<StreamTabId>();
