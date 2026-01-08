@@ -263,8 +263,7 @@ SELECT
     p.tier,
     COUNT(r.id) AS total_requests,
     COALESCE(SUM(r.input_tokens), 0) AS total_input_tokens,
-    COALESCE(SUM(GREATEST(r.input_tokens - COALESCE(r.cached_input_tokens, 0), 0)), 0)
-      AS total_net_input_tokens,
+    COALESCE(SUM(r.input_tokens), 0) AS total_net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS total_output_tokens,
     COALESCE(SUM(r.cached_input_tokens), 0) AS total_cached_tokens,
     COALESCE(SUM(r.reasoning_tokens), 0) AS total_reasoning_tokens,
@@ -399,8 +398,7 @@ SELECT
     r.provider,
     COUNT(r.id) AS request_count,
     COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
-    COALESCE(SUM(GREATEST(r.input_tokens - COALESCE(r.cached_input_tokens, 0), 0)), 0)
-      AS net_input_tokens,
+    COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cost), 0) AS cost_usd,
     AVG(r.response_time_ms) AS avg_response_time_ms
@@ -530,8 +528,7 @@ SELECT
     DATE_TRUNC('day', r.logged_at AT TIME ZONE 'UTC')::DATE AS day,
     COUNT(r.id) AS request_count,
     COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
-    COALESCE(SUM(GREATEST(r.input_tokens - COALESCE(r.cached_input_tokens, 0), 0)), 0)
-      AS net_input_tokens,
+    COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cost), 0) AS cost_usd
 FROM public.profiles p
@@ -661,8 +658,7 @@ SELECT
     DATE_TRUNC('month', r.logged_at AT TIME ZONE 'UTC')::DATE AS month,
     COUNT(r.id) AS request_count,
     COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
-    COALESCE(SUM(GREATEST(r.input_tokens - COALESCE(r.cached_input_tokens, 0), 0)), 0)
-      AS net_input_tokens,
+    COALESCE(SUM(r.input_tokens), 0) AS net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS output_tokens,
     COALESCE(SUM(r.cached_input_tokens), 0) AS cached_tokens,
     COALESCE(SUM(r.reasoning_tokens), 0) AS reasoning_tokens,
@@ -794,8 +790,7 @@ SELECT
     COUNT(DISTINCT r.user_id) AS active_users,
     COUNT(r.id) AS total_requests,
     COALESCE(SUM(r.input_tokens), 0) AS total_input_tokens,
-    COALESCE(SUM(GREATEST(r.input_tokens - COALESCE(r.cached_input_tokens, 0), 0)), 0)
-      AS total_net_input_tokens,
+    COALESCE(SUM(r.input_tokens), 0) AS total_net_input_tokens,
     COALESCE(SUM(r.output_tokens), 0) AS total_output_tokens,
     COALESCE(SUM(r.cost), 0) AS total_cost_usd,
     COUNT(DISTINCT r.model) AS models_used
