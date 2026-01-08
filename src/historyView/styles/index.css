@@ -67,32 +67,13 @@ mark.current-match {
   gap: var(--spacing-medium);
 }
 
+/* History item extends .list-item from common.css */
 .history-item {
-  border: var(--border-thin) solid var(--vscode-panelSection-border);
-  border-radius: var(--border-radius-large);
-  padding: var(--spacing-medium);
   margin-bottom: var(--spacing-medium);
-  background-color: var(--vscode-editor-background);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.history-item:hover {
-  background-color: var(--vscode-list-hoverBackground);
 }
 
 .history-timestamp {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
   margin-bottom: var(--spacing-small);
-}
-
-/* Header and details */
-.history-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .history-details {
@@ -116,13 +97,6 @@ mark.current-match {
 .button-clear {
   margin-bottom: var(--spacing-xlarge);
   padding: var(--spacing-medium) var(--spacing-large);
-}
-
-/* Empty state */
-.empty-state {
-  text-align: center;
-  margin-top: calc(var(--spacing-xlarge) + var(--spacing-xlarge));
-  color: var(--color-text-secondary);
 }
 
 /* Collapsible content */
