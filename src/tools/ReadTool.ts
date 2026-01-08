@@ -22,10 +22,16 @@ const ReadInputSchema = z.strictObject({
       start: z.int().min(1),
       end: z.int().min(1).nullish(),
     })
-    .refine((value) => value.end == null || value.end >= value.start, {
-      path: ['end'],
-      error: 'range.end must be greater than or equal to range.start',
-    })
+    .refine(
+      (value) =>
+        value.end === null ||
+        value.end === undefined ||
+        value.end >= value.start,
+      {
+        path: ['end'],
+        error: 'range.end must be greater than or equal to range.start',
+      },
+    )
     .nullish(),
 });
 
@@ -116,7 +122,9 @@ export class ReadFileTool extends defineTool({
       truncated,
       rangeProvided: Boolean(input.range),
       rangeEndExceeded:
-        input.range?.end != null && input.range.end > totalLines,
+        input.range?.end !== null &&
+        input.range?.end !== undefined &&
+        input.range.end > totalLines,
     });
 
     return {

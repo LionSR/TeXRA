@@ -129,7 +129,7 @@ export class TextEditorTool extends defineTool({
         );
 
       case 'insert':
-        if (input.insert_line == null) {
+        if (input.insert_line === null || input.insert_line === undefined) {
           throw new ToolError(
             'Parameter `insert_line` is required for command: insert',
           );
