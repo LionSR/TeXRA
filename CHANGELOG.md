@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.4] - 2026-01-08
+
+### Features
+
+- Added **Memory View** for browsing and managing agent memory entries with delete controls.
+- Added **context utilization display** showing percentage of context window used on each API call.
+- Automatic conversation compaction for OpenAI Responses API to manage long sessions.
+- Configurable context management with thinking block clearing for Anthropic models.
+
+### Bug Fixes
+
+- Fixed canceling rejection by pressing Escape on feedback input.
+- Fixed memory list not refreshing after deletion failure.
+- Fixed thinking block clearing not triggering properly on the client side.
+- Fixed LaTeX math delimiters not rendering correctly in markdown output.
+- Fixed conversation messages not syncing after tool-use cycles.
+- Fixed log content clearing when falling back to default session kind.
+- Fixed abort errors not using correct SDK error type.
+
+### Improvements
+
+- Improved tool use display to distinguish user feedback from errors.
+- Unified header styles across history, profile, and memory views.
+- Simplified run selector dropdown to show only timestamp.
+- Moved task-run temp storage from global to workspace storage for better isolation.
+- Updated dependencies: Supabase, MCP SDK.
+
 ## [0.35.3] - 2026-01-05
 
 ### Features
