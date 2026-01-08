@@ -10,6 +10,7 @@ import { progressViewState } from './progressViewState.js';
 export class UsageSummary {
   constructor() {
     this._summaryElem = null;
+    this._contextElem = null;
   }
 
   /**
@@ -83,5 +84,51 @@ export class UsageSummary {
     }
 
     return { inputTokens: 0, outputTokens: 0, cost: 0 };
+  }
+
+  /**
+   * Update the context utilization display in the footer.
+   * Shows "X% context left" based on current input tokens vs context window.
+   * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} contextState
+   */
+  updateContextDisplay(contextState) {
+    // Cache the context element
+    if (!this._contextElem) {
+      this._contextElem = document.getElementById('contextState');
+    }
+    if (!this._contextElem) return;
+
+    const { inputTokens, contextWindow, utilizationPercent } = contextState;
+
+    if (!contextWindow || contextWindow <= 0) {
+      this._contextElem.textContent = '';
+      this._contextElem.hidden = true;
+      return;
+    }
+
+    const contextLeft = Math.max(0, 100 - utilizationPercent);
+    const formattedInput = formatTokens(inputTokens);
+    const formattedWindow = formatTokens(contextWindow);
+
+    this._contextElem.innerHTML = `
+      <i class="codicon codicon-window" title="Context window"></i>
+      <span class="context-state__value" title="${formattedInput} / ${formattedWindow} tokens used">
+        ${contextLeft.toFixed(0)}% context left
+      </span>
+    `;
+    this._contextElem.hidden = false;
+  }
+
+  /**
+   * Clear the context state display.
+   */
+  clearContextDisplay() {
+    if (!this._contextElem) {
+      this._contextElem = document.getElementById('contextState');
+    }
+    if (this._contextElem) {
+      this._contextElem.textContent = '';
+      this._contextElem.hidden = true;
+    }
   }
 }
