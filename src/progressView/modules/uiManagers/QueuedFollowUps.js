@@ -3,7 +3,6 @@ import { ELEMENT_IDS } from '../constants.js';
 
 // Local imports - shared helpers
 import { safeGetElementById, setVisibilityState } from '@common/domUtils.js';
-import { escapeHtml } from '@common/htmlEncoding.js';
 
 /**
  * Manages the queued follow-ups display in the progress view.
@@ -38,6 +37,7 @@ export class QueuedFollowUps {
 
   /**
    * Update the queued follow-ups display.
+   * Shows all queued messages concatenated into a single preview.
    * @param {string[]} messages - The queued message texts
    */
   update(messages) {
@@ -53,20 +53,18 @@ export class QueuedFollowUps {
       return;
     }
 
+    // Concatenate all messages with newlines
+    const combinedText = this._currentMessages.join('\n\n');
+
     // Update the title to show count
     const count = this._currentMessages.length;
-    elements.container.setAttribute(
-      'title',
-      `Queued Messages (${count})`,
-    );
+    const suffix = count === 1 ? '' : ` (${count} combined)`;
+    elements.container.setAttribute('title', `Queued Message${suffix}`);
 
-    // Clear and rebuild the list
+    // Clear and show single combined message
     elements.list.innerHTML = '';
-
-    for (const text of this._currentMessages) {
-      const item = this._createMessageItem(text);
-      elements.list.appendChild(item);
-    }
+    const item = this._createMessageItem(combinedText);
+    elements.list.appendChild(item);
 
     this.show();
   }
