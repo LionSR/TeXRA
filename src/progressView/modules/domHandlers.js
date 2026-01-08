@@ -1,6 +1,4 @@
 // Local imports - progress view
-// Local imports
-import { progressViewState } from './progressViewState.js';
 import { TaskGroupDomManager, LogEntryManager } from './taskManagers.js';
 import { EventsManager } from './uiManagers/EventsManager.js';
 import { FileList } from './uiManagers/FileList.js';
@@ -16,7 +14,9 @@ import { Toolbar } from './uiManagers/Toolbar.js';
 import { TodoList } from './uiManagers/TodoList.js';
 import { QueuedFollowUps } from './uiManagers/QueuedFollowUps.js';
 import { UsageSummary } from './usageManagers.js';
+// Local imports - common
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
+import { validateTemplates } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -44,6 +44,39 @@ class ProgressViewDomHandler extends BaseDomHandler {
       todoList: new TodoList(),
       queuedFollowUps: new QueuedFollowUps(),
     });
+  }
+
+  initializeUI() {
+    validateTemplates([
+      'fileItemTemplate',
+      'usageTemplate',
+      'bulletTemplate',
+      'streamTabTemplate',
+      'roundHeaderTemplate',
+      'logLineTemplate',
+      'nativeStatusTemplate',
+      'bannerDetailsTemplate',
+      'toolUseTemplate',
+      'fileListDetailsTemplate',
+      'missingOutputsDetailsTemplate',
+      'latexdiffDetailsTemplate',
+      'statisticsDetailsTemplate',
+      'groupHeaderTemplate',
+      'groupDetailsTemplate',
+      'retryRequestTemplate',
+      'approvalRequestTemplate',
+    ]);
+    this.toolbar.render('workflow');
+    this.placeholder.show();
+    this.events.setup();
+    this.followUpInput.setup();
+    this.approvalRequests.setup();
+    this.retryRequests.setup();
+    this.events.applyToggleStates();
+  }
+
+  disposeUI() {
+    this.dispose();
   }
 }
 

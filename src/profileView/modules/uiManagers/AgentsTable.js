@@ -1,9 +1,17 @@
 /* global document, console */
 // Local imports - profile view
 import { ELEMENT_IDS, CLASS_NAMES } from '../constants.js';
+// Local imports - common
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
+
+const toggleHidden = (element, isHidden) => {
+  if (!element) {
+    return;
+  }
+  element.classList.toggle(CLASS_NAMES.HIDDEN, isHidden);
+};
 
 /**
  * Manages the agents table rendering and interactions.
@@ -70,16 +78,18 @@ export class AgentsTable {
 
     if (!authenticated) {
       // Show not authenticated state
-      profileInfo.style.display = 'none';
-      notAuthenticated.style.display = 'block';
-      remoteAgentsSection.style.display = 'none';
-      if (apiAccessSection) apiAccessSection.style.display = 'none';
+      toggleHidden(profileInfo, true);
+      toggleHidden(notAuthenticated, false);
+      toggleHidden(remoteAgentsSection, true);
+      if (apiAccessSection) {
+        toggleHidden(apiAccessSection, true);
+      }
       return;
     }
 
     // Show authenticated state
-    profileInfo.style.display = 'block';
-    notAuthenticated.style.display = 'none';
+    toggleHidden(profileInfo, false);
+    toggleHidden(notAuthenticated, true);
 
     // Update user info
     const userEmail = safeGetElementById(ELEMENT_IDS.USER_EMAIL);
@@ -105,17 +115,17 @@ export class AgentsTable {
           undefined,
           { year: 'numeric', month: 'short', day: 'numeric' },
         );
-        expirationRow.style.display = 'flex';
+        toggleHidden(expirationRow, false);
       } else {
         // No expiration - don't show the row
-        expirationRow.style.display = 'none';
+        toggleHidden(expirationRow, true);
       }
     }
 
     // Show API access section for all authenticated users
     // All tiers have some server-side access (free=budget, Max=mid-tier, Ultra=all)
     if (apiAccessSection) {
-      apiAccessSection.style.display = 'block';
+      toggleHidden(apiAccessSection, false);
       this.renderApiAccessSection(
         apiAccessMode,
         enabledProviders,
@@ -125,14 +135,14 @@ export class AgentsTable {
 
     // Show remote agents section for all authenticated users
     // RLS filters which agents they can see based on permissions
-    remoteAgentsSection.style.display = 'block';
+    toggleHidden(remoteAgentsSection, false);
 
     if (remoteAgents && remoteAgents.length > 0) {
       this.renderAgentsTable(remoteAgents);
-      noAgentsMessage.style.display = 'none';
+      toggleHidden(noAgentsMessage, true);
     } else {
       if (this.container) this.container.innerHTML = '';
-      noAgentsMessage.style.display = 'block';
+      toggleHidden(noAgentsMessage, false);
     }
   }
 
@@ -175,7 +185,7 @@ export class AgentsTable {
       enabledProviders.length > 0;
 
     if (modelAccessInfo) {
-      modelAccessInfo.style.display = showModelAccessInfo ? 'block' : 'none';
+      toggleHidden(modelAccessInfo, !showModelAccessInfo);
     }
 
     // Update providers info with count format

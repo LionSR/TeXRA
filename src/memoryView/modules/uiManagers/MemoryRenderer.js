@@ -1,6 +1,6 @@
 // Local imports - memory view
 import { COMMANDS, ELEMENT_IDS, LABELS } from '../constants.js';
-import { memoryViewState } from '../memoryViewState.js';
+// Local imports - common
 import { clearElement, safeGetElementById } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
@@ -119,5 +119,3 @@ export class MemoryRenderer {
     return `${value.toFixed(1)} ${units[unitIndex]}`;
   }
 }
-
-export const memoryRenderer = new MemoryRenderer(memoryViewState);

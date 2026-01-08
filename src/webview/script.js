@@ -9,22 +9,22 @@ import {
   setup as setupHandlers,
   dispose as disposeHandlers,
 } from './modules/messageHandlers.js';
+// Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { bootstrapWebview } from '@common/viewBootstrap.js';
 import { vscode } from '@common/webviewContext.js';
 
-// Register handlers immediately so early messages aren't missed
-setupHandlers({ requestData: false });
-
-window.addEventListener('beforeunload', () => {
-  disposeHandlers();
-  disposeManagers();
-});
-
-// Setup UI when DOM is loaded
-document.addEventListener('DOMContentLoaded', function () {
-  mainViewState.restore();
-  instructionManager.setup();
-  mainViewDomHandler.initializeUI();
-  setupHandlers({ requestData: true });
-  vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
+bootstrapWebview({
+  initializeState: () => mainViewState.initialize(),
+  setupHandlers: () => setupHandlers({ requestData: false }),
+  onDomReady: () => {
+    instructionManager.setup();
+    mainViewDomHandler.initializeUI();
+    setupHandlers({ requestData: true });
+    vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
+  },
+  onDispose: () => {
+    disposeHandlers();
+    disposeManagers();
+  },
 });

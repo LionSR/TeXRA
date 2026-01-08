@@ -38,6 +38,7 @@ export const CLASS_NAMES = {
   AGENT_ROW: 'agent-row',
   SELECT_BTN: 'select-btn',
   TAG: 'tag',
+  HIDDEN: 'is-hidden',
 };
 
 // Default values

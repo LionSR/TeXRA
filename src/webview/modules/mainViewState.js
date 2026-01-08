@@ -211,6 +211,10 @@ export class MainViewState {
     }
   }
 
+  initialize() {
+    this.restore();
+  }
+
   /**
    * @returns {boolean} true if setDefaults() was called and needs a save after
    */

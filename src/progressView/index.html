@@ -7,13 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'nonce-${nonce}' https://esm.sh; connect-src https://esm.sh; font-src ${cspSource} vscode-resource: https://cdn.jsdelivr.net; img-src ${cspSource} data: https:;"
     />
-    <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
+    ${commonHead}
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
@@ -57,6 +51,7 @@
           "@common/webview/themeHandlers.js": "${webviewThemeHandlersUri}",
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/viewBootstrap.js": "${viewBootstrapUri}",
           "@common/RecordingButtonManager.js": "${recordingButtonManagerUri}",
           "@common/textareaUtils.js": "${textareaUtilsUri}",
           "@common/modules/files/baseFileUtils.js": "${baseFileUtilsUri}",

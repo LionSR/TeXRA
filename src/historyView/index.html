@@ -7,13 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com https://esm.sh; connect-src https://cdnjs.cloudflare.com https://esm.sh; font-src ${cspSource} vscode-resource:;"
     />
-    <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
+    ${commonHead}
     <title>TeXRA History</title>
     <script
       nonce="${nonce}"
@@ -38,7 +32,9 @@
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
+          "@common/messageHandlerFactory.js": "${messageHandlerFactoryUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
+          "@common/viewBootstrap.js": "${viewBootstrapUri}",
           "@common/ToggleStateStore.js": "${toggleStateStoreUri}",
           "@common/constants/agentTypes.js": "${agentTypesUri}",
           "he": "https://esm.sh/he@1.2.0"

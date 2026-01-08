@@ -125,7 +125,10 @@ export abstract class BaseViewContentProvider {
       const commonUris = this.getCommonModuleUris(webview);
       const sharedUris = this.getSharedModuleUris(webview);
       const specificUris = this.getModuleUris(webview);
-      const templateVariables = this.getTemplateVariables();
+      const templateVariables = {
+        commonHead: this.buildCommonHead(sharedUris, commonUris),
+        ...this.getTemplateVariables(),
+      };
 
       this.logger.debug(
         this.channel,
@@ -155,6 +158,7 @@ export abstract class BaseViewContentProvider {
   ): Record<string, vscode.Uri> {
     return {
       commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
+      viewBootstrapUri: this.getCommonUri(webview, 'modules/viewBootstrap.js'),
       webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
       webviewContextUri: this.getCommonUri(
         webview,
@@ -166,6 +170,10 @@ export abstract class BaseViewContentProvider {
         'webview/themeHandlers.js',
       ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
+      messageHandlerFactoryUri: this.getCommonUri(
+        webview,
+        'modules/messageHandlerFactory.js',
+      ),
       recordingButtonManagerUri: this.getCommonUri(
         webview,
         'modules/RecordingButtonManager.js',
@@ -213,5 +221,24 @@ export abstract class BaseViewContentProvider {
         '@vscode/codicons/dist/codicon.ttf',
       ),
     };
+  }
+
+  private buildCommonHead(
+    sharedUris: Record<string, vscode.Uri>,
+    commonUris: Record<string, vscode.Uri>,
+  ): string {
+    const commonStyleUri = commonUris.commonStyleUri?.toString() ?? '';
+    const styleUri = sharedUris.styleUri?.toString() ?? '';
+    const codiconUri = commonUris.codiconUri?.toString() ?? '';
+
+    return [
+      `<link rel="stylesheet" href="${commonStyleUri}" />`,
+      `<link rel="stylesheet" href="${styleUri}" />`,
+      `<link`,
+      `  rel="stylesheet"`,
+      `  href="${codiconUri}"`,
+      `  id="vscode-codicon-stylesheet"`,
+      `/>`,
+    ].join('\n    ');
   }
 }

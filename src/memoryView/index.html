@@ -7,13 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
     />
-    <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
+    ${commonHead}
     <title>TeXRA Memory</title>
     <script type="importmap" nonce="${nonce}">
       {
@@ -31,7 +25,9 @@
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
-          "@common/BaseDomHandler.js": "${baseDomHandlerUri}"
+          "@common/messageHandlerFactory.js": "${messageHandlerFactoryUri}",
+          "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
+          "@common/viewBootstrap.js": "${viewBootstrapUri}"
         }
       }
     </script>

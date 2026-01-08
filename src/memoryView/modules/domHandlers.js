@@ -1,6 +1,8 @@
 // Local imports - memory view
 import { MemoryEventsManager } from './uiManagers/MemoryEventsManager.js';
-import { memoryRenderer } from './uiManagers/MemoryRenderer.js';
+import { MemoryRenderer } from './uiManagers/MemoryRenderer.js';
+import { memoryViewState } from './memoryViewState.js';
+// Local imports - common
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 
 /**
@@ -9,9 +11,10 @@ import { BaseDomHandler } from '@common/BaseDomHandler.js';
  */
 class MemoryViewDomHandler extends BaseDomHandler {
   constructor() {
-    super();
-    this.events = new MemoryEventsManager();
-    this.renderer = memoryRenderer;
+    super({
+      events: new MemoryEventsManager(),
+      renderer: new MemoryRenderer(memoryViewState),
+    });
   }
 
   /**

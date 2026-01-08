@@ -329,6 +329,10 @@ export class ProgressViewState {
     }
   }
 
+  initialize() {
+    this.load();
+  }
+
   setStreams(streams) {
     this.streams = new Set(streams?.filter(Boolean));
   }

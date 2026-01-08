@@ -7,13 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com https://unpkg.com; connect-src https://cdnjs.cloudflare.com https://unpkg.com; img-src https: vscode-resource:; font-src ${cspSource} vscode-resource:;"
     />
-    <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
+    ${commonHead}
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -40,6 +34,7 @@
           "@common/webview/commands.js": "${commandsUri}",
           "@common/webview/themeHandlers.js": "${webviewThemeHandlersUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/viewBootstrap.js": "${viewBootstrapUri}",
           "@common/RecordingButtonManager.js": "${recordingButtonManagerUri}",
           "@common/textareaUtils.js": "${textareaUtilsUri}",
           "@common/domUtils.js": "${domUtilsUri}",
@@ -60,7 +55,6 @@
       src="${vscodeElementsBundleUri}"
     ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   </head>
 
   <body>

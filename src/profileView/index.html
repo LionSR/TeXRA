@@ -7,13 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
     />
-    <link rel="stylesheet" href="${commonStyleUri}" />
-    <link rel="stylesheet" href="${styleUri}" />
-    <link
-      rel="stylesheet"
-      href="${codiconUri}"
-      id="vscode-codicon-stylesheet"
-    />
+    ${commonHead}
     <title>TeXRA Profile</title>
     <script type="importmap" nonce="${nonce}">
       {
@@ -31,7 +25,9 @@
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
-          "@common/BaseDomHandler.js": "${baseDomHandlerUri}"
+          "@common/messageHandlerFactory.js": "${messageHandlerFactoryUri}",
+          "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
+          "@common/viewBootstrap.js": "${viewBootstrapUri}"
         }
       }
     </script>
@@ -62,17 +58,13 @@
           <span class="label">Tier:</span>
           <span id="userTier" class="badge tier-badge">Loading...</span>
         </div>
-        <div id="accessExpirationRow" class="info-row" style="display: none">
+        <div id="accessExpirationRow" class="info-row is-hidden">
           <span class="label">Access Expires:</span>
           <span id="accessExpiration" class="value"></span>
         </div>
       </div>
 
-      <div
-        id="apiAccessSection"
-        class="api-access-section"
-        style="display: none"
-      >
+      <div id="apiAccessSection" class="api-access-section is-hidden">
         <h2>Model Access</h2>
         <p class="api-access-description">
           As a subscriber, you can use TeXRA's included model access or provide
@@ -108,11 +100,7 @@
             </span>
           </label>
         </div>
-        <details
-          id="modelAccessInfo"
-          class="model-access-info"
-          style="display: none"
-        >
+        <details id="modelAccessInfo" class="model-access-info is-hidden">
           <summary class="model-access-summary">
             <span id="enabledProvidersInfo"></span>
             <span class="separator">·</span>
@@ -122,11 +110,7 @@
         </details>
       </div>
 
-      <div
-        id="notAuthenticated"
-        class="not-authenticated"
-        style="display: none"
-      >
+      <div id="notAuthenticated" class="not-authenticated is-hidden">
         <p>You are not signed in to TeXRA.</p>
         <vscode-button id="signInBtn">
           <span slot="start" class="codicon codicon-sign-in"></span>
@@ -134,16 +118,12 @@
         </vscode-button>
       </div>
 
-      <div
-        id="remoteAgentsSection"
-        class="remote-agents-section"
-        style="display: none"
-      >
+      <div id="remoteAgentsSection" class="remote-agents-section is-hidden">
         <h2>Available Remote Agents</h2>
         <div id="agentsTableContainer">
           <!-- Agents table will be rendered here -->
         </div>
-        <p id="noAgentsMessage" class="no-agents" style="display: none">
+        <p id="noAgentsMessage" class="no-agents is-hidden">
           No remote agents available. Contact support@texra.ai for assistance.
         </p>
       </div>

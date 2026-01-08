@@ -118,6 +118,11 @@ vscode-toolbar-container {
   flex-wrap: nowrap;
 }
 
+/* Visibility helpers */
+.is-hidden {
+  display: none !important;
+}
+
 vscode-toolbar-button {
   flex-shrink: 0;
 }
