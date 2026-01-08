@@ -9,11 +9,7 @@ body {
   padding: var(--spacing-xlarge);
 }
 
-h1 {
-  color: var(--color-text-link);
-  margin-bottom: var(--spacing-xlarge);
-}
-
+/* Section headers (h2) have distinct styling with bottom border */
 h2 {
   color: var(--vscode-foreground);
   margin-top: var(--spacing-xlarge);
