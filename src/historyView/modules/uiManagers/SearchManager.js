@@ -100,7 +100,7 @@ export class SearchManager {
 
   expandAllCollapsibleSections() {
     document
-      .querySelectorAll(`.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`)
+      .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
       .forEach((section) => {
         if (!(section instanceof HTMLElement)) {
           return;
@@ -114,7 +114,7 @@ export class SearchManager {
 
   applySavedToggleStates() {
     document
-      .querySelectorAll(`.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`)
+      .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
       .forEach((section) => {
         if (!(section instanceof HTMLElement)) {
           return;
