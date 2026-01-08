@@ -57,7 +57,9 @@ void (true as _AssertSchemaCompatible);
 
 // Runtime assertion: ensure all canonical keys are handled
 const canonicalKeys = TokenUsageStatsSchema.keyof().options;
-const parsingKeys = new Set(Object.keys(TokenUsageStatsParsingBaseSchema.shape));
+const parsingKeys = new Set(
+  Object.keys(TokenUsageStatsParsingBaseSchema.shape),
+);
 const missingKeys = canonicalKeys.filter((k) => !parsingKeys.has(k));
 if (missingKeys.length > 0) {
   throw new Error(

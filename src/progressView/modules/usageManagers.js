@@ -54,18 +54,22 @@ export class UsageSummary {
     // Build cache segments: placed after input since cache is conceptually related to input
     // Cache read: tokens served from cache (discounted rate)
     // Cache creation: tokens written to cache (Anthropic: 1.25x input price)
-    const cacheReadSegment = cacheReadTokens > 0
-      ? ` · <i class="codicon codicon-cloud-download" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
-      : '';
-    const cacheCreationSegment = cacheCreationTokens > 0
-      ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
-      : '';
-    const cacheReadAriaLabel = cacheReadTokens > 0
-      ? `, ${formatTokens(cacheReadTokens)} cache read tokens`
-      : '';
-    const cacheCreationAriaLabel = cacheCreationTokens > 0
-      ? `, ${formatTokens(cacheCreationTokens)} cache creation tokens`
-      : '';
+    const cacheReadSegment =
+      cacheReadTokens > 0
+        ? ` · <i class="codicon codicon-cloud-download" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
+        : '';
+    const cacheCreationSegment =
+      cacheCreationTokens > 0
+        ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
+        : '';
+    const cacheReadAriaLabel =
+      cacheReadTokens > 0
+        ? `, ${formatTokens(cacheReadTokens)} cache read tokens`
+        : '';
+    const cacheCreationAriaLabel =
+      cacheCreationTokens > 0
+        ? `, ${formatTokens(cacheCreationTokens)} cache creation tokens`
+        : '';
 
     this._summaryElem.innerHTML = `
       <i class="codicon codicon-meter"></i>

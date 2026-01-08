@@ -6,6 +6,14 @@ export function uncapitalize(str) {
   return str.charAt(0).toLowerCase() + str.slice(1);
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 /**
  * Formats a timestamp as a relative time string (e.g., "2 mins ago").
  * @param {number} timestamp - Unix epoch time in milliseconds
@@ -24,4 +32,37 @@ export function formatRelativeTime(timestamp) {
   const days = Math.floor(hours / 24);
   if (days === 1) return '1 day ago';
   return `${days} days ago`;
+}
+
+export function formatUpdatedDate(value) {
+  if (!value) {
+    return 'Updated: unknown';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Updated: unknown';
+  }
+  return `Updated ${DATE_TIME_FORMATTER.format(date)}`;
+}
+
+export function formatLineCount(count) {
+  if (count === 1) {
+    return '1 line';
+  }
+  return `${count} lines`;
+}
+
+export function formatBytes(bytes) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
