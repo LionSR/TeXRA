@@ -682,6 +682,12 @@
       {
         "title": "LaTeX Replacements",
         "properties": {
+          "texra.latex.wrapCritiqueInAlign": {
+            "type": "boolean",
+            "default": true,
+            "description": "When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.",
+            "order": 7
+          },
           "texra.latex.enabledReplacements": {
             "type": "array",
             "items": {
@@ -959,6 +965,12 @@
             "type": "boolean",
             "default": true,
             "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
+            "scope": "resource"
+          },
+          "texra.toolUse.memory.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable the memory tool for all tool-use sessions",
             "scope": "resource"
           },
           "texra.toolUse.persistence.enabled": {
@@ -1299,6 +1311,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "texra.showMemory",
+        "title": "Show Agent Memory",
+        "category": "TeXRA",
+        "icon": "$(database)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
@@ -1483,9 +1501,14 @@
           "group": "navigation@5"
         },
         {
-          "command": "texra.auth.accountMenu",
+          "command": "texra.showMemory",
           "when": "view == texra.progressView",
           "group": "navigation@6"
+        },
+        {
+          "command": "texra.auth.accountMenu",
+          "when": "view == texra.progressView",
+          "group": "navigation@7"
         },
         {
           "command": "texra.folderExplorer.newFile",
