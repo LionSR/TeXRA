@@ -208,6 +208,50 @@ vscode-toolbar-button {
 }
 
 /* ==========================================================================
+   List Item Card - Shared card styling for history/memory item lists
+   ========================================================================== */
+
+.list-item {
+  border: var(--border-thin) solid var(--vscode-panelSection-border);
+  border-radius: var(--border-radius-large);
+  padding: var(--spacing-medium);
+  background-color: var(--vscode-editor-background);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.list-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.list-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ==========================================================================
+   Secondary Text - For timestamps, metadata, descriptions
+   ========================================================================== */
+
+.text-secondary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* ==========================================================================
+   Empty State - Shown when lists have no items
+   ========================================================================== */
+
+.empty-state {
+  text-align: center;
+  margin-top: calc(var(--spacing-xlarge) * 2);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* ==========================================================================
    Badge Base - Common styling for badge components
    Addresses duplication in profileView and historyView
    ========================================================================== */

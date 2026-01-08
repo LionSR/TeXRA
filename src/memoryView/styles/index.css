@@ -30,28 +30,7 @@ body {
   gap: var(--spacing-medium);
 }
 
-/* Memory item */
-.memory-item {
-  border: var(--border-thin) solid var(--vscode-panelSection-border);
-  border-radius: var(--border-radius-large);
-  padding: var(--spacing-medium);
-  background-color: var(--vscode-editor-background);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.memory-item:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-/* Item header */
-.memory-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
+/* Memory path styling */
 .memory-path {
   font-family: var(--vscode-editor-font-family), monospace;
   font-size: var(--font-size);
@@ -60,10 +39,8 @@ body {
   word-break: break-all;
 }
 
-/* Metadata */
+/* Metadata - extends .text-secondary from common.css */
 .memory-meta {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
   margin-top: var(--spacing-small);
 }
 
@@ -95,12 +72,4 @@ body {
   margin: 0;
   max-height: 200px;
   overflow-y: auto;
-}
-
-/* Empty state */
-.empty-state {
-  text-align: center;
-  margin-top: calc(var(--spacing-xlarge) + var(--spacing-xlarge));
-  color: var(--color-text-secondary);
-  font-style: italic;
 }
