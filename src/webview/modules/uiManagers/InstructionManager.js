@@ -3,6 +3,7 @@ import { setupPasteListener } from '../pasteHandler.js';
 import {
   ELEMENT_IDS,
   parseSessionType,
+  resolveRadioGroup,
   SESSION_TYPE_INPUT,
   SESSION_TYPES,
 } from '../constants.js';
@@ -83,7 +84,9 @@ export class InstructionManager {
   _setupPlaceholderRotation(target, textarea) {
     this._target = target;
     this._textarea = textarea;
-    this._sessionToggle = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+    // Resolve the actual radio group element, not just the container
+    const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+    this._sessionToggle = resolveRadioGroup(toggleContainer);
 
     this._handleInput = () => {
       if (!this._textarea) {
