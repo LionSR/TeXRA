@@ -363,8 +363,13 @@ export class ProgressViewProvider
 
   /**
    * Set active stream (used by message handler)
+   * Loads stream data lazily before updating the webview.
    */
-  public setActiveStream(stream: string): void {
+  public async setActiveStream(stream: string): Promise<void> {
+    // Load stream data before switching (for lazy loading)
+    if (stream) {
+      await this.state.ensureStreamLoaded(stream);
+    }
     this.state.activeStream = stream;
     this.updateWebview();
   }

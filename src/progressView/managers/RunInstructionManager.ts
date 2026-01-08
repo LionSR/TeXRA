@@ -19,16 +19,27 @@ type InstructionMap = Map<string, InstructionUpdate>;
 
 /**
  * Persists run-scoped instruction updates per stream.
+ *
+ * Uses file-based storage to enable lazy loading and avoid VS Code IPC limits.
  */
 export class RunInstructionManager extends PersistentMapManager<
   StreamTabId,
   InstructionMap
 > {
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.RUN_INSTRUCTIONS, storage);
+    // Enable file-based storage for lazy loading
+    super(WorkspaceStateKey.RUN_INSTRUCTIONS, storage, { useFileStorage: true });
   }
 
   getInstructions(stream: StreamTabId): InstructionMap {
+    return new Map(this.get(stream) ?? []);
+  }
+
+  /**
+   * Get instructions for a stream, ensuring data is loaded first.
+   */
+  async getInstructionsAsync(stream: StreamTabId): Promise<InstructionMap> {
+    await this.ensureLoaded(stream);
     return new Map(this.get(stream) ?? []);
   }
 
@@ -37,6 +48,9 @@ export class RunInstructionManager extends PersistentMapManager<
     storageKey: StorageKey,
     instruction: InstructionUpdate | null,
   ): Promise<void> {
+    // Ensure stream data is loaded before modifying
+    await this.ensureLoaded(stream);
+
     const existing = this.items.get(stream) ?? new Map();
 
     if (!instruction) {
@@ -47,11 +61,17 @@ export class RunInstructionManager extends PersistentMapManager<
 
     if (existing.size === 0) {
       this.items.delete(stream);
+      this.knownKeys.delete(stream);
+      this.loadedKeys.delete(stream);
+      if (this.useFileStorage) {
+        await this.delete(stream);
+      }
     } else {
       this.items.set(stream, existing);
+      this.knownKeys.add(stream);
+      this.loadedKeys.add(stream);
+      await this.saveEntry(stream, existing);
     }
-
-    await this.save();
   }
 
   async deleteRun(stream: StreamTabId, storageKey: StorageKey): Promise<void> {

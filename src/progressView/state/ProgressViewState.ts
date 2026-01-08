@@ -132,6 +132,20 @@ export class ProgressViewState {
   }
 
   /**
+   * Ensure all data for a stream is loaded (for lazy loading mode).
+   * Call this before accessing stream data to ensure it's available.
+   */
+  async ensureStreamLoaded(stream: StreamTabId): Promise<void> {
+    await Promise.all([
+      this._streamTabs.ensureLoaded(stream),
+      this._taskGroups.ensureLoaded(stream),
+      this._outputFiles.ensureLoaded(stream),
+      this._usageStats.ensureLoaded(stream),
+      this._runInstructions.ensureLoaded(stream),
+    ]);
+  }
+
+  /**
    * Ensure the active stream is valid within the given set of available streams.
    *
    * This is the SINGLE SOURCE OF TRUTH for active stream resolution. If the

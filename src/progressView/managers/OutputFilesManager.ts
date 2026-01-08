@@ -65,6 +65,8 @@ const OutputFilesDataSchema = createRunMapSchema(OutputFilesRoundMapSchema);
 /**
  * Manages output files collection with persistence and file existence validation.
  * Handles adding, updating, and managing output files for different streams.
+ *
+ * Uses file-based storage to enable lazy loading and avoid VS Code IPC limits.
  */
 export class OutputFilesManager extends PersistentMapManager<
   StreamTabId,
@@ -79,7 +81,8 @@ export class OutputFilesManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.OUTPUT_FILES, storage);
+    // Enable file-based storage for lazy loading
+    super(WorkspaceStateKey.OUTPUT_FILES, storage, { useFileStorage: true });
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
@@ -95,11 +98,16 @@ export class OutputFilesManager extends PersistentMapManager<
     storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
+    // Ensure stream data is loaded before modifying
+    await this.ensureLoaded(stream);
+
     // storageKey is already branded - use directly, no normalization needed
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
       streamRuns = new Map();
       this.items.set(stream, streamRuns);
+      this.knownKeys.add(stream);
+      this.loadedKeys.add(stream);
     }
 
     let runRounds = streamRuns.get(storageKey);
@@ -127,7 +135,7 @@ export class OutputFilesManager extends PersistentMapManager<
       runRounds.set(roundNum, normalizedFiles);
     }
 
-    await this.save();
+    await this.saveEntry(stream, streamRuns);
   }
 
   /**

@@ -13,6 +13,8 @@ import {
 /**
  * Manages stream tabs collection with persistence.
  * Handles adding, retrieving, and managing log messages for different streams.
+ *
+ * Uses file-based storage to enable lazy loading and avoid VS Code IPC limits.
  */
 export class StreamTabsManager extends PersistentMapManager<
   StreamTabId,
@@ -22,7 +24,8 @@ export class StreamTabsManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.STREAM_TABS, storage);
+    // Enable file-based storage for lazy loading
+    super(WorkspaceStateKey.STREAM_TABS, storage, { useFileStorage: true });
     this.logger = new AgentLogger('StreamTabsManager');
   }
 
@@ -33,6 +36,8 @@ export class StreamTabsManager extends PersistentMapManager<
     stream: StreamTabId,
     message: LogMessageData,
   ): Promise<boolean> {
+    // Ensure stream data is loaded before modifying
+    await this.ensureLoaded(stream);
     const messages = this.ensureMessages(stream);
 
     const existingIndex = messages.findIndex(
@@ -82,6 +87,15 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   getMessages(stream: StreamTabId): LogMessageData[] {
+    return this.ensureMessages(stream);
+  }
+
+  /**
+   * Get messages for a stream, ensuring data is loaded first.
+   * Use this for file-based storage to ensure data is available.
+   */
+  async getMessagesAsync(stream: StreamTabId): Promise<LogMessageData[]> {
+    await this.ensureLoaded(stream);
     return this.ensureMessages(stream);
   }
 

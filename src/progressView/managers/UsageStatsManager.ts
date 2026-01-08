@@ -59,6 +59,8 @@ const UsageDataSchema = createSingleValueRunMapSchema(
 /**
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
+ *
+ * Uses file-based storage to enable lazy loading and avoid VS Code IPC limits.
  */
 type RunUsageMap = Map<string, TokenUsageStats>;
 
@@ -69,7 +71,8 @@ export class UsageStatsManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.USAGE_STATS, storage);
+    // Enable file-based storage for lazy loading
+    super(WorkspaceStateKey.USAGE_STATS, storage, { useFileStorage: true });
     this.logger = new AgentLogger('UsageStatsManager');
   }
 
@@ -82,6 +85,9 @@ export class UsageStatsManager extends PersistentMapManager<
     storageKey: StorageKey,
     usage: TokenUsageStats,
   ): Promise<void> {
+    // Ensure stream data is loaded before modifying
+    await this.ensureLoaded(stream);
+
     const normalized = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
@@ -93,11 +99,17 @@ export class UsageStatsManager extends PersistentMapManager<
 
     if (current.size === 0) {
       this.items.delete(stream);
+      this.knownKeys.delete(stream);
+      this.loadedKeys.delete(stream);
+      if (this.useFileStorage) {
+        await this.delete(stream);
+      }
     } else {
       this.items.set(stream, current);
+      this.knownKeys.add(stream);
+      this.loadedKeys.add(stream);
+      await this.saveEntry(stream, current);
     }
-
-    await this.save();
   }
 
   /**
