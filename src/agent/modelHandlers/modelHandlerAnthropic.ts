@@ -523,12 +523,67 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ...(options.context_management?.edits ?? []),
       ];
 
+      // Add thinking block clearing strategy if reasoning is enabled
+      if (
+        this.capabilities.supportsReasoning &&
+        options.thinking &&
+        !contextManagementEdits.some(
+          (edit) => edit.type === 'clear_thinking_20251015',
+        )
+      ) {
+        const thinkingKeep = getConfig<number>(
+          'texra.model.anthropicThinkingBlocksKeep',
+          1,
+        );
+        // Thinking clearing must come first in the edits array
+        const thinkingEdit =
+          thinkingKeep === 0
+            ? { type: 'clear_thinking_20251015' as const, keep: 'all' as const }
+            : {
+                type: 'clear_thinking_20251015' as const,
+                keep: {
+                  type: 'thinking_turns' as const,
+                  value: thinkingKeep,
+                },
+              };
+        contextManagementEdits.unshift(thinkingEdit);
+      }
+
+      // Add tool result clearing strategy
       if (
         !contextManagementEdits.some(
           (edit) => edit.type === 'clear_tool_uses_20250919',
         )
       ) {
-        contextManagementEdits.push({ type: 'clear_tool_uses_20250919' });
+        const triggerTokens = getConfig<number>(
+          'texra.model.anthropicContextManagementTrigger',
+          100000,
+        );
+        const keepToolUses = getConfig<number>(
+          'texra.model.anthropicContextManagementKeep',
+          3,
+        );
+
+        // Build the tool clear edit with optional configuration
+        // Use type assertion since the SDK types may not include all options yet
+        const toolClearEdit = {
+          type: 'clear_tool_uses_20250919' as const,
+          // Only add trigger/keep if not using defaults (0 means use API defaults)
+          ...(triggerTokens > 0 && {
+            trigger: {
+              type: 'input_tokens' as const,
+              value: triggerTokens,
+            },
+          }),
+          ...(keepToolUses > 0 && {
+            keep: {
+              type: 'tool_uses' as const,
+              value: keepToolUses,
+            },
+          }),
+        };
+
+        contextManagementEdits.push(toolClearEdit);
       }
 
       options.context_management = {
@@ -588,6 +643,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
+
+        // Log context management events if any edits were applied (streaming)
+        this.logContextManagementFromResponse(response);
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
@@ -603,9 +661,91 @@ export class ModelHandlerAnthropic extends ModelHandler<
         () => client.beta.messages.create(options, { signal }),
       );
     }
-    // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+
+    // Log context management events if any edits were applied
+    this.logContextManagementFromResponse(response);
 
     return response;
+  }
+
+  /**
+   * Log context management events from the Anthropic response.
+   * The response includes applied_edits when server-side context editing was performed.
+   */
+  private logContextManagementFromResponse(response: BetaMessage): void {
+    // Type assertion needed because context_management is in beta
+    const contextManagement = (
+      response as unknown as {
+        context_management?: {
+          applied_edits?: Array<{
+            type: string;
+            cleared_tool_uses?: number;
+            cleared_thinking_turns?: number;
+            cleared_input_tokens?: number;
+          }>;
+        };
+      }
+    ).context_management;
+
+    if (!contextManagement?.applied_edits?.length) {
+      return;
+    }
+
+    const contextWindow = this.config.contextWindow;
+
+    for (const edit of contextManagement.applied_edits) {
+      if (
+        edit.type === 'clear_tool_uses_20250919' &&
+        edit.cleared_input_tokens &&
+        edit.cleared_input_tokens > 0
+      ) {
+        const clearedTokens = edit.cleared_input_tokens;
+        const clearedToolUses = edit.cleared_tool_uses ?? 0;
+        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+
+        this.logger.logContextManagement(
+          `Cleared ${clearedToolUses} tool use(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+          {
+            action: 'clear_tool_uses',
+            tokensBefore: response.usage.input_tokens + clearedTokens,
+            tokensAfter: response.usage.input_tokens,
+            contextWindow,
+            utilizationBefore:
+              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
+              100,
+            utilizationAfter:
+              (response.usage.input_tokens / contextWindow) * 100,
+            details: `Anthropic server-side: cleared ${clearedToolUses} tool use(s)`,
+          },
+        );
+      }
+
+      if (
+        edit.type === 'clear_thinking_20251015' &&
+        edit.cleared_input_tokens &&
+        edit.cleared_input_tokens > 0
+      ) {
+        const clearedTokens = edit.cleared_input_tokens;
+        const clearedTurns = edit.cleared_thinking_turns ?? 0;
+        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+
+        this.logger.logContextManagement(
+          `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+          {
+            action: 'clear_tool_uses', // Reuse action type for now
+            tokensBefore: response.usage.input_tokens + clearedTokens,
+            tokensAfter: response.usage.input_tokens,
+            contextWindow,
+            utilizationBefore:
+              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
+              100,
+            utilizationAfter:
+              (response.usage.input_tokens / contextWindow) * 100,
+            details: `Anthropic server-side: cleared ${clearedTurns} thinking turn(s)`,
+          },
+        );
+      }
+    }
   }
 
   private enforceCacheControlLimit(messages: MessageParam[]): void {
