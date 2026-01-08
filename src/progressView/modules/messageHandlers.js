@@ -212,6 +212,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_STREAM_STATUS]: this.handleUpdateStreamStatus.bind(this),
       [COMMANDS.UPDATE_USAGE]: this.handleUpdateUsage.bind(this),
       [COMMANDS.UPDATE_RUN_USAGE]: this.handleUpdateRunUsage.bind(this),
+      [COMMANDS.UPDATE_CONTEXT_STATE]: this.handleUpdateContextState.bind(this),
       [COMMANDS.UPDATE_FILES]: this.handleUpdateFiles.bind(this),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]:
         this.handleUpdateMissingOutputs.bind(this),
@@ -690,6 +691,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshUsageForActiveRun();
   }
 
+  /**
+   * Handle context state update (input tokens vs context window).
+   * Updates the context utilization display in the footer.
+   */
+  handleUpdateContextState(message) {
+    if (message.stream && !this._isActiveStream(message)) {
+      return;
+    }
+
+    const targetStream = this._getTargetStream(message);
+    if (!targetStream || !message.contextState) {
+      return;
+    }
+
+    state.setContextState(targetStream, message.contextState);
+    // Update the context display if this is the active stream
+    if (targetStream === state.activeStream) {
+      this.usageSummary?.updateContextDisplay?.(message.contextState);
+    }
+  }
+
   handleUpdateFiles(message) {
     const targetStream = this._getTargetStream(message);
     if (!targetStream) {
@@ -905,6 +927,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
       state.clearTodos(message.stream);
+      state.clearContextState(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
@@ -913,6 +936,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.runSelector.clear();
         dom.todoList.clear();
         dom.fileList.clear();
+        dom.usageSummary?.clearContextDisplay?.();
       }
     }
 
@@ -931,9 +955,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     state.clearAllTodos();
+    state.clearContextState(); // Clear all context state entries
     dom.runSelector.clear();
     dom.todoList.clear();
     dom.fileList.clear();
+    dom.usageSummary?.clearContextDisplay?.();
     this._updatePlaceholderVisibility();
   }
 
