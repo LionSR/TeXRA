@@ -26,6 +26,7 @@ import { ArxivDownloadTool, ArxivMetadataTool, ArxivSearchTool } from './arxiv';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
+import { MemoryTool } from './MemoryTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
@@ -48,6 +49,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       bash: new BashTool(),
       read_file: new ReadFileTool(),
       write_file: new WriteFileTool(),
+      memory: new MemoryTool(),
       edit_file: new EditFileTool(),
       file_op: new FileOpTool(),
       apply_path: new ApplyPathTool(),

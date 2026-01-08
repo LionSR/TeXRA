@@ -7,6 +7,7 @@ export * from './grep';
 export * from './fileOp';
 export * from './ReadTool';
 export * from './WriteTool';
+export * from './MemoryTool';
 export * from './EditTool';
 export * from './applyPath';
 export * from './ls';
