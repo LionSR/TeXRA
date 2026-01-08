@@ -33,7 +33,9 @@ const inFlightDetections = new Set<StreamTabId>();
  *
  * @returns true if a persisted flow was detected and status was set to WAITING
  */
-async function lazyDetectWaitingStatus(streamId: StreamTabId): Promise<boolean> {
+async function lazyDetectWaitingStatus(
+  streamId: StreamTabId,
+): Promise<boolean> {
   // Skip if status is already set (active, resuming, waiting, etc.)
   const currentStatus = StreamStatusService.get(streamId);
   if (currentStatus) {
