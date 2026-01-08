@@ -292,27 +292,6 @@
             "description": "Attach the `context-1m-2025-08-07` beta header for Claude Sonnet 4 requests to enable the 1M-token context window (usage capped at 200 K by extension).",
             "scope": "resource"
           },
-          "texra.model.anthropicContextManagementTrigger": {
-            "type": "number",
-            "default": 100000,
-            "minimum": 0,
-            "description": "Token threshold for triggering Anthropic's server-side context management (clear_tool_uses). When input tokens exceed this value, old tool results are cleared. Set to 0 to use API defaults.",
-            "scope": "resource"
-          },
-          "texra.model.anthropicContextManagementKeep": {
-            "type": "number",
-            "default": 3,
-            "minimum": 1,
-            "description": "Number of recent tool use/result pairs to keep after context clearing. The oldest tool interactions are removed first.",
-            "scope": "resource"
-          },
-          "texra.model.anthropicThinkingBlocksKeep": {
-            "type": "number",
-            "default": 1,
-            "minimum": 0,
-            "description": "Number of assistant turns with thinking blocks to keep. Set to 0 to keep all thinking blocks (maximizes cache hits). Only applies when extended thinking is enabled.",
-            "scope": "resource"
-          },
           "texra.model.instructionPolishModel": {
             "type": "string",
             "default": "sonnet45",
