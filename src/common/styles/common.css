@@ -180,10 +180,6 @@ vscode-toolbar-button {
 }
 
 /* ==========================================================================
-   Utility Classes
-   ========================================================================== */
-
-/* ==========================================================================
    View Header - Shared page header styling for history/profile/memory views
    ========================================================================== */
 
@@ -201,12 +197,6 @@ vscode-toolbar-button {
 
 .view-header h1 {
   color: var(--color-text-link);
-}
-
-.view-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
 }
 
 /* ==========================================================================
@@ -265,7 +255,6 @@ vscode-toolbar-button {
   text-align: center;
   margin-top: calc(var(--spacing-xlarge) * 2);
   color: var(--color-text-secondary);
-  font-style: italic;
 }
 
 /* ==========================================================================
