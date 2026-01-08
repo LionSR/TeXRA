@@ -1,13 +1,7 @@
 /*
  * History view styles
- * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
+ * Base styles (body, list-item, collapsible, text-secondary) inherited from common.css
  */
-
-/* Base styles */
-body {
-  background-color: var(--vscode-editor-background);
-  padding: var(--spacing-xlarge);
-}
 
 /* Search container */
 .search-container {
@@ -97,21 +91,6 @@ mark.current-match {
 .button-clear {
   margin-bottom: var(--spacing-xlarge);
   padding: var(--spacing-medium) var(--spacing-large);
-}
-
-/* Collapsible content */
-.history-collapsible {
-  margin-top: var(--spacing-small);
-}
-
-.history-collapsible::part(body) {
-  max-height: var(--height-medium);
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.history-collapsible[open]::part(body) {
-  max-height: var(--height-max);
 }
 
 /* Configuration section */
