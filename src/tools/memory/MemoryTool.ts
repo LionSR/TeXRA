@@ -35,7 +35,8 @@ const MemoryToolInputSchema = z.strictObject({
   path: z.string().nullish(),
   file_text: z.string().nullish(),
   view_range: z
-    .tuple([z.int().min(1), z.int().min(1)])
+    .array(z.int().min(1))
+    .length(2)
     .refine(([start, end]) => end >= start, {
       error: 'view_range[1] must be greater than or equal to view_range[0]',
     })
@@ -138,7 +139,7 @@ export class MemoryTool extends defineTool({
 
   private async view(
     inputPath: string,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);

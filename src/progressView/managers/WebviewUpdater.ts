@@ -96,13 +96,10 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update log content for a specific stream
-   * @param options.forceRebuild - Controls frontend DOM rebuild behavior:
-   *   - `true`: Full DOM rebuild (required when switching streams or after data deletion)
-   *   - `false`: Incremental update only (skip DOM rebuild, update metadata)
-   *   - `undefined`: Full DOM rebuild (legacy behavior, same as true)
-   *   Note: Frontend uses strict `=== false` check, so explicit `false` is required
-   *   for incremental updates.
+   * Update log content for a specific stream.
+   * @param forceRebuild - Controls frontend DOM rebuild behavior:
+   *   - `true`: Full DOM rebuild (stream switch, data deletion, first load)
+   *   - `false`: Incremental update only (same stream, metadata changes)
    */
   updateLogContent(
     stream: StreamTabId,
@@ -114,9 +111,7 @@ export class WebviewUpdater {
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
-    options?: {
-      forceRebuild?: boolean;
-    },
+    forceRebuild: boolean = false,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -127,7 +122,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
-      forceRebuild: options?.forceRebuild,
+      forceRebuild,
     });
   }
 
@@ -358,6 +353,17 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_TODOS,
       stream,
       todos,
+    });
+  }
+
+  /**
+   * Update the queued follow-ups display for a stream
+   */
+  updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+      stream,
+      messages,
     });
   }
 

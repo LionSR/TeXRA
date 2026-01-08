@@ -1,0 +1,55 @@
+/**
+ * Queued follow-ups styles for the ProgressView
+ * Shows pending messages that will be sent when the agent resumes
+ */
+
+/* Collapsible container styling */
+.queued-follow-ups-collapsible {
+  margin-bottom: var(--spacing-small);
+  border-radius: var(--radius);
+  background-color: var(--vscode-inputValidation-infoBackground);
+  border: 1px solid var(--vscode-inputValidation-infoBorder);
+}
+
+/* Override vscode-collapsible header padding */
+.queued-follow-ups-collapsible::part(header) {
+  padding: var(--spacing-small) var(--spacing-medium);
+  font-weight: 500;
+}
+
+.queued-follow-ups-collapsible::part(body) {
+  padding: 0 var(--spacing-medium) var(--spacing-small);
+}
+
+.queued-follow-ups-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+}
+
+.queued-follow-up-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-small);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  font-size: var(--font-size);
+  line-height: 1.4;
+  background-color: var(--vscode-editor-background);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.queued-follow-up-icon {
+  flex-shrink: 0;
+  font-size: var(--font-size-icon-sm);
+  line-height: 1.4;
+  margin-top: var(--border-thin);
+  color: var(--vscode-inputValidation-infoBorder);
+}
+
+.queued-follow-up-text {
+  flex: 1;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
