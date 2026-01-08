@@ -101,7 +101,7 @@ export function createFileHandlers(ctx) {
   }
 
   function handleSetDefaultOutputFiles(message) {
-    fileSelect.setAgentDefaultOutputFiles(message.files || []);
+    fileSelect.setAgentDefaultOutputFiles(message.files ?? []);
     // No postHandle needed - just storing defaults
   }
 

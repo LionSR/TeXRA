@@ -398,7 +398,7 @@ export class MainViewState {
       if (isActive && !selectEl.value) {
         // Check stored state first - DOM might not be updated yet for custom elements
         // (vscode-single-select may not synchronously update .value)
-        const storedState = this.stateManager.getState() || {};
+        const storedState = this.stateManager.getState() ?? {};
         const stateKey =
           resolvedSessionType === SESSION_TYPES.TOOL_USE
             ? 'toolUseAgent'
