@@ -1331,8 +1331,9 @@
       {
         "command": "texra.openProgressViewInTab",
         "title": "Open Tasks in Editor Tab",
+        "shortTitle": "Open in Tab",
         "category": "TeXRA",
-        "icon": "$(go-to-file)"
+        "icon": "$(multiple-windows)"
       }
     ],
     "walkthroughs": [
