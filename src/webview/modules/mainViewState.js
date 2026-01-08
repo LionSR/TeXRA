@@ -9,8 +9,8 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
-  normalizeSessionType,
-  resolveRadioGroup,
+  parseSessionType,
+  VSCODE_RADIO_GROUP_TAG,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -36,6 +36,22 @@ function getSessionDefaultAgent(sessionType) {
   return sessionType === SESSION_TYPES.TOOL_USE
     ? DEFAULT_TOOL_USE_AGENT
     : DEFAULT_WORKFLOW_AGENT;
+}
+
+function getDefaultState() {
+  return {
+    sessionType: SESSION_TYPES.WORKFLOW,
+    workflowAgent: getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      DEFAULT_WORKFLOW_AGENT,
+    ),
+    toolUseAgent: getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      DEFAULT_TOOL_USE_AGENT,
+    ),
+    model: 'gemini3p',
+    commit: 'HEAD',
+  };
 }
 
 function setFileSelectionGroupDisabled(isDisabled) {
@@ -201,43 +217,14 @@ export class MainViewState {
   _restoreImpl() {
     const previousState = this.stateManager.getState();
     if (previousState) {
-      const defaults = {
-        sessionType: SESSION_TYPES.WORKFLOW,
-        workflowAgent: getSelectDefaultValue(
-          AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
-          DEFAULT_WORKFLOW_AGENT,
-        ),
-        toolUseAgent: getSelectDefaultValue(
-          AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
-          DEFAULT_TOOL_USE_AGENT,
-        ),
-        model: 'gemini3p',
-        commit: 'HEAD',
-      };
-
-      const normalizedSessionType = normalizeSessionType(
-        previousState.sessionType ?? defaults.sessionType,
-      );
-
-      safeSetElementValue('sessionType', normalizedSessionType);
-      safeSetElementValue(
-        'workflowAgent',
-        previousState.workflowAgent ?? defaults.workflowAgent,
-      );
-      safeSetElementValue(
-        'toolUseAgent',
-        previousState.toolUseAgent ?? defaults.toolUseAgent,
-      );
+      const defaults = getDefaultState();
+      const mergedState = { ...defaults, ...previousState };
+      const sessionType =
+        parseSessionType(mergedState.sessionType) ?? defaults.sessionType;
+      mergedState.sessionType = sessionType;
 
       VALUE_ELEMENTS.forEach((id) => {
-        if (
-          id === 'sessionType' ||
-          id === 'workflowAgent' ||
-          id === 'toolUseAgent'
-        ) {
-          return;
-        }
-        safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
+        safeSetElementValue(id, mergedState[id] ?? '');
       });
 
       // Load checkboxes
@@ -256,8 +243,8 @@ export class MainViewState {
         }
         selectDiv.innerHTML = '';
 
-        const filesArray = previousState[id] ?? [];
-        const isVisible = previousState[`${id}Visible`];
+        const filesArray = mergedState[id] ?? [];
+        const isVisible = mergedState[`${id}Visible`];
 
         if (filesArray && filesArray.length > 0) {
           filesArray.forEach((file) => {
@@ -280,13 +267,13 @@ export class MainViewState {
         ELEMENT_IDS.TOGGLE_LATEXDIFFS,
       );
       if (latexdiffsContent && toggleLatexdiffs) {
-        const visible = previousState.latexdiffsVisible ?? false;
+        const visible = mergedState.latexdiffsVisible ?? false;
         latexdiffsContent.style.display = visible ? 'block' : 'none';
         setChevronIcon(toggleLatexdiffs, visible);
         setExpandedState(latexdiffsContent, '.latexdiffs-section', visible);
       }
 
-      this.applySessionType(normalizedSessionType, { skipSave: true });
+      this.applySessionType(sessionType, { skipSave: true });
       fileList.hideEmpty(MULTIPLE_SELECTIONS);
       return false; // No save needed - state already exists
     } else {
@@ -333,15 +320,16 @@ export class MainViewState {
 
     const sessionTypeValue =
       state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
-    const normalizedSessionType = normalizeSessionType(sessionTypeValue);
-    const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
+    const resolvedSessionType =
+      parseSessionType(sessionTypeValue) ?? SESSION_TYPES.WORKFLOW;
+    const activeSelectId = AGENT_SELECT_IDS[resolvedSessionType];
     if (activeSelectId) {
       const agentValue = safeGetElementValue(activeSelectId) ?? '';
       // Save the actual DOM value, not a computed default.
       // DOM modification during save() can trigger unexpected change events.
       // If agent is empty, restore() or applySessionType() will handle defaults.
       state.agent = agentValue;
-      state.isToolUseAgent = normalizedSessionType === SESSION_TYPES.TOOL_USE;
+      state.isToolUseAgent = resolvedSessionType === SESSION_TYPES.TOOL_USE;
     }
 
     this.stateManager.setState(state);
@@ -349,17 +337,21 @@ export class MainViewState {
 
   applySessionType(sessionType, options = {}) {
     const { skipSave = false } = options;
-    const normalized = normalizeSessionType(sessionType);
-    const isToolUseSession = normalized === SESSION_TYPES.TOOL_USE;
+    const resolvedSessionType =
+      parseSessionType(sessionType) ?? SESSION_TYPES.WORKFLOW;
+    const isToolUseSession = resolvedSessionType === SESSION_TYPES.TOOL_USE;
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
-      sessionInput.value = normalized;
+      sessionInput.value = resolvedSessionType;
     }
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const radioGroup = resolveRadioGroup(toggleContainer);
+      const radioGroup =
+        toggleContainer.tagName === VSCODE_RADIO_GROUP_TAG
+          ? toggleContainer
+          : toggleContainer.querySelector('vscode-radio-group');
       if (radioGroup instanceof HTMLElement) {
         const radios = radioGroup.querySelectorAll('vscode-radio');
         radios.forEach((radio) => {
@@ -368,7 +360,7 @@ export class MainViewState {
           }
           const radioValue =
             radio.dataset.sessionType || radio.getAttribute('value');
-          const isActive = radioValue === normalized;
+          const isActive = radioValue === resolvedSessionType;
           if ('checked' in radio) {
             radio.checked = isActive;
           }
@@ -386,7 +378,7 @@ export class MainViewState {
           if (!(button instanceof HTMLElement)) {
             return;
           }
-          const isActive = button.dataset.sessionType === normalized;
+          const isActive = button.dataset.sessionType === resolvedSessionType;
           button.classList.toggle('active', isActive);
           button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
@@ -398,7 +390,7 @@ export class MainViewState {
       if (!selectEl) {
         return;
       }
-      const isActive = selectId === AGENT_SELECT_IDS[normalized];
+      const isActive = selectId === AGENT_SELECT_IDS[resolvedSessionType];
       selectEl.classList.toggle('agent-select--active', isActive);
       selectEl.classList.toggle('agent-select--hidden', !isActive);
       selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
@@ -408,7 +400,7 @@ export class MainViewState {
         // (vscode-single-select may not synchronously update .value)
         const storedState = this.stateManager.getState() || {};
         const stateKey =
-          normalized === SESSION_TYPES.TOOL_USE
+          resolvedSessionType === SESSION_TYPES.TOOL_USE
             ? 'toolUseAgent'
             : 'workflowAgent';
         const storedValue = storedState[stateKey];
@@ -420,7 +412,7 @@ export class MainViewState {
           // Truly empty - apply default
           const fallback = getSelectDefaultValue(
             selectId,
-            getSessionDefaultAgent(normalized),
+            getSessionDefaultAgent(resolvedSessionType),
           );
           safeSetElementValue(selectId, fallback);
         }
