@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - explorer
-import { showLoggedErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
 import { agentDirectories } from '@frontend/agents';
 import { validateYamlAndPromptAdd } from '@frontend/agents';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -59,24 +59,41 @@ export class ExplorerOperations {
     _context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    // Initialize agent directory paths asynchronously with error handling
-    agentDirectories
-      .builtIn()
-      .then((p) => {
-        this.builtInAgentsPath = p;
-      })
-      .catch((err) => {
-        logger.warn(CHANNEL, `Failed to get built-in agents path: ${err}`);
-      });
+    void this.loadBuiltInPaths();
+  }
 
-    agentDirectories
-      .builtInToolUse()
-      .then((p) => {
-        this.builtInToolUsePath = p;
-      })
-      .catch((err) => {
-        logger.warn(CHANNEL, `Failed to get built-in tool-use path: ${err}`);
-      });
+  private async loadBuiltInPaths(): Promise<void> {
+    try {
+      const [builtInAgentsPath, builtInToolUsePath] = await Promise.all([
+        agentDirectories.builtIn(),
+        agentDirectories.builtInToolUse(),
+      ]);
+      this.builtInAgentsPath = builtInAgentsPath;
+      this.builtInToolUsePath = builtInToolUsePath;
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Failed to get built-in agents paths: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private resolveCustomPath(targetPath: string, customBase: string): string {
+    const isBuiltInAgents = this.builtInAgentsPath
+      ? targetPath.startsWith(this.builtInAgentsPath)
+      : false;
+    const isBuiltInToolUse = this.builtInToolUsePath
+      ? targetPath.startsWith(this.builtInToolUsePath)
+      : false;
+    if (!isBuiltInAgents && !isBuiltInToolUse) {
+      return targetPath;
+    }
+
+    const base = isBuiltInToolUse
+      ? this.builtInToolUsePath
+      : this.builtInAgentsPath;
+    const relativePath = path.relative(base, targetPath);
+    return path.join(customBase, relativePath);
   }
 
   async open(uri: vscode.Uri) {
@@ -117,12 +134,7 @@ export class ExplorerOperations {
   private async createCustomCopy(uri: vscode.Uri) {
     try {
       const customPath = await agentDirectories.custom();
-
-      const base = uri.fsPath.startsWith(this.builtInToolUsePath)
-        ? this.builtInToolUsePath
-        : this.builtInAgentsPath;
-      const relativePath = path.relative(base, uri.fsPath);
-      const targetPath = path.join(customPath, relativePath);
+      const targetPath = this.resolveCustomPath(uri.fsPath, customPath);
 
       const targetDir = path.dirname(targetPath);
       await AbsoluteFS.ensureDir(targetDir);
@@ -148,16 +160,7 @@ export class ExplorerOperations {
 
       let parentPath = node?.resourceUri.fsPath || customBase;
 
-      if (
-        parentPath.startsWith(this.builtInAgentsPath) ||
-        parentPath.startsWith(this.builtInToolUsePath)
-      ) {
-        const base = parentPath.startsWith(this.builtInToolUsePath)
-          ? this.builtInToolUsePath
-          : this.builtInAgentsPath;
-        const relative = path.relative(base, parentPath);
-        parentPath = path.join(customBase, relative);
-      }
+      parentPath = this.resolveCustomPath(parentPath, customBase);
 
       if (!parentPath) {
         throw new Error('No valid parent path found');
