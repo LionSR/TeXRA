@@ -94,11 +94,11 @@ export class UsageSummary {
       const usage = progressViewState.getRunUsage(stream, activeRunId);
       if (usage) {
         return {
-          inputTokens: usage.inputTokens || 0,
-          outputTokens: usage.outputTokens || 0,
-          cost: usage.cost || 0,
-          cacheReadInputTokens: usage.cacheReadInputTokens || 0,
-          cacheCreationInputTokens: usage.cacheCreationInputTokens || 0,
+          inputTokens: usage.inputTokens ?? 0,
+          outputTokens: usage.outputTokens ?? 0,
+          cost: usage.cost ?? 0,
+          cacheReadInputTokens: usage.cacheReadInputTokens ?? 0,
+          cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         };
       }
     }

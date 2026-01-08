@@ -31,8 +31,17 @@ const TokenUsageStatsParsingSchema = z
     inputTokens: FiniteNumber,
     outputTokens: FiniteNumber,
     cost: FiniteNumber,
+    // Cache tokens for display (optional, default to 0)
+    cacheReadInputTokens: FiniteNumber.optional().default(0),
+    cacheCreationInputTokens: FiniteNumber.optional().default(0),
   })
-  .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+  .catch({
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  });
 
 // Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
 type _AssertSchemaCompatible =
@@ -119,14 +128,24 @@ export class UsageStatsManager extends PersistentMapManager<
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let cacheReadInputTokens = 0;
+    let cacheCreationInputTokens = 0;
 
     for (const usage of runs.values()) {
       inputTokens += usage.inputTokens;
       outputTokens += usage.outputTokens;
       cost += usage.cost;
+      cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
+      cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
     }
 
-    return { inputTokens, outputTokens, cost };
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    };
   }
 
   /**
@@ -167,16 +186,26 @@ export class UsageStatsManager extends PersistentMapManager<
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let cacheReadInputTokens = 0;
+    let cacheCreationInputTokens = 0;
 
     for (const usage of this.items.values()) {
       for (const runUsage of usage.values()) {
         inputTokens += runUsage.inputTokens;
         outputTokens += runUsage.outputTokens;
         cost += runUsage.cost;
+        cacheReadInputTokens += runUsage.cacheReadInputTokens ?? 0;
+        cacheCreationInputTokens += runUsage.cacheCreationInputTokens ?? 0;
       }
     }
 
-    return { inputTokens, outputTokens, cost };
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    };
   }
 
   /**
