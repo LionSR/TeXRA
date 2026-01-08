@@ -105,7 +105,7 @@ class TaskGroups {
       return [];
     }
 
-    return Array.from(children);
+    return [...children];
   }
 
   _addChild(parentId, childId) {
@@ -401,7 +401,7 @@ export class ProgressViewState {
 
     const candidates = this._collectRunCandidates(targetStream);
     if (candidates.size === 1) {
-      const [only] = Array.from(candidates);
+      const [only] = candidates;
       if (only) {
         this.setActiveRunId(targetStream, only);
         return only;
@@ -478,7 +478,11 @@ export class ProgressViewState {
     if (rootGroups.length === 0) {
       const usageRuns = this.runUsage.getStreamMap(streamId);
       if (usageRuns && usageRuns.size > 0) {
-        return Array.from(usageRuns.keys())[usageRuns.size - 1] || null;
+        let latestRunId = null;
+        for (const runId of usageRuns.keys()) {
+          latestRunId = runId;
+        }
+        return latestRunId;
       }
       return null;
     }
@@ -490,7 +494,7 @@ export class ProgressViewState {
     });
 
     const latest = rootGroups.at(-1);
-    return latest?.id || null;
+    return latest?.id ?? null;
   }
 
   setPendingInstruction(streamId, instruction) {
@@ -581,7 +585,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    this.runFiles.set(targetStream, runId, filesByRound || {});
+    this.runFiles.set(targetStream, runId, filesByRound ?? {});
   }
 
   getRunFiles(streamId, runId) {
@@ -610,7 +614,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    this.runMissingOutputs.set(targetStream, runId, filesByRound || {});
+    this.runMissingOutputs.set(targetStream, runId, filesByRound ?? {});
   }
 
   getRunMissingOutputs(streamId, runId) {
@@ -683,7 +687,7 @@ export class ProgressViewState {
     if (targetStream == null) {
       return;
     }
-    this.streamTodos.set(targetStream, todos || []);
+    this.streamTodos.set(targetStream, todos ?? []);
   }
 
   /**
