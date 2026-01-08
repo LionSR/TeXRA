@@ -32,6 +32,7 @@ import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
+import { MemoryTool } from './memory';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -67,6 +68,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       web_fetch: new WebFetchTool(),
       web_search: new WebSearchTool(),
       todo_write: new TodoWriteTool(),
+      memory: new MemoryTool(),
     });
   }
   return defaultRegistryInstance;

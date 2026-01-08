@@ -4,14 +4,16 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
 
+const CHANNEL = 'openFileCommands';
+
+// Local imports - frontend
+import { fileLister } from '@frontend/files';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
-const CHANNEL = 'openFileCommands';
-
 // Local imports - utilities
-import { fileLister } from '@frontend/files';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { WorkspaceFS } from '@utils/files';
 
 export async function openFile(file: string): Promise<void> {
