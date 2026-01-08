@@ -69,10 +69,6 @@ export class InstructionManager extends BaseDomHandler {
         return;
       }
 
-      // Debounce state saves to avoid saving on every keystroke
-      const debouncedSave = debounce(() => this.state?.save(), 500);
-      this.addListener(target, 'input', debouncedSave);
-
       setupPasteListener(
         target,
         this.vscode,
@@ -89,7 +85,12 @@ export class InstructionManager extends BaseDomHandler {
   _setupPlaceholderRotation(target, textarea) {
     this._textarea = textarea;
 
+    // Debounce state saves to avoid saving on every keystroke
+    const debouncedSave = debounce(() => this.state?.save(), 500);
+
+    // Combined input handler for both save and placeholder rotation
     const handleInput = () => {
+      debouncedSave();
       if (!this._textarea) {
         return;
       }
@@ -193,12 +194,21 @@ export class InstructionManager extends BaseDomHandler {
     return SESSION_TYPES.WORKFLOW;
   }
 
+  /**
+   * Extract session type directly from a radio change event.
+   *
+   * We read from the event target rather than the hidden input because this
+   * handler fires before SettingsButtonManager updates the hidden input,
+   * which would give us the stale (previous) value.
+   *
+   * Checks both data-session-type attribute and value attribute to handle
+   * different vscode-radio configurations.
+   */
   _getSessionTypeFromEvent(event) {
     const target = event?.target;
     if (!(target instanceof HTMLElement)) {
       return null;
     }
-    // Extract from vscode-radio element's data attribute or value
     const sessionType =
       target.dataset?.sessionType || target.getAttribute('value');
     if (sessionType) {
