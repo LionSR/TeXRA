@@ -969,7 +969,7 @@
           },
           "texra.toolUse.memory.enabled": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Enable the memory tool for all tool-use sessions",
             "scope": "resource"
           },
