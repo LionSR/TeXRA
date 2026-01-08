@@ -203,7 +203,7 @@ export class BannerManager extends BaseDomHandler {
     // Clear existing content
     container.textContent = '';
 
-    const missing = config?.missingTools || [];
+    const missing = config?.missingTools ?? [];
     if (missing.length > 0) {
       const intro = document.createElement('span');
       intro.textContent = 'Missing dependencies:';
