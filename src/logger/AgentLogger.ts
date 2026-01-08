@@ -1,5 +1,6 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 
 // Local imports - events
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
@@ -28,23 +29,31 @@ import type { LogOptions } from './logOptions';
 
 /**
  * Context management event data for logging compaction, truncation, etc.
+ * Schema-first definition following project conventions (CLAUDE.md).
  */
-export interface ContextManagementData {
+export const ContextManagementDataSchema = z.object({
   /** Type of context management action */
-  action: 'compaction' | 'clear_tool_uses' | 'clear_thinking' | 'truncation';
+  action: z.enum([
+    'compaction',
+    'clear_tool_uses',
+    'clear_thinking',
+    'truncation',
+  ]),
   /** Tokens before the action */
-  tokensBefore: number;
+  tokensBefore: z.number().nonnegative(),
   /** Tokens after the action (if known) */
-  tokensAfter?: number;
+  tokensAfter: z.number().nonnegative().optional(),
   /** Context window size */
-  contextWindow: number;
+  contextWindow: z.number().positive(),
   /** Percentage of context utilized before action */
-  utilizationBefore: number;
+  utilizationBefore: z.number().nonnegative(),
   /** Percentage of context utilized after action (if known) */
-  utilizationAfter?: number;
+  utilizationAfter: z.number().nonnegative().optional(),
   /** Provider-specific details */
-  details?: string;
-}
+  details: z.string().optional(),
+});
+
+export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;

@@ -916,6 +916,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
       state.clearTodos(message.stream);
+      state.clearContextState(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
@@ -943,6 +944,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     state.clearAllTodos();
+    state.clearContextState(); // Clear all context state entries
     dom.runSelector.clear();
     dom.todoList.clear();
     dom.fileList.clear();
