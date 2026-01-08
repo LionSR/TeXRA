@@ -54,11 +54,11 @@ export class MemoryRenderer {
       dataset: {
         '.open-memory-btn': {
           command: COMMANDS.OPEN_MEMORY_FILE,
-          path: item.storagePath,
+          storagePath: item.storagePath,
         },
         '.delete-memory-btn': {
           command: COMMANDS.DELETE_MEMORY,
-          path: item.storagePath,
+          storagePath: item.storagePath,
           displayPath: item.displayPath,
         },
       },
