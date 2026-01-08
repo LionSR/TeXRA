@@ -17,7 +17,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Type imports
@@ -45,19 +45,6 @@ interface ResumeAgentCommandPayload {
 // ============================================================================
 
 const CHANNEL = 'resumeCommand';
-
-/**
- * Update the queued follow-ups display in the webview.
- */
-function updateQueuedFollowUpsUI(streamId: StreamTabId): void {
-  const provider = ProgressViewProvider.getInstance();
-  if (!provider) {
-    return;
-  }
-
-  const messages = ToolUseFollowUpQueue.getAll(streamId);
-  provider.webviewUpdater.updateQueuedFollowUps(streamId, messages);
-}
 
 function formatLostFollowUpSuffix(count: number): string {
   if (count === 0) {
@@ -105,14 +92,21 @@ async function resumeFromSnapshot(
 
     // Resume using flow-first execution
     await resumeToolUseFromSnapshot(snapshot, (session) => {
-      // Append any follow-up messages to the session
+      // Combine all follow-ups into a single message
+      const allFollowUps: string[] = [];
+
+      // Add explicit follow-up first if provided
       if (followUp !== undefined) {
-        session.appendFollowUp(followUp);
+        allFollowUps.push(followUp);
       }
 
-      // Append any queued follow-ups
-      for (const queuedFollowUp of queuedFollowUps) {
-        session.appendFollowUp(queuedFollowUp);
+      // Add queued follow-ups
+      allFollowUps.push(...queuedFollowUps);
+
+      // Send as single concatenated message
+      if (allFollowUps.length > 0) {
+        const combinedMessage = allFollowUps.join('\n\n');
+        session.appendFollowUp(combinedMessage);
       }
     });
 
