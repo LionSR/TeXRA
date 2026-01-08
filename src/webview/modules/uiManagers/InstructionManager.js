@@ -23,8 +23,8 @@ const PLACEHOLDER_ROTATION_MS = 12000;
 const ONBOARDING_PLACEHOLDERS = {
   [SESSION_TYPES.WORKFLOW]: [
     'Correct LaTeX errors, tighten language, and keep math notation intact.',
-    'Summarize edits and list all sections you touched.',
-    'Explain changes in bullet points and keep the tone formal.',
+    'Convert this section into Beamer slides with bullet points.',
+    'Derive the gradient of the loss function step by step.',
   ],
   [SESSION_TYPES.TOOL_USE]: [
     'Find missing citations, then suggest BibTeX entries.',
