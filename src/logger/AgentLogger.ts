@@ -1,5 +1,6 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 
 // Local imports - events
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
@@ -25,6 +26,49 @@ import type {
   MessageType,
 } from './messageTypes';
 import type { LogOptions } from './logOptions';
+
+/**
+ * Context management event data for logging compaction, truncation, etc.
+ * Schema-first definition following project conventions (CLAUDE.md).
+ */
+export const ContextManagementDataSchema = z.object({
+  /** Type of context management action */
+  action: z.enum([
+    'compaction',
+    'clear_tool_uses',
+    'clear_thinking',
+    'truncation',
+  ]),
+  /** Tokens before the action */
+  tokensBefore: z.number().nonnegative(),
+  /** Tokens after the action (if known) */
+  tokensAfter: z.number().nonnegative().optional(),
+  /** Context window size */
+  contextWindow: z.number().positive(),
+  /** Percentage of context utilized before action */
+  utilizationBefore: z.number().nonnegative(),
+  /** Percentage of context utilized after action (if known) */
+  utilizationAfter: z.number().nonnegative().optional(),
+  /** Provider-specific details */
+  details: z.string().optional(),
+});
+
+export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
+
+/**
+ * Context state data for tracking current context utilization.
+ * Emitted after token counting to update UI with current usage.
+ */
+export const ContextStateDataSchema = z.object({
+  /** Current input tokens in the context */
+  inputTokens: z.number().nonnegative(),
+  /** Maximum context window size */
+  contextWindow: z.number().positive(),
+  /** Percentage of context utilized (0-100) */
+  utilizationPercent: z.number().nonnegative(),
+});
+
+export type ContextStateData = z.infer<typeof ContextStateDataSchema>;
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
@@ -317,6 +361,58 @@ export class AgentLogger {
       groupId,
       messageType: MESSAGE_TYPES.SCRATCHPAD,
     });
+  }
+
+  /**
+   * Log a context management event (compaction, context clearing, etc.).
+   * Single source of truth for CONTEXT_MANAGEMENT message type.
+   *
+   * @param message - Human-readable summary of the action
+   * @param data - Structured data about the context management action
+   * @param groupId - Optional group ID for progress view
+   */
+  logContextManagement(
+    message: string,
+    data?: ContextManagementData,
+    groupId?: string,
+  ): void {
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+      data,
+    });
+  }
+
+  /**
+   * Log current context state (utilization percentage).
+   * Single source of truth for CONTEXT_STATE message type.
+   * Used to update UI with current context usage after token counting.
+   *
+   * @param inputTokens - Current input tokens in context
+   * @param contextWindow - Maximum context window size
+   * @param groupId - Optional group ID for progress view
+   */
+  logContextState(
+    inputTokens: number,
+    contextWindow: number,
+    groupId?: string,
+  ): void {
+    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    const data: ContextStateData = {
+      inputTokens,
+      contextWindow,
+      utilizationPercent,
+    };
+    // Use info level to ensure message reaches progress view (debug is filtered)
+    // The CONTEXT_STATE message type triggers UI update without cluttering logs
+    this.info(
+      `Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
+      {
+        groupId,
+        messageType: MESSAGE_TYPES.CONTEXT_STATE,
+        data,
+      },
+    );
   }
 
   /**

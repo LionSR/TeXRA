@@ -68,7 +68,9 @@ class ReplacementEngineImpl implements ReplacementEngine {
    */
   applyNonRegex(text: string): string {
     let processed = applyReplacements(text, getAllReplacements()).trim();
-    processed = wrapCritiqueInAlign(processed);
+    if (shouldWrapCritiqueInAlign()) {
+      processed = wrapCritiqueInAlign(processed);
+    }
     return processed;
   }
 
@@ -135,6 +137,10 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
   PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
   MAX_REGEX_REPLACEMENTS,
 ];
+
+function shouldWrapCritiqueInAlign(): boolean {
+  return getConfig('texra.latex.wrapCritiqueInAlign', true);
+}
 
 /**
  * Get all non-regex replacements combined into a single category.
@@ -316,7 +322,7 @@ export function applyReplacements(
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();
   cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
-  return wrapCritiqueInAlign(cleaned);
+  return shouldWrapCritiqueInAlign() ? wrapCritiqueInAlign(cleaned) : cleaned;
 }
 
 /**

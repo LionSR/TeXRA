@@ -61,6 +61,29 @@ export class LaTeXdiffService {
     );
   }
 
+  private logDiffError(context: string, err: unknown): LaTeXdiffResult {
+    const message = formatError(context, err);
+    logger.error(this.channel, message, {
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
+    return { success: false, message };
+  }
+
+  private logDiffMultipleError(
+    context: string,
+    err: unknown,
+  ): LaTeXdiffMultipleResult {
+    const message = formatError(context, err);
+    logger.error(this.channel, message, {
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
+    return {
+      success: false,
+      results: { success: [], failed: [] },
+      message,
+    };
+  }
+
   async runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
@@ -143,16 +166,13 @@ export class LaTeXdiffService {
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
-      const message = formatError('Error running LaTeX diff', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
+      const result = this.logDiffError('Error running LaTeX diff', err);
       logger.debug(
         this.channel,
         `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
         { messageType: MESSAGE_TYPES.INTERNAL },
       );
-      return { success: false, message };
+      return result;
     }
   }
 
@@ -189,11 +209,7 @@ export class LaTeXdiffService {
         message: `LaTeXdiff VC completed successfully: ${path.basename(diffFileName)}`,
       };
     } catch (err) {
-      const message = formatError('Error running LaTeX diff VC', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-      return { success: false, message };
+      return this.logDiffError('Error running LaTeX diff VC', err);
     }
   }
 
@@ -256,15 +272,7 @@ export class LaTeXdiffService {
         message: summary,
       };
     } catch (err) {
-      const message = formatError('Error in runDiffVcMultiple', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-      return {
-        success: false,
-        results: { success: [], failed: [] },
-        message,
-      };
+      return this.logDiffMultipleError('Error in runDiffVcMultiple', err);
     }
   }
 
@@ -295,11 +303,7 @@ export class LaTeXdiffService {
       logger.warn(this.channel, message);
       return { success: false, message };
     } catch (err) {
-      const message = formatError('Error in runDiffForRound', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-      return { success: false, message };
+      return this.logDiffError('Error in runDiffForRound', err);
     }
   }
 
@@ -341,11 +345,7 @@ export class LaTeXdiffService {
       logger.warn(this.channel, message);
       return { success: false, message };
     } catch (err) {
-      const message = formatError('Error in runDiffBetweenRounds', err);
-      logger.error(this.channel, message, {
-        messageType: MESSAGE_TYPES.INTERNAL,
-      });
-      return { success: false, message };
+      return this.logDiffError('Error in runDiffBetweenRounds', err);
     }
   }
 

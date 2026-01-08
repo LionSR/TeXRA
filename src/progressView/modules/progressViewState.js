@@ -279,8 +279,12 @@ export class ProgressViewState {
     this.runFiles = new RunScopedMap(streamResolver);
     this.runMissingOutputs = new RunScopedMap(streamResolver);
     this.runUsage = new RunScopedMap(streamResolver);
+    // Context state (input tokens, context window) per stream
+    this.contextState = new Map();
     // Todo storage by stream ID
     this.streamTodos = new Map();
+    // Queued follow-ups storage by stream ID
+    this.streamQueuedFollowUps = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -673,6 +677,51 @@ export class ProgressViewState {
     this.runUsage.clearAll();
   }
 
+  /**
+   * Set context state for a stream (input tokens vs context window).
+   * @param {string} streamId - The stream ID
+   * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} state
+   */
+  setContextState(streamId, state) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null || !state) {
+      return;
+    }
+    this.contextState.set(targetStream, {
+      inputTokens: state.inputTokens ?? 0,
+      contextWindow: state.contextWindow ?? 0,
+      utilizationPercent: state.utilizationPercent ?? 0,
+    });
+  }
+
+  /**
+   * Get context state for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {{ inputTokens: number, contextWindow: number, utilizationPercent: number } | null}
+   */
+  getContextState(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return null;
+    }
+    return this.contextState.get(targetStream) || null;
+  }
+
+  /**
+   * Clear context state for a stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearContextState(streamId) {
+    if (streamId != null) {
+      const targetStream = this._resolveStreamId(streamId);
+      if (targetStream != null) {
+        this.contextState.delete(targetStream);
+      }
+      return;
+    }
+    this.contextState.clear();
+  }
+
   deleteRunMissingOutputs(streamId, runId) {
     this.runMissingOutputs.delete(streamId, runId);
   }
@@ -720,6 +769,51 @@ export class ProgressViewState {
    */
   clearAllTodos() {
     this.streamTodos.clear();
+  }
+
+  /**
+   * Set queued follow-ups for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {string[]} messages - The queued message texts
+   */
+  setQueuedFollowUps(streamId, messages) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamQueuedFollowUps.set(targetStream, messages ?? []);
+  }
+
+  /**
+   * Get queued follow-ups for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {string[]|null}
+   */
+  getQueuedFollowUps(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return null;
+    }
+    return this.streamQueuedFollowUps.get(targetStream) || null;
+  }
+
+  /**
+   * Clear queued follow-ups for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearQueuedFollowUps(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamQueuedFollowUps.delete(targetStream);
+  }
+
+  /**
+   * Clear all queued follow-ups across all streams.
+   */
+  clearAllQueuedFollowUps() {
+    this.streamQueuedFollowUps.clear();
   }
 }
 

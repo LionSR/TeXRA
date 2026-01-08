@@ -127,6 +127,7 @@ export const AGENT_SELECT_IDS = {
 };
 
 export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
+export const SESSION_TYPE_VALUES = new Set(Object.values(SESSION_TYPES));
 
 /**
  * Tag name constant for VS Code radio group web component
@@ -134,23 +135,24 @@ export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
 export const VSCODE_RADIO_GROUP_TAG = 'VSCODE-RADIO-GROUP';
 
 /**
- * Normalizes a session type value to ensure it's a valid SESSION_TYPE.
- * @param {string} sessionType - The session type to normalize
+ * Parse a session type value if it is one of the supported session types.
+ * @param {string | undefined | null} sessionType - The session type to validate
+ * @returns {string | undefined} The valid session type, or undefined if invalid
+ */
+export function parseSessionType(sessionType) {
+  return SESSION_TYPE_VALUES.has(sessionType) ? sessionType : undefined;
+}
+
+/**
+ * Normalize a session type value into a valid SESSION_TYPE.
+ * Always returns a valid type, defaulting to WORKFLOW if invalid.
+ * @param {string | undefined | null} sessionType - The session type to normalize
  * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
  */
 export function normalizeSessionType(sessionType) {
   return sessionType === SESSION_TYPES.TOOL_USE
     ? SESSION_TYPES.TOOL_USE
     : SESSION_TYPES.WORKFLOW;
-}
-
-/**
- * Parse a session type value into a valid SESSION_TYPE.
- * @param {string} sessionType - The session type to parse
- * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
- */
-export function parseSessionType(sessionType) {
-  return normalizeSessionType(sessionType);
 }
 
 /**

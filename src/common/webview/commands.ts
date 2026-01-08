@@ -193,6 +193,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Usage
   UPDATE_USAGE: 'updateUsage',
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
+  UPDATE_CONTEXT_STATE: 'updateContextState', // Update context utilization display
 
   // Actions
   RESUME: 'resume',
@@ -217,6 +218,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   RESET_TOOL_EDIT_APPROVAL_BYPASS: 'resetToolEditApprovalBypass',
+
+  // Memory
+  OPEN_MEMORY_VIEW: 'openMemoryView',
 
   // File operations
   OPEN_FILE: 'openFile',
@@ -256,6 +260,16 @@ export const PROFILE_VIEW_COMMANDS = {
   SET_API_ACCESS_MODE: 'setApiAccessMode',
 };
 
+// Memory view specific commands
+export const MEMORY_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  GET_MEMORY_DATA: 'getMemoryData',
+  UPDATE_MEMORY: 'updateMemory',
+  OPEN_MEMORY_FILE: 'openMemoryFile',
+  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+};
+
 // Export all commands in a single object for convenience
 export const WEBVIEW_COMMANDS = {
   COMMON: COMMON_COMMANDS,
@@ -263,4 +277,5 @@ export const WEBVIEW_COMMANDS = {
   PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
   HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
   PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
+  MEMORY_VIEW: MEMORY_VIEW_COMMANDS,
 };

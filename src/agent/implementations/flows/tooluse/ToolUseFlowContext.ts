@@ -16,6 +16,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
+import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   ToolUseSessionLifecycle,
   type IToolUseSession,
@@ -165,6 +166,7 @@ export function createToolUseFlowContext<C = unknown>(
   // Resolve tools once at construction time
   const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
   const resolvedTools: ToolDefinition[] = [];
+  const resolvedNames = new Set<string>();
   for (const t of toolConfigs) {
     const def = typeof t === 'string' ? { name: t } : t;
     if (!toolRegistry.has(def.name)) {
@@ -172,6 +174,17 @@ export function createToolUseFlowContext<C = unknown>(
       continue;
     }
     resolvedTools.push(def);
+    resolvedNames.add(def.name);
+  }
+
+  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
+    const memoryTool = toolRegistry.get('memory');
+    if (memoryTool) {
+      resolvedTools.push(memoryTool.definition);
+      resolvedNames.add('memory');
+    } else {
+      logger.warn('Memory tool not found in registry');
+    }
   }
 
   // Spread init directly - it already contains setting, logger, etc.

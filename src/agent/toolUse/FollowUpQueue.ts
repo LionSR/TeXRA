@@ -58,4 +58,12 @@ export class FollowUpQueue {
     this.cancelWait();
     this.clear();
   }
+
+  /**
+   * Get a copy of all queued messages for display purposes.
+   * This doesn't modify the queue.
+   */
+  getAll(): string[] {
+    return [...this.queued];
+  }
 }
