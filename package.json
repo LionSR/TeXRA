@@ -1517,6 +1517,11 @@
           "group": "navigation@7"
         },
         {
+          "command": "texra.openProgressViewInTab",
+          "when": "view == texra.progressView",
+          "group": "navigation@8"
+        },
+        {
           "command": "texra.folderExplorer.newFile",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
