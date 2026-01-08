@@ -256,5 +256,7 @@ export function formatToolResultAsText(
     textPieces.push(attachmentSummary);
   }
 
+  // 'OK' fallback is defensive - only triggers if tool sets no output, summary,
+  // error, userInstruction, or attachmentSummary. All current tools set at least summary.
   return textPieces.join('\n\n') || 'OK';
 }
