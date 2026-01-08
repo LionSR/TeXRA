@@ -48,7 +48,7 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @returns {HTMLElement|null} Tool use element or null
  */
 export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
-  const { structured } = normalizedPayload || {};
+  const { structured } = normalizedPayload ?? {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
   if (!normalizedToolLog) {
@@ -141,7 +141,7 @@ export const formatWebSearch = (
     return element;
   }
 
-  const { structured } = normalizedPayload || {};
+  const { structured } = normalizedPayload ?? {};
   if (!structured || typeof structured !== 'object') {
     return null;
   }
