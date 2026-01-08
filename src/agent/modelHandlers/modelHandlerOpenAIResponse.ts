@@ -176,6 +176,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
+  private static readonly COMPACTION_TOKEN_THRESHOLD = 0.85;
   /** Statuses indicating the background response is still processing. */
   private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
     ['queued', 'in_progress'];
@@ -184,6 +185,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     ['completed', 'failed', 'cancelled', 'incomplete'];
   private previousResponseId: string | null = null;
   private sentMessages = 0;
+  private lastResponseTotalTokens = 0;
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -192,6 +194,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.sentMessages = 0;
+    this.lastResponseTotalTokens = 0;
   }
 
   /** Retrieve the stored previous response ID. */
@@ -223,6 +226,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
+    this.lastResponseTotalTokens = 0;
 
     const messages: ResponseInputItem[] = [];
 
@@ -487,6 +491,57 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
   }
 
+  private shouldCompactConversation(): boolean {
+    const contextWindow = this.config.contextWindow;
+    if (contextWindow <= 0) {
+      return false;
+    }
+
+    return (
+      !this.isOpenRouterRoutingEnabled() &&
+      this.previousResponseId !== null &&
+      this.lastResponseTotalTokens / contextWindow >=
+        ModelHandlerOpenAIResponse.COMPACTION_TOKEN_THRESHOLD
+    );
+  }
+
+  private async compactConversation(
+    client: OpenAI,
+    systemPrompt: string | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
+    if (!this.previousResponseId) {
+      return;
+    }
+
+    this.logger.debug('Compacting OpenAI Responses conversation context.', {
+      data: {
+        model: this.config.fullName,
+        previousResponseId: this.previousResponseId,
+      },
+    });
+
+    const compacted = await executeRequest(
+      {
+        model: this.config.name,
+        operation: 'openai.responses.compact',
+        signal,
+      },
+      () =>
+        client.responses.compact(
+          {
+            model: this.config.fullName,
+            previous_response_id: this.previousResponseId,
+            instructions: systemPrompt,
+          },
+          { signal },
+        ),
+    );
+
+    this.previousResponseId = compacted.id;
+    this.lastResponseTotalTokens = 0;
+  }
+
   /**
    * Create a response using the Responses API.
    * The handler submits only the messages that were not part of the previous
@@ -520,6 +575,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const useBackgroundResponses =
       this.backgroundModeSupported && backgroundToggleEnabled && isEligible;
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
+
+    if (this.shouldCompactConversation()) {
+      await this.compactConversation(client, systemPrompt, signal);
+    }
 
     if (streamingToggleEnabled && useBackgroundResponses) {
       this.logger.debug(
@@ -672,6 +731,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
+      const responseUsage = response.usage;
+      this.lastResponseTotalTokens =
+        responseUsage?.total_tokens ??
+        (responseUsage?.input_tokens ?? 0) +
+          (responseUsage?.output_tokens ?? 0);
       return response;
     }
 
@@ -716,6 +780,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
     this.previousResponseId = response.id;
     this.sentMessages = messages.length;
+    const responseUsage = response.usage;
+    this.lastResponseTotalTokens =
+      responseUsage?.total_tokens ??
+      (responseUsage?.input_tokens ?? 0) + (responseUsage?.output_tokens ?? 0);
     return response;
   }
 
