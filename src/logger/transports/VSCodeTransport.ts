@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
-import type { ContextManagementData } from '@logger/AgentLogger';
+import { ContextManagementDataSchema } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
@@ -152,24 +152,24 @@ export class VSCodeTransport extends Transport {
       validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
       event.data
     ) {
-      // Use the proper ContextManagementData type from AgentLogger
-      // Validate required fields before using to prevent runtime errors
-      const contextData = event.data as Partial<ContextManagementData>;
-      const contextWindow = contextData.contextWindow;
-      if (typeof contextWindow !== 'number' || contextWindow <= 0) {
+      // Validate using Zod schema at system boundary (CLAUDE.md schema-first approach)
+      const parseResult = ContextManagementDataSchema.safeParse(event.data);
+      if (!parseResult.success) {
         return; // Skip invalid context data
       }
 
+      const contextData = parseResult.data;
       const inputTokens =
         contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
       const utilizationPercent =
-        contextData.utilizationAfter ?? (inputTokens / contextWindow) * 100;
+        contextData.utilizationAfter ??
+        (inputTokens / contextData.contextWindow) * 100;
 
       bus.emit('updateContextState', {
         stream: this.streamName,
         contextState: {
           inputTokens,
-          contextWindow,
+          contextWindow: contextData.contextWindow,
           utilizationPercent,
         },
       });
