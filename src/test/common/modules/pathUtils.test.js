@@ -1,4 +1,3 @@
-/* eslint-env mocha */
 /* global suite, test */
 import * as assert from 'assert';
 import { getBasename } from '../../../common/modules/pathUtils.js';
