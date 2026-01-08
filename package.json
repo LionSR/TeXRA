@@ -1303,6 +1303,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "texra.showMemory",
+        "title": "Show Agent Memory",
+        "category": "TeXRA",
+        "icon": "$(database)"
+      },
+      {
         "command": "texra.openSettings",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
@@ -1487,9 +1493,14 @@
           "group": "navigation@5"
         },
         {
-          "command": "texra.auth.accountMenu",
+          "command": "texra.showMemory",
           "when": "view == texra.progressView",
           "group": "navigation@6"
+        },
+        {
+          "command": "texra.auth.accountMenu",
+          "when": "view == texra.progressView",
+          "group": "navigation@7"
         },
         {
           "command": "texra.folderExplorer.newFile",
