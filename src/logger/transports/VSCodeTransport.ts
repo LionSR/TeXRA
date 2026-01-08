@@ -145,5 +145,35 @@ export class VSCodeTransport extends Transport {
       stream: this.streamName,
       logMessage,
     });
+
+    // Emit context state update for CONTEXT_MANAGEMENT messages
+    if (
+      validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
+      event.data
+    ) {
+      const contextData = event.data as {
+        contextWindow?: number;
+        tokensAfter?: number;
+        tokensBefore?: number;
+        utilizationAfter?: number;
+      };
+      const contextWindow = contextData.contextWindow ?? 0;
+      const inputTokens =
+        contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
+      const utilizationPercent =
+        contextData.utilizationAfter ??
+        (contextWindow > 0 ? (inputTokens / contextWindow) * 100 : 0);
+
+      if (contextWindow > 0) {
+        bus.emit('updateContextState', {
+          stream: this.streamName,
+          contextState: {
+            inputTokens,
+            contextWindow,
+            utilizationPercent,
+          },
+        });
+      }
+    }
   }
 }
