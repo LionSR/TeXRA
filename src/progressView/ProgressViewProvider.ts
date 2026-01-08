@@ -344,10 +344,10 @@ export class ProgressViewProvider
   }
 
   /**
-   * Check if view is visible (legacy compatibility)
+   * Check if any view is visible (sidebar or panel)
    */
   public isViewVisible(): boolean {
-    return this._view?.visible ?? false;
+    return (this._view?.visible ?? false) || (this._panelView?.visible ?? false);
   }
 
   // ===== IRunStorageService implementation =====
@@ -436,11 +436,23 @@ export class ProgressViewProvider
     // Setup content, message handler, and theme listener (shared with sidebar)
     this._panelDisposables.push(...this.setupWebviewContent(this._panelView));
 
+    // Add visibility listener (panel uses onDidChangeViewState instead of onDidChangeVisibility)
+    this._panelDisposables.push(
+      this._panelView.onDidChangeViewState((e) => {
+        if (e.webviewPanel.visible) {
+          this.updateWebview();
+        }
+      }),
+    );
+
     // Cleanup on panel dispose
     this._panelView.onDidDispose(() => {
       this._panelDisposables.forEach((d) => d.dispose());
       this._panelDisposables = [];
       this._panelView = undefined;
     });
+
+    // Trigger initial update (webview will send WEBVIEW_READY when loaded)
+    this.updateWebview();
   }
 }
