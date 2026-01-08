@@ -81,6 +81,7 @@ export class ProgressEventHandler {
 
     // Usage events (inlined from UsageEvents.ts)
     bus.on('updateStreamUsage', this.handleUpdateStreamUsage, { signal });
+    bus.on('updateContextState', this.handleUpdateContextState, { signal });
 
     // Todo events (inlined from TodoEvents.ts)
     bus.on('updateTodos', this.handleUpdateTodos, { signal });
@@ -462,6 +463,25 @@ export class ProgressEventHandler {
             storageKey,
             normalizedUsage,
           );
+        }
+      },
+    );
+  };
+
+  /** Handle updateContextState - context utilization display */
+  private handleUpdateContextState = ({
+    stream,
+    contextState,
+  }: ProgressEventPayloads['updateContextState']): void => {
+    withEventErrorHandling(
+      'UsageEvents',
+      'failed to handle updateContextState',
+      () => {
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateContextState(stream, contextState);
         }
       },
     );

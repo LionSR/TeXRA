@@ -60,4 +60,25 @@ export class AgentUsageReporter {
       this.logger.statistics(stats, storageKey);
     }
   }
+
+  /**
+   * Report context state (utilization) to the progress view.
+   * Shows "X% context left" in the footer.
+   *
+   * @param inputTokens - Current cumulative input tokens
+   * @param contextWindow - Model's context window size
+   */
+  public reportContextState(inputTokens: number, contextWindow: number): void {
+    if (contextWindow <= 0) return;
+
+    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    bus.emit('updateContextState', {
+      stream: this.streamId,
+      contextState: {
+        inputTokens,
+        contextWindow,
+        utilizationPercent,
+      },
+    });
+  }
 }

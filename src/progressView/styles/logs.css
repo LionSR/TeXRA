@@ -273,7 +273,8 @@
   background-color: var(--vscode-sideBarSectionHeader-background);
   padding: var(--spacing-small) var(--spacing-medium);
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
@@ -284,6 +285,29 @@
 
 .usage-summary-footer .run-summary {
   margin-left: auto;
+}
+
+/* Context state display (left side of footer) */
+.context-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
+
+.context-state[hidden] {
+  display: none;
+}
+
+.context-state .codicon {
+  font-size: var(--font-size-icon-sm);
+  opacity: 0.75;
+}
+
+.context-state__value {
+  color: var(--vscode-foreground);
 }
 
 .file-item {
