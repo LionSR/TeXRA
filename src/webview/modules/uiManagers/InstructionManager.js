@@ -22,14 +22,14 @@ import {
 const PLACEHOLDER_ROTATION_MS = 12000;
 const ONBOARDING_PLACEHOLDERS = {
   [SESSION_TYPES.WORKFLOW]: [
-    'Example: Correct LaTeX errors, tighten language, and keep math notation intact.',
-    'Example: Summarize edits and list all sections you touched.',
-    'Example: Explain changes in bullet points and keep the tone formal.',
+    'Correct LaTeX errors, tighten language, and keep math notation intact.',
+    'Summarize edits and list all sections you touched.',
+    'Explain changes in bullet points and keep the tone formal.',
   ],
   [SESSION_TYPES.TOOL_USE]: [
-    'Example: Find missing citations, then suggest BibTeX entries.',
-    'Example: Scan for TODOs and draft fixes with file paths.',
-    'Example: Run LaTeX checks and report compilation warnings.',
+    'Find missing citations, then suggest BibTeX entries.',
+    'Scan for TODOs and draft fixes with file paths.',
+    'Run LaTeX checks and report compilation warnings.',
   ],
 };
 
