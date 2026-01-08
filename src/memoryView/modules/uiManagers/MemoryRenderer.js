@@ -49,7 +49,7 @@ export class MemoryRenderer {
         '.memory-meta': this.buildMeta(item),
       },
       attributes: {
-        '.memory-collapsible': { heading: LABELS.PREVIEW_HEADING },
+        '.collapsible': { heading: LABELS.PREVIEW_HEADING },
       },
       dataset: {
         '.open-memory-btn': {

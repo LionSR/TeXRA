@@ -21,7 +21,7 @@ export const ELEMENT_IDS = {
 
 // CSS class names used across modules
 export const CLASS_NAMES = {
-  HISTORY_COLLAPSIBLE: 'history-collapsible',
+  COLLAPSIBLE: 'collapsible',
   CURRENT_MATCH: 'current-match',
 };
 
