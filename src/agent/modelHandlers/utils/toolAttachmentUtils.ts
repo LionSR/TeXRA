@@ -243,6 +243,11 @@ export function formatToolResultAsText(
   if (isNonEmptyString(result.output)) {
     textPieces.push(result.output);
   }
+  // userPatch captures user modifications to tool proposals (distinct from userDiffNote
+  // which only shows merge conflicts). Include when user modified the proposed edit.
+  if (result.userPatch) {
+    textPieces.push(`User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``);
+  }
   if (result.userInstruction) {
     textPieces.push(`User feedback: ${result.userInstruction}`);
   }
