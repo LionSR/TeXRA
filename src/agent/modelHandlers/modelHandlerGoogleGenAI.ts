@@ -1340,7 +1340,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    // Build simplified result - Google SDK will serialize this to JSON internally
+    // Google SDK requires Record<string, unknown> for response parameter,
+    // so we must wrap the text in an object (unlike OpenAI which accepts string)
     const simplifiedResult = { result: formatToolResultAsText(result, attachmentSummary) };
 
     // Use SDK's createPartFromFunctionResponse with native attachment support
