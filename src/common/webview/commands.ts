@@ -267,6 +267,7 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY: 'updateMemory',
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
 };
 
 // Export all commands in a single object for convenience

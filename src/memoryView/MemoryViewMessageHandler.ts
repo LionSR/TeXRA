@@ -28,7 +28,10 @@ import {
 import { StorageFS } from '@utils/files';
 
 // Local imports - schemas
-import { MemoryPathMessageSchema } from '@webview/types/messages';
+import {
+  MemoryPathMessageSchema,
+  MemoryDeleteMessageSchema,
+} from '@webview/types/messages';
 
 interface MemoryViewItem {
   displayPath: string;
@@ -57,6 +60,8 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
         this.handleOpenMemoryFile.bind(this),
       [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
         this.handleOpenMemoryFolder.bind(this),
+      [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]:
+        this.handleDeleteMemory.bind(this),
     };
   }
 
@@ -115,6 +120,42 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
     }
+  }
+
+  private async handleDeleteMemory(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      MemoryDeleteMessageSchema,
+      message,
+      'deleteMemory',
+      async ({ storagePath, displayPath }) => {
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete "${displayPath}"?`,
+          { modal: true },
+          'Delete',
+        );
+
+        if (confirm !== 'Delete') {
+          return;
+        }
+
+        try {
+          const resolvedPath = resolveMemoryStoragePath(storagePath);
+          await StorageFS.delete(resolvedPath, { recursive: true });
+        } catch (error) {
+          await showLoggedErrorMessage(
+            this.channel,
+            'Failed to delete memory',
+            error,
+          );
+        } finally {
+          // Always refresh the memory list to reflect current state
+          await this.sendMemoryData(view.webview);
+        }
+      },
+    );
   }
 
   private async loadMemoryItems(): Promise<MemoryViewItem[]> {
