@@ -377,6 +377,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (this.config.capabilities.supportsInterleavedThinking) {
         this.appendBeta(options, INTERLEAVED_THINKING_BETA);
       }
+
+      // Memory tool requires the context management beta header
+      if (tools.some((t) => t.name === 'memory')) {
+        this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
+      }
     }
 
     // Enable thinking for any models that support reasoning
