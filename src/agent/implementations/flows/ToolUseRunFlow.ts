@@ -148,7 +148,7 @@ type ToolUsePrepareExecResult = NodeExecResult<ToolUsePrepareResult>;
  * Uses 'kind' discriminant for clarity (matches PocketFlow's InvocationResult).
  */
 type CycleExecResult =
-  | { kind: 'success' }
+  | { kind: 'success'; messages: ProviderMessage[] }
   | { kind: 'skipped' }
   | { kind: 'failed'; message: string }
   | { kind: 'cancelled' };
@@ -409,7 +409,9 @@ class ToolUseCycleNode<C> extends Node<
       if (completion.userCancelled) {
         return { kind: 'cancelled' };
       }
-      return { kind: 'success' };
+      // Return messages explicitly to ensure they're synced in post()
+      // cycleShared.messages was mutated during the cycle flow
+      return { kind: 'success', messages: cycleShared.messages };
     } catch (error) {
       return {
         kind: 'failed',
@@ -448,6 +450,13 @@ class ToolUseCycleNode<C> extends Node<
 
     switch (execRes.kind) {
       case 'success':
+        // Explicitly sync conversation from cycle result to ensure messages are preserved
+        // This is defensive - the array should be the same reference, but explicit sync
+        // ensures PersistedFlow saves the correct state
+        shared.state.conversation = execRes.messages;
+        // PersistedFlow handles checkpoint persistence automatically after each node
+        return FlowTransition.DEFAULT; // Follow next() → WaitNode
+
       case 'skipped':
         // PersistedFlow handles checkpoint persistence automatically after each node
         return FlowTransition.DEFAULT; // Follow next() → WaitNode
