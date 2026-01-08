@@ -297,13 +297,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = streams.find(
       (s) => s.name === message.activeStream,
     );
-    const sessionKind =
-      activeStreamInfo?.agentSessionKind ||
-      activeStreamInfo?.uiTraits?.sessionKind ||
-      'workflow'; // Default fallback
+    // Only determine session kind if we have stream info - avoid false 'workflow' default
+    // that would incorrectly clear tool-use log content
+    const sessionKind = activeStreamInfo
+      ? activeStreamInfo.agentSessionKind ||
+        activeStreamInfo.uiTraits?.sessionKind ||
+        'workflow'
+      : state.activeSessionKind || 'workflow';
     const isToolAgent = sessionKind === 'toolUse';
 
-    this._clearSessionKindState(sessionKind);
+    // Only clear session state if we have confirmed stream info for the session kind change
+    // This prevents clearing log content when stream info is temporarily unavailable
+    if (activeStreamInfo) {
+      this._clearSessionKindState(sessionKind);
+    }
     state.activeSessionKind = sessionKind;
 
     dom.runSelector.setDisplayEnabled(
@@ -796,7 +803,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       message.sessionKind || state.activeSessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
-    this._clearSessionKindState(sessionKind);
+    // Only clear session state if message explicitly provides session kind
+    // This prevents clearing log content when session kind is derived from state fallback
+    if (message.sessionKind) {
+      this._clearSessionKindState(sessionKind);
+    }
     state.activeSessionKind = sessionKind;
 
     let activeRunId = state.getActiveRunId(activeStream);
