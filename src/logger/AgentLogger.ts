@@ -26,6 +26,26 @@ import type {
 } from './messageTypes';
 import type { LogOptions } from './logOptions';
 
+/**
+ * Context management event data for logging compaction, truncation, etc.
+ */
+export interface ContextManagementData {
+  /** Type of context management action */
+  action: 'compaction' | 'clear_tool_uses' | 'truncation';
+  /** Tokens before the action */
+  tokensBefore: number;
+  /** Tokens after the action (if known) */
+  tokensAfter?: number;
+  /** Context window size */
+  contextWindow: number;
+  /** Percentage of context utilized before action */
+  utilizationBefore: number;
+  /** Percentage of context utilized after action (if known) */
+  utilizationAfter?: number;
+  /** Provider-specific details */
+  details?: string;
+}
+
 export interface LoggerScopeOptions {
   parentGroupId?: string;
   /**
@@ -316,6 +336,26 @@ export class AgentLogger {
     this.info(content, {
       groupId,
       messageType: MESSAGE_TYPES.SCRATCHPAD,
+    });
+  }
+
+  /**
+   * Log a context management event (compaction, context clearing, etc.).
+   * Single source of truth for CONTEXT_MANAGEMENT message type.
+   *
+   * @param message - Human-readable summary of the action
+   * @param data - Structured data about the context management action
+   * @param groupId - Optional group ID for progress view
+   */
+  logContextManagement(
+    message: string,
+    data?: ContextManagementData,
+    groupId?: string,
+  ): void {
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+      data,
     });
   }
 

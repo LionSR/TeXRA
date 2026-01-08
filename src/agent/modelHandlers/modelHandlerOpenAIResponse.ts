@@ -288,9 +288,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     systemPrompt?: string,
     signal?: AbortSignal,
   ): Promise<ResponseInputItem[]> {
-    const threshold = this.getCompactionTokenThreshold();
+    const tokensBefore = this.cumulativeInputTokens;
+    const contextWindow = this.config.contextWindow;
+    const utilizationBefore = (tokensBefore / contextWindow) * 100;
+
     this.logger.debug(
-      `Compacting conversation with ${this.cumulativeInputTokens} input tokens (threshold: ${threshold} tokens = ${this.getCompactionThresholdPercent()}% of ${this.config.contextWindow} context window)`,
+      `Compacting conversation with ${tokensBefore} input tokens (${utilizationBefore.toFixed(1)}% of ${contextWindow} context window)`,
     );
 
     const compactParams: ResponseCompactParams = {
@@ -316,14 +319,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         () => client.responses.compact(compactParams),
       );
 
-      this.logger.debug(
-        `Compaction successful: ${compactedResponse.usage.input_tokens} input tokens -> ${compactedResponse.output.length} output items`,
+      const tokensAfter = compactedResponse.usage.input_tokens;
+      const utilizationAfter = (tokensAfter / contextWindow) * 100;
+      const reduction = tokensBefore - tokensAfter;
+      const reductionPercent = ((reduction / tokensBefore) * 100).toFixed(1);
+
+      // Log context management event with structured data
+      this.logger.logContextManagement(
+        `Compacted conversation: ${tokensBefore.toLocaleString()} → ${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+        {
+          action: 'compaction',
+          tokensBefore,
+          tokensAfter,
+          contextWindow,
+          utilizationBefore: Number(utilizationBefore.toFixed(1)),
+          utilizationAfter: Number(utilizationAfter.toFixed(1)),
+          details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
+        },
       );
 
       // Update state after successful compaction
       this.isCompacted = true;
       // Reset cumulative tokens to the compacted usage
-      this.cumulativeInputTokens = compactedResponse.usage.input_tokens;
+      this.cumulativeInputTokens = tokensAfter;
       // Reset sent messages counter since we're using compacted output
       this.sentMessages = 0;
 
