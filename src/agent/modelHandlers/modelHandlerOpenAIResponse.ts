@@ -207,6 +207,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     cumulativeInputTokens: 0,
     /** Whether the conversation has been compacted */
     isCompacted: false,
+    /** Whether we've logged the OpenRouter compaction skip message */
+    openRouterSkipLogged: false,
   };
 
   /** Reset conversation state to initial values. */
@@ -215,6 +217,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       sentMessages: 0,
       cumulativeInputTokens: 0,
       isCompacted: false,
+      openRouterSkipLogged: false,
     };
   }
 
@@ -269,9 +272,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
     if (this.isOpenRouterRoutingEnabled()) {
-      this.logger.debug(
-        'Skipping compaction check: OpenRouter routing is enabled',
-      );
+      if (!this.conversationState.openRouterSkipLogged) {
+        this.logger.debug('Skipping compaction: OpenRouter routing is enabled');
+        this.conversationState.openRouterSkipLogged = true;
+      }
       return false;
     }
     const threshold = this.getCompactionTokenThreshold();
@@ -347,15 +351,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // Update state after successful compaction
       this.conversationState.isCompacted = true;
-      // Reset cumulative tokens to the compacted usage
+      // Reset cumulative tokens to the compacted usage (not additive - replaces history)
+      // This prevents double-counting since compacted output supersedes previous messages
       this.conversationState.cumulativeInputTokens = tokensAfter;
       // Reset sent messages counter since we're using compacted output
       this.conversationState.sentMessages = 0;
       // Clear previous_response_id - compacted output replaces server-side history
       this.previousResponseId = null;
 
-      // Convert output items to input items for the next request
-      // The compacted output contains user messages and a single compaction item
+      // Convert output items to input items for the next request.
+      // The compacted output contains user messages and a single compaction item.
+      // Type cast required: SDK's CompactedResponse.output is ResponseOutputItem[]
+      // but these are semantically valid as input items for the next request.
       return compactedResponse.output as unknown as ResponseInputItem[];
     } catch (err) {
       this.logger.warn(
