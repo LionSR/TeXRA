@@ -208,8 +208,8 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
  */
 /** Number of recent tool use/result pairs to keep after context clearing */
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
-/** Number of assistant turns with thinking blocks to keep (1 = most recent only) */
-const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 1;
+/** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
+const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -529,65 +529,69 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (this.agentType === AgentType.ToolUse) {
-      this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
+      // Use shared compaction threshold (percentage of context window)
+      // Set to 0 to disable context management entirely
+      const thresholdPercent = getConfig<number>(
+        'texra.model.compactionThresholdPercent',
+        75,
+      );
 
-      const contextManagementEdits = [
-        ...(options.context_management?.edits ?? []),
-      ];
+      // Only enable context management if threshold is configured (> 0)
+      if (thresholdPercent > 0) {
+        this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
 
-      // Add thinking block clearing strategy if reasoning is enabled
-      if (
-        this.capabilities.supportsReasoning &&
-        options.thinking &&
-        !contextManagementEdits.some(
-          (edit) => edit.type === 'clear_thinking_20251015',
-        )
-      ) {
-        // Thinking clearing must come first in the edits array
-        contextManagementEdits.unshift({
-          type: 'clear_thinking_20251015' as const,
-          keep: {
-            type: 'thinking_turns' as const,
-            value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
-          },
-        });
-      }
+        const contextManagementEdits = [
+          ...(options.context_management?.edits ?? []),
+        ];
 
-      // Add tool result clearing strategy
-      if (
-        !contextManagementEdits.some(
-          (edit) => edit.type === 'clear_tool_uses_20250919',
-        )
-      ) {
-        // Use shared compaction threshold (percentage of context window)
-        const thresholdPercent = getConfig<number>(
-          'texra.model.compactionThresholdPercent',
-          75,
-        );
-        const triggerTokens =
-          thresholdPercent > 0
-            ? Math.floor((thresholdPercent / 100) * this.config.contextWindow)
-            : 0;
-
-        contextManagementEdits.push({
-          type: 'clear_tool_uses_20250919' as const,
-          ...(triggerTokens > 0 && {
-            trigger: {
-              type: 'input_tokens' as const,
-              value: triggerTokens,
+        // Add thinking block clearing strategy if reasoning is enabled
+        if (
+          this.capabilities.supportsReasoning &&
+          options.thinking &&
+          !contextManagementEdits.some(
+            (edit) => edit.type === 'clear_thinking_20251015',
+          )
+        ) {
+          // Thinking clearing must come first in the edits array
+          contextManagementEdits.unshift({
+            type: 'clear_thinking_20251015' as const,
+            keep: {
+              type: 'thinking_turns' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
             },
-          }),
-          keep: {
-            type: 'tool_uses' as const,
-            value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
-          },
-        });
-      }
+          });
+        }
 
-      options.context_management = {
-        ...(options.context_management ?? {}),
-        edits: contextManagementEdits,
-      } satisfies BetaContextManagementConfig;
+        // Add tool result clearing strategy
+        if (
+          !contextManagementEdits.some(
+            (edit) => edit.type === 'clear_tool_uses_20250919',
+          )
+        ) {
+          const triggerTokens = Math.floor(
+            (thresholdPercent / 100) * this.config.contextWindow,
+          );
+
+          contextManagementEdits.push({
+            type: 'clear_tool_uses_20250919' as const,
+            ...(triggerTokens > 0 && {
+              trigger: {
+                type: 'input_tokens' as const,
+                value: triggerTokens,
+              },
+            }),
+            keep: {
+              type: 'tool_uses' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+            },
+          });
+        }
+
+        options.context_management = {
+          ...(options.context_management ?? {}),
+          edits: contextManagementEdits,
+        } satisfies BetaContextManagementConfig;
+      }
     }
 
     let response: BetaMessage;

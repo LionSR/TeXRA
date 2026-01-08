@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Internal imports
+import type { ContextManagementData } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
@@ -151,12 +152,8 @@ export class VSCodeTransport extends Transport {
       validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
       event.data
     ) {
-      const contextData = event.data as {
-        contextWindow?: number;
-        tokensAfter?: number;
-        tokensBefore?: number;
-        utilizationAfter?: number;
-      };
+      // Use the proper ContextManagementData type from AgentLogger
+      const contextData = event.data as ContextManagementData;
       const contextWindow = contextData.contextWindow ?? 0;
       const inputTokens =
         contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
