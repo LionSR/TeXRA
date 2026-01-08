@@ -160,7 +160,7 @@ export class InstructionManager {
     }
     const placeholder = this._getPlaceholder(sessionType, advance);
     if (placeholder) {
-      this._textarea.setAttribute('placeholder', placeholder);
+      this._textarea.placeholder = placeholder;
     }
   }
 
