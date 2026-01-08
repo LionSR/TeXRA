@@ -16,7 +16,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type ContextStateData } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
@@ -86,10 +86,7 @@ export class ProgressViewState {
    * Stores context utilization (input tokens vs context window) for replay
    * when switching streams.
    */
-  private _contextState: Map<
-    StreamTabId,
-    { inputTokens: number; contextWindow: number; utilizationPercent: number }
-  > = new Map();
+  private _contextState: Map<StreamTabId, ContextStateData> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -242,25 +239,14 @@ export class ProgressViewState {
    * Set context state for a stream.
    * Stores context utilization so it can be replayed when switching streams.
    */
-  setContextState(
-    stream: StreamTabId,
-    contextState: {
-      inputTokens: number;
-      contextWindow: number;
-      utilizationPercent: number;
-    },
-  ): void {
+  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
     this._contextState.set(stream, contextState);
   }
 
   /**
    * Get context state for a stream.
    */
-  getContextState(
-    stream: StreamTabId,
-  ):
-    | { inputTokens: number; contextWindow: number; utilizationPercent: number }
-    | undefined {
+  getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._contextState.get(stream);
   }
 
