@@ -118,18 +118,19 @@ export class UsageMonitor {
         this.modelInfo.capabilities.supportsPromptCaching ||
         this.modelInfo.capabilities.supportsAutoPromptCaching;
 
-      const roundCacheReadTokens = roundUsage.cachedInputTokens ?? 0;
-      const roundCacheCreationTokens = roundUsage.cacheCreationTokens ?? 0;
+      // Use accumulated totals for cache percentage calculation
+      const totalCacheReadTokens = totals.totalCacheReadInputTokens;
+      const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
 
       const totalCacheableTokens = cachingStats
         ? this.modelInfo.capabilities.supportsPromptCaching
-          ? roundCacheCreationTokens + roundCacheReadTokens
-          : roundUsage.inputTokens
+          ? totalCacheCreationTokens + totalCacheReadTokens
+          : totals.totalInputTokens
         : 0;
 
       const percentageCached = cachingStats
         ? totalCacheableTokens > 0
-          ? (roundCacheReadTokens / totalCacheableTokens) * 100
+          ? (totalCacheReadTokens / totalCacheableTokens) * 100
           : 0
         : undefined;
 
@@ -139,8 +140,8 @@ export class UsageMonitor {
         outputTokens: totals.totalOutputTokens,
         cost: Number(totals.totalCost.toFixed(3)),
         // Include cache tokens for display
-        cacheReadInputTokens: totals.totalCacheReadInputTokens || undefined,
-        cacheCreationInputTokens: totals.totalCacheCreationInputTokens || undefined,
+        cacheReadInputTokens: totalCacheReadTokens || undefined,
+        cacheCreationInputTokens: totalCacheCreationTokens || undefined,
       };
 
       const payload: ExtendedTokenUsageStats = {
@@ -149,18 +150,14 @@ export class UsageMonitor {
           (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
         ),
         ...(cachingStats && {
-          cacheReadInputTokens: roundCacheReadTokens,
-          ...(this.modelInfo.capabilities.supportsPromptCaching && {
-            cacheCreationInputTokens: roundCacheCreationTokens,
-          }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
         ...(this.modelInfo.capabilities.supportsReasoning && {
-          reasoningTokens: roundUsage.reasoningTokens ?? 0,
+          reasoningTokens: totals.totalReasoningTokens,
         }),
         // Include tool usage if any is present
-        ...((roundUsage.toolUsePromptTokens ?? 0) > 0 && {
-          toolUseTokens: roundUsage.toolUsePromptTokens ?? 0,
+        ...(totals.totalToolUsePromptTokens > 0 && {
+          toolUseTokens: totals.totalToolUsePromptTokens,
         }),
       };
 
