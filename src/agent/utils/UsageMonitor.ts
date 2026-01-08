@@ -46,10 +46,7 @@ export interface UsageMonitorModelInfo {
     | 'supportsReasoning'
     | 'cacheDiscountFactor'
   >;
-  config: Pick<
-    ModelConfig,
-    'provider' | 'name' | 'fullName' | 'inputPrice' | 'contextWindow'
-  >;
+  config: Pick<ModelConfig, 'provider' | 'name' | 'fullName' | 'inputPrice'>;
 }
 
 /**
@@ -167,11 +164,9 @@ export class UsageMonitor {
       const storageKey = this.context.getStorageKey();
       usageReporter.report(payload, storageKey);
 
-      // Emit context state for UI display (based on actual response usage)
-      const contextWindow = this.modelInfo.config.contextWindow;
-      if (contextWindow > 0) {
-        logger.logContextState(roundUsage.inputTokens, contextWindow);
-      }
+      // Note: Context state is emitted by model handlers during token counting
+      // (Anthropic, Google, OpenAI). This avoids duplicate emissions and ensures
+      // we use the native token count which is more accurate than response usage.
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
       this.logToBackend(stateGlobal.totalResponseTimeMs, roundUsage);
