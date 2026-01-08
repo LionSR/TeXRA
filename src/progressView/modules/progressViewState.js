@@ -643,11 +643,11 @@ export class ProgressViewState {
     }
     // SET semantics: backend sends accumulated values, we store directly
     // (no accumulation here - backend handles accumulation in UsageStatsManager)
+    // Use ?? (nullish coalescing) not || to preserve 0 and NaN as intentional values
     const normalized = {
       inputTokens: Number(usage?.inputTokens ?? 0),
       outputTokens: Number(usage?.outputTokens ?? 0),
       cost: Number(usage?.cost ?? 0),
-      // Include cache tokens for display (use ?? 0 for consistent falsy handling)
       cacheReadInputTokens: Number(usage?.cacheReadInputTokens ?? 0),
       cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
     };
