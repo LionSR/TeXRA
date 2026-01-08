@@ -138,7 +138,8 @@ export class UsageMonitor {
         inputTokens: totals.totalInputTokens,
         outputTokens: totals.totalOutputTokens,
         cost: Number(totals.totalCost.toFixed(3)),
-        // Include cache creation tokens for Anthropic (charged at 1.25x input price)
+        // Include cache tokens for display
+        cacheReadInputTokens: totals.totalCacheReadInputTokens || undefined,
         cacheCreationInputTokens: totals.totalCacheCreationInputTokens || undefined,
       };
 
