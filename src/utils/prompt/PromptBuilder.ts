@@ -23,14 +23,16 @@ For math in responses, use $...$ for inline and $$...$$ for display math (not \\
 
 /** Instructions appended when memory tool is enabled */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-You have access to a persistent memory system under /memories for storing important information across sessions.
-Use the memory tool to:
-- Store key findings, decisions, or context that may be useful later
-- Organize notes by topic using subdirectories (e.g., /memories/project-notes/, /memories/references/)
-- Review existing memories before starting complex tasks to maintain continuity
+IMPORTANT: ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE.
 
-Memory commands: view (read file/directory), create (new file), str_replace (edit), insert (add lines), delete, rename.
-Keep memory files concise and well-organized. Prefer updating existing files over creating duplicates.
+MEMORY PROTOCOL:
+1. Use the \`view\` command of your \`memory\` tool to check for earlier progress.
+2. ... (work on the task) ...
+   - As you make progress, record status / progress / thoughts etc in your memory.
+
+ASSUME INTERRUPTION: Your context window might be reset at any moment, so you risk losing any progress that is not recorded in your memory directory.
+
+Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
 </memory_tool_instructions>`;
 
 /**
