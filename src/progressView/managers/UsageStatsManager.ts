@@ -3,8 +3,11 @@ import { z } from 'zod';
 
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-// Types - import canonical type (schema defines structure)
-import { type TokenUsageStats } from '@agent/types/UsageTypes';
+// Types - import canonical schema as source of truth
+import {
+  TokenUsageStatsSchema,
+  type TokenUsageStats,
+} from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -24,31 +27,42 @@ const FiniteNumber = z.coerce
 
 /**
  * Schema for parsing TokenUsageStats with safe number coercion.
- * Extends the canonical schema shape with coercion for persistence resilience.
+ * Uses canonical schema as source of truth - compile-time assertion ensures sync.
  */
-const TokenUsageStatsParsingSchema = z
-  .object({
-    inputTokens: FiniteNumber,
-    outputTokens: FiniteNumber,
-    cost: FiniteNumber,
-    // Cache tokens for display (optional, default to 0)
-    cacheReadInputTokens: FiniteNumber.optional().default(0),
-    cacheCreationInputTokens: FiniteNumber.optional().default(0),
-  })
-  .catch({
-    inputTokens: 0,
-    outputTokens: 0,
-    cost: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-  });
+const TokenUsageStatsParsingBaseSchema = z.object({
+  // Required fields from canonical schema
+  inputTokens: FiniteNumber,
+  outputTokens: FiniteNumber,
+  cost: FiniteNumber,
+  // Optional fields from canonical schema (default to 0 for accumulation)
+  cacheReadInputTokens: FiniteNumber.optional().default(0),
+  cacheCreationInputTokens: FiniteNumber.optional().default(0),
+});
 
-// Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
+const TokenUsageStatsParsingSchema = TokenUsageStatsParsingBaseSchema.catch({
+  inputTokens: 0,
+  outputTokens: 0,
+  cost: 0,
+  cacheReadInputTokens: 0,
+  cacheCreationInputTokens: 0,
+});
+
+// Compile-time assertions to ensure parsing schema stays in sync with canonical schema
 type _AssertSchemaCompatible =
   z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
     ? true
     : never;
 const _assertCompatible: _AssertSchemaCompatible = true;
+
+// Runtime assertion: ensure all canonical keys are handled
+const canonicalKeys = TokenUsageStatsSchema.keyof().options;
+const parsingKeys = new Set(Object.keys(TokenUsageStatsParsingBaseSchema.shape));
+const missingKeys = canonicalKeys.filter((k) => !parsingKeys.has(k));
+if (missingKeys.length > 0) {
+  throw new Error(
+    `TokenUsageStatsParsingSchema missing keys from canonical schema: ${missingKeys.join(', ')}`,
+  );
+}
 
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
@@ -83,7 +97,7 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Update usage statistics for a stream
+   * Accumulate usage statistics for a stream (adds deltas to existing values).
    * @param storageKey - THE key for storage operations
    */
   async setRunUsage(
@@ -91,20 +105,31 @@ export class UsageStatsManager extends PersistentMapManager<
     storageKey: StorageKey,
     usage: TokenUsageStats,
   ): Promise<void> {
-    const normalized = TokenUsageStatsParsingSchema.parse(usage);
+    const delta = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
-    if (isEmptyUsage(normalized)) {
-      current.delete(storageKey);
-    } else {
-      current.set(storageKey, normalized);
+
+    if (isEmptyUsage(delta)) {
+      // Empty delta means nothing to add
+      return;
     }
 
-    if (current.size === 0) {
-      this.items.delete(stream);
-    } else {
-      this.items.set(stream, current);
-    }
+    // Accumulate: add delta to existing values
+    const existing = current.get(storageKey);
+    const accumulated: TokenUsageStats = {
+      inputTokens: (existing?.inputTokens ?? 0) + delta.inputTokens,
+      outputTokens: (existing?.outputTokens ?? 0) + delta.outputTokens,
+      cost: (existing?.cost ?? 0) + delta.cost,
+      cacheReadInputTokens:
+        (existing?.cacheReadInputTokens ?? 0) +
+        (delta.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens:
+        (existing?.cacheCreationInputTokens ?? 0) +
+        (delta.cacheCreationInputTokens ?? 0),
+    };
+
+    current.set(storageKey, accumulated);
+    this.items.set(stream, current);
 
     await this.save();
   }
