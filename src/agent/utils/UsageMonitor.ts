@@ -99,44 +99,44 @@ export class UsageMonitor {
         .at(-1);
       const latestUsage = latestUsageSnapshot?.usage;
 
-      const roundUsage = {
-        inputTokens: latestUsage?.inputTokens ?? totals.totalInputTokens,
-        outputTokens: latestUsage?.outputTokens ?? totals.totalOutputTokens,
-        cachedInputTokens:
-          latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens,
-        cacheCreationTokens:
-          latestUsage?.cacheCreationTokens ??
-          totals.totalCacheCreationInputTokens,
-        reasoningTokens:
-          latestUsage?.reasoningTokens ?? totals.totalReasoningTokens,
-        toolUsePromptTokens:
-          latestUsage?.toolUsePromptTokens ?? totals.totalToolUsePromptTokens,
-        cost: latestUsage?.cost ?? totals.totalCost,
-      };
+      // Per-round usage - sent to both UI (for accumulation) and backend analytics
+      const roundInputTokens = latestUsage?.inputTokens ?? 0;
+      const roundOutputTokens = latestUsage?.outputTokens ?? 0;
+      const roundCacheReadTokens = latestUsage?.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = latestUsage?.cacheCreationTokens ?? 0;
+      const roundReasoningTokens = latestUsage?.reasoningTokens ?? 0;
+      const roundCost = latestUsage?.cost ?? 0;
 
       const cachingStats =
         this.modelInfo.capabilities.supportsPromptCaching ||
         this.modelInfo.capabilities.supportsAutoPromptCaching;
 
-      const roundCacheReadTokens = roundUsage.cachedInputTokens ?? 0;
-      const roundCacheCreationTokens = roundUsage.cacheCreationTokens ?? 0;
+      // Use accumulated totals for cache percentage calculation (for display)
+      const totalCacheReadTokens = totals.totalCacheReadInputTokens;
+      const totalCacheCreationTokens = totals.totalCacheCreationInputTokens;
 
       const totalCacheableTokens = cachingStats
         ? this.modelInfo.capabilities.supportsPromptCaching
-          ? roundCacheCreationTokens + roundCacheReadTokens
-          : roundUsage.inputTokens
+          ? totalCacheCreationTokens + totalCacheReadTokens
+          : totals.totalInputTokens
         : 0;
 
       const percentageCached = cachingStats
         ? totalCacheableTokens > 0
-          ? (roundCacheReadTokens / totalCacheableTokens) * 100
+          ? (totalCacheReadTokens / totalCacheableTokens) * 100
           : 0
         : undefined;
 
+      // Send per-round deltas - storage will accumulate them
       const baseStats: TokenUsageStats = {
-        inputTokens: roundUsage.inputTokens,
-        outputTokens: roundUsage.outputTokens,
-        cost: Number(roundUsage.cost.toFixed(3)),
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
+        cost: Number(roundCost.toFixed(3)),
+        // Include cache tokens for display (only if > 0)
+        cacheReadInputTokens:
+          roundCacheReadTokens > 0 ? roundCacheReadTokens : undefined,
+        cacheCreationInputTokens:
+          roundCacheCreationTokens > 0 ? roundCacheCreationTokens : undefined,
       };
 
       const payload: ExtendedTokenUsageStats = {
@@ -145,18 +145,14 @@ export class UsageMonitor {
           (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
         ),
         ...(cachingStats && {
-          cacheReadInputTokens: roundCacheReadTokens,
-          ...(this.modelInfo.capabilities.supportsPromptCaching && {
-            cacheCreationInputTokens: roundCacheCreationTokens,
-          }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
         ...(this.modelInfo.capabilities.supportsReasoning && {
-          reasoningTokens: roundUsage.reasoningTokens ?? 0,
+          reasoningTokens: roundReasoningTokens,
         }),
         // Include tool usage if any is present
-        ...((roundUsage.toolUsePromptTokens ?? 0) > 0 && {
-          toolUseTokens: roundUsage.toolUsePromptTokens ?? 0,
+        ...((latestUsage?.toolUsePromptTokens ?? 0) > 0 && {
+          toolUseTokens: latestUsage?.toolUsePromptTokens ?? 0,
         }),
       };
 
@@ -169,22 +165,31 @@ export class UsageMonitor {
       // we use the native token count which is more accurate than response usage.
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(stateGlobal.totalResponseTimeMs, roundUsage);
+      const backendLogUsage = {
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
+        cachedInputTokens: roundCacheReadTokens,
+        cacheCreationInputTokens: roundCacheCreationTokens,
+        reasoningTokens: roundReasoningTokens,
+        cost: roundCost,
+      };
+      this.logToBackend(stateGlobal.totalResponseTimeMs, backendLogUsage);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
   }
 
   /**
-   * Log usage to backend for analytics.
+   * Log per-round usage to backend for analytics/billing.
    * Non-blocking - errors are caught and logged, never thrown.
    */
   private logToBackend(
     totalResponseTimeMs: number,
-    roundUsage: {
+    usage: {
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens?: number;
+      cacheCreationInputTokens?: number;
       reasoningTokens?: number;
       cost: number;
     },
@@ -207,11 +212,12 @@ export class UsageMonitor {
       // rather than cumulative history. Downstream dashboards should treat each
       // entry as a single round; if cumulative views are needed, aggregate by
       // streamId/task.
-      const roundInputTokens = roundUsage.inputTokens;
-      const roundOutputTokens = roundUsage.outputTokens;
-      const roundCachedInputTokens = roundUsage.cachedInputTokens ?? 0;
-      const roundReasoningTokens = roundUsage.reasoningTokens ?? 0;
-      const roundCost = roundUsage.cost;
+      const roundInputTokens = usage.inputTokens;
+      const roundOutputTokens = usage.outputTokens;
+      const roundCachedInputTokens = usage.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = usage.cacheCreationInputTokens ?? 0;
+      const roundReasoningTokens = usage.reasoningTokens ?? 0;
+      const roundCost = usage.cost;
 
       const netInputTokens = Math.max(
         0,
@@ -233,6 +239,7 @@ export class UsageMonitor {
         cost: Number(relayCost.toFixed(6)),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens: roundCachedInputTokens,
+        cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         usedRelay,
         streamId: this.context.streamId,
