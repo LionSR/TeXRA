@@ -14,6 +14,8 @@ export const TokenUsageStatsSchema = z.strictObject({
   outputTokens: z.number(),
   /** Total cost in USD for the request */
   cost: z.number(),
+  /** Tokens read from cache (discounted rate) */
+  cacheReadInputTokens: z.number().optional(),
   /** Tokens written to cache (Anthropic: charged at 1.25x input price) */
   cacheCreationInputTokens: z.number().optional(),
 });
@@ -26,10 +28,6 @@ export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
   /** Total elapsed time in seconds */
   elapsedTime: z.number().optional(),
-  /** Tokens read from cache */
-  cacheReadInputTokens: z.number().optional(),
-  /** Tokens written to cache */
-  cacheCreationInputTokens: z.number().optional(),
   /** Percentage of tokens served from cache */
   percentageCached: z.number().optional(),
   /** Tokens used for reasoning */
