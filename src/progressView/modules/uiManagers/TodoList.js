@@ -62,7 +62,7 @@ export class TodoList {
       return;
     }
 
-    this._currentTodos = todos || [];
+    this._currentTodos = todos ?? [];
 
     if (this._currentTodos.length === 0) {
       this.hide();

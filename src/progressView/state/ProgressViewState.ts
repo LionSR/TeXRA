@@ -367,7 +367,7 @@ export class ProgressViewState {
         continue;
       }
 
-      const startTime = this.normalizeStartTime(group);
+      const startTime = group.startTime;
       if (!latest || startTime >= latest.start) {
         latest = { id: group.id, start: startTime };
       }
@@ -383,19 +383,6 @@ export class ProgressViewState {
     }
 
     return latest?.id ?? null;
-  }
-
-  private normalizeStartTime(group: TaskGroup): number {
-    if (typeof group.startTime === 'number') {
-      return group.startTime;
-    }
-
-    if (typeof group.startTime === 'string') {
-      const parsed = Date.parse(group.startTime);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    }
-
-    return 0;
   }
 
   private loadActiveRunIds(): void {

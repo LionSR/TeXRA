@@ -62,7 +62,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { showErrorMessage } from '@frontend/ui/messageUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -402,6 +401,26 @@ function updateFlowStatus(
   }
 }
 
+type FlowRunner = () => Promise<EndGroupStatus>;
+
+async function runFlowWithLifecycle(
+  ctx: ResolvedAgentBase,
+  streamTabId: StreamTabId,
+  agentName: string,
+  runner: FlowRunner,
+): Promise<void> {
+  try {
+    const flowStatus = await runner();
+    ctx.runStage.end(flowStatus);
+    updateFlowStatus(streamTabId, flowStatus);
+    logger.debug(`Task completed with status: ${flowStatus}`);
+  } catch (error) {
+    ctx.runStage.end(END_GROUP_STATUS.ERROR);
+    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
+    await handleFlowError(error, agentName, ctx.logger);
+  }
+}
+
 // ============================================================================
 // UI and Error Handling
 // ============================================================================
@@ -474,7 +493,6 @@ async function logFlowError(
 async function handleFlowError(
   err: unknown,
   agentName: string,
-  streamId: StreamTabId,
   agentLogger: AgentLogger,
 ): Promise<never> {
   const rawMsg = toErrorMessage(err);
@@ -523,12 +541,12 @@ export async function executeAgent(
   } catch (err) {
     // Show error to user unless it's a ZodError (handled by executeCommand.ts)
     if (!(err instanceof ZodError)) {
-      void showErrorMessage(toErrorMessage(err));
+      void vscode.window.showErrorMessage(toErrorMessage(err));
     }
     throw err;
   }
 
-  const { setting, streamId: streamTabId, config, logger: agentLogger } = ctx;
+  const { setting, streamId: streamTabId, config } = ctx;
   const agentName = config.agent;
 
   if (!config.session) {
@@ -543,7 +561,7 @@ export async function executeAgent(
     );
   }
 
-  try {
+  await runFlowWithLifecycle(ctx, streamTabId, agentName, async () => {
     if (executionId) await ensureRunDir(executionId);
 
     const runStorage = getRunStorageService();
@@ -586,11 +604,10 @@ export async function executeAgent(
     }
 
     // Execute the appropriate flow based on agent type
-    await logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
+    return logger.withScope(`Task: ${agentName}@${config.model}`, async () => {
       logger.info(`Executing ${agentName} with model ${config.model}`);
 
       const interruptManager = new InterruptManager();
-      let flowStatus: EndGroupStatus;
 
       if (setting.agentType === 'toolUse') {
         // Tool-use flow execution
@@ -600,32 +617,21 @@ export async function executeAgent(
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
         });
-        flowStatus = result.status;
-      } else {
-        // Reflection flow execution (direct/CoT/workflow)
-        // Pass runStage as parentStage so r0, r1 become children of it
-        const result = await runReflectionFlow({
-          ...ctx,
-          ...interruptManager.asFlowInput(),
-          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
-          setting: ctx.setting as AgentWorkflowSetting,
-          parentStage: ctx.runStage,
-        });
-        flowStatus = result.status;
+        return result.status;
       }
 
-      // End the runStage since we created it in resolveAgentBase
-      // (runReflectionFlow won't end it when parentStage is provided)
-      ctx.runStage.end(flowStatus);
-      updateFlowStatus(streamTabId, flowStatus);
-      logger.debug(`Task completed with status: ${flowStatus}`);
+      // Reflection flow execution (direct/CoT/workflow)
+      // Pass runStage as parentStage so r0, r1 become children of it
+      const result = await runReflectionFlow({
+        ...ctx,
+        ...interruptManager.asFlowInput(),
+        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'workflow'),
+        setting: ctx.setting as AgentWorkflowSetting,
+        parentStage: ctx.runStage,
+      });
+      return result.status;
     });
-  } catch (err) {
-    // End the runStage with error status on exception
-    ctx.runStage.end(END_GROUP_STATUS.ERROR);
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(err, agentName, streamTabId, agentLogger);
-  }
+  });
 }
 
 /**
@@ -647,12 +653,7 @@ export async function executeMergeAgent(
     editedFile,
   });
 
-  const {
-    streamId: streamTabId,
-    config,
-    logger: agentLogger,
-    executionId,
-  } = ctx;
+  const { streamId: streamTabId, config, executionId } = ctx;
 
   if (!config.session) {
     throw new Error('Merge agent configuration is missing session metadata.');
@@ -666,10 +667,10 @@ export async function executeMergeAgent(
     );
   }
 
-  try {
+  await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
     setupFlowUIState(ctx);
 
-    await logger.withScope(`Task: merge@${model}`, async () => {
+    return logger.withScope(`Task: merge@${model}`, async () => {
       logger.info(`Executing merge with model ${model}`);
 
       const interruptManager = new InterruptManager();
@@ -693,17 +694,9 @@ export async function executeMergeAgent(
         parentStage: ctx.runStage,
       });
 
-      // End the runStage since we created it in resolveAgentBase
-      ctx.runStage.end(result.status);
-      updateFlowStatus(streamTabId, result.status);
-      logger.debug(`Task completed with status: ${result.status}`);
+      return result.status;
     });
-  } catch (err) {
-    // End the runStage with error status on exception
-    ctx.runStage.end(END_GROUP_STATUS.ERROR);
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(err, 'merge', streamTabId, agentLogger);
-  }
+  });
 }
 
 // ============================================================================
@@ -736,7 +729,7 @@ export async function resumeToolUseFromSnapshot(
     executionId,
     { streamTabIdOverride: snapshot.streamId as StreamTabId },
   );
-  const { setting, streamId: streamTabId, config, logger: agentLogger } = ctx;
+  const { setting, streamId: streamTabId, config } = ctx;
 
   // Validate agent type and session
   if (setting.agentType !== 'toolUse') {
@@ -751,33 +744,26 @@ export async function resumeToolUseFromSnapshot(
 
   const interruptManager = new InterruptManager();
 
-  try {
-    setupFlowUIState(ctx);
+  await runFlowWithLifecycle(
+    ctx,
+    streamTabId,
+    snapshotConfig.agent,
+    async () => {
+      setupFlowUIState(ctx);
 
-    // Run the flow with resume snapshot
-    const result = await runToolUseFlow(
-      {
-        ...ctx,
-        ...interruptManager.asFlowInput(),
-        getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
-        setting: setting as AgentToolUseSetting,
-        resumeSnapshot: snapshot,
-      },
-      setupSession ? (context) => setupSession(context.session) : undefined,
-    );
+      // Run the flow with resume snapshot
+      const result = await runToolUseFlow(
+        {
+          ...ctx,
+          ...interruptManager.asFlowInput(),
+          getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
+          setting: setting as AgentToolUseSetting,
+          resumeSnapshot: snapshot,
+        },
+        setupSession ? (context) => setupSession(context.session) : undefined,
+      );
 
-    // End the runStage since we created it in resolveAgentBase
-    ctx.runStage.end(result.status);
-    updateFlowStatus(streamTabId, result.status);
-  } catch (error) {
-    // End the runStage with error status on exception
-    ctx.runStage.end(END_GROUP_STATUS.ERROR);
-    StreamStatusService.set(streamTabId, STREAM_STATUS.ERROR);
-    await handleFlowError(
-      error,
-      snapshotConfig.agent,
-      streamTabId,
-      agentLogger,
-    );
-  }
+      return result.status;
+    },
+  );
 }
