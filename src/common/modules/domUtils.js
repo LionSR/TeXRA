@@ -244,24 +244,29 @@ export function waitForElement(selector, options = {}) {
   }
 
   let observer = null;
-  let resolver = null;
   let timeoutId = null;
+  let resolved = false;
+  let resolvePromise;
+
+  const finish = (value) => {
+    if (resolved) {
+      return;
+    }
+    resolved = true;
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    observer?.disconnect();
+    observer = null;
+    resolvePromise(value);
+  };
 
   const promise = new Promise((resolve) => {
-    resolver = resolve;
+    resolvePromise = resolve;
 
-    // Set up optional timeout
     if (options.timeout && options.timeout > 0) {
-      timeoutId = setTimeout(() => {
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
-        if (resolver) {
-          resolver = null;
-          resolve(null);
-        }
-      }, options.timeout);
+      timeoutId = setTimeout(() => finish(null), options.timeout);
     }
 
     observer = new MutationObserver(() => {
@@ -269,16 +274,7 @@ export function waitForElement(selector, options = {}) {
       if (!element) {
         return;
       }
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      if (observer) {
-        observer.disconnect();
-        observer = null;
-      }
-      resolver = null;
-      resolve(element);
+      finish(element);
     });
 
     observer.observe(document.documentElement, {
@@ -287,21 +283,7 @@ export function waitForElement(selector, options = {}) {
     });
   });
 
-  const dispose = () => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
-    if (resolver) {
-      const resolve = resolver;
-      resolver = null;
-      resolve(null);
-    }
-  };
+  const dispose = () => finish(null);
 
   return { promise, dispose };
 }
