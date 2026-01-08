@@ -657,8 +657,9 @@ export class ProgressViewState {
       normalized.cost === 0
     ) {
       // Empty usage means nothing to store.
-      // Note: We intentionally only check input/output/cost, not cache tokens.
-      // If cost is 0, there's no billing impact regardless of cache token counts.
+      // Note: We only check input/output/cost, not cache tokens separately.
+      // Cost is calculated upstream and already includes cache creation charges
+      // (Anthropic: 1.25x input price), so cost=0 implies no cache creation billing.
       return;
     }
     this.runUsage.set(targetStream, runId, normalized);
