@@ -1327,6 +1327,12 @@
         "title": "Show Tasks",
         "category": "TeXRA",
         "icon": "$(eye)"
+      },
+      {
+        "command": "texra.openProgressViewInTab",
+        "title": "Open Tasks in Editor Tab",
+        "category": "TeXRA",
+        "icon": "$(go-to-file)"
       }
     ],
     "walkthroughs": [
