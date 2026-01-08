@@ -283,9 +283,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Result from compactConversation including messages and state updates.
+   * State updates are returned but not applied - caller is responsible for
+   * applying them only after successful API call to prevent stale state on retry.
+   */
+  private compactionResult?: {
+    compactedMessages: ResponseInputItem[];
+    tokensAfter: number;
+  };
+
+  /**
    * Compact the conversation to reduce context size.
    * Uses OpenAI's `/responses/compact` endpoint to replace prior assistant messages,
    * tool calls, and results with a single encrypted compaction item.
+   *
+   * State updates are stored in compactionResult but NOT applied immediately.
+   * The caller must apply them only after successful API call to prevent
+   * stale state if the API call fails and needs to retry.
    *
    * @param client - OpenAI client instance
    * @param messages - Current conversation messages
@@ -349,27 +363,42 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
 
-      // Update state after successful compaction
-      this.conversationState.isCompacted = true;
-      // Reset cumulative tokens to the compacted usage (not additive - replaces history)
-      // This prevents double-counting since compacted output supersedes previous messages
-      this.conversationState.cumulativeInputTokens = tokensAfter;
-      // Reset sent messages counter since we're using compacted output
-      this.conversationState.sentMessages = 0;
-      // Clear previous_response_id - compacted output replaces server-side history
-      this.previousResponseId = null;
+      // Store compacted messages for use in this request.
+      // Mark as pending compaction - state will be finalized after successful API call.
+      // This prevents stale state if API call fails and needs retry.
+      const compactedMessages =
+        compactedResponse.output as unknown as ResponseInputItem[];
+      this.compactionResult = { compactedMessages, tokensAfter };
 
-      // Convert output items to input items for the next request.
-      // The compacted output contains user messages and a single compaction item.
-      // Type cast required: SDK's CompactedResponse.output is ResponseOutputItem[]
-      // but these are semantically valid as input items for the next request.
-      return compactedResponse.output as unknown as ResponseInputItem[];
+      return compactedMessages;
     } catch (err) {
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
       );
+      this.compactionResult = undefined;
       return messages;
     }
+  }
+
+  /**
+   * Apply compaction state updates after successful API call.
+   * Clears the pending compaction result and updates conversation state.
+   *
+   * Note: cumulativeInputTokens is NOT updated here - it will be set from
+   * response.usage.input_tokens after the API call to reflect actual usage.
+   */
+  private applyCompactionState(): void {
+    if (!this.compactionResult) return;
+
+    // Reset sent messages counter since we're using compacted output
+    this.conversationState.sentMessages = 0;
+    // Mark as compacted so subsequent requests know to send all messages
+    this.conversationState.isCompacted = true;
+    // Clear previous_response_id - compacted output replaces server-side history
+    this.previousResponseId = null;
+
+    // Clear the pending result
+    this.compactionResult = undefined;
   }
 
   /** Creates a configured OpenAI client instance. */
@@ -705,6 +734,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Check if compaction is needed before processing the request
     let effectiveMessages = messages;
+    // Track if compaction happened in THIS call (not previous calls)
+    let compactedThisCall = false;
     if (this.shouldCompact()) {
       const threshold = this.getCompactionTokenThreshold();
       this.logger.logProgress(
@@ -716,11 +747,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         systemPrompt,
         signal,
       );
+      // compactionResult is set if compaction succeeded
+      compactedThisCall = this.compactionResult !== undefined;
     }
 
-    // After compaction, we send all messages (compacted output replaces history)
-    // Otherwise, we only send new messages since last request
-    const newMessages = this.conversationState.isCompacted
+    // After compaction in THIS call, send all compacted messages.
+    // If already compacted (from previous call), also send all messages.
+    // Otherwise, only send new messages since last request.
+    const shouldSendAll =
+      compactedThisCall || this.conversationState.isCompacted;
+    const newMessages = shouldSendAll
       ? effectiveMessages
       : effectiveMessages.slice(this.conversationState.sentMessages);
 
@@ -866,14 +902,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Emit any web searches not yet emitted (fallback for edge cases)
       this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
+      // Apply compaction state if compaction happened this call
+      if (compactedThisCall) {
+        this.applyCompactionState();
+      }
+
       this.previousResponseId = response.id;
       this.conversationState.sentMessages = effectiveMessages.length;
-      // Update cumulative input tokens for compaction threshold checking
+      // Set cumulative input tokens from actual usage (not additive - this IS the total)
+      // The response's input_tokens reflects the full context including server-side history
       if (response.usage?.input_tokens) {
-        this.conversationState.cumulativeInputTokens +=
+        this.conversationState.cumulativeInputTokens =
           response.usage.input_tokens;
       }
-      // Reset compacted flag after successful request
+      // Reset compacted flag after successful request (ready for next compaction if needed)
       this.conversationState.isCompacted = false;
       return response;
     }
@@ -917,14 +959,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal,
       );
     }
+
+    // Apply compaction state if compaction happened this call
+    if (compactedThisCall) {
+      this.applyCompactionState();
+    }
+
     this.previousResponseId = response.id;
     this.conversationState.sentMessages = effectiveMessages.length;
-    // Update cumulative input tokens for compaction threshold checking
+    // Set cumulative input tokens from actual usage (not additive - this IS the total)
+    // The response's input_tokens reflects the full context including server-side history
     if (response.usage?.input_tokens) {
-      this.conversationState.cumulativeInputTokens +=
+      this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
     }
-    // Reset compacted flag after successful request
+    // Reset compacted flag after successful request (ready for next compaction if needed)
     this.conversationState.isCompacted = false;
     return response;
   }

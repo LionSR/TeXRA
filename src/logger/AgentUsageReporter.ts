@@ -61,24 +61,7 @@ export class AgentUsageReporter {
     }
   }
 
-  /**
-   * Report context state (utilization) to the progress view.
-   * Shows "X% context left" in the footer.
-   *
-   * @param inputTokens - Current cumulative input tokens
-   * @param contextWindow - Model's context window size
-   */
-  public reportContextState(inputTokens: number, contextWindow: number): void {
-    if (contextWindow <= 0) return;
-
-    const utilizationPercent = (inputTokens / contextWindow) * 100;
-    bus.emit('updateContextState', {
-      stream: this.streamId,
-      contextState: {
-        inputTokens,
-        contextWindow,
-        utilizationPercent,
-      },
-    });
-  }
+  // Note: Context state is emitted by VSCodeTransport when CONTEXT_MANAGEMENT
+  // log events are processed. This keeps context emission centralized in the
+  // logging infrastructure rather than split between reporter and transport.
 }
