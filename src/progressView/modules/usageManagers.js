@@ -31,6 +31,7 @@ export class UsageSummary {
     const inputTokens = totals?.inputTokens ?? 0;
     const outputTokens = totals?.outputTokens ?? 0;
     const cost = totals?.cost ?? 0;
+    const cacheCreationTokens = totals?.cacheCreationInputTokens ?? 0;
 
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
@@ -49,25 +50,33 @@ export class UsageSummary {
     const formattedOutput = formatTokens(outputTokens);
     const formattedCost = `$${cost.toFixed(3)}`;
 
+    // Build cache creation segment if present (Anthropic: charged at 1.25x input price)
+    const cacheCreationSegment = cacheCreationTokens > 0
+      ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
+      : '';
+    const cacheCreationAriaLabel = cacheCreationTokens > 0
+      ? `, ${formatTokens(cacheCreationTokens)} cache creation tokens`
+      : '';
+
     this._summaryElem.innerHTML = `
       <i class="codicon codicon-meter"></i>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput} ·
-        <i class="codicon codicon-arrow-down" title="Output tokens"></i>${formattedOutput} ·
+        <i class="codicon codicon-arrow-down" title="Output tokens"></i>${formattedOutput}${cacheCreationSegment} ·
         ${formattedCost}
       </span>
     `;
     this._summaryElem.setAttribute(
       'aria-label',
-      `Total usage: ${formattedInput} input tokens, ${formattedOutput} output tokens, ${formattedCost}`,
+      `Total usage: ${formattedInput} input tokens, ${formattedOutput} output tokens${cacheCreationAriaLabel}, ${formattedCost}`,
     );
   }
 
   /**
    * Compute total usage for the active session in the active stream.
    * Each stream tab can have multiple sessions; this returns the current session's total.
-   * @returns {Object} Total usage with inputTokens, outputTokens, and cost
+   * @returns {Object} Total usage with inputTokens, outputTokens, cost, and cacheCreationInputTokens
    */
   computeTotal() {
     const stream = progressViewState.activeStream;
@@ -79,11 +88,12 @@ export class UsageSummary {
           inputTokens: usage.inputTokens || 0,
           outputTokens: usage.outputTokens || 0,
           cost: usage.cost || 0,
+          cacheCreationInputTokens: usage.cacheCreationInputTokens || 0,
         };
       }
     }
 
-    return { inputTokens: 0, outputTokens: 0, cost: 0 };
+    return { inputTokens: 0, outputTokens: 0, cost: 0, cacheCreationInputTokens: 0 };
   }
 
   /**
