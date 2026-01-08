@@ -439,7 +439,10 @@ export class ProgressEventHandler {
           inputTokens: Number(usage.inputTokens ?? 0),
           outputTokens: Number(usage.outputTokens ?? 0),
           cost: Number(usage.cost ?? 0),
-          // Pass through cache creation tokens for Anthropic (charged at 1.25x input price)
+          // Pass through cache tokens for display
+          ...(usage.cacheReadInputTokens && {
+            cacheReadInputTokens: Number(usage.cacheReadInputTokens),
+          }),
           ...(usage.cacheCreationInputTokens && {
             cacheCreationInputTokens: Number(usage.cacheCreationInputTokens),
           }),
