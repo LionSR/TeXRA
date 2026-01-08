@@ -381,7 +381,7 @@ export class ProgressViewProvider
     // If panel already exists, reveal it
     if (this._panelView) {
       this._panelView.reveal(vscode.ViewColumn.One);
-      this.updatePanelWebview({ forceRebuild: true });
+      this.updateWebview({ forceRebuild: true });
       return;
     }
 
@@ -413,11 +413,11 @@ export class ProgressViewProvider
       ),
     );
 
-    // Setup theme change listener for panel
+    // Setup theme change listener for panel (uses shared updateWebview)
     this._panelDisposables.push(
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (this._panelView?.visible) {
-          this.updatePanelWebview();
+          this.updateWebview();
         }
       }),
     );
@@ -428,38 +428,5 @@ export class ProgressViewProvider
       this._panelDisposables = [];
       this._panelView = undefined;
     });
-  }
-
-  /**
-   * Update the panel webview content (separate from sidebar updates).
-   */
-  private updatePanelWebview(options?: { forceRebuild?: boolean }): void {
-    if (!this._panelView) return;
-
-    const theme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-        ? 'dark'
-        : 'light';
-
-    const activeStream = this.state.activeStream;
-    const streamStatuses = this.eventHandler.getAllStreamStatuses();
-
-    // Send data to panel webview
-    this._panelView.webview.postMessage({
-      command: 'updateAll',
-      data: {
-        streams: this.state.getAllStreams(),
-        activeStream,
-        streamStatuses: Object.fromEntries(streamStatuses),
-        theme,
-      },
-    });
-
-    if (options?.forceRebuild) {
-      this._panelView.webview.postMessage({
-        command: 'refreshStreamSurface',
-        data: { streamId: activeStream || '', forceRebuild: true },
-      });
-    }
   }
 }
