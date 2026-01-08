@@ -216,48 +216,50 @@
                 class="queued-follow-ups-list"
               ></div>
             </vscode-collapsible>
-            <vscode-textarea
-              id="followUpInput"
-              placeholder="Send follow-up message"
-              rows="10"
-              resize="vertical"
-            ></vscode-textarea>
-            <div class="follow-up-actions">
-              <vscode-toolbar-button
-                id="polishFollowUpBtn"
-                icon="sparkle"
-                label="Polish follow-up"
-                title="Polish follow-up with AI"
-              ></vscode-toolbar-button>
-              <vscode-progress-ring
-                id="polishFollowUpProgressContainer"
-                style="display: none; width: 16px; height: 16px"
-              ></vscode-progress-ring>
-              <vscode-toolbar-button
-                id="resetApprovalBypassBtn"
-                icon="shield"
-                label="Resume approval prompts"
-                title="Resume approval prompts"
-                hidden
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                id="recordFollowUpBtn"
-                icon="mic"
-                label="Record follow-up"
-                title="Record follow-up with microphone"
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                id="clearFollowUpBtn"
-                icon="clear-all"
-                label="Clear input"
-                title="Clear input"
-              ></vscode-toolbar-button>
-              <vscode-toolbar-button
-                id="sendFollowUpBtn"
-                icon="send"
-                label="Send"
-                title="Send follow-up message"
-              ></vscode-toolbar-button>
+            <div class="follow-up-input-row">
+              <vscode-textarea
+                id="followUpInput"
+                placeholder="Send follow-up message"
+                rows="10"
+                resize="vertical"
+              ></vscode-textarea>
+              <div class="follow-up-actions">
+                <vscode-toolbar-button
+                  id="polishFollowUpBtn"
+                  icon="sparkle"
+                  label="Polish follow-up"
+                  title="Polish follow-up with AI"
+                ></vscode-toolbar-button>
+                <vscode-progress-ring
+                  id="polishFollowUpProgressContainer"
+                  style="display: none; width: 16px; height: 16px"
+                ></vscode-progress-ring>
+                <vscode-toolbar-button
+                  id="resetApprovalBypassBtn"
+                  icon="shield"
+                  label="Resume approval prompts"
+                  title="Resume approval prompts"
+                  hidden
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="recordFollowUpBtn"
+                  icon="mic"
+                  label="Record follow-up"
+                  title="Record follow-up with microphone"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="clearFollowUpBtn"
+                  icon="clear-all"
+                  label="Clear input"
+                  title="Clear input"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="sendFollowUpBtn"
+                  icon="send"
+                  label="Send"
+                  title="Send follow-up message"
+                ></vscode-toolbar-button>
+              </div>
             </div>
           </div>
           <template id="fileItemTemplate">
