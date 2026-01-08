@@ -1,5 +1,13 @@
 // Local imports - webview
 import { setupPasteListener } from '../pasteHandler.js';
+import {
+  ELEMENT_IDS,
+  normalizeSessionType,
+  SESSION_TYPE_INPUT,
+  SESSION_TYPES,
+} from '../constants.js';
+
+// Local imports - common
 import { safeGetElementById } from '@common/domUtils.js';
 import { debounce } from '@common/debounce.js';
 import {
@@ -8,11 +16,35 @@ import {
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
 
+const PLACEHOLDER_ROTATION_MS = 12000;
+const ONBOARDING_PLACEHOLDERS = {
+  [SESSION_TYPES.WORKFLOW]: [
+    'Example: Correct LaTeX errors, tighten language, and keep math notation intact.',
+    'Example: Summarize edits and list all sections you touched.',
+    'Example: Explain changes in bullet points and keep the tone formal.',
+  ],
+  [SESSION_TYPES.TOOL_USE]: [
+    'Example: Find missing citations, then suggest BibTeX entries.',
+    'Example: Scan for TODOs and draft fixes with file paths.',
+    'Example: Run LaTeX checks and report compilation warnings.',
+  ],
+};
+
 export class InstructionManager {
   constructor(textareaId, vscode, state) {
     this.textareaId = textareaId;
     this.vscode = vscode;
     this.state = state;
+    this._rotationTimer = null;
+    this._rotationIndex = {
+      [SESSION_TYPES.WORKFLOW]: 0,
+      [SESSION_TYPES.TOOL_USE]: 0,
+    };
+    this._currentSessionType = SESSION_TYPES.WORKFLOW;
+    this._textarea = null;
+    this._sessionToggle = null;
+    this._handleInput = null;
+    this._handleSessionTypeChange = null;
   }
 
   setup() {
@@ -40,8 +72,107 @@ export class InstructionManager {
         () => this.state?.save(),
         (ta, text) => insertTextAtCursor(ta, text),
       );
+
+      this._setupPlaceholderRotation(target, textarea);
     };
 
     awaitTextareaUpgrade(target, () => applySetup());
+  }
+
+  _setupPlaceholderRotation(target, textarea) {
+    this._textarea = textarea;
+    this._sessionToggle = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
+
+    this._handleInput = () => {
+      if (!this._textarea) {
+        return;
+      }
+      if (this._textarea.value.trim()) {
+        this._stopRotation();
+        return;
+      }
+      this._startRotation();
+      this._refreshPlaceholder(false);
+    };
+
+    this._handleSessionTypeChange = () => {
+      if (!this._textarea) {
+        return;
+      }
+      this._currentSessionType = this._getSessionType();
+      if (!this._textarea.value.trim()) {
+        this._refreshPlaceholder(false);
+      }
+    };
+
+    target.addEventListener('input', this._handleInput);
+    this._sessionToggle?.addEventListener(
+      'change',
+      this._handleSessionTypeChange,
+    );
+
+    this._handleInput();
+  }
+
+  _startRotation() {
+    if (this._rotationTimer) {
+      return;
+    }
+    this._rotationTimer = window.setInterval(() => {
+      if (!this._textarea) {
+        this._stopRotation();
+        return;
+      }
+      if (this._textarea.value.trim()) {
+        this._stopRotation();
+        return;
+      }
+      this._refreshPlaceholder(true);
+    }, PLACEHOLDER_ROTATION_MS);
+  }
+
+  _stopRotation() {
+    if (this._rotationTimer) {
+      window.clearInterval(this._rotationTimer);
+      this._rotationTimer = null;
+    }
+  }
+
+  _refreshPlaceholder(advance) {
+    if (!this._textarea) {
+      return;
+    }
+    const sessionType = this._getSessionType();
+    if (sessionType !== this._currentSessionType) {
+      this._currentSessionType = sessionType;
+    }
+    const placeholder = this._getPlaceholder(sessionType, advance);
+    if (placeholder) {
+      this._textarea.setAttribute('placeholder', placeholder);
+    }
+  }
+
+  _getPlaceholder(sessionType, advance) {
+    const placeholders =
+      ONBOARDING_PLACEHOLDERS[sessionType] ||
+      ONBOARDING_PLACEHOLDERS[SESSION_TYPES.WORKFLOW];
+    if (!placeholders.length) {
+      return '';
+    }
+    const currentIndex = this._rotationIndex[sessionType] ?? 0;
+    const index = currentIndex % placeholders.length;
+    const nextIndex = (index + 1) % placeholders.length;
+    if (advance) {
+      this._rotationIndex[sessionType] = nextIndex;
+    }
+    return placeholders[index];
+  }
+
+  _getSessionType() {
+    const input = safeGetElementById(SESSION_TYPE_INPUT);
+    if (input instanceof HTMLInputElement && input.value) {
+      return normalizeSessionType(input.value);
+    }
+    return SESSION_TYPES.WORKFLOW;
   }
 }
