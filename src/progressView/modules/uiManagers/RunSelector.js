@@ -1,16 +1,8 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants.js';
+import { getDateTimeFormatter } from '../formatters/timestampUtils.js';
 // Local imports - shared helpers
 import { safeGetElementById } from '@common/domUtils.js';
-
-const RUN_LABEL_DATETIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
 
 /**
  * Manages the run selector dropdown in the progress view header.
@@ -299,7 +291,7 @@ export class RunSelector {
       return '';
     }
 
-    return RUN_LABEL_DATETIME_FORMATTER.format(date);
+    return getDateTimeFormatter().format(date);
   }
 
   _syncVisibility() {
