@@ -151,7 +151,8 @@ export class UsageStatsManager extends PersistentMapManager<
 
   /**
    * Get usage for a specific key without copying the entire map.
-   * More efficient for single-key lookups.
+   * More efficient for single-key lookups in read-only scenarios
+   * (e.g., refreshStreamSurface bulk updates, displaying current usage).
    */
   getUsageForKey(
     stream: StreamTabId,

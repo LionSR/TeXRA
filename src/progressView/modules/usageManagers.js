@@ -55,7 +55,7 @@ export class UsageSummary {
     // Cache read: tokens served from cache (discounted rate)
     // Cache creation: tokens written to cache (Anthropic: 1.25x input price)
     const cacheReadSegment = cacheReadTokens > 0
-      ? ` · <i class="codicon codicon-arrow-circle-up" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
+      ? ` · <i class="codicon codicon-cloud-download" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
       : '';
     const cacheCreationSegment = cacheCreationTokens > 0
       ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
