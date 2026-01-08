@@ -14,6 +14,7 @@ import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { TodoList } from './uiManagers/TodoList.js';
+import { QueuedFollowUps } from './uiManagers/QueuedFollowUps.js';
 import { UsageSummary } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { vscode } from '@common/webviewContext.js';
@@ -41,6 +42,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       approvalRequests: new ApprovalRequests(),
       retryRequests: new RetryRequests(),
       todoList: new TodoList(),
+      queuedFollowUps: new QueuedFollowUps(),
     });
   }
 }

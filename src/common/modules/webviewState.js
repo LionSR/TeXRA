@@ -12,13 +12,8 @@ export class WebviewStateManager {
    */
   constructor(defaultState = {}) {
     this.defaultState = { ...defaultState };
-    try {
-      const saved = vscode.getState() ?? {};
-      this.state = { ...this.defaultState, ...saved };
-    } catch (e) {
-      console.error('Failed to get state:', e);
-      this.state = { ...this.defaultState };
-    }
+    const saved = vscode.getState() || {};
+    this.state = { ...this.defaultState, ...saved };
   }
 
   /**
@@ -34,11 +29,7 @@ export class WebviewStateManager {
    */
   setState(state) {
     this.state = { ...state };
-    try {
-      vscode.setState(this.state);
-    } catch (e) {
-      console.error('Failed to set state:', e);
-    }
+    vscode.setState(this.state);
   }
 
   /**

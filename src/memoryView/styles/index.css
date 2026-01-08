@@ -1,0 +1,52 @@
+/*
+ * Memory view styles
+ * Base styles (body, list-item, collapsible, text-secondary) inherited from common.css
+ */
+
+/* Container */
+.memory-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+/* Description - extends .text-secondary */
+.memory-description {
+  margin: 0 0 var(--spacing-medium) 0;
+}
+
+/* Memory list */
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+/* Memory path styling */
+.memory-path {
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: var(--font-size);
+  font-weight: 500;
+  color: var(--vscode-textLink-foreground);
+  word-break: break-all;
+}
+
+/* Metadata - extends .text-secondary from common.css */
+.memory-meta {
+  margin-top: var(--spacing-small);
+}
+
+/* Preview text */
+.memory-preview {
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: var(--spacing-medium);
+  border-radius: var(--border-radius);
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
