@@ -195,19 +195,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
 
   private previousResponseId: string | null = null;
-  private sentMessages = 0;
 
   /**
-   * Tracks cumulative input tokens across the conversation.
-   * Used to determine when compaction should be triggered.
+   * Conversation state for tracking messages, tokens, and compaction.
+   * Grouped together to ensure synchronized resets.
    */
-  private cumulativeInputTokens = 0;
+  private conversationState = {
+    /** Number of messages already sent to the API */
+    sentMessages: 0,
+    /** Cumulative input tokens across the conversation (for compaction trigger) */
+    cumulativeInputTokens: 0,
+    /** Whether the conversation has been compacted */
+    isCompacted: false,
+  };
 
-  /**
-   * Tracks whether the conversation has been compacted.
-   * After compaction, message handling changes to use compacted input.
-   */
-  private isCompacted = false;
+  /** Reset conversation state to initial values. */
+  private resetConversationState(): void {
+    this.conversationState = {
+      sentMessages: 0,
+      cumulativeInputTokens: 0,
+      isCompacted: false,
+    };
+  }
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -215,9 +224,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
-    this.sentMessages = 0;
-    this.cumulativeInputTokens = 0;
-    this.isCompacted = false;
+    this.resetConversationState();
   }
 
   /** Retrieve the stored previous response ID. */
@@ -268,7 +275,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
     const threshold = this.getCompactionTokenThreshold();
-    return this.cumulativeInputTokens > threshold;
+    return this.conversationState.cumulativeInputTokens > threshold;
   }
 
   /**
@@ -288,7 +295,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     systemPrompt?: string,
     signal?: AbortSignal,
   ): Promise<ResponseInputItem[]> {
-    const tokensBefore = this.cumulativeInputTokens;
+    const tokensBefore = this.conversationState.cumulativeInputTokens;
     const contextWindow = this.config.contextWindow;
     const utilizationBefore = (tokensBefore / contextWindow) * 100;
 
@@ -339,11 +346,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
 
       // Update state after successful compaction
-      this.isCompacted = true;
+      this.conversationState.isCompacted = true;
       // Reset cumulative tokens to the compacted usage
-      this.cumulativeInputTokens = tokensAfter;
+      this.conversationState.cumulativeInputTokens = tokensAfter;
       // Reset sent messages counter since we're using compacted output
-      this.sentMessages = 0;
+      this.conversationState.sentMessages = 0;
+      // Clear previous_response_id - compacted output replaces server-side history
+      this.previousResponseId = null;
 
       // Convert output items to input items for the next request
       // The compacted output contains user messages and a single compaction item
@@ -379,9 +388,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
-    this.sentMessages = 0;
-    this.cumulativeInputTokens = 0;
-    this.isCompacted = false;
+    this.resetConversationState();
 
     const messages: ResponseInputItem[] = [];
 
@@ -694,7 +701,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (this.shouldCompact()) {
       const threshold = this.getCompactionTokenThreshold();
       this.logger.logProgress(
-        `Compacting conversation (${this.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
+        `Compacting conversation (${this.conversationState.cumulativeInputTokens} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
       );
       effectiveMessages = await this.compactConversation(
         client,
@@ -706,9 +713,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // After compaction, we send all messages (compacted output replaces history)
     // Otherwise, we only send new messages since last request
-    const newMessages = this.isCompacted
+    const newMessages = this.conversationState.isCompacted
       ? effectiveMessages
-      : effectiveMessages.slice(this.sentMessages);
+      : effectiveMessages.slice(this.conversationState.sentMessages);
 
     await this.uploadInlineInputFiles(client, newMessages);
 
@@ -853,13 +860,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
       this.previousResponseId = response.id;
-      this.sentMessages = effectiveMessages.length;
+      this.conversationState.sentMessages = effectiveMessages.length;
       // Update cumulative input tokens for compaction threshold checking
       if (response.usage?.input_tokens) {
-        this.cumulativeInputTokens += response.usage.input_tokens;
+        this.conversationState.cumulativeInputTokens +=
+          response.usage.input_tokens;
       }
       // Reset compacted flag after successful request
-      this.isCompacted = false;
+      this.conversationState.isCompacted = false;
       return response;
     }
 
@@ -903,13 +911,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
     }
     this.previousResponseId = response.id;
-    this.sentMessages = effectiveMessages.length;
+    this.conversationState.sentMessages = effectiveMessages.length;
     // Update cumulative input tokens for compaction threshold checking
     if (response.usage?.input_tokens) {
-      this.cumulativeInputTokens += response.usage.input_tokens;
+      this.conversationState.cumulativeInputTokens +=
+        response.usage.input_tokens;
     }
     // Reset compacted flag after successful request
-    this.isCompacted = false;
+    this.conversationState.isCompacted = false;
     return response;
   }
 
