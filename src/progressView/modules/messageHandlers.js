@@ -373,9 +373,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Determine rebuild strategy based on forceRebuild flag:
     // - false: Incremental update only (skip DOM rebuild)
-    // - true/undefined: Full DOM rebuild needed
+    // - true: Full DOM rebuild required (stream switch, data deletion)
+    // - undefined: Legacy behavior, but avoid clearing if no messages
     // See WebviewUpdater.updateLogContent() JSDoc for contract details.
-    const useIncrementalUpdate = message.forceRebuild === false;
+    //
+    // IMPORTANT: When forceRebuild is not explicitly true and incoming messages
+    // are empty, use incremental update to prevent clearing existing content.
+    // This prevents data loss during follow-up after reload scenarios where
+    // UPDATE_LOGS arrives with empty/stale data before messages are loaded.
+    const logMessages = message.messages ?? [];
+    const useIncrementalUpdate =
+      message.forceRebuild === false ||
+      (message.forceRebuild !== true && logMessages.length === 0);
     if (useIncrementalUpdate) {
       this._handleIncrementalUpdate(message);
       this._updatePlaceholderVisibility();
@@ -430,7 +439,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       dom.taskGroups.showRun(null);
     }
-    const logMessages = message.messages ?? [];
     logMessages.forEach((msg) => {
       if (msg.groupId) {
         if (!dom.logEntries.append(msg)) {
