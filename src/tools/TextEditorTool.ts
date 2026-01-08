@@ -369,7 +369,7 @@ export class TextEditorTool extends defineTool({
       return {
         summary: `Created file ${filePath}`,
         output,
-        // userPatch omitted - userDiffNote in output already shows user adjustments
+        userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
@@ -495,7 +495,7 @@ export class TextEditorTool extends defineTool({
       return {
         summary: `Updated ${filePath}`,
         output: successMsg,
-        // userPatch omitted - userDiffNote in output already shows user adjustments
+        userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
@@ -618,7 +618,7 @@ export class TextEditorTool extends defineTool({
       return {
         summary: `Inserted text into ${filePath}`,
         output: successMsg,
-        // userPatch omitted - userDiffNote in output already shows user adjustments
+        userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
@@ -698,7 +698,7 @@ export class TextEditorTool extends defineTool({
       return {
         summary: `Undid edit on ${filePath}`,
         output,
-        // userPatch omitted - userDiffNote in output already shows user adjustments
+        userPatch: approval.userPatch,
         edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       };
     } catch (error) {
