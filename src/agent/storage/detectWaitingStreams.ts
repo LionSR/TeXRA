@@ -1,14 +1,32 @@
 /**
  * Detect waiting streams from persisted flow data.
  *
- * On extension startup, scans ExecutionKVStore for persisted tool-use flows
- * that were interrupted mid-session. These streams should be marked as WAITING
- * so users can send follow-ups and resume them.
+ * Provides lazy detection of persisted tool-use flows that were interrupted
+ * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { getExecutionStore } from './ExecutionKVStore';
+
+/**
+ * Check if a single stream has a persisted flow record.
+ *
+ * Used for lazy detection when a user sends a follow-up to a stream
+ * that wasn't detected at startup (or when startup detection is skipped).
+ *
+ * @returns true if a persisted flow record exists (session can be resumed)
+ */
+export async function hasPersistedFlowRecord(
+  executionId: ExecutionId,
+): Promise<boolean> {
+  try {
+    const kv = getExecutionStore(executionId);
+    return await kv.exists(`flow:${executionId}`);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Detect streams that have persisted flow state and should be marked as WAITING.
