@@ -7,6 +7,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
+import type { ContextStateData } from '@logger/AgentLogger';
 import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
@@ -69,11 +70,7 @@ export interface ProgressEventPayloads {
   };
   updateContextState: {
     stream: StreamTabId;
-    contextState: {
-      inputTokens: number;
-      contextWindow: number;
-      utilizationPercent: number;
-    };
+    contextState: ContextStateData;
   };
   showRetryRequest: RetryRequestPrompt;
   resolveRetryRequest: { streamId: StreamTabId };
