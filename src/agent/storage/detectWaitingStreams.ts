@@ -28,8 +28,9 @@ export async function hasPersistedFlowRecord(
   try {
     const kv = getExecutionStore(executionId);
     const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-    // Validate the record has the expected shape (shared state exists)
-    return flowRecord?.shared !== undefined;
+    // Use truthy check to match resume logic in SessionResumeRetrieval.ts
+    // This rejects null, undefined, and empty objects consistently
+    return !!flowRecord?.shared;
   } catch {
     return false;
   }
@@ -51,16 +52,8 @@ export async function detectWaitingStreams(
   const waitingStreams = new Set<StreamTabId>();
 
   for (const [streamId, executionId] of executionIdMap) {
-    try {
-      const kv = getExecutionStore(executionId);
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-
-      // Validate the record has the expected shape - corrupted records are skipped
-      if (flowRecord?.shared !== undefined) {
-        waitingStreams.add(streamId);
-      }
-    } catch {
-      // Ignore errors - stream won't be marked as waiting
+    if (await hasPersistedFlowRecord(executionId)) {
+      waitingStreams.add(streamId);
     }
   }
 
