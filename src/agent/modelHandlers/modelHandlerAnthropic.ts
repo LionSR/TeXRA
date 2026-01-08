@@ -199,6 +199,15 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
+/**
+ * Context management constants for Anthropic's server-side editing.
+ * These are reasonable defaults that balance context efficiency with conversation continuity.
+ */
+/** Number of recent tool use/result pairs to keep after context clearing */
+const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
+/** Number of assistant turns with thinking blocks to keep (1 = most recent only) */
+const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 1;
+
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
 /**
@@ -531,22 +540,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (edit) => edit.type === 'clear_thinking_20251015',
         )
       ) {
-        const thinkingKeep = getConfig<number>(
-          'texra.model.anthropicThinkingBlocksKeep',
-          1,
-        );
         // Thinking clearing must come first in the edits array
-        const thinkingEdit =
-          thinkingKeep === 0
-            ? { type: 'clear_thinking_20251015' as const, keep: 'all' as const }
-            : {
-                type: 'clear_thinking_20251015' as const,
-                keep: {
-                  type: 'thinking_turns' as const,
-                  value: thinkingKeep,
-                },
-              };
-        contextManagementEdits.unshift(thinkingEdit);
+        contextManagementEdits.unshift({
+          type: 'clear_thinking_20251015' as const,
+          keep: {
+            type: 'thinking_turns' as const,
+            value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+          },
+        });
       }
 
       // Add tool result clearing strategy
@@ -555,35 +556,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
           (edit) => edit.type === 'clear_tool_uses_20250919',
         )
       ) {
-        const triggerTokens = getConfig<number>(
-          'texra.model.anthropicContextManagementTrigger',
-          100000,
+        // Use shared compaction threshold (percentage of context window)
+        const thresholdPercent = getConfig<number>(
+          'texra.model.compactionThresholdPercent',
+          75,
         );
-        const keepToolUses = getConfig<number>(
-          'texra.model.anthropicContextManagementKeep',
-          3,
-        );
+        const triggerTokens =
+          thresholdPercent > 0
+            ? Math.floor((thresholdPercent / 100) * this.config.contextWindow)
+            : 0;
 
-        // Build the tool clear edit with optional configuration
-        // Use type assertion since the SDK types may not include all options yet
-        const toolClearEdit = {
+        contextManagementEdits.push({
           type: 'clear_tool_uses_20250919' as const,
-          // Only add trigger/keep if not using defaults (0 means use API defaults)
           ...(triggerTokens > 0 && {
             trigger: {
               type: 'input_tokens' as const,
               value: triggerTokens,
             },
           }),
-          ...(keepToolUses > 0 && {
-            keep: {
-              type: 'tool_uses' as const,
-              value: keepToolUses,
-            },
-          }),
-        };
-
-        contextManagementEdits.push(toolClearEdit);
+          keep: {
+            type: 'tool_uses' as const,
+            value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+          },
+        });
       }
 
       options.context_management = {
