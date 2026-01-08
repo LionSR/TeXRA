@@ -924,6 +924,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.runSelector.clear();
         dom.todoList.clear();
         dom.fileList.clear();
+        dom.usageSummary?.clearContextDisplay?.();
       }
     }
 
@@ -945,6 +946,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.runSelector.clear();
     dom.todoList.clear();
     dom.fileList.clear();
+    dom.usageSummary?.clearContextDisplay?.();
     this._updatePlaceholderVisibility();
   }
 
