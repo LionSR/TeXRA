@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Added **Memory View** for browsing and managing agent memory entries with delete controls.
 - Added **context utilization display** showing percentage of context window used on each API call.
-- Automatic conversation compaction for OpenAI Responses API to manage long sessions.
-- Configurable context management with thinking block clearing for Anthropic models.
+- Added automatic conversation compaction for OpenAI Responses API to manage long sessions.
+- Added configurable context management with thinking block clearing for Anthropic models.
 
 ### Bug Fixes
 
