@@ -11,10 +11,7 @@ import type {
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-import {
-  UsageProviderSchema,
-  type NormalizedUsage,
-} from '@agent/types/NormalizedUsage';
+import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 
 // Internal imports
 import { UsageLogService } from '@logger/UsageLogService';
@@ -102,30 +99,44 @@ export class UsageMonitor {
         .at(-1);
       const latestUsage = latestUsageSnapshot?.usage;
 
-      // `totalCost` is the provider-computed charge (includes cache discounts).
-      const cost = totals.totalCost;
+      const roundUsage = {
+        inputTokens: latestUsage?.inputTokens ?? totals.totalInputTokens,
+        outputTokens: latestUsage?.outputTokens ?? totals.totalOutputTokens,
+        cachedInputTokens:
+          latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens,
+        cacheCreationTokens:
+          latestUsage?.cacheCreationTokens ??
+          totals.totalCacheCreationInputTokens,
+        reasoningTokens:
+          latestUsage?.reasoningTokens ?? totals.totalReasoningTokens,
+        toolUsePromptTokens:
+          latestUsage?.toolUsePromptTokens ?? totals.totalToolUsePromptTokens,
+        cost: latestUsage?.cost ?? totals.totalCost,
+      };
 
       const cachingStats =
         this.modelInfo.capabilities.supportsPromptCaching ||
         this.modelInfo.capabilities.supportsAutoPromptCaching;
 
+      const roundCacheReadTokens = roundUsage.cachedInputTokens ?? 0;
+      const roundCacheCreationTokens = roundUsage.cacheCreationTokens ?? 0;
+
       const totalCacheableTokens = cachingStats
         ? this.modelInfo.capabilities.supportsPromptCaching
-          ? totals.totalCacheCreationInputTokens +
-            totals.totalCacheReadInputTokens
-          : totals.totalInputTokens
+          ? roundCacheCreationTokens + roundCacheReadTokens
+          : roundUsage.inputTokens
         : 0;
 
       const percentageCached = cachingStats
         ? totalCacheableTokens > 0
-          ? (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100
+          ? (roundCacheReadTokens / totalCacheableTokens) * 100
           : 0
         : undefined;
 
       const baseStats: TokenUsageStats = {
-        inputTokens: totals.totalInputTokens,
-        outputTokens: totals.totalOutputTokens,
-        cost: Number(cost.toFixed(3)),
+        inputTokens: roundUsage.inputTokens,
+        outputTokens: roundUsage.outputTokens,
+        cost: Number(roundUsage.cost.toFixed(3)),
       };
 
       const payload: ExtendedTokenUsageStats = {
@@ -134,18 +145,18 @@ export class UsageMonitor {
           (stateGlobal.totalResponseTimeMs / 1000).toFixed(1),
         ),
         ...(cachingStats && {
-          cacheReadInputTokens: totals.totalCacheReadInputTokens,
+          cacheReadInputTokens: roundCacheReadTokens,
           ...(this.modelInfo.capabilities.supportsPromptCaching && {
-            cacheCreationInputTokens: totals.totalCacheCreationInputTokens,
+            cacheCreationInputTokens: roundCacheCreationTokens,
           }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
         ...(this.modelInfo.capabilities.supportsReasoning && {
-          reasoningTokens: totals.totalReasoningTokens,
+          reasoningTokens: roundUsage.reasoningTokens ?? 0,
         }),
         // Include tool usage if any is present
-        ...(totals.totalToolUsePromptTokens > 0 && {
-          toolUseTokens: totals.totalToolUsePromptTokens,
+        ...((roundUsage.toolUsePromptTokens ?? 0) > 0 && {
+          toolUseTokens: roundUsage.toolUsePromptTokens ?? 0,
         }),
       };
 
@@ -154,7 +165,7 @@ export class UsageMonitor {
       usageReporter.report(payload, storageKey);
 
       // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(totals, stateGlobal.totalResponseTimeMs, latestUsage);
+      this.logToBackend(stateGlobal.totalResponseTimeMs, roundUsage);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
@@ -165,9 +176,14 @@ export class UsageMonitor {
    * Non-blocking - errors are caught and logged, never thrown.
    */
   private logToBackend(
-    totals: ReturnType<AgentRunState['usageAccumulator']['getTotals']>,
     totalResponseTimeMs: number,
-    latestUsage: NormalizedUsage | undefined,
+    roundUsage: {
+      inputTokens: number;
+      outputTokens: number;
+      cachedInputTokens?: number;
+      reasoningTokens?: number;
+      cost: number;
+    },
   ): void {
     try {
       const { config } = this.modelInfo;
@@ -187,15 +203,11 @@ export class UsageMonitor {
       // rather than cumulative history. Downstream dashboards should treat each
       // entry as a single round; if cumulative views are needed, aggregate by
       // streamId/task.
-      const roundInputTokens =
-        latestUsage?.inputTokens ?? totals.totalInputTokens;
-      const roundOutputTokens =
-        latestUsage?.outputTokens ?? totals.totalOutputTokens;
-      const roundCachedInputTokens =
-        latestUsage?.cachedInputTokens ?? totals.totalCacheReadInputTokens;
-      const roundReasoningTokens =
-        latestUsage?.reasoningTokens ?? totals.totalReasoningTokens;
-      const roundCost = latestUsage?.cost ?? totals.totalCost;
+      const roundInputTokens = roundUsage.inputTokens;
+      const roundOutputTokens = roundUsage.outputTokens;
+      const roundCachedInputTokens = roundUsage.cachedInputTokens ?? 0;
+      const roundReasoningTokens = roundUsage.reasoningTokens ?? 0;
+      const roundCost = roundUsage.cost;
 
       const netInputTokens = Math.max(
         0,
