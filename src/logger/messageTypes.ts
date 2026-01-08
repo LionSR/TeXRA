@@ -77,6 +77,8 @@ export const MESSAGE_TYPES = {
   ERROR: 'error',
   /** Internal/system messages used by the extension */
   INTERNAL: 'internal',
+  /** Context management events (compaction, context clearing) */
+  CONTEXT_MANAGEMENT: 'contextManagement',
   DEFAULT: 'default',
 } as const;
 
@@ -94,6 +96,7 @@ export const MessageTypeSchema = z.enum([
   MESSAGE_TYPES.PROGRESS_STATUS,
   MESSAGE_TYPES.ERROR,
   MESSAGE_TYPES.INTERNAL,
+  MESSAGE_TYPES.CONTEXT_MANAGEMENT,
   MESSAGE_TYPES.DEFAULT,
 ]);
 

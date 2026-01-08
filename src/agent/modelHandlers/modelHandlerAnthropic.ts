@@ -84,6 +84,7 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
@@ -102,6 +103,9 @@ import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
   BetaContextManagementConfig,
+  BetaContextManagementResponse,
+  BetaClearToolUses20250919EditResponse,
+  BetaClearThinking20251015EditResponse,
   BetaImageBlockParam,
   BetaMessage,
   BetaRedactedThinkingBlock,
@@ -198,6 +202,15 @@ const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
+
+/**
+ * Context management constants for Anthropic's server-side editing.
+ * These are reasonable defaults that balance context efficiency with conversation continuity.
+ */
+/** Number of recent tool use/result pairs to keep after context clearing */
+const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
+/** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
+const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -517,24 +530,68 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (this.agentType === AgentType.ToolUse) {
-      this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
+      // Use shared compaction threshold (percentage of context window)
+      // Set to 0 to disable context management entirely
+      const thresholdPercent = getConfig<number>(
+        'texra.model.compactionThresholdPercent',
+        DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+      );
 
-      const contextManagementEdits = [
-        ...(options.context_management?.edits ?? []),
-      ];
+      // Only enable context management if threshold is configured (> 0)
+      if (thresholdPercent > 0) {
+        this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
 
-      if (
-        !contextManagementEdits.some(
-          (edit) => edit.type === 'clear_tool_uses_20250919',
-        )
-      ) {
-        contextManagementEdits.push({ type: 'clear_tool_uses_20250919' });
+        const contextManagementEdits = [
+          ...(options.context_management?.edits ?? []),
+        ];
+
+        // Add thinking block clearing strategy if reasoning is enabled
+        if (
+          this.capabilities.supportsReasoning &&
+          options.thinking &&
+          !contextManagementEdits.some(
+            (edit) => edit.type === 'clear_thinking_20251015',
+          )
+        ) {
+          // Thinking clearing must come first in the edits array
+          contextManagementEdits.unshift({
+            type: 'clear_thinking_20251015' as const,
+            keep: {
+              type: 'thinking_turns' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS,
+            },
+          });
+        }
+
+        // Add tool result clearing strategy
+        if (
+          !contextManagementEdits.some(
+            (edit) => edit.type === 'clear_tool_uses_20250919',
+          )
+        ) {
+          const triggerTokens = Math.floor(
+            (thresholdPercent / 100) * this.config.contextWindow,
+          );
+
+          contextManagementEdits.push({
+            type: 'clear_tool_uses_20250919' as const,
+            // triggerTokens is guaranteed > 0 since thresholdPercent > 0 (checked above)
+            trigger: {
+              type: 'input_tokens' as const,
+              value: triggerTokens,
+            },
+            keep: {
+              type: 'tool_uses' as const,
+              value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
+            },
+          });
+        }
+
+        options.context_management = {
+          ...(options.context_management ?? {}),
+          edits: contextManagementEdits,
+        } satisfies BetaContextManagementConfig;
       }
-
-      options.context_management = {
-        ...(options.context_management ?? {}),
-        edits: contextManagementEdits,
-      } satisfies BetaContextManagementConfig;
     }
 
     let response: BetaMessage;
@@ -603,9 +660,89 @@ export class ModelHandlerAnthropic extends ModelHandler<
         () => client.beta.messages.create(options, { signal }),
       );
     }
-    // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+
+    // Log context management events if any edits were applied
+    this.logContextManagementFromResponse(response);
 
     return response;
+  }
+
+  /**
+   * Log context management events from the Anthropic response.
+   * The response includes applied_edits when server-side context editing was performed.
+   */
+  private logContextManagementFromResponse(response: BetaMessage): void {
+    // Access context_management from response - uses SDK types where available
+    const contextManagement = (
+      response as BetaMessage & {
+        context_management?: BetaContextManagementResponse | null;
+      }
+    ).context_management;
+
+    if (!contextManagement?.applied_edits?.length) {
+      return;
+    }
+
+    const contextWindow = this.config.contextWindow;
+    type AppliedEdit =
+      | BetaClearToolUses20250919EditResponse
+      | BetaClearThinking20251015EditResponse;
+
+    for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
+      if (
+        edit.type === 'clear_tool_uses_20250919' &&
+        edit.cleared_input_tokens &&
+        edit.cleared_input_tokens > 0
+      ) {
+        const typedEdit = edit as BetaClearToolUses20250919EditResponse;
+        const clearedTokens = typedEdit.cleared_input_tokens;
+        const clearedToolUses = typedEdit.cleared_tool_uses ?? 0;
+        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+
+        this.logger.logContextManagement(
+          `Cleared ${clearedToolUses} tool use(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+          {
+            action: 'clear_tool_uses',
+            tokensBefore: response.usage.input_tokens + clearedTokens,
+            tokensAfter: response.usage.input_tokens,
+            contextWindow,
+            utilizationBefore:
+              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
+              100,
+            utilizationAfter:
+              (response.usage.input_tokens / contextWindow) * 100,
+            details: `Anthropic server-side: cleared ${clearedToolUses} tool use(s)`,
+          },
+        );
+      }
+
+      if (
+        edit.type === 'clear_thinking_20251015' &&
+        edit.cleared_input_tokens &&
+        edit.cleared_input_tokens > 0
+      ) {
+        const typedEdit = edit as BetaClearThinking20251015EditResponse;
+        const clearedTokens = typedEdit.cleared_input_tokens;
+        const clearedTurns = typedEdit.cleared_thinking_turns ?? 0;
+        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+
+        this.logger.logContextManagement(
+          `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+          {
+            action: 'clear_thinking',
+            tokensBefore: response.usage.input_tokens + clearedTokens,
+            tokensAfter: response.usage.input_tokens,
+            contextWindow,
+            utilizationBefore:
+              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
+              100,
+            utilizationAfter:
+              (response.usage.input_tokens / contextWindow) * 100,
+            details: `Anthropic server-side: cleared ${clearedTurns} thinking turn(s)`,
+          },
+        );
+      }
+    }
   }
 
   private enforceCacheControlLimit(messages: MessageParam[]): void {
