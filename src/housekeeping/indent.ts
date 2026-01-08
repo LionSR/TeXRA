@@ -60,88 +60,63 @@ export async function indentLatexFilesInDirectory(
 
   let indentedCount = 0;
 
-  const processDirectory = async (dirPath: string) => {
-    try {
-      const entries = await WorkspaceFS.readDir(dirPath);
-      for (const [name, type] of entries) {
-        if (EXCLUDED_DIRS.has(name.toLowerCase())) {
-          continue;
-        }
-        if (name.includes('Diffs')) {
-          continue;
-        }
-
-        const fullPath = path.join(dirPath, name);
-
-        if (type === vscode.FileType.Directory) {
-          await processDirectory(fullPath);
-        } else if (type === vscode.FileType.File && name.endsWith('.tex')) {
-          if (progressCallback) {
-            progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
-          }
-
-          logger.debug(CHANNEL, `Processing file: ${fullPath}`);
-          try {
-            const success = await runLatexFormatter(fullPath);
-            if (success) {
-              logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
-              indentedCount++;
-            } else {
-              logger.error(CHANNEL, `Failed to format ${fullPath}`);
-            }
-          } catch (err) {
-            logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
-            continue;
-          }
-        }
+  const walkDirectory = async (
+    dirPath: string,
+    onFile: (fullPath: string, name: string) => Promise<void>,
+  ) => {
+    const entries = await WorkspaceFS.readDir(dirPath);
+    for (const [name, type] of entries) {
+      if (EXCLUDED_DIRS.has(name.toLowerCase())) {
+        continue;
       }
-    } catch (err) {
-      logger.error(CHANNEL, `Error processing directory ${dirPath}: ${err}`);
+      if (name.includes('Diffs')) {
+        continue;
+      }
+
+      const fullPath = path.join(dirPath, name);
+
+      if (type === vscode.FileType.Directory) {
+        await walkDirectory(fullPath, onFile);
+      } else if (type === vscode.FileType.File) {
+        await onFile(fullPath, name);
+      }
     }
   };
 
   try {
-    await processDirectory(directory);
+    await walkDirectory(directory, async (fullPath, name) => {
+      if (!name.endsWith('.tex')) {
+        return;
+      }
+      if (progressCallback) {
+        progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
+      }
 
-    // Clean up temporary files recursively
-    const processCleanup = async (dirPath: string) => {
+      logger.debug(CHANNEL, `Processing file: ${fullPath}`);
       try {
-        const entries = await WorkspaceFS.readDir(dirPath);
-        for (const [name, type] of entries) {
-          if (EXCLUDED_DIRS.has(name.toLowerCase())) {
-            continue;
-          }
-          if (name.includes('Diffs')) {
-            continue;
-          }
-
-          const fullPath = path.join(dirPath, name);
-
-          if (type === vscode.FileType.Directory) {
-            await processCleanup(fullPath);
-          } else if (type === vscode.FileType.File) {
-            // Check for temporary files
-            if (
-              name.endsWith('.bak') ||
-              name.endsWith('.bak0') ||
-              name.endsWith('.bak1') ||
-              name === 'indent.log'
-            ) {
-              logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
-              await WorkspaceFS.delete(fullPath);
-            }
-          }
+        const success = await runLatexFormatter(fullPath);
+        if (success) {
+          logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
+          indentedCount++;
+        } else {
+          logger.error(CHANNEL, `Failed to format ${fullPath}`);
         }
       } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error during cleanup in directory ${dirPath}: ${err}`,
-        );
+        logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
       }
-    };
+    });
 
-    // Start cleanup from the specified directory
-    await processCleanup(directory);
+    await walkDirectory(directory, async (fullPath, name) => {
+      if (
+        name.endsWith('.bak') ||
+        name.endsWith('.bak0') ||
+        name.endsWith('.bak1') ||
+        name === 'indent.log'
+      ) {
+        logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
+        await WorkspaceFS.delete(fullPath);
+      }
+    });
 
     logger.info(
       CHANNEL,
