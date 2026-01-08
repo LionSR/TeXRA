@@ -13,6 +13,7 @@ import {
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { toPosixPath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -28,6 +29,44 @@ interface GlobMatchInfo {
   relativePath: string;
   mtime: number;
   lineCount: number | null;
+}
+
+/**
+ * Count lines for multiple files using `wc -l` (efficient, streams files).
+ * Returns a map from relative path to line count.
+ */
+async function countLinesForFiles(
+  filePaths: string[],
+): Promise<Map<string, number>> {
+  const lineCounts = new Map<string, number>();
+  if (filePaths.length === 0) {
+    return lineCounts;
+  }
+
+  // Batch files to avoid command line length limits
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
+    const batch = filePaths.slice(i, i + BATCH_SIZE);
+    const result = await executeCommand(['wc', '-l', ...batch], {
+      channel: 'GlobTool',
+    });
+
+    if (result.success && result.stdout) {
+      // Parse wc -l output: "  123 path/to/file"
+      for (const line of result.stdout.split('\n')) {
+        const match = line.match(/^\s*(\d+)\s+(.+)$/);
+        if (match) {
+          const [, count, path] = match;
+          // Skip "total" line that wc outputs when given multiple files
+          if (path !== 'total') {
+            lineCounts.set(path, parseInt(count, 10));
+          }
+        }
+      }
+    }
+  }
+
+  return lineCounts;
 }
 
 export class GlobTool extends defineTool({
@@ -73,32 +112,33 @@ export class GlobTool extends defineTool({
 
       try {
         const stat = await WorkspaceFS.stat(relativePath);
-        let lineCount: number | null = null;
-
-        // Count lines for regular files
-        if (stat.isFile) {
-          try {
-            const content = await WorkspaceFS.readFile(relativePath);
-            lineCount = content.split('\n').length;
-          } catch {
-            // Ignore read errors (binary files, permission issues, etc.)
-          }
-        }
-
         return {
           relativePath,
           mtime: stat.mtime ?? 0,
-          lineCount,
+          isFile: stat.isFile,
         };
       } catch (_err) {
-        return { relativePath, mtime: 0, lineCount: null };
+        return { relativePath, mtime: 0, isFile: false };
       }
     });
 
     const decoratedWithNulls = await Promise.all(statPromises);
-    const decorated = decoratedWithNulls.filter(
-      (item): item is GlobMatchInfo => item !== null,
+    const statsOnly = decoratedWithNulls.filter(
+      (item): item is { relativePath: string; mtime: number; isFile: boolean } =>
+        item !== null,
     );
+
+    // Count lines for all files in batch using wc -l (efficient, no memory issues)
+    const filePaths = statsOnly
+      .filter((item) => item.isFile)
+      .map((item) => item.relativePath);
+    const lineCounts = await countLinesForFiles(filePaths);
+
+    const decorated: GlobMatchInfo[] = statsOnly.map((item) => ({
+      relativePath: item.relativePath,
+      mtime: item.mtime,
+      lineCount: item.isFile ? (lineCounts.get(item.relativePath) ?? null) : null,
+    }));
 
     const sorted = decorated.sort((a, b) => {
       if (b.mtime !== a.mtime) {
