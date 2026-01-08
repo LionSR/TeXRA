@@ -50,6 +50,13 @@ export const StreamHintsSchema = z.object({
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
 
 /**
+ * Maximum number of streams to retain in storage.
+ * When exceeded during load, oldest streams are pruned to prevent
+ * VS Code storage IPC threshold warnings (~5MB limit).
+ */
+const MAX_STREAMS = 50;
+
+/**
  * Core state management for the progress view.
  * Composes focused manager classes and provides a clean interface
  * for state operations while hiding implementation details.
@@ -581,6 +588,9 @@ export class ProgressViewState {
       this.loadAgentTypeFilter(),
       this.loadActiveRunIds(),
     ]);
+
+    // Prune old streams to prevent storage bloat
+    await this.pruneOldStreams();
   }
 
   /**
@@ -759,5 +769,57 @@ export class ProgressViewState {
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       this._agentTypeFilter,
     );
+  }
+
+  /**
+   * Prune old streams if the count exceeds MAX_STREAMS.
+   * Removes oldest streams based on task group timestamps.
+   * Called during load to prevent storage bloat.
+   */
+  private async pruneOldStreams(): Promise<void> {
+    const allStreams = this._streamTabs.keys();
+    if (allStreams.length <= MAX_STREAMS) {
+      return;
+    }
+
+    // Get timestamps for all streams (from task groups or fallback to 0)
+    const streamTimestamps: Array<{ stream: StreamTabId; timestamp: number }> =
+      allStreams.map((stream) => ({
+        stream,
+        timestamp: this.getStreamTimestamp(stream),
+      }));
+
+    // Sort by timestamp descending (newest first)
+    streamTimestamps.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Keep the newest MAX_STREAMS, remove the rest
+    const streamsToRemove = streamTimestamps.slice(MAX_STREAMS);
+
+    if (streamsToRemove.length > 0) {
+      this.logger.info(
+        `Pruning ${streamsToRemove.length} old streams to stay under ${MAX_STREAMS} limit`,
+      );
+
+      for (const { stream } of streamsToRemove) {
+        await this.clearStream(stream);
+      }
+    }
+  }
+
+  /**
+   * Get the most recent timestamp for a stream.
+   * Uses task group start times, falling back to 0 for streams without groups.
+   */
+  private getStreamTimestamp(stream: StreamTabId): number {
+    const groups = this._taskGroups.getStreamGroups(stream);
+    let maxTimestamp = 0;
+
+    for (const group of groups.values()) {
+      if (group.startTime > maxTimestamp) {
+        maxTimestamp = group.startTime;
+      }
+    }
+
+    return maxTimestamp;
   }
 }
