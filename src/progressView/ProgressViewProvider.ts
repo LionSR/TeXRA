@@ -363,4 +363,22 @@ export class ProgressViewProvider
     this.state.activeStream = stream;
     this.updateWebview();
   }
+
+  /**
+   * Open the progress view in a separate editor tab (WebviewPanel).
+   * This creates a standalone panel that can be positioned anywhere in the editor.
+   */
+  public showProgressViewAsPanel(): void {
+    const isNew = this.createOrShowPanel({
+      viewType: ProgressViewProvider.viewType + '.panel',
+      title: 'TeXRA ProgressBoard',
+      viewPath: 'progressView',
+    });
+
+    if (isNew) {
+      // For new panels, mark as ready and trigger initial update
+      // The panel's webview will signal ready via message, same as sidebar
+      this.logger.info('ProgressView opened in separate tab');
+    }
+  }
 }
