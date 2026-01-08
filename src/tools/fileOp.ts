@@ -48,7 +48,8 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'write': {
-        if (content === null || content === undefined) {
+        // eslint-disable-next-line eqeqeq
+        if (content == null) {
           return {
             error: 'content parameter is required for write',
             isError: true,
@@ -105,7 +106,8 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'append': {
-        if (content === null || content === undefined) {
+        // eslint-disable-next-line eqeqeq
+        if (content == null) {
           return {
             error: 'content parameter is required for append',
             isError: true,
