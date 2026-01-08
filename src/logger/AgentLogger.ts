@@ -1,5 +1,6 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 
 // Local imports - events
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
@@ -25,6 +26,34 @@ import type {
   MessageType,
 } from './messageTypes';
 import type { LogOptions } from './logOptions';
+
+/**
+ * Context management event data for logging compaction, truncation, etc.
+ * Schema-first definition following project conventions (CLAUDE.md).
+ */
+export const ContextManagementDataSchema = z.object({
+  /** Type of context management action */
+  action: z.enum([
+    'compaction',
+    'clear_tool_uses',
+    'clear_thinking',
+    'truncation',
+  ]),
+  /** Tokens before the action */
+  tokensBefore: z.number().nonnegative(),
+  /** Tokens after the action (if known) */
+  tokensAfter: z.number().nonnegative().optional(),
+  /** Context window size */
+  contextWindow: z.number().positive(),
+  /** Percentage of context utilized before action */
+  utilizationBefore: z.number().nonnegative(),
+  /** Percentage of context utilized after action (if known) */
+  utilizationAfter: z.number().nonnegative().optional(),
+  /** Provider-specific details */
+  details: z.string().optional(),
+});
+
+export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
@@ -316,6 +345,26 @@ export class AgentLogger {
     this.info(content, {
       groupId,
       messageType: MESSAGE_TYPES.SCRATCHPAD,
+    });
+  }
+
+  /**
+   * Log a context management event (compaction, context clearing, etc.).
+   * Single source of truth for CONTEXT_MANAGEMENT message type.
+   *
+   * @param message - Human-readable summary of the action
+   * @param data - Structured data about the context management action
+   * @param groupId - Optional group ID for progress view
+   */
+  logContextManagement(
+    message: string,
+    data?: ContextManagementData,
+    groupId?: string,
+  ): void {
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+      data,
     });
   }
 

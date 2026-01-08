@@ -67,6 +67,14 @@ export interface ProgressEventPayloads {
   updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
   };
+  updateContextState: {
+    stream: StreamTabId;
+    contextState: {
+      inputTokens: number;
+      contextWindow: number;
+      utilizationPercent: number;
+    };
+  };
   showRetryRequest: RetryRequestPrompt;
   resolveRetryRequest: { streamId: StreamTabId };
   showToolEditApprovalPrompt: ToolEditApprovalPrompt;
