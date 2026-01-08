@@ -9,6 +9,7 @@ import {
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import {
   showErrorMessage,
@@ -20,6 +21,53 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
+
+// Track in-flight lazy detection checks to prevent race conditions
+const inFlightDetections = new Set<StreamTabId>();
+
+/**
+ * Lazily detect if a stream has a persisted flow record and set WAITING status.
+ *
+ * This enables lazy loading of session state - instead of checking all streams
+ * at startup, we only check when the user actually sends a follow-up.
+ *
+ * @returns true if a persisted flow was detected and status was set to WAITING
+ */
+async function lazyDetectWaitingStatus(streamId: StreamTabId): Promise<boolean> {
+  // Skip if status is already set (active, resuming, waiting, etc.)
+  const currentStatus = StreamStatusService.get(streamId);
+  if (currentStatus) {
+    return currentStatus === STREAM_STATUS.WAITING;
+  }
+
+  // Skip if detection is already in progress for this stream
+  if (inFlightDetections.has(streamId)) {
+    return false;
+  }
+
+  // Get execution ID to check for persisted flow
+  const progressState = ProgressViewProvider.getInstance()?.state;
+  const executionId = progressState?.getExecutionId(streamId);
+  if (!executionId) {
+    return false;
+  }
+
+  // Mark as in-flight to prevent duplicate checks
+  inFlightDetections.add(streamId);
+  try {
+    // Check if a persisted flow record exists
+    const hasFlow = await hasPersistedFlowRecord(executionId);
+    if (hasFlow) {
+      // Set WAITING status so sendFollowUp will queue the message
+      StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
+      logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
+      return true;
+    }
+    return false;
+  } finally {
+    inFlightDetections.delete(streamId);
+  }
+}
 
 /**
  * Attempt to auto-resume a WAITING tool-use session.
@@ -154,6 +202,11 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
       'texra.sendFollowUp',
       async (payload: { stream: string; text: string }) => {
         const streamId = payload.stream as StreamTabId;
+
+        // Lazy detection: check for persisted flow if status not already set.
+        // This avoids iterating through all streams at startup.
+        await lazyDetectWaitingStatus(streamId);
+
         const result = await sendFollowUp(streamId, payload.text);
         await handleFollowUpResult(result, streamId);
       },
