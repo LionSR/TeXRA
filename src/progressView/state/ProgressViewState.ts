@@ -16,7 +16,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type ContextStateData } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
@@ -81,6 +81,12 @@ export class ProgressViewState {
    * Not persisted - session-only state that's also stored in AgentWorkspaceState.
    */
   private _todos: Map<StreamTabId, TodoItem[]> = new Map();
+  /**
+   * Ephemeral context state storage keyed by stream ID.
+   * Stores context utilization (input tokens vs context window) for replay
+   * when switching streams.
+   */
+  private _contextState: Map<StreamTabId, ContextStateData> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -226,6 +232,29 @@ export class ProgressViewState {
    */
   clearAllTodos(): void {
     this._todos.clear();
+  }
+
+  // Context state management (ephemeral, non-persistent)
+  /**
+   * Set context state for a stream.
+   * Stores context utilization so it can be replayed when switching streams.
+   */
+  setContextState(stream: StreamTabId, contextState: ContextStateData): void {
+    this._contextState.set(stream, contextState);
+  }
+
+  /**
+   * Get context state for a stream.
+   */
+  getContextState(stream: StreamTabId): ContextStateData | undefined {
+    return this._contextState.get(stream);
+  }
+
+  /**
+   * Clear context state for a stream.
+   */
+  clearContextState(stream: StreamTabId): void {
+    this._contextState.delete(stream);
   }
 
   setActiveRunId(stream: StreamTabId, runId: string | null): void {
@@ -523,6 +552,7 @@ export class ProgressViewState {
     this.clearStreamHints(stream);
     this.clearActiveRun(stream);
     this.clearTodos(stream);
+    this.clearContextState(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -550,6 +580,7 @@ export class ProgressViewState {
     this._executionIds.clear();
     this._streamHints.clear();
     this._todos.clear();
+    this._contextState.clear();
     this._activeRunIds.clear();
     this._activeStream = '';
     this.saveActiveStream();
