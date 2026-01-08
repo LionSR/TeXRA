@@ -546,6 +546,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
 
         // Add thinking block clearing strategy if reasoning is enabled
+        // NOTE: The Anthropic API doesn't support a trigger for thinking clearing -
+        // it's applied eagerly on every request, keeping only the last N thinking turns.
+        // This is by design to manage thinking token accumulation.
         if (
           this.capabilities.supportsReasoning &&
           options.thinking &&
@@ -564,6 +567,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         // Add tool result clearing strategy
+        // Tool use clearing has a trigger - it only activates when input tokens exceed threshold
         if (
           !contextManagementEdits.some(
             (edit) => edit.type === 'clear_tool_uses_20250919',
@@ -575,7 +579,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           contextManagementEdits.push({
             type: 'clear_tool_uses_20250919' as const,
-            // triggerTokens is guaranteed > 0 since thresholdPercent > 0 (checked above)
             trigger: {
               type: 'input_tokens' as const,
               value: triggerTokens,
