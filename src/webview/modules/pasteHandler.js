@@ -120,7 +120,7 @@ export async function handleImagePaste(
 ) {
   const { host, textarea } = resolveTextareaTarget(target);
   const activeTextarea = textarea ?? target;
-  const items = event.clipboardData?.items || [];
+  const items = event.clipboardData?.items ?? [];
   const images = [];
 
   for (const item of items) {

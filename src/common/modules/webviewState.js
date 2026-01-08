@@ -13,7 +13,7 @@ export class WebviewStateManager {
   constructor(defaultState = {}) {
     this.defaultState = { ...defaultState };
     try {
-      const saved = vscode.getState() || {};
+      const saved = vscode.getState() ?? {};
       this.state = { ...this.defaultState, ...saved };
     } catch (e) {
       console.error('Failed to get state:', e);
