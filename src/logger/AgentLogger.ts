@@ -55,6 +55,21 @@ export const ContextManagementDataSchema = z.object({
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 
+/**
+ * Context state data for tracking current context utilization.
+ * Emitted after token counting to update UI with current usage.
+ */
+export const ContextStateDataSchema = z.object({
+  /** Current input tokens in the context */
+  inputTokens: z.number().nonnegative(),
+  /** Maximum context window size */
+  contextWindow: z.number().positive(),
+  /** Percentage of context utilized (0-100) */
+  utilizationPercent: z.number().nonnegative(),
+});
+
+export type ContextStateData = z.infer<typeof ContextStateDataSchema>;
+
 export interface LoggerScopeOptions {
   parentGroupId?: string;
   /**
@@ -364,6 +379,34 @@ export class AgentLogger {
     this.info(message, {
       groupId,
       messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+      data,
+    });
+  }
+
+  /**
+   * Log current context state (utilization percentage).
+   * Single source of truth for CONTEXT_STATE message type.
+   * Used to update UI with current context usage after token counting.
+   *
+   * @param inputTokens - Current input tokens in context
+   * @param contextWindow - Maximum context window size
+   * @param groupId - Optional group ID for progress view
+   */
+  logContextState(
+    inputTokens: number,
+    contextWindow: number,
+    groupId?: string,
+  ): void {
+    const utilizationPercent = (inputTokens / contextWindow) * 100;
+    const data: ContextStateData = {
+      inputTokens,
+      contextWindow,
+      utilizationPercent,
+    };
+    // Use debug level since this is frequent and informational
+    this.debug(`Context: ${inputTokens}/${contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`, {
+      groupId,
+      messageType: MESSAGE_TYPES.CONTEXT_STATE,
       data,
     });
   }
