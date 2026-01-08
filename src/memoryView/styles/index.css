@@ -1,13 +1,7 @@
 /*
  * Memory view styles
- * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
+ * Base styles (body, list-item, collapsible, text-secondary) inherited from common.css
  */
-
-/* Base styles */
-body {
-  background-color: var(--vscode-editor-background);
-  padding: var(--spacing-xlarge);
-}
 
 /* Container */
 .memory-view-container {
@@ -16,10 +10,8 @@ body {
   gap: var(--spacing-medium);
 }
 
-/* Description */
+/* Description - extends .text-secondary */
 .memory-description {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
   margin: 0 0 var(--spacing-medium) 0;
 }
 
@@ -42,21 +34,6 @@ body {
 /* Metadata - extends .text-secondary from common.css */
 .memory-meta {
   margin-top: var(--spacing-small);
-}
-
-/* Collapsible preview */
-.memory-collapsible {
-  margin-top: var(--spacing-small);
-}
-
-.memory-collapsible::part(body) {
-  max-height: var(--height-medium);
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.memory-collapsible[open]::part(body) {
-  max-height: var(--height-max);
 }
 
 /* Preview text */
