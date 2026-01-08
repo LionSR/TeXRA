@@ -121,10 +121,9 @@ export class ReadFileTool extends defineTool({
       requestedEndLine,
       truncated,
       rangeProvided: Boolean(input.range),
-      rangeEndExceeded: (() => {
-        // eslint-disable-next-line eqeqeq
-        return input.range?.end != null && input.range.end > totalLines;
-      })(),
+      // eslint-disable-next-line eqeqeq
+      rangeEndExceeded:
+        input.range?.end != null && input.range.end > totalLines,
     });
 
     return {
