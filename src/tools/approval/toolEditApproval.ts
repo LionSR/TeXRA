@@ -737,7 +737,11 @@ export async function handleProgressViewToolEditApprovalAction(
         prompt: 'Optionally share why the change was rejected',
         placeHolder: 'Add guidance for the assistant (press Enter to skip)',
       });
-      userMessage = note?.trim();
+      // If user pressed Escape, cancel the rejection and keep waiting
+      if (note === undefined) {
+        return;
+      }
+      userMessage = note.trim();
     }
 
     entry.settle({
