@@ -47,6 +47,13 @@ export class InstructionManager extends BaseDomHandler {
     this._textarea = null;
   }
 
+  /**
+   * Set up the instruction textarea with debounced saves, paste handling,
+   * and placeholder rotation.
+   *
+   * Note: This must be called after mainViewState.restore() so that any
+   * restored textarea value is present when placeholder rotation initializes.
+   */
   setup() {
     const target = safeGetElementById(this.textareaId);
     if (!target) {
@@ -64,7 +71,7 @@ export class InstructionManager extends BaseDomHandler {
 
       // Debounce state saves to avoid saving on every keystroke
       const debouncedSave = debounce(() => this.state?.save(), 500);
-      target.addEventListener('input', debouncedSave);
+      this.addListener(target, 'input', debouncedSave);
 
       setupPasteListener(
         target,
