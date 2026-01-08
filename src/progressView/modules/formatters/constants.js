@@ -82,7 +82,4 @@ export const TOOL_ICON_MAP = {
 
   // Task management
   todo_write: 'codicon-tasklist',
-
-  // Memory
-  memory: 'codicon-database',
 };
