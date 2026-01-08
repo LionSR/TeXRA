@@ -81,6 +81,7 @@ export class ProgressEventHandler {
 
     // Usage events (inlined from UsageEvents.ts)
     bus.on('updateStreamUsage', this.handleUpdateStreamUsage, { signal });
+    bus.on('updateContextState', this.handleUpdateContextState, { signal });
 
     // Todo events (inlined from TodoEvents.ts)
     bus.on('updateTodos', this.handleUpdateTodos, { signal });
@@ -467,6 +468,27 @@ export class ProgressEventHandler {
     );
   };
 
+  /** Handle updateContextState - context utilization display */
+  private handleUpdateContextState = ({
+    stream,
+    contextState,
+  }: ProgressEventPayloads['updateContextState']): void => {
+    withEventErrorHandling(
+      'UsageEvents',
+      'failed to handle updateContextState',
+      () => {
+        // Store context state for replay when switching streams
+        this.state.setContextState(stream, contextState);
+        if (
+          this.webviewUpdater.isAvailable() &&
+          stream === this.state.activeStream
+        ) {
+          this.webviewUpdater.updateContextState(stream, contextState);
+        }
+      },
+    );
+  };
+
   /** Handle updateTodos - inlined from TodoEvents.ts */
   private handleUpdateTodos = ({
     stream,
@@ -626,6 +648,12 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream);
     if (todos !== undefined) {
       this.webviewUpdater.updateTodos(stream, todos);
+    }
+
+    // Refresh context state for the stream (ephemeral state)
+    const contextState = this.state.getContextState(stream);
+    if (contextState !== undefined) {
+      this.webviewUpdater.updateContextState(stream, contextState);
     }
 
     // Update status for current stream. Don't default to RUNNING - that causes a race

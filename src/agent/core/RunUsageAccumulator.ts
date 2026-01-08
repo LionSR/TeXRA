@@ -7,7 +7,13 @@ import {
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
 
-/** Default values for run usage totals - exported for use in schema defaults */
+/**
+ * Default values for run usage totals - exported for use in schema defaults.
+ *
+ * `totalCost` is the running sum of `NormalizedUsage.cost`, which is already
+ * calculated per provider (including prompt-cache discounts or creation
+ * premiums). No extra adjustments are applied here.
+ */
 export const DEFAULT_TOTALS = {
   firstInputTokens: 0,
   totalInputTokens: 0,

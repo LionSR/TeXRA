@@ -260,3 +260,19 @@ export const SetApiAccessModeMessageSchema = z.object({
 export type SetApiAccessModeMessage = z.infer<
   typeof SetApiAccessModeMessageSchema
 >;
+
+// --- Memory View Schemas ---
+
+/** Memory path message for file operations */
+export const MemoryPathMessageSchema = z.object({
+  storagePath: z.string().min(1),
+});
+
+export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
+
+/** Memory delete message with display path for confirmation */
+export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
+  displayPath: z.string().min(1),
+});
+
+export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;

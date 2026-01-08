@@ -60,4 +60,8 @@ export class AgentUsageReporter {
       this.logger.statistics(stats, storageKey);
     }
   }
+
+  // Note: Context state is emitted by VSCodeTransport when CONTEXT_MANAGEMENT
+  // log events are processed. This keeps context emission centralized in the
+  // logging infrastructure rather than split between reporter and transport.
 }
