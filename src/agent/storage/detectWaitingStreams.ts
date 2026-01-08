@@ -7,7 +7,6 @@
  */
 
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-import type { FlowRecord } from '@agent/node/persisted-flow';
 
 import { getExecutionStore } from './ExecutionKVStore';
 
@@ -29,10 +28,12 @@ export async function detectWaitingStreams(
   for (const [streamId, executionId] of executionIdMap) {
     try {
       const kv = getExecutionStore(executionId);
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+      // Use exists() instead of read() to avoid loading entire session into memory.
+      // The flow record can be large (contains full conversation history).
+      // We only need to know if it exists - actual loading happens on resume.
+      const hasFlowRecord = await kv.exists(`flow:${executionId}`);
 
-      // If a flow record exists, this stream was mid-session and should be WAITING
-      if (flowRecord?.shared) {
+      if (hasFlowRecord) {
         waitingStreams.add(streamId);
       }
     } catch {
