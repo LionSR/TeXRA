@@ -251,7 +251,8 @@ export function formatToolResultAsText(
   if (result.userInstruction) {
     textPieces.push(`User feedback: ${result.userInstruction}`);
   }
-  if (result.isError && !result.output && result.error) {
+  // Include error when no meaningful output - use same check as above for consistency
+  if (result.isError && !isNonEmptyString(result.output) && result.error) {
     textPieces.push(result.error);
   }
   if (textPieces.length === 0 && result.summary) {
