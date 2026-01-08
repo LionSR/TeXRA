@@ -36,6 +36,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
+import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -56,7 +57,7 @@ import {
 } from './CycleServices';
 
 interface ToolValidationDiagnostics {
-  type: 'validation_error';
+  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
   issues: any;
   formatted: Array<{
     path: string;
@@ -106,7 +107,7 @@ function normalizeToolCallError(
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
-        type: 'validation_error',
+        type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
         issues,
         formatted: issues.map((issue) => ({
           path: Array.isArray(issue.path) ? issue.path.join('.') : '',
