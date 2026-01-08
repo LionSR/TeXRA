@@ -135,7 +135,7 @@ export class EditFileTool extends defineTool({
     return {
       summary,
       output,
-      // userPatch omitted - userDiffNote in output already shows user adjustments
+      userPatch: approval.userPatch,
       edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
     };
   }

@@ -108,7 +108,7 @@ export class DiagnosticsTool extends defineTool({
       ...('messages' in args ? { messages: args.messages } : {}),
     };
 
-    // Human-readable output instead of JSON - diagnostics field carries structured data
+    // Build human-readable output
     const { errors = 0, warnings = 0, info = 0, hints = 0 } = args.severity;
     const counts = [
       errors > 0 && `${errors} error${errors === 1 ? '' : 's'}`,
@@ -118,7 +118,19 @@ export class DiagnosticsTool extends defineTool({
     ]
       .filter(Boolean)
       .join(', ');
-    const output = counts || 'No issues found';
+
+    // For 'list' command, include actual diagnostic messages so model can see them
+    let output: string;
+    if ('messages' in args && args.messages.length > 0) {
+      const messageLines = args.messages.map((d) => {
+        const line = d.range.start.line + 1; // VS Code lines are 0-indexed
+        const severity = ['error', 'warning', 'info', 'hint'][d.severity] ?? 'unknown';
+        return `  ${line}: [${severity}] ${d.message}`;
+      });
+      output = `${counts || 'No issues found'}\n\n${messageLines.join('\n')}`;
+    } else {
+      output = counts || 'No issues found';
+    }
 
     return {
       summary: args.summary,
