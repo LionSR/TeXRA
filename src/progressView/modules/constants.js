@@ -163,12 +163,12 @@ export const TOOLBAR_BUTTONS = {
   toolUse: TOOL_USE_TOOLBAR,
 };
 
-export const ALL_TOOLBAR_BUTTON_IDS = Array.from(
-  new Set([
+export const ALL_TOOLBAR_BUTTON_IDS = [
+  ...new Set([
     ...WORKFLOW_TOOLBAR.map((btn) => btn.id),
     ...TOOL_USE_TOOLBAR.map((btn) => btn.id),
   ]),
-);
+];
 
 export const SORT_BUTTONS = [
   {

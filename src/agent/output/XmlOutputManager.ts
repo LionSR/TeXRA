@@ -136,28 +136,24 @@ export class XmlOutputManager {
       return texLocation;
     }
 
-    try {
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        parseTagValue: true,
-        textNodeName: 'content',
-        attributeNamePrefix: '',
-        processEntities: false,
-        ignoreDeclaration: true,
-      });
-      const root = parser.parse(outputContent);
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      parseTagValue: true,
+      textNodeName: 'content',
+      attributeNamePrefix: '',
+      processEntities: false,
+      ignoreDeclaration: true,
+    });
+    const root = parser.parse(outputContent);
 
-      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
-      if (latexDocument) {
-        await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
-        return texLocation;
-      }
-      throw new Error(
-        `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
-      );
-    } catch (err) {
-      throw err;
+    const latexDocument = extractContentFromXMLbyTag(root, documentTag);
+    if (latexDocument) {
+      await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
+      return texLocation;
     }
+    throw new Error(
+      `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
+    );
   }
 
   /**
