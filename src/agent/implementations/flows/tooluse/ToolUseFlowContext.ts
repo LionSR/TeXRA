@@ -115,8 +115,13 @@ export async function prepareInitialState<C>(
   const runState = new AgentRunState();
   const workspaceState = AgentWorkspaceState.create();
 
+  // Check if memory tool is enabled for this session
+  const memoryEnabled = services.resolvedTools.some((t) => t.name === 'memory');
+
   const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-    await buildInitialToolUsePrompts(prompt, userVarChannels.transient, logger);
+    await buildInitialToolUsePrompts(prompt, userVarChannels.transient, logger, {
+      memoryEnabled,
+    });
 
   const messages = await modelHandler.initializeMessages(
     userPrefix,
