@@ -133,16 +133,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * - Workflow sessions create hierarchical task groups
    * - Tool-use sessions don't create task groups at all
    * Stale groups from previous sessions interfere with run ID resolution.
+   *
+   * NOTE: Log content is NOT cleared here. It's handled by handleUpdateLogs
+   * with forceRebuild: true, which properly coordinates clearing with
+   * re-rendering. Clearing here would cause data loss when UPDATE_LOGS
+   * arrives with forceRebuild: false (same stream, incremental update).
+   *
    * @param {string} newSessionKind - The new session kind being switched to
    */
   _clearSessionKindState(newSessionKind) {
     if (newSessionKind !== state.activeSessionKind && state.activeSessionKind) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        logContent.innerHTML = '';
-      }
     }
   }
 
@@ -343,6 +345,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.todoList.clear();
       dom.queuedFollowUps.clear();
       dom.fileList.clear();
+      // Clear log content when no stream is active to avoid stale content
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
