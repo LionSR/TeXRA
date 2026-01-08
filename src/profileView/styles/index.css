@@ -1,19 +1,9 @@
 /*
  * Profile view styles
- * Note: Base body styles (margin, font-family, font-size, box-sizing, color) inherited from common.css
+ * Base styles (body, badge, text-secondary) inherited from common.css
  */
 
-/* Base styles */
-body {
-  background-color: var(--vscode-editor-background);
-  padding: var(--spacing-xlarge);
-}
-
-h1 {
-  color: var(--color-text-link);
-  margin-bottom: var(--spacing-xlarge);
-}
-
+/* Section headers (h2) have distinct styling with bottom border */
 h2 {
   color: var(--vscode-foreground);
   margin-top: var(--spacing-xlarge);
