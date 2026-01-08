@@ -31,7 +31,7 @@ import type { LogOptions } from './logOptions';
  */
 export interface ContextManagementData {
   /** Type of context management action */
-  action: 'compaction' | 'clear_tool_uses' | 'truncation';
+  action: 'compaction' | 'clear_tool_uses' | 'clear_thinking' | 'truncation';
   /** Tokens before the action */
   tokensBefore: number;
   /** Tokens after the action (if known) */

@@ -102,6 +102,9 @@ import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,
   BetaContextManagementConfig,
+  BetaContextManagementResponse,
+  BetaClearToolUses20250919EditResponse,
+  BetaClearThinking20251015EditResponse,
   BetaImageBlockParam,
   BetaMessage,
   BetaRedactedThinkingBlock,
@@ -665,17 +668,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * The response includes applied_edits when server-side context editing was performed.
    */
   private logContextManagementFromResponse(response: BetaMessage): void {
-    // Type assertion needed because context_management is in beta
+    // Access context_management from response - uses SDK types where available
     const contextManagement = (
-      response as unknown as {
-        context_management?: {
-          applied_edits?: Array<{
-            type: string;
-            cleared_tool_uses?: number;
-            cleared_thinking_turns?: number;
-            cleared_input_tokens?: number;
-          }>;
-        };
+      response as BetaMessage & {
+        context_management?: BetaContextManagementResponse | null;
       }
     ).context_management;
 
@@ -684,15 +680,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
+    type AppliedEdit =
+      | BetaClearToolUses20250919EditResponse
+      | BetaClearThinking20251015EditResponse;
 
-    for (const edit of contextManagement.applied_edits) {
+    for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
       if (
         edit.type === 'clear_tool_uses_20250919' &&
         edit.cleared_input_tokens &&
         edit.cleared_input_tokens > 0
       ) {
-        const clearedTokens = edit.cleared_input_tokens;
-        const clearedToolUses = edit.cleared_tool_uses ?? 0;
+        const typedEdit = edit as BetaClearToolUses20250919EditResponse;
+        const clearedTokens = typedEdit.cleared_input_tokens;
+        const clearedToolUses = typedEdit.cleared_tool_uses ?? 0;
         const utilizationReduction = (clearedTokens / contextWindow) * 100;
 
         this.logger.logContextManagement(
@@ -717,14 +717,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
         edit.cleared_input_tokens &&
         edit.cleared_input_tokens > 0
       ) {
-        const clearedTokens = edit.cleared_input_tokens;
-        const clearedTurns = edit.cleared_thinking_turns ?? 0;
+        const typedEdit = edit as BetaClearThinking20251015EditResponse;
+        const clearedTokens = typedEdit.cleared_input_tokens;
+        const clearedTurns = typedEdit.cleared_thinking_turns ?? 0;
         const utilizationReduction = (clearedTokens / contextWindow) * 100;
 
         this.logger.logContextManagement(
           `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
           {
-            action: 'clear_tool_uses', // Reuse action type for now
+            action: 'clear_thinking',
             tokensBefore: response.usage.input_tokens + clearedTokens,
             tokensAfter: response.usage.input_tokens,
             contextWindow,
