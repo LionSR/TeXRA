@@ -136,9 +136,11 @@ export class UsageMonitor {
         inputTokens: totals.totalInputTokens,
         outputTokens: totals.totalOutputTokens,
         cost: Number(totals.totalCost.toFixed(3)),
-        // Include cache tokens for display
-        cacheReadInputTokens: totalCacheReadTokens || undefined,
-        cacheCreationInputTokens: totalCacheCreationTokens || undefined,
+        // Include cache tokens for display (only if > 0)
+        cacheReadInputTokens:
+          totalCacheReadTokens > 0 ? totalCacheReadTokens : undefined,
+        cacheCreationInputTokens:
+          totalCacheCreationTokens > 0 ? totalCacheCreationTokens : undefined,
       };
 
       const payload: ExtendedTokenUsageStats = {
