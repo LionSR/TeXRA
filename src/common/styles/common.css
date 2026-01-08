@@ -182,6 +182,32 @@ vscode-toolbar-button {
    ========================================================================== */
 
 /* ==========================================================================
+   View Header - Shared page header styling for history/profile/memory views
+   ========================================================================== */
+
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.view-header h1,
+.view-header h2 {
+  margin: 0;
+}
+
+.view-header h1 {
+  color: var(--color-text-link);
+}
+
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+/* ==========================================================================
    Badge Base - Common styling for badge components
    Addresses duplication in profileView and historyView
    ========================================================================== */
