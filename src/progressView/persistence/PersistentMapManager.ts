@@ -137,10 +137,34 @@ export abstract class PersistentMapManager<K extends string, V> {
   /** Load state from persistence */
   async load(): Promise<void> {
     if (this.useFileStorage) {
+      // First, migrate any existing data from workspaceState to files
+      await this.migrateFromWorkspaceState();
       await this.loadFromFiles();
     } else {
       await this.loadFromWorkspaceState();
     }
+  }
+
+  /**
+   * Migrate existing data from workspaceState to file storage.
+   * This is a one-time migration that clears the old workspaceState data.
+   */
+  private async migrateFromWorkspaceState(): Promise<void> {
+    const saved = this.storage.get<Record<string, unknown>>(this.storageKey);
+
+    if (!saved || Object.keys(saved).length === 0) {
+      return; // Nothing to migrate
+    }
+
+    // Migrate each entry to file storage
+    for (const [key, value] of Object.entries(saved)) {
+      const deserialized = await this.deserialize(value, key as K);
+      const serialized = this.serialize(deserialized, key as K);
+      await streamStorage.save(this.storageKey, key, serialized);
+    }
+
+    // Clear the old workspaceState data
+    await this.storage.update(this.storageKey, undefined as never);
   }
 
   /** Load only the list of keys (for file storage mode) */
