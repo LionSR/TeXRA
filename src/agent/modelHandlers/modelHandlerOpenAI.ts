@@ -216,6 +216,11 @@ export class ModelHandlerOpenAI<
       this.logger.debug(
         `Approximate token count of message: ${approximateInputTokens}`,
       );
+      // Emit context state for UI display
+      this.logger.logContextState(
+        approximateInputTokens,
+        this.config.contextWindow,
+      );
 
       if (approximateInputTokens > this.config.contextWindow) {
         const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
