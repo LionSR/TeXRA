@@ -29,6 +29,11 @@ import { ProgressViewState } from './state/ProgressViewState';
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  *
+ * Supports two simultaneous views:
+ * - Sidebar view (_view): Standard VS Code webview view in the bottom panel
+ * - Panel view (_panelView): Standalone editor tab for more screen real estate
+ * Both views share state and receive synchronized updates via WebviewUpdater.
+ *
  * Implements IRunStorageService to provide run state access to the agent runtime
  * without creating circular dependencies.
  */
@@ -445,14 +450,25 @@ export class ProgressViewProvider
       }),
     );
 
-    // Cleanup on panel dispose
-    this._panelView.onDidDispose(() => {
-      this._panelDisposables.forEach((d) => d.dispose());
-      this._panelDisposables = [];
-      this._panelView = undefined;
-    });
+    // Cleanup on panel dispose (added to disposables for consistency)
+    this._panelDisposables.push(
+      this._panelView.onDidDispose(() => {
+        this._panelDisposables.forEach((d) => d.dispose());
+        this._panelDisposables = [];
+        this._panelView = undefined;
+      }),
+    );
 
     // Trigger initial update (webview will send WEBVIEW_READY when loaded)
     this.updateWebview();
+  }
+
+  public override dispose(): void {
+    // Clean up panel resources
+    this._panelDisposables.forEach((d) => d.dispose());
+    this._panelDisposables = [];
+    this._panelView?.dispose();
+    this._panelView = undefined;
+    super.dispose();
   }
 }
