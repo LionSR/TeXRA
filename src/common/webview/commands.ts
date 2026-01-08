@@ -193,6 +193,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Usage
   UPDATE_USAGE: 'updateUsage',
   UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
+  UPDATE_CONTEXT_STATE: 'updateContextState', // Update context utilization display
 
   // Actions
   RESUME: 'resume',
