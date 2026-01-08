@@ -13,9 +13,11 @@
 
 body {
   margin: 0;
+  padding: var(--spacing-xlarge);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
   box-sizing: border-box;
 }
 
@@ -216,9 +218,6 @@ vscode-toolbar-button {
   border-radius: var(--border-radius-large);
   padding: var(--spacing-medium);
   background-color: var(--vscode-editor-background);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
 }
 
 .list-item:hover {
@@ -229,6 +228,24 @@ vscode-toolbar-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* ==========================================================================
+   Collapsible - Shared styling for vscode-collapsible elements
+   ========================================================================== */
+
+.collapsible {
+  margin-top: var(--spacing-small);
+}
+
+.collapsible::part(body) {
+  max-height: var(--height-medium);
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible[open]::part(body) {
+  max-height: var(--height-max);
 }
 
 /* ==========================================================================
