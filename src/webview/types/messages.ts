@@ -269,3 +269,10 @@ export const MemoryPathMessageSchema = z.object({
 });
 
 export type MemoryPathMessage = z.infer<typeof MemoryPathMessageSchema>;
+
+/** Memory delete message with display path for confirmation */
+export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
+  displayPath: z.string().min(1),
+});
+
+export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;
