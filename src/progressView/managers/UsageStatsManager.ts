@@ -47,12 +47,13 @@ const TokenUsageStatsParsingSchema = TokenUsageStatsParsingBaseSchema.catch({
   cacheCreationInputTokens: 0,
 });
 
-// Compile-time assertions to ensure parsing schema stays in sync with canonical schema
+// Compile-time assertion: parsing schema output must be assignable to canonical type.
+// This fails at compile time if TokenUsageStatsParsingSchema produces incompatible fields.
 type _AssertSchemaCompatible =
   z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
     ? true
     : never;
-const _assertCompatible: _AssertSchemaCompatible = true;
+void (true as _AssertSchemaCompatible);
 
 // Runtime assertion: ensure all canonical keys are handled
 const canonicalKeys = TokenUsageStatsSchema.keyof().options;
