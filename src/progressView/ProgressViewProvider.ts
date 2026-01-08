@@ -51,6 +51,9 @@ export class ProgressViewProvider
   // Infrastructure
   private readonly _viewTitle: string;
   private _webviewReady = false;
+  // Separate panel view (editor tab) from sidebar view
+  private _panelView?: vscode.WebviewPanel;
+  private _panelDisposables: vscode.Disposable[] = [];
   /**
    * Tracks pending update options when webview is not ready.
    * Uses an object instead of boolean to preserve forceRebuild requests.
@@ -79,7 +82,11 @@ export class ProgressViewProvider
 
     // Initialize new modular architecture
     this.state = new ProgressViewState();
-    this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
+    // WebviewUpdater sends to all available webviews (sidebar + panel)
+    this.webviewUpdater = new WebviewUpdater(() => [
+      this._view?.webview,
+      this._panelView?.webview,
+    ]);
     this.eventHandler = new ProgressEventHandler(
       this.state,
       this.webviewUpdater,
@@ -181,11 +188,12 @@ export class ProgressViewProvider
   }
 
   /**
-   * Update webview content using the new architecture
+   * Update webview content using the new architecture.
+   * WebviewUpdater automatically sends to all registered webviews (sidebar + panel).
    * @param options.forceRebuild - Force full DOM rebuild in frontend
    */
   public updateWebview(options?: { forceRebuild?: boolean }): void {
-    if (!this._view) return;
+    if (!this._view && !this._panelView) return;
 
     if (!this._webviewReady) {
       // Queue the update, preserving forceRebuild if any caller requested it.
@@ -367,19 +375,91 @@ export class ProgressViewProvider
   /**
    * Open the progress view in a separate editor tab (WebviewPanel).
    * This creates a standalone panel that can be positioned anywhere in the editor.
+   * The panel is tracked separately from the sidebar view.
    */
   public showProgressViewAsPanel(): void {
-    const isNew = this.createOrShowPanel({
-      viewType: ProgressViewProvider.viewType + '.panel',
-      title: 'TeXRA ProgressBoard',
-      viewPath: 'progressView',
+    // If panel already exists, reveal it
+    if (this._panelView) {
+      this._panelView.reveal(vscode.ViewColumn.One);
+      this.updatePanelWebview({ forceRebuild: true });
+      return;
+    }
+
+    // Create new panel
+    this._panelView = vscode.window.createWebviewPanel(
+      ProgressViewProvider.viewType + '.panel',
+      'TeXRA ProgressBoard',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: getSharedLocalResourceRoots(
+          this.context,
+          'progressView',
+        ),
+      },
+    );
+
+    // Set panel HTML content
+    this._panelView.webview.html = this.contentProvider.getHtmlContent(
+      this._panelView.webview,
+    );
+
+    // Setup panel message handling
+    this._panelDisposables.push(
+      this._panelView.webview.onDidReceiveMessage((message) =>
+        this.messageHandler.handleMessage(message, this._panelView!),
+      ),
+    );
+
+    // Setup theme change listener for panel
+    this._panelDisposables.push(
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        if (this._panelView?.visible) {
+          this.updatePanelWebview();
+        }
+      }),
+    );
+
+    // Cleanup on panel dispose
+    this._panelView.onDidDispose(() => {
+      this._panelDisposables.forEach((d) => d.dispose());
+      this._panelDisposables = [];
+      this._panelView = undefined;
+    });
+  }
+
+  /**
+   * Update the panel webview content (separate from sidebar updates).
+   */
+  private updatePanelWebview(options?: { forceRebuild?: boolean }): void {
+    if (!this._panelView) return;
+
+    const theme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+        ? 'dark'
+        : 'light';
+
+    const activeStream = this.state.activeStream;
+    const streamStatuses = this.eventHandler.getAllStreamStatuses();
+
+    // Send data to panel webview
+    this._panelView.webview.postMessage({
+      command: 'updateAll',
+      data: {
+        streams: this.state.getAllStreams(),
+        activeStream,
+        streamStatuses: Object.fromEntries(streamStatuses),
+        theme,
+      },
     });
 
-    if (!isNew) {
-      // Refresh data when revealing existing panel
-      this.updateWebview({ forceRebuild: true });
+    if (options?.forceRebuild) {
+      this._panelView.webview.postMessage({
+        command: 'refreshStreamSurface',
+        data: { streamId: activeStream || '', forceRebuild: true },
+      });
     }
-    // For new panels, the webview will signal ready via WEBVIEW_READY message,
-    // which triggers markWebviewReady() and the initial updateWebview()
   }
 }
