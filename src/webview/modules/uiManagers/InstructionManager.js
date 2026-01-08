@@ -97,12 +97,16 @@ export class InstructionManager {
       this._refreshPlaceholder(false);
     };
 
-    this._handleSessionTypeChange = () => {
+    this._handleSessionTypeChange = (event) => {
       if (!this._textarea) {
         return;
       }
       if (!this._textarea.value.trim()) {
-        this._refreshPlaceholder(false);
+        // Extract session type from event target to avoid stale hidden input value
+        const sessionType = this._getSessionTypeFromEvent(event);
+        if (sessionType) {
+          this._refreshPlaceholderForType(sessionType);
+        }
       }
     };
 
@@ -144,6 +148,13 @@ export class InstructionManager {
       return;
     }
     const sessionType = this._getSessionType();
+    this._refreshPlaceholderForType(sessionType, advance);
+  }
+
+  _refreshPlaceholderForType(sessionType, advance = false) {
+    if (!this._textarea) {
+      return;
+    }
     const placeholder = this._getPlaceholder(sessionType, advance);
     if (placeholder) {
       this._textarea.setAttribute('placeholder', placeholder);
@@ -157,13 +168,13 @@ export class InstructionManager {
     if (!placeholders.length) {
       return '';
     }
-    const currentIndex = this._rotationIndex[sessionType];
-    const index = currentIndex % placeholders.length;
-    const nextIndex = (index + 1) % placeholders.length;
+    const currentIndex = this._rotationIndex[sessionType] ?? 0;
     if (advance) {
+      const nextIndex = (currentIndex + 1) % placeholders.length;
       this._rotationIndex[sessionType] = nextIndex;
+      return placeholders[nextIndex];
     }
-    return placeholders[index];
+    return placeholders[currentIndex % placeholders.length];
   }
 
   _getSessionType() {
@@ -172,6 +183,20 @@ export class InstructionManager {
       return parseSessionType(input.value);
     }
     return SESSION_TYPES.WORKFLOW;
+  }
+
+  _getSessionTypeFromEvent(event) {
+    const target = event?.target;
+    if (!(target instanceof HTMLElement)) {
+      return null;
+    }
+    // Extract from vscode-radio element's data attribute or value
+    const sessionType =
+      target.dataset?.sessionType || target.getAttribute('value');
+    if (sessionType) {
+      return parseSessionType(sessionType);
+    }
+    return null;
   }
 
   dispose() {
