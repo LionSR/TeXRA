@@ -6,9 +6,9 @@ import {
   CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
   parseSessionType,
+  resolveRadioGroup,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
-  VSCODE_RADIO_GROUP_TAG,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
@@ -270,10 +270,7 @@ export class SettingsButtonManager extends BaseDomHandler {
         }
       };
 
-      const radioGroup =
-        toggleContainer.tagName === VSCODE_RADIO_GROUP_TAG
-          ? toggleContainer
-          : toggleContainer.querySelector('vscode-radio-group');
+      const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup) {
         // Initialize last session type from radio group
         // Only set if we can determine a valid initial value to avoid masking the first user interaction
