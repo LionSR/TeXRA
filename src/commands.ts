@@ -43,6 +43,7 @@ import {
   registerStateRestoreCommand,
   registerHistoryCommands,
 } from '@commands/history';
+import { registerMemoryCommands } from '@commands/memory';
 import {
   registerWolframScriptCommands,
   registerWolframToolCommands,
@@ -96,6 +97,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     wolframTool: registerWolframToolCommands(context),
     wolframScript: registerWolframScriptCommands(context),
     history: registerHistoryCommands(context),
+    memory: registerMemoryCommands(context),
     arXiv: registerArXivCommands(context),
     compare: registerCompareCommands(context),
     progressView: registerProgressViewCommands(context),
@@ -156,5 +158,6 @@ export {
 } from '@commands/system';
 export { apiKeyCommands } from '@commands/api/apiKeyCommands';
 export { stateRestoreCommand, historyCommands } from '@commands/history';
+export { memoryCommands } from '@commands/memory';
 export { wolframToolCommands, wolframScriptCommands } from '@commands/wolfram';
 export { openFileCommands } from '@commands/files';
