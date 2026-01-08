@@ -142,3 +142,21 @@ export const VSCODE_RADIO_GROUP_TAG = 'VSCODE-RADIO-GROUP';
 export function parseSessionType(sessionType) {
   return SESSION_TYPE_VALUES.has(sessionType) ? sessionType : undefined;
 }
+
+/**
+ * Resolves a vscode-radio-group element from a container element.
+ * If the element itself is a radio group, returns it directly.
+ * Otherwise, searches for a radio group child element.
+ * @param {HTMLElement|null|undefined} element - The container element
+ * @returns {HTMLElement|null} The radio group element, or null if not found
+ */
+export function resolveRadioGroup(element) {
+  if (!element) {
+    return null;
+  }
+  if (element.tagName === VSCODE_RADIO_GROUP_TAG) {
+    return element;
+  }
+  const radioGroup = element.querySelector('vscode-radio-group');
+  return radioGroup instanceof HTMLElement ? radioGroup : null;
+}
