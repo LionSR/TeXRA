@@ -133,10 +133,13 @@ export class UsageMonitor {
           : 0
         : undefined;
 
+      // Use accumulated totals for the UI display, not per-round usage
       const baseStats: TokenUsageStats = {
-        inputTokens: roundUsage.inputTokens,
-        outputTokens: roundUsage.outputTokens,
-        cost: Number(roundUsage.cost.toFixed(3)),
+        inputTokens: totals.totalInputTokens,
+        outputTokens: totals.totalOutputTokens,
+        cost: Number(totals.totalCost.toFixed(3)),
+        // Include cache creation tokens for Anthropic (charged at 1.25x input price)
+        cacheCreationInputTokens: totals.totalCacheCreationInputTokens || undefined,
       };
 
       const payload: ExtendedTokenUsageStats = {
