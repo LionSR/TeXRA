@@ -27,6 +27,7 @@ export type GlobInput = z.infer<typeof GlobInputSchema>;
 interface GlobMatchInfo {
   relativePath: string;
   mtime: number;
+  lineCount: number | null;
 }
 
 export class GlobTool extends defineTool({
@@ -72,12 +73,25 @@ export class GlobTool extends defineTool({
 
       try {
         const stat = await WorkspaceFS.stat(relativePath);
+        let lineCount: number | null = null;
+
+        // Count lines for regular files
+        if (stat.isFile) {
+          try {
+            const content = await WorkspaceFS.readFile(relativePath);
+            lineCount = content.split('\n').length;
+          } catch {
+            // Ignore read errors (binary files, permission issues, etc.)
+          }
+        }
+
         return {
           relativePath,
           mtime: stat.mtime ?? 0,
+          lineCount,
         };
       } catch (_err) {
-        return { relativePath, mtime: 0 };
+        return { relativePath, mtime: 0, lineCount: null };
       }
     });
 
@@ -94,7 +108,13 @@ export class GlobTool extends defineTool({
     });
 
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
-    const lines = sorted.map((item) => toPosixPath(item.relativePath));
+    const lines = sorted.map((item) => {
+      const path = toPosixPath(item.relativePath);
+      if (item.lineCount !== null) {
+        return `${path} (${item.lineCount} lines)`;
+      }
+      return path;
+    });
     return {
       summary: `glob "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),

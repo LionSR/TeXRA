@@ -62,7 +62,8 @@ export function buildArguments(
   }
 
   if (outputMode === 'content') {
-    if (input['-n']) {
+    // Line numbers enabled by default for better navigation
+    if (input['-n'] !== false) {
       args.push('-n');
     }
     if (typeof input['-A'] === 'number') {
@@ -95,7 +96,7 @@ function applyHeadLimit(output: string | null, headLimit?: number): string {
 export class GrepTool extends defineTool({
   name: 'grep',
   description:
-    'Search file contents using regex patterns. Supports context (-A/-B/-C), glob/type filters, and multiline matching.',
+    'Search file contents using regex patterns. Shows line numbers by default. Supports context (-A/-B/-C), glob/type filters, and multiline matching.',
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {

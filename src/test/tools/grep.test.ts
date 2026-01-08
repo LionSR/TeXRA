@@ -7,8 +7,13 @@ import { buildArguments, type GrepInput } from '@tools/grep';
 describe('buildArguments', () => {
   const baseInput: GrepInput = { pattern: 'example' };
 
-  it('omits --files-with-matches when using content mode', () => {
+  it('includes -n by default in content mode', () => {
     const args = buildArguments(baseInput, 'content');
+    assert.deepEqual(args, ['--color=never', '-n']);
+  });
+
+  it('omits -n when explicitly disabled', () => {
+    const args = buildArguments({ ...baseInput, '-n': false }, 'content');
     assert.deepEqual(args, ['--color=never']);
   });
 
