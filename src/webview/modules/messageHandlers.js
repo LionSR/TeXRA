@@ -13,7 +13,6 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   CHECK_BOXES,
-  normalizeSessionType,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
