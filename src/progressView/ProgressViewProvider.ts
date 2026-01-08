@@ -58,7 +58,6 @@ export class ProgressViewProvider
    */
   private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private _hasResolved = false;
-  private _lastRenderedStream = ''; // Track last rendered stream for switch detection
   private readonly logger: AgentLogger;
   private readonly pendingApprovalPrompts = new Map<
     string,
@@ -135,7 +134,7 @@ export class ProgressViewProvider
     super.cleanupView();
     this._webviewReady = false;
     this._pendingUpdateOptions = null;
-    this._lastRenderedStream = '';
+    this.state.clearRenderedStreamTracking();
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -147,8 +146,8 @@ export class ProgressViewProvider
 
     this._webviewReady = false;
     this._pendingUpdateOptions = null;
-    // Clear last rendered stream to force rebuild - DOM state is stale after resolve
-    this._lastRenderedStream = '';
+    // Clear rendered stream tracking to force rebuild - DOM state is stale after resolve
+    this.state.clearRenderedStreamTracking();
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -210,20 +209,16 @@ export class ProgressViewProvider
       theme,
     );
 
-    // Determine if full DOM rebuild is needed.
-    // forceRebuild has tri-state behavior:
-    // - true: Always rebuild (e.g., after state.load(), data deletion)
-    // - false: Always use incremental update (caller explicitly knows content unchanged)
-    // - undefined: Auto-detect based on stream switch or first render
-    const isStreamSwitch = this._lastRenderedStream !== activeStream;
+    // Use state as single source of truth for stream switch detection
+    const isStreamSwitch = this.state.isStreamSwitch(activeStream);
     const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
 
     this.eventHandler.refreshStreamSurface(activeStream || '', {
       forceRebuild: shouldForceRebuild,
     });
 
-    // Update tracking after refresh
-    this._lastRenderedStream = activeStream;
+    // Mark stream as rendered for future switch detection
+    this.state.markStreamRendered(activeStream);
     this._pendingUpdateOptions = null;
   }
 

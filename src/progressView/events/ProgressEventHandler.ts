@@ -104,7 +104,8 @@ export class ProgressEventHandler {
         const { stream, session, isRemote, hasMultipleOutputs } = payload;
         if (!stream) return;
 
-        const isStreamSwitch = this.state.activeStream !== stream;
+        // Use state's single source of truth for stream switch detection
+        const isStreamSwitch = this.state.isStreamSwitch(stream);
 
         await this.state.streamTabs.ensureStream(stream);
         this.state.updateStreamHints(stream, {
@@ -148,6 +149,8 @@ export class ProgressEventHandler {
             updateInstruction: false,
             forceRebuild: isStreamSwitch,
           });
+          // Mark stream as rendered for future switch detection
+          this.state.markStreamRendered(stream);
           this.sendInstructionUpdate(stream, activeRunId);
         }
       },
@@ -581,7 +584,7 @@ export class ProgressEventHandler {
     const { updateInstruction = true, forceRebuild = false } = options;
 
     if (!stream) {
-      this.webviewUpdater.updateLogContent('', [], []);
+      this.webviewUpdater.updateLogContent('', [], [], undefined, true);
       this.webviewUpdater.updateFiles('', { reset: true });
       this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
@@ -627,7 +630,7 @@ export class ProgressEventHandler {
         runUsage: usageByRun,
         runFiles: filesByRun,
       },
-      { forceRebuild },
+      forceRebuild,
     );
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
@@ -827,11 +830,12 @@ export class ProgressEventHandler {
       // Force rebuild to clear any previous stream's content. The new task
       // group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
-      // Use the returned runId to avoid duplicate resolveRunId call.
       const activeRunId = this.refreshStreamSurface(stream, {
         updateInstruction: false,
         forceRebuild: true,
       });
+      // Mark stream as rendered for future switch detection
+      this.state.markStreamRendered(stream);
       this.sendInstructionUpdate(stream, activeRunId);
     }
   }
