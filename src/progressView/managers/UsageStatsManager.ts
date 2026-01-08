@@ -3,8 +3,11 @@ import { z } from 'zod';
 
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-// Types - import canonical type (schema defines structure)
-import { type TokenUsageStats } from '@agent/types/UsageTypes';
+// Types - import canonical schema as source of truth
+import {
+  TokenUsageStatsSchema,
+  type TokenUsageStats,
+} from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -24,27 +27,52 @@ const FiniteNumber = z.coerce
 
 /**
  * Schema for parsing TokenUsageStats with safe number coercion.
- * Extends the canonical schema shape with coercion for persistence resilience.
+ * Uses canonical schema as source of truth - compile-time assertion ensures sync.
  */
-const TokenUsageStatsParsingSchema = z
-  .object({
-    inputTokens: FiniteNumber,
-    outputTokens: FiniteNumber,
-    cost: FiniteNumber,
-  })
-  .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+const TokenUsageStatsParsingBaseSchema = z.object({
+  // Required fields from canonical schema
+  inputTokens: FiniteNumber,
+  outputTokens: FiniteNumber,
+  cost: FiniteNumber,
+  // Optional fields from canonical schema (default to 0 for accumulation)
+  cacheReadInputTokens: FiniteNumber.optional().default(0),
+  cacheCreationInputTokens: FiniteNumber.optional().default(0),
+});
 
-// Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
+const TokenUsageStatsParsingSchema = TokenUsageStatsParsingBaseSchema.catch({
+  inputTokens: 0,
+  outputTokens: 0,
+  cost: 0,
+  cacheReadInputTokens: 0,
+  cacheCreationInputTokens: 0,
+});
+
+// Compile-time assertion: parsing schema output must be assignable to canonical type.
+// This fails at compile time if TokenUsageStatsParsingSchema produces incompatible fields.
 type _AssertSchemaCompatible =
   z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
     ? true
     : never;
-const _assertCompatible: _AssertSchemaCompatible = true;
+void (true as _AssertSchemaCompatible);
+
+// Runtime assertion: ensure all canonical keys are handled
+const canonicalKeys = TokenUsageStatsSchema.keyof().options;
+const parsingKeys = new Set(Object.keys(TokenUsageStatsParsingBaseSchema.shape));
+const missingKeys = canonicalKeys.filter((k) => !parsingKeys.has(k));
+if (missingKeys.length > 0) {
+  throw new Error(
+    `TokenUsageStatsParsingSchema missing keys from canonical schema: ${missingKeys.join(', ')}`,
+  );
+}
 
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
   return (
-    usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cost === 0 &&
+    (usage.cacheReadInputTokens ?? 0) === 0 &&
+    (usage.cacheCreationInputTokens ?? 0) === 0
   );
 }
 
@@ -74,37 +102,63 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Update usage statistics for a stream
+   * Accumulate usage statistics for a stream (adds deltas to existing values).
+   * Returns the accumulated value to avoid race conditions from separate read.
    * @param storageKey - THE key for storage operations
+   * @returns The accumulated usage, or undefined if delta was empty
    */
   async setRunUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
-  ): Promise<void> {
-    const normalized = TokenUsageStatsParsingSchema.parse(usage);
+  ): Promise<TokenUsageStats | undefined> {
+    const delta = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
-    if (isEmptyUsage(normalized)) {
-      current.delete(storageKey);
-    } else {
-      current.set(storageKey, normalized);
+
+    if (isEmptyUsage(delta)) {
+      // Empty delta means nothing to add - return existing if any
+      return current.get(storageKey);
     }
 
-    if (current.size === 0) {
-      this.items.delete(stream);
-    } else {
-      this.items.set(stream, current);
-    }
+    // Accumulate: add delta to existing values
+    const existing = current.get(storageKey);
+    const accumulated: TokenUsageStats = {
+      inputTokens: (existing?.inputTokens ?? 0) + delta.inputTokens,
+      outputTokens: (existing?.outputTokens ?? 0) + delta.outputTokens,
+      cost: (existing?.cost ?? 0) + delta.cost,
+      cacheReadInputTokens:
+        (existing?.cacheReadInputTokens ?? 0) +
+        (delta.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens:
+        (existing?.cacheCreationInputTokens ?? 0) +
+        (delta.cacheCreationInputTokens ?? 0),
+    };
+
+    current.set(storageKey, accumulated);
+    this.items.set(stream, current);
 
     await this.save();
+    return accumulated;
   }
 
   /**
-   * Get usage statistics for a stream
+   * Get usage statistics for a stream (returns a copy of the map)
    */
   getRunUsage(stream: StreamTabId): RunUsageMap {
     return new Map(this.items.get(stream) ?? []);
+  }
+
+  /**
+   * Get usage for a specific key without copying the entire map.
+   * More efficient for single-key lookups in read-only scenarios
+   * (e.g., refreshStreamSurface bulk updates, displaying current usage).
+   */
+  getUsageForKey(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): TokenUsageStats | undefined {
+    return this.items.get(stream)?.get(storageKey);
   }
 
   /**
@@ -119,14 +173,24 @@ export class UsageStatsManager extends PersistentMapManager<
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let cacheReadInputTokens = 0;
+    let cacheCreationInputTokens = 0;
 
     for (const usage of runs.values()) {
       inputTokens += usage.inputTokens;
       outputTokens += usage.outputTokens;
       cost += usage.cost;
+      cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
+      cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
     }
 
-    return { inputTokens, outputTokens, cost };
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    };
   }
 
   /**
@@ -167,16 +231,26 @@ export class UsageStatsManager extends PersistentMapManager<
     let inputTokens = 0;
     let outputTokens = 0;
     let cost = 0;
+    let cacheReadInputTokens = 0;
+    let cacheCreationInputTokens = 0;
 
     for (const usage of this.items.values()) {
       for (const runUsage of usage.values()) {
         inputTokens += runUsage.inputTokens;
         outputTokens += runUsage.outputTokens;
         cost += runUsage.cost;
+        cacheReadInputTokens += runUsage.cacheReadInputTokens ?? 0;
+        cacheCreationInputTokens += runUsage.cacheCreationInputTokens ?? 0;
       }
     }
 
-    return { inputTokens, outputTokens, cost };
+    return {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    };
   }
 
   /**
