@@ -67,7 +67,11 @@ if (missingKeys.length > 0) {
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
   return (
-    usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cost === 0 &&
+    (usage.cacheReadInputTokens ?? 0) === 0 &&
+    (usage.cacheCreationInputTokens ?? 0) === 0
   );
 }
 
@@ -98,20 +102,22 @@ export class UsageStatsManager extends PersistentMapManager<
 
   /**
    * Accumulate usage statistics for a stream (adds deltas to existing values).
+   * Returns the accumulated value to avoid race conditions from separate read.
    * @param storageKey - THE key for storage operations
+   * @returns The accumulated usage, or undefined if delta was empty
    */
   async setRunUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
-  ): Promise<void> {
+  ): Promise<TokenUsageStats | undefined> {
     const delta = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
 
     if (isEmptyUsage(delta)) {
-      // Empty delta means nothing to add
-      return;
+      // Empty delta means nothing to add - return existing if any
+      return current.get(storageKey);
     }
 
     // Accumulate: add delta to existing values
@@ -132,13 +138,25 @@ export class UsageStatsManager extends PersistentMapManager<
     this.items.set(stream, current);
 
     await this.save();
+    return accumulated;
   }
 
   /**
-   * Get usage statistics for a stream
+   * Get usage statistics for a stream (returns a copy of the map)
    */
   getRunUsage(stream: StreamTabId): RunUsageMap {
     return new Map(this.items.get(stream) ?? []);
+  }
+
+  /**
+   * Get usage for a specific key without copying the entire map.
+   * More efficient for single-key lookups.
+   */
+  getUsageForKey(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): TokenUsageStats | undefined {
+    return this.items.get(stream)?.get(storageKey);
   }
 
   /**
