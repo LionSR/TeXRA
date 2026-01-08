@@ -46,7 +46,7 @@ export const formatUserMessage = (normalizedPayload, logId, timestamp) => {
  * @returns {HTMLElement} Progress status element
  */
 export const formatProgressStatus = (message) => {
-  const normalizedPayload = message.normalizedPayload || {};
+  const normalizedPayload = message.normalizedPayload ?? {};
   const severity = message.level || 'info';
   const date = new Date(message.timestamp ?? Date.now());
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
@@ -86,7 +86,7 @@ export const formatProgressStatus = (message) => {
  * @returns {HTMLElement|null} Error banner element or null
  */
 export const formatError = (message) => {
-  const normalizedPayload = message.normalizedPayload || {};
+  const normalizedPayload = message.normalizedPayload ?? {};
   const date = new Date(message.timestamp ?? Date.now());
   const { fullTimestamp, timeDisplay, tooltipTimestamp } =
     formatTimestamp(date);
@@ -96,7 +96,7 @@ export const formatError = (message) => {
     'Error occurred';
 
   // Build error details from structured data - order defines display priority
-  const structured = normalizedPayload.structured || {};
+  const structured = normalizedPayload.structured ?? {};
   const fieldConfig = [
     { key: 'message', skip: (v) => v === summaryText },
     { key: 'operation' },

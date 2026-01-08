@@ -105,7 +105,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const stream = state.activeStream || null;
     const activeRunId = runId ?? state.resolveActiveRunId(stream);
     const filesByRound = activeRunId
-      ? state.getRunFiles(stream, activeRunId) || {}
+      ? (state.getRunFiles(stream, activeRunId) ?? {})
       : {};
     // Hide round headers for tool-use agents where round numbers don't have meaning
     const showRoundHeaders = state.activeSessionKind !== 'toolUse';
@@ -256,7 +256,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // remain marked as error instead of reverting to stopped. Other statuses
     // (like RUNNING) should not be preserved when omitted, as undefined means
     // the stream has completed (READY status is deleted from the status map).
-    const streams = (message.streams || []).map((s) => {
+    const streams = (message.streams ?? []).map((s) => {
       let status = s.status;
       if (status === undefined) {
         const cachedStatus = state.streamStatuses.get(s.name);
@@ -341,7 +341,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
       // Refresh todos for the active stream
       const todos = state.getTodos(message.activeStream);
-      dom.todoList.update(todos || []);
+      dom.todoList.update(todos ?? []);
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
@@ -379,7 +379,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const previousRunId = state.getActiveRunId(message.stream);
     state.clearActiveRun(message.stream);
     logContent.innerHTML = '';
-    const groups = message.groups || [];
+    const groups = message.groups ?? [];
 
     // Always update run metadata (instructions, usage, files) regardless of groups
     // Tool-use sessions don't create task groups but still have usage data
@@ -415,7 +415,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       dom.taskGroups.showRun(null);
     }
-    const logMessages = message.messages || [];
+    const logMessages = message.messages ?? [];
     logMessages.forEach((msg) => {
       if (msg.groupId) {
         if (!dom.logEntries.append(msg)) {
@@ -463,7 +463,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Update task group statuses if they changed
     // Note: Only status/endTime are expected to change post-creation
-    const groups = message.groups || [];
+    const groups = message.groups ?? [];
     groups.forEach((group) => {
       const existing = state.taskGroups.get(group.id);
       if (!existing) {
@@ -534,7 +534,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (!updated) {
         const logId = message.logMessage?.id;
         if (logId) {
-          const existingUpdate = pendingLogUpdates.get(logId) || {};
+          const existingUpdate = pendingLogUpdates.get(logId) ?? {};
           pendingLogUpdates.set(logId, {
             ...existingUpdate,
             ...message.logMessage,
@@ -657,7 +657,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     state.clearRunUsage(targetStream);
-    const usageByRun = message.usageByRun || {};
+    const usageByRun = message.usageByRun ?? {};
     Object.entries(usageByRun).forEach(([runId, usage]) => {
       state.setRunUsage(targetStream, runId, usage);
     });
