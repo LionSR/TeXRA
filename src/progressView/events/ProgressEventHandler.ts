@@ -647,13 +647,12 @@ export class ProgressEventHandler {
     });
 
     // Refresh todos for the stream (ephemeral state)
-    // Always send todos if defined (including empty array to clear stale UI)
-    const todos = this.state.getTodos(stream);
-    if (todos !== undefined) {
-      this.webviewUpdater.updateTodos(stream, todos);
-    }
+    // Always send update (empty array if undefined) to clear stale UI from previous stream
+    const todos = this.state.getTodos(stream) ?? [];
+    this.webviewUpdater.updateTodos(stream, todos);
 
     // Refresh context state for the stream (ephemeral state)
+    // Only send if defined - frontend will show default state if not set
     const contextState = this.state.getContextState(stream);
     if (contextState !== undefined) {
       this.webviewUpdater.updateContextState(stream, contextState);
@@ -838,6 +837,22 @@ export class ProgressEventHandler {
       this.state.markStreamRendered(stream);
       this.sendInstructionUpdate(stream, activeRunId);
     }
+  }
+
+  /**
+   * Clear pending task groups for a specific stream.
+   * Called when a stream is deleted to prevent memory leaks.
+   */
+  clearPendingTaskGroups(stream: string): void {
+    this.pendingTaskGroups.delete(stream);
+  }
+
+  /**
+   * Clear all pending task groups.
+   * Called when all streams are deleted to prevent memory leaks.
+   */
+  clearAllPendingTaskGroups(): void {
+    this.pendingTaskGroups.clear();
   }
 
   /**
