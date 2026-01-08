@@ -88,6 +88,7 @@ import type {
   ResponseReasoningSummaryTextDeltaEvent,
   ResponseOutputItemDoneEvent,
   ResponseWebSearchCallInProgressEvent,
+  ResponseWebSearchCallSearchingEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -621,6 +622,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           ? this.createOutputStream()
           : null,
         emittedWebSearchIds: new Set<string>(),
+        inProgressWebSearchIds: new Set<string>(),
         hasThinkingContent: false,
       };
 
@@ -630,7 +632,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           state.hasThinkingContent = true;
         } else if (this.isTextDeltaEvent(event)) {
           state.outputStream?.append(event.delta);
-        } else if (this.isWebSearchInProgressEvent(event)) {
+        } else if (
+          this.isWebSearchInProgressEvent(event) ||
+          this.isWebSearchSearchingEvent(event)
+        ) {
+          if (!state.inProgressWebSearchIds.has(event.item_id)) {
+            this.emitOpenAIWebSearchInProgress(event.item_id);
+            state.inProgressWebSearchIds.add(event.item_id);
+          }
           // Web search starting - finalize current thinking stream
           // Don't emit placeholder here - wait for output_item.done with full data
           if (state.hasThinkingContent) {
@@ -653,7 +662,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               state.hasThinkingContent = false;
               state.thinkingStream = this.createThinkingStream();
             }
-            this.emitOpenAIWebSearch(item);
+            this.emitOpenAIWebSearch(item, {
+              update: state.inProgressWebSearchIds.has(item.id),
+            });
             state.emittedWebSearchIds.add(item.id);
           }
         }
@@ -668,7 +679,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (state.outputStream) state.outputStream.finalize(finalText);
 
       // Emit any web searches not yet emitted (fallback for edge cases)
-      this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+      this.emitWebSearchesFromResponse(
+        response,
+        state.emittedWebSearchIds,
+        state.inProgressWebSearchIds,
+      );
 
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
@@ -1609,6 +1624,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return event.type === 'response.web_search_call.in_progress';
   }
 
+  /** Type guard for web search searching events. */
+  private isWebSearchSearchingEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseWebSearchCallSearchingEvent {
+    return event.type === 'response.web_search_call.searching';
+  }
+
   /** Type guard for text output delta events. */
   private isTextDeltaEvent(
     event: ResponseStreamEvent,
@@ -1634,8 +1656,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Emit web search result to progress view during streaming.
    * Uses shared helper for consistent WebSearchResult construction.
    */
-  private emitOpenAIWebSearch(item: ResponseFunctionWebSearch): void {
-    this.emitWebSearchResult(buildOpenAIWebSearchResult(item));
+  private emitOpenAIWebSearch(
+    item: ResponseFunctionWebSearch,
+    options: { update?: boolean } = {},
+  ): void {
+    this.emitWebSearchResult(buildOpenAIWebSearchResult(item), options);
+  }
+
+  private emitOpenAIWebSearchInProgress(callId: string): void {
+    this.emitWebSearchResult({
+      query: '',
+      results: [],
+      provider: 'openai',
+      callId,
+      status: 'in_progress',
+    });
   }
 
   /**
@@ -1652,6 +1687,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private emitWebSearchesFromResponse(
     response: Response,
     alreadyEmitted: Set<string>,
+    inProgressIds: Set<string>,
   ): void {
     const output = response?.output;
     if (!Array.isArray(output)) {
@@ -1664,7 +1700,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         !alreadyEmitted.has(item.id) &&
         hasOpenAIWebSearchData(item)
       ) {
-        this.emitOpenAIWebSearch(item);
+        this.emitOpenAIWebSearch(item, {
+          update: inProgressIds.has(item.id),
+        });
         alreadyEmitted.add(item.id);
       }
     }

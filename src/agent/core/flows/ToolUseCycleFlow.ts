@@ -763,6 +763,19 @@ class ToolUseDispatchNode<C> extends BaseNode<
     let result: ToolResult;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
 
+    if (!options.modelHandler.getStreamingConfig()) {
+      options.logger.emitLogMessage({
+        id: call.callId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: {
+          toolName: call.name,
+          input: parsedInput ?? call.raw,
+          status: 'started',
+          callId: call.callId,
+        },
+      });
+    }
+
     if (!tool) {
       result = {
         error: `Unknown tool ${call.name}`,
@@ -836,11 +849,14 @@ class ToolUseDispatchNode<C> extends BaseNode<
       input: parsedInput ?? call.raw,
       output: sanitizedOutput,
       ...(editedFiles.length > 0 && { files: editedFiles }),
+      status: result.isError ? 'failed' : 'completed',
       isError: Boolean(result.isError),
     };
-    options.logger.info('', {
+    options.logger.emitLogMessage({
+      id: call.callId,
       messageType: MESSAGE_TYPES.TOOL_USE,
       data: toolUseLog,
+      update: true,
     });
 
     if (result.files && result.files.length > 0) {

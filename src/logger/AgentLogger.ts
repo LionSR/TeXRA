@@ -226,6 +226,59 @@ export class AgentLogger {
     });
   }
 
+  emitLogMessage(options: {
+    id: string;
+    messageType: MessageType;
+    data?: unknown;
+    text?: string;
+    level?: 'debug' | 'info' | 'warn' | 'error';
+    groupId?: string;
+    update?: boolean;
+  }): void {
+    const {
+      id,
+      messageType,
+      data,
+      text = '',
+      level = 'info',
+      update = false,
+    } = options;
+    const groupId = options.groupId ?? this.resolveActiveGroupId();
+
+    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
+    if (!shouldEmit) {
+      return;
+    }
+
+    if (update) {
+      bus.emit('updateLogMessage', {
+        stream: this.channelId,
+        logMessage: {
+          id,
+          text,
+          groupId,
+          messageType,
+          data,
+        },
+      });
+      return;
+    }
+
+    bus.emit('addLogMessage', {
+      stream: this.channelId,
+      logMessage: {
+        id,
+        text,
+        level,
+        timestamp: Date.now(),
+        groupId,
+        messageType,
+        verbose: debugMode,
+        data,
+      },
+    });
+  }
+
   /**
    * Log a structured error with consistent formatting.
    * Single source of truth for ERROR message type logging.

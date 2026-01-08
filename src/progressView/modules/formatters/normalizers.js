@@ -161,6 +161,11 @@ export const normalizeToolUseLog = (structured) => {
       ? parsed.output
       : {};
 
+  const status =
+    (typeof parsed.status === 'string' && parsed.status.trim()) ||
+    (typeof outputDetails.status === 'string' && outputDetails.status.trim()) ||
+    '';
+
   const summaryText =
     (typeof parsed.summary === 'string' && parsed.summary.trim()) ||
     (typeof outputDetails.summary === 'string' &&
@@ -208,6 +213,7 @@ export const normalizeToolUseLog = (structured) => {
     errorText,
     outputText,
     input: parsed.input,
+    status,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),

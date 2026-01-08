@@ -36,6 +36,8 @@ import {
   isContextWindowError,
   isMissingFinishReasonError,
 } from '@common/errors/sdkErrorUtils';
+// Local imports - logging
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -319,6 +321,7 @@ export class ModelHandlerOpenAI<
           signal,
         });
         const streamingAggregator = this.createStreamingAggregator();
+        const startedToolCalls = new Set<number>();
 
         const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
           if (!delta) {
@@ -334,6 +337,32 @@ export class ModelHandlerOpenAI<
           if (reasoningDelta) {
             thinking.append(reasoningDelta);
             streamingAggregator?.appendReasoning(reasoningDelta);
+          }
+
+          const toolCalls = chunk.choices[0]?.delta?.tool_calls;
+          if (!Array.isArray(toolCalls)) {
+            return;
+          }
+
+          for (const call of toolCalls) {
+            if (!call.function?.name) {
+              continue;
+            }
+            if (startedToolCalls.has(call.index)) {
+              continue;
+            }
+            startedToolCalls.add(call.index);
+            const callId = call.id || `tool_call_${call.index}`;
+            this.logger.emitLogMessage({
+              id: callId,
+              messageType: MESSAGE_TYPES.TOOL_USE,
+              data: {
+                toolName: call.function.name,
+                input: call.function.arguments,
+                status: 'started',
+                callId,
+              },
+            });
           }
         };
 

@@ -209,13 +209,20 @@ export abstract class ModelHandler<
    * This allows search results to appear in correct order based on when
    * they occurred in the response, rather than being logged after streaming.
    */
-  protected emitWebSearchResult(result: WebSearchResult): void {
+  protected emitWebSearchResult(
+    result: WebSearchResult,
+    options: { update?: boolean } = {},
+  ): void {
     if (!this.progressViewEnabled) {
       return;
     }
-    this.logger.info('', {
+    const logId = result.callId ?? `${Date.now()}`;
+    const shouldUpdate = (options.update ?? false) && Boolean(result.callId);
+    this.logger.emitLogMessage({
+      id: logId,
       messageType: MESSAGE_TYPES.WEB_SEARCH,
       data: result,
+      update: shouldUpdate,
     });
   }
 

@@ -2,17 +2,21 @@
  * Dedicated stream handler for Anthropic responses.
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
+// Local imports - tool handling
 import {
   extractDomain,
   type WebSearchResult,
   type WebSearchResultEntry,
 } from '@agent/modelHandlers/types/ServerToolTypes';
+// Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
+// Third-party imports
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   ServerToolUseBlock,
+  ToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
@@ -191,11 +195,26 @@ export class AnthropicStreamHandler {
       // Track web search server tool use to get query
       const block = event.content_block as ServerToolUseBlock;
       if (block.name === 'web_search') {
+        const input = block.input as { query?: string } | undefined;
+        this.emitWebSearchResult(
+          {
+            query: input?.query ?? '',
+            results: [],
+            provider: 'anthropic',
+            callId: block.id,
+            status: 'in_progress',
+          },
+          { update: false },
+        );
         this.state.pendingSearches.set(block.id, {
           index: blockIndex,
           input: '',
         });
       }
+      // Finalize any pending text stream
+      this.finalizeOutputStream();
+    } else if (blockType === 'tool_use') {
+      this.emitToolUseStart(event.content_block as ToolUseBlock);
       // Finalize any pending text stream
       this.finalizeOutputStream();
     } else if (blockType === 'web_search_tool_result') {
@@ -268,13 +287,16 @@ export class AnthropicStreamHandler {
 
     // Emit to progress view
     if (entries.length > 0 || query) {
-      this.emitWebSearchResult({
-        query,
-        results: entries,
-        provider: 'anthropic',
-        callId: block.tool_use_id,
-        status: 'completed',
-      });
+      this.emitWebSearchResult(
+        {
+          query,
+          results: entries,
+          provider: 'anthropic',
+          callId: block.tool_use_id,
+          status: 'completed',
+        },
+        { update: true },
+      );
       this.state.emittedSearchIds.add(block.tool_use_id);
     }
 
@@ -342,13 +364,35 @@ export class AnthropicStreamHandler {
   /**
    * Emits a web search result to the progress view.
    */
-  private emitWebSearchResult(result: WebSearchResult): void {
+  private emitWebSearchResult(
+    result: WebSearchResult,
+    options: { update: boolean },
+  ): void {
     if (!this.config.progressViewEnabled) {
       return;
     }
-    this.logger.info('', {
+    const logId = result.callId ?? `${Date.now()}`;
+    this.logger.emitLogMessage({
+      id: logId,
       messageType: MESSAGE_TYPES.WEB_SEARCH,
       data: result,
+      update: options.update,
+    });
+  }
+
+  private emitToolUseStart(block: ToolUseBlock): void {
+    if (!this.config.progressViewEnabled) {
+      return;
+    }
+    this.logger.emitLogMessage({
+      id: block.id,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: block.name,
+        input: block.input,
+        status: 'started',
+        callId: block.id,
+      },
     });
   }
 }

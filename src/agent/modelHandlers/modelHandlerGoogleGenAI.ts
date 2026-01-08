@@ -45,7 +45,9 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
+// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 import { ReasoningEffort } from '@model/ModelConfig';
 
@@ -530,6 +532,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ? this.createOutputStream()
           : undefined;
 
+        const startedToolCalls = new Set<string>();
         let baseResponse: GenerateContentResponse | undefined;
         let latestCandidate:
           | NonNullable<GenerateContentResponse['candidates']>[number]
@@ -546,6 +549,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             const parts = candidate.content?.parts ?? [];
             aggregatedParts.push(...parts);
             for (const part of parts) {
+              const functionCall = (part as { functionCall?: FunctionCall })
+                .functionCall;
+              if (functionCall?.name) {
+                const callId =
+                  functionCall.id ??
+                  `${functionCall.name}:${startedToolCalls.size}`;
+                if (!startedToolCalls.has(callId)) {
+                  startedToolCalls.add(callId);
+                  this.logger.emitLogMessage({
+                    id: callId,
+                    messageType: MESSAGE_TYPES.TOOL_USE,
+                    data: {
+                      toolName: functionCall.name,
+                      input: functionCall.args,
+                      status: 'started',
+                      callId,
+                    },
+                  });
+                }
+              }
               if (part.thought && isTextPart(part)) {
                 thinking.append(part.text);
               }
@@ -1229,9 +1252,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return [];
     }
 
-    return functionCalls.map(({ call, thoughtSignature }) => ({
+    return functionCalls.map(({ call, thoughtSignature }, index) => ({
       provider: 'google',
-      callId: call.id ?? randomUUID(),
+      callId: call.id ?? `${call.name}:${index}`,
       name: call.name!,
       input: call.args,
       raw: call,

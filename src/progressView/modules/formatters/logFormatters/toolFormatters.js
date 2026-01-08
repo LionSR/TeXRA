@@ -55,7 +55,9 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     return null;
   }
 
-  const { parsed, toolName, errorText, outputText, input } = normalizedToolLog;
+  const { parsed, toolName, errorText, outputText, input, status } =
+    normalizedToolLog;
+  const isStarting = status === 'started' || status === 'in_progress';
 
   // Use tool-specific icon
   const iconClass = getToolIconClass(toolName, normalizedToolLog.isError);
@@ -68,9 +70,15 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   // Build title
   const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
+  const statusSuffix =
+    status === 'started' || status === 'in_progress'
+      ? ' (starting...)'
+      : status === 'failed'
+        ? ' (failed)'
+        : '';
   const titleText = normalizedToolLog.headerSummary
-    ? `${titleBase} — ${normalizedToolLog.headerSummary}`
-    : titleBase;
+    ? `${titleBase}${statusSuffix} — ${normalizedToolLog.headerSummary}`
+    : `${titleBase}${statusSuffix}`;
 
   if (headerLabel) {
     headerLabel.textContent = titleText;
@@ -78,6 +86,9 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
 
   // Icon already set in createToolElement; just toggle error state
   element.classList.toggle('tool-use-error', normalizedToolLog.isError);
+  if (iconElem) {
+    iconElem.className = `codicon ${iconClass}${isStarting ? ' spin' : ''}`;
+  }
 
   if (!contentElem) {
     return element;
