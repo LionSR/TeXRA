@@ -645,6 +645,9 @@ export class ProgressViewState {
       inputTokens: Number(usage?.inputTokens) || 0,
       outputTokens: Number(usage?.outputTokens) || 0,
       cost: Number(usage?.cost) || 0,
+      // Include cache tokens for display (optional fields)
+      cacheReadInputTokens: Number(usage?.cacheReadInputTokens) || 0,
+      cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens) || 0,
     };
     if (
       normalized.inputTokens === 0 &&
