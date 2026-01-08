@@ -638,9 +638,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
-
-        // Log context management events if any edits were applied (streaming)
-        this.logContextManagementFromResponse(response);
       } finally {
         // Always finalize stream handler to prevent memory leaks on error
         streamHandler.finalize();
