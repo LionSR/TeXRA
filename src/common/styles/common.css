@@ -13,9 +13,11 @@
 
 body {
   margin: 0;
+  padding: var(--spacing-xlarge);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
   box-sizing: border-box;
 }
 
@@ -178,8 +180,82 @@ vscode-toolbar-button {
 }
 
 /* ==========================================================================
-   Utility Classes
+   View Header - Shared page header styling for history/profile/memory views
    ========================================================================== */
+
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.view-header h1,
+.view-header h2 {
+  margin: 0;
+}
+
+.view-header h1 {
+  color: var(--color-text-link);
+}
+
+/* ==========================================================================
+   List Item Card - Shared card styling for history/memory item lists
+   ========================================================================== */
+
+.list-item {
+  border: var(--border-thin) solid var(--vscode-panelSection-border);
+  border-radius: var(--border-radius-large);
+  padding: var(--spacing-medium);
+  background-color: var(--vscode-editor-background);
+}
+
+.list-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.list-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ==========================================================================
+   Collapsible - Shared styling for vscode-collapsible elements
+   ========================================================================== */
+
+.collapsible {
+  margin-top: var(--spacing-small);
+}
+
+.collapsible::part(body) {
+  max-height: var(--height-medium);
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible[open]::part(body) {
+  max-height: var(--height-max);
+}
+
+/* ==========================================================================
+   Secondary Text - For timestamps, metadata, descriptions
+   ========================================================================== */
+
+.text-secondary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* ==========================================================================
+   Empty State - Shown when lists have no items
+   ========================================================================== */
+
+.empty-state {
+  text-align: center;
+  margin-top: calc(var(--spacing-xlarge) * 2);
+  color: var(--color-text-secondary);
+}
 
 /* ==========================================================================
    Badge Base - Common styling for badge components
