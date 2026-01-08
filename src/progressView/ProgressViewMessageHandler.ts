@@ -179,6 +179,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleDeleteStream(message: any): Promise<void> {
     // Delete persisted session data if any
     await this.deleteSessionSnapshot(message.stream);
+    // Clear pending task groups to prevent memory leaks
+    this.provider.eventHandler.clearPendingTaskGroups(message.stream);
     await this.provider.state.clearStream(message.stream);
     // Force rebuild since we deleted a stream
     this.provider.updateWebview({ forceRebuild: true });
@@ -203,6 +205,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       await this.deleteSessionSnapshot(stream);
     }
 
+    // Clear all pending task groups to prevent memory leaks
+    this.provider.eventHandler.clearAllPendingTaskGroups();
     await this.provider.state.clearAll();
     // Force rebuild since we deleted all streams
     this.provider.updateWebview({ forceRebuild: true });
