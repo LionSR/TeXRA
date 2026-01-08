@@ -1,6 +1,3 @@
-// Standard library imports
-import { promises as fs } from 'fs';
-
 // Third-party imports
 import { execa, execaSync } from 'execa';
 import * as vscode from 'vscode';
@@ -9,9 +6,6 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-
-// Type imports
-import type { Dirent } from 'fs';
 
 const CHANNEL = 'gitCommands';
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
@@ -204,9 +198,9 @@ async function cloneOverleafProject(
     return;
   }
 
-  let directoryEntries: Dirent[];
+  let directoryEntries: [string, vscode.FileType][];
   try {
-    directoryEntries = await fs.readdir(workspacePath, { withFileTypes: true });
+    directoryEntries = await WorkspaceFS.readDir(workspacePath);
   } catch (error) {
     vscode.window.showErrorMessage(
       'Unable to inspect the workspace folder before cloning the Overleaf project.',
@@ -218,7 +212,7 @@ async function cloneOverleafProject(
 
   const ignoredWorkspaceEntries = new Set(['.DS_Store', 'Thumbs.db']);
   const nonIgnoredEntries = directoryEntries.filter(
-    (entry) => !ignoredWorkspaceEntries.has(entry.name),
+    ([name]) => !ignoredWorkspaceEntries.has(name),
   );
 
   if (nonIgnoredEntries.length > 0) {
