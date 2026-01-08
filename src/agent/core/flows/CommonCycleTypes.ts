@@ -88,7 +88,7 @@ export const BaseCycleFieldsSchema = z.object({
   /** Time taken for response in milliseconds */
   responseTimeMs: z.number().optional(),
   /** Reason the model stopped generating (nullable to match ProviderStopReason) */
-  stopReason: z.string().nullable().optional(),
+  stopReason: z.string().nullish(),
   /** Last error info for retry handling */
   lastError: RetryErrorInfoSchema.optional(),
 });
