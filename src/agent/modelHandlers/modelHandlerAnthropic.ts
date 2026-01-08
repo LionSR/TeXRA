@@ -210,6 +210,12 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 const CONTEXT_MANAGEMENT_KEEP_TOOL_USES = 3;
 /** Number of assistant turns with thinking blocks to keep (3 = preserve more reasoning context) */
 const CONTEXT_MANAGEMENT_KEEP_THINKING_TURNS = 3;
+/**
+ * Default compaction threshold percentage (shared with OpenAI handler).
+ * When context utilization exceeds this percentage, context management is triggered.
+ * Must match texra.model.compactionThresholdPercent default in package.json.
+ */
+const DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -533,7 +539,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Set to 0 to disable context management entirely
       const thresholdPercent = getConfig<number>(
         'texra.model.compactionThresholdPercent',
-        75,
+        DEFAULT_COMPACTION_THRESHOLD_PERCENT,
       );
 
       // Only enable context management if threshold is configured (> 0)
@@ -574,12 +580,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           contextManagementEdits.push({
             type: 'clear_tool_uses_20250919' as const,
-            ...(triggerTokens > 0 && {
-              trigger: {
-                type: 'input_tokens' as const,
-                value: triggerTokens,
-              },
-            }),
+            // triggerTokens is guaranteed > 0 since thresholdPercent > 0 (checked above)
+            trigger: {
+              type: 'input_tokens' as const,
+              value: triggerTokens,
+            },
             keep: {
               type: 'tool_uses' as const,
               value: CONTEXT_MANAGEMENT_KEEP_TOOL_USES,
