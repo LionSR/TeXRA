@@ -41,7 +41,7 @@ export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().nullish(),
-  view_range: z.tuple([z.number(), z.number()]).nullish(),
+  view_range: z.array(z.number()).length(2).nullish(),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
   insert_line: z.number().nullish(),
@@ -217,7 +217,7 @@ export class TextEditorTool extends defineTool({
    */
   private async view(
     filePath: string,
-    viewRange?: [number, number],
+    viewRange?: number[],
   ): Promise<ToolResult> {
     try {
       // Check if the path is a directory

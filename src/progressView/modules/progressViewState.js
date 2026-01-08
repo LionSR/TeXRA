@@ -283,6 +283,8 @@ export class ProgressViewState {
     this.contextState = new Map();
     // Todo storage by stream ID
     this.streamTodos = new Map();
+    // Queued follow-ups storage by stream ID
+    this.streamQueuedFollowUps = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -767,6 +769,51 @@ export class ProgressViewState {
    */
   clearAllTodos() {
     this.streamTodos.clear();
+  }
+
+  /**
+   * Set queued follow-ups for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {string[]} messages - The queued message texts
+   */
+  setQueuedFollowUps(streamId, messages) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamQueuedFollowUps.set(targetStream, messages ?? []);
+  }
+
+  /**
+   * Get queued follow-ups for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {string[]|null}
+   */
+  getQueuedFollowUps(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return null;
+    }
+    return this.streamQueuedFollowUps.get(targetStream) || null;
+  }
+
+  /**
+   * Clear queued follow-ups for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearQueuedFollowUps(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamQueuedFollowUps.delete(targetStream);
+  }
+
+  /**
+   * Clear all queued follow-ups across all streams.
+   */
+  clearAllQueuedFollowUps() {
+    this.streamQueuedFollowUps.clear();
   }
 }
 

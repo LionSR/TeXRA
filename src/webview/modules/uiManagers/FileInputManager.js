@@ -20,7 +20,6 @@ import { fileSelect } from './FileSelect.js';
 import { outputFilesManager } from './OutputFilesManager.js';
 import { safeGetElementById, safeGetElementValue } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { debounce } from '@common/debounce.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -338,17 +337,13 @@ export class FileInputManager extends BaseDomHandler {
         id === 'model' ||
         id === 'workflowAgent' ||
         id === 'toolUseAgent' ||
-        id === 'sessionType'
+        id === 'sessionType' ||
+        id === 'instruction' // handled by InstructionManager
       ) {
-        return; // handled by SettingsButtonManager
+        return;
       }
-      if (id !== 'instruction') {
-        this.addListener(id, 'change', this.state.save.bind(this.state));
-      }
+      this.addListener(id, 'change', this.state.save.bind(this.state));
     });
-    // Debounce instruction input to avoid saving on every keystroke
-    const debouncedSave = debounce(this.state.save.bind(this.state), 500);
-    this.addListener('instruction', 'input', debouncedSave);
   }
 
   setup() {
