@@ -177,13 +177,22 @@ export const normalizeToolUseLog = (structured) => {
 
   // Extract the actual output content, avoiding redundant nesting
   // If outputCandidate is an object with an 'output' field, use that directly
+  // Also exclude fields that are displayed elsewhere (error, isError, diagnostics, userInstruction)
   let outputContent = outputCandidate;
   if (
     outputCandidate !== null &&
     typeof outputCandidate === 'object' &&
     !Array.isArray(outputCandidate)
   ) {
-    const { summary: _unusedSummary, output, ...rest } = outputCandidate;
+    const {
+      summary: _unusedSummary,
+      output,
+      error: _extractedError,
+      isError: _extractedIsError,
+      diagnostics: _extractedDiagnostics,
+      userInstruction: _extractedUserInstruction,
+      ...rest
+    } = outputCandidate;
     // Prefer the nested output field if it exists, otherwise use remaining fields
     outputContent = output !== undefined ? output : rest;
   }
@@ -207,6 +216,8 @@ export const normalizeToolUseLog = (structured) => {
   const userInstructionText =
     (typeof parsed.userInstruction === 'string' &&
       parsed.userInstruction.trim()) ||
+    (typeof outputDetails.userInstruction === 'string' &&
+      outputDetails.userInstruction.trim()) ||
     '';
   const isUserFeedback = userInstructionText.length > 0;
 
