@@ -54,6 +54,7 @@ describe('AgentUsageReporter', () => {
 
       assert.equal(streamEvents.length, 1);
       // storageKey is THE single source of truth - no runId needed
+      // Cache tokens are passed through for display
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         storageKey,
@@ -61,6 +62,7 @@ describe('AgentUsageReporter', () => {
           inputTokens: 10,
           outputTokens: 5,
           cost: 0.25,
+          cacheCreationInputTokens: 4,
         },
       });
       // Verify statistics were logged with storageKey
@@ -105,6 +107,7 @@ describe('AgentUsageReporter', () => {
       reporter.report(stats, storageKey);
 
       assert.equal(streamEvents.length, 1);
+      // Cache tokens are passed through for display
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         storageKey,
@@ -112,6 +115,7 @@ describe('AgentUsageReporter', () => {
           inputTokens: 6,
           outputTokens: 2,
           cost: 0.1,
+          cacheCreationInputTokens: 1,
         },
       });
     } finally {
