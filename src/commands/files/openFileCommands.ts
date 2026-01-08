@@ -3,9 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
-
-const CHANNEL = 'openFileCommands';
-
 // Local imports - frontend
 import { fileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -15,6 +12,8 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
+
+const CHANNEL = 'openFileCommands';
 
 export async function openFile(file: string): Promise<void> {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));

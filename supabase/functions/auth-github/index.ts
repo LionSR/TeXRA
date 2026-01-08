@@ -150,7 +150,9 @@ async function validateGitHubToken(
 
   if (!userRes || !userRes.ok || !workingHeaders) {
     console.error(`[AUTH] GitHub token validation failed: ${lastError}`);
-    return { error: `GitHub API rejected token (${lastError.split(' - ')[0]})` };
+    return {
+      error: `GitHub API rejected token (${lastError.split(' - ')[0]})`,
+    };
   }
 
   const user: GitHubUser = await userRes.json();
