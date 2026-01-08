@@ -7,6 +7,7 @@ import Transport from 'winston-transport';
 import {
   ContextManagementDataSchema,
   ContextStateDataSchema,
+  type ContextStateData,
 } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
@@ -168,13 +169,10 @@ export class VSCodeTransport extends Transport {
         contextData.utilizationAfter ??
         (inputTokens / contextData.contextWindow) * 100;
 
-      bus.emit('updateContextState', {
-        stream: this.streamName,
-        contextState: {
-          inputTokens,
-          contextWindow: contextData.contextWindow,
-          utilizationPercent,
-        },
+      this.emitContextState({
+        inputTokens,
+        contextWindow: contextData.contextWindow,
+        utilizationPercent,
       });
     }
 
@@ -185,11 +183,18 @@ export class VSCodeTransport extends Transport {
         return; // Skip invalid context state data
       }
 
-      const contextState = parseResult.data;
-      bus.emit('updateContextState', {
-        stream: this.streamName,
-        contextState,
-      });
+      this.emitContextState(parseResult.data);
     }
+  }
+
+  /**
+   * Emit context state to the progress view event bus.
+   * Shared helper for both CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
+   */
+  private emitContextState(contextState: ContextStateData): void {
+    bus.emit('updateContextState', {
+      stream: this.streamName,
+      contextState,
+    });
   }
 }
