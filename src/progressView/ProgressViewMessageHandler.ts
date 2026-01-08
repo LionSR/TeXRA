@@ -138,6 +138,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       // Profile
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
 
+      // Memory
+      [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]:
+        this.handleOpenMemoryView.bind(this),
+
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]:
@@ -602,6 +606,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleOpenProfile(): Promise<void> {
     await vscode.commands.executeCommand('texra.auth.viewProfile');
+  }
+
+  private async handleOpenMemoryView(): Promise<void> {
+    await vscode.commands.executeCommand('texra.showMemory');
   }
 
   private async handleFileOperation(

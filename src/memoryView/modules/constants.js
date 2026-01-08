@@ -16,7 +16,8 @@ export const ELEMENT_IDS = {
 
 // Text labels and messages
 export const LABELS = {
-  EMPTY_STATE: 'No memory files found',
-  PREVIEW_HEADING: 'Preview',
-  EMPTY_PREVIEW: 'This memory file is empty.',
+  EMPTY_STATE:
+    'No saved memories yet. The assistant will create notes here when it needs to remember something.',
+  PREVIEW_HEADING: 'Contents',
+  EMPTY_PREVIEW: 'This note is empty.',
 };
