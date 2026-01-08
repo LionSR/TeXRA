@@ -44,6 +44,7 @@ import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -185,15 +186,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly BACKGROUND_TERMINAL_STATUSES: readonly ResponseStatus[] =
     ['completed', 'failed', 'cancelled', 'incomplete'];
 
-  /**
-   * Default threshold percentage for triggering conversation compaction.
-   * When cumulative input tokens exceed this percentage of the model's context window,
-   * the conversation will be compacted using OpenAI's `/responses/compact` endpoint.
-   * Set to 0 to disable automatic compaction.
-   * Default: 75% of context window
-   */
-  private static readonly DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
-
   private previousResponseId: string | null = null;
 
   /**
@@ -242,7 +234,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private getCompactionThresholdPercent(): number {
     return getConfig<number>(
       'texra.model.compactionThresholdPercent',
-      ModelHandlerOpenAIResponse.DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
   }
 
@@ -695,11 +687,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * request and relies on `previous_response_id` for conversation context.
    *
    * Supports automatic conversation compaction when cumulative input tokens
-   * exceed the configured threshold (texra.model.compactionThreshold).
+   * exceed the configured threshold (texra.model.compactionThresholdPercent).
    */
   async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
+    // Clear any stale compaction result from previous attempts (ensures clean state on retries)
+    this.compactionResult = undefined;
+
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
     const streamingToggleEnabled = this.getStreamingConfig();
