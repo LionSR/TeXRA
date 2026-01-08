@@ -67,4 +67,16 @@ export class ToolUseFollowUpQueue {
     );
     return drained;
   }
+
+  /**
+   * Get all queued follow-up messages for a stream without consuming them.
+   * Used for UI display purposes.
+   */
+  static getAll(streamId: StreamTabId): string[] {
+    const queue = this.queues.get(streamId);
+    if (!queue) {
+      return [];
+    }
+    return queue.getAll();
+  }
 }

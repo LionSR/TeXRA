@@ -8,6 +8,7 @@ import {
   sendFollowUp,
   type SendFollowUpResult,
 } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
@@ -21,6 +22,19 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { ResumeAgentResultSchema } from './resumeCommand';
 
 const logger = new AgentLogger('followUpCommand');
+
+/**
+ * Update the queued follow-ups display in the webview.
+ */
+function updateQueuedFollowUpsUI(streamId: StreamTabId): void {
+  const provider = ProgressViewProvider.getInstance();
+  if (!provider) {
+    return;
+  }
+
+  const messages = ToolUseFollowUpQueue.getAll(streamId);
+  provider.webviewUpdater.updateQueuedFollowUps(streamId, messages);
+}
 
 // Track in-flight lazy detection checks to prevent race conditions
 const inFlightDetections = new Set<StreamTabId>();
@@ -175,8 +189,12 @@ async function handleFollowUpResult(
   switch (result.status) {
     case 'sent':
       // Silent success - no notification needed
+      // Also update queue display (message was sent, queue may be empty now)
+      updateQueuedFollowUpsUI(streamId);
       break;
     case 'queued':
+      // Update the queued follow-ups display
+      updateQueuedFollowUpsUI(streamId);
       if (result.reason === 'waiting') {
         // Auto-resume WAITING tool-use sessions
         const resumed = await tryAutoResume(streamId);
