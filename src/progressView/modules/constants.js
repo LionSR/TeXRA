@@ -48,6 +48,8 @@ export const ELEMENT_IDS = {
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
+  QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
+  QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   RESET_APPROVAL_BYPASS_BTN: 'resetApprovalBypassBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
