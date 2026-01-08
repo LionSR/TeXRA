@@ -272,6 +272,14 @@
             "description": "Enable background mode for OpenAI Responses API to handle long-running generations (>10mins) more reliably by preventing request timeouts. Adds polling overhead.",
             "scope": "resource"
           },
+          "texra.model.compactionThresholdPercent": {
+            "type": "number",
+            "default": 75,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percentage of context window to trigger automatic conversation compaction with OpenAI Responses API. When cumulative input tokens exceed this percentage of the model's context window, the conversation is compacted to reduce context size. Set to 0 to disable automatic compaction.",
+            "scope": "resource"
+          },
           "texra.model.gpt5ReasoningSummary": {
             "type": "boolean",
             "default": false,
