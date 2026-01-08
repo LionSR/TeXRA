@@ -5,24 +5,31 @@
  * mid-session. These streams can be resumed when the user sends a follow-up.
  */
 
+import type { FlowRecord } from '@agent/node/persisted-flow';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 import { getExecutionStore } from './ExecutionKVStore';
 
 /**
- * Check if a single stream has a persisted flow record.
+ * Check if a single stream has a valid, resumable flow record.
  *
  * Used for lazy detection when a user sends a follow-up to a stream
  * that wasn't detected at startup (or when startup detection is skipped).
  *
- * @returns true if a persisted flow record exists (session can be resumed)
+ * Note: We read and validate the record rather than just checking existence,
+ * because a corrupted/truncated record (e.g., from a crash during write)
+ * would cause resume to fail, leaving the stream stuck in WAITING state.
+ *
+ * @returns true if a valid flow record exists (session can be resumed)
  */
 export async function hasPersistedFlowRecord(
   executionId: ExecutionId,
 ): Promise<boolean> {
   try {
     const kv = getExecutionStore(executionId);
-    return await kv.exists(`flow:${executionId}`);
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    // Validate the record has the expected shape (shared state exists)
+    return flowRecord?.shared !== undefined;
   } catch {
     return false;
   }
@@ -46,12 +53,10 @@ export async function detectWaitingStreams(
   for (const [streamId, executionId] of executionIdMap) {
     try {
       const kv = getExecutionStore(executionId);
-      // Use exists() instead of read() to avoid loading entire session into memory.
-      // The flow record can be large (contains full conversation history).
-      // We only need to know if it exists - actual loading happens on resume.
-      const hasFlowRecord = await kv.exists(`flow:${executionId}`);
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
 
-      if (hasFlowRecord) {
+      // Validate the record has the expected shape - corrupted records are skipped
+      if (flowRecord?.shared !== undefined) {
         waitingStreams.add(streamId);
       }
     } catch {
