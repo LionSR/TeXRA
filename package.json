@@ -674,6 +674,12 @@
       {
         "title": "LaTeX Replacements",
         "properties": {
+          "texra.latex.wrapCritiqueInAlign": {
+            "type": "boolean",
+            "default": true,
+            "description": "When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.",
+            "order": 7
+          },
           "texra.latex.enabledReplacements": {
             "type": "array",
             "items": {
