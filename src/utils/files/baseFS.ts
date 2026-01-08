@@ -107,10 +107,7 @@ export abstract class BaseFS {
     target: PathInput,
   ): Promise<void> {
     try {
-      const existsResult = await this.exists(target);
-      if (!existsResult) {
-        await this.createDir(target);
-      }
+      await this.createDir(target);
     } catch (err) {
       if (err instanceof vscode.FileSystemError && err.code === 'FileExists') {
         return;
