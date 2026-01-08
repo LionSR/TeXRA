@@ -80,6 +80,13 @@ CLAUDE.md
 !src/profileView/*.html
 !src/profileView/*.css
 
+!src/memoryView/modules/uiManagers/*.js
+!src/memoryView/modules/*.js
+!src/memoryView/styles/*.css
+!src/memoryView/*.js
+!src/memoryView/*.html
+!src/memoryView/*.css
+
 .env
 
 supabase/**
