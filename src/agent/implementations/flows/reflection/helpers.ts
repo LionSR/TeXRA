@@ -10,9 +10,15 @@ import * as path from 'path';
 import type { RoundOutput } from '@agent/output';
 
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type {
+  AgentWorkflowSetting,
+  AgentPrompt,
+} from '@agent/core/AgentDataclass';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import {
   WorkspaceFS,
   createWorkspaceLocation,
+  type AgentFileLocation,
   type FileLocation,
   type TaskRunFileService,
   type WorkspaceFileLocation,
@@ -82,4 +88,109 @@ export function createBaseFileLocations(
     const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
     return createWorkspaceLocation(absolutePath, relativePath);
   });
+}
+
+/**
+ * Compute whether to enforce XML structure in responses.
+ *
+ * Extracted from runReflectionFlow for clarity and testability.
+ * Logic priority:
+ * 1. Explicit xmlStructureMode setting takes precedence
+ * 2. CoT agents always use XML structure
+ * 3. Direct agents only use XML structure with scratchpad
+ *
+ * @param setting - Agent workflow settings
+ * @param useScratchpad - Whether scratchpad prefill is enabled
+ * @returns Whether to enforce XML structure
+ */
+export function computeShouldEnsureXmlStructure(
+  setting: AgentWorkflowSetting,
+  useScratchpad: boolean,
+): boolean {
+  if (setting.xmlStructureMode !== undefined) {
+    return (
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad)
+    );
+  }
+  if (setting.agentType === 'CoT') {
+    return true;
+  }
+  if (setting.agentType === 'direct') {
+    return useScratchpad;
+  }
+  return false;
+}
+
+/**
+ * Compute total rounds for workflow execution.
+ *
+ * Extracted from runReflectionFlow for clarity and testability.
+ * Logic priority:
+ * 1. Explicit maxRounds setting takes precedence
+ * 2. Direct agents always run 1 round
+ * 3. Otherwise use max of configured rounds or request count
+ *
+ * @param setting - Agent workflow settings
+ * @param prompt - Agent prompt with user requests
+ * @returns Number of rounds to execute
+ */
+export function computeTotalRounds(
+  setting: AgentWorkflowSetting,
+  prompt: AgentPrompt,
+): number {
+  if (setting.maxRounds !== undefined) {
+    return setting.maxRounds;
+  }
+  if (setting.agentType === 'direct') {
+    return 1;
+  }
+  const requests = Array.isArray(prompt.userRequest)
+    ? prompt.userRequest
+    : prompt.userRequest
+      ? [prompt.userRequest]
+      : [];
+  return Math.max(setting.rounds ?? 2, requests.length);
+}
+
+/**
+ * Parameters for creating an output file location getter.
+ */
+interface OutputFileLocationParams {
+  fileService: TaskRunFileService;
+  config: AgentConfig;
+  modelName: string;
+  setting: AgentWorkflowSetting;
+  useScratchpad: boolean;
+}
+
+/**
+ * Create a function that generates output file locations for each round.
+ *
+ * Extracted from runReflectionFlow for clarity and reuse.
+ *
+ * @param params - Configuration for output file generation
+ * @returns Function that maps round number to output file location
+ */
+export function createOutputFileLocationGetter(
+  params: OutputFileLocationParams,
+): (round: number) => AgentFileLocation {
+  const { fileService, config, modelName, setting, useScratchpad } = params;
+  const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
+
+  return (currRound: number): AgentFileLocation => {
+    const fileName = getOutputFileName(
+      config.inputFile,
+      config.agent,
+      modelName,
+      fileExtension,
+      currRound,
+      config.editedFile || undefined,
+    );
+    return (
+      useScratchpad
+        ? fileService.createRawOutputLocation(fileName)
+        : fileService.createLocation(fileName)
+    ) as AgentFileLocation;
+  };
 }
