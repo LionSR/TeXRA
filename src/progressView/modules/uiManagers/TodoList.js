@@ -89,23 +89,17 @@ export class TodoList {
     const item = document.createElement('div');
     item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
 
+    const iconClass =
+      STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
+    const isInProgress = todo.status === TODO_STATUS.IN_PROGRESS;
+
     const icon = document.createElement('i');
-    let iconClass = STATUS_ICONS[todo.status];
-    if (!iconClass) {
-      console.warn(
-        `[TodoList] Unknown todo status: "${todo.status}", using pending icon`,
-      );
-      iconClass = STATUS_ICONS[TODO_STATUS.PENDING];
-    }
-    // Add 'spin' as separate class for in-progress animation (codicon pattern)
-    const spinClass = todo.status === TODO_STATUS.IN_PROGRESS ? ' spin' : '';
-    icon.className = `codicon codicon-${iconClass}${spinClass} todo-item__icon`;
+    icon.className = `codicon codicon-${iconClass}${isInProgress ? ' spin' : ''} todo-item__icon`;
     item.appendChild(icon);
 
     const content = document.createElement('span');
     content.className = 'todo-item__content';
-    content.textContent =
-      todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
+    content.textContent = isInProgress ? todo.activeForm : todo.content;
     item.appendChild(content);
 
     return item;
