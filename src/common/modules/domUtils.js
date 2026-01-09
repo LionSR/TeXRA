@@ -82,7 +82,9 @@ export function safeSetElementChecked(id, checked) {
     console.warn(`Element with id '${id}' not found`);
     return;
   }
+  // VS Code web components require both property and attribute for visual sync
   element.checked = checked;
+  element.toggleAttribute('checked', checked);
 }
 
 export function safeGetElementById(id) {
