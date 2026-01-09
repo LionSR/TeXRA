@@ -762,8 +762,11 @@ export function buildApprovalRejectedResult(
   // while still forwarding any user note as explicit instruction for the model.
   const note = userMessage?.trim();
   const result: ToolResult = {
+    // Use output to ensure the rejection message is always shown to the model.
+    // formatToolResultAsText prioritizes output over error/summary.
+    output: baseMessage,
     summary: baseMessage,
-    error: note && note.length > 0 ? note : baseMessage,
+    error: baseMessage,
     isError: true,
     ...(note && note.length > 0 ? { userInstruction: note } : {}),
   };
