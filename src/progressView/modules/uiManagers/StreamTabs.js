@@ -52,13 +52,7 @@ export class StreamTabs {
         },
       });
       if (!tabEl) return;
-      const statusEl = tabEl.querySelector('.tab-status');
-      if (statusEl) {
-        const status = info.status || 'stopped';
-        statusEl.classList.add(`is-${status}`);
-        statusEl.dataset.status =
-          status.charAt(0).toUpperCase() + status.slice(1);
-      }
+      this._applyStatus(tabEl.querySelector('.tab-status'), info.status);
       // Apply agent decorators from shared config
       this._applyAgentDecorators(tabEl, info);
       if (info.name === activeStream) {
@@ -112,6 +106,27 @@ export class StreamTabs {
   }
 
   /**
+   * Apply status to a status element, handling class updates and dataset.
+   * @param {HTMLElement} statusEl - The status element to update
+   * @param {string} status - The status value
+   */
+  _applyStatus(statusEl, status) {
+    if (!statusEl) return;
+    // Remove old status classes - ensures sync with STREAM_STATUS constants
+    Object.values(STREAM_STATUS).forEach((s) =>
+      statusEl.classList.remove(`is-${s}`),
+    );
+    // READY means execution completed - display as stopped (no active indicator)
+    const normalizedStatus =
+      status === STREAM_STATUS.READY
+        ? STREAM_STATUS.STOPPED
+        : status || STREAM_STATUS.STOPPED;
+    statusEl.classList.add(`is-${normalizedStatus}`);
+    statusEl.dataset.status =
+      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+  }
+
+  /**
    * Update status and/or timestamp for a single stream tab.
    * More efficient than full update() when only status changed.
    * @param {string} streamName - The stream to update
@@ -152,18 +167,7 @@ export class StreamTabs {
 
     const statusEl = streamTab.querySelector('.tab-status');
     if (statusEl) {
-      // Remove old status classes
-      for (const s of Object.values(STREAM_STATUS)) {
-        statusEl.classList.remove(`is-${s}`);
-      }
-      // READY means execution completed - display as stopped
-      const displayStatus =
-        status === STREAM_STATUS.READY || !status
-          ? STREAM_STATUS.STOPPED
-          : status;
-      statusEl.classList.add(`is-${displayStatus}`);
-      statusEl.dataset.status =
-        displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
+      this._applyStatus(statusEl, status);
       updated = true;
     }
 
