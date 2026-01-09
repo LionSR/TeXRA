@@ -1,32 +1,23 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Type imports
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
-// Types
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-import { type StreamStatus } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
+import type { StreamStatus } from '@common/constants/streamStatus';
+import type { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+import { AgentLogger } from '@logger/AgentLogger';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
+
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-
-// Internal imports
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { COMMANDS } from '@progressView/modules/constants.js';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-} from '@eventBus/types';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { RetryRequestPrompt, ToolEditApprovalPrompt } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
-
-// Logger imports
-// Type imports
 
 /**
  * Manages webview updates for the progress view.
