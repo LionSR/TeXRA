@@ -152,7 +152,6 @@ export class ProgressViewProvider
     super.cleanupView();
     this._sidebarReady = false;
     this._pendingUpdateOptions = null;
-    this.state.clearRenderedStreamTracking();
   }
 
   /**
@@ -187,8 +186,6 @@ export class ProgressViewProvider
 
     this._sidebarReady = false;
     this._pendingUpdateOptions = null;
-    // Clear rendered stream tracking to force rebuild - DOM state is stale after resolve
-    this.state.clearRenderedStreamTracking();
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -251,16 +248,10 @@ export class ProgressViewProvider
       theme,
     );
 
-    // Use state as single source of truth for stream switch detection
-    const isStreamSwitch = this.state.isStreamSwitch(activeStream);
-    const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
+    // Frontend detects stream switches using its own lastRenderedStream tracking.
+    // Backend just sends data with action: 'render', frontend decides if rebuild needed.
+    this.eventHandler.refreshStreamSurface(activeStream || '');
 
-    this.eventHandler.refreshStreamSurface(activeStream || '', {
-      forceRebuild: shouldForceRebuild,
-    });
-
-    // Mark stream as rendered for future switch detection
-    this.state.markStreamRendered(activeStream);
     this._pendingUpdateOptions = null;
   }
 
