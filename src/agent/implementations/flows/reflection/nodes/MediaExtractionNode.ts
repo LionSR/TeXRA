@@ -14,8 +14,6 @@ import {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
-import { getFilesForRound } from '../helpers';
-
 import {
   type ReflectionFlowShared,
   type RoundContext,
@@ -45,16 +43,10 @@ export class MediaExtractionNode<C = unknown> extends Node<
 
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, roundOutputs, context } = shared;
+    const { currentRound, context } = shared;
 
     const workspaceState = AgentWorkspaceState.fromSnapshot(
       shared.workspaceSnapshot,
-    );
-    const files = getFilesForRound(
-      currentRound,
-      roundOutputs,
-      config,
-      fileService,
     );
 
     const extraMediaFiles: FileLocation[] = [];
@@ -68,7 +60,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     }
 
     return {
-      files,
+      files: context?.filesForRound ?? [],
       currentRound,
       supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,

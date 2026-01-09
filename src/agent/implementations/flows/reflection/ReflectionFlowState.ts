@@ -44,7 +44,7 @@ import {
   CycleFieldsSchema,
   type CycleTransientFields,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { AgentFileLocationSchema } from '@utils/files';
+import { AgentFileLocationSchema, FileLocationSchema } from '@utils/files';
 
 // ============================================================================
 // Schemas (Single Source of Truth)
@@ -57,6 +57,9 @@ import { AgentFileLocationSchema } from '@utils/files';
  * - stateRoundSnapshot is a plain JSON snapshot (not class instance)
  * - Nodes reconstruct ConversationRoundState when needed for mutation
  * - This ensures structuredClone() works correctly in PersistedFlow
+ *
+ * Pre-computed values to avoid redundant calculations across nodes:
+ * - filesForRound: computed once in PrepareContextNode, reused by TeXCountNode and MediaExtractionNode
  */
 export const RoundContextSchema = z.object({
   /** Prepared messages for the model */
@@ -65,6 +68,8 @@ export const RoundContextSchema = z.object({
   prefill: z.string(),
   /** Round state snapshot (natively serializable) */
   stateRoundSnapshot: ConversationRoundStateSnapshotSchema,
+  /** Files to process for this round (computed once, reused by multiple nodes) */
+  filesForRound: z.array(FileLocationSchema),
 });
 
 /** Derived type from schema */

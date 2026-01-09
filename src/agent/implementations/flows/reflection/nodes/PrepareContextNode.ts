@@ -25,7 +25,9 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { FileLocation } from '@utils/files';
 
+import { getFilesForRound } from '../helpers';
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -42,6 +44,7 @@ import type {
 interface ContextPrepInput {
   currentRound: number;
   conversation: ProviderMessage[];
+  filesForRound: FileLocation[];
 }
 
 type ContextExecResult = { kind: 'ready'; context: RoundContext };
@@ -61,11 +64,24 @@ export class PrepareContextNode<C = unknown> extends Node<
 
   /**
    * Extract data needed for context preparation.
+   * Computes filesForRound here to avoid redundant calls in subsequent nodes.
    */
   async prep(shared: ReflectionFlowShared): Promise<ContextPrepInput> {
+    const { config, fileService } = this.services;
+    const { currentRound, conversation, roundOutputs } = shared;
+
+    // Compute filesForRound once here, reused by TeXCountNode and MediaExtractionNode
+    const filesForRound = getFilesForRound(
+      currentRound,
+      roundOutputs,
+      config,
+      fileService,
+    );
+
     return {
-      currentRound: shared.currentRound,
-      conversation: shared.conversation,
+      currentRound,
+      conversation,
+      filesForRound,
     };
   }
 
@@ -75,7 +91,7 @@ export class PrepareContextNode<C = unknown> extends Node<
    */
   async exec(prepRes: ContextPrepInput): Promise<ContextExecResult> {
     const { promptBuilder, modelHandler, logger } = this.services;
-    const { currentRound, conversation } = prepRes;
+    const { currentRound, conversation, filesForRound } = prepRes;
 
     const stateRound = new ConversationRoundState(currentRound);
 
@@ -105,6 +121,7 @@ export class PrepareContextNode<C = unknown> extends Node<
           messages,
           prefill: prefill ?? '',
           stateRoundSnapshot: stateRound.toSnapshot(),
+          filesForRound,
         },
       };
     } else {
@@ -131,6 +148,7 @@ export class PrepareContextNode<C = unknown> extends Node<
           messages,
           prefill: prefill ?? '',
           stateRoundSnapshot: stateRound.toSnapshot(),
+          filesForRound,
         },
       };
     }
