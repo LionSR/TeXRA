@@ -10,6 +10,7 @@ export function initializeExtensionLifecycle(): void {
     return;
   }
   initialized = true;
+  extensionIsDeactivating = false;
 
   cleanup = bus.on('extensionDeactivating', () => {
     extensionIsDeactivating = true;
@@ -20,7 +21,6 @@ export function disposeExtensionLifecycle(): void {
   cleanup?.();
   cleanup = undefined;
   initialized = false;
-  extensionIsDeactivating = false;
 }
 
 export function isExtensionDeactivating(): boolean {
