@@ -78,6 +78,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1963,15 +1964,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...attachments);
     }
 
-    const textPieces: string[] = [];
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    textPieces.push(JSON.stringify(sanitizedResult, null, 2));
-
+    // Build tool result as plain text - JSON wastes tokens
+    // Note: Anthropic handles attachments as separate content blocks, not in text
     const toolResultContent: Array<
       TextBlockParam | ImageBlockParam | DocumentBlockParam
-    > = [{ type: 'text', text: textPieces.join('\n\n') }];
+    > = [{ type: 'text', text: formatToolResultAsText(result) }];
 
     const unsupportedNotes: string[] = [];
 
