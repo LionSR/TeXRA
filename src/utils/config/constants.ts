@@ -101,10 +101,12 @@ export function getToolUsePersistenceTtlHours(): number {
 
 /** Determine whether the memory tool is enabled for tool-use sessions. */
 export function getToolUseMemoryEnabled(): boolean {
-  return globalSM?.get<boolean>(
-    GlobalStateKey.MEMORY_ENABLED,
-    DEFAULT_TOOL_USE_MEMORY_ENABLED,
-  ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED;
+  return (
+    globalSM?.get<boolean>(
+      GlobalStateKey.MEMORY_ENABLED,
+      DEFAULT_TOOL_USE_MEMORY_ENABLED,
+    ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED
+  );
 }
 
 /** Set whether the memory tool is enabled for tool-use sessions. */
