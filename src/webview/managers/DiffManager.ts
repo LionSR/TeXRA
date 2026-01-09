@@ -77,7 +77,10 @@ export class DiffManager extends BaseWebviewManager {
     message: any,
     result: { commits: string[]; isGitRepo: boolean },
   ): void {
-    if (!message?.notifyWhenEmpty || (result.commits.length > 0 && result.isGitRepo)) {
+    if (
+      !message?.notifyWhenEmpty ||
+      (result.commits.length > 0 && result.isGitRepo)
+    ) {
       return;
     }
 
