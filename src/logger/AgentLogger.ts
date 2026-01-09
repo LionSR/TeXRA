@@ -480,13 +480,9 @@ export class AgentLogger {
    * Log missing output information.
    */
   missingOutputs(info: unknown, groupId?: string): void {
-    const missing =
-      typeof info === 'object' && info !== null && 'missing' in info
-        ? (info as { missing?: unknown[] }).missing
-        : undefined;
-    const count = missing?.length ?? 0;
-    const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
-    this.info(summary, {
+    const missing = (info as { missing?: unknown[] } | null)?.missing;
+    const count = Array.isArray(missing) ? missing.length : 0;
+    this.info(`${count} output file${count === 1 ? '' : 's'} missing`, {
       groupId,
       messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
       data: info,
