@@ -104,9 +104,6 @@ export class ProgressEventHandler {
         const { stream, session, isRemote, hasMultipleOutputs } = payload;
         if (!stream) return;
 
-        // Use state's single source of truth for stream switch detection
-        const isStreamSwitch = this.state.isStreamSwitch(stream);
-
         await this.state.streamTabs.ensureStream(stream);
         this.state.updateStreamHints(stream, {
           sessionCategory: session?.agentCategory,
@@ -145,12 +142,10 @@ export class ProgressEventHandler {
         }
 
         if (this.webviewUpdater.isAvailable()) {
+          // Frontend detects stream switches using lastRenderedStream tracking.
           const activeRunId = this.refreshStreamSurface(stream, {
             updateInstruction: false,
-            forceRebuild: isStreamSwitch,
           });
-          // Mark stream as rendered for future switch detection
-          this.state.markStreamRendered(stream);
           this.sendInstructionUpdate(stream, activeRunId);
         }
       },
@@ -577,24 +572,27 @@ export class ProgressEventHandler {
 
   /**
    * Refresh all webview surface data for a specific stream.
-   * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
-   *   Required when switching streams or after data deletion. Defaults to false
-   *   for incremental updates.
+   *
+   * Sends UPDATE_LOGS with action: 'render' (or 'clear' if stream is empty).
+   * Frontend detects stream switches using its lastRenderedStream tracking
+   * and decides whether to do full rebuild or incremental update.
+   *
+   * @param options.updateInstruction - If true (default), also update instruction panel.
    * @returns The resolved active run ID, useful for callers that need to pass it
    *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
     stream: string,
-    options: { updateInstruction?: boolean; forceRebuild?: boolean } = {},
+    options: { updateInstruction?: boolean } = {},
   ): string | null {
     if (!this.webviewUpdater.isAvailable()) return null;
 
-    const { updateInstruction = true, forceRebuild = false } = options;
+    const { updateInstruction = true } = options;
 
     if (!stream) {
-      // No active stream: explicitly clear content with clearContent: true.
-      // This is an intentional clear (not a bug), so we pass the explicit flag.
-      this.webviewUpdater.updateLogContent('', [], [], undefined, true, true);
+      // No active stream: explicitly clear content with action: 'clear'.
+      // This is an intentional clear (e.g., stream deleted, no streams left).
+      this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
       this.webviewUpdater.updateFiles('', { reset: true });
       this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
@@ -630,18 +628,14 @@ export class ProgressEventHandler {
     // Groups already in state will be sent via updateLogContent.
     this.pendingTaskGroups.delete(stream);
 
-    this.webviewUpdater.updateLogContent(
-      stream,
-      messages,
-      groups,
-      {
-        runInstructions,
-        activeRunId,
-        runUsage: usageByRun,
-        runFiles: filesByRun,
-      },
-      forceRebuild,
-    );
+    // Send data with action: 'render' (default).
+    // Frontend detects stream switch by comparing stream with lastRenderedStream.
+    this.webviewUpdater.updateLogContent(stream, messages, groups, {
+      runInstructions,
+      activeRunId,
+      runUsage: usageByRun,
+      runFiles: filesByRun,
+    });
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
     // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
@@ -836,15 +830,12 @@ export class ProgressEventHandler {
       // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
       this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
-      // Force rebuild to clear any previous stream's content. The new task
-      // group must be added to state BEFORE this call (in TaskGroupEvents)
+      // The new task group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
+      // Frontend detects stream switches using lastRenderedStream tracking.
       const activeRunId = this.refreshStreamSurface(stream, {
         updateInstruction: false,
-        forceRebuild: true,
       });
-      // Mark stream as rendered for future switch detection
-      this.state.markStreamRendered(stream);
       this.sendInstructionUpdate(stream, activeRunId);
     }
   }

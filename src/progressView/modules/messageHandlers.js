@@ -364,6 +364,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (logContent) {
         logContent.innerHTML = '';
       }
+      // Reset lastRenderedStream since we cleared content
+      state.lastRenderedStream = '';
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
@@ -395,25 +397,29 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const logMessages = message.messages ?? [];
 
-    // Determine rebuild strategy based on explicit flags:
+    // Action-based rebuild strategy (simpler than boolean flags):
     //
-    // clearContent: Explicit signal to clear DOM content (e.g., no active stream,
-    //               stream deletion). When true, we clear even with empty messages.
+    // action: 'clear' → Explicitly clear DOM content (no active stream, stream deleted)
+    // action: 'render' (default) → Send data to display, frontend decides:
+    //   - Stream switch (message.stream !== lastRenderedStream) → Full rebuild
+    //   - Same stream → Incremental update (just metadata)
     //
-    // forceRebuild: Signal that a full DOM rebuild is appropriate. However:
-    //   - forceRebuild: true with messages → Clear and rebuild
-    //   - forceRebuild: true without messages → Preserve content (safety guard)
-    //                   This prevents data loss from race conditions, filter mismatches,
-    //                   or other edge cases where forceRebuild is set but data isn't ready.
+    // This design moves stream switch detection to the frontend, which tracks
+    // lastRenderedStream. Backend just sends data with intent, no longer tracks
+    // what was rendered. The frontend is the single source of truth for render state.
+    const action = message.action ?? 'render';
+    const isExplicitClear = action === 'clear';
+    const isStreamSwitch = message.stream !== state.lastRenderedStream;
+
+    // Determine if we need full rebuild:
+    // - Explicit clear: always clear (even without messages)
+    // - Stream switch: always clear (user switched, expects different content)
+    // - Same stream: incremental update only (metadata changes, messages via APPEND_LOG)
     //
-    // forceRebuild: false → Incremental update only (metadata changes)
-    //
-    // The clearContent flag makes intent explicit and removes ambiguity from the
-    // "forceRebuild: true with empty messages" case that previously caused bugs.
-    const explicitClear = Boolean(message.clearContent);
-    const hasMessages = logMessages.length > 0;
-    const shouldFullRebuild =
-      explicitClear || (message.forceRebuild && hasMessages);
+    // Note: Stream switch ALWAYS triggers full rebuild, even with empty messages.
+    // Showing empty content for a new stream is correct; showing the previous
+    // stream's content would be confusing and a source of bugs.
+    const shouldFullRebuild = isExplicitClear || isStreamSwitch;
 
     if (!shouldFullRebuild) {
       this._handleIncrementalUpdate(message);
@@ -421,7 +427,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // Full rebuild path: clear and rebuild (either explicit clear or have messages)
+    // Full rebuild path: clear and rebuild
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
@@ -488,6 +494,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
     this._refreshContextStateForActiveStream();
+
+    // Update lastRenderedStream AFTER successful render.
+    // This is the single source of truth for stream switch detection.
+    state.lastRenderedStream = message.stream;
 
     this._updatePlaceholderVisibility();
   }
@@ -978,6 +988,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearContextState(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
+        // Reset lastRenderedStream since the rendered stream was deleted
+        state.lastRenderedStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
@@ -998,6 +1010,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.resetExecutionIdAvailability();
     state.clearStreams();
     state.activeStream = '';
+    // Reset lastRenderedStream since all streams are deleted
+    state.lastRenderedStream = '';
     dom.instructionPanel.hide();
     state.clearRunInstructions();
     state.clearRunFiles();
