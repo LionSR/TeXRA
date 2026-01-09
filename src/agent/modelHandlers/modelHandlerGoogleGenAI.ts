@@ -61,6 +61,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
+import { isNonEmptyString } from '@utils/core';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
@@ -68,6 +69,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1316,16 +1318,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    // Result is already sanitized by source - create mutable copy for adding attachmentSummary
-    const finalResult: ToolResultPayload = { ...result };
     let attachmentParts: FunctionResponsePart[] = [];
+    let attachmentSummary: string | undefined;
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      finalResult.attachmentSummary = formatAttachmentSummary(
-        attachments,
-        'included-inline',
-      );
+      attachmentSummary = formatAttachmentSummary(attachments, 'included-inline');
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
@@ -1344,12 +1342,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
+    // Google SDK requires Record<string, unknown> for response parameter,
+    // so we must wrap the text in an object (unlike OpenAI which accepts string)
+    const simplifiedResult = { result: formatToolResultAsText(result, attachmentSummary) };
+
     // Use SDK's createPartFromFunctionResponse with native attachment support
     // The 4th parameter accepts FunctionResponsePart[] for media attachments
     return createPartFromFunctionResponse(
       call.callId,
       call.name,
-      finalResult,
+      simplifiedResult,
       attachmentParts.length > 0 ? attachmentParts : undefined,
     );
   }
