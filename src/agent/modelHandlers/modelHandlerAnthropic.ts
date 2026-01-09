@@ -85,7 +85,11 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
@@ -487,12 +491,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
             this.logger.error(errMsg);
             throw new Error(errMsg);
           }
-          if (effectiveContextWindow - inputTokens < options.max_tokens) {
-            const MIN_COMPLETION_TOKENS = 100;
+          const availableTokens = effectiveContextWindow - inputTokens;
+          if (availableTokens < options.max_tokens) {
             const originalMaxTokens = options.max_tokens;
-            const reducedMaxTokens = Math.max(
-              MIN_COMPLETION_TOKENS,
-              effectiveContextWindow - inputTokens - 10,
+            const reducedMaxTokens = computeReducedMaxTokens(
+              availableTokens,
+              TOKEN_SAFETY_BUFFER,
             );
             const utilizationPercent =
               (inputTokens / effectiveContextWindow) * 100;

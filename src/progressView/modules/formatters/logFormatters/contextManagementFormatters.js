@@ -54,7 +54,7 @@ export const formatContextManagement = (normalizedPayload, logId) => {
   initToggleIcon(element, false);
 
   const parsed = normalizedPayload?.structured;
-  if (!parsed || typeof parsed !== 'object') {
+  if (parsed === null || typeof parsed !== 'object') {
     return null;
   }
 
@@ -98,7 +98,11 @@ export const formatContextManagement = (normalizedPayload, logId) => {
   };
 
   // For max_tokens_reduced, show the reduction
-  if (action === 'max_tokens_reduced' && originalMaxTokens && reducedMaxTokens) {
+  if (
+    action === 'max_tokens_reduced' &&
+    originalMaxTokens &&
+    reducedMaxTokens
+  ) {
     pushItem(
       'codicon-arrow-down',
       'Max tokens reduced',
@@ -108,25 +112,24 @@ export const formatContextManagement = (normalizedPayload, logId) => {
 
   // For clearing actions, show tokens freed
   if (
-    (action === 'clear_tool_uses' || action === 'clear_thinking' || action === 'compaction') &&
+    (action === 'clear_tool_uses' ||
+      action === 'clear_thinking' ||
+      action === 'compaction') &&
     tokensBefore !== undefined &&
     tokensAfter !== undefined
   ) {
     const tokensFreed = tokensBefore - tokensAfter;
     if (tokensFreed > 0) {
-      pushItem(
-        'codicon-dash',
-        'Tokens freed',
-        formatTokens(tokensFreed),
-      );
+      pushItem('codicon-dash', 'Tokens freed', formatTokens(tokensFreed));
     }
   }
 
   // Show context utilization
   if (utilizationBefore !== undefined) {
-    const utilizationDisplay = utilizationAfter !== undefined
-      ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
-      : `${utilizationBefore.toFixed(1)}%`;
+    const utilizationDisplay =
+      utilizationAfter !== undefined
+        ? `${utilizationBefore.toFixed(1)}% → ${utilizationAfter.toFixed(1)}%`
+        : `${utilizationBefore.toFixed(1)}%`;
     pushItem('codicon-pie-chart', 'Context utilization', utilizationDisplay);
   }
 
