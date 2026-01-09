@@ -32,19 +32,22 @@ import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
  * without coupling business logic to DOM operations.
+ * Supports multiple webviews (e.g., sidebar + editor tab panel).
  */
 export class WebviewUpdater {
   private readonly logger: AgentLogger;
 
-  constructor(private getWebview: () => vscode.Webview | undefined) {
+  constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {
     this.logger = new AgentLogger('WebviewUpdater');
   }
 
-  /** Helper to send messages to webview, eliminating repetitive null checks */
+  /** Helper to send messages to all registered webviews */
   private sendMessage(message: any): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-    webview.postMessage(message);
+    for (const webview of this.getWebviews()) {
+      if (webview) {
+        webview.postMessage(message);
+      }
+    }
   }
 
   static createInstructionUpdate(
@@ -386,7 +389,7 @@ export class WebviewUpdater {
     // Delegate active stream resolution to state (single source of truth)
     const activeStream = state.resolveActiveStream(streamNames);
 
-    if (!this.getWebview()) {
+    if (!this.isAvailable()) {
       return activeStream;
     }
 
@@ -404,9 +407,9 @@ export class WebviewUpdater {
   }
 
   /**
-   * Check if webview is available
+   * Check if any webview is available
    */
   isAvailable(): boolean {
-    return this.getWebview() !== undefined;
+    return this.getWebviews().some((w) => w !== undefined);
   }
 }
