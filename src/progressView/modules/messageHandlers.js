@@ -117,6 +117,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Refresh context state display for the active stream.
+   * Clears display if stream has no context state.
+   */
+  _refreshContextStateForActiveStream() {
+    const stream = state.activeStream;
+    const contextState = stream ? state.getContextState(stream) : null;
+    if (contextState) {
+      dom.usageSummary.updateContextDisplay(contextState);
+    } else {
+      dom.usageSummary.clearContextDisplay();
+    }
+  }
+
+  /**
    * Auto-focus follow-up input when status is WAITING.
    * Extracted to avoid duplication in handleUpdateStreams and handleUpdateStreamStatus.
    * @param {string} status - The stream status to check
@@ -370,6 +384,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun();
     this._refreshUsageForActiveRun();
     this._refreshOutputsForActiveRun();
+    this._refreshContextStateForActiveStream();
   }
 
   handleUpdateLogs(message) {
@@ -720,7 +735,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.setContextState(targetStream, message.contextState);
     // Update the context display if this is the active stream
     if (targetStream === state.activeStream) {
-      this.usageSummary?.updateContextDisplay?.(message.contextState);
+      dom.usageSummary.updateContextDisplay(message.contextState);
     }
   }
 
@@ -950,7 +965,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.todoList.clear();
         dom.queuedFollowUps.clear();
         dom.fileList.clear();
-        dom.usageSummary?.clearContextDisplay?.();
+        dom.usageSummary.clearContextDisplay();
       }
     }
 
@@ -975,7 +990,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.todoList.clear();
     dom.queuedFollowUps.clear();
     dom.fileList.clear();
-    dom.usageSummary?.clearContextDisplay?.();
+    dom.usageSummary.clearContextDisplay();
     this._updatePlaceholderVisibility();
   }
 
