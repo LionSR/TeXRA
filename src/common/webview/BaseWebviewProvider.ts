@@ -69,8 +69,9 @@ export abstract class BaseWebviewProvider {
    * @returns true if panel was created, false if existing panel was revealed
    */
   protected createOrShowPanel(options: PanelOptions): boolean {
-    // If we already have a panel, reveal it
-    if (this._view && 'reveal' in this._view) {
+    // If we already have a panel (not a sidebar WebviewView), reveal it.
+    // Check for 'viewColumn' which is unique to WebviewPanel (WebviewView doesn't have it).
+    if (this._view && 'viewColumn' in this._view) {
       this._view.reveal(options.column ?? vscode.ViewColumn.One);
       return false;
     }

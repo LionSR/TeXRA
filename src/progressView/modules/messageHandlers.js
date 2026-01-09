@@ -117,6 +117,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Refresh context state display for the active stream.
+   * Clears display if stream has no context state.
+   */
+  _refreshContextStateForActiveStream() {
+    const stream = state.activeStream;
+    const contextState = stream ? state.getContextState(stream) : null;
+    if (contextState) {
+      dom.usageSummary.updateContextDisplay(contextState);
+    } else {
+      dom.usageSummary.clearContextDisplay();
+    }
+  }
+
+  /**
    * Auto-focus follow-up input when status is WAITING.
    * Extracted to avoid duplication in handleUpdateStreams and handleUpdateStreamStatus.
    * @param {string} status - The stream status to check
@@ -133,16 +147,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * - Workflow sessions create hierarchical task groups
    * - Tool-use sessions don't create task groups at all
    * Stale groups from previous sessions interfere with run ID resolution.
+   *
+   * NOTE: Log content is NOT cleared here. It's handled by handleUpdateLogs
+   * with forceRebuild: true, which properly coordinates clearing with
+   * re-rendering. Clearing here would cause data loss when UPDATE_LOGS
+   * arrives with forceRebuild: false (same stream, incremental update).
+   *
    * @param {string} newSessionKind - The new session kind being switched to
    */
   _clearSessionKindState(newSessionKind) {
     if (newSessionKind !== state.activeSessionKind && state.activeSessionKind) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        logContent.innerHTML = '';
-      }
     }
   }
 
@@ -343,6 +359,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.todoList.clear();
       dom.queuedFollowUps.clear();
       dom.fileList.clear();
+      // Clear log content when no stream is active to avoid stale content
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
       state.clearRunInstructions();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
@@ -363,6 +384,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun();
     this._refreshUsageForActiveRun();
     this._refreshOutputsForActiveRun();
+    this._refreshContextStateForActiveStream();
   }
 
   handleUpdateLogs(message) {
@@ -447,6 +469,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
+    this._refreshContextStateForActiveStream();
 
     this._updatePlaceholderVisibility();
   }
@@ -503,6 +526,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
+    this._refreshContextStateForActiveStream();
   }
 
   handleAppendLog(message) {
@@ -713,7 +737,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.setContextState(targetStream, message.contextState);
     // Update the context display if this is the active stream
     if (targetStream === state.activeStream) {
-      this.usageSummary?.updateContextDisplay?.(message.contextState);
+      dom.usageSummary.updateContextDisplay(message.contextState);
     }
   }
 
@@ -943,7 +967,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.todoList.clear();
         dom.queuedFollowUps.clear();
         dom.fileList.clear();
-        dom.usageSummary?.clearContextDisplay?.();
+        dom.usageSummary.clearContextDisplay();
       }
     }
 
@@ -968,7 +992,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.todoList.clear();
     dom.queuedFollowUps.clear();
     dom.fileList.clear();
-    dom.usageSummary?.clearContextDisplay?.();
+    dom.usageSummary.clearContextDisplay();
     this._updatePlaceholderVisibility();
   }
 

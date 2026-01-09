@@ -21,6 +21,21 @@ Call tools sequentially and wait for the output before calling another.
 For math in responses, use $...$ for inline and $$...$$ for display math (not \\(...\\) or \\[...\\]).
 </tool_use_instructions>`;
 
+/** Instructions appended when memory tool is enabled */
+const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
+IMPORTANT: ALWAYS VIEW YOUR MEMORY DIRECTORY BEFORE DOING ANYTHING ELSE.
+
+MEMORY PROTOCOL:
+1. Use the \`view\` command of your \`memory\` tool to check for earlier progress.
+2. ... (work on the task) ...
+   - As you make progress, record status, progress, and thoughts in your memory.
+   - Record user preferences and general style guidelines from the user.
+
+Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
+
+Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
+</memory_tool_instructions>`;
+
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.
  *
@@ -152,10 +167,16 @@ export type InitialPrompts = Awaited<
   ReturnType<PromptBuilder['buildInitialPrompts']>
 >;
 
+export interface ToolUsePromptOptions {
+  /** Whether the memory tool is enabled for this session */
+  memoryEnabled?: boolean;
+}
+
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
   userVars: Record<string, any>,
   logger?: AgentLogger,
+  options?: ToolUsePromptOptions,
 ): Promise<InitialPrompts & { instructionSuffix: string }> {
   const builder = new PromptBuilder(
     agentPrompt,
@@ -165,8 +186,15 @@ export async function buildInitialToolUsePrompts(
   );
   const initial = await builder.buildInitialPrompts();
 
+  // Build instruction suffix: always include tool-use instructions,
+  // optionally append memory instructions when enabled
+  const suffixParts = [TOOL_USE_INSTRUCTIONS];
+  if (options?.memoryEnabled) {
+    suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
+  }
+
   return {
     ...initial,
-    instructionSuffix: TOOL_USE_INSTRUCTIONS,
+    instructionSuffix: suffixParts.join('\n'),
   };
 }

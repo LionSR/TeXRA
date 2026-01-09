@@ -96,18 +96,17 @@ function notifyProgressViewApprovalBypassState(): void {
   });
 }
 
-async function ensureStorageDir(): Promise<string> {
-  if (!initialized || !storageDirectory) {
+function getStorageDir(): string {
+  if (!storageDirectory) {
     throw new Error('Tool edit approval has not been initialized.');
   }
-
-  await fs.mkdir(storageDirectory, { recursive: true });
   return storageDirectory;
 }
 
-function resolveTempExtension(targetPath: string): string {
-  const ext = path.extname(targetPath);
-  return ext ? ext : '.txt';
+async function ensureStorageDir(): Promise<string> {
+  const dir = getStorageDir();
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
 }
 
 async function createTempFile(
@@ -116,7 +115,7 @@ async function createTempFile(
   content: string,
 ): Promise<vscode.Uri> {
   const dir = await ensureStorageDir();
-  const ext = resolveTempExtension(targetPath);
+  const ext = path.extname(targetPath) || '.txt';
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
@@ -432,9 +431,7 @@ async function closeApprovalEditors(
 async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  if (!initialized) {
-    throw new Error('Tool edit approval has not been initialized.');
-  }
+  getStorageDir(); // Validates initialization
 
   const { path, originalContent, proposedContent, sourceTool, streamId } =
     request;

@@ -68,6 +68,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { TaskRunFileService } from '@utils/files';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
@@ -382,25 +383,6 @@ function setupFlowUIState(
   StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
 }
 
-/**
- * Update stream status based on flow result.
- *
- * DRY helper: All flow completions need to update status, but must
- * preserve WAITING state for tool-use flows awaiting follow-up.
- */
-function updateFlowStatus(
-  streamTabId: StreamTabId,
-  flowStatus: 'error' | 'stopped',
-): void {
-  const currentStatus = StreamStatusService.get(streamTabId);
-  if (currentStatus !== STREAM_STATUS.WAITING) {
-    StreamStatusService.set(
-      streamTabId,
-      flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-    );
-  }
-}
-
 type FlowRunner = () => Promise<EndGroupStatus>;
 
 async function runFlowWithLifecycle(
@@ -412,7 +394,14 @@ async function runFlowWithLifecycle(
   try {
     const flowStatus = await runner();
     ctx.runStage.end(flowStatus);
-    updateFlowStatus(streamTabId, flowStatus);
+    // Update stream status, preserving WAITING state for tool-use flows awaiting follow-up
+    const currentStatus = StreamStatusService.get(streamTabId);
+    if (currentStatus !== STREAM_STATUS.WAITING) {
+      StreamStatusService.set(
+        streamTabId,
+        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
+      );
+    }
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (error) {
     ctx.runStage.end(END_GROUP_STATUS.ERROR);
@@ -425,6 +414,7 @@ async function runFlowWithLifecycle(
 // UI and Error Handling
 // ============================================================================
 
+/** Show notification when progress view isn't visible. */
 function showAgentNotification(config: AgentConfig): void {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
@@ -451,13 +441,7 @@ function showAgentNotification(config: AgentConfig): void {
     });
 }
 
-function isApiKeyError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes('Missing API key') ||
-    errorMessage.includes('API key not found')
-  );
-}
-
+/** Show API key error notification with action buttons. */
 async function showApiKeyErrorNotification(): Promise<void> {
   await showInstructionWithSuppress(
     'missingApiKey',
@@ -477,19 +461,6 @@ async function showApiKeyErrorNotification(): Promise<void> {
   );
 }
 
-async function logFlowError(
-  errorMsg: string,
-  err: unknown,
-  agentName: string,
-  agentLogger: AgentLogger,
-): Promise<void> {
-  // Log error directly without creating a new visible group.
-  // The error is already captured in the runStage (ended with ERROR status).
-  // Using skip: true prevents creating a separate "Error:" session entry.
-  const errorContext = { operation: `execute ${agentName}` };
-  await agentLogger.logError(errorMsg, err, errorContext);
-}
-
 async function handleFlowError(
   err: unknown,
   agentName: string,
@@ -498,15 +469,20 @@ async function handleFlowError(
   const rawMsg = toErrorMessage(err);
   const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
-  // Show appropriate notification
-  if (isApiKeyError(rawMsg)) {
+  // Show appropriate notification based on error type
+  const isApiKeyError =
+    rawMsg.includes('Missing API key') || rawMsg.includes('API key not found');
+  if (isApiKeyError) {
     await showApiKeyErrorNotification();
   } else {
     vscode.window.showErrorMessage(errorMsg);
   }
 
-  // Log error (without creating a separate session group)
-  await logFlowError(errorMsg, err, agentName, agentLogger);
+  // Log error directly without creating a new visible group
+  // (error is already captured in runStage with ERROR status)
+  await agentLogger.logError(errorMsg, err, {
+    operation: `execute ${agentName}`,
+  });
 
   throw new Error(errorMsg);
 }
@@ -616,6 +592,7 @@ export async function executeAgent(
           ...interruptManager.asFlowInput(),
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: ctx.setting as AgentToolUseSetting,
+          onFollowUpConsumed: () => updateQueuedFollowUpsUI(ctx.streamId),
         });
         return result.status;
       }
@@ -759,6 +736,7 @@ export async function resumeToolUseFromSnapshot(
           getUsageRecorder: createUsageRecorder(ctx.usageMonitor, 'tool-use'),
           setting: setting as AgentToolUseSetting,
           resumeSnapshot: snapshot,
+          onFollowUpConsumed: () => updateQueuedFollowUpsUI(ctx.streamId),
         },
         setupSession ? (context) => setupSession(context.session) : undefined,
       );

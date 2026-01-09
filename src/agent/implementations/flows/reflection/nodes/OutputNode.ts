@@ -1,27 +1,8 @@
 /**
  * OutputNode - Handles output processing after response cycle.
  *
- * Responsibilities:
- * - Ensure XML structure (if applicable)
- * - Process output files
- * - Handle latexdiff operations
- * - Finalize round and get artifacts
- *
- * All operations can fail gracefully - latexdiff failures
- * shouldn't stop the round from completing.
- *
- * PocketFlow pattern:
- * - prep(): Extract output location and round info
- * - exec(): Process output files and latexdiff
- * - post(): Store round output in shared
- *
- * Serialization pattern (koala-code-reader):
- * - Accesses only natively serializable state fields
- * - Stores RoundOutput (plain JSON) to shared.roundOutputs
- * - No class instances or runtime dependencies in state
- *
- * Services accessed via native `this.services`:
- * - outputHandler, logger, setting, fileService
+ * Processes output files, handles latexdiff, and finalizes round artifacts.
+ * Non-critical operations can fail gracefully (logged as warnings).
  */
 
 import { Node } from '@agent/node';
@@ -35,7 +16,6 @@ import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
-import { createBaseFileLocations } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -69,11 +49,8 @@ export class OutputNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Extract data needed for output processing.
-   */
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
-    const { config, fileService, setting } = this.services;
+    const { baseFiles, shouldEnsureXmlStructure } = this.services;
     const { currentRound, outputLocation, endTurn } = shared;
 
     if (!outputLocation) {
@@ -82,25 +59,15 @@ export class OutputNode<C = unknown> extends Node<
       );
     }
 
-    // Base files for latexdiff - MUST be workspace locations
-    const baseFiles = createBaseFileLocations(config);
-
-    // Determine if we should ensure XML structure (based on xmlStructureMode config)
-    const ensureXmlStructure = this.services.shouldEnsureXmlStructure;
-
     return {
       currentRound,
       outputLocation,
       endTurn,
       baseFiles,
-      ensureXmlStructure,
+      ensureXmlStructure: shouldEnsureXmlStructure,
     };
   }
 
-  /**
-   * Process output files and handle latexdiff.
-   * Logs warnings for non-critical failures. Throws on critical failures.
-   */
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputHandler, setting, logger } = this.services;
     const {
@@ -115,7 +82,6 @@ export class OutputNode<C = unknown> extends Node<
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
-      // Ensure XML structure if needed
       if (ensureXmlStructure) {
         try {
           await outputHandler.ensureXmlStructure(
@@ -123,47 +89,37 @@ export class OutputNode<C = unknown> extends Node<
             setting.documentTag ?? 'document',
           );
         } catch (error) {
-          const msg = toErrorMessage(error);
-          logger.warn(`XML structure failed: ${msg}`);
+          logger.warn(`XML structure failed: ${toErrorMessage(error)}`);
         }
       }
 
-      // Process output files
       try {
         await outputHandler.processOutputFiles(outputLocation, currentRound);
       } catch (error) {
-        const msg = toErrorMessage(error);
-        logger.warn(`Output processing failed: ${msg}`);
+        logger.warn(`Output processing failed: ${toErrorMessage(error)}`);
       }
 
-      // Handle latexdiff if we have outputs and base files
       if (outputHandler.hasRoundOutputs(currentRound)) {
         try {
           await this.handleLatexdiff(currentRound, baseFiles);
         } catch (error) {
-          const msg = toErrorMessage(error);
-          logger.warn(`Latexdiff failed: ${msg}`);
+          logger.warn(`Latexdiff failed: ${toErrorMessage(error)}`);
         }
       }
     }
 
-    // Finalize round
     try {
       await outputHandler.finalizeRound(outputLocation, currentRound, {
         endTurn,
       });
     } catch (error) {
-      const msg = toErrorMessage(error);
-      logger.warn(`Round finalization failed: ${msg}`);
+      logger.warn(`Round finalization failed: ${toErrorMessage(error)}`);
     }
 
     // Get round artifacts - this is critical, throw if it fails
     return await outputHandler.getRoundArtifacts(currentRound);
   }
 
-  /**
-   * Handle total failure - log warning and return empty output.
-   */
   async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
@@ -182,9 +138,6 @@ export class OutputNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Store round output in shared.
-   */
   async post(
     shared: ReflectionFlowShared,
     _prepRes: OutputPrepInput,
@@ -197,9 +150,6 @@ export class OutputNode<C = unknown> extends Node<
     return FlowTransition.DEFAULT;
   }
 
-  /**
-   * Handle latexdiff operations.
-   */
   private async handleLatexdiff(
     currentRound: number,
     baseFiles: FileLocation[],

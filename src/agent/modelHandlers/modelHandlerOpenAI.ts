@@ -59,6 +59,7 @@ import {
 import { toOpenAITools } from './toolConversion';
 import {
   formatAttachmentSummary,
+  formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -569,45 +570,26 @@ export class ModelHandlerOpenAI<
       userMessageContent.push(...formattedMediaContent);
     }
 
-    // Append the formatted content to the correct message
-    let lastRole = messages.length > 0 ? messages.at(-1).role : null;
-    if (lastRole === 'system' || messages.length === 0) {
-      messages.push({ role: 'user', content: userMessageContent });
-    } else if (lastRole === 'user') {
-      messages.at(-1).content.push(...userMessageContent);
+    // Append content to last user message, or create new user message
+    const lastMsg = messages.at(-1);
+    if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
+      lastMsg.content.push(...userMessageContent);
     } else {
-      // Fallback: Should not happen with current logic but good to handle
       messages.push({ role: 'user', content: userMessageContent });
-      this.logger.warn(
-        'Unexpected message structure, adding new user message.',
-      );
     }
 
     // Add final user request
     const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
-    lastRole = messages.length > 0 ? messages.at(-1)?.role : null;
+    const lastMessage = messages.at(-1);
 
-    if (requestRole === 'system') {
-      messages.push({
-        role: requestRole,
-        content: [{ type: 'text', text: userRequest }],
-      });
-    } else if (requestRole === 'user' && lastRole === 'user') {
-      const lastMessage = messages.at(-1);
-      if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: userRequest,
-        });
-      } else if (lastMessage && typeof lastMessage.content === 'string') {
-        // Convert string content to array format
-        lastMessage.content = [
-          { type: 'text', text: lastMessage.content },
-          { type: 'text', text: userRequest },
-        ];
-      }
+    if (
+      requestRole === 'user' &&
+      lastMessage?.role === 'user' &&
+      Array.isArray(lastMessage.content)
+    ) {
+      lastMessage.content.push({ type: 'text', text: userRequest });
     } else {
       messages.push({
         role: requestRole,
@@ -1349,19 +1331,16 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Add attachment summary only if handler supports them and attachments exist
-    const finalResult =
+    // Build tool result as plain text - JSON wastes tokens
+    const attachmentSummary =
       this.canProcessToolResultAttachments && attachments.length > 0
-        ? {
-            ...result,
-            attachmentSummary: formatAttachmentSummary(attachments),
-          }
-        : result;
+        ? formatAttachmentSummary(attachments)
+        : undefined;
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify(finalResult),
+      content: formatToolResultAsText(result, attachmentSummary),
     };
     return [callMsg, resultMsg];
   }

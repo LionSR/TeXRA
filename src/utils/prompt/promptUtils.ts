@@ -17,23 +17,6 @@ const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
 
 /**
- * Get XML formatted string from a single file.
- * Internal helper used by getXmlFormatFromFiles.
- */
-async function getXmlFormatFromFile(file: string): Promise<string> {
-  try {
-    const content = await WorkspaceFS.read(file);
-    return `<document name="${file}">\n${content}\n</document>`;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error formatting file as XML: ${toErrorMessage(err)}`,
-    );
-    throw err;
-  }
-}
-
-/**
  * Get XML formatted string from multiple files
  * @param files List of file paths
  * @returns XML formatted string containing all file contents, or null if no files
@@ -41,21 +24,24 @@ async function getXmlFormatFromFile(file: string): Promise<string> {
 export async function getXmlFormatFromFiles(
   files: string[],
 ): Promise<string | null> {
-  try {
-    if (!files || files.length === 0) {
-      return null;
-    }
-
-    const xmlPromises = files.map((file) => getXmlFormatFromFile(file));
-    const xmlContents = await Promise.all(xmlPromises);
-    return xmlContents.join('\n');
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error formatting files as XML: ${toErrorMessage(err)}`,
-    );
-    throw err;
+  if (files.length === 0) {
+    return null;
   }
+
+  const xmlPromises = files.map(async (file) => {
+    try {
+      const content = await WorkspaceFS.read(file);
+      return `<document name="${file}">\n${content}\n</document>`;
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error formatting file as XML: ${toErrorMessage(err)}`,
+      );
+      throw err;
+    }
+  });
+  const xmlContents = await Promise.all(xmlPromises);
+  return xmlContents.join('\n');
 }
 
 /**
@@ -64,19 +50,10 @@ export async function getXmlFormatFromFiles(
  * @returns Comma-separated string of file paths
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
-  try {
-    if (!files || files.length === 0) {
-      return '';
-    }
-    return files
-      .filter(
-        (f): f is string => f !== null && f !== undefined && f.trim() !== '',
-      )
-      .join(', ');
-  } catch (err) {
-    logger.error(CHANNEL, `Error creating file list: ${toErrorMessage(err)}`);
-    throw err;
+  if (!files || files.length === 0) {
+    return '';
   }
+  return files.filter((f) => f.trim() !== '').join(', ');
 }
 
 /**
@@ -90,24 +67,17 @@ export async function renderPrompt(
   variables: { [key: string]: any },
 ): Promise<string> {
   try {
-    // First resolve any Promise values in the variables
+    // Resolve any Promise values in variables (including nested objects)
     const resolvedVariables: { [key: string]: any } = {};
     for (const [key, value] of Object.entries(variables)) {
       if (value instanceof Promise) {
         resolvedVariables[key] = await value;
-      } else if (
-        typeof value === 'object' &&
-        value !== null &&
-        value !== undefined
-      ) {
+      } else if (typeof value === 'object' && value !== null) {
         // Handle nested objects that might contain promises
         const resolved: { [key: string]: any } = {};
         for (const [nestedKey, nestedValue] of Object.entries(value)) {
-          if (nestedValue instanceof Promise) {
-            resolved[nestedKey] = await nestedValue;
-          } else {
-            resolved[nestedKey] = nestedValue;
-          }
+          resolved[nestedKey] =
+            nestedValue instanceof Promise ? await nestedValue : nestedValue;
         }
         resolvedVariables[key] = resolved;
       } else {
@@ -116,8 +86,7 @@ export async function renderPrompt(
     }
 
     const env = nunjucks.configure({ autoescape: false });
-    const renderedPrompt = env.renderString(prompt, resolvedVariables);
-    return renderedPrompt;
+    return env.renderString(prompt, resolvedVariables);
   } catch (err) {
     logger.error(CHANNEL, `Error rendering prompt: ${toErrorMessage(err)}`);
     throw err;

@@ -69,8 +69,11 @@ export const UsageLogStatsSchema = z.object({
   /** Response time in milliseconds */
   responseTimeMs: z.number().nonnegative().optional(),
 
-  /** Tokens served from cache */
+  /** Tokens served from cache (discounted rate) */
   cachedInputTokens: z.int().nonnegative().optional(),
+
+  /** Tokens written to cache (Anthropic: 1.25x cost) */
+  cacheCreationInputTokens: z.int().nonnegative().optional(),
 
   /** Tokens used for reasoning (o1, DeepSeek-R1, etc.) */
   reasoningTokens: z.int().nonnegative().optional(),

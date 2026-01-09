@@ -60,14 +60,11 @@ export interface ProviderHttpErrorDetails {
   requestId?: string;
 }
 
-/**
- * Safely get the reason phrase for a status code.
- * Returns undefined if the status code is not recognized.
- */
+/** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
   try {
     return getReasonPhrase(statusCode);
-  } catch (_err) {
+  } catch {
     return undefined;
   }
 }

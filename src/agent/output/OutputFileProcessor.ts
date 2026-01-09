@@ -62,7 +62,7 @@ export class OutputFileProcessor {
       const processedPairs =
         await xmlManager.processMultipleXmlOutputs(outputLocation);
 
-      if (processedPairs && processedPairs.length > 0) {
+      if (processedPairs.length > 0) {
         await indentLatexFiles(
           processedPairs.map((p) => p.location),
           logger,
@@ -71,7 +71,7 @@ export class OutputFileProcessor {
           `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
         );
 
-        if (baseFiles && baseFiles.length > 0) {
+        if (baseFiles.length > 0) {
           await replaceInputCommands(
             baseFiles,
             processedPairs.map((p) => p.location),
@@ -138,11 +138,9 @@ export class OutputFileProcessor {
         processed = await xmlManager.processSingleXmlOutput(outputLocation);
       }
 
-      const hasProcessedPath = Boolean(
-        processed && processed.location.absolutePath,
-      );
+      const hasProcessedPath = Boolean(processed.location.absolutePath);
 
-      if (hasProcessedPath && processed.location) {
+      if (hasProcessedPath) {
         await indentLatexFile(processed.location, logger);
         logger.debug(
           `Indented single output file: ${processed.location.absolutePath}`,
@@ -152,7 +150,7 @@ export class OutputFileProcessor {
       const processedFiles = hasProcessedPath ? [processed] : [];
 
       if (hasProcessedPath) {
-        if (baseFiles && baseFiles.length > 0) {
+        if (baseFiles.length > 0) {
           await replaceInputCommands(
             baseFiles,
             processedFiles.map((entry) => entry.location),
