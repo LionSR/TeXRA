@@ -16,9 +16,12 @@
   display: grid;
 }
 
-/* Queued messages align with textarea column only */
+/* Queued messages span full width above textarea */
 .follow-up-container > .queued-follow-ups-collapsible {
-  grid-column: 1;
+  display: block;
+  grid-column: 1 / -1;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Input row children participate directly in grid */
