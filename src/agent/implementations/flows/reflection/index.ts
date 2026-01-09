@@ -45,7 +45,6 @@ export {
 // State types and schemas
 export {
   type RoundContext,
-  createInitialReflectionState,
   ReflectionFlowStateSchema,
   RoundContextSchema,
 } from './ReflectionFlowState';

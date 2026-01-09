@@ -15,7 +15,11 @@ import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import type { PromptBuilder } from '@utils/prompt';
-import type { AgentFileLocation, TaskRunFileService } from '@utils/files';
+import type {
+  AgentFileLocation,
+  TaskRunFileService,
+  WorkspaceFileLocation,
+} from '@utils/files';
 import type { LatexMediaManager } from '@latex';
 import type { BaseFlowContextInit } from '../common/BaseFlowServices';
 
@@ -75,11 +79,8 @@ export interface ReflectionServices<
    */
   readonly shouldEnsureXmlStructure: boolean;
 
-  /**
-   * Get usage recorder callback for tracking round statistics.
-   * Returns a callback that will be invoked when a round finalizes.
-   */
   readonly getUsageRecorder: () => RoundFinalizedCallback;
+  readonly baseFiles: WorkspaceFileLocation[];
 }
 
 /**

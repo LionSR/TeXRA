@@ -28,7 +28,9 @@ export class RecordingManager {
     private readonly commandConfig: RecordingManagerConfig,
   ) {}
 
-  async start(webviewView: vscode.WebviewView): Promise<void> {
+  async start(
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
     try {
       const result = await startRecording(this.context);
       if (result.success) {
@@ -54,7 +56,9 @@ export class RecordingManager {
     }
   }
 
-  async stop(webviewView: vscode.WebviewView): Promise<void> {
+  async stop(
+    webviewView: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
     let stopAcknowledged = false;
     const acknowledgeStop = () => {
       if (stopAcknowledged) {

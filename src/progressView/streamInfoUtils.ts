@@ -19,36 +19,6 @@ const sortComparators = {
     (a.agent ?? '').localeCompare(b.agent ?? ''),
 } as const;
 
-function matchesAgentFilter(
-  sessionCategory: AgentCategory,
-  filter: AgentFilter,
-): boolean {
-  switch (filter) {
-    case 'all':
-      return true;
-    case 'toolUse':
-      return sessionCategory === AgentCategory.ToolUse;
-    case 'workflow':
-      return sessionCategory === AgentCategory.Workflow;
-    default:
-      return true;
-  }
-}
-
-function buildStreamLabel(
-  agentName: string,
-  inputFile: string,
-  sessionCategory: AgentCategory,
-): string {
-  if (sessionCategory === AgentCategory.ToolUse) {
-    return agentName;
-  }
-
-  const agentLabel = agentName;
-  const baseName = inputFile ? path.basename(inputFile) : '';
-  return baseName ? `${agentLabel}: ${baseName}` : agentLabel;
-}
-
 /**
  * Build metadata objects for all streams in the given state.
  */
@@ -70,15 +40,23 @@ export function buildStreamInfos(
     let sessionCategory =
       taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
 
-    // Filter logic: streams without category only show when filter is "all"
+    // Filter logic: check if stream matches the current filter
     if (!sessionCategory) {
+      // Streams without category only show when filter is "all"
       if (filter !== 'all') {
         return acc;
       }
-      // Default to Workflow for display purposes only when filter is "all"
       sessionCategory = AgentCategory.Workflow;
-    } else if (!matchesAgentFilter(sessionCategory, filter)) {
-      return acc;
+    } else if (filter !== 'all') {
+      // Check if session category matches filter
+      const filterMap: Record<AgentFilter, AgentCategory | null> = {
+        all: null,
+        toolUse: AgentCategory.ToolUse,
+        workflow: AgentCategory.Workflow,
+      };
+      if (filterMap[filter] !== sessionCategory) {
+        return acc;
+      }
     }
 
     const agentType =
@@ -92,7 +70,13 @@ export function buildStreamInfos(
       ? isRemoteAgent(rawAgentName)
       : (hints.isRemote ?? false);
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(agentName, inputFile, sessionCategory);
+
+    // Build label: tool-use shows agent only, workflows show agent + file basename
+    let label = agentName;
+    if (sessionCategory !== AgentCategory.ToolUse && inputFile) {
+      label = `${agentName}: ${path.basename(inputFile)}`;
+    }
+
     acc.push({
       name: id,
       label,

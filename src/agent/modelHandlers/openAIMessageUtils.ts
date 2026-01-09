@@ -24,10 +24,7 @@ function mergeMessageContent(
   const currContent = current.content;
 
   if (Array.isArray(prevContent) && Array.isArray(currContent)) {
-    previous.content = [
-      ...(prevContent as ContentArray),
-      ...((structuredClone(currContent) as ContentArray) ?? []),
-    ];
+    previous.content = [...prevContent, ...structuredClone(currContent)];
     return;
   }
 
@@ -46,16 +43,12 @@ function mergeMessageContent(
     if (typeof prevContent === 'string' && prevContent.length > 0) {
       previous.content = [
         { type: 'text', text: prevContent },
-        ...((clonedCurrent as ContentArray) ?? []),
+        ...clonedCurrent,
       ];
       return;
     }
 
-    if (
-      prevContent === null ||
-      prevContent === undefined ||
-      (typeof prevContent === 'string' && prevContent.length === 0)
-    ) {
+    if (prevContent == null || prevContent === '') {
       previous.content = clonedCurrent;
     }
     return;
@@ -72,7 +65,7 @@ function mergeMessageContent(
     return;
   }
 
-  if (prevContent === null || prevContent === undefined) {
+  if (prevContent == null) {
     previous.content = currContent;
   }
 }

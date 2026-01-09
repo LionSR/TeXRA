@@ -72,6 +72,12 @@ export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
 // Diagnostics Types (not Zod - these are complex unions with external types)
 // ============================================================================
 
+/**
+ * Diagnostic type identifier for tool parameter validation errors.
+ * Used when Zod validation fails on tool input parameters.
+ */
+export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
+
 export interface DiagnosticsPayload {
   path: string;
   command: 'list' | 'count';

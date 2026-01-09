@@ -173,8 +173,8 @@ export class RemoteAgentLoader {
         // Extract settings and prompts
         // Note: Remote agents are expected to be self-contained (no inheritance).
         // If inherits field is present, it's ignored - merge should happen on upload.
-        const settings: Partial<AgentSetting> = validated.settings ?? {};
-        const prompts: Partial<AgentPrompt> = validated.prompts ?? {};
+        const settings: Partial<AgentSetting> = validated.settings;
+        const prompts: Partial<AgentPrompt> = validated.prompts;
 
         // Resolve tool names to definitions using shared utility
         if (Array.isArray(settings.tools)) {

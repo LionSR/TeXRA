@@ -20,7 +20,6 @@ import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 // Local file imports
 import {
-  SettingsManager,
   RecordingManager,
   FileManager,
   ExecutionManager,
@@ -29,7 +28,6 @@ import {
 } from './managers';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
-  private readonly settingsManager: SettingsManager;
   private readonly recordingManager: RecordingManager;
   private readonly fileManager: FileManager;
   private readonly executionManager: ExecutionManager;
@@ -38,7 +36,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
   constructor(context: vscode.ExtensionContext) {
     super('MainView', { trackActiveView: true });
-    this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
@@ -89,7 +86,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
         this.handleShowAgentHistory.bind(this),
 
-      // Delegate to managers for specific functionality
       // File selection commands
       [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m) =>
         this.fileManager.handleFileSelection(m),
@@ -150,22 +146,34 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // Execution commands
       [MAIN_VIEW_COMMANDS.MERGE]: async (m) =>
-        this.executionManager.handleMerge(m),
+        this.executionManager.handleFileOperation(m),
       [MAIN_VIEW_COMMANDS.COMPARE]: async (m) =>
-        this.executionManager.handleCompare(m),
+        this.executionManager.handleFileOperation(m),
 
       // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
-        this.settingsManager.openSettings(),
+        safeExecuteCommand(
+          'workbench.action.openSettings',
+          [SETTINGS_QUERY.EXTENSION],
+          this.viewName,
+        ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
         const query =
           m?.sessionType === 'toolUse'
             ? SETTINGS_QUERY.TOOL_USE_AGENTS
             : SETTINGS_QUERY.WORKFLOW_AGENTS;
-        return this.settingsManager.openSettings(query);
+        return safeExecuteCommand(
+          'workbench.action.openSettings',
+          [query],
+          this.viewName,
+        );
       },
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
-        this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
+        safeExecuteCommand(
+          'workbench.action.openSettings',
+          [SETTINGS_QUERY.MODELS],
+          this.viewName,
+        ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
           const dir = await agentDirectories.custom();
@@ -198,13 +206,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
-        // Reuse existing setApiKey command with provider parameter
         if (m?.provider) {
           await safeExecuteCommand('texra.setApiKey', [m.provider]);
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
-        // Open provider-specific API key page
         if (m?.provider) {
           const url = PROVIDER_URLS[m.provider as keyof typeof PROVIDER_URLS];
           if (url) {
@@ -219,7 +225,8 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ),
         );
       },
-      // Banner handlers - forwarded to client for rendering
+
+      // Banner handlers
       [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
       [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: (m) => this.forwardToWebview(m),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
@@ -265,7 +272,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
         try {
           await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
-          // Only hide banner if sign-in was successful
           const authStatus = await getAuthStatus();
           if (authStatus.authenticated) {
             this.forwardToWebview({
@@ -273,7 +279,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
             });
           }
         } catch (error) {
-          // Sign-in was cancelled or failed - banner remains visible
           this.logger.debug(
             this.channel,
             `Sign-in from banner failed: ${toErrorMessage(error)}`,
@@ -339,17 +344,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // Other operations
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: async (m) =>
-        this.executionManager.handleAcceptEdited(m),
+        this.executionManager.handleFileOperation(m),
     };
   }
 
-  /** Forward a message directly to the webview client (for client-side handlers) */
+  /** Forward a message directly to the webview client */
   private forwardToWebview(message: any): void {
     const view = this.getActiveView();
     view?.webview.postMessage(message);
   }
 
-  // Implement handler methods
   private async handleInfoMessage(message: any): Promise<void> {
     vscode.window.showInformationMessage(message.text);
     this.logger.debug(this.channel, `Information message: ${message.text}`);
@@ -406,10 +410,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
     await super.handleWebviewReady(_message, webviewView);
     try {
-      // computeModelOptions checks canUseServerSideKeys() and sets data-requires-key
-      // accordingly. The webview's _applyModelOptions then calls updateModelApiKeyBanner()
-      // which shows/hides the banner based on the selected model's data-requires-key.
-      // No separate banner message needed here - webview handles it.
       const modelOptions = await computeModelOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
@@ -422,7 +422,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         options: agentOptions,
       });
 
-      // Check if user is authenticated and show/hide login banner accordingly
       const showLoginBanner = getConfig<boolean>('ui.showLoginBanner', true);
       const authStatus = await getAuthStatus();
       if (showLoginBanner && !authStatus.authenticated) {
@@ -430,7 +429,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
         });
       } else if (authStatus.authenticated) {
-        // Hide banner if user signed in through other means (account menu, etc.)
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER,
         });
