@@ -109,18 +109,13 @@ async function ensureStorageDir(): Promise<string> {
   return dir;
 }
 
-function resolveTempExtension(targetPath: string): string {
-  const ext = path.extname(targetPath);
-  return ext ? ext : '.txt';
-}
-
 async function createTempFile(
   side: 'original' | 'proposed',
   targetPath: string,
   content: string,
 ): Promise<vscode.Uri> {
   const dir = await ensureStorageDir();
-  const ext = resolveTempExtension(targetPath);
+  const ext = path.extname(targetPath) || '.txt';
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
