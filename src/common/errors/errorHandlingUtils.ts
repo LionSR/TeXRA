@@ -90,12 +90,6 @@ export function toErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
   }
-  if (err === undefined) {
-    return 'undefined';
-  }
-  if (err === null) {
-    return 'null';
-  }
   return String(err);
 }
 
