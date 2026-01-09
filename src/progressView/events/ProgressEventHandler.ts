@@ -628,6 +628,9 @@ export class ProgressEventHandler {
     // Groups already in state will be sent via updateLogContent.
     this.pendingTaskGroups.delete(stream);
 
+    // Get context state for this stream (ephemeral - not persisted)
+    const contextState = this.state.getContextState(stream);
+
     // Send data with action: 'render' (default).
     // Frontend detects stream switch by comparing stream with lastRenderedStream.
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
@@ -635,6 +638,7 @@ export class ProgressEventHandler {
       activeRunId,
       runUsage: usageByRun,
       runFiles: filesByRun,
+      contextState,
     });
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
@@ -655,12 +659,8 @@ export class ProgressEventHandler {
     const todos = this.state.getTodos(stream) ?? [];
     this.webviewUpdater.updateTodos(stream, todos);
 
-    // Refresh context state for the stream (ephemeral state)
-    // Only send if defined - frontend will show default state if not set
-    const contextState = this.state.getContextState(stream);
-    if (contextState !== undefined) {
-      this.webviewUpdater.updateContextState(stream, contextState);
-    }
+    // Context state is already included in updateLogContent above (via contextState field)
+    // No separate UPDATE_CONTEXT_STATE message needed here
 
     // Update status for current stream. Don't default to RUNNING - that causes a race
     // condition where the "already running" check in executeAgent fails. Let setupFlowUIState
