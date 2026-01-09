@@ -5,6 +5,25 @@ import { formatTokens } from './formatters/index.js';
 import { progressViewState } from './progressViewState.js';
 
 /**
+ * Build HTML and aria-label segments for cache token display.
+ * @param {number} tokens - Token count
+ * @param {string} iconClass - Codicon class name (without 'codicon-' prefix)
+ * @param {string} titleText - Title for HTML tooltip
+ * @param {string} ariaText - Text for aria-label
+ * @returns {{ html: string, aria: string }}
+ */
+function buildCacheSegment(tokens, iconClass, titleText, ariaText) {
+  if (tokens <= 0) {
+    return { html: '', aria: '' };
+  }
+  const formatted = formatTokens(tokens);
+  return {
+    html: ` · <i class="codicon codicon-${iconClass}" title="${titleText}"></i>${formatted}`,
+    aria: `, ${formatted} ${ariaText}`,
+  };
+}
+
+/**
  * Manages usage summary display.
  */
 export class UsageSummary {
@@ -81,37 +100,31 @@ export class UsageSummary {
     const formattedCost = `$${cost.toFixed(3)}`;
 
     // Build cache segments: placed after input since cache is conceptually related to input
-    // Cache read: tokens served from cache (discounted rate)
-    // Cache creation: tokens written to cache (Anthropic: 1.25x input price)
-    const cacheReadSegment =
-      cacheReadTokens > 0
-        ? ` · <i class="codicon codicon-cloud-download" title="Cache read tokens (discounted)"></i>${formatTokens(cacheReadTokens)}`
-        : '';
-    const cacheCreationSegment =
-      cacheCreationTokens > 0
-        ? ` · <i class="codicon codicon-database" title="Cache creation tokens (1.25x cost)"></i>${formatTokens(cacheCreationTokens)}`
-        : '';
-    const cacheReadAriaLabel =
-      cacheReadTokens > 0
-        ? `, ${formatTokens(cacheReadTokens)} cache read tokens`
-        : '';
-    const cacheCreationAriaLabel =
-      cacheCreationTokens > 0
-        ? `, ${formatTokens(cacheCreationTokens)} cache creation tokens`
-        : '';
+    const cacheRead = buildCacheSegment(
+      cacheReadTokens,
+      'cloud-download',
+      'Cache read tokens (discounted)',
+      'cache read tokens',
+    );
+    const cacheCreation = buildCacheSegment(
+      cacheCreationTokens,
+      'database',
+      'Cache creation tokens (1.25x cost)',
+      'cache creation tokens',
+    );
 
     this._summaryElem.innerHTML = `
       <i class="codicon codicon-meter"></i>
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
-        <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput}${cacheReadSegment}${cacheCreationSegment} ·
+        <i class="codicon codicon-arrow-up" title="Input tokens"></i>${formattedInput}${cacheRead.html}${cacheCreation.html} ·
         <i class="codicon codicon-arrow-down" title="Output tokens"></i>${formattedOutput} ·
         ${formattedCost}
       </span>
     `;
     this._summaryElem.setAttribute(
       'aria-label',
-      `Total usage: ${formattedInput} input tokens${cacheReadAriaLabel}${cacheCreationAriaLabel}, ${formattedOutput} output tokens, ${formattedCost}`,
+      `Total usage: ${formattedInput} input tokens${cacheRead.aria}${cacheCreation.aria}, ${formattedOutput} output tokens, ${formattedCost}`,
     );
   }
 
