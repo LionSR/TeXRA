@@ -553,14 +553,14 @@ export class AgentLogger {
     fn: () => Promise<T> | T,
   ): Promise<T> {
     if (!groupId) {
-      return Promise.resolve(fn());
+      return fn();
     }
 
     return logger.runWithGroupContext(
       this.channelId,
       groupId,
       this.isAgentLogger,
-      async () => await fn(),
+      fn,
     );
   }
 
