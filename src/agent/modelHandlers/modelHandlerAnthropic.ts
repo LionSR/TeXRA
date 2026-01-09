@@ -488,12 +488,26 @@ export class ModelHandlerAnthropic extends ModelHandler<
             throw new Error(errMsg);
           }
           if (effectiveContextWindow - inputTokens < options.max_tokens) {
+            const MIN_COMPLETION_TOKENS = 100;
+            const originalMaxTokens = options.max_tokens;
             const reducedMaxTokens = Math.max(
-              0,
+              MIN_COMPLETION_TOKENS,
               effectiveContextWindow - inputTokens - 10,
             );
-            const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
-            this.logger.warn(warnMsg);
+            const utilizationPercent =
+              (inputTokens / effectiveContextWindow) * 100;
+            this.logger.logContextManagement(
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow: effectiveContextWindow,
+                utilizationBefore: utilizationPercent,
+                originalMaxTokens,
+                reducedMaxTokens,
+                details: 'Anthropic: max_tokens reduced to fit context window',
+              },
+            );
             options.max_tokens = reducedMaxTokens;
 
             if (
