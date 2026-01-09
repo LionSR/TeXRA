@@ -511,20 +511,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleCompareOriginal(
     message: BaseFileCommandMessage,
   ): Promise<void> {
-    if (!message.base) {
-      this.logger.warn(
-        this.channel,
-        'Compare original requested without a base path.',
-        { data: { file: message.file } },
-      );
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'texra.compare',
-      pathToLocation(''), // inputFile unused
-      pathToLocation(message.base),
-      pathToLocation(message.file),
+    await this.executeWithBaseFile(message, 'Compare original', (file, base) =>
+      vscode.commands.executeCommand(
+        'texra.compare',
+        pathToLocation(''), // inputFile unused
+        pathToLocation(base),
+        pathToLocation(file),
+      ),
     );
   }
 
@@ -551,56 +544,29 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleAcceptFile(
     message: BaseFileCommandMessage,
   ): Promise<void> {
-    if (!message.base) {
-      this.logger.warn(this.channel, 'Accept requested without a base path.', {
-        data: { file: message.file },
-      });
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'texra.acceptEdited',
-      pathToLocation(''), // inputFile unused
-      pathToLocation(message.base),
-      pathToLocation(message.file),
+    await this.executeWithBaseFile(message, 'Accept', (file, base) =>
+      vscode.commands.executeCommand(
+        'texra.acceptEdited',
+        pathToLocation(''), // inputFile unused
+        pathToLocation(base),
+        pathToLocation(file),
+      ),
     );
   }
 
   private async handleMergeFile(
     message: BaseFileCommandMessage,
   ): Promise<void> {
-    if (!message.base) {
-      this.logger.warn(this.channel, 'Merge requested without a base path.', {
-        data: { file: message.file },
-      });
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'texra.merge',
-      undefined,
-      message.base,
-      message.file,
+    await this.executeWithBaseFile(message, 'Merge', (file, base) =>
+      vscode.commands.executeCommand('texra.merge', undefined, base, file),
     );
   }
 
   private async handleLatexdiffFile(
     message: BaseFileCommandMessage,
   ): Promise<void> {
-    if (!message.base) {
-      this.logger.warn(
-        this.channel,
-        'Latexdiff requested without a base path.',
-        { data: { file: message.file } },
-      );
-      return;
-    }
-
-    await vscode.commands.executeCommand(
-      'texra.latexdiff',
-      undefined,
-      message.base,
-      message.file,
+    await this.executeWithBaseFile(message, 'Latexdiff', (file, base) =>
+      vscode.commands.executeCommand('texra.latexdiff', undefined, base, file),
     );
   }
 
@@ -679,5 +645,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     await action(taskState);
+  }
+
+  /**
+   * Executes a file operation command with base file validation.
+   * Returns early with a warning if base file is missing.
+   */
+  private async executeWithBaseFile(
+    message: BaseFileCommandMessage,
+    actionName: string,
+    execute: (file: string, base: string) => Thenable<unknown>,
+  ): Promise<void> {
+    if (!message.base) {
+      this.logger.warn(
+        this.channel,
+        `${actionName} requested without a base path.`,
+        { data: { file: message.file } },
+      );
+      return;
+    }
+    await execute(message.file, message.base);
   }
 }

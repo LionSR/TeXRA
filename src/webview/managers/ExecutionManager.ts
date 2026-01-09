@@ -25,8 +25,6 @@ function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
 }
 
 export class ExecutionManager {
-  constructor() {}
-
   async handleExecute(message: any): Promise<void> {
     const isToolUseAgent = !!message.isToolUseAgent;
     const config = isToolUseAgent
@@ -112,18 +110,18 @@ export class ExecutionManager {
     };
   }
 
+  private mapMediaPath(f: string | null): string | null {
+    if (!f) return null;
+    if (isPastedImage(f)) {
+      return getPastedImageFullPath(f);
+    }
+    return f;
+  }
+
   private composeBaseAgentConfig(
     message: any,
     session: AgentSessionDescriptor,
   ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles' | 'toolConfig'> {
-    const mapMediaPath = (f: string | null): string | null => {
-      if (!f) return null;
-      if (isPastedImage(f)) {
-        return getPastedImageFullPath(f);
-      }
-      return f;
-    };
-
     return {
       agent: message.agent,
       model: message.model,
@@ -134,10 +132,10 @@ export class ExecutionManager {
       referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
       auxiliaryFile: message.auxiliaryFile ?? null,
       auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
-      mediaFile: mapMediaPath(message.mediaFile ?? null),
+      mediaFile: this.mapMediaPath(message.mediaFile ?? null),
       mediaFiles: getFilesIfNotEmpty<string>(
         (message.mediaFiles ?? [])
-          .map(mapMediaPath)
+          .map((f) => this.mapMediaPath(f))
           .filter((f: string | null): f is string => f !== null),
       ),
       editedFile: null,
@@ -146,25 +144,13 @@ export class ExecutionManager {
     };
   }
 
-  private handleFileOperation(message: any): void {
+  handleFileOperation(message: any): void {
     void vscode.commands.executeCommand(
       `texra.${message.command}`,
       message.inputFile,
       message.baseFile,
       message.editedFile,
     );
-  }
-
-  handleMerge(message: any): void {
-    this.handleFileOperation(message);
-  }
-
-  handleCompare(message: any): void {
-    this.handleFileOperation(message);
-  }
-
-  handleAcceptEdited(message: any): void {
-    this.handleFileOperation(message);
   }
 
   handleHousekeeping(message: any): void {
