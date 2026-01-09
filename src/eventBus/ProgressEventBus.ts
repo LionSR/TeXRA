@@ -1,27 +1,25 @@
 // Standard library imports
 import { EventEmitter } from 'events';
 
-// Local imports - agent
+// Type imports
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type { ContextStateData } from '@logger/AgentLogger';
 import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 import type {
   AddTaskGroupPayload,
-  UpdateTaskGroupPayload,
   RunScopedPayload,
+  UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
+import type { RetryRequestPrompt, ToolEditApprovalPrompt } from './types';
 
-// Re-export for consumers that import from this module
+// Re-exports for consumers
 export type { StreamStatus };
-
-// Re-export schema types for consumers
 export type { TaskGroupStatus } from './schemas';
 
 // Maximum number of events to buffer when no listeners are registered
@@ -83,7 +81,23 @@ export interface ProgressEventPayloads {
 
 export type ProgressEvent = keyof ProgressEventPayloads;
 
-class ProgressEventBus {
+/**
+ * Interface for the progress event bus.
+ * Used by event handler modules for testability and dependency injection.
+ */
+export interface ProgressEventBusLike {
+  on<K extends ProgressEvent>(
+    event: K,
+    listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
+  ): () => void;
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
+}
+
+class ProgressEventBus implements ProgressEventBusLike {
   private emitter = new EventEmitter();
   private buffer: {
     event: ProgressEvent;
