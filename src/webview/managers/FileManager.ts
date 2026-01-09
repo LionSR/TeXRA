@@ -113,7 +113,10 @@ export class FileManager extends BaseWebviewManager {
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const fileTypeToListType: Record<string, 'reference' | 'auxiliary' | 'media'> = {
+    const fileTypeToListType: Record<
+      string,
+      'reference' | 'auxiliary' | 'media'
+    > = {
       Reference: 'reference',
       Auxiliary: 'auxiliary',
       Media: 'media',

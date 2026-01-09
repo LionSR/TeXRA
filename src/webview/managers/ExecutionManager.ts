@@ -135,7 +135,7 @@ export class ExecutionManager {
       mediaFile: this.mapMediaPath(message.mediaFile ?? null),
       mediaFiles: getFilesIfNotEmpty<string>(
         (message.mediaFiles ?? [])
-          .map((f) => this.mapMediaPath(f))
+          .map((f: string | null) => this.mapMediaPath(f))
           .filter((f: string | null): f is string => f !== null),
       ),
       editedFile: null,
