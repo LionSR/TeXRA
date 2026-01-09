@@ -156,43 +156,45 @@ export abstract class BaseFS {
     );
   }
 
+  /**
+   * Check if file type matches a predicate.
+   * Returns false if the target doesn't exist or an error occurs.
+   */
+  private static async checkFileType(
+    this: typeof BaseFS,
+    target: PathInput,
+    predicate: (type: vscode.FileType) => boolean,
+  ): Promise<boolean> {
+    try {
+      const stats = await this.stat(target);
+      return predicate(stats.type);
+    } catch (_err) {
+      return false;
+    }
+  }
+
   public static async isDir(
     this: typeof BaseFS,
     target: PathInput,
   ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return stats.type === vscode.FileType.Directory;
-    } catch (_err) {
-      return false;
-    }
+    return this.checkFileType(target, (t) => t === vscode.FileType.Directory);
   }
 
   public static async isFile(
     this: typeof BaseFS,
     target: PathInput,
   ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return stats.type === vscode.FileType.File;
-    } catch (_err) {
-      return false;
-    }
+    return this.checkFileType(target, (t) => t === vscode.FileType.File);
   }
 
   public static async isSymbolicLink(
     this: typeof BaseFS,
     target: PathInput,
   ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return (
-        (stats.type & vscode.FileType.SymbolicLink) ===
-        vscode.FileType.SymbolicLink
-      );
-    } catch (_err) {
-      return false;
-    }
+    return this.checkFileType(
+      target,
+      (t) => (t & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink,
+    );
   }
 
   // ===== Sync Methods =====
