@@ -291,10 +291,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Update run-scoped metadata (instructions, usage, files) from message.
+   * Update run-scoped metadata (instructions, usage, files, context) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
-   * @param {Object} message - Message containing runInstructions, runUsage, runFiles
+   * @param {Object} message - Message containing runInstructions, runUsage, runFiles, contextState
    */
   _updateRunMetadata(stream, message) {
     const updates = [
@@ -310,6 +310,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           }
         }
       }
+    }
+
+    // Context state is stream-scoped (not run-scoped), store if provided
+    if (message.contextState) {
+      state.setContextState(stream, message.contextState);
     }
   }
 
