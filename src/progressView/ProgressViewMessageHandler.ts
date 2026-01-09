@@ -34,7 +34,11 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import { pathToLocation, flexibleFS, createExternalLocation } from '@utils/files';
+import {
+  pathToLocation,
+  flexibleFS,
+  createExternalLocation,
+} from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -559,7 +563,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     message: BaseFileCommandMessage,
   ): Promise<void> {
     // Check if user modified the model's output before accepting
-    const backup = message.file ? this.modelOutputBackups.get(message.file) : null;
+    const backup = message.file
+      ? this.modelOutputBackups.get(message.file)
+      : null;
     let currentContent: string | null = null;
 
     if (backup) {
@@ -581,7 +587,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     // Inform the model about user modifications via follow-up
-    if (backup && currentContent !== null && currentContent !== backup.content) {
+    if (
+      backup &&
+      currentContent !== null &&
+      currentContent !== backup.content
+    ) {
       const fileName = path.basename(message.file);
       const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
 

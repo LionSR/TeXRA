@@ -244,14 +244,13 @@ export class ModelHandlerOpenAI<
         );
         baseParams[maxOutputKey] = reducedMaxTokens;
 
-        const detailsMsg =
-          availableTokens <= 0
-            ? `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`
-            : `OpenAI: ${maxOutputKey} reduced to fit context window`;
-        const logMsg =
-          availableTokens <= 0
-            ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to ${reducedMaxTokens} token.`
-            : `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${reducedMaxTokens}.`;
+        const isOverflow = availableTokens <= 0;
+        const detailsMsg = isOverflow
+          ? `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`
+          : `OpenAI: ${maxOutputKey} reduced to fit context window`;
+        const logMsg = isOverflow
+          ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to ${reducedMaxTokens} token.`
+          : `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${reducedMaxTokens}.`;
 
         this.logger.logContextManagement(logMsg, {
           action: 'max_tokens_reduced',
@@ -282,11 +281,7 @@ export class ModelHandlerOpenAI<
     finalResponse: ChatCompletion,
   ): void {
     const finalReasoning = this.processThinkingBlock(finalResponse);
-    if (finalReasoning === null) {
-      thinking.finalize();
-    } else {
-      thinking.finalize(finalReasoning);
-    }
+    thinking.finalize(finalReasoning ?? undefined);
 
     const finalOutput = finalResponse.choices?.[0]?.message?.content ?? '';
     output?.finalize(finalOutput);
