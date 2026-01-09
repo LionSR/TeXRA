@@ -16,17 +16,20 @@ export interface IRunStorageService {
 
 let service: IRunStorageService | null = null;
 
+/** Default no-op service when ProgressView is not registered */
+const DEFAULT_SERVICE: IRunStorageService = {
+  getActiveRunId: () => null,
+  getRunOutputFiles: () => undefined,
+  isViewVisible: () => false,
+};
+
 export const setRunStorageService = (s: IRunStorageService): void => {
   service = s;
 };
 
 /** Returns service or safe defaults if not registered */
 export const getRunStorageService = (): IRunStorageService =>
-  service ?? {
-    getActiveRunId: () => null,
-    getRunOutputFiles: () => undefined,
-    isViewVisible: () => false,
-  };
+  service ?? DEFAULT_SERVICE;
 
 /** Reset to default state (for testing) */
 export const resetRunStorageService = (): void => {
