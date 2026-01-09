@@ -1,7 +1,3 @@
-// (none)
-
-// (none)
-
 const EMOJI_BY_LEVEL: Record<string, string> = {
   error: '🔴',
   warn: '🟡',
