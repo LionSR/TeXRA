@@ -49,23 +49,20 @@ export class UsageSummary {
   }
 
   /**
-   * Sync footer visibility based on whether usage or context are displayed.
+   * Sync footer visibility based on whether context is displayed.
    * @param {HTMLElement|null} footer - The footer element
    */
   _syncFooterVisibility(footer) {
     if (!footer) return;
     this._ensureContextElem();
-    const contextVisible = this._contextElem?.hidden === false;
-    footer.hidden = !contextVisible;
+    footer.hidden = this._contextElem?.hidden !== false;
   }
 
   /**
    * Cache the context element if not already cached.
    */
   _ensureContextElem() {
-    if (!this._contextElem) {
-      this._contextElem = document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
-    }
+    this._contextElem ??= document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
   }
 
   /**

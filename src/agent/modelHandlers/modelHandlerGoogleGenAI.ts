@@ -196,42 +196,36 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const requestedLevel = this.capabilities.reasoningEffort;
     const isGemini3 = this.isGemini3Model();
 
-    if (requestedLevel === ReasoningEffort.NONE) {
-      if (isGemini3) {
-        // Gemini 3 Pro only supports LOW/HIGH; Flash supports MINIMAL but still requires
-        // thought signatures. Use LOW for minimal latency when thinking is "disabled".
-        this.logger.warn(
-          "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
-        );
+    switch (requestedLevel) {
+      case ReasoningEffort.NONE:
+        if (isGemini3) {
+          this.logger.warn(
+            "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
+          );
+          return ThinkingLevel.LOW;
+        }
+        return undefined;
+
+      case ReasoningEffort.LOW:
         return ThinkingLevel.LOW;
-      }
-      return undefined;
-    }
 
-    if (requestedLevel === ReasoningEffort.LOW) {
-      return ThinkingLevel.LOW;
-    }
+      case ReasoningEffort.MEDIUM:
+        // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
+        if (isGemini3 && this.config.fullName.includes('-pro')) {
+          this.logger.debug(
+            'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
+          );
+          return ThinkingLevel.HIGH;
+        }
+        return ThinkingLevel.MEDIUM;
 
-    if (requestedLevel === ReasoningEffort.MEDIUM) {
-      // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
-      if (isGemini3 && this.config.fullName.includes('-pro')) {
-        this.logger.debug(
-          'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
-        );
+      case ReasoningEffort.HIGH:
+      case ReasoningEffort.XHIGH:
         return ThinkingLevel.HIGH;
-      }
-      return ThinkingLevel.MEDIUM;
-    }
 
-    // HIGH and XHIGH both map to ThinkingLevel.HIGH (the maximum in Google's SDK)
-    if (
-      requestedLevel === ReasoningEffort.HIGH ||
-      requestedLevel === ReasoningEffort.XHIGH
-    ) {
-      return ThinkingLevel.HIGH;
+      default:
+        return undefined;
     }
-
-    return undefined;
   }
 
   protected getInlineUploadLimitBytes(): number {
