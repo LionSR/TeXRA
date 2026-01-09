@@ -53,6 +53,17 @@ export class ProgressEventHandler {
   }
 
   /**
+   * Check if webview is available and the stream is active.
+   * Common guard condition for event handlers that should only update
+   * the webview when it's visible and showing the relevant stream.
+   */
+  private canUpdateWebview(stream: StreamTabId): boolean {
+    return (
+      this.webviewUpdater.isAvailable() && stream === this.state.activeStream
+    );
+  }
+
+  /**
    * Setup all event bus listeners.
    * Uses AbortController for cleanup - single dispose aborts all listeners.
    */
@@ -262,10 +273,7 @@ export class ProgressEventHandler {
       async () => {
         await this.state.taskGroups.updateGroup(data);
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          data.stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(data.stream)) {
           this.webviewUpdater.updateTaskGroup(data);
         }
       },
@@ -340,10 +348,7 @@ export class ProgressEventHandler {
 
         await this.state.streamTabs.save();
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateLogMessage(stream, existing);
         }
       },
@@ -413,10 +418,7 @@ export class ProgressEventHandler {
       'failed to handle clearMissingOutputs',
       async () => {
         await this.state.outputFiles.clearMissingOutputs(stream);
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
         }
       },
@@ -457,11 +459,7 @@ export class ProgressEventHandler {
           this.state.setActiveRunId(stream, storageKey);
         }
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream &&
-          accumulatedUsage
-        ) {
+        if (this.canUpdateWebview(stream) && accumulatedUsage) {
           // Send accumulated value to frontend (not the delta)
           // Frontend uses SET semantics to avoid double-counting
           this.webviewUpdater.updateRunUsage(
@@ -485,10 +483,7 @@ export class ProgressEventHandler {
       () => {
         // Store context state for replay when switching streams
         this.state.setContextState(stream, contextState);
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateContextState(stream, contextState);
         }
       },
@@ -502,10 +497,7 @@ export class ProgressEventHandler {
   }: ProgressEventPayloads['updateTodos']): void => {
     withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
       this.state.setTodos(stream, todos);
-      if (
-        this.webviewUpdater.isAvailable() &&
-        stream === this.state.activeStream
-      ) {
+      if (this.canUpdateWebview(stream)) {
         this.webviewUpdater.updateTodos(stream, todos);
       }
     });

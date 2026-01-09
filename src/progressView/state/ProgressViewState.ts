@@ -349,36 +349,21 @@ export class ProgressViewState {
   private collectRunCandidates(stream: StreamTabId): Set<string> {
     const candidates = new Set<string>();
 
-    const instructionRuns = this._runInstructions.getInstructions(stream);
-    for (const runId of instructionRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
+    // Helper to add all keys from a Map
+    const addKeys = (map: Map<string, unknown>): void => {
+      for (const runId of map.keys()) {
+        if (runId) candidates.add(runId);
       }
-    }
+    };
 
-    const fileRuns = this._outputFiles.getFiles(stream);
-    for (const runId of fileRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
+    // Collect from all run-scoped data sources
+    addKeys(this._runInstructions.getInstructions(stream));
+    addKeys(this._outputFiles.getFiles(stream));
+    addKeys(this._outputFiles.getMissingOutputs(stream));
+    addKeys(this._usageStats.getRunUsage(stream));
 
-    const missingRuns = this._outputFiles.getMissingOutputs(stream);
-    for (const runId of missingRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
-
-    const usageRuns = this._usageStats.getRunUsage(stream);
-    for (const runId of usageRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
-
-    const groups = this._taskGroups.getStreamGroups(stream);
-    for (const group of groups.values()) {
+    // Add root task group IDs (groups without parents)
+    for (const group of this._taskGroups.getStreamGroups(stream).values()) {
       if (!group.parentGroupId) {
         candidates.add(group.id);
       }
@@ -635,7 +620,6 @@ export class ProgressViewState {
    */
   private async loadTaskStates(): Promise<void> {
     const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
-
     this.taskStates.clear();
 
     if (Object.keys(raw).length === 0) {
@@ -643,32 +627,20 @@ export class ProgressViewState {
       return;
     }
 
-    const container = raw;
-    const buckets: Record<string, unknown>[] = [];
-
-    if (
-      typeof container.workflow === 'object' ||
-      typeof container.toolUse === 'object'
-    ) {
-      if (container.workflow && typeof container.workflow === 'object') {
-        buckets.push(container.workflow as Record<string, unknown>);
-      }
-      if (container.toolUse && typeof container.toolUse === 'object') {
-        buckets.push(container.toolUse as Record<string, unknown>);
-      }
-    } else {
-      buckets.push(container);
-    }
+    // Extract buckets: either legacy format (workflow/toolUse sub-objects) or flat
+    const hasLegacyFormat =
+      typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
+    const buckets = hasLegacyFormat
+      ? [raw.workflow, raw.toolUse].filter(
+          (b): b is Record<string, unknown> => typeof b === 'object' && b !== null,
+        )
+      : [raw];
 
     let loaded = 0;
-
     for (const record of buckets) {
       for (const [stream, rawState] of Object.entries(record)) {
-        if (!rawState || typeof rawState !== 'object') {
-          continue;
-        }
+        if (!rawState || typeof rawState !== 'object') continue;
 
-        // Validate against TaskState schema to catch corrupted/malformed state
         const parseResult = TaskStateSchema.safeParse(rawState);
         if (!parseResult.success) {
           this.logger.debug(
@@ -677,12 +649,7 @@ export class ProgressViewState {
           continue;
         }
 
-        // Cast is safe: schema uses passthrough() for efficiency but data
-        // originated from a validated TaskState with full AgentConfig
-        this.taskStates.set(
-          stream as StreamTabId,
-          parseResult.data as TaskState,
-        );
+        this.taskStates.set(stream as StreamTabId, parseResult.data as TaskState);
         loaded += 1;
       }
     }
