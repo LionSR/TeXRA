@@ -25,6 +25,7 @@ export class MemoryViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateMemoryEnabled(message) {
     const toggle = safeGetElementById(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE);
     if (toggle) {
+      // VS Code web components require both property and attribute for visual sync
       toggle.checked = message.enabled;
       toggle.toggleAttribute('checked', message.enabled);
       setElementDisabled(toggle, false);
