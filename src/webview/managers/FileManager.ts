@@ -113,15 +113,12 @@ export class FileManager extends BaseWebviewManager {
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const fileTypeToListType: Record<
-      string,
-      'reference' | 'auxiliary' | 'media'
-    > = {
+    const listTypeMap: Record<string, 'reference' | 'auxiliary' | 'media'> = {
       Reference: 'reference',
       Auxiliary: 'auxiliary',
       Media: 'media',
     };
-    const listType = fileTypeToListType[fileType];
+    const listType = listTypeMap[fileType];
     const files = listType ? await fileLister.list(listType) : [];
     this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
@@ -131,15 +128,12 @@ export class FileManager extends BaseWebviewManager {
   async handleRequestEditedFile(
     message: RequestEditedFileMessage,
   ): Promise<void> {
-    let allEditedFiles: string[] = [];
-    if (message.baseFile) {
-      const baseFileNameForEdited = path.basename(
-        message.baseFile,
-        path.extname(message.baseFile),
-      );
-      allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
-    }
-    this.postFileUpdate('Edited', allEditedFiles, {
+    const files = message.baseFile
+      ? await fileLister.listEditedFiles(
+          path.basename(message.baseFile, path.extname(message.baseFile)),
+        )
+      : [];
+    this.postFileUpdate('Edited', files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
@@ -158,73 +152,45 @@ export class FileManager extends BaseWebviewManager {
   async handleRequestDefaultOutputFiles(
     message: RequestDefaultOutputFilesMessage,
   ): Promise<void> {
-    const agentIdentifier = message.agent;
-    if (!agentIdentifier) {
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-        files: [],
-      });
-      return;
+    let files: string[] = [];
+    if (message.agent) {
+      try {
+        const entry = getAgent(message.agent);
+        files = entry?.defaultOutputFiles ?? [];
+      } catch (err) {
+        logger.error(
+          CHANNEL,
+          `Error requesting default output files: ${toErrorMessage(err)}`,
+        );
+      }
     }
-
-    try {
-      const entry = getAgent(agentIdentifier);
-      const files = entry?.defaultOutputFiles ?? [];
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-        files,
-      });
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error requesting default output files: ${toErrorMessage(err)}`,
-      );
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-        files: [],
-      });
-    }
+    this.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
+      files,
+    });
   }
 
   handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
     if (message.files && message.files.length > 0) {
-      this.postMessage({
-        command: message.command,
-        files: message.files,
-      });
+      this.postMessage({ command: message.command, files: message.files });
     }
   }
 
   async handleSelectMultipleFiles(
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
-    const fileType = message.fileType;
-    let selectedFiles: string[] | null = null;
-
+    const { fileType, currentFile } = message;
     try {
-      if (fileType === 'OutputFiles') {
-        selectedFiles = await this.selectOutputFiles(message.currentFile);
-      } else {
-        const currentFileForMultiple = message.currentFile;
-        const baseType = fileType.replace('Files', '');
-        selectedFiles = await vscode.commands.executeCommand<string[]>(
-          `texra.select${baseType}Files`,
-          currentFileForMultiple,
-        );
-        if (selectedFiles === undefined) {
-          logger.warn(
-            CHANNEL,
-            `Command texra.select${baseType}Files returned undefined`,
-          );
-          selectedFiles = null;
-        }
-      }
+      const selectedFiles =
+        fileType === 'OutputFiles'
+          ? await this.selectOutputFiles(currentFile)
+          : await vscode.commands.executeCommand<string[]>(
+              `texra.select${fileType.replace('Files', '')}Files`,
+              currentFile,
+            );
 
       if (selectedFiles) {
-        this.postMessage({
-          command: `set${fileType}`,
-          files: selectedFiles,
-        });
+        this.postMessage({ command: `set${fileType}`, files: selectedFiles });
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -424,12 +390,12 @@ export class FileManager extends BaseWebviewManager {
   }
 
   async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
-    const command = message.command;
-    const fileType = command.replace('update', '');
-    const files = message.files ?? [];
-
-    logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
-    this.postMessage({ command: `set${fileType}`, files });
+    const fileType = message.command.replace('update', '');
+    logger.debug(
+      CHANNEL,
+      `Updating ${fileType} with ${message.files?.length ?? 0} files`,
+    );
+    this.postMessage({ command: `set${fileType}`, files: message.files ?? [] });
   }
 
   private _deriveBaseFileFromLatexDiff(filePath: string): string | null {
@@ -543,7 +509,9 @@ export class FileManager extends BaseWebviewManager {
 
     // Convert to relative paths and deduplicate
     const relevantFiles = [
-      ...new Set(fileUris.map((uri) => workspace.asRelativePath(uri.fsPath, false))),
+      ...new Set(
+        fileUris.map((uri) => workspace.asRelativePath(uri.fsPath, false)),
+      ),
     ];
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
