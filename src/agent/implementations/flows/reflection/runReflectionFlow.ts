@@ -104,17 +104,63 @@ export interface RunReflectionFlowResult {
 }
 
 // ============================================================================
+// Configuration Derivation
+// ============================================================================
+
+interface DerivedConfig {
+  useScratchpad: boolean;
+  shouldEnsureXmlStructure: boolean;
+  totalRounds: number;
+  outputExt: string;
+}
+
+/** Derive configuration values from settings and prompts. */
+function deriveConfig(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): DerivedConfig {
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+
+  // Determine XML structure enforcement
+  let shouldEnsureXmlStructure = false;
+  if (setting.xmlStructureMode !== undefined) {
+    shouldEnsureXmlStructure =
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
+  } else if (setting.agentType === 'CoT') {
+    shouldEnsureXmlStructure = true;
+  } else if (setting.agentType === 'direct') {
+    shouldEnsureXmlStructure = useScratchpad;
+  }
+
+  // Compute total rounds
+  let totalRounds: number;
+  if (setting.maxRounds !== undefined) {
+    totalRounds = setting.maxRounds;
+  } else if (setting.agentType === 'direct') {
+    totalRounds = 1;
+  } else {
+    const requests = Array.isArray(prompt.userRequest)
+      ? prompt.userRequest
+      : prompt.userRequest
+        ? [prompt.userRequest]
+        : [];
+    totalRounds = Math.max(setting.rounds ?? 2, requests.length);
+  }
+
+  return {
+    useScratchpad,
+    shouldEnsureXmlStructure,
+    totalRounds,
+    outputExt: useScratchpad ? 'xml' : setting.outputExt,
+  };
+}
+
+// ============================================================================
 // Flow Runner
 // ============================================================================
 
-/**
- * Run a reflection flow.
- *
- * Creates all services inline and manages interrupt registration.
- *
- * @param input - Flow configuration and dependencies
- * @returns Flow execution result
- */
+/** Run a reflection flow. Creates services and manages interrupt registration. */
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
 ): Promise<RunReflectionFlowResult> {
@@ -175,38 +221,11 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Compute configuration values
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-
-  // Determine if XML structure should be enforced
-  let shouldEnsureXmlStructure = false;
-  if (setting.xmlStructureMode !== undefined) {
-    shouldEnsureXmlStructure =
-      setting.xmlStructureMode === 'always' ||
-      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
-  } else if (setting.agentType === 'CoT') {
-    shouldEnsureXmlStructure = true;
-  } else if (setting.agentType === 'direct') {
-    shouldEnsureXmlStructure = useScratchpad;
-  }
-
-  // Compute total rounds
-  let totalRounds: number;
-  if (setting.maxRounds !== undefined) {
-    totalRounds = setting.maxRounds;
-  } else if (setting.agentType === 'direct') {
-    totalRounds = 1;
-  } else {
-    const requests = Array.isArray(prompt.userRequest)
-      ? prompt.userRequest
-      : prompt.userRequest
-        ? [prompt.userRequest]
-        : [];
-    totalRounds = Math.max(setting.rounds ?? 2, requests.length);
-  }
+  // Derive configuration values
+  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
+    deriveConfig(setting, prompt);
 
   // Create output file location getter
-  const outputExt = useScratchpad ? 'xml' : setting.outputExt;
   const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
