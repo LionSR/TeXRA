@@ -578,10 +578,6 @@ const launchCodespace = async () => {
   color: var(--vp-c-text-2);
 }
 
-.script-info li {
-  margin: 0.25rem 0;
-}
-
 .bookmark-tip,
 .secrets-tip {
   margin-top: 1rem;
@@ -622,13 +618,18 @@ const launchCodespace = async () => {
   color: var(--vp-c-text-1);
 }
 
-.info-box ul {
+.info-box ol {
   margin: 0;
   padding-left: 1.5rem;
 }
 
-.info-box li {
+.script-info li,
+.info-box li,
+.quick-guide li {
   margin: 0.25rem 0;
+}
+
+.info-box li {
   color: var(--vp-c-text-2);
 }
 
@@ -719,10 +720,6 @@ const launchCodespace = async () => {
   padding-left: 1.5rem;
   color: var(--vp-c-text-2);
   font-size: 0.9rem;
-}
-
-.quick-guide li {
-  margin: 0.25rem 0;
 }
 
 .setup-link {
