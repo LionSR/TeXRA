@@ -147,71 +147,61 @@ export abstract class BaseViewContentProvider {
     }
   }
 
+  /** Common module descriptors from src/common */
+  private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
+    [
+      { key: 'commonStyleUri', path: 'styles/common.css' },
+      { key: 'webviewStateUri', path: 'modules/webviewState.js' },
+      { key: 'webviewContextUri', path: 'modules/webviewContext.js' },
+      { key: 'commandsUri', path: 'webview/commands.js' },
+      { key: 'webviewThemeHandlersUri', path: 'webview/themeHandlers.js' },
+      { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
+      { key: 'recordingButtonManagerUri', path: 'modules/RecordingButtonManager.js' },
+      { key: 'textareaUtilsUri', path: 'modules/textareaUtils.js' },
+      { key: 'htmlEncodingUri', path: 'modules/htmlEncoding.js' },
+      { key: 'iconConstantsUri', path: 'modules/iconConstants.js' },
+      { key: 'baseWebviewMessageHandlerUri', path: 'modules/BaseWebviewMessageHandler.js' },
+      { key: 'baseFileUtilsUri', path: 'modules/files/baseFileUtils.js' },
+      { key: 'domUtilsUri', path: 'modules/domUtils.js' },
+      { key: 'baseDomHandlerUri', path: 'modules/BaseDomHandler.js' },
+      { key: 'stringUtilsUri', path: 'modules/stringUtils.js' },
+      { key: 'pathUtilsUri', path: 'modules/pathUtils.js' },
+      { key: 'debounceUri', path: 'modules/debounce.js' },
+      { key: 'clipboardUtilsUri', path: 'modules/clipboardUtils.js' },
+      { key: 'streamStatusUri', path: 'constants/streamStatus.js' },
+      { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
+      { key: 'agentTypesUri', path: 'constants/agentTypes.js' },
+      { key: 'toggleStateStoreUri', path: 'modules/ToggleStateStore.js' },
+    ];
+
+  /** Node module descriptors from node_modules */
+  private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
+    [
+      { key: 'vscodeElementsBundleUri', path: '@vscode-elements/elements/dist/bundled.js' },
+      { key: 'codiconUri', path: '@vscode/codicons/dist/codicon.css' },
+      { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
+    ];
+
   /**
    * Common URIs used by all views
    */
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
-    return {
-      commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
-      webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
-      webviewContextUri: this.getCommonUri(
-        webview,
-        'modules/webviewContext.js',
-      ),
-      commandsUri: this.getCommonUri(webview, 'webview/commands.js'),
-      webviewThemeHandlersUri: this.getCommonUri(
-        webview,
-        'webview/themeHandlers.js',
-      ),
-      templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
-      recordingButtonManagerUri: this.getCommonUri(
-        webview,
-        'modules/RecordingButtonManager.js',
-      ),
-      textareaUtilsUri: this.getCommonUri(webview, 'modules/textareaUtils.js'),
-      htmlEncodingUri: this.getCommonUri(webview, 'modules/htmlEncoding.js'),
-      iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
-      baseWebviewMessageHandlerUri: this.getCommonUri(
-        webview,
-        'modules/BaseWebviewMessageHandler.js',
-      ),
-      baseFileUtilsUri: this.getCommonUri(
-        webview,
-        'modules/files/baseFileUtils.js',
-      ),
-      domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
-      baseDomHandlerUri: this.getCommonUri(
-        webview,
-        'modules/BaseDomHandler.js',
-      ),
-      stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
-      pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
-      debounceUri: this.getCommonUri(webview, 'modules/debounce.js'),
-      clipboardUtilsUri: this.getCommonUri(
-        webview,
-        'modules/clipboardUtils.js',
-      ),
-      streamStatusUri: this.getCommonUri(webview, 'constants/streamStatus.js'),
-      todoStatusUri: this.getCommonUri(webview, 'constants/todoStatus.js'),
-      agentTypesUri: this.getCommonUri(webview, 'constants/agentTypes.js'),
-      toggleStateStoreUri: this.getCommonUri(
-        webview,
-        'modules/ToggleStateStore.js',
-      ),
-      vscodeElementsBundleUri: this.getNodeModulesUri(
-        webview,
-        '@vscode-elements/elements/dist/bundled.js',
-      ),
-      codiconUri: this.getNodeModulesUri(
-        webview,
-        '@vscode/codicons/dist/codicon.css',
-      ),
-      codiconsFontUri: this.getNodeModulesUri(
-        webview,
-        '@vscode/codicons/dist/codicon.ttf',
-      ),
-    };
+    const commonUris = BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS.reduce<
+      Record<string, vscode.Uri>
+    >((acc, d) => {
+      acc[d.key] = this.getCommonUri(webview, d.path);
+      return acc;
+    }, {});
+
+    const nodeUris = BaseViewContentProvider.NODE_MODULE_DESCRIPTORS.reduce<
+      Record<string, vscode.Uri>
+    >((acc, d) => {
+      acc[d.key] = this.getNodeModulesUri(webview, d.path);
+      return acc;
+    }, {});
+
+    return { ...commonUris, ...nodeUris };
   }
 }

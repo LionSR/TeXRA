@@ -96,6 +96,16 @@ export function convertHtmlToMarkdown(html: string): string {
 }
 
 /**
+ * Reference type patterns for Pandoc normalization.
+ * Each entry maps reference type to the LaTeX command.
+ */
+const REFERENCE_PATTERNS: Array<{ type: string; command: string }> = [
+  { type: 'ref', command: 'ref' },
+  { type: 'eqref', command: 'eqref' },
+  { type: '[Cc]ref', command: 'cref' },
+];
+
+/**
  * Normalize Pandoc reference syntax to canonical LaTeX format.
  * Pandoc outputs references in formats like:
  * - [label]{reference-type="ref" reference="label"}
@@ -103,47 +113,34 @@ export function convertHtmlToMarkdown(html: string): string {
  * These are converted to standard \ref{label}, \cref{label}, \eqref{label}
  */
 function normalizePandocReferences(text: string): string {
-  // Handle markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
-  text = text.replaceAll(
-    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
-    '\\ref{$2}',
-  );
-  text = text.replaceAll(
-    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
-    '\\eqref{$2}',
-  );
-  text = text.replaceAll(
-    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
-    '\\cref{$2}',
-  );
+  for (const { type, command } of REFERENCE_PATTERNS) {
+    // Handle markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
+    text = text.replaceAll(
+      new RegExp(
+        `\\[\\\\?\\[([^\\]]+)\\\\?\\]\\]\\(#[^)]*\\)\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
+        'g',
+      ),
+      `\\${command}{$2}`,
+    );
 
-  // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
-  text = text.replaceAll(
-    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
-    '\\ref{$2}',
-  );
-  text = text.replaceAll(
-    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
-    '\\eqref{$2}',
-  );
-  text = text.replaceAll(
-    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
-    '\\cref{$2}',
-  );
+    // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
+    text = text.replaceAll(
+      new RegExp(
+        `\\[([^\\[\\]]+)\\]\\(#[^)]*\\)\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
+        'g',
+      ),
+      `\\${command}{$2}`,
+    );
 
-  // Handle simple Pandoc format: [label]{reference-type="ref" reference="label"}
-  text = text.replaceAll(
-    /\[([^\]]+)\]\{reference-type="ref"\s+reference="([^"]+)"\}/g,
-    '\\ref{$2}',
-  );
-  text = text.replaceAll(
-    /\[([^\]]+)\]\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
-    '\\eqref{$2}',
-  );
-  text = text.replaceAll(
-    /\[([^\]]+)\]\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
-    '\\cref{$2}',
-  );
+    // Handle simple Pandoc format: [label]{reference-type="ref" reference="label"}
+    text = text.replaceAll(
+      new RegExp(
+        `\\[([^\\]]+)\\]\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
+        'g',
+      ),
+      `\\${command}{$2}`,
+    );
+  }
 
   return text;
 }
