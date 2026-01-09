@@ -255,11 +255,15 @@ const handleRepoTypeChange = () => {
 const copyToClipboard = async () => {
   if (!setupCommand.value) return;
 
-  await navigator.clipboard.writeText(setupCommand.value);
-  copySuccess.value = true;
-  setTimeout(() => {
-    copySuccess.value = false;
-  }, 2000);
+  try {
+    await navigator.clipboard.writeText(setupCommand.value);
+    copySuccess.value = true;
+    setTimeout(() => {
+      copySuccess.value = false;
+    }, 2000);
+  } catch {
+    // Clipboard API can fail in non-secure contexts or when permission denied
+  }
 };
 
 const isValid = computed(() => {
