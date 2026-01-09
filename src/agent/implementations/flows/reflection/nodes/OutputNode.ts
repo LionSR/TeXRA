@@ -37,6 +37,28 @@ interface OutputPrepInput {
 type OutputExecResult = RoundOutput;
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+type WarnLogger = { warn: (msg: string) => void };
+
+/**
+ * Execute an operation that can fail gracefully.
+ * Logs warnings on failure but doesn't throw.
+ */
+async function tryOperation(
+  label: string,
+  operation: () => Promise<void>,
+  logger: WarnLogger,
+): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    logger.warn(`${label} failed: ${toErrorMessage(error)}`);
+  }
+}
+
+// ============================================================================
 // Node Implementation
 // ============================================================================
 
@@ -70,52 +92,39 @@ export class OutputNode<C = unknown> extends Node<
 
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputHandler, setting, logger } = this.services;
-    const {
-      currentRound,
-      outputLocation,
-      endTurn,
-      baseFiles,
-      ensureXmlStructure,
-    } = prepRes;
-
-    // Helper for non-critical operations that can fail gracefully
-    const tryOperation = async (
-      label: string,
-      operation: () => Promise<void>,
-    ): Promise<void> => {
-      try {
-        await operation();
-      } catch (error) {
-        logger.warn(`${label} failed: ${toErrorMessage(error)}`);
-      }
-    };
+    const { currentRound, outputLocation, endTurn, baseFiles, ensureXmlStructure } = prepRes;
 
     // Only process if turn ended (model completed response)
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
       if (ensureXmlStructure) {
-        await tryOperation('XML structure', () =>
-          outputHandler.ensureXmlStructure(
-            outputLocation,
-            setting.documentTag ?? 'document',
-          ),
+        await tryOperation(
+          'XML structure',
+          () => outputHandler.ensureXmlStructure(outputLocation, setting.documentTag ?? 'document'),
+          logger,
         );
       }
 
-      await tryOperation('Output processing', () =>
-        outputHandler.processOutputFiles(outputLocation, currentRound),
+      await tryOperation(
+        'Output processing',
+        () => outputHandler.processOutputFiles(outputLocation, currentRound),
+        logger,
       );
 
       if (outputHandler.hasRoundOutputs(currentRound)) {
-        await tryOperation('Latexdiff', () =>
-          this.handleLatexdiff(currentRound, baseFiles),
+        await tryOperation(
+          'Latexdiff',
+          () => this.handleLatexdiff(currentRound, baseFiles),
+          logger,
         );
       }
     }
 
-    await tryOperation('Round finalization', () =>
-      outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+    await tryOperation(
+      'Round finalization',
+      () => outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+      logger,
     );
 
     // Get round artifacts - this is critical, throw if it fails
