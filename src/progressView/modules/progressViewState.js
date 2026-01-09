@@ -283,6 +283,18 @@ export class ProgressViewState {
     return null;
   }
 
+  /**
+   * Resolve stream and validate runId for run-scoped operations.
+   * Returns null if either stream cannot be resolved or runId is missing.
+   * @param {string} streamId - Stream ID to resolve
+   * @param {string} runId - Run ID to validate
+   * @returns {string|null} Resolved stream or null if validation fails
+   */
+  _resolveRunContext(streamId, runId) {
+    if (!runId) return null;
+    return this._resolveStreamId(streamId);
+  }
+
   setExecutionIdAvailable(stream, hasExecutionId) {
     this._executionIdAvailability.set(stream, Boolean(hasExecutionId));
   }
@@ -532,10 +544,8 @@ export class ProgressViewState {
   }
 
   setRunFiles(streamId, runId, filesByRound) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !runId) {
-      return;
-    }
+    const targetStream = this._resolveRunContext(streamId, runId);
+    if (!targetStream) return;
     this.runFiles.set(targetStream, runId, filesByRound ?? {});
   }
 
@@ -559,10 +569,8 @@ export class ProgressViewState {
   }
 
   setRunMissingOutputs(streamId, runId, filesByRound) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !runId) {
-      return;
-    }
+    const targetStream = this._resolveRunContext(streamId, runId);
+    if (!targetStream) return;
     this.runMissingOutputs.set(targetStream, runId, filesByRound ?? {});
   }
 
@@ -582,24 +590,26 @@ export class ProgressViewState {
   }
 
   setRunUsage(streamId, runId, usage) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !runId) {
-      return;
-    }
-    const inputTokens = Number(usage?.inputTokens ?? 0);
-    const outputTokens = Number(usage?.outputTokens ?? 0);
-    const cost = Number(usage?.cost ?? 0);
+    const targetStream = this._resolveRunContext(streamId, runId);
+    if (!targetStream) return;
+
+    // Normalize usage fields - ?? preserves 0, unlike ||
+    const toNum = (v) => Number(v ?? 0);
+    const normalized = {
+      inputTokens: toNum(usage?.inputTokens),
+      outputTokens: toNum(usage?.outputTokens),
+      cost: toNum(usage?.cost),
+      cacheReadInputTokens: toNum(usage?.cacheReadInputTokens),
+      cacheCreationInputTokens: toNum(usage?.cacheCreationInputTokens),
+    };
     // Skip empty usage (cost=0 implies no cache billing)
-    if (inputTokens === 0 && outputTokens === 0 && cost === 0) {
-      return;
+    const isEmpty =
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0;
+    if (!isEmpty) {
+      this.runUsage.set(targetStream, runId, normalized);
     }
-    this.runUsage.set(targetStream, runId, {
-      inputTokens,
-      outputTokens,
-      cost,
-      cacheReadInputTokens: Number(usage?.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
-    });
   }
 
   getRunUsage(streamId, runId) {
