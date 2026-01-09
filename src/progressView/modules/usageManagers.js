@@ -134,28 +134,20 @@ export class UsageSummary {
    * @returns {Object} Total usage with inputTokens, outputTokens, cost, and cache token counts
    */
   computeTotal() {
-    const stream = progressViewState.activeStream;
-    const activeRunId = progressViewState.resolveActiveRunId(stream);
-    if (stream && activeRunId) {
-      const usage = progressViewState.getRunUsage(stream, activeRunId);
-      if (usage) {
-        return {
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          cost: usage.cost ?? 0,
-          cacheReadInputTokens: usage.cacheReadInputTokens ?? 0,
-          cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
-        };
-      }
-    }
-
-    return {
+    const emptyUsage = {
       inputTokens: 0,
       outputTokens: 0,
       cost: 0,
       cacheReadInputTokens: 0,
       cacheCreationInputTokens: 0,
     };
+    const stream = progressViewState.activeStream;
+    const activeRunId = stream && progressViewState.resolveActiveRunId(stream);
+    if (!activeRunId) {
+      return emptyUsage;
+    }
+    const usage = progressViewState.getRunUsage(stream, activeRunId);
+    return usage ? { ...emptyUsage, ...usage } : emptyUsage;
   }
 
   /**
