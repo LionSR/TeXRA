@@ -75,6 +75,10 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -478,15 +482,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
           );
         }
-        if (
-          this.config.contextWindow - totalTokens <
-          (generationConfig.maxOutputTokens ?? 8192)
-        ) {
-          this.logger.warn(
-            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${generationConfig.maxOutputTokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - totalTokens}.`,
+        const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
+        const availableTokens = this.config.contextWindow - totalTokens;
+        if (availableTokens < originalMaxTokens) {
+          const reducedMaxTokens = computeReducedMaxTokens(
+            availableTokens,
+            TOKEN_SAFETY_BUFFER,
           );
-          generationConfig.maxOutputTokens =
-            this.config.contextWindow - totalTokens - 10;
+          const utilizationPercent =
+            (totalTokens / this.config.contextWindow) * 100;
+          this.logger.logContextManagement(
+            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: totalTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore: utilizationPercent,
+              originalMaxTokens,
+              reducedMaxTokens,
+              details: 'Google: maxOutputTokens reduced to fit context window',
+            },
+          );
+          generationConfig.maxOutputTokens = reducedMaxTokens;
         }
       } catch (err) {
         // Re-throw context window violations - these are intentional validation errors
