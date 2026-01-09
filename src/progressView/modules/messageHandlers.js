@@ -114,7 +114,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _refreshOutputsForActiveRun(runId) {
     const ctx = this._getActiveRunContext(runId);
-    const filesByRound = ctx ? (state.getRunFiles(ctx.stream, ctx.runId) ?? {}) : {};
+    const filesByRound = ctx
+      ? (state.getRunFiles(ctx.stream, ctx.runId) ?? {})
+      : {};
     // Hide round headers for tool-use agents where round numbers don't have meaning
     const showRoundHeaders = state.activeSessionKind !== 'toolUse';
     dom.fileList.update(filesByRound, { showRoundHeaders });
@@ -328,13 +330,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStreamInfo = streams.find(
       (s) => s.name === message.activeStream,
     );
-    // Only determine session kind if we have stream info - avoid false 'workflow' default
-    // that would incorrectly clear tool-use log content
-    const sessionKind = activeStreamInfo
-      ? activeStreamInfo.agentSessionKind ||
-        activeStreamInfo.uiTraits?.sessionKind ||
-        'workflow'
-      : state.activeSessionKind || 'workflow';
+    // Determine session kind from stream info, or preserve current if unavailable
+    const sessionKind =
+      activeStreamInfo?.agentSessionKind ||
+      activeStreamInfo?.uiTraits?.sessionKind ||
+      (activeStreamInfo ? 'workflow' : state.activeSessionKind) ||
+      'workflow';
     const isToolAgent = sessionKind === 'toolUse';
 
     // Only clear session state if we have confirmed stream info for the session kind change
@@ -881,96 +882,50 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const activeStream = state.activeStream || '';
 
     if (message.stream !== activeStream) {
-      if (!activeStream && !message.stream) {
-        dom.instructionPanel.hide();
-      }
+      if (!activeStream && !message.stream) dom.instructionPanel.hide();
       return;
     }
 
-    const payload = message.instruction || null;
-    const text = payload?.text ?? '';
-    const metadata = payload?.metadata;
+    const text = message.instruction?.text ?? '';
+    const metadata = message.instruction?.metadata;
     const sessionKind =
       message.sessionKind || state.activeSessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
+    const hasText = typeof text === 'string' && text.trim();
 
-    // Only clear session state if message explicitly provides session kind
-    // This prevents clearing log content when session kind is derived from state fallback
-    if (message.sessionKind) {
-      this._clearSessionKindState(sessionKind);
-    }
+    if (message.sessionKind) this._clearSessionKindState(sessionKind);
     state.activeSessionKind = sessionKind;
 
-    let activeRunId = state.getActiveRunId(activeStream);
-    if (!activeRunId) {
-      activeRunId =
-        dom.runSelector.getActiveRunId() ||
-        state.resolveActiveRunId(activeStream);
-      if (activeRunId) {
-        state.setActiveRunId(activeStream, activeRunId);
-      }
-    }
+    // Resolve active run ID
+    let activeRunId =
+      state.getActiveRunId(activeStream) ||
+      dom.runSelector.getActiveRunId() ||
+      state.resolveActiveRunId(activeStream);
+    if (activeRunId) state.setActiveRunId(activeStream, activeRunId);
 
+    // Update run instruction state
     if (activeRunId) {
-      if (typeof text === 'string' && text.trim()) {
-        state.setRunInstruction(activeStream, activeRunId, {
-          text,
-          metadata,
-        });
+      if (hasText) {
+        state.setRunInstruction(activeStream, activeRunId, { text, metadata });
       } else {
         state.clearRunInstruction(activeStream, activeRunId);
       }
       state.clearPendingInstruction(activeStream);
     }
 
+    // Tool-use agents: render instruction as user message in log
     if (isToolUseAgent) {
       dom.instructionPanel.hide();
       state.clearPendingInstruction(activeStream);
-
-      if (!text || !text.trim()) {
-        this._refreshInstructionForActiveRun();
-        return;
-      }
-
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        const targetContentId = activeRunId
-          ? `${GROUP_DOM_IDS.CONTENT_PREFIX}${activeRunId}`
-          : null;
-        const targetContainer = targetContentId
-          ? document.getElementById(targetContentId)
-          : logContent;
-        const scope = targetContainer || logContent;
-
-        const existingInstruction = scope.querySelector(
-          '.user-message-container[data-instruction="true"]',
-        );
-
-        if (!existingInstruction) {
-          const userMessage = this._entryFormatter.format({
-            id: `instruction-${activeStream}-${activeRunId || 'default'}`,
-            messageType: 'userMessage',
-            text,
-            timestamp: Date.now(),
-            groupId: activeRunId || undefined,
-          });
-
-          if (userMessage) {
-            userMessage.dataset.instruction = 'true';
-            if (scope.firstChild) {
-              scope.insertBefore(userMessage, scope.firstChild);
-            } else {
-              scope.appendChild(userMessage);
-            }
-          }
-        }
-      }
-
+      if (hasText)
+        this._renderToolUseInstruction(activeStream, activeRunId, text);
+      else this._refreshInstructionForActiveRun();
       return;
     }
 
+    // Workflow agents: show in panel or as pending
     if (!activeRunId) {
-      if (typeof text === 'string' && text.trim()) {
+      if (hasText) {
         state.setPendingInstruction(activeStream, { text, metadata });
         dom.instructionPanel.show(text, metadata);
       } else {
@@ -981,6 +936,37 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._refreshInstructionForActiveRun();
+  }
+
+  /**
+   * Render instruction as user message in log for tool-use agents.
+   */
+  _renderToolUseInstruction(stream, runId, text) {
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!logContent) return;
+
+    const targetContentId = runId
+      ? `${GROUP_DOM_IDS.CONTENT_PREFIX}${runId}`
+      : null;
+    const scope =
+      (targetContentId && document.getElementById(targetContentId)) ||
+      logContent;
+
+    if (scope.querySelector('.user-message-container[data-instruction="true"]'))
+      return;
+
+    const userMessage = this._entryFormatter.format({
+      id: `instruction-${stream}-${runId || 'default'}`,
+      messageType: 'userMessage',
+      text,
+      timestamp: Date.now(),
+      groupId: runId || undefined,
+    });
+
+    if (userMessage) {
+      userMessage.dataset.instruction = 'true';
+      scope.insertBefore(userMessage, scope.firstChild);
+    }
   }
 
   handleDeleteStream(message) {
