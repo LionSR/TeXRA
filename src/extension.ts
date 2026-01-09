@@ -334,15 +334,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
+
+  // Notify all listeners that extension is deactivating
+  bus.emit('extensionDeactivating', undefined);
+
   disposeExtensionLifecycle();
 
   // Flush any pending usage logs before deactivating
   await UsageLogService.dispose();
 
   // PersistedFlow cleanup is handled automatically via ExecutionKVStore.
-
-  // Notify all listeners that extension is deactivating
-  bus.emit('extensionDeactivating', undefined);
 
   statusBarItem?.dispose();
   disposeDiffRefresh();

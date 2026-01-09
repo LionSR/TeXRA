@@ -8,17 +8,9 @@ export function shouldPreserveFlowRecord(
   status: EndGroupStatus,
   userCancelledRetry: boolean,
 ): boolean {
-  if (isExtensionDeactivating()) {
-    return true;
-  }
-
-  if (status !== END_GROUP_STATUS.STOPPED) {
-    return true;
-  }
-
-  if (userCancelledRetry) {
-    return true;
-  }
-
-  return false;
+  return (
+    isExtensionDeactivating() ||
+    status !== END_GROUP_STATUS.STOPPED ||
+    userCancelledRetry
+  );
 }

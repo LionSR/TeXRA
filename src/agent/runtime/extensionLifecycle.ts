@@ -19,6 +19,8 @@ export function initializeExtensionLifecycle(): void {
 export function disposeExtensionLifecycle(): void {
   cleanup?.();
   cleanup = undefined;
+  initialized = false;
+  extensionIsDeactivating = false;
 }
 
 export function isExtensionDeactivating(): boolean {
