@@ -26,7 +26,7 @@ export class MemoryViewMessageHandler extends BaseWebviewMessageHandler {
     const toggle = safeGetElementById(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE);
     if (toggle) {
       toggle.checked = message.enabled;
-      toggle.disabled = false;
+      toggle.removeAttribute('disabled');
     }
   }
 }
