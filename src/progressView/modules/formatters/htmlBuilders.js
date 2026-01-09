@@ -69,9 +69,7 @@ export function initToggleIcon(element, expanded = false) {
  * @returns {{items: string, summary: string}|null} Rendered items and summary
  */
 export function buildFileListRender(files) {
-  if (!Array.isArray(files)) {
-    return null;
-  }
+  if (!Array.isArray(files)) return null;
 
   const items = files
     .map((file) => {
@@ -79,32 +77,25 @@ export function buildFileListRender(files) {
       const escaped = encodeHtml(file.filePath);
       const fileNameEscaped = encodeHtml(file.fileName);
 
-      let metadata = '';
+      const metaParts = [];
       if (file.varName) {
-        metadata += `<span class="file-var">[${encodeHtml(file.varName)}]</span>`;
+        metaParts.push(`<span class="file-var">[${encodeHtml(file.varName)}]</span>`);
       }
       if (file.source && file.source !== 'unknown') {
-        const sourceEscaped = encodeHtml(file.sourceDisplay);
-        if (file.internal) {
-          metadata += ` <span class="file-source">(${sourceEscaped}, internal)</span>`;
-        } else {
-          metadata += ` <span class="file-source">(${sourceEscaped})</span>`;
-        }
+        const sourceText = file.internal
+          ? `${encodeHtml(file.sourceDisplay)}, internal`
+          : encodeHtml(file.sourceDisplay);
+        metaParts.push(`<span class="file-source">(${sourceText})</span>`);
       }
 
-      return `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+      return `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metaParts.join(' ')}</li>`;
     })
     .join('');
 
-  const totalFiles = files.length;
   const loadedFiles = files.filter((file) => file.ok).length;
-  const failedFiles = totalFiles - loadedFiles;
-
-  let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
-  if (failedFiles > 0) {
-    summary += `, ${failedFiles} not found`;
-  }
-  summary += ')';
+  const failedFiles = files.length - loadedFiles;
+  const failedSuffix = failedFiles > 0 ? `, ${failedFiles} not found` : '';
+  const summary = `Files (${loadedFiles}/${files.length} loaded${failedSuffix})`;
 
   return { items, summary };
 }
