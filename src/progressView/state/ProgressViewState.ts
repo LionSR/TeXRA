@@ -144,12 +144,13 @@ export class ProgressViewState {
    * current active stream is not in the available set (e.g., due to filtering),
    * this method picks the first available stream and updates the state.
    *
-   * IMPORTANT: When availableStreams is empty but streams exist in state, we
-   * preserve the current activeStream to avoid clearing content during temporary
-   * filter mismatches (e.g., during resume flow race conditions).
+   * IMPORTANT: When availableStreams is empty, we preserve and return the current
+   * activeStream to avoid clearing content during temporary filter mismatches
+   * (e.g., during resume flow race conditions). The return value is always
+   * consistent with state._activeStream.
    *
    * @param availableStreams - Array of stream IDs that are currently visible/available
-   * @returns The resolved active stream ID (may be empty string if no streams available)
+   * @returns The resolved active stream ID (current active if no streams available)
    */
   resolveActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const currentActive = this._activeStream;
@@ -159,20 +160,19 @@ export class ProgressViewState {
       return currentActive;
     }
 
-    // Otherwise, pick the first available stream (or empty if none)
-    const resolved = availableStreams[0] ?? '';
+    // Pick the first available stream, or preserve current if none available.
+    // Preserving current when availableStreams is empty prevents clearing content
+    // during temporary filter mismatches (e.g., during resume flow race conditions).
+    const resolved = availableStreams[0];
 
-    // Only update state if we have a valid resolved stream.
-    // Don't persist empty activeStream when availableStreams is empty -
-    // this could be a temporary filter mismatch (e.g., during resume flow).
-    // Clearing activeStream would cause refreshStreamSurface('') to send
-    // action: 'clear', wiping the frontend display incorrectly.
     if (resolved && resolved !== currentActive) {
       this._activeStream = resolved;
       this.saveActiveStream();
     }
 
-    return resolved;
+    // Return resolved if valid, otherwise preserve current active.
+    // This keeps return value consistent with state._activeStream.
+    return resolved || currentActive;
   }
 
   get streamSortOrder(): string {
