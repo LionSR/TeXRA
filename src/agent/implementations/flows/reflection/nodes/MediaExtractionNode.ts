@@ -11,14 +11,12 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';
 
 import {
-  getWorkspaceState,
-  updateWorkspaceSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
@@ -49,7 +47,9 @@ export class MediaExtractionNode<C = unknown> extends Node<
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
-    const workspaceState = getWorkspaceState(shared);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
     const files = getFilesForRound(
       currentRound,
       roundOutputs,
@@ -118,7 +118,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     mediaFiles: FileLocation[] | null,
   ): Promise<string | undefined> {
     // Always update workspace snapshot since prep() reconstructed it
-    updateWorkspaceSnapshot(shared, prepRes.workspaceState);
+    shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
     if (mediaFiles && mediaFiles.length > 0 && shared.context) {
       await this.services.modelHandler.addMediaToUserMessage(

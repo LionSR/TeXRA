@@ -126,7 +126,8 @@ export class DiagnosticsTool extends defineTool({
     if ('messages' in args && args.messages.length > 0) {
       const messageLines = args.messages.map((d) => {
         const line = d.range.start.line + 1; // VS Code lines are 0-indexed
-        const severity = ['error', 'warning', 'info', 'hint'][d.severity] ?? 'unknown';
+        const severity =
+          ['error', 'warning', 'info', 'hint'][d.severity] ?? 'unknown';
         return `  ${line}: [${severity}] ${d.message}`;
       });
       output = `${header}\n\n${messageLines.join('\n')}`;
