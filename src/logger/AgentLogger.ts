@@ -28,17 +28,29 @@ import type {
 import type { LogOptions } from './logOptions';
 
 /**
+ * Context management actions that can be logged.
+ * - compaction: OpenAI conversation compaction
+ * - clear_tool_uses: Anthropic server-side tool use clearing
+ * - clear_thinking: Anthropic server-side thinking clearing
+ * - truncation: Generic message/context truncation
+ * - max_tokens_reduced: Max output tokens reduced due to context pressure
+ */
+export const ContextManagementAction = z.enum([
+  'compaction',
+  'clear_tool_uses',
+  'clear_thinking',
+  'truncation',
+  'max_tokens_reduced',
+]);
+export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
+
+/**
  * Context management event data for logging compaction, truncation, etc.
  * Schema-first definition following project conventions (CLAUDE.md).
  */
 export const ContextManagementDataSchema = z.object({
   /** Type of context management action */
-  action: z.enum([
-    'compaction',
-    'clear_tool_uses',
-    'clear_thinking',
-    'truncation',
-  ]),
+  action: ContextManagementAction,
   /** Tokens before the action */
   tokensBefore: z.number().nonnegative(),
   /** Tokens after the action (if known) */
@@ -51,6 +63,10 @@ export const ContextManagementDataSchema = z.object({
   utilizationAfter: z.number().nonnegative().optional(),
   /** Provider-specific details */
   details: z.string().optional(),
+  /** Original max tokens before reduction (for max_tokens_reduced action) */
+  originalMaxTokens: z.number().positive().optional(),
+  /** Reduced max tokens after adjustment (for max_tokens_reduced action) */
+  reducedMaxTokens: z.number().positive().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
