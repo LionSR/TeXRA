@@ -1078,30 +1078,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * @returns {'workflow' | 'toolUse'} The normalized session type
    */
   _determineSessionType(canonicalSession, state) {
-    // Priority 1: Canonical session descriptor (single source of truth)
-    const category = canonicalSession?.agentCategory;
-    if (
-      category === SESSION_TYPES.TOOL_USE ||
-      category === SESSION_TYPES.WORKFLOW
-    ) {
-      return category;
+    const isValidSessionType = (value) =>
+      value === SESSION_TYPES.TOOL_USE || value === SESSION_TYPES.WORKFLOW;
+
+    // Priority order: canonical > explicit > inferred > default
+    const candidates = [
+      canonicalSession?.agentCategory,
+      state.sessionType,
+      canonicalSession?.agentType ?? state.agentType,
+    ];
+
+    for (const candidate of candidates) {
+      if (isValidSessionType(candidate)) {
+        return candidate;
+      }
     }
 
-    // Priority 2: Explicit sessionType property (for legacy/webview state)
-    if (
-      state.sessionType === SESSION_TYPES.TOOL_USE ||
-      state.sessionType === SESSION_TYPES.WORKFLOW
-    ) {
-      return state.sessionType;
-    }
-
-    // Priority 3: Infer from agentType or isToolUseAgent flag (legacy support)
-    const agentType = canonicalSession?.agentType ?? state.agentType;
-    if (agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent) {
+    // Legacy: check isToolUseAgent flag
+    if (state.isToolUseAgent) {
       return SESSION_TYPES.TOOL_USE;
     }
 
-    // Default to workflow
     return SESSION_TYPES.WORKFLOW;
   }
 
@@ -1111,20 +1108,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * separate workflowAgent/toolUseAgent fields for UI persistence.
    */
   _extractAgentValue(state, forToolUse, isCurrentlyToolUse) {
-    // Check for explicit session-specific agent value first (webview state format)
-    // Use nullish check (!= null) to preserve empty string as an explicit value
+    // Prefer explicit session-specific value (nullish check preserves empty string)
     const explicitValue = forToolUse ? state.toolUseAgent : state.workflowAgent;
     if (explicitValue != null) {
       return explicitValue;
     }
 
-    // Fall back to generic 'agent' field only if it matches the session type
-    // This prevents workflow agent from being assigned to tool-use dropdown and vice versa
-    if (state.agent != null && forToolUse === isCurrentlyToolUse) {
-      return state.agent;
-    }
-
-    return '';
+    // Use generic 'agent' only when it matches current session type
+    const shouldUseGenericAgent =
+      state.agent != null && forToolUse === isCurrentlyToolUse;
+    return shouldUseGenericAgent ? state.agent : '';
   }
 
   /**
@@ -1217,48 +1210,65 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   _restoreFileArrays(state, savedState, activeFiles = {}) {
     for (const fileType of FILE_TYPES) {
-      const filesArray =
-        state[`${fileType}Files`] ||
-        state[`multiple${capitalize(fileType)}Files`] ||
-        [];
-      const isVisible =
-        activeFiles[fileType] ||
-        state[`${fileType}FilesActive`] ||
-        state[`multiple${capitalize(fileType)}FilesActive`] ||
-        false;
+      const { files, isVisible } = this._getFileArrayState(
+        state,
+        activeFiles,
+        fileType,
+      );
 
-      const targetArrayName = `${fileType}Files`;
-      const visibilityName = `${targetArrayName}Active`;
-      savedState[targetArrayName] = filesArray;
-      savedState[visibilityName] = isVisible;
+      // Update savedState
+      savedState[`${fileType}Files`] = files;
+      savedState[`${fileType}FilesActive`] = isVisible;
 
-      const multipleFilesId = `${fileType}Files`;
-      const containerId = `${fileType}FilesContainer`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      // Update DOM
+      this._updateFileArrayDOM(fileType, files, isVisible);
+    }
+  }
 
-      const multipleFiles = this._getElement(multipleFilesId);
-      const container = this._getElement(containerId);
-      const toggleElement = this._getElement(toggleId);
+  /**
+   * Extract file array and visibility state for a file type.
+   */
+  _getFileArrayState(state, activeFiles, fileType) {
+    const capitalizedType = capitalize(fileType);
+    const files =
+      state[`${fileType}Files`] ||
+      state[`multiple${capitalizedType}Files`] ||
+      [];
+    const isVisible =
+      activeFiles[fileType] ||
+      state[`${fileType}FilesActive`] ||
+      state[`multiple${capitalizedType}FilesActive`] ||
+      false;
+    return { files, isVisible };
+  }
 
-      // Always clear existing files first to handle restoration to empty state
-      if (multipleFiles) {
-        multipleFiles.innerHTML = '';
-      }
+  /**
+   * Update DOM elements for a file array.
+   */
+  _updateFileArrayDOM(fileType, files, isVisible) {
+    const listId = `${fileType}Files`;
+    const containerId = `${fileType}FilesContainer`;
+    const toggleId = `toggle${capitalize(fileType)}Files`;
 
-      // Set container visibility and toggle icon
-      if (container) {
-        container.style.display = isVisible ? 'block' : 'none';
-      }
-      this._setToggleIcon(toggleElement, isVisible);
+    const listElement = this._getElement(listId);
+    const container = this._getElement(containerId);
 
-      // Add files if any
-      if (filesArray.length > 0 && multipleFiles) {
-        fileList._batchMode = true;
-        filesArray.forEach((file) => {
-          fileList.add(multipleFilesId, file);
-        });
-        fileList._batchMode = false;
-      }
+    // Clear existing content
+    if (listElement) {
+      listElement.innerHTML = '';
+    }
+
+    // Set visibility
+    if (container) {
+      container.style.display = isVisible ? 'block' : 'none';
+    }
+    this._setToggleIcon(this._getElement(toggleId), isVisible);
+
+    // Populate files in batch mode
+    if (files.length > 0 && listElement) {
+      fileList._batchMode = true;
+      files.forEach((file) => fileList.add(listId, file));
+      fileList._batchMode = false;
     }
   }
 
