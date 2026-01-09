@@ -19,36 +19,6 @@ const sortComparators = {
     (a.agent ?? '').localeCompare(b.agent ?? ''),
 } as const;
 
-function matchesAgentFilter(
-  sessionCategory: AgentCategory,
-  filter: AgentFilter,
-): boolean {
-  switch (filter) {
-    case 'all':
-      return true;
-    case 'toolUse':
-      return sessionCategory === AgentCategory.ToolUse;
-    case 'workflow':
-      return sessionCategory === AgentCategory.Workflow;
-    default:
-      return true;
-  }
-}
-
-function buildStreamLabel(
-  agentName: string,
-  inputFile: string,
-  sessionCategory: AgentCategory,
-): string {
-  if (sessionCategory === AgentCategory.ToolUse) {
-    return agentName;
-  }
-
-  const agentLabel = agentName;
-  const baseName = inputFile ? path.basename(inputFile) : '';
-  return baseName ? `${agentLabel}: ${baseName}` : agentLabel;
-}
-
 /**
  * Build metadata objects for all streams in the given state.
  */
@@ -77,8 +47,15 @@ export function buildStreamInfos(
       }
       // Default to Workflow for display purposes only when filter is "all"
       sessionCategory = AgentCategory.Workflow;
-    } else if (!matchesAgentFilter(sessionCategory, filter)) {
-      return acc;
+    } else {
+      // Inline filter matching: check if session category matches filter
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'toolUse' && sessionCategory === AgentCategory.ToolUse) ||
+        (filter === 'workflow' && sessionCategory === AgentCategory.Workflow);
+      if (!matchesFilter) {
+        return acc;
+      }
     }
 
     const agentType =
@@ -92,7 +69,13 @@ export function buildStreamInfos(
       ? isRemoteAgent(rawAgentName)
       : (hints.isRemote ?? false);
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(agentName, inputFile, sessionCategory);
+    // Build label: tool-use shows agent only, workflows show agent + file basename
+    const label =
+      sessionCategory === AgentCategory.ToolUse
+        ? agentName
+        : inputFile
+          ? `${agentName}: ${path.basename(inputFile)}`
+          : agentName;
     acc.push({
       name: id,
       label,
