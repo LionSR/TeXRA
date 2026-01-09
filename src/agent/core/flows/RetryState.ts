@@ -100,24 +100,6 @@ function getNodeRetryConfig(): NodeRetryConfig {
   };
 }
 
-// ============================================================================
-// State management
-// ============================================================================
-
-/**
- * Clears error state. Used internally by handleInvocationResult.
- */
-function clearRetryError(state: RetryState): void {
-  state.lastError = undefined;
-}
-
-/**
- * Records an error in retry state. Used internally by handleInvocationResult.
- */
-function recordRetryError(state: RetryState, error: RetryErrorInfo): void {
-  state.lastError = error;
-}
-
 /**
  * Result from manual retry prompt.
  */
@@ -516,8 +498,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   // Handle user cancellation (do NOT record error - distinguishes from failure)
   if (result.kind === 'cancelled') {
-    // Clear any previous error to ensure userCancelled detection works
-    clearRetryError(retryState);
+    retryState.lastError = undefined;
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
     return null;
@@ -525,11 +506,10 @@ export function handleInvocationResult<T extends { response: unknown }>(
 
   // Handle failure (all retries exhausted or non-retryable error)
   if (result.kind === 'failed') {
-    // Record error for caller access
-    recordRetryError(retryState, {
+    retryState.lastError = {
       message: result.message,
       retryable: false, // Already exhausted retries
-    });
+    };
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
     return null;
@@ -540,16 +520,16 @@ export function handleInvocationResult<T extends { response: unknown }>(
   // IMPORTANT: Record an error to prevent misclassification as user cancellation
   if (!result.response) {
     logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
-    recordRetryError(retryState, {
+    retryState.lastError = {
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
-    });
+    };
     state.shouldStop = true;
     state.endTurn = false; // Not a normal completion
     return null;
   }
 
   // Success with valid response - clear any previous error
-  clearRetryError(retryState);
+  retryState.lastError = undefined;
   return result;
 }
