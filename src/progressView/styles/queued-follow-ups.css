@@ -8,6 +8,8 @@
   border-radius: var(--radius);
   background-color: var(--vscode-inputValidation-infoBackground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
+  /* Align with textarea by accounting for action buttons width + gap */
+  margin-right: calc(28px + var(--spacing-small));
 }
 
 /* Override vscode-collapsible header padding */
