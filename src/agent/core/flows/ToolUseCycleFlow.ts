@@ -58,7 +58,7 @@ import {
 
 interface ToolValidationDiagnostics {
   type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: any;
+  issues: Array<Record<string, unknown>>;
   formatted: Array<{
     path: string;
     message: string;
@@ -68,16 +68,22 @@ interface ToolValidationDiagnostics {
   }>;
 }
 
+/**
+ * Parse tool input, handling various input formats from different model providers.
+ * Returns parsed JSON if input is a JSON string, otherwise returns input as-is.
+ */
 function parseToolInput(
   raw: unknown,
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw === null) {
+  // Handle null/undefined
+  if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
 
+  // Handle primitives (boolean, number) - pass through with warning
   if (typeof raw === 'boolean' || typeof raw === 'number') {
     logger.warn(
       `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
@@ -85,47 +91,77 @@ function parseToolInput(
     return raw;
   }
 
-  if (typeof raw !== 'string') return raw ?? {};
+  // Handle objects/arrays - pass through directly
+  if (typeof raw !== 'string') {
+    return raw;
+  }
+
+  // Handle strings - try to parse as JSON
   try {
     return JSON.parse(raw);
-  } catch (error) {
+  } catch {
     logger.warn(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
-      { data: error },
     );
     return raw;
   }
 }
 
+/** Check if an error is a Zod validation error (has issues array). */
+function isZodValidationError(
+  error: unknown,
+): error is { issues: Array<Record<string, unknown>> } {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'issues' in error &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
+/** Format a Zod issue into a readable diagnostic entry. */
+function formatZodIssue(issue: Record<string, unknown>): {
+  path: string;
+  message: string;
+  expected?: unknown;
+  received?: unknown;
+  code?: string;
+} {
+  return {
+    path: Array.isArray(issue.path) ? issue.path.join('.') : '',
+    message: String(issue.message ?? ''),
+    expected: issue.expected,
+    received: issue.received,
+    code: typeof issue.code === 'string' ? issue.code : undefined,
+  };
+}
+
+/**
+ * Normalize a tool call error into a user-friendly message with optional diagnostics.
+ */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ToolValidationDiagnostics } {
-  if (error && typeof error === 'object' && 'issues' in error) {
-    const zodError = error as { issues?: any[] };
-    const issues = Array.isArray(zodError.issues) ? zodError.issues : [];
+  // Handle Zod validation errors with structured diagnostics
+  if (isZodValidationError(error)) {
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-        issues,
-        formatted: issues.map((issue) => ({
-          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
-          message: issue.message,
-          expected: issue.expected,
-          received: issue.received,
-          code: issue.code,
-        })),
+        issues: error.issues,
+        formatted: error.issues.map(formatZodIssue),
       },
     };
   }
 
-  const fallbackMessage =
+  // Handle standard errors and unknown types
+  const message =
     error instanceof Error
       ? `${toolName}: ${error.message}`
       : `${toolName}: ${String(error)}`;
 
-  return { message: fallbackMessage };
+  return { message };
 }
 
 // ============================================================================
@@ -849,31 +885,46 @@ class ToolUseDispatchNode<C> extends BaseNode<
       data: toolUseLog,
     });
 
-    if (result.files && result.files.length > 0) {
-      const toAdd: FileLocation[] = [];
-      for (const attachment of result.files) {
-        const candidate = attachment.path;
-        if (typeof candidate !== 'string' || candidate.trim() === '') {
-          continue;
-        }
-        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
-        // including external paths outside the workspace
-        const location = pathToLocation(candidate);
-        try {
-          // Use AbsoluteFS for file existence check to support external paths
-          const exists = await AbsoluteFS.exists(location.absolutePath);
-          if (exists) {
-            toAdd.push(location);
-          }
-        } catch (_err) {
-          // Ignore errors when checking existence
-        }
-      }
-      if (toAdd.length > 0) {
-        // addMediaFiles handles deduplication (both within toAdd and against existing files)
-        workspace.media.addMediaFiles(toAdd);
-      }
+    // Process media file attachments if present
+    const mediaLocations = await this.collectValidMediaLocations(result.files);
+    if (mediaLocations.length > 0) {
+      workspace.media.addMediaFiles(mediaLocations);
     }
+  }
+
+  /**
+   * Collect valid file locations from tool result attachments.
+   * Filters out invalid paths and non-existent files.
+   * Uses parallel file existence checks for better performance.
+   */
+  private async collectValidMediaLocations(
+    files: ToolResult['files'],
+  ): Promise<FileLocation[]> {
+    if (!files || files.length === 0) {
+      return [];
+    }
+
+    const results = await Promise.all(
+      files.map(async (attachment) => {
+        const path = attachment.path;
+
+        // Skip invalid paths
+        if (typeof path !== 'string' || path.trim() === '') {
+          return null;
+        }
+
+        const location = pathToLocation(path);
+
+        // Check if file exists (ignore errors)
+        try {
+          return (await AbsoluteFS.exists(location.absolutePath)) ? location : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    return results.filter((loc): loc is FileLocation => loc !== null);
   }
 
   /**
