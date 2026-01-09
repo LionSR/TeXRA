@@ -14,6 +14,24 @@ import {
 import { normalizeToolUseLog, stringifyForDisplay } from '../normalizers.js';
 import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
 
+// Web search provider display names
+const PROVIDER_LABELS = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+};
+
+// Web search status suffixes for title
+const STATUS_SUFFIXES = {
+  in_progress: ' (searching...)',
+  failed: ' (failed)',
+};
+
+// Web search status-based icon classes
+const STATUS_ICONS = {
+  failed: 'codicon codicon-error',
+  in_progress: 'codicon codicon-sync spin',
+};
+
 /**
  * Create and initialize a tool-style element from template
  * @param {string} logId - Log entry ID
@@ -22,7 +40,7 @@ import { QUERY_PREVIEW_MAX_LENGTH } from '../constants.js';
  * @param {string} iconClass - Initial icon class (e.g., 'codicon-wrench')
  * @returns {{element: HTMLElement, headerLabel: HTMLElement|null, iconElem: HTMLElement|null, contentElem: HTMLElement|null}|null}
  */
-const createToolElement = (logId, groupId, timestamp, iconClass) => {
+function createToolElement(logId, groupId, timestamp, iconClass) {
   const element = createFromTemplate('toolUseTemplate');
   if (!element) return null;
 
@@ -37,7 +55,7 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
   element.classList.remove('tool-use-error');
 
   return { element, headerLabel, iconElem, contentElem };
-};
+}
 
 /**
  * Format tool use log entry
@@ -47,7 +65,7 @@ const createToolElement = (logId, groupId, timestamp, iconClass) => {
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} Tool use element or null
  */
-export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
+export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const { structured } = normalizedPayload ?? {};
   const normalizedToolLog = normalizeToolUseLog(structured);
 
@@ -76,7 +94,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
   const toolElement = createToolElement(logId, groupId, timestamp, iconClass);
   if (!toolElement) return null;
 
-  const { element, headerLabel, iconElem, contentElem } = toolElement;
+  const { element, headerLabel, contentElem } = toolElement;
 
   // Build title based on state
   const titlePrefix = isUserFeedback
@@ -111,8 +129,6 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
     }
   }
 
-  // Note: File path is already in headerSummary, so we skip the Files section
-
   // Show output if present (primary result from tool)
   if (outputText) {
     sections.push(
@@ -142,7 +158,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
       : sections.join('<hr class="tool-use-separator">');
 
   return element;
-};
+}
 
 /**
  * Format web search results from native provider tools (Anthropic, OpenAI)
@@ -152,12 +168,7 @@ export const formatToolUse = (normalizedPayload, logId, groupId, timestamp) => {
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} Web search element or null
  */
-export const formatWebSearch = (
-  normalizedPayload,
-  logId,
-  groupId,
-  timestamp,
-) => {
+export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   const toolElement = createToolElement(
     logId,
     groupId,
@@ -180,15 +191,7 @@ export const formatWebSearch = (
   const { query, results, provider, status } = structured;
   const resultCount = Array.isArray(results) ? results.length : 0;
 
-  // Provider display names
-  const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI' };
   const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
-
-  // Status suffixes
-  const STATUS_SUFFIXES = {
-    in_progress: ' (searching...)',
-    failed: ' (failed)',
-  };
   const statusSuffix = STATUS_SUFFIXES[status] ?? '';
 
   // Build query preview
@@ -196,12 +199,6 @@ export const formatWebSearch = (
     ? `: "${query.length > QUERY_PREVIEW_MAX_LENGTH ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...' : query}"`
     : '';
   const titleText = `${providerLabel} Search${queryPreview}${statusSuffix}`;
-
-  // Status-based icon classes
-  const STATUS_ICONS = {
-    failed: 'codicon codicon-error',
-    in_progress: 'codicon codicon-sync spin',
-  };
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
@@ -255,4 +252,4 @@ export const formatWebSearch = (
       : sections.join('<hr class="tool-use-separator">');
 
   return element;
-};
+}
