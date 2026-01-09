@@ -592,7 +592,9 @@ export class ProgressEventHandler {
     const { updateInstruction = true, forceRebuild = false } = options;
 
     if (!stream) {
-      this.webviewUpdater.updateLogContent('', [], [], undefined, true);
+      // No active stream: explicitly clear content with clearContent: true.
+      // This is an intentional clear (not a bug), so we pass the explicit flag.
+      this.webviewUpdater.updateLogContent('', [], [], undefined, true, true);
       this.webviewUpdater.updateFiles('', { reset: true });
       this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
