@@ -122,6 +122,11 @@ export class WebviewUpdater {
       activeRunId?: string | null;
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+      contextState?: {
+        inputTokens: number;
+        contextWindow: number;
+        utilizationPercent: number;
+      };
     },
     action: 'render' | 'clear' = 'render',
   ): void {
@@ -134,6 +139,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
+      contextState: extras?.contextState,
       action,
     });
   }
