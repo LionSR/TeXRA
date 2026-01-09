@@ -470,7 +470,10 @@ interface InvocationResultHandlerOptions {
  * failure, or empty response). This distinction is important for
  * determining whether to persist state for resume.
  */
-function markFlowStopped(state: { shouldStop: boolean; endTurn: boolean }): void {
+function markFlowStopped(state: {
+  shouldStop: boolean;
+  endTurn: boolean;
+}): void {
   state.shouldStop = true;
   state.endTurn = false;
 }

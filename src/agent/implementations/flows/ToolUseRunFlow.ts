@@ -74,9 +74,7 @@ type CycleExecResult =
   | { kind: 'failed'; message: string }
   | { kind: 'cancelled' };
 
-type WaitExecResult =
-  | { kind: 'continue'; followUp: string }
-  | { kind: 'stop' };
+type WaitExecResult = { kind: 'continue'; followUp: string } | { kind: 'stop' };
 
 interface CyclePrepResult {
   shouldSkip: boolean;
@@ -192,8 +190,13 @@ class ToolUsePrepareNode<C> extends Node<
         : new Error(String(execRes.error));
     }
 
-    const { messages, runState, workspaceState, userChannels, shouldSkipCycle } =
-      execRes.result;
+    const {
+      messages,
+      runState,
+      workspaceState,
+      userChannels,
+      shouldSkipCycle,
+    } = execRes.result;
     shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.stateSlices = {

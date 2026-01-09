@@ -92,7 +92,13 @@ export class OutputNode<C = unknown> extends Node<
 
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputHandler, setting, logger } = this.services;
-    const { currentRound, outputLocation, endTurn, baseFiles, ensureXmlStructure } = prepRes;
+    const {
+      currentRound,
+      outputLocation,
+      endTurn,
+      baseFiles,
+      ensureXmlStructure,
+    } = prepRes;
 
     // Only process if turn ended (model completed response)
     if (endTurn) {
@@ -101,7 +107,11 @@ export class OutputNode<C = unknown> extends Node<
       if (ensureXmlStructure) {
         await tryOperation(
           'XML structure',
-          () => outputHandler.ensureXmlStructure(outputLocation, setting.documentTag ?? 'document'),
+          () =>
+            outputHandler.ensureXmlStructure(
+              outputLocation,
+              setting.documentTag ?? 'document',
+            ),
           logger,
         );
       }
@@ -123,7 +133,8 @@ export class OutputNode<C = unknown> extends Node<
 
     await tryOperation(
       'Round finalization',
-      () => outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+      () =>
+        outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
       logger,
     );
 
