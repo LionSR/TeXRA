@@ -79,16 +79,7 @@ export interface ReflectionServices<
    */
   readonly shouldEnsureXmlStructure: boolean;
 
-  /**
-   * Get usage recorder callback for tracking round statistics.
-   * Returns a callback that will be invoked when a round finalizes.
-   */
   readonly getUsageRecorder: () => RoundFinalizedCallback;
-
-  /**
-   * Base files for latexdiff operations.
-   * Pre-computed once in runReflectionFlow to avoid redundant recalculation.
-   */
   readonly baseFiles: WorkspaceFileLocation[];
 }
 
