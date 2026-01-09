@@ -6,8 +6,11 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolFileAttachment } from '@tools/result';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import {
+  formatToolResultAsText,
+  type ToolResultPayload,
+} from './utils/toolAttachmentUtils';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
-import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 // Type imports
 import type { DeepSeekToolCall } from './types/IModelHandler';
@@ -159,10 +162,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     );
 
     // Result is already sanitized by source - attachments are ignored
+    // Use plain text instead of JSON (Claude Code pattern) to save tokens
     const resultMsg = {
       role: 'tool' as const,
       tool_call_id: toolCall.id,
-      content: JSON.stringify(result),
+      content: formatToolResultAsText(result),
     };
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
@@ -220,11 +224,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
     // with reasoning_content field that OpenAI's types don't know about
-    // Build tool result messages (results are already sanitized by source)
+    // Build tool result messages - use plain text instead of JSON to save tokens
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
       tool_call_id: call.id,
-      content: JSON.stringify(results[i]),
+      content: formatToolResultAsText(results[i]),
     }));
 
     return [callMsg as ChatCompletionMessageParam, ...toolResultMessages];
