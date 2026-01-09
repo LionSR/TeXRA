@@ -99,10 +99,8 @@ export class RunUsageAccumulator {
 
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
     if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens =
-        usage.inputTokens +
-        (usage.cachedInputTokens ?? 0) +
-        (usage.cacheCreationTokens ?? 0);
+      // inputTokens already includes cached tokens (total context measurement)
+      this.totals.firstInputTokens = usage.inputTokens;
     }
 
     this.totals.totalInputTokens += usage.inputTokens;
