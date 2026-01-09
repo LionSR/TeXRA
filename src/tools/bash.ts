@@ -17,7 +17,9 @@ export type BashInput = z.infer<typeof BashInputSchema>;
 export class BashTool extends defineTool({
   name: 'bash',
   description:
-    'Execute shell commands. Returns stdout on success, throws error with stderr on failure.',
+    'Execute shell commands. Returns stdout on success, throws error with stderr on failure. ' +
+    'WARNING: For text replacement in files, use edit_file instead of bash+sed - ' +
+    'sed has escaping issues with special characters, file paths with spaces, and LaTeX patterns.',
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
