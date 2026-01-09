@@ -304,6 +304,29 @@ export const formatLatexdiff = (normalizedPayload, logId) => {
   return element;
 };
 
+// Statistics field configuration: [key, icon, label, formatter]
+const STAT_FIELDS = [
+  ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
+  ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
+  ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
+  ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
+  [
+    'percentageCached',
+    'codicon-graph-line',
+    'Cached %',
+    (v) => `${v.toFixed(2)}%`,
+  ],
+  [
+    'reasoningTokens',
+    'codicon-comment-discussion',
+    'Reasoning tokens',
+    formatTokens,
+  ],
+  ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
+  ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
+  ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+];
+
 /**
  * Format statistics entry
  * @param {object} normalizedPayload - Normalized payload
@@ -321,68 +344,10 @@ export const formatStatistics = (normalizedPayload, logId) => {
     return null;
   }
 
-  const items = [];
-  const pushItem = (icon, label, value, suffix = '') => {
-    items.push(
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
-    );
-  };
-
-  if (parsed.inputTokens !== undefined) {
-    pushItem(
-      'codicon-arrow-up',
-      'Input tokens',
-      formatTokens(parsed.inputTokens),
-    );
-  }
-  if (parsed.outputTokens !== undefined) {
-    pushItem(
-      'codicon-arrow-down',
-      'Output tokens',
-      formatTokens(parsed.outputTokens),
-    );
-  }
-  if (parsed.cacheReadInputTokens !== undefined) {
-    pushItem(
-      'codicon-history',
-      'Cache hits',
-      formatTokens(parsed.cacheReadInputTokens),
-    );
-  }
-  if (parsed.cacheCreationInputTokens !== undefined) {
-    pushItem(
-      'codicon-save',
-      'Cache writes',
-      formatTokens(parsed.cacheCreationInputTokens),
-    );
-  }
-  if (parsed.percentageCached !== undefined) {
-    pushItem(
-      'codicon-graph-line',
-      'Cached %',
-      `${parsed.percentageCached.toFixed(2)}%`,
-    );
-  }
-  if (parsed.reasoningTokens !== undefined) {
-    pushItem(
-      'codicon-comment-discussion',
-      'Reasoning tokens',
-      formatTokens(parsed.reasoningTokens),
-    );
-  }
-  if (parsed.toolUseTokens !== undefined) {
-    pushItem(
-      'codicon-tools',
-      'Tool tokens',
-      formatTokens(parsed.toolUseTokens),
-    );
-  }
-  if (parsed.elapsedTime !== undefined) {
-    pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
-  }
-  if (parsed.cost !== undefined) {
-    pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
-  }
+  const items = STAT_FIELDS.filter(([key]) => parsed[key] !== undefined).map(
+    ([key, icon, label, formatter]) =>
+      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(parsed[key])}</span>`,
+  );
 
   if (contentElem) {
     contentElem.innerHTML = items.join('');
