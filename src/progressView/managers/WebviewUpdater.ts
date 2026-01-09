@@ -100,9 +100,15 @@ export class WebviewUpdater {
 
   /**
    * Update log content for a specific stream.
-   * @param forceRebuild - Controls frontend DOM rebuild behavior:
-   *   - `true`: Full DOM rebuild (stream switch, data deletion, first load)
-   *   - `false`: Incremental update only (same stream, metadata changes)
+   *
+   * Behavior based on flags:
+   * - `clearContent: true` → Explicitly clear DOM content (for stream deletion, no active stream)
+   * - `forceRebuild: true` with messages → Clear and rebuild with new content (stream switch)
+   * - `forceRebuild: true` without messages → Preserve existing content (safety guard)
+   * - `forceRebuild: false` → Incremental update only (metadata changes)
+   *
+   * @param forceRebuild - Whether a full DOM rebuild is intended
+   * @param clearContent - Whether to explicitly clear content (use for intentional clearing)
    */
   updateLogContent(
     stream: StreamTabId,
@@ -115,6 +121,7 @@ export class WebviewUpdater {
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
     forceRebuild: boolean = false,
+    clearContent: boolean = false,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -126,6 +133,7 @@ export class WebviewUpdater {
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
       forceRebuild,
+      clearContent,
     });
   }
 
