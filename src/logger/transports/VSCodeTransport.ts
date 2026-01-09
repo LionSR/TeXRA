@@ -159,10 +159,7 @@ export class VSCodeTransport extends Transport {
    * Parse and emit context state for CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
    * Each message type uses a different schema and derivation logic.
    */
-  private maybeEmitContextState(
-    messageType: MessageType,
-    data: unknown,
-  ): void {
+  private maybeEmitContextState(messageType: MessageType, data: unknown): void {
     if (!data) return;
 
     switch (messageType) {

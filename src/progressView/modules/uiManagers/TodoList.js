@@ -87,7 +87,8 @@ export class TodoList {
    */
   _createTodoItem(todo) {
     const isInProgress = todo.status === TODO_STATUS.IN_PROGRESS;
-    const iconName = STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
+    const iconName =
+      STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
 
     const item = document.createElement('div');
     item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
