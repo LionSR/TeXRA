@@ -393,17 +393,35 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // forceRebuild is now always a boolean from backend:
-    // - false: Incremental update only (same stream, metadata changes)
-    // - true: Full DOM rebuild (stream switch, data deletion, first load)
-    if (!message.forceRebuild) {
+    const logMessages = message.messages ?? [];
+
+    // Determine rebuild strategy based on explicit flags:
+    //
+    // clearContent: Explicit signal to clear DOM content (e.g., no active stream,
+    //               stream deletion). When true, we clear even with empty messages.
+    //
+    // forceRebuild: Signal that a full DOM rebuild is appropriate. However:
+    //   - forceRebuild: true with messages → Clear and rebuild
+    //   - forceRebuild: true without messages → Preserve content (safety guard)
+    //                   This prevents data loss from race conditions, filter mismatches,
+    //                   or other edge cases where forceRebuild is set but data isn't ready.
+    //
+    // forceRebuild: false → Incremental update only (metadata changes)
+    //
+    // The clearContent flag makes intent explicit and removes ambiguity from the
+    // "forceRebuild: true with empty messages" case that previously caused bugs.
+    const explicitClear = Boolean(message.clearContent);
+    const hasMessages = logMessages.length > 0;
+    const shouldFullRebuild =
+      explicitClear || (message.forceRebuild && hasMessages);
+
+    if (!shouldFullRebuild) {
       this._handleIncrementalUpdate(message);
       this._updatePlaceholderVisibility();
       return;
     }
 
-    // Full rebuild path
-    const logMessages = message.messages ?? [];
+    // Full rebuild path: clear and rebuild (either explicit clear or have messages)
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
