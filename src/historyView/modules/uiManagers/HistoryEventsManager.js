@@ -13,39 +13,9 @@ export class HistoryEventsManager {
   }
 
   setup() {
-    const searchInput = document.getElementById(ELEMENT_IDS.SEARCH_INPUT);
     const searchHandler = debounce((e) => {
-      const term = e.target.value.trim();
-      this.searchManager.search(term);
+      this.searchManager.search(e.target.value.trim());
     }, 300);
-    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'input', searchHandler);
-    if (searchInput) {
-      this.handlers.push({
-        element: searchInput,
-        type: 'input',
-        handler: searchHandler,
-      });
-    }
-
-    const prevHandler = () => this.searchManager.navigatePrev();
-    addEventListenerSafely(ELEMENT_IDS.PREV_MATCH, 'click', prevHandler);
-    const prevEl = document.getElementById(ELEMENT_IDS.PREV_MATCH);
-    if (prevEl)
-      this.handlers.push({
-        element: prevEl,
-        type: 'click',
-        handler: prevHandler,
-      });
-
-    const nextHandler = () => this.searchManager.navigateNext();
-    addEventListenerSafely(ELEMENT_IDS.NEXT_MATCH, 'click', nextHandler);
-    const nextEl = document.getElementById(ELEMENT_IDS.NEXT_MATCH);
-    if (nextEl)
-      this.handlers.push({
-        element: nextEl,
-        type: 'click',
-        handler: nextHandler,
-      });
 
     const keyHandler = (e) => {
       if (e.key === 'Enter') {
@@ -57,13 +27,22 @@ export class HistoryEventsManager {
         }
       }
     };
-    addEventListenerSafely(ELEMENT_IDS.SEARCH_INPUT, 'keydown', keyHandler);
-    if (searchInput) {
-      this.handlers.push({
-        element: searchInput,
-        type: 'keydown',
-        handler: keyHandler,
-      });
+
+    this._registerHandler(ELEMENT_IDS.SEARCH_INPUT, 'input', searchHandler);
+    this._registerHandler(ELEMENT_IDS.SEARCH_INPUT, 'keydown', keyHandler);
+    this._registerHandler(ELEMENT_IDS.PREV_MATCH, 'click', () =>
+      this.searchManager.navigatePrev(),
+    );
+    this._registerHandler(ELEMENT_IDS.NEXT_MATCH, 'click', () =>
+      this.searchManager.navigateNext(),
+    );
+  }
+
+  _registerHandler(elementId, eventType, handler) {
+    addEventListenerSafely(elementId, eventType, handler);
+    const element = document.getElementById(elementId);
+    if (element) {
+      this.handlers.push({ element, type: eventType, handler });
     }
   }
 
