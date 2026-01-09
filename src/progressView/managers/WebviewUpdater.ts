@@ -53,22 +53,13 @@ export class WebviewUpdater {
   static createInstructionUpdate(
     taskState?: TaskState,
   ): InstructionUpdate | undefined {
-    if (!taskState) {
+    const text = taskState?.agentConfig?.instruction?.trim();
+    if (!text) {
       return undefined;
     }
 
-    const text = taskState.agentConfig?.instruction ?? '';
-    const normalized = text.trim();
-    if (!normalized) {
-      return undefined;
-    }
-
-    const metadata = WebviewUpdater.computeInstructionMetadata(normalized);
-    const payload: InstructionUpdate = { text: normalized };
-    if (metadata) {
-      payload.metadata = metadata;
-    }
-    return payload;
+    const metadata = WebviewUpdater.computeInstructionMetadata(text);
+    return metadata ? { text, metadata } : { text };
   }
 
   private static computeInstructionMetadata(
