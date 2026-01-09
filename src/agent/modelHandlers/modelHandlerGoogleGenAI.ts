@@ -1323,7 +1323,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      attachmentSummary = formatAttachmentSummary(attachments, 'included-inline');
+      attachmentSummary = formatAttachmentSummary(
+        attachments,
+        'included-inline',
+      );
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
@@ -1344,7 +1347,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Google SDK requires Record<string, unknown> for response parameter,
     // so we must wrap the text in an object (unlike OpenAI which accepts string)
-    const simplifiedResult = { result: formatToolResultAsText(result, attachmentSummary) };
+    const simplifiedResult = {
+      result: formatToolResultAsText(result, attachmentSummary),
+    };
 
     // Use SDK's createPartFromFunctionResponse with native attachment support
     // The 4th parameter accepts FunctionResponsePart[] for media attachments
