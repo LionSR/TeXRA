@@ -199,27 +199,30 @@ export class StreamTabs {
       agentIcon.title = `Agent type: ${decorator.label}`;
     }
 
-    // Remote agent icon
-    const remoteIcon = tabEl.querySelector('.remote-agent');
-    if (remoteIcon) {
-      if (info.isRemote) {
-        const { icon, hint } = AGENT_DECORATORS.properties.remote;
-        applyCodiconClass(remoteIcon, icon);
-        remoteIcon.title = hint;
-      } else {
-        remoteIcon.remove();
-      }
-    }
+    // Property-based decorators (remote, multipleOutputs)
+    const propertyDecorators = [
+      {
+        selector: '.remote-agent',
+        condition: info.isRemote,
+        property: 'remote',
+      },
+      {
+        selector: '.multi-file',
+        condition: info.hasMultipleOutputs,
+        property: 'multipleOutputs',
+      },
+    ];
 
-    // Multiple outputs icon
-    const multiIcon = tabEl.querySelector('.multi-file');
-    if (multiIcon) {
-      if (info.hasMultipleOutputs) {
-        const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
-        applyCodiconClass(multiIcon, icon);
-        multiIcon.title = hint;
+    for (const { selector, condition, property } of propertyDecorators) {
+      const iconEl = tabEl.querySelector(selector);
+      if (!iconEl) continue;
+
+      if (condition) {
+        const { icon, hint } = AGENT_DECORATORS.properties[property];
+        applyCodiconClass(iconEl, icon);
+        iconEl.title = hint;
       } else {
-        multiIcon.remove();
+        iconEl.remove();
       }
     }
   }
