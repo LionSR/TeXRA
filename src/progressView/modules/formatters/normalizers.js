@@ -187,7 +187,10 @@ export function normalizeToolUseLog(structured) {
     outputDetails.userInstruction,
   );
 
-  const outputContent = extractOutputContent(structured.output ?? outputDetails.output);
+  // Use explicit undefined check to preserve null as a valid explicit value
+  const outputCandidate =
+    structured.output !== undefined ? structured.output : outputDetails.output;
+  const outputContent = extractOutputContent(outputCandidate);
   const isEmptyObject =
     isPlainObject(outputContent) && Object.keys(outputContent).length === 0;
 
