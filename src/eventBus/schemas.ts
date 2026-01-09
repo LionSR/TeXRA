@@ -58,19 +58,19 @@ export const RunScopedPayloadSchema = z.strictObject({
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
 
-/**
- * Todo status constants - single source of truth for todo item states.
- * Used by tool-use agents for task tracking.
- */
+/** Todo status values - single source of truth for todo item states. */
+const todoStatusValues = ['pending', 'in_progress', 'completed'] as const;
+
+/** Todo status constants for programmatic access. */
 export const TODO_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
-} as const;
+} as const satisfies Record<string, (typeof todoStatusValues)[number]>;
 
 /** Status of a todo item */
 export const TodoStatusSchema = z
-  .enum([TODO_STATUS.PENDING, TODO_STATUS.IN_PROGRESS, TODO_STATUS.COMPLETED])
+  .enum(todoStatusValues)
   .describe('Current status of the task');
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 
