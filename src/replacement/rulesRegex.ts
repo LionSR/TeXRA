@@ -8,6 +8,10 @@ import {
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
 
+function getSafeString(value: string | number | undefined): string {
+  return typeof value === 'string' ? value : '';
+}
+
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
   leadingBreak,
@@ -17,22 +21,17 @@ const convertFencedLatexBlock: ReplacementFunction = (
   inlineBody,
 ) => {
   const newline = match.includes('\r\n') ? '\r\n' : '\n';
-  const safeLeadingBreak = typeof leadingBreak === 'string' ? leadingBreak : '';
-  const safeIndent = typeof indent === 'string' ? indent : '';
-  const safeEnvironment = typeof environment === 'string' ? environment : '';
-  const safeBody =
-    typeof multilineBody === 'string'
-      ? multilineBody
-      : typeof inlineBody === 'string'
-        ? inlineBody
-        : '';
+  const safeLeadingBreak = getSafeString(leadingBreak);
+  const safeIndent = getSafeString(indent);
+  const safeEnvironment = getSafeString(environment);
+  const safeBody = getSafeString(multilineBody) || getSafeString(inlineBody);
 
-  const bodyWithTrailingBreak =
-    safeBody === ''
-      ? ''
-      : safeBody.endsWith(newline)
-        ? safeBody
-        : `${safeBody}${newline}`;
+  let bodyWithTrailingBreak = '';
+  if (safeBody !== '') {
+    bodyWithTrailingBreak = safeBody.endsWith(newline)
+      ? safeBody
+      : `${safeBody}${newline}`;
+  }
   const emptyBodyPadding = safeBody === '' ? newline : '';
 
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
