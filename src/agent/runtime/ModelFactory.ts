@@ -38,23 +38,16 @@ const PROVIDER_HANDLERS = new Map<
 export class ModelFactory {
   /** Creates a model handler instance based on provider and routing configuration. */
   static createHandler(config: ModelConfig): ModelHandler {
-    // OpenAI models requiring Responses API bypass OpenRouter
-    if (config.provider === ModelProvider.OPENAI) {
-      if (config.requiresResponsesAPI) {
-        logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
-        return new ModelHandlerOpenAIResponse(config);
-      }
-
-      const useResponsesAPI =
-        getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
-        config.fullName.startsWith('gpt-oss');
-      if (useResponsesAPI) {
-        logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
-        return new ModelHandlerOpenAIResponse(config);
-      }
+    // Models requiring Responses API must bypass OpenRouter (e.g., deep research)
+    if (
+      config.provider === ModelProvider.OPENAI &&
+      config.requiresResponsesAPI
+    ) {
+      logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
+      return new ModelHandlerOpenAIResponse(config);
     }
 
-    // Route through OpenRouter if configured
+    // Route through OpenRouter if configured (takes precedence over optional Responses API)
     const useOpenRouter =
       config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false);
@@ -66,6 +59,17 @@ export class ModelFactory {
         return new ModelHandlerAnthropicViaOpenRouter(config);
       }
       return new ModelHandlerOpenRouter(config);
+    }
+
+    // Check for optional OpenAI Responses API usage (only when not using OpenRouter)
+    if (config.provider === ModelProvider.OPENAI) {
+      const useResponsesAPI =
+        getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+        config.fullName.startsWith('gpt-oss');
+      if (useResponsesAPI) {
+        logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+        return new ModelHandlerOpenAIResponse(config);
+      }
     }
 
     // Use direct provider handler
