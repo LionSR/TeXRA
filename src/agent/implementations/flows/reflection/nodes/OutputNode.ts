@@ -78,43 +78,45 @@ export class OutputNode<C = unknown> extends Node<
       ensureXmlStructure,
     } = prepRes;
 
+    // Helper for non-critical operations that can fail gracefully
+    const tryOperation = async (
+      label: string,
+      operation: () => Promise<void>,
+    ): Promise<void> => {
+      try {
+        await operation();
+      } catch (error) {
+        logger.warn(`${label} failed: ${toErrorMessage(error)}`);
+      }
+    };
+
     // Only process if turn ended (model completed response)
     if (endTurn) {
       logger.debug(`Processing output for round ${currentRound}`);
 
       if (ensureXmlStructure) {
-        try {
-          await outputHandler.ensureXmlStructure(
+        await tryOperation('XML structure', () =>
+          outputHandler.ensureXmlStructure(
             outputLocation,
             setting.documentTag ?? 'document',
-          );
-        } catch (error) {
-          logger.warn(`XML structure failed: ${toErrorMessage(error)}`);
-        }
+          ),
+        );
       }
 
-      try {
-        await outputHandler.processOutputFiles(outputLocation, currentRound);
-      } catch (error) {
-        logger.warn(`Output processing failed: ${toErrorMessage(error)}`);
-      }
+      await tryOperation('Output processing', () =>
+        outputHandler.processOutputFiles(outputLocation, currentRound),
+      );
 
       if (outputHandler.hasRoundOutputs(currentRound)) {
-        try {
-          await this.handleLatexdiff(currentRound, baseFiles);
-        } catch (error) {
-          logger.warn(`Latexdiff failed: ${toErrorMessage(error)}`);
-        }
+        await tryOperation('Latexdiff', () =>
+          this.handleLatexdiff(currentRound, baseFiles),
+        );
       }
     }
 
-    try {
-      await outputHandler.finalizeRound(outputLocation, currentRound, {
-        endTurn,
-      });
-    } catch (error) {
-      logger.warn(`Round finalization failed: ${toErrorMessage(error)}`);
-    }
+    await tryOperation('Round finalization', () =>
+      outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+    );
 
     // Get round artifacts - this is critical, throw if it fails
     return await outputHandler.getRoundArtifacts(currentRound);
