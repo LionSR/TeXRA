@@ -21,11 +21,7 @@ const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
 function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
-  if (!Array.isArray(files) || files.length === 0) {
-    return [];
-  }
-
-  return files;
+  return files?.length ? files : [];
 }
 
 export class ExecutionManager {
