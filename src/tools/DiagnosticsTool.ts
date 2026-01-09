@@ -108,9 +108,35 @@ export class DiagnosticsTool extends defineTool({
       ...('messages' in args ? { messages: args.messages } : {}),
     };
 
+    // Build human-readable output
+    const { errors = 0, warnings = 0, info = 0, hints = 0 } = args.severity;
+    const counts = [
+      errors > 0 && `${errors} error${errors === 1 ? '' : 's'}`,
+      warnings > 0 && `${warnings} warning${warnings === 1 ? '' : 's'}`,
+      info > 0 && `${info} info`,
+      hints > 0 && `${hints} hint${hints === 1 ? '' : 's'}`,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    // For 'list' command, include actual diagnostic messages so model can see them
+    // Always include file path so model knows which file diagnostics belong to
+    let output: string;
+    const header = `${args.path}: ${counts || 'No issues found'}`;
+    if ('messages' in args && args.messages.length > 0) {
+      const messageLines = args.messages.map((d) => {
+        const line = d.range.start.line + 1; // VS Code lines are 0-indexed
+        const severity = ['error', 'warning', 'info', 'hint'][d.severity] ?? 'unknown';
+        return `  ${line}: [${severity}] ${d.message}`;
+      });
+      output = `${header}\n\n${messageLines.join('\n')}`;
+    } else {
+      output = header;
+    }
+
     return {
       summary: args.summary,
-      output: JSON.stringify(payload, null, 2),
+      output,
       diagnostics: payload,
     };
   }

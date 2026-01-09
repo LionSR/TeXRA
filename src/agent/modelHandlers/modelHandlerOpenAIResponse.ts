@@ -37,6 +37,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 // Local file imports
 import {
   formatAttachmentSummary,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1694,15 +1695,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       finalResult.attachmentSummary = formatAttachmentSummary(attachments);
     }
 
-    const primaryText = isNonEmptyString(result.output)
-      ? result.output
-      : isNonEmptyString(result.summary)
-        ? result.summary
-        : undefined;
-    const summaryPayload = JSON.stringify(finalResult, null, 2);
-    const combinedText = primaryText
-      ? `${primaryText}\n\n${summaryPayload}`
-      : summaryPayload;
+    // Build tool result as plain text - JSON wastes tokens
+    const combinedText = formatToolResultAsText(result, finalResult.attachmentSummary);
 
     let outputPayload: string | ResponseFunctionCallOutputItemList;
 
