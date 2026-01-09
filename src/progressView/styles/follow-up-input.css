@@ -24,17 +24,19 @@
   box-sizing: border-box;
 }
 
-/* Input row children participate directly in grid */
+/* Input row spans full width, uses flexbox internally for reliable alignment */
 .follow-up-input-row {
-  display: contents;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-small);
+  grid-column: 1 / -1;
 }
 
 /* Style the textarea for multi-line input */
 #followUpInput {
   display: block;
-  grid-column: 1;
-  align-self: end;
-  min-width: 0; /* Allow shrinking below default 320px */
+  flex: 1; /* Fill remaining space, staying adjacent to buttons */
+  min-width: 0; /* Allow shrinking below vscode-textarea default 320px */
   line-height: 1.4;
   min-height: 106px;
   max-height: var(--height-xlarge);
@@ -53,6 +55,5 @@ vscode-toolbar-container.follow-up-actions {
   display: flex;
   flex-direction: column !important;
   align-items: center;
-  align-self: end;
   gap: var(--spacing-small);
 }
