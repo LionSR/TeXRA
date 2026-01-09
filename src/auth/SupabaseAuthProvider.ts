@@ -451,33 +451,36 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
     // Extract provider from scopes (format: "provider:github", "provider:github-browser", or "provider:google")
-    const providerScope = scopes.find((s) => s.startsWith('provider:'));
-    const requestedProvider = providerScope?.split(':')[1];
+    const requestedProvider = scopes
+      .find((s) => s.startsWith('provider:'))
+      ?.split(':')[1];
 
-    // Handle github-browser as a special case - use browser OAuth flow for GitHub
-    if (requestedProvider === 'github-browser') {
-      logger.info(
-        'SupabaseAuthProvider',
-        'Using browser-based GitHub auth (Supabase OAuth flow)',
-      );
-      return this.createSessionViaSupabaseOAuth('github');
+    // Route to appropriate auth flow based on provider
+    switch (requestedProvider) {
+      case 'github-browser':
+        logger.info(
+          'SupabaseAuthProvider',
+          'Using browser-based GitHub auth (Supabase OAuth flow)',
+        );
+        return this.createSessionViaSupabaseOAuth('github');
+
+      case 'github':
+      case undefined:
+        // Default to VS Code's built-in GitHub auth - works everywhere and is simpler
+        logger.info(
+          'SupabaseAuthProvider',
+          'Using VS Code GitHub auth (works on desktop and Codespaces)',
+        );
+        return this.createSessionViaVSCodeGitHub();
+
+      default:
+        // Other providers (Google) use traditional Supabase OAuth flow
+        return this.createSessionViaSupabaseOAuth(
+          isOAuthProvider(requestedProvider)
+            ? requestedProvider
+            : DEFAULT_OAUTH_PROVIDER,
+        );
     }
-
-    const provider = isOAuthProvider(requestedProvider)
-      ? requestedProvider
-      : DEFAULT_OAUTH_PROVIDER;
-
-    // For GitHub, use VS Code's built-in auth - works everywhere and is simpler
-    if (provider === 'github') {
-      logger.info(
-        'SupabaseAuthProvider',
-        'Using VS Code GitHub auth (works on desktop and Codespaces)',
-      );
-      return this.createSessionViaVSCodeGitHub();
-    }
-
-    // For other providers (Google), use traditional Supabase OAuth flow
-    return this.createSessionViaSupabaseOAuth(provider);
   }
 
   /**

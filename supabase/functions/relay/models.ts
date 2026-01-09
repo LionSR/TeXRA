@@ -148,9 +148,10 @@ export const FREE_TIER = 'free';
  * Get the monthly spending limit for a tier.
  */
 export function getSpendingLimit(tier: string): number {
-  if (tier === ULTRA_TIER) return TIER_SPENDING_LIMITS.Ultra;
-  if (tier === MAX_TIER) return TIER_SPENDING_LIMITS.Max;
-  return TIER_SPENDING_LIMITS.free;
+  return (
+    TIER_SPENDING_LIMITS[tier as keyof TierSpendingLimits] ??
+    TIER_SPENDING_LIMITS.free
+  );
 }
 
 // =============================================================================
@@ -166,27 +167,18 @@ export function isModelAllowedForTier(
   tier: string,
   modelName: string | null,
 ): boolean {
-  if (tier === ULTRA_TIER) {
-    return true;
-  }
-
+  if (tier === ULTRA_TIER) return true;
   if (!modelName) return false;
 
   const normalizedModel = modelName.toLowerCase();
+  const patterns =
+    tier === MAX_TIER
+      ? MAX_TIER_API_PATTERNS
+      : tier === FREE_TIER
+        ? FREE_TIER_API_PATTERNS
+        : [];
 
-  if (tier === MAX_TIER) {
-    return MAX_TIER_API_PATTERNS.some((pattern) =>
-      normalizedModel.startsWith(pattern),
-    );
-  }
-
-  if (tier === FREE_TIER) {
-    return FREE_TIER_API_PATTERNS.some((pattern) =>
-      normalizedModel.startsWith(pattern),
-    );
-  }
-
-  return false;
+  return patterns.some((pattern) => normalizedModel.startsWith(pattern));
 }
 
 // =============================================================================
