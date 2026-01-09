@@ -125,7 +125,7 @@ export class EditFileTool extends defineTool({
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       targetPath,
-      finalContent,
+      updatedContent,
       appliedContent,
     );
     const output = userDiffNote
