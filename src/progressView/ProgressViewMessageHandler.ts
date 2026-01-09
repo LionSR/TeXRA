@@ -61,7 +61,9 @@ interface CompareMessage extends BaseFileCommandMessage {
   prev?: string;
 }
 
-export class ProgressViewMessageHandler extends BaseViewMessageHandler {
+export class ProgressViewMessageHandler extends BaseViewMessageHandler<
+  vscode.WebviewView | vscode.WebviewPanel
+> {
   private readonly recordingManager: RecordingManager;
 
   constructor(
@@ -86,7 +88,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   protected createHandlers(): Record<
     string,
-    MessageHandler<vscode.WebviewView>
+    MessageHandler<vscode.WebviewView | vscode.WebviewPanel>
   > {
     return {
       // Common handlers
@@ -168,8 +170,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const webviewView = this.getActiveView();
     if (webviewView) {
       await super.handleWebviewReady(message, webviewView);
+      this.provider.markWebviewReady(webviewView);
     }
-    this.provider.markWebviewReady();
   }
 
   private async handleSwitchStream(message: any): Promise<void> {
