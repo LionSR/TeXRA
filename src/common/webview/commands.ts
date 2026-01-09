@@ -268,6 +268,9 @@ export const MEMORY_VIEW_COMMANDS = {
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
+  GET_MEMORY_ENABLED: 'getMemoryEnabled',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
+  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 };
 
 // Export all commands in a single object for convenience

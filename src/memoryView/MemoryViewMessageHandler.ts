@@ -27,10 +27,17 @@ import {
 // Local imports - storage
 import { StorageFS } from '@utils/files';
 
+// Local imports - config
+import {
+  getToolUseMemoryEnabled,
+  setToolUseMemoryEnabled,
+} from '@utils/config/constants';
+
 // Local imports - schemas
 import {
   MemoryPathMessageSchema,
   MemoryDeleteMessageSchema,
+  MemoryEnabledMessageSchema,
 } from '@webview/types/messages';
 
 interface MemoryViewItem {
@@ -61,6 +68,10 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
       [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
         this.handleOpenMemoryFolder.bind(this),
       [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
+      [MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED]:
+        this.handleGetMemoryEnabled.bind(this),
+      [MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
+        this.handleSetMemoryEnabled.bind(this),
     };
   }
 
@@ -153,6 +164,38 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
           // Always refresh the memory list to reflect current state
           await this.sendMemoryData(view.webview);
         }
+      },
+    );
+  }
+
+  public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
+    const enabled = getToolUseMemoryEnabled();
+    await webview.postMessage({
+      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled,
+    });
+  }
+
+  private async handleGetMemoryEnabled(
+    _message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.sendMemoryEnabled(view.webview);
+  }
+
+  private async handleSetMemoryEnabled(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      MemoryEnabledMessageSchema,
+      message,
+      'setMemoryEnabled',
+      async ({ enabled }) => {
+        await setToolUseMemoryEnabled(enabled);
+
+        // Confirm the update back to the webview
+        await this.sendMemoryEnabled(view.webview);
       },
     );
   }
