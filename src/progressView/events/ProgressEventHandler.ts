@@ -64,6 +64,20 @@ export class ProgressEventHandler {
   }
 
   /**
+   * Update agentTypeFilter to match the session category if needed.
+   * Only updates when filter is not 'all' and doesn't already match.
+   */
+  private maybeUpdateFilterForCategory(category: AgentCategory | undefined): void {
+    if (
+      category &&
+      this.state.agentTypeFilter !== 'all' &&
+      this.state.agentTypeFilter !== category
+    ) {
+      this.state.agentTypeFilter = category;
+    }
+  }
+
+  /**
    * Setup all event bus listeners.
    * Uses AbortController for cleanup - single dispose aborts all listeners.
    */
@@ -121,15 +135,7 @@ export class ProgressEventHandler {
           isRemote,
           hasMultipleOutputs,
         });
-
-        if (
-          session?.agentCategory &&
-          this.state.agentTypeFilter !== 'all' &&
-          this.state.agentTypeFilter !== session.agentCategory
-        ) {
-          this.state.agentTypeFilter = session.agentCategory;
-        }
-
+        this.maybeUpdateFilterForCategory(session?.agentCategory);
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
@@ -190,12 +196,8 @@ export class ProgressEventHandler {
         this.state.setTaskState(streamTabId, taskState);
         const sessionKind = taskState.agentConfig.session.agentCategory;
 
-        if (
-          this.state.activeStream === streamTabId &&
-          this.state.agentTypeFilter !== 'all' &&
-          this.state.agentTypeFilter !== sessionKind
-        ) {
-          this.state.agentTypeFilter = sessionKind;
+        if (this.state.activeStream === streamTabId) {
+          this.maybeUpdateFilterForCategory(sessionKind);
         }
 
         if (executionId) {
@@ -372,10 +374,10 @@ export class ProgressEventHandler {
           .getFiles(stream)
           .get(storageKey);
         const rounds = this.toRoundRecord(runFiles);
-        this.webviewUpdater.updateFiles(
-          stream,
-          rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-        );
+        this.webviewUpdater.updateFiles(stream, {
+          runId: storageKey,
+          ...(rounds && { rounds }),
+        });
       },
     );
   };
@@ -401,10 +403,10 @@ export class ProgressEventHandler {
           .getMissingOutputs(stream)
           .get(storageKey);
         const rounds = this.toRoundRecord(runMissing);
-        this.webviewUpdater.updateMissingOutputs(
-          stream,
-          rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-        );
+        this.webviewUpdater.updateMissingOutputs(stream, {
+          runId: storageKey,
+          ...(rounds && { rounds }),
+        });
       },
     );
   };
