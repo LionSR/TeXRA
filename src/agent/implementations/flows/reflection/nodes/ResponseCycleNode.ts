@@ -28,6 +28,7 @@ import {
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
   assertCycleFieldsPopulated,
@@ -43,8 +44,6 @@ import {
 import type { AgentFileLocation } from '@utils/files';
 
 import {
-  getWorkspaceState,
-  updateWorkspaceSnapshot,
   type ReflectionFlowShared,
   type RoundContext,
 } from '../ReflectionFlowState';
@@ -98,7 +97,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
     }
 
     // Reconstruct state instances from snapshots
-    const workspace = getWorkspaceState(shared);
+    const workspace = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
     const run = AgentRunState.fromSnapshot(shared.runStateSnapshot);
     const round = ConversationRoundState.fromSnapshot(
       context.stateRoundSnapshot,
@@ -268,7 +269,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     // Update snapshots from slices (cycle results already in shared via native nesting)
     shared.runStateSnapshot = execRes.run.toSnapshot();
-    updateWorkspaceSnapshot(shared, execRes.workspace);
+    shared.workspaceSnapshot = execRes.workspace.toSnapshot();
 
     // Sync conversation state - messages modified in-place during cycle
     shared.conversation = prepRes.context.messages;
