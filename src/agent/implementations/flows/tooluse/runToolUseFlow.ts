@@ -110,7 +110,7 @@ export async function runToolUseFlow<C = unknown>(
     // Check for persisted flow (resume scenario)
     let flowRecord: FlowRecord | null = null;
     try {
-      flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+      flowRecord = (await kv.read<FlowRecord>(`flow:${executionId}`)) ?? null;
     } catch (error) {
       logger.debug(
         `Resume parse failed, starting fresh: ${error instanceof Error ? error.message : 'unknown'}`,
