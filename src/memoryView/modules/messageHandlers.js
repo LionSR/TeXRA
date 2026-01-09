@@ -3,10 +3,7 @@ import { memoryViewDomHandler } from './domHandlers.js';
 import { ELEMENT_IDS } from './constants.js';
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
-import {
-  safeGetElementById,
-  setElementDisabled,
-} from '@common/domUtils.js';
+import { safeGetElementById, setElementDisabled } from '@common/domUtils.js';
 
 /**
  * Handles messages from the extension for the memory view.
