@@ -191,15 +191,18 @@ export function normalizeToolUseLog(structured) {
   const outputCandidate =
     structured.output !== undefined ? structured.output : outputDetails.output;
   const outputContent = extractOutputContent(outputCandidate);
-  const isEmptyObject =
-    isPlainObject(outputContent) && Object.keys(outputContent).length === 0;
 
-  const outputText =
-    typeof outputContent === 'string'
-      ? outputContent
-      : outputContent !== undefined && !isEmptyObject
-        ? stringifyForDisplay(outputContent)
-        : '';
+  // Convert outputContent to display string
+  let outputText = '';
+  if (typeof outputContent === 'string') {
+    outputText = outputContent;
+  } else if (outputContent !== undefined) {
+    const isEmptyObject =
+      isPlainObject(outputContent) && Object.keys(outputContent).length === 0;
+    if (!isEmptyObject) {
+      outputText = stringifyForDisplay(outputContent);
+    }
+  }
 
   const rawToolName = structured.toolName ?? structured.tool;
   const toolName = typeof rawToolName === 'string' ? rawToolName.trim() : '';
