@@ -28,8 +28,10 @@ import {
 import { StorageFS } from '@utils/files';
 
 // Local imports - config
-import { setConfig } from '@utils/config';
-import { getToolUseMemoryEnabled } from '@utils/config/constants';
+import {
+  getToolUseMemoryEnabled,
+  setToolUseMemoryEnabled,
+} from '@utils/config/constants';
 
 // Local imports - schemas
 import {
@@ -190,7 +192,7 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
       message,
       'setMemoryEnabled',
       async ({ enabled }) => {
-        await setConfig('texra.toolUse.memory.enabled', enabled);
+        await setToolUseMemoryEnabled(enabled);
 
         // Confirm the update back to the webview
         await this.sendMemoryEnabled(view.webview);

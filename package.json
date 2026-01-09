@@ -967,12 +967,6 @@
             "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
             "scope": "resource"
           },
-          "texra.toolUse.memory.enabled": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable the memory tool for all tool-use sessions",
-            "scope": "resource"
-          },
           "texra.toolUse.persistence.enabled": {
             "type": "boolean",
             "default": true,

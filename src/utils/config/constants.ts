@@ -1,3 +1,6 @@
+// Local imports - common
+import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+
 // Local imports - config utils
 import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
@@ -98,10 +101,15 @@ export function getToolUsePersistenceTtlHours(): number {
 
 /** Determine whether the memory tool is enabled for tool-use sessions. */
 export function getToolUseMemoryEnabled(): boolean {
-  return getConfig<boolean>(
-    'texra.toolUse.memory.enabled',
+  return globalSM?.get<boolean>(
+    GlobalStateKey.MEMORY_ENABLED,
     DEFAULT_TOOL_USE_MEMORY_ENABLED,
-  );
+  ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED;
+}
+
+/** Set whether the memory tool is enabled for tool-use sessions. */
+export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
+  await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
 export function getModelRetryMaxAttempts(): number {
