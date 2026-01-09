@@ -71,27 +71,27 @@ function popGroupContext(
   const key = getChannelKey(channel, isAgent);
   const context = store.get(key);
 
+  // No context or empty stack - nothing to pop
   if (!context?.stack.length) {
+    return;
+  }
+
+  // Remove only the LAST occurrence of groupId from stack.
+  // This supports:
+  // 1. Non-LIFO group endings (different group IDs can end out of order)
+  // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
+  const lastIndex = context.stack.lastIndexOf(groupId);
+  if (lastIndex === -1) {
+    return;
+  }
+
+  // Create new stack without the removed element
+  const newStack = context.stack.toSpliced(lastIndex, 1);
+
+  if (newStack.length === 0) {
     store.delete(key);
   } else {
-    // Remove only the LAST occurrence of groupId from stack.
-    // This supports:
-    // 1. Non-LIFO group endings (different group IDs can end out of order)
-    // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
-    const lastIndex = context.stack.lastIndexOf(groupId);
-    if (lastIndex === -1) {
-      // groupId not found, nothing to pop
-      return;
-    }
-    const newStack = [
-      ...context.stack.slice(0, lastIndex),
-      ...context.stack.slice(lastIndex + 1),
-    ];
-    if (newStack.length === 0) {
-      store.delete(key);
-    } else {
-      store.set(key, { stack: newStack });
-    }
+    store.set(key, { stack: newStack });
   }
 
   contextStorage.enterWith(store);

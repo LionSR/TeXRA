@@ -151,39 +151,46 @@ export class VSCodeTransport extends Transport {
       logMessage,
     });
 
-    // Emit context state update for CONTEXT_MANAGEMENT messages
-    if (
-      validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
-      event.data
-    ) {
-      // Validate using Zod schema at system boundary (CLAUDE.md schema-first approach)
-      const parseResult = ContextManagementDataSchema.safeParse(event.data);
-      if (!parseResult.success) {
-        return; // Skip invalid context data
+    // Emit context state updates for context-related message types
+    this.maybeEmitContextState(validatedMessageType, event.data);
+  }
+
+  /**
+   * Parse and emit context state for CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
+   * Each message type uses a different schema and derivation logic.
+   */
+  private maybeEmitContextState(
+    messageType: MessageType,
+    data: unknown,
+  ): void {
+    if (!data) return;
+
+    switch (messageType) {
+      case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
+        const parseResult = ContextManagementDataSchema.safeParse(data);
+        if (!parseResult.success) return;
+
+        const contextData = parseResult.data;
+        const inputTokens =
+          contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
+        const utilizationPercent =
+          contextData.utilizationAfter ??
+          (inputTokens / contextData.contextWindow) * 100;
+
+        this.emitContextState({
+          inputTokens,
+          contextWindow: contextData.contextWindow,
+          utilizationPercent,
+        });
+        break;
       }
+      case MESSAGE_TYPES.CONTEXT_STATE: {
+        const parseResult = ContextStateDataSchema.safeParse(data);
+        if (!parseResult.success) return;
 
-      const contextData = parseResult.data;
-      const inputTokens =
-        contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
-      const utilizationPercent =
-        contextData.utilizationAfter ??
-        (inputTokens / contextData.contextWindow) * 100;
-
-      this.emitContextState({
-        inputTokens,
-        contextWindow: contextData.contextWindow,
-        utilizationPercent,
-      });
-    }
-
-    // Emit context state update for CONTEXT_STATE messages (from token counting)
-    if (validatedMessageType === MESSAGE_TYPES.CONTEXT_STATE && event.data) {
-      const parseResult = ContextStateDataSchema.safeParse(event.data);
-      if (!parseResult.success) {
-        return; // Skip invalid context state data
+        this.emitContextState(parseResult.data);
+        break;
       }
-
-      this.emitContextState(parseResult.data);
     }
   }
 
