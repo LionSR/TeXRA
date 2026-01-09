@@ -47,9 +47,7 @@ interface ToolResolutionContext {
 }
 
 /** Normalize tool config to a ToolDefinition. */
-function normalizeToolConfig(
-  config: string | ToolDefinition,
-): ToolDefinition {
+function normalizeToolConfig(config: string | ToolDefinition): ToolDefinition {
   return typeof config === 'string' ? { name: config } : config;
 }
 
