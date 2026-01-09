@@ -20,13 +20,14 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
-  return files?.length ? files : [];
+/** Normalize nullish file arrays to empty arrays */
+function toArray<T>(files: T[] | undefined | null): T[] {
+  return files ?? [];
 }
 
 export class ExecutionManager {
   async handleExecute(message: any): Promise<void> {
-    const isToolUseAgent = !!message.isToolUseAgent;
+    const isToolUseAgent = Boolean(message.isToolUseAgent);
     const config = isToolUseAgent
       ? this.buildToolUseCommandPayload(message)
       : await this.buildWorkflowCommandPayload(message);
@@ -70,10 +71,9 @@ export class ExecutionManager {
     session: AgentSessionDescriptor,
   ): AgentConfig {
     const baseConfig = this.composeBaseAgentConfig(message, session);
-    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
-    const useMultipleOutputs = !!(
-      message.outputFilesActive || outputFiles.length > 1
-    );
+    const outputFiles = toArray<string>(message.outputFiles);
+    const useMultipleOutputs =
+      Boolean(message.outputFilesActive) || outputFiles.length > 1;
 
     // toolConfig only applies to workflow agents
     const toolConfig: ToolConfig = {
@@ -127,13 +127,13 @@ export class ExecutionManager {
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile ?? '',
-      inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
+      inputFiles: toArray<string>(message.inputFiles),
       referenceFile: message.referenceFile ?? null,
-      referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
+      referenceFiles: toArray<string>(message.referenceFiles),
       auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
+      auxiliaryFiles: toArray<string>(message.auxiliaryFiles),
       mediaFile: this.mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: getFilesIfNotEmpty<string>(
+      mediaFiles: toArray<string>(
         (message.mediaFiles ?? [])
           .map((f: string | null) => this.mapMediaPath(f))
           .filter((f: string | null): f is string => f !== null),
