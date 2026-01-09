@@ -11,6 +11,31 @@ export class UsageSummary {
   constructor() {
     this._summaryElem = null;
     this._contextElem = null;
+    this._footerElem = null;
+  }
+
+  /**
+   * Get the footer element, caching it after first successful lookup.
+   * Only caches when a valid footer is found to allow retry if called early.
+   * Checks isConnected to handle webview refresh scenarios.
+   * @returns {HTMLElement|null}
+   */
+  _getFooter() {
+    if (this._footerElem?.isConnected) return this._footerElem;
+    const anchor = this._summaryElem || this._contextElem;
+    if (anchor) {
+      this._footerElem = anchor.closest('.usage-summary-footer');
+    }
+    return this._footerElem;
+  }
+
+  /**
+   * Cache the context element if not already cached.
+   */
+  _ensureContextElem() {
+    if (!this._contextElem) {
+      this._contextElem = document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
+    }
   }
 
   /**
@@ -24,7 +49,8 @@ export class UsageSummary {
       this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
-    const footer = this._summaryElem.closest('.usage-summary-footer');
+
+    const footer = this._getFooter();
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
@@ -37,7 +63,10 @@ export class UsageSummary {
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
       this._summaryElem.removeAttribute('aria-label');
-      if (footer) {
+      // Only hide footer if context state is also not visible
+      this._ensureContextElem();
+      const contextVisible = this._contextElem?.hidden === false;
+      if (footer && !contextVisible) {
         footer.hidden = true;
       }
       return;
@@ -122,10 +151,7 @@ export class UsageSummary {
    * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} contextState
    */
   updateContextDisplay(contextState) {
-    // Cache the context element
-    if (!this._contextElem) {
-      this._contextElem = document.getElementById('contextState');
-    }
+    this._ensureContextElem();
     if (!this._contextElem) return;
 
     const { inputTokens, contextWindow, utilizationPercent } = contextState;
@@ -134,6 +160,12 @@ export class UsageSummary {
       this._contextElem.textContent = '';
       this._contextElem.hidden = true;
       return;
+    }
+
+    // Ensure footer is visible when context state is displayed
+    const footer = this._getFooter();
+    if (footer) {
+      footer.hidden = false;
     }
 
     const contextLeft = Math.max(0, 100 - utilizationPercent);
@@ -151,14 +183,22 @@ export class UsageSummary {
 
   /**
    * Clear the context state display.
+   * Also hides the footer if usage summary is empty.
    */
   clearContextDisplay() {
-    if (!this._contextElem) {
-      this._contextElem = document.getElementById('contextState');
-    }
-    if (this._contextElem) {
-      this._contextElem.textContent = '';
-      this._contextElem.hidden = true;
+    this._ensureContextElem();
+    if (!this._contextElem) return;
+
+    this._contextElem.textContent = '';
+    this._contextElem.hidden = true;
+
+    // Hide footer if usage is also empty
+    const usageEmpty = !this._summaryElem?.textContent;
+    if (usageEmpty) {
+      const footer = this._getFooter();
+      if (footer) {
+        footer.hidden = true;
+      }
     }
   }
 }
