@@ -6,7 +6,10 @@ import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview';
-import { AgentHistoryManager } from '@common/history';
+import {
+  AgentHistoryManager,
+  type AgentHistoryItem,
+} from '@common/history';
 import { agentConfigToTaskState } from '@utils/config';
 import { HistoryIdMessageSchema } from '@webview/types/messages';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
@@ -47,32 +50,50 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     await this.sendHistoryData(view.webview);
   }
 
-  private async handleRerunAgent(
+  /**
+   * Helper to validate message, fetch history item, and execute action with error handling.
+   * Reduces duplication across rerun/restore handlers.
+   */
+  private async withHistoryItemFromMessage(
     message: unknown,
-    _view: vscode.WebviewView | vscode.WebviewPanel,
+    operationName: string,
+    action: (historyItem: AgentHistoryItem) => Promise<void>,
+    errorPrefix: string,
   ): Promise<void> {
     await this.withValidatedMessage(
       HistoryIdMessageSchema,
       message,
-      'rerunAgent',
+      operationName,
       async ({ historyId }) => {
         try {
           const historyItem =
             await AgentHistoryManager.getHistoryItemById(historyId);
-          if (historyItem) {
-            await vscode.window.showInformationMessage(
-              'Rerunning agent from history',
-            );
-            await runExecuteCommand(historyItem.agentConfig);
-          } else {
+          if (!historyItem) {
             await vscode.window.showErrorMessage('History item not found');
+            return;
           }
+          await action(historyItem);
         } catch (error) {
-          await vscode.window.showErrorMessage(
-            `Failed to rerun agent: ${error}`,
-          );
+          await showLoggedErrorMessage(this.channel, errorPrefix, error);
         }
       },
+    );
+  }
+
+  private async handleRerunAgent(
+    message: unknown,
+    _view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withHistoryItemFromMessage(
+      message,
+      'rerunAgent',
+      async (historyItem) => {
+        await vscode.window.showInformationMessage(
+          'Rerunning agent from history',
+        );
+        await runExecuteCommand(historyItem.agentConfig);
+      },
+      'Failed to rerun agent',
     );
   }
 
@@ -80,31 +101,14 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    await this.withValidatedMessage(
-      HistoryIdMessageSchema,
+    await this.withHistoryItemFromMessage(
       message,
       'restoreAgent',
-      async ({ historyId }) => {
-        try {
-          const historyItem =
-            await AgentHistoryManager.getHistoryItemById(historyId);
-          if (historyItem) {
-            const taskState = agentConfigToTaskState(historyItem.agentConfig);
-            await vscode.commands.executeCommand(
-              'texra.restoreState',
-              taskState,
-            );
-          } else {
-            await vscode.window.showErrorMessage('History item not found');
-          }
-        } catch (error) {
-          await showLoggedErrorMessage(
-            this.channel,
-            'Failed to restore configuration',
-            error,
-          );
-        }
+      async (historyItem) => {
+        const taskState = agentConfigToTaskState(historyItem.agentConfig);
+        await vscode.commands.executeCommand('texra.restoreState', taskState);
       },
+      'Failed to restore configuration',
     );
   }
 
@@ -149,7 +153,11 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
         command: HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
       });
     } catch (error) {
-      await vscode.window.showErrorMessage(`Failed to clear history: ${error}`);
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to clear history',
+        error,
+      );
     }
   }
 }
