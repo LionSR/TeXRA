@@ -75,6 +75,10 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -479,11 +483,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           );
         }
         const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
-        if (this.config.contextWindow - totalTokens < originalMaxTokens) {
-          const MIN_COMPLETION_TOKENS = 100;
-          const reducedMaxTokens = Math.max(
-            MIN_COMPLETION_TOKENS,
-            this.config.contextWindow - totalTokens - 10,
+        const availableTokens = this.config.contextWindow - totalTokens;
+        if (availableTokens < originalMaxTokens) {
+          const reducedMaxTokens = computeReducedMaxTokens(
+            availableTokens,
+            TOKEN_SAFETY_BUFFER,
           );
           const utilizationPercent =
             (totalTokens / this.config.contextWindow) * 100;

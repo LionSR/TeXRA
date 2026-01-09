@@ -64,6 +64,10 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
+import {
+  computeReducedMaxTokens,
+  HEURISTIC_TOKEN_BUFFER,
+} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
@@ -232,45 +236,32 @@ export class ModelHandlerOpenAI<
         this.config.contextWindow - approximateInputTokens;
       const currentMax = baseParams[maxOutputKey];
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
-        const TOKEN_BUFFER = 5000;
-        const MIN_COMPLETION_TOKENS = 100;
         const utilizationPercent =
           (approximateInputTokens / this.config.contextWindow) * 100;
+        const reducedMaxTokens = computeReducedMaxTokens(
+          availableTokens,
+          HEURISTIC_TOKEN_BUFFER,
+        );
+        baseParams[maxOutputKey] = reducedMaxTokens;
 
-        if (availableTokens <= 0) {
-          baseParams[maxOutputKey] = 1;
-          this.logger.logContextManagement(
-            `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to 1 token.`,
-            {
-              action: 'max_tokens_reduced',
-              tokensBefore: approximateInputTokens,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore: utilizationPercent,
-              originalMaxTokens: currentMax,
-              reducedMaxTokens: 1,
-              details: `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`,
-            },
-          );
-        } else {
-          const adjustedWithBuffer = Math.max(
-            MIN_COMPLETION_TOKENS,
-            availableTokens - TOKEN_BUFFER,
-          );
-          const adjusted = Math.min(availableTokens, adjustedWithBuffer);
-          baseParams[maxOutputKey] = adjusted;
-          this.logger.logContextManagement(
-            `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${adjusted}.`,
-            {
-              action: 'max_tokens_reduced',
-              tokensBefore: approximateInputTokens,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore: utilizationPercent,
-              originalMaxTokens: currentMax,
-              reducedMaxTokens: adjusted,
-              details: `OpenAI: ${maxOutputKey} reduced to fit context window`,
-            },
-          );
-        }
+        const detailsMsg =
+          availableTokens <= 0
+            ? `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`
+            : `OpenAI: ${maxOutputKey} reduced to fit context window`;
+        const logMsg =
+          availableTokens <= 0
+            ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to ${reducedMaxTokens} token.`
+            : `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${reducedMaxTokens}.`;
+
+        this.logger.logContextManagement(logMsg, {
+          action: 'max_tokens_reduced',
+          tokensBefore: approximateInputTokens,
+          contextWindow: this.config.contextWindow,
+          utilizationBefore: utilizationPercent,
+          originalMaxTokens: currentMax,
+          reducedMaxTokens,
+          details: detailsMsg,
+        });
       }
     } catch (err) {
       // Re-throw context window violations - these are intentional validation errors
