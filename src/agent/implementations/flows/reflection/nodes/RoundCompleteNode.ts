@@ -1,20 +1,8 @@
 /**
- * RoundCompleteNode - Handles round completion and continuation logic.
+ * RoundCompleteNode - Determines whether to continue to next round or finalize.
  *
- * Responsibilities:
- * - Check if more rounds should run (bounds, interruption, flags)
- * - Signal intent to RoundPersistedFlow (CONTINUE_NEXT_ROUND or FINALIZE)
- *
- * Note: RoundPersistedFlow OWNS the round increment. This node only signals
- * intent, and the flow handles all round lifecycle (increment, stages, reset).
- *
- * PocketFlow pattern:
- * - prep(): Extract current state
- * - exec(): Determine next action (pure logic)
- * - post(): Route based on decision
- *
- * Services accessed via native `this.services`:
- * - logger, checkInterruption
+ * Checks bounds, interruption, and continue flag to decide next action.
+ * RoundPersistedFlow owns round lifecycle; this node only signals intent.
  */
 
 import { Node } from '@agent/node';
@@ -58,9 +46,6 @@ export class RoundCompleteNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Extract state for completion decision.
-   */
   async prep(shared: ReflectionFlowShared): Promise<RoundCompletePrepInput> {
     return {
       currentRound: shared.currentRound,
@@ -69,9 +54,6 @@ export class RoundCompleteNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Determine whether to continue or finalize.
-   */
   async exec(
     prepRes: RoundCompletePrepInput,
   ): Promise<RoundCompleteExecResult> {
@@ -106,29 +88,16 @@ export class RoundCompleteNode<C = unknown> extends Node<
   }
 
   /**
-   * Route based on decision.
-   *
-   * RoundPersistedFlow OWNS all round lifecycle:
-   * - Incrementing currentRound (single source of truth)
-   * - Stage lifecycle (end old stage, create new stage)
-   * - Workspace reset (via resetForNextRound hook)
-   *
-   * This node only signals intent via FlowTransitions.
+   * Route based on decision. RoundPersistedFlow owns all round lifecycle
+   * (incrementing, stages, workspace reset) - this node only signals intent.
    */
   async post(
     _shared: ReflectionFlowShared,
     _prepRes: RoundCompletePrepInput,
     execRes: RoundCompleteExecResult,
   ): Promise<string | undefined> {
-    if (execRes.kind === 'finalize') {
-      return FlowTransition.FINALIZE;
-    }
-
-    // Signal intent to continue - RoundPersistedFlow will:
-    // 1. Increment currentRound (single source of truth)
-    // 2. End old round stage
-    // 3. Call resetForNextRound hook (workspace reset)
-    // 4. Create new round stage
-    return FlowTransition.CONTINUE_NEXT_ROUND;
+    return execRes.kind === 'finalize'
+      ? FlowTransition.FINALIZE
+      : FlowTransition.CONTINUE_NEXT_ROUND;
   }
 }
