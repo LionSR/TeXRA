@@ -197,10 +197,17 @@ export const normalizeToolUseLog = (structured) => {
     outputContent = output !== undefined ? output : rest;
   }
 
+  // Check if outputContent is an empty object (no meaningful data to display)
+  const isEmptyObject =
+    outputContent !== null &&
+    typeof outputContent === 'object' &&
+    !Array.isArray(outputContent) &&
+    Object.keys(outputContent).length === 0;
+
   const outputText =
     typeof outputContent === 'string'
       ? outputContent
-      : outputContent !== undefined
+      : outputContent !== undefined && !isEmptyObject
         ? stringifyForDisplay(outputContent)
         : '';
 
