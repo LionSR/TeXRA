@@ -143,7 +143,7 @@ export class WebFetchTool extends defineTool({
     }
 
     return {
-      summary: `Fetched ${url}`,
+      summary: url,
       output: sections.join('\n\n'),
     };
   }

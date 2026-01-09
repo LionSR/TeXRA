@@ -105,7 +105,7 @@ export class CrossrefSearchTool extends defineTool({
     };
 
     return {
-      summary: `Found ${results.length} Crossref result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
+      summary: `Found: ${results.length} result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
     };
   }
