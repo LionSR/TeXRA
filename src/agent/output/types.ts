@@ -30,24 +30,15 @@ export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 
-/** XML summary with defaults applied via transform */
-const RawOutputXmlSummarySchema = z.strictObject({
+/** XML summary schema with defaults via prefault */
+export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
     .record(z.string(), z.union([z.string(), z.array(z.string())]))
-    .optional(),
-  documents: z.array(z.string()).optional(),
+    .prefault(() => ({})),
+  documents: z.array(z.string()).prefault(() => []),
   singleOutputFile: z.string().nullable(),
   sourceLocation: FileLocationSchema.nullable(),
 });
-
-export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
-  (value) => ({
-    tagContents: value.tagContents ?? {},
-    documents: value.documents ?? [],
-    singleOutputFile: value.singleOutputFile ?? null,
-    sourceLocation: value.sourceLocation ?? null,
-  }),
-);
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
 /** Output from processing a conversation round */
