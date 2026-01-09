@@ -417,11 +417,13 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: true, userCancelled: false };
     }
 
-    // User cancelled or timeout
+    // User cancelled or timeout - preserve WAITING status so user can resume
+    // from last successful breakpoint. The flow record is NOT deleted when
+    // userCancelled is true, enabling resume capability.
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
-    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED);
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
     return { shouldRetry: false, userCancelled: true };
   }
 
