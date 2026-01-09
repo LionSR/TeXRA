@@ -9,9 +9,6 @@ import { vscode } from '@common/webviewContext.js';
 // Initialize the state when the window loads
 progressViewState.load();
 
-// Register handlers for VSCode messages
-messageHandler.setup();
-
 window.addEventListener('beforeunload', () => {
   messageHandler.dispose();
 });
@@ -37,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'retryRequestTemplate',
     'approvalRequestTemplate',
   ]);
+  // Register handlers for VSCode messages after the DOM is ready
+  messageHandler.setup();
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
