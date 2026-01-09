@@ -110,28 +110,15 @@ function removeTexExtension(value: string): string {
 
 /**
  * Build a string → string lookup for LaTeX \input command replacement.
- * @param baseToOutputMap Map from base file path to output FileLocation
+ * Generates all path suffix variants (from full path down to filename) for flexible matching.
  */
 function buildReplacementLookup(
   baseToOutputMap: Map<string, FileLocation>,
 ): Map<string, string> {
   const replacements = new Map<string, string>();
 
-  const registerReplacement = (source: string, target: string) => {
-    const normalizedSource = normalizeLatexPath(source);
-    const normalizedTarget = normalizeLatexPath(target);
-
-    if (!normalizedSource || replacements.has(normalizedSource)) {
-      return;
-    }
-
-    replacements.set(normalizedSource, normalizedTarget);
-  };
-
   for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
-    if (!baseFile || !outputLoc) {
-      continue;
-    }
+    if (!baseFile || !outputLoc) continue;
 
     const outputFile =
       outputLoc.kind !== 'external'
@@ -146,13 +133,21 @@ function buildReplacementLookup(
       const baseSuffix = baseSegments.slice(-depth).join('/');
       const outputSuffix = outputSegments.slice(-depth).join('/');
 
-      registerReplacement(baseSuffix, outputSuffix);
+      // Register replacement if not already present
+      const normalizedBase = normalizeLatexPath(baseSuffix);
+      if (normalizedBase && !replacements.has(normalizedBase)) {
+        replacements.set(normalizedBase, normalizeLatexPath(outputSuffix));
+      }
 
+      // Also register without .tex extension
       if (hasTexExtension(baseSuffix) && hasTexExtension(outputSuffix)) {
-        registerReplacement(
-          removeTexExtension(baseSuffix),
-          removeTexExtension(outputSuffix),
-        );
+        const baseNoExt = normalizeLatexPath(removeTexExtension(baseSuffix));
+        if (baseNoExt && !replacements.has(baseNoExt)) {
+          replacements.set(
+            baseNoExt,
+            normalizeLatexPath(removeTexExtension(outputSuffix)),
+          );
+        }
       }
     }
   }
