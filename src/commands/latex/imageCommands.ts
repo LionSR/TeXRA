@@ -53,9 +53,10 @@ async function handleCountPdfPages(): Promise<void> {
     const pageCount = await countPdfPages(selection.relativePath);
     if (pageCount > 0) {
       vscode.window.showInformationMessage(`The PDF has ${pageCount} pages`);
-    } else {
-      vscode.window.showErrorMessage('Could not count pages in the PDF');
+      return;
     }
+
+    vscode.window.showErrorMessage('Could not count pages in the PDF');
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'countPdfPages command failed', err);
   }
@@ -158,10 +159,10 @@ async function handleConvertPdfToImages(): Promise<
         'PDF conversion completed successfully',
       );
       return result;
-    } else {
-      vscode.window.showErrorMessage('Failed to convert PDF');
-      return undefined;
     }
+
+    vscode.window.showErrorMessage('Failed to convert PDF');
+    return undefined;
   } catch (err) {
     await showLoggedErrorMessage(
       CHANNEL,
