@@ -360,7 +360,7 @@ export class TextEditorTool extends defineTool({
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        finalContent,
+        proposedContent,
         appliedContent,
       );
       const output = userDiffNote
@@ -478,7 +478,7 @@ export class TextEditorTool extends defineTool({
       // Prepare success message
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        newFileContent,
         finalContent,
       );
       const successIntro = `The file ${filePath} has been edited.`;
@@ -597,7 +597,7 @@ export class TextEditorTool extends defineTool({
       const startLine = snippetStart + 1;
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        newFileContent,
         finalContent,
       );
 
@@ -688,7 +688,7 @@ export class TextEditorTool extends defineTool({
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        previousContent,
         finalContent,
       );
       const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;
