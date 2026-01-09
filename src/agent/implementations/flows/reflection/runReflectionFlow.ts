@@ -114,6 +114,55 @@ interface DerivedConfig {
   outputExt: string;
 }
 
+/** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
+function shouldEnforceXmlStructure(
+  setting: AgentWorkflowSetting,
+  useScratchpad: boolean,
+): boolean {
+  // Explicit mode takes precedence
+  if (setting.xmlStructureMode !== undefined) {
+    switch (setting.xmlStructureMode) {
+      case 'always':
+        return true;
+      case 'scratchpadOnly':
+        return useScratchpad;
+      case 'never':
+        return false;
+    }
+  }
+
+  // Fall back to agent type defaults
+  switch (setting.agentType) {
+    case 'CoT':
+      return true;
+    case 'direct':
+      return useScratchpad;
+    default:
+      return false;
+  }
+}
+
+/** Compute the total number of rounds based on settings and prompt. */
+function computeTotalRounds(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): number {
+  if (setting.maxRounds !== undefined) {
+    return setting.maxRounds;
+  }
+
+  if (setting.agentType === 'direct') {
+    return 1;
+  }
+
+  const requests = Array.isArray(prompt.userRequest)
+    ? prompt.userRequest
+    : prompt.userRequest
+      ? [prompt.userRequest]
+      : [];
+  return Math.max(setting.rounds ?? 2, requests.length);
+}
+
 /** Derive configuration values from settings and prompts. */
 function deriveConfig(
   setting: AgentWorkflowSetting,
@@ -121,37 +170,10 @@ function deriveConfig(
 ): DerivedConfig {
   const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
 
-  // Determine XML structure enforcement
-  let shouldEnsureXmlStructure = false;
-  if (setting.xmlStructureMode !== undefined) {
-    shouldEnsureXmlStructure =
-      setting.xmlStructureMode === 'always' ||
-      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
-  } else if (setting.agentType === 'CoT') {
-    shouldEnsureXmlStructure = true;
-  } else if (setting.agentType === 'direct') {
-    shouldEnsureXmlStructure = useScratchpad;
-  }
-
-  // Compute total rounds
-  let totalRounds: number;
-  if (setting.maxRounds !== undefined) {
-    totalRounds = setting.maxRounds;
-  } else if (setting.agentType === 'direct') {
-    totalRounds = 1;
-  } else {
-    const requests = Array.isArray(prompt.userRequest)
-      ? prompt.userRequest
-      : prompt.userRequest
-        ? [prompt.userRequest]
-        : [];
-    totalRounds = Math.max(setting.rounds ?? 2, requests.length);
-  }
-
   return {
     useScratchpad,
-    shouldEnsureXmlStructure,
-    totalRounds,
+    shouldEnsureXmlStructure: shouldEnforceXmlStructure(setting, useScratchpad),
+    totalRounds: computeTotalRounds(setting, prompt),
     outputExt: useScratchpad ? 'xml' : setting.outputExt,
   };
 }
