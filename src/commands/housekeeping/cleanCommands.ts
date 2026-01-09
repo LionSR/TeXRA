@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import { showLoggedMessage } from '@common/errors';
+import { formatZodError, showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -31,14 +31,6 @@ const CleanParamsSchema = z.object({
 
 // --- Helpers ---
 
-function formatZodError(error: z.ZodError): string {
-  return error.issues
-    .map((i) =>
-      i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
-    )
-    .join(', ');
-}
-
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success':
@@ -58,7 +50,9 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export function registerCleanCommands(context: vscode.ExtensionContext) {
+export function registerCleanCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.clean', handleClean),
     vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
@@ -72,7 +66,7 @@ async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
-) {
+): Promise<void> {
   const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
   if (!parsed.success) {
     await showLoggedMessage(
@@ -97,7 +91,7 @@ async function handleCleanMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-) {
+): Promise<void> {
   const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
   if (!parsed.success) {
     await showLoggedMessage(
@@ -126,8 +120,8 @@ async function handleCleanMultiple(
 export async function handleClean(config: {
   streamId?: string;
   skipProgressViewClear?: boolean;
-  [key: string]: any;
-}) {
+  [key: string]: unknown;
+}): Promise<void> {
   logger.debug(
     CHANNEL,
     `Clean command called with config: ${JSON.stringify(config)}`,

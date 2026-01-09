@@ -1,34 +1,30 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
+// Local imports
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
-import {
-  showLoggedMessageWithDocs,
-  showLoggedErrorMessage,
-} from '@common/errors';
+import { showLoggedMessageWithDocs } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
-
-export function registerMergeCommands(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'texra.merge',
-      (inputFile: string, baseFile: string, editedFile: string) =>
-        handleMerge(context, inputFile, baseFile, editedFile),
-    ),
-  );
-}
 
 const CHANNEL = 'MergeCommands';
 logger.initialize(CHANNEL);
 
+export function registerMergeCommands(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'texra.merge',
+      (inputFile: string, baseFile: string, editedFile: string) =>
+        handleMerge(inputFile, baseFile, editedFile),
+    ),
+  );
+}
+
 async function handleMerge(
-  _context: vscode.ExtensionContext,
   inputFile: string,
   baseFile: string,
   editedFile: string,
-) {
+): Promise<void> {
   if (!editedFile || (!baseFile && !inputFile)) {
     await showLoggedMessageWithDocs(
       CHANNEL,
@@ -42,17 +38,7 @@ async function handleMerge(
   const model = getConfig('texra.merge.defaultModel', 'sonnet37');
   const fileToUse = baseFile ?? inputFile;
 
-  try {
-    await executeMergeAgent(model, fileToUse, editedFile);
-  } catch (err) {
-    // Log the error before re-throwing
-    await showLoggedErrorMessage(
-      'MergeCommands',
-      'Merge operation failed',
-      err,
-    );
-    throw err;
-  }
+  await executeMergeAgent(model, fileToUse, editedFile);
 }
 
 export const mergeCommands = {
