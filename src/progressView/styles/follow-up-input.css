@@ -3,34 +3,30 @@
  * Minimal styling for the user input area
  */
 
-/* Follow-up input container - uses CSS Grid for consistent column alignment */
+/* Follow-up input container */
 .follow-up-container {
   display: none;
-  grid-template-columns: 1fr auto;
+  flex-direction: column;
   padding: var(--spacing-medium);
   border-top: 1px solid var(--color-border);
   gap: var(--spacing-small);
 }
 
 .follow-up-container.is-visible {
-  display: grid;
+  display: flex;
 }
 
-/* Queued messages span only the main content column */
-.follow-up-container > .queued-follow-ups-collapsible {
-  grid-column: 1;
-}
-
-/* Input row children participate directly in grid */
+/* Row container for textarea and action buttons */
 .follow-up-input-row {
-  display: contents;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-small);
 }
 
 /* Style the textarea for multi-line input */
 #followUpInput {
   display: block;
-  grid-column: 1;
-  align-self: end;
+  flex: 1;
   line-height: 1.4;
   min-height: 106px;
   max-height: var(--height-xlarge);
@@ -49,7 +45,6 @@ vscode-toolbar-container.follow-up-actions {
   display: flex;
   flex-direction: column !important;
   align-items: center;
-  align-self: end;
   gap: var(--spacing-small);
 }
 
