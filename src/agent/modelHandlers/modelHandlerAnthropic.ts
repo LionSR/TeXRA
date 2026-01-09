@@ -1513,6 +1513,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
     const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
 
+    // Emit context state as fallback for when token counting is skipped
+    // (e.g., when file sources are present or countTokens fails)
+    if (inputTokens > 0 && this.config.contextWindow > 0) {
+      this.logger.logContextState(inputTokens, this.config.contextWindow);
+    }
+
     // Calculate percentage cached
     const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
     const percentageCached =

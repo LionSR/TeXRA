@@ -1017,6 +1017,11 @@ export class ModelHandlerOpenAI<
     const inputTokens = rawUsage.prompt_tokens ?? 0;
     const outputTokens = rawUsage.completion_tokens ?? 0;
 
+    // Emit context state for UI display (fallback for when token counting doesn't emit it)
+    if (inputTokens > 0 && this.config.contextWindow > 0) {
+      this.logger.logContextState(inputTokens, this.config.contextWindow);
+    }
+
     // Extract cached tokens (OpenAI style or DeepSeek style)
     const cachedTokens =
       rawUsage.prompt_tokens_details?.cached_tokens ??
