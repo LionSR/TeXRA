@@ -164,64 +164,48 @@ export class FileList {
    * @private
    */
   updateFileButtons(clone, file, effectiveBase) {
-    const buttonConfigs = [
-      {
-        selector: '.compare-btn',
-        command: COMMANDS.COMPARE_ORIGINAL,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.accept-btn',
-        command: COMMANDS.ACCEPT_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.merge-btn',
-        command: COMMANDS.MERGE_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.diff-btn',
-        command: COMMANDS.LATEXDIFF_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.prev-btn',
-        command: COMMANDS.COMPARE_PREVIOUS,
-        condition: file.lineage?.diffBase?.absolutePath,
-        configure: (btn, basePath) => {
-          btn.dataset.prev = file.lineage?.diffBase?.absolutePath;
-          if (basePath) {
-            btn.dataset.base = basePath;
-          }
-        },
-      },
+    const filePath = file.location.absolutePath;
+    const diffBase = file.lineage?.diffBase?.absolutePath;
+
+    // Standard buttons that use effectiveBase
+    const standardButtons = [
+      { selector: '.compare-btn', command: COMMANDS.COMPARE_ORIGINAL },
+      { selector: '.accept-btn', command: COMMANDS.ACCEPT_FILE },
+      { selector: '.merge-btn', command: COMMANDS.MERGE_FILE },
+      { selector: '.diff-btn', command: COMMANDS.LATEXDIFF_FILE },
     ];
 
-    buttonConfigs.forEach(({ selector, command, condition, configure }) => {
-      const button = clone.querySelector(selector);
-      if (!button) {
-        return;
-      }
-      if (condition) {
-        button.dataset.command = command;
-        button.dataset.file = file.location.absolutePath;
-        if (configure) {
-          configure(button, effectiveBase);
-        } else {
-          button.dataset.base = effectiveBase;
-        }
+    for (const { selector, command } of standardButtons) {
+      const btn = clone.querySelector(selector);
+      if (!btn) continue;
+      if (effectiveBase) {
+        btn.dataset.command = command;
+        btn.dataset.file = filePath;
+        btn.dataset.base = effectiveBase;
       } else {
-        button.style.display = 'none';
+        btn.style.display = 'none';
       }
-    });
+    }
 
-    // Add dataset for the file path link
+    // Previous button has special handling
+    const prevBtn = clone.querySelector('.prev-btn');
+    if (prevBtn) {
+      if (diffBase) {
+        prevBtn.dataset.command = COMMANDS.COMPARE_PREVIOUS;
+        prevBtn.dataset.file = filePath;
+        prevBtn.dataset.prev = diffBase;
+        if (effectiveBase) prevBtn.dataset.base = effectiveBase;
+      } else {
+        prevBtn.style.display = 'none';
+      }
+    }
+
+    // File path link
     const filePathSpan = clone.querySelector('.file-path');
     if (filePathSpan) {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
-      filePathSpan.dataset.file = file.location.absolutePath;
+      filePathSpan.dataset.file = filePath;
     }
   }
 
