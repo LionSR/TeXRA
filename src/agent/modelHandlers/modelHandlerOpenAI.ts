@@ -59,6 +59,7 @@ import {
 import { toOpenAITools } from './toolConversion';
 import {
   formatAttachmentSummary,
+  formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -1349,19 +1350,16 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Add attachment summary only if handler supports them and attachments exist
-    const finalResult =
+    // Build tool result as plain text - JSON wastes tokens
+    const attachmentSummary =
       this.canProcessToolResultAttachments && attachments.length > 0
-        ? {
-            ...result,
-            attachmentSummary: formatAttachmentSummary(attachments),
-          }
-        : result;
+        ? formatAttachmentSummary(attachments)
+        : undefined;
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify(finalResult),
+      content: formatToolResultAsText(result, attachmentSummary),
     };
     return [callMsg, resultMsg];
   }
