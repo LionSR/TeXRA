@@ -141,28 +141,17 @@ export class InstructionManager extends BaseWebviewManager {
         message.outputFiles,
       );
 
-      try {
-        const result = await polishTextWithAI(message.text, fileContext);
-        if (result.success) {
-          this.postMessage({
-            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
-            text: result.text,
-          });
-        } else {
-          this.postMessage({
-            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-            error: result.error ?? 'Error polishing text',
-          });
-        }
-      } catch (error) {
+      const result = await polishTextWithAI(message.text, fileContext);
+      if (result.success) {
+        this.postMessage({
+          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
+          text: result.text,
+        });
+      } else {
         this.postMessage({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-          error: toErrorMessage(error),
+          error: result.error ?? 'Error polishing text',
         });
-        logger.error(
-          CHANNEL,
-          `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
-        );
       }
     } catch (error) {
       this.postMessage({
@@ -171,7 +160,7 @@ export class InstructionManager extends BaseWebviewManager {
       });
       logger.error(
         CHANNEL,
-        `Error setting up text polishing: ${toErrorMessage(error)}`,
+        `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
       );
     }
   }

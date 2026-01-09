@@ -886,17 +886,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleShowToolEditApproval(message) {
-    if (!message || !message.request) {
-      return;
-    }
-    dom.approvalRequests.show(message.request);
+    if (message?.request) dom.approvalRequests.show(message.request);
   }
 
   handleResolveToolEditApproval(message) {
-    if (!message || !message.requestId) {
-      return;
-    }
-    dom.approvalRequests.resolve(message.requestId);
+    if (message?.requestId) dom.approvalRequests.resolve(message.requestId);
   }
 
   handleUpdateToolEditApprovalState(message) {
@@ -907,17 +901,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleShowRetryRequest(message) {
-    if (!message || !message.request) {
-      return;
-    }
-    dom.retryRequests.show(message.request);
+    if (message?.request) dom.retryRequests.show(message.request);
   }
 
   handleResolveRetryRequest(message) {
-    if (!message || !message.streamId) {
-      return;
-    }
-    dom.retryRequests.resolve(message.streamId);
+    if (message?.streamId) dom.retryRequests.resolve(message.streamId);
   }
 
   /**

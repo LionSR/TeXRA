@@ -47,16 +47,16 @@ const ACTION_CONFIG = {
  * @returns {HTMLElement|null} Context management element or null
  */
 export const formatContextManagement = (normalizedPayload, logId) => {
+  const parsed = normalizedPayload?.structured;
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
   const element = createFromTemplate('contextManagementTemplate');
   if (!element) return null;
 
   const contentElem = element.querySelector('.context-management-content');
   initToggleIcon(element, false);
-
-  const parsed = normalizedPayload?.structured;
-  if (parsed === null || typeof parsed !== 'object') {
-    return null;
-  }
 
   const {
     action,
