@@ -1,5 +1,5 @@
 /**
- * Base service interfaces shared across all flow types.
+ * Base service interfaces and shared types for all flow types.
  *
  * Following the PocketFlow pattern:
  * - Services are immutable dependencies injected via flow.setServices()
@@ -14,17 +14,20 @@
 // Node Configuration Constants
 // ============================================================================
 
-/**
- * Node retry configuration: no retries (single attempt).
- * Most flow nodes don't retry - errors bubble up to agent.run() for handling.
- */
+/** Node retry configuration: no retries (single attempt). */
 export const NODE_NO_RETRY = 1;
 
-/**
- * Node wait configuration: no wait between retries.
- * When retries are disabled, this has no effect.
- */
+/** Node wait configuration: no wait between retries. */
 export const NODE_NO_WAIT = 0;
+
+// ============================================================================
+// Result Types
+// ============================================================================
+
+/** Generic result type for exec methods that return a value. */
+export type NodeExecResult<T> =
+  | { kind: 'success'; result: T }
+  | { kind: 'error'; error: unknown };
 
 // ============================================================================
 // Service Interfaces
