@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 import { type OAuthProvider, getExternalAuthCallbackUri } from './config';
@@ -125,8 +126,9 @@ export async function signIn(): Promise<void> {
       );
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    void vscode.window.showErrorMessage(`Sign in failed: ${message}`);
+    void vscode.window.showErrorMessage(
+      `Sign in failed: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -178,9 +180,8 @@ async function signInWithEmail(): Promise<void> {
       `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(
-      `Failed to send magic link: ${message}`,
+      `Failed to send magic link: ${toErrorMessage(error)}`,
     );
   }
 }
@@ -226,8 +227,9 @@ export async function signOut(): Promise<void> {
       );
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    void vscode.window.showErrorMessage(`Sign out failed: ${message}`);
+    void vscode.window.showErrorMessage(
+      `Sign out failed: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -246,8 +248,9 @@ export async function viewProfile(): Promise<void> {
   try {
     await profileViewProvider.showProfileView();
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    void vscode.window.showErrorMessage(`Failed to load profile: ${message}`);
+    void vscode.window.showErrorMessage(
+      `Failed to load profile: ${toErrorMessage(error)}`,
+    );
   }
 }
 
@@ -331,9 +334,8 @@ export async function showAccountMenu(): Promise<void> {
       }
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(
-      `Failed to show account menu: ${message}`,
+      `Failed to show account menu: ${toErrorMessage(error)}`,
     );
   }
 }

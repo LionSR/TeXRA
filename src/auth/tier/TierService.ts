@@ -19,6 +19,7 @@ import {
   TierModelConfigSchema,
   UserAccessStatusSchema,
   type TierModelConfig,
+  type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
 
@@ -162,6 +163,17 @@ export class TierService {
   }
 
   /**
+   * Get tier-specific config from cached or provided config.
+   * Returns null if config or tier config not available.
+   */
+  private getTierConfig(
+    tier: UserTier,
+    config?: TierModelConfig | null,
+  ): TierModelsConfig | null {
+    return (config ?? this.cache)?.tiers[tier] ?? null;
+  }
+
+  /**
    * Check if a specific model is available for a user tier.
    *
    * @param tier - User's tier (free, Max, Ultra)
@@ -173,20 +185,9 @@ export class TierService {
     modelName: string,
     config?: TierModelConfig | null,
   ): boolean {
-    const cfg = config ?? this.cache;
-    if (!cfg) {
-      return false;
-    }
-
-    const tierConfig = cfg.tiers[tier];
-    if (!tierConfig) {
-      return false;
-    }
-
-    if (tierConfig.models === '*') {
-      return true;
-    }
-
+    const tierConfig = this.getTierConfig(tier, config);
+    if (!tierConfig) return false;
+    if (tierConfig.models === '*') return true;
     return tierConfig.models.includes(modelName);
   }
 
@@ -198,20 +199,9 @@ export class TierService {
     tier: UserTier,
     config?: TierModelConfig | null,
   ): string[] | null {
-    const cfg = config ?? this.cache;
-    if (!cfg) {
-      return [];
-    }
-
-    const tierConfig = cfg.tiers[tier];
-    if (!tierConfig) {
-      return [];
-    }
-
-    if (tierConfig.models === '*') {
-      return null;
-    }
-
+    const tierConfig = this.getTierConfig(tier, config);
+    if (!tierConfig) return [];
+    if (tierConfig.models === '*') return null;
     return tierConfig.models;
   }
 
@@ -220,8 +210,7 @@ export class TierService {
    * All tiers have access to the same providers.
    */
   getProviders(config?: TierModelConfig | null): string[] {
-    const cfg = config ?? this.cache;
-    return cfg?.providers ?? [];
+    return (config ?? this.cache)?.providers ?? [];
   }
 
   /**
@@ -231,25 +220,11 @@ export class TierService {
     tier: UserTier,
     config?: TierModelConfig | null,
   ): string {
-    const cfg = config ?? this.cache;
-    if (!cfg) {
-      return 'No included model access';
-    }
-
-    const tierConfig = cfg.tiers[tier];
-    if (!tierConfig) {
-      return 'No included model access';
-    }
-
-    if (tierConfig.models === '*') {
-      return 'All models included';
-    }
-
+    const tierConfig = this.getTierConfig(tier, config);
+    if (!tierConfig) return 'No included model access';
+    if (tierConfig.models === '*') return 'All models included';
     const modelCount = tierConfig.models.length;
-    if (modelCount === 0) {
-      return 'No included model access';
-    }
-
+    if (modelCount === 0) return 'No included model access';
     return `${modelCount} model${modelCount === 1 ? '' : 's'} included`;
   }
 
