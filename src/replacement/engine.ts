@@ -290,6 +290,11 @@ export function applyReplacements(
         // Non-regex patterns only use string replacements
         if (typeof newText === 'string') {
           text = text.replaceAll(old, newText);
+        } else {
+          logger.debug(
+            CHANNEL,
+            `Skipping function pattern "${old}" in non-regex category "${category.name}"`,
+          );
         }
       }
     }
@@ -309,11 +314,12 @@ export function applyReplacements(
 
 /**
  * Clean content using all replacement rules.
- * Delegates to the engine's applyAll method which applies non-regex rules twice
- * (before and after regex rules) to catch artifacts introduced by regex processing.
+ * Applies non-regex, then regex rules, then conditional critique wrapping.
  */
 export function cleanFileContent(content: string): string {
-  return replacementEngine.applyAll(content);
+  let cleaned = applyReplacements(content, getAllReplacements()).trim();
+  cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
+  return shouldWrapCritiqueInAlign() ? wrapCritiqueInAlign(cleaned) : cleaned;
 }
 
 /**
