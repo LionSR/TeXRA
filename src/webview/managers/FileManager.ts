@@ -113,18 +113,13 @@ export class FileManager extends BaseWebviewManager {
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
-    const files = await (async () => {
-      switch (fileType) {
-        case 'Reference':
-          return await fileLister.list('reference');
-        case 'Auxiliary':
-          return await fileLister.list('auxiliary');
-        case 'Media':
-          return await fileLister.list('media');
-        default:
-          return [];
-      }
-    })();
+    const fileTypeToListType: Record<string, 'reference' | 'auxiliary' | 'media'> = {
+      Reference: 'reference',
+      Auxiliary: 'auxiliary',
+      Media: 'media',
+    };
+    const listType = fileTypeToListType[fileType];
+    const files = listType ? await fileLister.list(listType) : [];
     this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
