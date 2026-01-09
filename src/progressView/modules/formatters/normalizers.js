@@ -159,44 +159,38 @@ function isPlainObject(value) {
 }
 
 /**
+ * Extract output content from possibly nested structure
+ * @param {*} candidate - Output candidate value
+ * @returns {*} Extracted output content
+ */
+function extractOutputContent(candidate) {
+  if (!isPlainObject(candidate)) return candidate;
+
+  // Extract nested output, stripping metadata fields
+  const { output, summary, error, isError, diagnostics, userInstruction, ...rest } = candidate;
+  return output !== undefined ? output : rest;
+}
+
+/**
  * Normalize tool use log entry
  * @param {object} structured - Raw tool use data
  * @returns {object|null} Normalized tool use log
  */
 export function normalizeToolUseLog(structured) {
-  if (!isPlainObject(structured)) {
-    return null;
-  }
+  if (!isPlainObject(structured)) return null;
 
-  const parsed = structured;
-  const outputDetails = isPlainObject(parsed.output) ? parsed.output : {};
-
-  const summaryText = extractString(parsed.summary, outputDetails.summary);
-  const errorText = extractString(parsed.error, outputDetails.error);
+  const outputDetails = isPlainObject(structured.output) ? structured.output : {};
+  const summaryText = extractString(structured.summary, outputDetails.summary);
+  const errorText = extractString(structured.error, outputDetails.error);
   const userInstructionText = extractString(
-    parsed.userInstruction,
+    structured.userInstruction,
     outputDetails.userInstruction,
   );
 
+  // Use explicit undefined check to preserve null as a valid explicit value
   const outputCandidate =
-    parsed.output !== undefined ? parsed.output : outputDetails.output;
-
-  // Extract the actual output content, avoiding redundant nesting
-  let outputContent = outputCandidate;
-  if (isPlainObject(outputCandidate)) {
-    const {
-      summary: _unusedSummary,
-      output,
-      error: _extractedError,
-      isError: _extractedIsError,
-      diagnostics: _extractedDiagnostics,
-      userInstruction: _extractedUserInstruction,
-      ...rest
-    } = outputCandidate;
-    outputContent = output !== undefined ? output : rest;
-  }
-
-  // Check if outputContent is an empty object
+    structured.output !== undefined ? structured.output : outputDetails.output;
+  const outputContent = extractOutputContent(outputCandidate);
   const isEmptyObject =
     isPlainObject(outputContent) && Object.keys(outputContent).length === 0;
 
@@ -207,22 +201,18 @@ export function normalizeToolUseLog(structured) {
         ? stringifyForDisplay(outputContent)
         : '';
 
-  // Extract tool name from either toolName or tool field
-  const rawToolName = parsed.toolName ?? parsed.tool;
+  const rawToolName = structured.toolName ?? structured.tool;
   const toolName = typeof rawToolName === 'string' ? rawToolName.trim() : '';
-
   const isUserFeedback = userInstructionText.length > 0;
 
   return {
-    parsed,
+    parsed: structured,
     toolName,
     errorText,
     outputText,
     userInstructionText,
-    input: parsed.input,
-    isError: Boolean(
-      parsed.isError || outputDetails.isError || errorText.length > 0,
-    ),
+    input: structured.input,
+    isError: Boolean(structured.isError || outputDetails.isError || errorText),
     isUserFeedback,
     headerSummary: summaryText || (isUserFeedback ? '' : errorText),
   };

@@ -42,47 +42,27 @@ export class FileList {
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
 
-    // Tool-use mode: files append directly to container without round headers
-    // Workflow mode: each round gets its own collapsible details with a header
-
     let hasFiles = false;
-    rounds.forEach((round) => {
+    for (const round of rounds) {
       const files = filesByRound[round];
-      if (!Array.isArray(files)) {
-        if (files !== undefined) {
-          console.warn(
-            `FileList.update: Expected array for round ${round}, got:`,
-            typeof files,
-            files,
-          );
-        }
-        return;
-      }
-      if (files.length === 0) return;
+      if (!Array.isArray(files) || files.length === 0) continue;
 
       hasFiles = true;
 
+      // Determine target container based on mode
+      let target = container;
       if (showRoundHeaders) {
-        // Workflow mode: create collapsible round group for each round
         const roundGroup = createFromTemplate('roundHeaderTemplate');
-        if (!roundGroup) return;
-        // roundGroup is the vscode-collapsible root element
+        if (!roundGroup) continue;
         roundGroup.setAttribute('title', `r${round}`);
         const roundContent = roundGroup.querySelector('.round-content');
-        if (!roundContent) return;
-
-        files.forEach((file) => {
-          this._renderFileItem(template, roundContent, file, round);
-        });
-
+        if (!roundContent) continue;
+        target = roundContent;
         container.appendChild(roundGroup);
-      } else {
-        // Tool-use mode: append files directly to container
-        files.forEach((file) => {
-          this._renderFileItem(template, container, file, round);
-        });
       }
-    });
+
+      files.forEach((file) => this._renderFileItem(template, target, file, round));
+    }
 
     // Show/hide collapsible based on whether files were actually rendered
     setVisibilityState(collapsible, hasFiles);
