@@ -111,16 +111,11 @@ export async function runToolUseFlow<C = unknown>(
     // Get execution-scoped storage for persistence
     const kv: ExecutionKVStore = getExecutionStore(executionId);
 
-    // Try to restore from persisted flow (resume scenario)
-    let isResume = false;
-    try {
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      if (flowRecord?.shared) {
-        isResume = true;
-        logger.debug('Resuming tool-use flow from persistence');
-      }
-    } catch {
-      // No persisted flow - fresh start
+    // Check for persisted flow (resume scenario)
+    const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+    const isResume = Boolean(flowRecord?.shared);
+    if (isResume) {
+      logger.debug('Resuming tool-use flow from persistence');
     }
 
     // Create shared state
