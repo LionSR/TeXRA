@@ -250,22 +250,22 @@ export class ServerSideKeyService {
 
   private async fetchAccessStatus(): Promise<boolean> {
     try {
-      const isAuthenticated = await this.authProvider.isAuthenticated();
-      if (!isAuthenticated) {
-        this.accessResult = false;
-        this.userTier = null;
-        return false;
+      if (!(await this.authProvider.isAuthenticated())) {
+        return this.setAccessDenied();
       }
-
       const tier = await this.authProvider.getUserTier();
       this.accessResult = true;
       this.userTier = tier || FREE_TIER;
       return true;
-    } catch (_err) {
-      this.accessResult = false;
-      this.userTier = null;
-      return false;
+    } catch {
+      return this.setAccessDenied();
     }
+  }
+
+  private setAccessDenied(): false {
+    this.accessResult = false;
+    this.userTier = null;
+    return false;
   }
 
   /**
