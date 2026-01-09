@@ -2,6 +2,7 @@
 export {
   DocId,
   formatError,
+  formatZodError,
   isFileNotFoundError,
   toErrorMessage,
   logErrorMessage,
