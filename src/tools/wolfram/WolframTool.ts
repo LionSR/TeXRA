@@ -27,7 +27,7 @@ export class WolframTool extends defineTool({
     });
     if (result.success) {
       return {
-        summary: 'Executed: code evaluation',
+        summary: 'Executed',
         output: result.output ?? '',
       };
     }
