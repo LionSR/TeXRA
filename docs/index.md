@@ -16,10 +16,12 @@ hero:
       <span class="chevron">▼</span>
     </button>
     <div class="dropdown-menu">
-      <a href="/guide/">Documentation</a>
-      <a href="vscode:extension/texra-ai.texra">VS Code</a>
-      <a href="/launch">GitHub Codespaces</a>
+      <a href="vscode:extension/texra-ai.texra">VS Code*</a>
+      <a href="cursor://texra-ai.texra">Cursor*</a>
+      <a href="windsurf://texra-ai.texra">Windsurf*</a>
       <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra">VS Code Marketplace</a>
+      <a href="/launch">Web (Codespaces)</a>
+      <span class="dropdown-note">*Requires app install</span>
     </div>
   </div>
   <a href="https://github.com/texra-ai/texra-issues" class="alt-button">View on GitHub</a>
@@ -221,6 +223,13 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
 }
 .dropdown-menu a:hover {
   background: var(--vp-c-bg-soft);
+}
+.dropdown-note {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  color: var(--vp-c-text-3);
+  border-top: 1px solid var(--vp-c-divider);
 }
 .alt-button {
   display: inline-flex;
