@@ -162,33 +162,6 @@ class StreamStatuses {
   }
 }
 
-/**
- * Tracks whether a stream has an execution directory available.
- */
-class ExecutionIdAvailability {
-  constructor() {
-    this.availability = new Map();
-  }
-
-  setAvailable(stream, hasExecutionId) {
-    this.availability.set(stream, Boolean(hasExecutionId));
-  }
-
-  hasExecutionId(stream) {
-    return this.availability.get(stream) ?? false;
-  }
-
-  delete(stream) {
-    if (!stream) {
-      return;
-    }
-    this.availability.delete(stream);
-  }
-
-  clear() {
-    this.availability.clear();
-  }
-}
 
 class RunScopedMap {
   constructor(resolveStreamId) {
@@ -296,7 +269,7 @@ export class ProgressViewState {
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStateStore(this.saveToggleStates.bind(this));
     this.streamStatuses = new StreamStatuses();
-    this.executionIdAvailability = new ExecutionIdAvailability();
+    this._executionIdAvailability = new Map();
   }
 
   _resolveStreamId(streamId) {
@@ -312,19 +285,21 @@ export class ProgressViewState {
   }
 
   setExecutionIdAvailable(stream, hasExecutionId) {
-    this.executionIdAvailability.setAvailable(stream, hasExecutionId);
+    this._executionIdAvailability.set(stream, Boolean(hasExecutionId));
   }
 
   hasExecutionId(stream) {
-    return this.executionIdAvailability.hasExecutionId(stream);
+    return this._executionIdAvailability.get(stream) ?? false;
   }
 
   clearExecutionIdAvailability(stream) {
-    this.executionIdAvailability.delete(stream);
+    if (stream) {
+      this._executionIdAvailability.delete(stream);
+    }
   }
 
   resetExecutionIdAvailability() {
-    this.executionIdAvailability.clear();
+    this._executionIdAvailability.clear();
   }
 
   /** Load saved state from VS Code storage. */
@@ -430,22 +405,25 @@ export class ProgressViewState {
   _collectRunCandidates(streamId) {
     const candidates = new Set();
 
-    // Helper to add all keys from a Map
-    const addKeys = (map) => {
-      if (map) {
-        for (const runId of map.keys()) {
-          if (runId) candidates.add(runId);
+    // Collect run IDs from all run-scoped maps
+    const runMaps = [
+      this.runInstructions,
+      this.runFiles,
+      this.runMissingOutputs,
+      this.runUsage,
+    ];
+    for (const runMap of runMaps) {
+      const streamMap = runMap.getStreamMap(streamId);
+      if (streamMap) {
+        for (const runId of streamMap.keys()) {
+          if (runId) {
+            candidates.add(runId);
+          }
         }
       }
-    };
+    }
 
-    // Collect from all run-scoped data sources
-    addKeys(this.runInstructions.getStreamMap(streamId));
-    addKeys(this.runFiles.getStreamMap(streamId));
-    addKeys(this.runMissingOutputs.getStreamMap(streamId));
-    addKeys(this.runUsage.getStreamMap(streamId));
-
-    // Add root task group IDs (groups without parents)
+    // Add root task group IDs
     for (const group of this.taskGroups.getGroupMap().values()) {
       if (group && !group.parentGroupId) {
         candidates.add(group.id);
@@ -456,34 +434,19 @@ export class ProgressViewState {
   }
 
   _findLatestRunId(streamId) {
-    const groups = this.taskGroups.getGroupMap();
-    const rootGroups = [];
-    for (const group of groups.values()) {
-      if (group && !group.parentGroupId) {
-        rootGroups.push(group);
-      }
-    }
+    const rootGroups = Array.from(this.taskGroups.getGroupMap().values()).filter(
+      (g) => g && !g.parentGroupId,
+    );
 
     if (rootGroups.length === 0) {
+      // Fall back to last run ID from usage map
       const usageRuns = this.runUsage.getStreamMap(streamId);
-      if (usageRuns && usageRuns.size > 0) {
-        let latestRunId = null;
-        for (const runId of usageRuns.keys()) {
-          latestRunId = runId;
-        }
-        return latestRunId;
-      }
-      return null;
+      return usageRuns?.size > 0 ? Array.from(usageRuns.keys()).at(-1) : null;
     }
 
-    rootGroups.sort((a, b) => {
-      const aTime = typeof a.startTime === 'number' ? a.startTime : 0;
-      const bTime = typeof b.startTime === 'number' ? b.startTime : 0;
-      return aTime - bTime;
-    });
-
-    const latest = rootGroups.at(-1);
-    return latest?.id ?? null;
+    // Return ID of the group with the latest start time
+    const getTime = (g) => (typeof g.startTime === 'number' ? g.startTime : 0);
+    return rootGroups.sort((a, b) => getTime(a) - getTime(b)).at(-1)?.id ?? null;
   }
 
   setPendingInstruction(streamId, instruction) {
@@ -628,28 +591,23 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    // SET semantics: backend sends accumulated values, we store directly
-    // (no accumulation here - backend handles accumulation in UsageStatsManager)
-    // Use ?? (nullish coalescing) not || to preserve 0 and NaN as intentional values
+    // Normalize usage fields - ?? preserves 0, unlike ||
+    const toNum = (v) => Number(v ?? 0);
     const normalized = {
-      inputTokens: Number(usage?.inputTokens ?? 0),
-      outputTokens: Number(usage?.outputTokens ?? 0),
-      cost: Number(usage?.cost ?? 0),
-      cacheReadInputTokens: Number(usage?.cacheReadInputTokens ?? 0),
-      cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
+      inputTokens: toNum(usage?.inputTokens),
+      outputTokens: toNum(usage?.outputTokens),
+      cost: toNum(usage?.cost),
+      cacheReadInputTokens: toNum(usage?.cacheReadInputTokens),
+      cacheCreationInputTokens: toNum(usage?.cacheCreationInputTokens),
     };
-    if (
+    // Skip empty usage (cost=0 implies no cache billing)
+    const isEmpty =
       normalized.inputTokens === 0 &&
       normalized.outputTokens === 0 &&
-      normalized.cost === 0
-    ) {
-      // Empty usage means nothing to store.
-      // Note: We only check input/output/cost, not cache tokens separately.
-      // Cost is calculated upstream and already includes cache creation charges
-      // (Anthropic: 1.25x input price), so cost=0 implies no cache creation billing.
-      return;
+      normalized.cost === 0;
+    if (!isEmpty) {
+      this.runUsage.set(targetStream, runId, normalized);
     }
-    this.runUsage.set(targetStream, runId, normalized);
   }
 
   getRunUsage(streamId, runId) {
