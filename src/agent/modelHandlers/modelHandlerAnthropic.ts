@@ -708,6 +708,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
+
+    // Calculate total input tokens (Anthropic SDK: total = input + cache_read + cache_creation)
+    const totalInputTokens =
+      response.usage.input_tokens +
+      (response.usage.cache_read_input_tokens ?? 0) +
+      (response.usage.cache_creation_input_tokens ?? 0);
     type AppliedEdit =
       | BetaClearToolUses20250919EditResponse
       | BetaClearThinking20251015EditResponse;
@@ -727,14 +733,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           `Cleared ${clearedToolUses} tool use(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
           {
             action: 'clear_tool_uses',
-            tokensBefore: response.usage.input_tokens + clearedTokens,
-            tokensAfter: response.usage.input_tokens,
+            tokensBefore: totalInputTokens + clearedTokens,
+            tokensAfter: totalInputTokens,
             contextWindow,
             utilizationBefore:
-              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
-              100,
-            utilizationAfter:
-              (response.usage.input_tokens / contextWindow) * 100,
+              ((totalInputTokens + clearedTokens) / contextWindow) * 100,
+            utilizationAfter: (totalInputTokens / contextWindow) * 100,
             details: `Anthropic server-side: cleared ${clearedToolUses} tool use(s)`,
           },
         );
@@ -754,14 +758,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
           {
             action: 'clear_thinking',
-            tokensBefore: response.usage.input_tokens + clearedTokens,
-            tokensAfter: response.usage.input_tokens,
+            tokensBefore: totalInputTokens + clearedTokens,
+            tokensAfter: totalInputTokens,
             contextWindow,
             utilizationBefore:
-              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
-              100,
-            utilizationAfter:
-              (response.usage.input_tokens / contextWindow) * 100,
+              ((totalInputTokens + clearedTokens) / contextWindow) * 100,
+            utilizationAfter: (totalInputTokens / contextWindow) * 100,
             details: `Anthropic server-side: cleared ${clearedTurns} thinking turn(s)`,
           },
         );
@@ -1506,18 +1508,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
     }
 
-    const inputTokens = rawUsage.input_tokens ?? 0;
+    // Anthropic SDK docs: "Total input tokens in a request is the summation
+    // of `input_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`."
+    const baseInputTokens = rawUsage.input_tokens ?? 0;
     const outputTokens = rawUsage.output_tokens ?? 0;
     const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
     const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
 
-    // Calculate percentage cached
+    // Total input tokens for context measurement (includes all cached tokens)
+    const totalInputTokens =
+      baseInputTokens + cacheReadTokens + cacheCreationTokens;
+
+    // Calculate percentage cached (relative to total)
     const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
     const percentageCached =
-      inputTokens > 0 ? (totalCacheTokens / inputTokens) * 100 : 0;
+      totalInputTokens > 0 ? (totalCacheTokens / totalInputTokens) * 100 : 0;
 
     return {
-      inputTokens,
+      inputTokens: totalInputTokens,
       outputTokens,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
