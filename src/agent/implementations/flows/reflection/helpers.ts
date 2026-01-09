@@ -4,7 +4,10 @@ import * as path from 'path';
 
 import type { RoundOutput } from '@agent/output';
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentWorkflowSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import type {
+  AgentWorkflowSetting,
+  AgentPrompt,
+} from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import {
   WorkspaceFS,
@@ -45,8 +48,11 @@ export function getFilesForRound(
 }
 
 /** Create workspace file locations for latexdiff base files. */
-export function createBaseFileLocations(config: AgentConfig): WorkspaceFileLocation[] {
-  const files = config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
+export function createBaseFileLocations(
+  config: AgentConfig,
+): WorkspaceFileLocation[] {
+  const files =
+    config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile];
   return files.map((f) => {
     const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
     const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
@@ -60,8 +66,10 @@ export function computeShouldEnsureXmlStructure(
   useScratchpad: boolean,
 ): boolean {
   if (setting.xmlStructureMode !== undefined) {
-    return setting.xmlStructureMode === 'always' ||
-      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
+    return (
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad)
+    );
   }
   if (setting.agentType === 'CoT') return true;
   if (setting.agentType === 'direct') return useScratchpad;
@@ -69,12 +77,17 @@ export function computeShouldEnsureXmlStructure(
 }
 
 /** Compute total rounds: explicit maxRounds, or 1 for direct, or max(rounds, requests). */
-export function computeTotalRounds(setting: AgentWorkflowSetting, prompt: AgentPrompt): number {
+export function computeTotalRounds(
+  setting: AgentWorkflowSetting,
+  prompt: AgentPrompt,
+): number {
   if (setting.maxRounds !== undefined) return setting.maxRounds;
   if (setting.agentType === 'direct') return 1;
   const requests = Array.isArray(prompt.userRequest)
     ? prompt.userRequest
-    : prompt.userRequest ? [prompt.userRequest] : [];
+    : prompt.userRequest
+      ? [prompt.userRequest]
+      : [];
   return Math.max(setting.rounds ?? 2, requests.length);
 }
 
@@ -90,7 +103,18 @@ export function createOutputFileLocationGetter(params: {
   const ext = useScratchpad ? 'xml' : setting.outputExt;
 
   return (round: number): AgentFileLocation => {
-    const fileName = getOutputFileName(config.inputFile, config.agent, modelName, ext, round, config.editedFile || undefined);
-    return (useScratchpad ? fileService.createRawOutputLocation(fileName) : fileService.createLocation(fileName)) as AgentFileLocation;
+    const fileName = getOutputFileName(
+      config.inputFile,
+      config.agent,
+      modelName,
+      ext,
+      round,
+      config.editedFile || undefined,
+    );
+    return (
+      useScratchpad
+        ? fileService.createRawOutputLocation(fileName)
+        : fileService.createLocation(fileName)
+    ) as AgentFileLocation;
   };
 }

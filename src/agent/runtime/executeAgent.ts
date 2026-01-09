@@ -480,7 +480,9 @@ async function handleFlowError(
 
   // Log error directly without creating a new visible group
   // (error is already captured in runStage with ERROR status)
-  await agentLogger.logError(errorMsg, err, { operation: `execute ${agentName}` });
+  await agentLogger.logError(errorMsg, err, {
+    operation: `execute ${agentName}`,
+  });
 
   throw new Error(errorMsg);
 }
