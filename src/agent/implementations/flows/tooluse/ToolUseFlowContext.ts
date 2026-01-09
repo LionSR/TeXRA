@@ -71,6 +71,47 @@ export interface ToolUseFlowContext<C = unknown> {
 }
 
 // ============================================================================
+// Tool Resolution Helper
+// ============================================================================
+
+interface ResolveToolsParams {
+  tools: AgentToolUseSetting['tools'];
+  toolRegistry: IToolRegistry;
+  logger: { warn: (msg: string) => void };
+}
+
+/** Resolve tool definitions from setting, validating against registry. */
+function resolveTools(params: ResolveToolsParams): ToolDefinition[] {
+  const { tools, toolRegistry, logger } = params;
+
+  const toolConfigs = Array.isArray(tools) ? tools : [];
+  const resolved: ToolDefinition[] = [];
+  const resolvedNames = new Set<string>();
+
+  for (const t of toolConfigs) {
+    const def = typeof t === 'string' ? { name: t } : t;
+    if (!toolRegistry.has(def.name)) {
+      logger.warn(`Tool "${def.name}" not found in registry`);
+      continue;
+    }
+    resolved.push(def);
+    resolvedNames.add(def.name);
+  }
+
+  // Inject memory tool if enabled and not already present
+  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
+    const memoryTool = toolRegistry.get('memory');
+    if (memoryTool) {
+      resolved.push(memoryTool.definition);
+    } else {
+      logger.warn('Memory tool not found in registry');
+    }
+  }
+
+  return resolved;
+}
+
+// ============================================================================
 // Factory Function
 // ============================================================================
 
@@ -89,29 +130,11 @@ export function createToolUseFlowContext<C = unknown>(
   const toolRegistry = customRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
-  // Resolve tools once at construction time
-  const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
-  const resolvedTools: ToolDefinition[] = [];
-  const resolvedNames = new Set<string>();
-  for (const t of toolConfigs) {
-    const def = typeof t === 'string' ? { name: t } : t;
-    if (!toolRegistry.has(def.name)) {
-      logger.warn(`Tool "${def.name}" not found in registry`);
-      continue;
-    }
-    resolvedTools.push(def);
-    resolvedNames.add(def.name);
-  }
-
-  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
-    const memoryTool = toolRegistry.get('memory');
-    if (memoryTool) {
-      resolvedTools.push(memoryTool.definition);
-      resolvedNames.add('memory');
-    } else {
-      logger.warn('Memory tool not found in registry');
-    }
-  }
+  const resolvedTools = resolveTools({
+    tools: setting.tools,
+    toolRegistry,
+    logger,
+  });
 
   // Spread init directly - it already contains setting, logger, etc.
   const services: ToolUseServices<C> = {

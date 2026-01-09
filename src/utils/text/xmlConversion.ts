@@ -26,35 +26,23 @@ import {
 const CHANNEL = 'xmlConversion';
 logger.initialize(CHANNEL);
 
-// Cache pandoc availability check
-let pandocAvailable: boolean | null = null;
+/**
+ * Cached pandoc availability check.
+ * Caches positive results permanently, but clears on failure to allow retry
+ * (e.g., if user installs pandoc mid-session).
+ */
 let pandocCheckPromise: Promise<boolean> | null = null;
 
 async function isPandocAvailable(): Promise<boolean> {
-  if (pandocAvailable !== null) {
-    return pandocAvailable;
-  }
-
-  // If a check is already in progress, wait for it
-  if (pandocCheckPromise !== null) {
-    return pandocCheckPromise;
-  }
-
-  // Start new check and store the promise
-  pandocCheckPromise = checkToolInstalled('pandoc', false)
-    .then((result) => {
-      pandocAvailable = result;
+  if (pandocCheckPromise === null) {
+    pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
+      // Clear cache on negative result to allow retry next time
+      if (!result) {
+        pandocCheckPromise = null;
+      }
       return result;
-    })
-    .catch(() => {
-      // Cache negative result on error to prevent infinite retries
-      pandocAvailable = false;
-      return false;
-    })
-    .finally(() => {
-      pandocCheckPromise = null;
     });
-
+  }
   return pandocCheckPromise;
 }
 
