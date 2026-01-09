@@ -287,11 +287,10 @@ export class HistoryRenderer {
       );
       if (!collapsible) continue;
 
-      const isExpanded = Boolean(expanded);
+      // Use .open property for <details> elements - it automatically manages the attribute
       if ('open' in collapsible) {
-        collapsible.open = isExpanded;
+        collapsible.open = Boolean(expanded);
       }
-      collapsible.toggleAttribute('open', isExpanded);
     }
   }
 }

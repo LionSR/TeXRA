@@ -118,11 +118,7 @@ export class SearchManager {
         if ('open' in section) {
           section.open = expanded;
         }
-        if (expanded) {
-          section.setAttribute('open', '');
-        } else {
-          section.removeAttribute('open');
-        }
+        section.toggleAttribute('open', expanded);
       });
   }
 
