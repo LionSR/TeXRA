@@ -85,12 +85,18 @@ export interface DiagnosticsPayload {
   messages?: Diagnostic[];
 }
 
-// Define proper type for diagnostic information
+/**
+ * Union type for diagnostic information attached to tool results.
+ * - ZodIssue[]: Validation errors from schema parsing
+ * - Error-like: Regular errors with name and optional stack
+ * - DiagnosticsPayload: Structured diagnostics from tools
+ * - unknown: Other diagnostic formats for forward compatibility
+ */
 export type ErrorDiagnostics =
-  | ZodIssue[] // For validation errors
-  | { name: string; stack?: string } // For regular errors
-  | DiagnosticsPayload // For diagnostics payloads returned by tools
-  | unknown; // For other types of diagnostics
+  | ZodIssue[]
+  | { name: string; stack?: string }
+  | DiagnosticsPayload
+  | unknown;
 
 // ============================================================================
 // ToolResult Schema
