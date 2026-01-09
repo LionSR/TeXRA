@@ -22,16 +22,11 @@ const ReadInputSchema = z.strictObject({
       start: z.int().min(1),
       end: z.int().min(1).nullish(),
     })
-    .refine(
-      (value) => {
-        // eslint-disable-next-line eqeqeq
-        return value.end == null || value.end >= value.start;
-      },
-      {
-        path: ['end'],
-        error: 'range.end must be greater than or equal to range.start',
-      },
-    )
+    // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+    .refine((value) => value.end == null || value.end >= value.start, {
+      path: ['end'],
+      error: 'range.end must be greater than or equal to range.start',
+    })
     .nullish(),
 });
 
@@ -121,9 +116,8 @@ export class ReadFileTool extends defineTool({
       requestedEndLine,
       truncated,
       rangeProvided: Boolean(input.range),
-      // eslint-disable-next-line eqeqeq
-      rangeEndExceeded:
-        input.range?.end != null && input.range.end > totalLines,
+      // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+      rangeEndExceeded: input.range?.end != null && input.range.end > totalLines,
     });
 
     return {
@@ -156,34 +150,23 @@ export class ReadFileTool extends defineTool({
     rangeEndExceeded,
   }: BuildSummaryParams): string {
     if (visibleCount === 0) {
-      if (totalLines === 0) {
-        return `Read ${path} (file is empty)`;
-      }
-      return `Read ${path} (no lines in requested range)`;
+      return totalLines === 0
+        ? `Read ${path} (file is empty)`
+        : `Read ${path} (no lines in requested range)`;
     }
 
-    const safeActualStartLine = actualStartLine ?? 1;
-    const safeActualEndLine =
-      actualEndLine ?? safeActualStartLine + visibleCount - 1;
-    const describeRange =
-      rangeProvided ||
-      truncated ||
-      safeActualStartLine !== 1 ||
-      safeActualEndLine !== totalLines;
+    const startLine = actualStartLine ?? 1;
+    const endLine = actualEndLine ?? startLine + visibleCount - 1;
+    const isPartialRead =
+      rangeProvided || truncated || startLine !== 1 || endLine !== totalLines;
+
     const rangeLabel =
-      safeActualStartLine === safeActualEndLine
-        ? `line ${safeActualStartLine}`
-        : `lines ${safeActualStartLine}-${safeActualEndLine}`;
+      startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
+    const base = isPartialRead ? `Read ${rangeLabel} of ${path}` : `Read ${path}`;
 
-    let summary = describeRange
-      ? `Read ${rangeLabel} of ${path}`
-      : `Read ${path}`;
-
-    if (rangeEndExceeded) {
-      summary += ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`;
-    }
-
-    return summary;
+    return rangeEndExceeded
+      ? `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`
+      : base;
   }
 
   private getAttachmentConfig(

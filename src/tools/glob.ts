@@ -55,7 +55,7 @@ export class GlobTool extends defineTool({
     }
 
     // Process matches in parallel for better performance
-    const statPromises = matches.map(async (match) => {
+    const statPromises = matches.map(async (match): Promise<GlobMatchInfo | null> => {
       let resolved;
       try {
         resolved = joinWorkspaceRelativePath(base.relative, match);
@@ -70,21 +70,12 @@ export class GlobTool extends defineTool({
         return null;
       }
 
-      try {
-        const stat = await WorkspaceFS.stat(relativePath);
-        return {
-          relativePath,
-          mtime: stat.mtime ?? 0,
-        };
-      } catch (_err) {
-        return { relativePath, mtime: 0 };
-      }
+      const stat = await WorkspaceFS.stat(relativePath).catch(() => null);
+      return { relativePath, mtime: stat?.mtime ?? 0 };
     });
 
-    const decoratedWithNulls = await Promise.all(statPromises);
-    const decorated = decoratedWithNulls.filter(
-      (item): item is GlobMatchInfo => item !== null,
-    );
+    const results = await Promise.all(statPromises);
+    const decorated = results.filter((item): item is GlobMatchInfo => item !== null);
 
     const sorted = decorated.sort((a, b) => {
       if (b.mtime !== a.mtime) {
