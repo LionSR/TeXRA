@@ -169,14 +169,12 @@ export function getAllReplacements(): ReplacementCategory {
     enabledCategoryNames.includes(category.name),
   );
 
-  // Combine patterns from all enabled categories
-  let allPatterns: { [key: string]: ReplacementValue } = {};
-  enabledCategories.forEach((category) => {
-    allPatterns = { ...allPatterns, ...category.patterns };
-  });
-
-  // Add custom replacements (these take precedence over built-in ones)
-  allPatterns = { ...allPatterns, ...customReplacements };
+  // Combine patterns from all enabled categories with custom replacements taking precedence
+  const allPatterns: { [key: string]: ReplacementValue } = Object.assign(
+    {},
+    ...enabledCategories.map((c) => c.patterns),
+    customReplacements,
+  );
 
   return {
     name: 'all',
@@ -237,19 +235,10 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
 export function getReplacementsByCategory(
   categoryName: string,
 ): ReplacementCategory | undefined {
-  // Define all available categories
-  const allCategories = [...NON_REGEX_CATEGORIES, ...REGEX_CATEGORIES];
-
-  // Create a map for efficient lookup by name
-  const categoryMap = new Map<string, ReplacementCategory>();
-
-  // Add all categories to the map
-  allCategories.forEach((category) => {
-    categoryMap.set(category.name, category);
-  });
-
-  // Return the requested category if it exists
-  return categoryMap.get(categoryName);
+  return (
+    NON_REGEX_CATEGORIES.find((c) => c.name === categoryName) ??
+    REGEX_CATEGORIES.find((c) => c.name === categoryName)
+  );
 }
 
 /**
@@ -284,12 +273,11 @@ export function applyReplacements(
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
           const regex = new RegExp(pattern, category.flags);
-          if (typeof repl === 'function') {
-            const replacer = repl as ReplacementFunction;
-            text = text.replace(regex, (...args) => replacer(...args));
-          } else {
-            text = text.replace(regex, repl);
-          }
+          // Type narrowing: if repl is a function, use it as callback; otherwise use as string
+          text =
+            typeof repl === 'function'
+              ? text.replace(regex, repl)
+              : text.replace(regex, repl);
         } catch (regexErr) {
           logger.error(
             CHANNEL,
@@ -299,7 +287,15 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        text = text.replaceAll(old, newText as string);
+        // Non-regex patterns only use string replacements
+        if (typeof newText === 'string') {
+          text = text.replaceAll(old, newText);
+        } else {
+          logger.debug(
+            CHANNEL,
+            `Skipping function pattern "${old}" in non-regex category "${category.name}"`,
+          );
+        }
       }
     }
   }
@@ -318,6 +314,7 @@ export function applyReplacements(
 
 /**
  * Clean content using all replacement rules.
+ * Applies non-regex, then regex rules, then conditional critique wrapping.
  */
 export function cleanFileContent(content: string): string {
   let cleaned = applyReplacements(content, getAllReplacements()).trim();
