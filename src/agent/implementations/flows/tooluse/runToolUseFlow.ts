@@ -23,11 +23,7 @@ import {
 } from '@common/constants/streamStatus';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
-import {
-  createToolUseRunFlow,
-  createInitialToolUseState,
-  type ToolUseRunShared,
-} from '../ToolUseRunFlow';
+import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';
 import {
   createToolUseFlowContext,
   type ToolUseFlowContext,
@@ -125,7 +121,7 @@ export async function runToolUseFlow<C = unknown>(
 
     // Create shared state
     const shared: ToolUseRunShared = {
-      state: createInitialToolUseState(),
+      state: { conversation: [], shouldSkipCycle: false, stateSlices: null },
     };
 
     // Create PersistedFlow with the start node

@@ -44,18 +44,12 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
+import { buildInitialToolUsePrompts } from '@utils/prompt';
 import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Internal imports
-
-// Service types and helper functions (direct calls, no closures)
-import {
-  prepareInitialState,
-  applyFollowUpMessage,
-  type ToolUseServices,
-  type ToolUseFlowParams,
-} from './tooluse';
+// Service types
+import { type ToolUseServices, type ToolUseFlowParams } from './tooluse';
 
 // ============================================================================
 // State Types
@@ -95,20 +89,6 @@ export interface ToolUseRunState {
   shouldSkipCycle: boolean;
   /** State slices (natively serializable) - reconstruct via fromSnapshot() */
   stateSlices: StateSlicesSnapshot | null;
-}
-
-/**
- * Create initial state for a tool-use flow run.
- *
- * Factory function for consistency with ReflectionFlow pattern
- * (which uses createInitialReflectionState).
- */
-export function createInitialToolUseState(): ToolUseRunState {
-  return {
-    conversation: [],
-    shouldSkipCycle: false,
-    stateSlices: null,
-  };
 }
 
 /**
@@ -248,12 +228,67 @@ class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult }> {
-    // Call helper functions directly (no closure wrappers)
-    // prepareInitialState returns individual slices directly (no store wrapper)
-    const prepared = await prepareInitialState(this.services);
+    const { modelHandler, prompt, userVarChannels, logger, snapshot } =
+      this.services;
+
+    // Resume from snapshot if available
+    if (snapshot) {
+      logger.debug('Resuming tool-use session from saved state.');
+      const runState = AgentRunState.fromSnapshot(snapshot.run);
+      const workspaceState = AgentWorkspaceState.fromSnapshot(
+        snapshot.workspace,
+      );
+      const userChannels = {
+        input: Object.freeze({ ...snapshot.user.input }),
+        transient: { ...snapshot.user.transient },
+      };
+      return {
+        kind: 'success',
+        result: {
+          messages: snapshot.messages,
+          runState,
+          workspaceState,
+          userChannels,
+          shouldSkipCycle: true,
+        },
+      };
+    }
+
+    // Create fresh state for new sessions
+    const runState = new AgentRunState();
+    const workspaceState = AgentWorkspaceState.create();
+    const memoryEnabled = this.services.resolvedTools.some(
+      (t) => t.name === 'memory',
+    );
+
+    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
+      await buildInitialToolUsePrompts(
+        prompt,
+        userVarChannels.transient,
+        logger,
+        {
+          memoryEnabled,
+        },
+      );
+
+    const messages = await modelHandler.initializeMessages(
+      userPrefix,
+      userRequest,
+      undefined,
+      systemPrompt
+        ? `${systemPrompt}\n${instructionSuffix}`
+        : instructionSuffix,
+    );
+
     return {
       kind: 'success',
-      result: prepared,
+      result: {
+        messages,
+        runState,
+        workspaceState,
+        userChannels: userVarChannels,
+        shouldSkipCycle: false,
+      },
     };
   }
 
@@ -569,11 +604,12 @@ class ToolUseWaitNode<C> extends Node<
     // Apply follow-up (state mutation in post - correct)
     const session = this.services.session;
     await session.markRunning();
-    shared.state.conversation = await applyFollowUpMessage(
-      this.services,
-      execRes.followUp,
-      shared.state.conversation,
-    );
+    this.services.logger.userMessage(execRes.followUp);
+    shared.state.conversation =
+      await this.services.modelHandler.createUserFollowUpMessages(
+        shared.state.conversation,
+        execRes.followUp,
+      );
 
     // Loop back to CycleNode
     return FlowTransition.CONTINUE;
