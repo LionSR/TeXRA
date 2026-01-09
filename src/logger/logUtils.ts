@@ -101,37 +101,15 @@ function resolveActiveGroupByKey(
   key: ChannelKey,
   groupId: string | undefined,
 ): string | undefined {
-  if (groupId) {
-    return groupId;
-  }
-
-  const context = getContextByKey(key);
-  return context?.stack.at(-1);
-}
-
-function resolveActiveGroup(
-  channel: string,
-  groupId: string | undefined,
-  isAgent: boolean,
-): string | undefined {
-  return resolveActiveGroupByKey(getChannelKey(channel, isAgent), groupId);
-}
-
-/**
- * Get a cached channel entry by pre-computed key.
- * Returns undefined if the entry doesn't exist.
- */
-function getCachedEntryByKey(
-  key: ChannelKey,
-): ReturnType<typeof registry.ensure> | undefined {
-  return initializedChannels.get(key);
+  if (groupId) return groupId;
+  return getContextByKey(key)?.stack.at(-1);
 }
 
 /**
  * Get or create a cached channel entry.
- * Single source of truth for channel initialization - eliminates repeated registry.ensure() calls.
+ * Single source of truth for channel initialization.
  */
-function getCachedEntry(
+function getOrCreateEntry(
   channel: string,
   isAgent: boolean,
 ): ReturnType<typeof registry.ensure> {
@@ -144,22 +122,20 @@ function getCachedEntry(
   return entry;
 }
 
+/**
+ * Get transport, creating the channel if needed for writes, or returning
+ * undefined for reads on non-existent channels.
+ */
 function getTransport(
   channel: string,
-  isAgent = false,
+  isAgent: boolean,
+  createIfMissing: boolean,
 ): VSCodeTransport | undefined {
   const key = getChannelKey(channel, isAgent);
-  return (
-    initializedChannels.get(key)?.transport ??
-    registry.getTransport(channel, { isAgent })
-  );
-}
-
-function getOrCreateTransport(
-  channel: string,
-  isAgent: boolean,
-): VSCodeTransport {
-  return getCachedEntry(channel, isAgent).transport;
+  const cached = initializedChannels.get(key);
+  if (cached) return cached.transport;
+  if (createIfMissing) return getOrCreateEntry(channel, isAgent).transport;
+  return undefined;
 }
 
 function logWithGroup(
@@ -169,9 +145,8 @@ function logWithGroup(
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  // Compute key once and reuse for both entry lookup and group resolution
   const key = getChannelKey(channel, isAgent);
-  const entry = getCachedEntryByKey(key) ?? getCachedEntry(channel, isAgent);
+  const entry = getOrCreateEntry(channel, isAgent);
   const activeGroupId = resolveActiveGroupByKey(key, options.groupId);
 
   entry.logger.log(level, message, {
@@ -182,7 +157,7 @@ function logWithGroup(
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  getCachedEntry(channel, isAgent);
+  getOrCreateEntry(channel, isAgent);
 }
 
 export function startGroup(
@@ -192,7 +167,7 @@ export function startGroup(
   parentGroupId?: string,
   isAgent = false,
 ): string {
-  const transport = getOrCreateTransport(channel, isAgent);
+  const transport = getTransport(channel, isAgent, true)!;
   const groupId = id ?? randomUUID();
   pushGroupContext(channel, groupId, isAgent);
   return transport.startGroup(groupName, groupId, parentGroupId);
@@ -204,8 +179,7 @@ export function endGroup(
   status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   isAgent = false,
 ): void {
-  const transport = getTransport(channel, isAgent);
-  transport?.endGroup(groupId, status);
+  getTransport(channel, isAgent, false)?.endGroup(groupId, status);
   popGroupContext(channel, groupId, isAgent);
 }
 
@@ -213,7 +187,8 @@ export function getActiveGroupId(
   channel: string,
   isAgent = false,
 ): string | undefined {
-  return resolveActiveGroup(channel, undefined, isAgent);
+  const key = getChannelKey(channel, isAgent);
+  return resolveActiveGroupByKey(key, undefined);
 }
 
 export async function runWithGroupContext<T>(
