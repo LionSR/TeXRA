@@ -19,32 +19,28 @@ export class DiffStatsManager {
     baseLocation: FileLocation | null,
     outputLocation: FileLocation,
   ): Promise<DiffStats> {
-    try {
-      if (!baseLocation) {
-        const outContent = await flexibleFS.read(outputLocation);
-        const added = this.countLines(outContent);
-        return { added };
-      }
-
-      const [baseContent, outContent] = await Promise.all([
-        flexibleFS.read(baseLocation),
-        flexibleFS.read(outputLocation),
-      ]);
-
-      const dmp = new diff_match_patch();
-      const diffs = dmp.diff_main(baseContent, outContent);
-      let added = 0;
-      let removed = 0;
-      for (const [op, text] of diffs) {
-        if (op === 1) {
-          added += this.countLines(text);
-        } else if (op === -1) {
-          removed += this.countLines(text);
-        }
-      }
-      return { added, removed };
-    } catch (_err) {
-      return {};
+    if (!baseLocation) {
+      const outContent = await flexibleFS.read(outputLocation);
+      const added = this.countLines(outContent);
+      return { added };
     }
+
+    const [baseContent, outContent] = await Promise.all([
+      flexibleFS.read(baseLocation),
+      flexibleFS.read(outputLocation),
+    ]);
+
+    const dmp = new diff_match_patch();
+    const diffs = dmp.diff_main(baseContent, outContent);
+    let added = 0;
+    let removed = 0;
+    for (const [op, text] of diffs) {
+      if (op === 1) {
+        added += this.countLines(text);
+      } else if (op === -1) {
+        removed += this.countLines(text);
+      }
+    }
+    return { added, removed };
   }
 }

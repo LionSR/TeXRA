@@ -11,11 +11,6 @@ import {
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import {
-  showErrorMessage,
-  showWarningMessage,
-  showInfoMessage,
-} from '@frontend/ui/messageUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
@@ -187,16 +182,20 @@ async function handleFollowUpResult(
         const resumed = await tryAutoResume(streamId);
         if (!resumed) {
           // Fallback: show message if auto-resume fails
-          await showInfoMessage('Message queued. Click Resume to process it.');
+          await vscode.window.showInformationMessage(
+            'Message queued. Click Resume to process it.',
+          );
         }
       }
       // For 'resuming' reason, message is queued for the in-progress resume
       break;
     case 'error':
-      await showErrorMessage(`Failed to send follow-up: ${result.message}`);
+      await vscode.window.showErrorMessage(
+        `Failed to send follow-up: ${result.message}`,
+      );
       break;
     case 'no_session':
-      await showWarningMessage(
+      await vscode.window.showWarningMessage(
         'No active tool-use session found. Use the Resume button to continue.',
       );
       break;
