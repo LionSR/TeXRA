@@ -4,9 +4,9 @@ import {
   ALL_TOOLBAR_BUTTON_IDS,
   ELEMENT_IDS,
 } from '../constants.js';
-// Local imports
 import { progressViewState } from '../progressViewState.js';
-import { setElementsDisabled } from '@common/domUtils.js';
+// Local imports - common helpers
+import { safeGetElementById, setElementsDisabled } from '@common/domUtils.js';
 
 /**
  * Manages status display and button states.
@@ -92,10 +92,8 @@ export class Status {
   }
 
   _applyExecutionAvailability() {
-    const storageButton = document.getElementById(
-      ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-    );
-    const resumeButton = document.getElementById(ELEMENT_IDS.RESUME_BTN);
+    const storageButton = safeGetElementById(ELEMENT_IDS.OPEN_TASK_STORAGE_BTN);
+    const resumeButton = safeGetElementById(ELEMENT_IDS.RESUME_BTN);
 
     const isAvailable = this._executionAvailable;
 
@@ -124,18 +122,16 @@ export class Status {
    */
   update(status) {
     this._applyExecutionAvailability();
-    const statusIndicator = document.getElementById(
-      ELEMENT_IDS.STATUS_INDICATOR,
-    );
+    const statusIndicator = safeGetElementById(ELEMENT_IDS.STATUS_INDICATOR);
     if (!statusIndicator) {
       console.error('Status.update: statusIndicator element not found');
       return;
     }
 
     // Query buttons fresh each time to handle toolbar re-rendering
-    const buttons = this.BUTTON_IDS.map((id) =>
-      document.getElementById(id),
-    ).filter(Boolean);
+    const buttons = this.BUTTON_IDS.map((id) => safeGetElementById(id)).filter(
+      Boolean,
+    );
 
     setElementsDisabled(buttons, true);
 
@@ -158,7 +154,7 @@ export class Status {
       statusIndicator.dataset.status = cfg.label;
 
       const elementsToEnable = cfg.enable
-        .map((id) => document.getElementById(id))
+        .map((id) => safeGetElementById(id))
         .filter((el) => {
           if (!el) {
             return false;
