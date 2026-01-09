@@ -123,32 +123,35 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const diffContainer = document.createElement('span');
     diffContainer.className = 'approval-request__diff';
 
-    const summaryParts = [];
-    if (added > 0) {
-      const addedSpan = document.createElement('span');
-      addedSpan.className = 'approval-request__diff-added';
-      addedSpan.textContent = `+${added}`;
-      diffContainer.appendChild(addedSpan);
-      summaryParts.push(`+${added}`);
-    }
+    const diffStats = [
+      { value: added, prefix: '+', className: 'approval-request__diff-added' },
+      {
+        value: removed,
+        prefix: '-',
+        className: 'approval-request__diff-removed',
+      },
+    ];
 
-    if (removed > 0) {
-      const removedSpan = document.createElement('span');
-      removedSpan.className = 'approval-request__diff-removed';
-      removedSpan.textContent = `-${removed}`;
-      diffContainer.appendChild(removedSpan);
-      summaryParts.push(`-${removed}`);
-    }
+    const summaryParts = diffStats
+      .filter((stat) => stat.value > 0)
+      .map((stat) => {
+        const span = document.createElement('span');
+        span.className = stat.className;
+        span.textContent = `${stat.prefix}${stat.value}`;
+        diffContainer.appendChild(span);
+        return `${stat.prefix}${stat.value}`;
+      });
 
     const total = added + removed;
+    const lineLabel = total === 1 ? 'line' : 'lines';
     const labelSpan = document.createElement('span');
     labelSpan.className = 'approval-request__diff-label';
-    labelSpan.textContent = `${total} ${total === 1 ? 'line' : 'lines'}`;
+    labelSpan.textContent = `${total} ${lineLabel}`;
     diffContainer.appendChild(labelSpan);
 
     diffContainer.title =
       summaryParts.length > 0
-        ? `${summaryParts.join(' / ')} ${total === 1 ? 'line' : 'lines'} changed`
+        ? `${summaryParts.join(' / ')} ${lineLabel} changed`
         : 'No line changes';
 
     if (toolSummary && diffContainer.childElementCount > 0) {
