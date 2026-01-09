@@ -14,7 +14,10 @@ function toErrorData(error: unknown): Record<string, unknown> {
 
 /** Check if a value is a thenable (has .catch method). */
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return value !== null && typeof (value as PromiseLike<unknown>)?.then === 'function';
+  return (
+    value !== null &&
+    typeof (value as PromiseLike<unknown>)?.then === 'function'
+  );
 }
 
 /** Log an error with module context. */
@@ -34,7 +37,9 @@ export function withEventErrorHandling(
   try {
     const result = fn();
     if (isThenable(result)) {
-      void Promise.resolve(result).catch((error) => logError(moduleName, context, error));
+      void Promise.resolve(result).catch((error) =>
+        logError(moduleName, context, error),
+      );
     }
   } catch (error) {
     logError(moduleName, context, error);
