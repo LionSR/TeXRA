@@ -114,7 +114,7 @@ export class SearchManager {
       .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
       .forEach((section) => {
         if (!(section instanceof HTMLElement)) return;
-        // Use .open property - it automatically manages the attribute
+        // vscode-collapsible has reflect:true on open property - setting .open syncs the attribute
         if ('open' in section) {
           section.open = getExpandedState(section);
         }
