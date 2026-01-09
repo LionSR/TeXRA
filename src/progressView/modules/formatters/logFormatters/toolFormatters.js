@@ -180,32 +180,32 @@ export const formatWebSearch = (
   const { query, results, provider, status } = structured;
   const resultCount = Array.isArray(results) ? results.length : 0;
 
-  // Build title based on provider (anthropic or openai)
-  const providerLabel =
-    provider === 'anthropic'
-      ? 'Anthropic'
-      : provider === 'openai'
-        ? 'OpenAI'
-        : 'Web';
+  // Provider display names
+  const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI' };
+  const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
+
+  // Status suffixes
+  const STATUS_SUFFIXES = {
+    in_progress: ' (searching...)',
+    failed: ' (failed)',
+  };
+  const statusSuffix = STATUS_SUFFIXES[status] ?? '';
+
+  // Build query preview
   const queryPreview = query
     ? `: "${query.length > QUERY_PREVIEW_MAX_LENGTH ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...' : query}"`
     : '';
-  const statusSuffix =
-    status === 'in_progress'
-      ? ' (searching...)'
-      : status === 'failed'
-        ? ' (failed)'
-        : '';
   const titleText = `${providerLabel} Search${queryPreview}${statusSuffix}`;
+
+  // Status-based icon classes
+  const STATUS_ICONS = {
+    failed: 'codicon codicon-error',
+    in_progress: 'codicon codicon-sync spin',
+  };
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
-    iconElem.className =
-      status === 'failed'
-        ? 'codicon codicon-error'
-        : status === 'in_progress'
-          ? 'codicon codicon-sync spin'
-          : 'codicon codicon-globe';
+    iconElem.className = STATUS_ICONS[status] ?? 'codicon codicon-globe';
   }
   element.classList.toggle('tool-use-error', status === 'failed');
 

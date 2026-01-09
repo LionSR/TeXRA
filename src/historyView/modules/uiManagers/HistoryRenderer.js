@@ -222,24 +222,25 @@ export class HistoryRenderer {
       <div class="history-value config-section">`;
     entries.forEach(([key, value]) => {
       const encodedKey = encodeHtml(key);
-      let display;
-      let alreadyEncoded = false;
-
-      if (Array.isArray(value)) {
-        display = encodeListForHtml(value);
-        alreadyEncoded = true;
-      } else if (typeof value === 'boolean') {
-        display = value ? 'Yes' : 'No';
-      } else {
-        display = encodeHtml(value);
-        alreadyEncoded = true;
-      }
-
-      const safeDisplay = alreadyEncoded ? display : encodeHtml(display);
-      html += `<div class="config-item"><span class="config-key">${encodedKey}:</span> ${safeDisplay}</div>`;
+      const display = this._formatConfigValue(value);
+      html += `<div class="config-item"><span class="config-key">${encodedKey}:</span> ${display}</div>`;
     });
     html += `</div>`;
     return html;
+  }
+
+  /**
+   * Format a config value for display, handling different types.
+   * @private
+   */
+  _formatConfigValue(value) {
+    if (Array.isArray(value)) {
+      return encodeListForHtml(value);
+    }
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+    return encodeHtml(value);
   }
 
   setupItemEventListeners() {

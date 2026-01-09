@@ -390,27 +390,35 @@ export class ProgressViewState {
       return null;
     }
 
+    // Return current if already set
     const current = this.getActiveRunId(targetStream);
     if (current) {
       return current;
     }
 
-    const candidates = this._collectRunCandidates(targetStream);
+    // Resolve from candidates or latest, then cache and return
+    const resolved = this._resolveRunIdFromCandidates(targetStream);
+    if (resolved) {
+      this.setActiveRunId(targetStream, resolved);
+    }
+    return resolved;
+  }
+
+  /**
+   * Find the best run ID from candidates or latest.
+   * @private
+   */
+  _resolveRunIdFromCandidates(streamId) {
+    const candidates = this._collectRunCandidates(streamId);
+
+    // If exactly one candidate, use it
     if (candidates.size === 1) {
       const [only] = candidates;
-      if (only) {
-        this.setActiveRunId(targetStream, only);
-        return only;
-      }
+      if (only) return only;
     }
 
-    const latest = this._findLatestRunId(targetStream);
-    if (latest) {
-      this.setActiveRunId(targetStream, latest);
-      return latest;
-    }
-
-    return null;
+    // Otherwise fall back to latest
+    return this._findLatestRunId(streamId);
   }
 
   _collectRunCandidates(streamId) {

@@ -71,42 +71,21 @@ export class PrepareContextNode<C = unknown> extends Node<
     const { currentRound, conversation } = prepRes;
 
     const stateRound = new ConversationRoundState(currentRound);
+    const isFirstRound = currentRound === 0;
 
-    if (currentRound === 0) {
-      const { systemPrompt, userRequest, userPrefix } =
-        await promptBuilder.buildInitialPrompts();
-      const prefill = await promptBuilder.buildPrefill(currentRound);
-      const messages = await modelHandler.initializeMessages(
-        userPrefix,
-        userRequest,
-        undefined,
-        systemPrompt,
-      );
+    // Build messages based on round
+    const messages = isFirstRound
+      ? await this.buildInitialMessages(promptBuilder, modelHandler)
+      : await modelHandler.createRoundMessages(
+          conversation,
+          await promptBuilder.buildUserRequest(currentRound),
+          undefined,
+        );
 
-      logger.debug(
-        `Prepared first round context with ${messages.length} messages`,
-      );
-
-      return {
-        kind: 'ready',
-        context: {
-          messages,
-          prefill: prefill ?? '',
-          stateRoundSnapshot: stateRound.toSnapshot(),
-        },
-      };
-    }
-
-    const userRequest = await promptBuilder.buildUserRequest(currentRound);
     const prefill = await promptBuilder.buildPrefill(currentRound);
-    const messages = await modelHandler.createRoundMessages(
-      conversation,
-      userRequest,
-      undefined,
-    );
 
     logger.debug(
-      `Prepared round ${currentRound} context with ${messages.length} messages`,
+      `Prepared ${isFirstRound ? 'first' : `round ${currentRound}`} context with ${messages.length} messages`,
     );
 
     return {
@@ -117,6 +96,20 @@ export class PrepareContextNode<C = unknown> extends Node<
         stateRoundSnapshot: stateRound.toSnapshot(),
       },
     };
+  }
+
+  private async buildInitialMessages(
+    promptBuilder: ReflectionServices<C>['promptBuilder'],
+    modelHandler: ReflectionServices<C>['modelHandler'],
+  ): Promise<ProviderMessage[]> {
+    const { systemPrompt, userRequest, userPrefix } =
+      await promptBuilder.buildInitialPrompts();
+    return modelHandler.initializeMessages(
+      userPrefix,
+      userRequest,
+      undefined,
+      systemPrompt,
+    );
   }
 
   /**

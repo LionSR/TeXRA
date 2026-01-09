@@ -102,6 +102,20 @@ function getSelectDefaultValue(selectId, fallback) {
 }
 
 /**
+ * Set latexdiffs section visibility with consistent chevron and aria updates.
+ * @param {boolean} visible - Whether the section should be visible
+ */
+function setLatexdiffsVisible(visible) {
+  const content = safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT);
+  const toggle = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
+  if (content && toggle) {
+    content.style.display = visible ? 'block' : 'none';
+    setChevronIcon(toggle, visible);
+    setExpandedState(content, '.latexdiffs-section', visible);
+  }
+}
+
+/**
  * Manages persistent state for the main webview.
  */
 export class MainViewState {
@@ -183,15 +197,7 @@ export class MainViewState {
       }
     });
 
-    const latexdiffsContent = safeGetElementById(
-      ELEMENT_IDS.LATEXDIFFS_CONTENT,
-    );
-    const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
-    if (latexdiffsContent && toggleLatexdiffs) {
-      latexdiffsContent.style.display = 'none';
-      setChevronIcon(toggleLatexdiffs, false);
-    }
-
+    setLatexdiffsVisible(false);
     this.save();
   }
 
@@ -260,18 +266,7 @@ export class MainViewState {
         }
       });
 
-      const latexdiffsContent = safeGetElementById(
-        ELEMENT_IDS.LATEXDIFFS_CONTENT,
-      );
-      const toggleLatexdiffs = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_LATEXDIFFS,
-      );
-      if (latexdiffsContent && toggleLatexdiffs) {
-        const visible = mergedState.latexdiffsVisible ?? false;
-        latexdiffsContent.style.display = visible ? 'block' : 'none';
-        setChevronIcon(toggleLatexdiffs, visible);
-        setExpandedState(latexdiffsContent, '.latexdiffs-section', visible);
-      }
+      setLatexdiffsVisible(mergedState.latexdiffsVisible ?? false);
 
       this.applySessionType(sessionType, { skipSave: true });
       fileList.hideEmpty(MULTIPLE_SELECTIONS);
