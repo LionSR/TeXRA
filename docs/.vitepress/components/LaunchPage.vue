@@ -255,15 +255,11 @@ const handleRepoTypeChange = () => {
 const copyToClipboard = async () => {
   if (!setupCommand.value) return;
 
-  try {
-    await navigator.clipboard.writeText(setupCommand.value);
-    copySuccess.value = true;
-    setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
-  } catch (err) {
-    console.error('Failed to copy:', err);
-  }
+  await navigator.clipboard.writeText(setupCommand.value);
+  copySuccess.value = true;
+  setTimeout(() => {
+    copySuccess.value = false;
+  }, 2000);
 };
 
 const isValid = computed(() => {
@@ -358,13 +354,8 @@ const launchCodespace = async () => {
     // Note: GitHub Codespaces doesn't support passing env vars via URL directly
     // We'll need to use a different approach - store config temporarily or use secrets
 
-    // For now, we'll open the codespace and show instructions
-    const instructionsUrl = `https://github.com/${workspaceRepo}?setup=${encodeURIComponent(configBase64)}`;
-
     // Store config in sessionStorage for manual retrieval
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('texra-launch-config', configBase64);
-    }
+    sessionStorage.setItem('texra-launch-config', configBase64);
 
     // Open the Codespace creation page
     window.open(codespaceUrl.toString(), '_blank');
@@ -372,16 +363,8 @@ const launchCodespace = async () => {
     // Store the setup command
     setupCommand.value = `echo '${configBase64}' | base64 -d > /tmp/texra-config.json && bash /workspaces/texra-workspace/.devcontainer/auto-setup.sh`;
 
-    // Show success message with instructions
-    if (repoType.value === 'overleaf') {
-      if (authMethod.value === 'secrets') {
-        error.value = `success`;
-      } else {
-        error.value = `success`;
-      }
-    } else {
-      error.value = `success`;
-    }
+    // Show success message
+    error.value = 'success';
   } catch (err) {
     error.value = `Error: ${err.message}`;
   } finally {
