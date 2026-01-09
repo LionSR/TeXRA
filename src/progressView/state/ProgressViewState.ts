@@ -144,6 +144,10 @@ export class ProgressViewState {
    * current active stream is not in the available set (e.g., due to filtering),
    * this method picks the first available stream and updates the state.
    *
+   * IMPORTANT: When availableStreams is empty but streams exist in state, we
+   * preserve the current activeStream to avoid clearing content during temporary
+   * filter mismatches (e.g., during resume flow race conditions).
+   *
    * @param availableStreams - Array of stream IDs that are currently visible/available
    * @returns The resolved active stream ID (may be empty string if no streams available)
    */
@@ -158,8 +162,12 @@ export class ProgressViewState {
     // Otherwise, pick the first available stream (or empty if none)
     const resolved = availableStreams[0] ?? '';
 
-    // Only update state if it actually changed
-    if (resolved !== currentActive) {
+    // Only update state if we have a valid resolved stream.
+    // Don't persist empty activeStream when availableStreams is empty -
+    // this could be a temporary filter mismatch (e.g., during resume flow).
+    // Clearing activeStream would cause refreshStreamSurface('') to send
+    // action: 'clear', wiping the frontend display incorrectly.
+    if (resolved && resolved !== currentActive) {
       this._activeStream = resolved;
       this.saveActiveStream();
     }
