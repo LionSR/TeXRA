@@ -55,7 +55,9 @@ export class FileList {
         const roundGroup = createFromTemplate('roundHeaderTemplate');
         if (!roundGroup) continue;
         roundGroup.setAttribute('title', `r${round}`);
-        target = roundGroup.querySelector('.round-content') || roundGroup;
+        const roundContent = roundGroup.querySelector('.round-content');
+        if (!roundContent) continue;
+        target = roundContent;
         container.appendChild(roundGroup);
       }
 
