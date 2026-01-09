@@ -60,7 +60,10 @@ export const formatTokens = (tokens) => {
   if (tokens >= 100_000) {
     return `${(tokens / 1_000_000).toFixed(1)}M`;
   }
-  return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
+  if (tokens > 4096) {
+    return `${Math.round(tokens / 1000)}k`;
+  }
+  return `${tokens}`;
 };
 
 /**
