@@ -198,6 +198,9 @@ function extractModelFromPath(apiPath: string): string | null {
   return match ? match[1] : null;
 }
 
+/** Milliseconds in one day */
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /**
  * Calculate access status for a user based on their tier and expiration date.
  */
@@ -219,16 +222,14 @@ function calculateAccessStatus(
     };
   }
 
-  const expiresAt = new Date(accessExpiresAt);
-  const now = new Date();
-  const diffMs = expiresAt.getTime() - now.getTime();
-  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  const isExpired = daysRemaining <= 0;
+  const daysRemaining = Math.ceil(
+    (new Date(accessExpiresAt).getTime() - Date.now()) / MS_PER_DAY,
+  );
 
   return {
     tier,
     accessExpiresAt,
-    isExpired,
+    isExpired: daysRemaining <= 0,
     daysRemaining,
   };
 }
