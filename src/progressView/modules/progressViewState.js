@@ -162,7 +162,6 @@ class StreamStatuses {
   }
 }
 
-
 class RunScopedMap {
   constructor(resolveStreamId) {
     this._resolveStreamId = resolveStreamId;
@@ -434,9 +433,9 @@ export class ProgressViewState {
   }
 
   _findLatestRunId(streamId) {
-    const rootGroups = Array.from(this.taskGroups.getGroupMap().values()).filter(
-      (g) => g && !g.parentGroupId,
-    );
+    const rootGroups = Array.from(
+      this.taskGroups.getGroupMap().values(),
+    ).filter((g) => g && !g.parentGroupId);
 
     if (rootGroups.length === 0) {
       // Fall back to last run ID from usage map
@@ -446,7 +445,9 @@ export class ProgressViewState {
 
     // Return ID of the group with the latest start time
     const getTime = (g) => (typeof g.startTime === 'number' ? g.startTime : 0);
-    return rootGroups.sort((a, b) => getTime(a) - getTime(b)).at(-1)?.id ?? null;
+    return (
+      rootGroups.sort((a, b) => getTime(a) - getTime(b)).at(-1)?.id ?? null
+    );
   }
 
   setPendingInstruction(streamId, instruction) {
@@ -520,14 +521,12 @@ export class ProgressViewState {
   clearRunInstructions(streamId) {
     if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
-      if (targetStream == null) {
-        return;
+      if (targetStream != null) {
+        this.runInstructions.clearStream(targetStream);
+        this.clearPendingInstruction(targetStream);
       }
-      this.runInstructions.clearStream(targetStream);
-      this.clearPendingInstruction(targetStream);
       return;
     }
-
     this.runInstructions.clearAll();
     this.clearAllPendingInstructions();
   }
@@ -547,13 +546,11 @@ export class ProgressViewState {
   clearRunFiles(streamId) {
     if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
-      if (targetStream == null) {
-        return;
+      if (targetStream != null) {
+        this.runFiles.clearStream(targetStream);
       }
-      this.runFiles.clearStream(targetStream);
       return;
     }
-
     this.runFiles.clearAll();
   }
 
@@ -576,13 +573,11 @@ export class ProgressViewState {
   clearRunMissingOutputs(streamId) {
     if (streamId != null) {
       const targetStream = this._resolveStreamId(streamId);
-      if (targetStream == null) {
-        return;
+      if (targetStream != null) {
+        this.runMissingOutputs.clearStream(targetStream);
       }
-      this.runMissingOutputs.clearStream(targetStream);
       return;
     }
-
     this.runMissingOutputs.clearAll();
   }
 
@@ -591,23 +586,20 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    // Normalize usage fields - ?? preserves 0, unlike ||
-    const toNum = (v) => Number(v ?? 0);
-    const normalized = {
-      inputTokens: toNum(usage?.inputTokens),
-      outputTokens: toNum(usage?.outputTokens),
-      cost: toNum(usage?.cost),
-      cacheReadInputTokens: toNum(usage?.cacheReadInputTokens),
-      cacheCreationInputTokens: toNum(usage?.cacheCreationInputTokens),
-    };
+    const inputTokens = Number(usage?.inputTokens ?? 0);
+    const outputTokens = Number(usage?.outputTokens ?? 0);
+    const cost = Number(usage?.cost ?? 0);
     // Skip empty usage (cost=0 implies no cache billing)
-    const isEmpty =
-      normalized.inputTokens === 0 &&
-      normalized.outputTokens === 0 &&
-      normalized.cost === 0;
-    if (!isEmpty) {
-      this.runUsage.set(targetStream, runId, normalized);
+    if (inputTokens === 0 && outputTokens === 0 && cost === 0) {
+      return;
     }
+    this.runUsage.set(targetStream, runId, {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens: Number(usage?.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
+    });
   }
 
   getRunUsage(streamId, runId) {
@@ -616,15 +608,11 @@ export class ProgressViewState {
 
   clearRunUsage(streamId, runId) {
     if (runId) {
-      this.runUsage.delete(streamId, runId);
-      return;
+      return this.runUsage.delete(streamId, runId);
     }
-
     if (streamId != null) {
-      this.runUsage.clearStream(streamId);
-      return;
+      return this.runUsage.clearStream(streamId);
     }
-
     this.runUsage.clearAll();
   }
 
@@ -660,17 +648,16 @@ export class ProgressViewState {
 
   /**
    * Clear context state for a stream.
-   * @param {string} streamId - The stream ID
+   * @param {string} streamId - The stream ID (optional, clears all if omitted)
    */
   clearContextState(streamId) {
-    if (streamId != null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream != null) {
-        this.contextState.delete(targetStream);
-      }
-      return;
+    if (streamId == null) {
+      return this.contextState.clear();
     }
-    this.contextState.clear();
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream != null) {
+      this.contextState.delete(targetStream);
+    }
   }
 
   deleteRunMissingOutputs(streamId, runId) {
