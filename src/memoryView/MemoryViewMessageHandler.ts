@@ -27,6 +27,10 @@ import {
 // Local imports - storage
 import { StorageFS } from '@utils/files';
 
+// Local imports - config
+import { setConfig } from '@utils/config';
+import { getToolUseMemoryEnabled } from '@utils/config/constants';
+
 // Local imports - schemas
 import {
   MemoryPathMessageSchema,
@@ -61,6 +65,10 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
       [MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
         this.handleOpenMemoryFolder.bind(this),
       [MEMORY_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
+      [MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED]:
+        this.handleGetMemoryEnabled.bind(this),
+      [MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
+        this.handleSetMemoryEnabled.bind(this),
     };
   }
 
@@ -155,6 +163,38 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
         }
       },
     );
+  }
+
+  private async handleGetMemoryEnabled(
+    _message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    const enabled = getToolUseMemoryEnabled();
+    await view.webview.postMessage({
+      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled,
+    });
+  }
+
+  private async handleSetMemoryEnabled(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    const enabled =
+      typeof message === 'object' &&
+      message !== null &&
+      'enabled' in message &&
+      typeof (message as { enabled: unknown }).enabled === 'boolean'
+        ? (message as { enabled: boolean }).enabled
+        : false;
+
+    await setConfig('texra.toolUse.memory.enabled', enabled);
+
+    // Confirm the update back to the webview
+    await view.webview.postMessage({
+      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled,
+    });
   }
 
   private async loadMemoryItems(): Promise<MemoryViewItem[]> {
