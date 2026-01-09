@@ -87,20 +87,14 @@ export class RetryRequests extends BaseUIRequestManager {
       return;
     }
 
-    // Send command to backend - UI resolution happens via resolveRetryRequest event
-    if (action === 'retry') {
-      vscode.postMessage({
-        command: COMMANDS.RETRY_STREAM_REQUEST,
-        stream: streamId,
-      });
-      return;
-    }
+    const actionCommands = {
+      retry: COMMANDS.RETRY_STREAM_REQUEST,
+      dismiss: COMMANDS.CANCEL_RETRY_REQUEST,
+    };
 
-    if (action === 'dismiss') {
-      vscode.postMessage({
-        command: COMMANDS.CANCEL_RETRY_REQUEST,
-        stream: streamId,
-      });
+    const command = actionCommands[action];
+    if (command) {
+      vscode.postMessage({ command, stream: streamId });
     }
   }
 }

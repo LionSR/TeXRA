@@ -16,7 +16,8 @@ import { TOOL_ICON_MAP } from './constants.js';
  * @param {string} content - The HTML content for the section
  * @returns {string} HTML string for the section
  */
-export const buildToolUseSection = (label, content) => `
+export function buildToolUseSection(label, content) {
+  return `
   <div class="tool-use-section">
     <div class="tool-use-subsection">
       <span class="tool-use-sublabel">${label}</span>
@@ -24,6 +25,7 @@ export const buildToolUseSection = (label, content) => `
     </div>
   </div>
 `;
+}
 
 /**
  * Wrap text in a pre element with optional class
@@ -31,42 +33,42 @@ export const buildToolUseSection = (label, content) => `
  * @param {string} [className] - Optional CSS class
  * @returns {string} HTML string
  */
-export const wrapInPre = (text, className = '') => {
+export function wrapInPre(text, className = '') {
   const classAttr = className ? ` class="${className}"` : '';
   return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
-};
+}
 
 /**
  * Set common dataset attributes on an element
  * @param {HTMLElement} element - The element to modify
  * @param {{logId?: string, groupId?: string, timestamp?: string}} data - Dataset values
  */
-export const setElementDataset = (element, { logId, groupId, timestamp }) => {
+export function setElementDataset(element, { logId, groupId, timestamp }) {
   if (logId) element.dataset.logId = logId;
   if (groupId) element.dataset.groupId = groupId;
   if (timestamp) element.dataset.fullTimestamp = timestamp;
-};
+}
 
 /**
  * Initialize toggle icon on a collapsible element
  * @param {HTMLElement} element - Element containing toggle icon
  * @param {boolean} [expanded=false] - Whether the element is expanded
  */
-export const initToggleIcon = (element, expanded = false) => {
+export function initToggleIcon(element, expanded = false) {
   const toggleIcon = element.querySelector('.toggle-icon');
   if (toggleIcon) {
     toggleIcon.className = `${
       expanded ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS
     } toggle-icon`;
   }
-};
+}
 
 /**
  * Build rendered HTML for file list
  * @param {Array} files - Array of normalized file entries
  * @returns {{items: string, summary: string}|null} Rendered items and summary
  */
-export const buildFileListRender = (files) => {
+export function buildFileListRender(files) {
   if (!Array.isArray(files)) {
     return null;
   }
@@ -105,7 +107,7 @@ export const buildFileListRender = (files) => {
   summary += ')';
 
   return { items, summary };
-};
+}
 
 /**
  * Build file link HTML element
@@ -113,12 +115,12 @@ export const buildFileListRender = (files) => {
  * @param {string} displayName - Display name for the link
  * @returns {string} HTML string for the file link
  */
-export const buildFileLink = (filePath, displayName) => {
+export function buildFileLink(filePath, displayName) {
   if (!filePath) {
     return `<span>${encodeHtml(displayName)}</span>`;
   }
   return `<span class="file-link clickable-link" data-file="${encodeHtml(filePath)}">${encodeHtml(displayName)}</span>`;
-};
+}
 
 /**
  * Build detail list item with icon
@@ -129,7 +131,7 @@ export const buildFileLink = (filePath, displayName) => {
  * @param {string} [options.runId] - data-run-id attribute
  * @returns {string} HTML string for list item
  */
-export const buildDetailItem = (iconClass, content, options = {}) => {
+export function buildDetailItem(iconClass, content, options = {}) {
   const titleAttr = options.title
     ? ` title="${encodeHtml(options.title)}"`
     : '';
@@ -137,7 +139,7 @@ export const buildDetailItem = (iconClass, content, options = {}) => {
     ? ` data-run-id="${encodeHtml(options.runId)}"`
     : '';
   return `<li class="detail-item"${runAttr}><i class="codicon ${iconClass}"${titleAttr}></i> ${content}</li>`;
-};
+}
 
 /**
  * Get appropriate icon class for a tool
@@ -145,7 +147,7 @@ export const buildDetailItem = (iconClass, content, options = {}) => {
  * @param {boolean} isError - Whether the tool execution errored
  * @returns {string} Codicon class name
  */
-export const getToolIconClass = (toolName, isError = false) => {
+export function getToolIconClass(toolName, isError = false) {
   if (isError) return 'codicon-error';
   return TOOL_ICON_MAP[toolName] || 'codicon-wrench';
-};
+}
