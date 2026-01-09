@@ -47,6 +47,52 @@ export class WebviewUpdater {
     webview.postMessage(message);
   }
 
+  /**
+   * Helper for stream + payload spread pattern.
+   * Reduces duplication in methods that forward a payload object.
+   */
+  private sendStreamUpdate(
+    command: string,
+    stream: StreamTabId,
+    payload: Record<string, any>,
+  ): void {
+    this.sendMessage({ command, stream, ...payload });
+  }
+
+  /**
+   * Helper for stream + named data field pattern.
+   * Reduces duplication in methods that send a single data field.
+   */
+  private sendStreamData(
+    command: string,
+    stream: StreamTabId,
+    fieldName: string,
+    data: any,
+  ): void {
+    this.sendMessage({ command, stream, [fieldName]: data });
+  }
+
+  /**
+   * Helper for sending a request prompt.
+   */
+  private sendPromptRequest(command: string, request: any): void {
+    this.sendMessage({ command, request });
+  }
+
+  /**
+   * Helper for resolving a prompt by ID.
+   */
+  private sendPromptResolution(command: string, idField: string, id: string): void {
+    this.sendMessage({ command, [idField]: id });
+  }
+
+  /**
+   * Helper for sending a message with a single data field.
+   */
+  private sendSimpleUpdate(command: string, fieldName: string, value: any): void {
+    this.sendMessage({ command, [fieldName]: value });
+  }
+
   static createInstructionUpdate(
     taskState?: TaskState,
   ): InstructionUpdate | undefined {
@@ -130,22 +176,14 @@ export class WebviewUpdater {
    * Append a single log message to a stream
    */
   appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.sendMessage({
-      command: COMMANDS.APPEND_LOG,
-      stream,
-      logMessage,
-    });
+    this.sendStreamData(COMMANDS.APPEND_LOG, stream, 'logMessage', logMessage);
   }
 
   /**
    * Update an existing log message
    */
   updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_LOG,
-      stream,
-      logMessage,
-    });
+    this.sendStreamData(COMMANDS.UPDATE_LOG, stream, 'logMessage', logMessage);
   }
 
   /**
@@ -159,11 +197,7 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_FILES,
-      stream,
-      ...payload,
-    });
+    this.sendStreamUpdate(COMMANDS.UPDATE_FILES, stream, payload);
   }
 
   /**
@@ -177,46 +211,27 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_MISSING_OUTPUTS,
-      stream,
-      ...payload,
-    });
+    this.sendStreamUpdate(COMMANDS.UPDATE_MISSING_OUTPUTS, stream, payload);
   }
 
   showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
-    this.sendMessage({
-      command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
-      request: prompt,
-    });
+    this.sendPromptRequest(COMMANDS.SHOW_TOOL_EDIT_APPROVAL, prompt);
   }
 
   resolveToolEditApprovalPrompt(requestId: string): void {
-    this.sendMessage({
-      command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
-      requestId,
-    });
+    this.sendPromptResolution(COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL, 'requestId', requestId);
   }
 
   updateToolEditApprovalState(bypassActive: boolean): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
-      bypassActive,
-    });
+    this.sendSimpleUpdate(COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE, 'bypassActive', bypassActive);
   }
 
   showRetryRequest(request: RetryRequestPrompt): void {
-    this.sendMessage({
-      command: COMMANDS.SHOW_RETRY_REQUEST,
-      request,
-    });
+    this.sendPromptRequest(COMMANDS.SHOW_RETRY_REQUEST, request);
   }
 
   resolveRetryRequest(streamId: string): void {
-    this.sendMessage({
-      command: COMMANDS.RESOLVE_RETRY_REQUEST,
-      streamId,
-    });
+    this.sendPromptResolution(COMMANDS.RESOLVE_RETRY_REQUEST, 'streamId', streamId);
   }
 
   /**
@@ -290,20 +305,14 @@ export class WebviewUpdater {
    * Update the code highlight theme
    */
   updateTheme(theme: 'dark' | 'light'): void {
-    this.sendMessage({
-      command: COMMANDS.THEME_SET,
-      theme,
-    });
+    this.sendSimpleUpdate(COMMANDS.THEME_SET, 'theme', theme);
   }
 
   /**
    * Update stream status indicator (for active stream)
    */
   updateStatus(status: StreamStatus): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_STATUS,
-      status,
-    });
+    this.sendSimpleUpdate(COMMANDS.UPDATE_STATUS, 'status', status);
   }
 
   /**
@@ -328,43 +337,28 @@ export class WebviewUpdater {
    * Add a task group to the webview
    */
   addTaskGroup(stream: StreamTabId, group: any): void {
-    this.sendMessage({
-      command: COMMANDS.ADD_TASK_GROUP,
-      stream,
-      group,
-    });
+    this.sendStreamData(COMMANDS.ADD_TASK_GROUP, stream, 'group', group);
   }
 
   /**
    * Update a task group in the webview
    */
   updateTaskGroup(update: UpdateTaskGroupPayload): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_TASK_GROUP,
-      update,
-    });
+    this.sendSimpleUpdate(COMMANDS.UPDATE_TASK_GROUP, 'update', update);
   }
 
   /**
    * Update the todo list for a stream
    */
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_TODOS,
-      stream,
-      todos,
-    });
+    this.sendStreamData(COMMANDS.UPDATE_TODOS, stream, 'todos', todos);
   }
 
   /**
    * Update the queued follow-ups display for a stream
    */
   updateQueuedFollowUps(stream: StreamTabId, messages: string[]): void {
-    this.sendMessage({
-      command: COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
-      stream,
-      messages,
-    });
+    this.sendStreamData(COMMANDS.UPDATE_QUEUED_FOLLOW_UPS, stream, 'messages', messages);
   }
 
   /**
