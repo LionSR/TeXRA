@@ -19,6 +19,8 @@
  * - PersistedFlow handles persistence transparently
  */
 
+import * as path from 'path';
+
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
@@ -34,6 +36,7 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
+import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
 import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -48,8 +51,15 @@ import {
 } from '@common/constants/streamStatus';
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
+
 import { PromptBuilder } from '@utils/prompt';
-import { TaskRunFileService, type AgentFileLocation } from '@utils/files';
+import {
+  TaskRunFileService,
+  WorkspaceFS,
+  createWorkspaceLocation,
+  type AgentFileLocation,
+  type WorkspaceFileLocation,
+} from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 import {
@@ -57,12 +67,6 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlow';
 import { ReflectionFlowStateSchema } from './ReflectionFlowState';
-import {
-  createBaseFileLocations,
-  computeShouldEnsureXmlStructure,
-  computeTotalRounds,
-  createOutputFileLocationGetter,
-} from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -100,17 +104,63 @@ export interface RunReflectionFlowResult {
 }
 
 // ============================================================================
+// Configuration Derivation
+// ============================================================================
+
+interface DerivedConfig {
+  useScratchpad: boolean;
+  shouldEnsureXmlStructure: boolean;
+  totalRounds: number;
+  outputExt: string;
+}
+
+/** Derive configuration values from settings and prompts. */
+function deriveConfig(
+  setting: AgentWorkflowSetting,
+  prompt: RunReflectionFlowInput['prompt'],
+): DerivedConfig {
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+
+  // Determine XML structure enforcement
+  let shouldEnsureXmlStructure = false;
+  if (setting.xmlStructureMode !== undefined) {
+    shouldEnsureXmlStructure =
+      setting.xmlStructureMode === 'always' ||
+      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
+  } else if (setting.agentType === 'CoT') {
+    shouldEnsureXmlStructure = true;
+  } else if (setting.agentType === 'direct') {
+    shouldEnsureXmlStructure = useScratchpad;
+  }
+
+  // Compute total rounds
+  let totalRounds: number;
+  if (setting.maxRounds !== undefined) {
+    totalRounds = setting.maxRounds;
+  } else if (setting.agentType === 'direct') {
+    totalRounds = 1;
+  } else {
+    const requests = Array.isArray(prompt.userRequest)
+      ? prompt.userRequest
+      : prompt.userRequest
+        ? [prompt.userRequest]
+        : [];
+    totalRounds = Math.max(setting.rounds ?? 2, requests.length);
+  }
+
+  return {
+    useScratchpad,
+    shouldEnsureXmlStructure,
+    totalRounds,
+    outputExt: useScratchpad ? 'xml' : setting.outputExt,
+  };
+}
+
+// ============================================================================
 // Flow Runner
 // ============================================================================
 
-/**
- * Run a reflection flow.
- *
- * Creates all services inline and manages interrupt registration.
- *
- * @param input - Flow configuration and dependencies
- * @returns Flow execution result
- */
+/** Run a reflection flow. Creates services and manages interrupt registration. */
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
 ): Promise<RunReflectionFlowResult> {
@@ -142,7 +192,15 @@ export async function runReflectionFlow<C = unknown>(
   // ========================================================================
 
   const fileService = new TaskRunFileService(executionId);
-  const baseFiles = createBaseFileLocations(config);
+
+  // Create workspace file locations for latexdiff base files
+  const baseFiles: WorkspaceFileLocation[] = (
+    config.outputFiles.length > 0 ? config.outputFiles : [config.inputFile]
+  ).map((f) => {
+    const absolutePath = path.isAbsolute(f) ? f : WorkspaceFS.fullPath(f);
+    const relativePath = path.isAbsolute(f) ? WorkspaceFS.relativePath(f) : f;
+    return createWorkspaceLocation(absolutePath, relativePath);
+  });
 
   const outputHandler: IOutputHandler = new OutputHandler(
     setting,
@@ -163,23 +221,28 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Compute configuration values using helpers
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-  const shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(
-    setting,
-    useScratchpad,
-  );
-  const totalRounds = computeTotalRounds(setting, prompt);
+  // Derive configuration values
+  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
+    deriveConfig(setting, prompt);
 
-  // Use custom getter if provided, otherwise create default
+  // Create output file location getter
+  const modelName = modelHandler.config.name;
   const getOutputFileLocation =
     input.getOutputFileLocation ??
-    createOutputFileLocationGetter({
-      fileService,
-      config,
-      modelName: modelHandler.config.name,
-      setting,
-      useScratchpad,
+    ((round: number): AgentFileLocation => {
+      const fileName = getOutputFileName(
+        config.inputFile,
+        config.agent,
+        modelName,
+        outputExt,
+        round,
+        config.editedFile || undefined,
+      );
+      return (
+        useScratchpad
+          ? fileService.createRawOutputLocation(fileName)
+          : fileService.createLocation(fileName)
+      ) as AgentFileLocation;
     });
 
   // Create interruptible object for registration
