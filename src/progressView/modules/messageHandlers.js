@@ -469,6 +469,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
+    this._refreshContextStateForActiveStream();
 
     this._updatePlaceholderVisibility();
   }
@@ -525,6 +526,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
+    this._refreshContextStateForActiveStream();
   }
 
   handleAppendLog(message) {
