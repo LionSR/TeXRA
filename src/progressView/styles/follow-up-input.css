@@ -21,12 +21,14 @@
   display: flex;
   align-items: flex-end;
   gap: var(--spacing-small);
+  width: 100%;
 }
 
 /* Style the textarea for multi-line input */
 #followUpInput {
   display: block;
   flex: 1;
+  min-width: 0; /* Allow shrinking below default 320px */
   line-height: 1.4;
   min-height: 106px;
   max-height: var(--height-xlarge);
@@ -46,9 +48,4 @@ vscode-toolbar-container.follow-up-actions {
   flex-direction: column !important;
   align-items: center;
   gap: var(--spacing-small);
-}
-
-.follow-up-actions vscode-button,
-.follow-up-actions vscode-toolbar-button {
-  /* Remove margin-bottom since we're using gap in flex column */
 }
