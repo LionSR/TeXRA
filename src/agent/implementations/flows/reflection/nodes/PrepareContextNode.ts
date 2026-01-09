@@ -83,23 +83,39 @@ export class PrepareContextNode<C = unknown> extends Node<
         systemPrompt,
       );
 
-      logger.debug(`Prepared first round context with ${messages.length} messages`);
+      logger.debug(
+        `Prepared first round context with ${messages.length} messages`,
+      );
 
       return {
         kind: 'ready',
-        context: { messages, prefill: prefill ?? '', stateRoundSnapshot: stateRound.toSnapshot() },
+        context: {
+          messages,
+          prefill: prefill ?? '',
+          stateRoundSnapshot: stateRound.toSnapshot(),
+        },
       };
     }
 
     const userRequest = await promptBuilder.buildUserRequest(currentRound);
     const prefill = await promptBuilder.buildPrefill(currentRound);
-    const messages = await modelHandler.createRoundMessages(conversation, userRequest, undefined);
+    const messages = await modelHandler.createRoundMessages(
+      conversation,
+      userRequest,
+      undefined,
+    );
 
-    logger.debug(`Prepared round ${currentRound} context with ${messages.length} messages`);
+    logger.debug(
+      `Prepared round ${currentRound} context with ${messages.length} messages`,
+    );
 
     return {
       kind: 'ready',
-      context: { messages, prefill: prefill ?? '', stateRoundSnapshot: stateRound.toSnapshot() },
+      context: {
+        messages,
+        prefill: prefill ?? '',
+        stateRoundSnapshot: stateRound.toSnapshot(),
+      },
     };
   }
 
