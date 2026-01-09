@@ -9,15 +9,41 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 
-const sortComparators = {
-  time: (a: StreamTabInfo, b: StreamTabInfo) =>
+const sortComparators: Record<
+  string,
+  (a: StreamTabInfo, b: StreamTabInfo) => number
+> = {
+  time: (a, b) =>
     (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
     (a.lastTimestamp ?? a.creationTimestamp ?? 0),
-  inputFile: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  agent: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.agent ?? '').localeCompare(b.agent ?? ''),
-} as const;
+  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
+  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
+};
+
+/**
+ * Check if a session category matches the given filter.
+ * Returns the category to use (defaulting to Workflow) or null if filtered out.
+ */
+function matchesFilter(
+  category: AgentCategory | undefined,
+  filter: AgentFilter,
+): AgentCategory | null {
+  // When filter is 'all', accept everything (default to Workflow if no category)
+  if (filter === 'all') {
+    return category ?? AgentCategory.Workflow;
+  }
+
+  // No category means we can't match a specific filter
+  if (!category) {
+    return null;
+  }
+
+  // Map filter values to expected categories
+  const expectedCategory =
+    filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
+
+  return category === expectedCategory ? category : null;
+}
 
 /**
  * Build metadata objects for all streams in the given state.
@@ -37,26 +63,13 @@ export function buildStreamInfos(
     // Extract clean agent name (strip source: prefix if present)
     const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
     const agentName = getCleanAgentName(rawAgentName);
-    let sessionCategory =
+    const rawCategory =
       taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
 
-    // Filter logic: check if stream matches the current filter
-    if (!sessionCategory) {
-      // Streams without category only show when filter is "all"
-      if (filter !== 'all') {
-        return acc;
-      }
-      sessionCategory = AgentCategory.Workflow;
-    } else if (filter !== 'all') {
-      // Check if session category matches filter
-      const filterMap: Record<AgentFilter, AgentCategory | null> = {
-        all: null,
-        toolUse: AgentCategory.ToolUse,
-        workflow: AgentCategory.Workflow,
-      };
-      if (filterMap[filter] !== sessionCategory) {
-        return acc;
-      }
+    // Filter check: returns resolved category or null if filtered out
+    const sessionCategory = matchesFilter(rawCategory, filter);
+    if (sessionCategory === null) {
+      return acc;
     }
 
     const agentType =
@@ -103,8 +116,7 @@ export function buildStreamInfos(
     return acc;
   }, []);
 
-  const comparator =
-    sortComparators[state.streamSortOrder as keyof typeof sortComparators];
+  const comparator = sortComparators[state.streamSortOrder];
   if (comparator) {
     infos.sort(comparator);
   }
