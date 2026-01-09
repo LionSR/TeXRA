@@ -181,24 +181,9 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
-    const runs = this.items.get(stream);
-    if (!runs) {
-      return undefined;
-    }
-
-    const target = runs.get(storageKey);
-    if (!target) {
-      return undefined;
-    }
-
-    const entries: [number, OutputFileInfo[]][] = [];
-    for (const [round, infos] of target.entries()) {
-      if (Array.isArray(infos)) {
-        entries.push([round, infos]);
-      }
-    }
-
-    return new Map(entries);
+    const target = this.items.get(stream)?.get(storageKey);
+    // Return a copy to prevent external mutation
+    return target ? new Map(target) : undefined;
   }
 
   /**
