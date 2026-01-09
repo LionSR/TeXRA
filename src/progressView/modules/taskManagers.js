@@ -4,9 +4,10 @@ import {
   TaskGroupHeaderFormatter,
   getSharedLogEntryFormatter,
 } from './formatters/index.js';
-// Local imports
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
+// Local imports - common helpers
+import { safeGetElementById } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
@@ -69,7 +70,7 @@ export class TaskGroupDomManager {
 
   _resolveGroupContent(parentGroupId) {
     if (!parentGroupId) {
-      return document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      return safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
     }
     const parentDetails = this.groupElements.get(parentGroupId);
     return parentDetails?.querySelector('.log-group-content') ?? null;
@@ -80,7 +81,7 @@ export class TaskGroupDomManager {
       return;
     }
 
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const container = safeGetElementById(ELEMENT_IDS.LOG_CONTENT);
     if (!container) {
       return;
     }
@@ -466,7 +467,7 @@ export class LogEntryManager {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
       const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${logMessage.groupId}`;
-      const groupContent = document.getElementById(groupContentId);
+      const groupContent = safeGetElementById(groupContentId);
       if (groupContent) {
         const logLineElement = this.entryFormatter.format(logMessage, options);
         if (!logLineElement) {

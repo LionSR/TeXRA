@@ -119,9 +119,14 @@ export async function prepareInitialState<C>(
   const memoryEnabled = services.resolvedTools.some((t) => t.name === 'memory');
 
   const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-    await buildInitialToolUsePrompts(prompt, userVarChannels.transient, logger, {
-      memoryEnabled,
-    });
+    await buildInitialToolUsePrompts(
+      prompt,
+      userVarChannels.transient,
+      logger,
+      {
+        memoryEnabled,
+      },
+    );
 
   const messages = await modelHandler.initializeMessages(
     userPrefix,
