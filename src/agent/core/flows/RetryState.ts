@@ -105,15 +105,6 @@ function getNodeRetryConfig(): NodeRetryConfig {
 // ============================================================================
 
 /**
- * Creates initial retry state.
- */
-export function createRetryState(): RetryState {
-  return {
-    lastError: undefined,
-  };
-}
-
-/**
  * Clears error state. Used internally by handleInvocationResult.
  */
 function clearRetryError(state: RetryState): void {
