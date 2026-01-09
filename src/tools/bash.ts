@@ -30,7 +30,7 @@ export class BashTool extends defineTool({
           ? `${input.command.slice(0, 57)}…`
           : input.command;
       return {
-        summary: `Ran bash: ${commandPreview}`,
+        summary: `Ran: ${commandPreview}`,
         output: result.stdout || '',
       };
     }
