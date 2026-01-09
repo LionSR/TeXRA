@@ -1,4 +1,3 @@
-// Local imports - model handlers
 import {
   ModelHandler,
   ModelHandlerAnthropic,
@@ -13,28 +12,33 @@ import {
   ModelHandlerOpenAIResponse,
 } from '@agent/modelHandlers';
 
-// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-
-// Local imports - logging
 import * as logger from '@logger/logUtils';
 import { ModelConfig, ModelProvider } from '@model';
 import { getConfig } from '@utils/config';
 
-// Initialize logger
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
+const PROVIDER_HANDLERS = new Map<
+  ModelProvider,
+  new (config: ModelConfig) => ModelHandler<ProviderMessage>
+>([
+  [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
+  [ModelProvider.OPENAI, ModelHandlerOpenAI],
+  [ModelProvider.GOOGLE, ModelHandlerGoogleGenAI],
+  [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
+  [ModelProvider.XAI, ModelHandlerXAI],
+  [ModelProvider.MOONSHOT, ModelHandlerKimi],
+  [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
+  [ModelProvider.OTHERS, ModelHandlerOpenRouter],
+]);
+
 /** Factory class for instantiating appropriate model handlers based on configuration. */
 export class ModelFactory {
-  /**
-   * Creates a model handler instance based on provider and routing configuration.
-   * @param config Model configuration including provider and OpenRouter settings
-   * @returns Appropriate ModelHandler instance for the configuration
-   * @throws Error if provider is unsupported
-   */
+  /** Creates a model handler instance based on provider and routing configuration. */
   static createHandler(config: ModelConfig): ModelHandler {
-    // Models requiring Responses API (e.g., deep research) must bypass OpenRouter
+    // Models requiring Responses API must bypass OpenRouter (e.g., deep research)
     if (
       config.provider === ModelProvider.OPENAI &&
       config.requiresResponsesAPI
@@ -43,56 +47,33 @@ export class ModelFactory {
       return new ModelHandlerOpenAIResponse(config);
     }
 
-    // Use OpenRouter if model requires it or if explicitly configured in toolConfig
+    // Route through OpenRouter if configured (takes precedence over optional Responses API)
     const useOpenRouter =
       config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false);
-
     if (useOpenRouter) {
-      // Set OpenRouter model name if not provided
       if (!config.openrouterFullName) {
         config.openrouterFullName = `${config.provider}/${config.fullName}`;
       }
-
-      // Route to appropriate OpenRouter handler
       if (config.provider === ModelProvider.ANTHROPIC) {
         return new ModelHandlerAnthropicViaOpenRouter(config);
       }
       return new ModelHandlerOpenRouter(config);
     }
 
-    // Check for OpenAI Responses API usage
-    const useOpenAIResponsesAPI = getConfig<boolean>(
-      'texra.model.useOpenAIResponsesAPI',
-      false,
-    );
-    if (
-      config.provider === ModelProvider.OPENAI &&
-      (useOpenAIResponsesAPI || config.fullName.startsWith('gpt-oss'))
-    ) {
-      logger.debug(
-        CHANNEL,
-        'Using OpenAI Responses API Handler (ModelHandlerOpenAIResponse)',
-      );
-      return new ModelHandlerOpenAIResponse(config);
+    // Check for optional OpenAI Responses API usage (only when not using OpenRouter)
+    if (config.provider === ModelProvider.OPENAI) {
+      const useResponsesAPI =
+        getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
+        config.fullName.startsWith('gpt-oss');
+      if (useResponsesAPI) {
+        logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
+        return new ModelHandlerOpenAIResponse(config);
+      }
     }
 
-    // Map providers to their handler classes (excluding the native Google handler handled above)
-    const handlerMap = new Map<
-      ModelProvider,
-      new (config: ModelConfig) => ModelHandler<ProviderMessage>
-    >([
-      [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
-      [ModelProvider.OPENAI, ModelHandlerOpenAI],
-      [ModelProvider.GOOGLE, ModelHandlerGoogleGenAI],
-      [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
-      [ModelProvider.XAI, ModelHandlerXAI],
-      [ModelProvider.MOONSHOT, ModelHandlerKimi],
-      [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
-      [ModelProvider.OTHERS, ModelHandlerOpenRouter],
-    ]);
-
-    const HandlerClass = handlerMap.get(config.provider);
+    // Use direct provider handler
+    const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
     if (!HandlerClass) {
       throw new Error(`Unsupported model provider: ${config.provider}`);
     }
