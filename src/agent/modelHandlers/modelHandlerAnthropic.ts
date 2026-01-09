@@ -714,7 +714,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * The response includes applied_edits when server-side context editing was performed.
    */
   private logContextManagementFromResponse(response: BetaMessage): void {
-    // Access context_management from response - uses SDK types where available
     const contextManagement = (
       response as BetaMessage & {
         context_management?: BetaContextManagementResponse | null;
@@ -726,66 +725,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
-
-    // Calculate total input tokens (Anthropic SDK: total = input + cache_read + cache_creation)
     const totalInputTokens =
       response.usage.input_tokens +
       (response.usage.cache_read_input_tokens ?? 0) +
       (response.usage.cache_creation_input_tokens ?? 0);
+
     type AppliedEdit =
       | BetaClearToolUses20250919EditResponse
       | BetaClearThinking20251015EditResponse;
 
     for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
-      if (
-        edit.type === 'clear_tool_uses_20250919' &&
-        edit.cleared_input_tokens &&
-        edit.cleared_input_tokens > 0
-      ) {
-        const typedEdit = edit as BetaClearToolUses20250919EditResponse;
-        const clearedTokens = typedEdit.cleared_input_tokens;
-        const clearedToolUses = typedEdit.cleared_tool_uses ?? 0;
-        const utilizationReduction = (clearedTokens / contextWindow) * 100;
-
-        this.logger.logContextManagement(
-          `Cleared ${clearedToolUses} tool use(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
-          {
-            action: 'clear_tool_uses',
-            tokensBefore: totalInputTokens + clearedTokens,
-            tokensAfter: totalInputTokens,
-            contextWindow,
-            utilizationBefore:
-              ((totalInputTokens + clearedTokens) / contextWindow) * 100,
-            utilizationAfter: (totalInputTokens / contextWindow) * 100,
-            details: `Anthropic server-side: cleared ${clearedToolUses} tool use(s)`,
-          },
-        );
+      const clearedTokens = edit.cleared_input_tokens;
+      if (!clearedTokens || clearedTokens <= 0) {
+        continue;
       }
 
-      if (
-        edit.type === 'clear_thinking_20251015' &&
-        edit.cleared_input_tokens &&
-        edit.cleared_input_tokens > 0
-      ) {
-        const typedEdit = edit as BetaClearThinking20251015EditResponse;
-        const clearedTokens = typedEdit.cleared_input_tokens;
-        const clearedTurns = typedEdit.cleared_thinking_turns ?? 0;
-        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+      const isToolUses = edit.type === 'clear_tool_uses_20250919';
+      const clearedCount = isToolUses
+        ? ((edit as BetaClearToolUses20250919EditResponse).cleared_tool_uses ??
+          0)
+        : ((edit as BetaClearThinking20251015EditResponse)
+            .cleared_thinking_turns ?? 0);
+      const itemLabel = isToolUses ? 'tool use(s)' : 'thinking turn(s)';
+      const action = isToolUses ? 'clear_tool_uses' : 'clear_thinking';
+      const utilizationReduction = (clearedTokens / contextWindow) * 100;
 
-        this.logger.logContextManagement(
-          `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
-          {
-            action: 'clear_thinking',
-            tokensBefore: totalInputTokens + clearedTokens,
-            tokensAfter: totalInputTokens,
-            contextWindow,
-            utilizationBefore:
-              ((totalInputTokens + clearedTokens) / contextWindow) * 100,
-            utilizationAfter: (totalInputTokens / contextWindow) * 100,
-            details: `Anthropic server-side: cleared ${clearedTurns} thinking turn(s)`,
-          },
-        );
-      }
+      this.logger.logContextManagement(
+        `Cleared ${clearedCount} ${itemLabel}: ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+        {
+          action,
+          tokensBefore: totalInputTokens + clearedTokens,
+          tokensAfter: totalInputTokens,
+          contextWindow,
+          utilizationBefore:
+            ((totalInputTokens + clearedTokens) / contextWindow) * 100,
+          utilizationAfter: (totalInputTokens / contextWindow) * 100,
+          details: `Anthropic server-side: cleared ${clearedCount} ${itemLabel}`,
+        },
+      );
     }
   }
 
