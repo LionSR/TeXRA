@@ -154,15 +154,7 @@ export class AgentsTable {
     const modelsListContainer = safeGetElementById(
       ELEMENT_IDS.MODELS_LIST_CONTAINER,
     );
-    // Normalize allowedModels: array stays array, null stays null, else default to []
-    let resolvedAllowedModels;
-    if (Array.isArray(allowedModels)) {
-      resolvedAllowedModels = allowedModels;
-    } else if (allowedModels === null) {
-      resolvedAllowedModels = null;
-    } else {
-      resolvedAllowedModels = [];
-    }
+    // allowedModels is pre-normalized by messageHandler: null | [] | string[]
 
     // Set the current mode
     if (includedRadio) {
@@ -194,7 +186,7 @@ export class AgentsTable {
         modelsInfo,
         modelsListContainer,
         apiAccessMode,
-        resolvedAllowedModels,
+        allowedModels,
         enabledProviders,
       );
     }
