@@ -237,7 +237,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _resolveSessionKind(streamInfo) {
     if (!streamInfo) return state.activeSessionKind || 'workflow';
-    return streamInfo.agentSessionKind || streamInfo.uiTraits?.sessionKind || 'workflow';
+    return (
+      streamInfo.agentSessionKind ||
+      streamInfo.uiTraits?.sessionKind ||
+      'workflow'
+    );
   }
 
   /**
@@ -405,7 +409,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
-    const activeStreamInfo = streams.find((s) => s.name === message.activeStream);
+    const activeStreamInfo = streams.find(
+      (s) => s.name === message.activeStream,
+    );
     const sessionKind = this._resolveSessionKind(activeStreamInfo);
     const isToolAgent = sessionKind === 'toolUse';
 
@@ -533,7 +539,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (parentGroups.length > 0) {
         const runIds = parentGroups.map((g) => g.id);
         const preferredRun = this._resolvePreferredRunId(
-          runIds, message.activeRunId, previousRunId,
+          runIds,
+          message.activeRunId,
+          previousRunId,
         );
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
@@ -544,7 +552,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
       // Sync state if resolution differs
       const resolvedRunId = state.resolveActiveRunId(message.stream);
-      if (resolvedRunId && state.getActiveRunId(message.stream) !== resolvedRunId) {
+      if (
+        resolvedRunId &&
+        state.getActiveRunId(message.stream) !== resolvedRunId
+      ) {
         state.setActiveRunId(message.stream, resolvedRunId);
       }
     } else {
@@ -836,7 +847,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.reset) {
       state.clearRunFiles(targetStream);
     } else if (message.runId) {
-      const hasRounds = message.rounds && Object.keys(message.rounds).length > 0;
+      const hasRounds =
+        message.rounds && Object.keys(message.rounds).length > 0;
       if (hasRounds) {
         state.setRunFiles(targetStream, message.runId, message.rounds);
       } else {
