@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import { showLoggedMessage } from '@common/errors';
+import { formatZodError, showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -55,14 +55,6 @@ const PackMultipleSchema = z
 
 // --- Helpers ---
 
-function formatZodError(error: z.ZodError): string {
-  return error.issues
-    .map((i) =>
-      i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
-    )
-    .join(', ');
-}
-
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success': {
@@ -97,7 +89,7 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 
 // --- Handlers ---
 
-async function handlePack(config: unknown) {
+async function handlePack(config: unknown): Promise<void> {
   const parsed = PackConfigSchema.safeParse(config);
   if (!parsed.success) {
     await showLoggedMessage(
@@ -145,7 +137,7 @@ async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
-) {
+): Promise<void> {
   const parsed = PackParamsSchema.safeParse({ inputFile, agent, model });
   if (!parsed.success) {
     await showLoggedMessage(
@@ -170,7 +162,7 @@ async function handlePackMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-) {
+): Promise<void> {
   const parsed = PackMultipleSchema.safeParse({
     inputFile,
     agent,
@@ -202,7 +194,7 @@ async function handlePackMultiple(
 
 // --- Registration ---
 
-export function registerPackCommands(context: vscode.ExtensionContext) {
+export function registerPackCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.pack', handlePack),
     vscode.commands.registerCommand('texra.packSingle', handlePackSingle),

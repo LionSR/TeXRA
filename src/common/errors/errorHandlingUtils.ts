@@ -26,6 +26,7 @@
 
 // Third-party imports
 import * as vscode from 'vscode';
+import type { z } from 'zod';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -97,6 +98,32 @@ export function toErrorMessage(err: unknown): string {
     return 'null';
   }
   return String(err);
+}
+
+/**
+ * Format a Zod validation error into a human-readable string.
+ *
+ * Converts Zod's structured error issues into a comma-separated list
+ * of field paths and messages, making validation errors easier to understand.
+ *
+ * @param error - The Zod error to format
+ * @returns A formatted string describing the validation issues
+ *
+ * @example
+ * ```typescript
+ * const result = schema.safeParse(data);
+ * if (!result.success) {
+ *   const message = formatZodError(result.error);
+ *   // Returns: "inputFile: Required, model: String must contain at least 1 character(s)"
+ * }
+ * ```
+ */
+export function formatZodError(error: z.ZodError): string {
+  return error.issues
+    .map((i) =>
+      i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
+    )
+    .join(', ');
 }
 
 /**
