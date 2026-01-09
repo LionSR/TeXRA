@@ -139,10 +139,9 @@ export class FileList {
 
     // Handle diff stats (use schema field names: added/removed)
     if (statsSpan) {
-      if (file.diff?.added !== undefined && file.diff?.removed !== undefined) {
-        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
-      } else if (file.diff?.added !== undefined) {
-        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
+      const statsHtml = this._buildDiffStatsHtml(file.diff);
+      if (statsHtml) {
+        statsSpan.innerHTML = statsHtml;
       } else {
         statsSpan.remove();
       }
@@ -224,6 +223,22 @@ export class FileList {
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
       filePathSpan.dataset.file = file.location.absolutePath;
     }
+  }
+
+  /**
+   * Build HTML for diff stats display.
+   * @private
+   * @param {Object|undefined} diff - Diff stats with added/removed counts
+   * @returns {string|null} HTML string or null if no stats to show
+   */
+  _buildDiffStatsHtml(diff) {
+    if (diff?.added === undefined) return null;
+    const addedSpan = `<span class="added">+${diff.added}</span>`;
+    const removedSpan =
+      diff.removed !== undefined
+        ? `<span class="removed">-${diff.removed}</span>`
+        : '';
+    return addedSpan + removedSpan;
   }
 
   /**
