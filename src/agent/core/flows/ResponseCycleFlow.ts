@@ -537,6 +537,13 @@ class ResponseProcessNode<C> extends BaseNode<
         prepRes.responseTimeMs ?? 0,
       );
 
+      // Emit context state for UI display (centralized for all model handlers)
+      const { inputTokens } = normalizedUsage;
+      const { contextWindow } = modelHandler.config;
+      if (inputTokens > 0 && contextWindow > 0) {
+        logger.logContextState(inputTokens, contextWindow);
+      }
+
       const repetitionResult = checkForMassiveRepetition(
         prepRes.lastResponse,
         newResponse,
