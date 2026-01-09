@@ -59,9 +59,6 @@ export class PrepareContextNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /**
-   * Extract data needed for context preparation.
-   */
   async prep(shared: ReflectionFlowShared): Promise<ContextPrepInput> {
     return {
       currentRound: shared.currentRound,
@@ -69,10 +66,6 @@ export class PrepareContextNode<C = unknown> extends Node<
     };
   }
 
-  /**
-   * Build prompts and base messages for the round.
-   * Does NOT include texcount stats or media - those are added by subsequent nodes.
-   */
   async exec(prepRes: ContextPrepInput): Promise<ContextExecResult> {
     const { promptBuilder, modelHandler, logger } = this.services;
     const { currentRound, conversation } = prepRes;
@@ -80,60 +73,34 @@ export class PrepareContextNode<C = unknown> extends Node<
     const stateRound = new ConversationRoundState(currentRound);
 
     if (currentRound === 0) {
-      // First round: build initial prompts
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
-
-      // Build prefill
       const prefill = await promptBuilder.buildPrefill(currentRound);
-
-      // Initialize base messages (no media - will be added by MediaExtractionNode)
       const messages = await modelHandler.initializeMessages(
         userPrefix,
         userRequest,
-        undefined, // media added later by MediaExtractionNode
+        undefined,
         systemPrompt,
       );
 
-      logger.debug(
-        `Prepared first round base context with ${messages.length} messages`,
-      );
+      logger.debug(`Prepared first round context with ${messages.length} messages`);
 
       return {
         kind: 'ready',
-        context: {
-          messages,
-          prefill: prefill ?? '',
-          stateRoundSnapshot: stateRound.toSnapshot(),
-        },
-      };
-    } else {
-      // Subsequent rounds: build user request only
-      const userRequest = await promptBuilder.buildUserRequest(currentRound);
-
-      // Build prefill
-      const prefill = await promptBuilder.buildPrefill(currentRound);
-
-      // Create round messages (no media - will be added by MediaExtractionNode)
-      const messages = await modelHandler.createRoundMessages(
-        conversation,
-        userRequest,
-        undefined, // media added later by MediaExtractionNode
-      );
-
-      logger.debug(
-        `Prepared round ${currentRound} base context with ${messages.length} messages`,
-      );
-
-      return {
-        kind: 'ready',
-        context: {
-          messages,
-          prefill: prefill ?? '',
-          stateRoundSnapshot: stateRound.toSnapshot(),
-        },
+        context: { messages, prefill: prefill ?? '', stateRoundSnapshot: stateRound.toSnapshot() },
       };
     }
+
+    const userRequest = await promptBuilder.buildUserRequest(currentRound);
+    const prefill = await promptBuilder.buildPrefill(currentRound);
+    const messages = await modelHandler.createRoundMessages(conversation, userRequest, undefined);
+
+    logger.debug(`Prepared round ${currentRound} context with ${messages.length} messages`);
+
+    return {
+      kind: 'ready',
+      context: { messages, prefill: prefill ?? '', stateRoundSnapshot: stateRound.toSnapshot() },
+    };
   }
 
   /**
