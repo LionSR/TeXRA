@@ -89,6 +89,11 @@ export interface ToolUseRunState {
   shouldSkipCycle: boolean;
   /** State slices (natively serializable) - reconstruct via fromSnapshot() */
   stateSlices: StateSlicesSnapshot | null;
+  /**
+   * Tracks if user cancelled manual retry (timeout or explicit cancel).
+   * When true, flow record should be preserved so user can resume from last successful breakpoint.
+   */
+  userCancelledRetry?: boolean;
 }
 
 /**
@@ -497,6 +502,8 @@ class ToolUseCycleNode<C> extends Node<
 
       case 'cancelled':
         // User cancelled - not an error, flow ends gracefully
+        // Mark state so flow record is preserved for resume from last successful breakpoint
+        shared.state.userCancelledRetry = true;
         // Return FINALIZE to exit flow (no finalize successor = flow ends)
         return FlowTransition.FINALIZE;
     }
