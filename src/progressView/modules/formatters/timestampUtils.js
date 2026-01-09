@@ -49,11 +49,17 @@ export const formatTimestamp = (date) => {
 };
 
 /**
- * Format token counts, displaying values in "k" units when exceeding 4096.
+ * Format token counts for display.
+ * - Values >= 100,000 display as "M" (millions), e.g., "1.2M"
+ * - Values > 4096 display as "k" (thousands), e.g., "50k"
+ * - Values <= 4096 display as raw numbers
  * @param {number} tokens - Raw token count
  * @returns {string} Formatted token count
  */
 export const formatTokens = (tokens) => {
+  if (tokens >= 100_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
 };
 
