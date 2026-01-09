@@ -114,11 +114,10 @@ export class SearchManager {
       .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
       .forEach((section) => {
         if (!(section instanceof HTMLElement)) return;
-        const expanded = getExpandedState(section);
+        // Use .open property - it automatically manages the attribute
         if ('open' in section) {
-          section.open = expanded;
+          section.open = getExpandedState(section);
         }
-        section.toggleAttribute('open', expanded);
       });
   }
 
