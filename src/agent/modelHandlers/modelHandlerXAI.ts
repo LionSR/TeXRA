@@ -1,9 +1,3 @@
-// (none needed)
-
-// Local imports - agent
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { K_SLICE } from '@utils/config';
-
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
@@ -12,80 +6,28 @@ import type { ExtractResponseResult } from './types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
+ *
+ * Note: reasoning_effort is not supported by grok-4 models.
+ * Specifying reasoning_effort parameter will result in an error response.
+ *
+ * processThinkingBlock is inherited from ModelHandlerOpenAI which already
+ * extracts reasoning_content from the response message.
+ *
  * usageProvider and toolCallProvider inherit from base class via config.provider.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
-  /**
-   * Process thinking blocks for xAI models
-   * @param responseObject The raw response object from the model
-   * @param workspaceState Optional workspaceState to update with the thinking block
-   * @returns The extracted reasoning_content or null if none
-   */
-  processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
-  ): string | null {
-    if (!responseObject) {
-      return null;
-    }
-
-    // reasoning_effort is not supported by grok-4.
-    // Specifying reasoning_effort parameter will get an error response.
-
-    // Extract reasoning content from xAI response
-    let reasoningContent = null;
-
-    // Check for reasoning_content based on xAI API structure
-    if (
-      responseObject.choices &&
-      responseObject.choices.length > 0 &&
-      responseObject.choices[0].message
-    ) {
-      const message = responseObject.choices[0].message;
-
-      // Extract reasoning_content from xAI response
-      if (message.reasoning_content) {
-        reasoningContent = message.reasoning_content;
-        this.logger.debug(
-          'Found reasoning_content in choices[0].message.reasoning_content',
-        );
-
-        // If workspaceState is provided and we have reasoning content,
-        // store it in the workspaceState for future use
-        if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-          // Create a thinking block in a consistent format
-          const thinkingBlock = {
-            type: 'thinking',
-            thinking: reasoningContent,
-          };
-
-          workspaceState.reasoning.thinkingBlocks = [thinkingBlock];
-          workspaceState.reasoning.thinkingAdded = true;
-        }
-      }
-    }
-
-    if (!reasoningContent) {
-      return null;
-    }
-
-    // Log preview of thinking content
-    this.logger.debug(
-      `xAI reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-    );
-
-    return reasoningContent;
-  }
-
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
+  override extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): ExtractResponseResult {
     const result = super.extractResponse(responseObject, endTag);
 
-    // Extract and add reasoning tokens for usage calculation
-    if (responseObject.usage?.completion_tokens_details?.reasoning_tokens) {
-      this.logger.debug(
-        `Found reasoning tokens: ${responseObject.usage.completion_tokens_details.reasoning_tokens}`,
-      );
+    // Log reasoning tokens if present (xAI-specific debug info)
+    const reasoningTokens =
+      responseObject.usage?.completion_tokens_details?.reasoning_tokens;
+    if (reasoningTokens) {
+      this.logger.debug(`Found reasoning tokens: ${reasoningTokens}`);
     }
 
     return result;
