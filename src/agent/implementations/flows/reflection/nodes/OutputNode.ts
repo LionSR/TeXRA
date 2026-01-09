@@ -16,7 +16,6 @@ import { toErrorMessage } from '@common/errors';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 
-import { createBaseFileLocations } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type {
   ReflectionFlowParams,
@@ -51,7 +50,7 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
-    const { config, fileService, setting } = this.services;
+    const { baseFiles, shouldEnsureXmlStructure } = this.services;
     const { currentRound, outputLocation, endTurn } = shared;
 
     if (!outputLocation) {
@@ -60,18 +59,12 @@ export class OutputNode<C = unknown> extends Node<
       );
     }
 
-    // Base files for latexdiff - MUST be workspace locations
-    const baseFiles = createBaseFileLocations(config);
-
-    // Determine if we should ensure XML structure (based on xmlStructureMode config)
-    const ensureXmlStructure = this.services.shouldEnsureXmlStructure;
-
     return {
       currentRound,
       outputLocation,
       endTurn,
       baseFiles,
-      ensureXmlStructure,
+      ensureXmlStructure: shouldEnsureXmlStructure,
     };
   }
 
