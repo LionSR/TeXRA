@@ -180,22 +180,19 @@ export async function getLinterMessages(
   }
 }
 
+/** Map from DiagnosticSeverity to string name */
+const SEVERITY_MAP: Record<vscode.DiagnosticSeverity, string> = {
+  [vscode.DiagnosticSeverity.Error]: 'error',
+  [vscode.DiagnosticSeverity.Warning]: 'warning',
+  [vscode.DiagnosticSeverity.Information]: 'info',
+  [vscode.DiagnosticSeverity.Hint]: 'hint',
+};
+
 /**
  * Convert diagnostic severity to a readable string
  */
 export function getSeverityString(severity: vscode.DiagnosticSeverity): string {
-  switch (severity) {
-    case vscode.DiagnosticSeverity.Error:
-      return 'error';
-    case vscode.DiagnosticSeverity.Warning:
-      return 'warning';
-    case vscode.DiagnosticSeverity.Information:
-      return 'info';
-    case vscode.DiagnosticSeverity.Hint:
-      return 'hint';
-    default:
-      return 'unknown';
-  }
+  return SEVERITY_MAP[severity] ?? 'unknown';
 }
 
 /**
@@ -207,29 +204,20 @@ export function countDiagnosticsBySeverity(diagnostics: vscode.Diagnostic[]): {
   info: number;
   hints: number;
 } {
-  const counts = {
-    errors: 0,
-    warnings: 0,
-    info: 0,
-    hints: 0,
+  const counts = { errors: 0, warnings: 0, info: 0, hints: 0 };
+  const countKey: Record<string, keyof typeof counts> = {
+    error: 'errors',
+    warning: 'warnings',
+    info: 'info',
+    hint: 'hints',
   };
 
-  diagnostics.forEach((diagnostic) => {
-    switch (diagnostic.severity) {
-      case vscode.DiagnosticSeverity.Error:
-        counts.errors++;
-        break;
-      case vscode.DiagnosticSeverity.Warning:
-        counts.warnings++;
-        break;
-      case vscode.DiagnosticSeverity.Information:
-        counts.info++;
-        break;
-      case vscode.DiagnosticSeverity.Hint:
-        counts.hints++;
-        break;
+  for (const diagnostic of diagnostics) {
+    const key = countKey[getSeverityString(diagnostic.severity)];
+    if (key) {
+      counts[key]++;
     }
-  });
+  }
 
   return counts;
 }
