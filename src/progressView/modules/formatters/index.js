@@ -163,6 +163,8 @@ export class LogEntryFormatter {
           () => formatStatistics(message.normalizedPayload, message.id),
           'statistics',
         ),
+      // Context state is displayed in the footer, not inline in logs
+      contextState: () => null,
       userMessage: (message) =>
         safeFormat(
           () =>
@@ -215,7 +217,8 @@ export class LogEntryFormatter {
       if (
         messageType === 'thinking' ||
         messageType === 'scratchpad' ||
-        messageType === 'modelResponse'
+        messageType === 'modelResponse' ||
+        messageType === 'contextState'
       ) {
         return null;
       }

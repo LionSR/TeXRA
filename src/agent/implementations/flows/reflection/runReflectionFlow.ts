@@ -34,8 +34,8 @@ import {
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
+import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
@@ -56,12 +56,13 @@ import {
   createReflectionFlow,
   type ReflectionFlowShared,
 } from './ReflectionFlow';
+import { ReflectionFlowStateSchema } from './ReflectionFlowState';
 import {
-  createFreshWorkspaceSnapshot,
-  createInitialReflectionState,
-  ReflectionFlowStateSchema,
-} from './ReflectionFlowState';
-import { createBaseFileLocations } from './helpers';
+  createBaseFileLocations,
+  computeShouldEnsureXmlStructure,
+  computeTotalRounds,
+  createOutputFileLocationGetter,
+} from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
 
 // ============================================================================
@@ -162,52 +163,23 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Compute shouldEnsureXmlStructure from configuration
+  // Compute configuration values using helpers
   const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-  let shouldEnsureXmlStructure = false;
-  if (setting.xmlStructureMode !== undefined) {
-    shouldEnsureXmlStructure =
-      setting.xmlStructureMode === 'always' ||
-      (setting.xmlStructureMode === 'scratchpadOnly' && useScratchpad);
-  } else if (setting.agentType === 'CoT') {
-    shouldEnsureXmlStructure = true;
-  } else if (setting.agentType === 'direct') {
-    shouldEnsureXmlStructure = useScratchpad;
-  }
-
-  // Compute totalRounds from configuration
-  let totalRounds: number;
-  if (setting.maxRounds !== undefined) {
-    totalRounds = setting.maxRounds;
-  } else if (setting.agentType === 'direct') {
-    totalRounds = 1;
-  } else {
-    const requestArray = Array.isArray(prompt.userRequest)
-      ? prompt.userRequest
-      : prompt.userRequest
-        ? [prompt.userRequest]
-        : [];
-    totalRounds = Math.max(setting.rounds ?? 2, requestArray.length);
-  }
+  const shouldEnsureXmlStructure = computeShouldEnsureXmlStructure(
+    setting,
+    useScratchpad,
+  );
+  const totalRounds = computeTotalRounds(setting, prompt);
 
   // Use custom getter if provided, otherwise create default
   const getOutputFileLocation =
     input.getOutputFileLocation ??
-    ((currRound: number): AgentFileLocation => {
-      const fileExtension = useScratchpad ? 'xml' : setting.outputExt;
-      const fileName = getOutputFileName(
-        config.inputFile,
-        config.agent,
-        modelHandler.config.name,
-        fileExtension,
-        currRound,
-        config.editedFile || undefined,
-      );
-      return (
-        useScratchpad
-          ? fileService.createRawOutputLocation(fileName)
-          : fileService.createLocation(fileName)
-      ) as AgentFileLocation;
+    createOutputFileLocationGetter({
+      fileService,
+      config,
+      modelName: modelHandler.config.name,
+      setting,
+      useScratchpad,
     });
 
   // Create interruptible object for registration
@@ -277,10 +249,19 @@ export async function runReflectionFlow<C = unknown>(
 
     // Create fresh state if not resuming
     if (!shared) {
-      shared = createInitialReflectionState(
+      shared = {
+        currentRound: 0,
         totalRounds,
-        AgentWorkspaceState.create().toSnapshot(),
-      );
+        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+        context: null,
+        outputLocation: null,
+        conversation: [],
+        runStateSnapshot: new AgentRunState().toSnapshot(),
+        roundStateSnapshots: [],
+        roundOutputs: [],
+        continueRounds: true,
+        endTurn: false,
+      };
     }
 
     // Create RoundPersistedFlow with the start node
@@ -301,7 +282,7 @@ export async function runReflectionFlow<C = unknown>(
           });
         },
         resetForNextRound: (s) => {
-          s.workspaceSnapshot = createFreshWorkspaceSnapshot();
+          s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         },
         checkInterruption,
         onFlowEnd: (_shared, flowEndStatus) => {
@@ -321,6 +302,7 @@ export async function runReflectionFlow<C = unknown>(
       getOutputFileLocation,
       shouldEnsureXmlStructure,
       runStage,
+      baseFiles,
     };
     pf.setServices(services);
 

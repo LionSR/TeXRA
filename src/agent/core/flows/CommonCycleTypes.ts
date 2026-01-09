@@ -97,6 +97,18 @@ export const BaseCycleFieldsSchema = z.object({
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /**
+ * Reset values for base cycle fields (excludes messages which persists).
+ * Co-located with schema as single source of truth for reset behavior.
+ */
+export const BASE_CYCLE_RESET_VALUES: Omit<BaseCycleFields, 'messages'> = {
+  shouldStop: false,
+  endTurn: false,
+  responseTimeMs: undefined,
+  stopReason: undefined,
+  lastError: undefined,
+};
+
+/**
  * Unified debug context used across all cycle flows.
  * Provides consistent logging and execution tracking.
  *
@@ -161,34 +173,21 @@ export type SkippableNodeResult<T> =
   | { kind: 'success'; value: T };
 
 /**
- * Generic reset function for cycle states.
- * Resets base state fields and any additional optional fields to undefined.
+ * Reset cycle state to initial values.
  *
- * IMPORTANT: Only pass fields that should be reset to undefined.
- * - Do NOT pass 'messages' (preserved across cycles)
- * - Do NOT pass boolean fields like 'endTurn'
- *   (these should be reset to false separately, not undefined)
+ * Resets base fields using BASE_CYCLE_RESET_VALUES, then resets additional
+ * flow-specific fields to undefined.
  *
  * @param state - The state object to reset (must extend BaseCycleFields)
- * @param additionalFields - Field names to reset to undefined (typically optional object fields)
+ * @param additionalFields - Field names to reset to undefined (flow-specific fields)
  */
 export function resetCycleState<T extends BaseCycleFields>(
   state: T,
-  additionalFields: (keyof T)[],
+  additionalFields: (keyof T)[] = [],
 ): void {
-  // Reset base cycle state fields
-  state.shouldStop = false;
-  state.endTurn = false;
-  state.responseTimeMs = undefined;
-  state.stopReason = undefined;
-  state.lastError = undefined;
-
-  // Reset additional optional fields to undefined
+  Object.assign(state, BASE_CYCLE_RESET_VALUES);
   for (const field of additionalFields) {
-    // Skip 'messages' to preserve it across resets
-    if (field !== 'messages') {
-      state[field] = undefined as T[typeof field];
-    }
+    state[field] = undefined as T[typeof field];
   }
 }
 

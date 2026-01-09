@@ -12,7 +12,6 @@ import type { FileLocation } from '@utils/files';
 import { getTeXCountStats } from '@latex';
 
 import { getFilesForRound } from '../helpers';
-
 import type {
   ReflectionFlowShared,
   RoundContext,
@@ -39,12 +38,15 @@ export class TeXCountNode<C = unknown> extends Node<
 
   async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
     const { config, fileService } = this.services;
-    const { currentRound, roundOutputs, context } = shared;
-
     return {
-      files: getFilesForRound(currentRound, roundOutputs, config, fileService),
+      files: getFilesForRound(
+        shared.currentRound,
+        shared.roundOutputs,
+        config,
+        fileService,
+      ),
       attachTeXCount: config.toolConfig.attachTeXCount,
-      context,
+      context: shared.context,
     };
   }
 

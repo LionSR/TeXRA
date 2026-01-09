@@ -78,6 +78,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -282,17 +283,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.cacheControlledBlock = undefined;
   }
 
-  private getMutableBetas(options: MessageCreateParams): AnthropicBeta[] {
+  /** Ensures a beta flag is included in options, initializing the array if needed. */
+  private ensureBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
     if (!options.betas) {
       options.betas = [];
     }
-    return options.betas;
-  }
-
-  private appendBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
-    const betas = this.getMutableBetas(options);
-    if (!betas.includes(beta)) {
-      betas.push(beta);
+    if (!options.betas.includes(beta)) {
+      options.betas.push(beta);
     }
   }
 
@@ -375,7 +372,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       if (this.config.capabilities.supportsInterleavedThinking) {
-        this.appendBeta(options, INTERLEAVED_THINKING_BETA);
+        this.ensureBeta(options, INTERLEAVED_THINKING_BETA);
+      }
+
+      // Memory tool requires the context management beta header
+      if (tools.some((t) => t.name === 'memory')) {
+        this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
       }
     }
 
@@ -414,9 +416,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
-      const sonnetBetas = this.getMutableBetas(options);
-      sonnetBetas.length = 0;
-      sonnetBetas.push(SONNET_37_OUTPUT_BETA);
+      // Reset betas to only include the output beta for this specific model
+      options.betas = [SONNET_37_OUTPUT_BETA];
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -424,7 +425,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Opt-in beta for 1M context window on Claude Sonnet 4 family
     if (isAnthropic1MBetaActive) {
-      this.appendBeta(options, CONTEXT_1M_BETA);
+      this.ensureBeta(options, CONTEXT_1M_BETA);
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -444,8 +445,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           // Include tools in token counting for accurate measurement.
           // Tool schemas can be substantial and affect context utilization.
+          // Filter out memory tool as countTokens API doesn't support it yet.
           if (options.tools && options.tools.length > 0) {
-            countTokensParams.tools = options.tools;
+            const countableTools = options.tools.filter(
+              (tool) => !('type' in tool && tool.type === 'memory_20250818'),
+            );
+            if (countableTools.length > 0) {
+              countTokensParams.tools = countableTools;
+            }
           }
 
           // If thinking is enabled, we need to pass it to countTokens as well
@@ -537,7 +544,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (hasFileReference) {
-      this.appendBeta(options, FILES_API_BETA);
+      this.ensureBeta(options, FILES_API_BETA);
     }
 
     if (this.agentType === AgentType.ToolUse) {
@@ -550,7 +557,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       // Only enable context management if threshold is configured (> 0)
       if (thresholdPercent > 0) {
-        this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
+        this.ensureBeta(options, CONTEXT_MANAGEMENT_BETA);
 
         const contextManagementEdits = [
           ...(options.context_management?.edits ?? []),
@@ -778,13 +785,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       for (const block of content) {
+        // Clear cache_control from ineligible blocks (defensive cleanup)
         if (!isCacheControlEligibleBlock(block)) {
-          if (
-            block &&
-            typeof block === 'object' &&
-            'cache_control' in block &&
-            (block as { cache_control?: unknown }).cache_control
-          ) {
+          if (block && typeof block === 'object' && 'cache_control' in block) {
             delete (block as { cache_control?: unknown }).cache_control;
           }
           continue;
@@ -796,19 +799,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    if (cacheControlledBlocks.length <= MAX_CACHE_CONTROLLED_BLOCKS) {
-      this.cacheControlledBlock = cacheControlledBlocks.at(-1);
-      return;
-    }
-
-    const excess = cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS;
+    // Remove excess cache control markers, keeping only the last MAX_CACHE_CONTROLLED_BLOCKS
+    const excess = Math.max(
+      0,
+      cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS,
+    );
     for (let idx = 0; idx < excess; idx += 1) {
-      const block = cacheControlledBlocks[idx];
-      delete block.cache_control;
+      delete cacheControlledBlocks[idx].cache_control;
     }
 
-    const remainingBlocks = cacheControlledBlocks.slice(excess);
-    this.cacheControlledBlock = remainingBlocks.at(-1);
+    this.cacheControlledBlock = cacheControlledBlocks.at(-1);
   }
 
   private async replaceDocumentDataWithUploads(
@@ -916,23 +916,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       for (const block of contentBlocks) {
-        if (block.type !== 'document') {
+        // Skip non-document blocks or those without source
+        if (block.type !== 'document' || !block.source) {
           continue;
         }
 
-        const source = block.source;
-        if (!source) {
-          continue;
-        }
-
+        const { source } = block;
         if ('file_id' in (source as { file_id?: string })) {
           hasFileSource = true;
-        } else if (source.type === 'base64') {
-          if (source.media_type === 'application/pdf' && source.data) {
-            hasBase64Pdf = true;
-          }
+        } else if (
+          source.type === 'base64' &&
+          source.media_type === 'application/pdf' &&
+          source.data
+        ) {
+          hasBase64Pdf = true;
         }
 
+        // Early exit if both found
         if (hasFileSource && hasBase64Pdf) {
           return { hasFileSource: true, hasBase64Pdf: true };
         }
@@ -1952,15 +1952,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...attachments);
     }
 
-    const textPieces: string[] = [];
-    if (isNonEmptyString(result.output)) {
-      textPieces.push(result.output);
-    }
-    textPieces.push(JSON.stringify(sanitizedResult, null, 2));
-
+    // Build tool result as plain text - JSON wastes tokens
+    // Note: Anthropic handles attachments as separate content blocks, not in text
     const toolResultContent: Array<
       TextBlockParam | ImageBlockParam | DocumentBlockParam
-    > = [{ type: 'text', text: textPieces.join('\n\n') }];
+    > = [{ type: 'text', text: formatToolResultAsText(result) }];
 
     const unsupportedNotes: string[] = [];
 

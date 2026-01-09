@@ -29,6 +29,11 @@ import { ProgressViewState } from './state/ProgressViewState';
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
  *
+ * Supports two simultaneous views:
+ * - Sidebar view (_view): Standard VS Code webview view in the bottom panel
+ * - Panel view (_panelView): Standalone editor tab for more screen real estate
+ * Both views share state and receive synchronized updates via WebviewUpdater.
+ *
  * Implements IRunStorageService to provide run state access to the agent runtime
  * without creating circular dependencies.
  */
@@ -50,7 +55,11 @@ export class ProgressViewProvider
 
   // Infrastructure
   private readonly _viewTitle: string;
-  private _webviewReady = false;
+  private _sidebarReady = false;
+  private _panelReady = false;
+  // Separate panel view (editor tab) from sidebar view
+  private _panelView?: vscode.WebviewPanel;
+  private _panelDisposables: vscode.Disposable[] = [];
   /**
    * Tracks pending update options when webview is not ready.
    * Uses an object instead of boolean to preserve forceRebuild requests.
@@ -79,7 +88,11 @@ export class ProgressViewProvider
 
     // Initialize new modular architecture
     this.state = new ProgressViewState();
-    this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
+    // WebviewUpdater sends to all available webviews (sidebar + panel)
+    this.webviewUpdater = new WebviewUpdater(() => [
+      this._view?.webview,
+      this._panelView?.webview,
+    ]);
     this.eventHandler = new ProgressEventHandler(
       this.state,
       this.webviewUpdater,
@@ -109,6 +122,11 @@ export class ProgressViewProvider
         // Force rebuild after state reload to ensure freshly loaded data is rendered
         this.updateWebview({ forceRebuild: true });
       }),
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        if (this.isViewVisible()) {
+          this.updateWebview();
+        }
+      }),
     );
   }
 
@@ -132,9 +150,32 @@ export class ProgressViewProvider
 
   protected override cleanupView(): void {
     super.cleanupView();
-    this._webviewReady = false;
+    this._sidebarReady = false;
     this._pendingUpdateOptions = null;
     this.state.clearRenderedStreamTracking();
+  }
+
+  /**
+   * Common setup for any webview (sidebar or panel).
+   * Sets HTML content and message handler.
+   * @returns disposables that should be cleaned up when the view is disposed
+   */
+  private setupWebviewContent(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): vscode.Disposable[] {
+    const disposables: vscode.Disposable[] = [];
+
+    // Set HTML content
+    view.webview.html = this.contentProvider.getHtmlContent(view.webview);
+
+    // Setup message handling
+    disposables.push(
+      view.webview.onDidReceiveMessage((message) =>
+        this.messageHandler.handleMessage(message, view),
+      ),
+    );
+
+    return disposables;
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -144,10 +185,11 @@ export class ProgressViewProvider
     }
     this._hasResolved = true;
 
-    this._webviewReady = false;
+    this._sidebarReady = false;
     this._pendingUpdateOptions = null;
     // Clear rendered stream tracking to force rebuild - DOM state is stale after resolve
     this.state.clearRenderedStreamTracking();
+
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -156,38 +198,38 @@ export class ProgressViewProvider
         'progressView',
       ),
     };
-
     webviewView.title = this._viewTitle;
 
-    // Call super first to set up base functionality and clean up old disposables
-    super.resolveWebviewViewInternal(webviewView);
+    // Clean up old view and set new one
+    this.cleanupView();
+    this._view = webviewView;
 
-    // Add visibility and theme listeners after super.resolveWebviewView
-    // This ensures they aren't cleared by the base class's cleanupView()
-    this.addViewDisposables(
+    // Setup content, message handler, and theme listener
+    const disposables = this.setupWebviewContent(webviewView);
+    this._viewDisposables.push(...disposables);
+
+    // Add visibility listener (specific to sidebar)
+    this._viewDisposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this.updateWebview();
         }
       }),
-      vscode.window.onDidChangeActiveColorTheme(() => {
-        if (webviewView.visible) {
-          this.updateWebview();
-        }
-      }),
+      webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
 
     this.updateWebview();
   }
 
   /**
-   * Update webview content using the new architecture
+   * Update webview content using the new architecture.
+   * WebviewUpdater automatically sends to all registered webviews (sidebar + panel).
    * @param options.forceRebuild - Force full DOM rebuild in frontend
    */
   public updateWebview(options?: { forceRebuild?: boolean }): void {
-    if (!this._view) return;
+    if (!this._view && !this._panelView) return;
 
-    if (!this._webviewReady) {
+    if (!this.isAnyViewReady()) {
       // Queue the update, preserving forceRebuild if any caller requested it.
       // Once forceRebuild is true, it stays true until the update is processed.
       const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
@@ -225,8 +267,14 @@ export class ProgressViewProvider
   /**
    * Mark the webview as ready and process any pending updates.
    */
-  public markWebviewReady(): void {
-    this._webviewReady = true;
+  public markWebviewReady(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): void {
+    if (this.isPanelView(view)) {
+      this._panelReady = true;
+    } else {
+      this._sidebarReady = true;
+    }
 
     // Clear pending options - we always force rebuild on first load anyway,
     // and that takes precedence over any pending options.
@@ -252,7 +300,7 @@ export class ProgressViewProvider
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.pendingApprovalPrompts.set(prompt.requestId, prompt);
 
-    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.showToolEditApprovalPrompt(prompt);
     }
   }
@@ -260,7 +308,7 @@ export class ProgressViewProvider
   public resolveToolEditApprovalPrompt(requestId: string): void {
     this.pendingApprovalPrompts.delete(requestId);
 
-    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
     }
   }
@@ -268,7 +316,7 @@ export class ProgressViewProvider
   public updateToolEditApprovalBypassState(bypassActive: boolean): void {
     this.approvalBypassActive = bypassActive;
 
-    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateToolEditApprovalState(bypassActive);
     }
   }
@@ -278,7 +326,7 @@ export class ProgressViewProvider
   ): void {
     this.pendingRetryRequests.set(payload.streamId, payload);
 
-    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.showRetryRequest(payload);
     }
   }
@@ -286,7 +334,7 @@ export class ProgressViewProvider
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
 
-    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.resolveRetryRequest(streamId);
     }
   }
@@ -304,10 +352,12 @@ export class ProgressViewProvider
   }
 
   /**
-   * Check if view is visible (legacy compatibility)
+   * Check if any view is visible (sidebar or panel)
    */
   public isViewVisible(): boolean {
-    return this._view?.visible ?? false;
+    return (
+      (this._view?.visible ?? false) || (this._panelView?.visible ?? false)
+    );
   }
 
   // ===== IRunStorageService implementation =====
@@ -362,5 +412,84 @@ export class ProgressViewProvider
   public setActiveStream(stream: string): void {
     this.state.activeStream = stream;
     this.updateWebview();
+  }
+
+  /**
+   * Open the progress view in a separate editor tab (WebviewPanel).
+   * This creates a standalone panel that can be positioned anywhere in the editor.
+   * The panel is tracked separately from the sidebar view.
+   */
+  public showProgressViewAsPanel(): void {
+    // If panel already exists, reveal it
+    if (this._panelView) {
+      this._panelView.reveal(vscode.ViewColumn.One);
+      this.updateWebview({ forceRebuild: true });
+      return;
+    }
+
+    // Create new panel
+    this._panelView = vscode.window.createWebviewPanel(
+      ProgressViewProvider.viewType + '.panel',
+      'TeXRA ProgressBoard',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: getSharedLocalResourceRoots(
+          this.context,
+          'progressView',
+        ),
+      },
+    );
+    this._panelReady = false;
+
+    // Setup content, message handler, and theme listener (shared with sidebar)
+    this._panelDisposables.push(...this.setupWebviewContent(this._panelView));
+
+    // Add visibility listener (panel uses onDidChangeViewState instead of onDidChangeVisibility)
+    this._panelDisposables.push(
+      this._panelView.onDidChangeViewState((e) => {
+        if (e.webviewPanel.visible) {
+          this.updateWebview();
+        }
+      }),
+    );
+
+    this._panelDisposables.push(
+      this._panelView.onDidDispose(() => {
+        this.disposePanelResources();
+      }),
+    );
+
+    // Trigger initial update (webview will send WEBVIEW_READY when loaded)
+    this.updateWebview();
+  }
+
+  public override dispose(): void {
+    // Clean up panel resources
+    this.disposePanelResources(true);
+    super.dispose();
+  }
+
+  private isAnyViewReady(): boolean {
+    return this._sidebarReady || this._panelReady;
+  }
+
+  private isPanelView(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): view is vscode.WebviewPanel {
+    return 'viewColumn' in view;
+  }
+
+  private disposePanelResources(disposeView = false): void {
+    const panelView = this._panelView;
+    this._panelView = undefined;
+    this._panelDisposables.forEach((d) => d.dispose());
+    this._panelDisposables = [];
+    this._panelReady = false;
+    if (disposeView) {
+      panelView?.dispose();
+    }
   }
 }

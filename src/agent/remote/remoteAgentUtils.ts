@@ -10,7 +10,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - frontend
 import { getMainWebview } from '@frontend/system/commandUtils';
-import { showInfoMessage, showWarningMessage } from '@frontend/ui/messageUtils';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
@@ -41,7 +40,7 @@ async function handleSelectionFallback(
 ): Promise<SelectAgentResult> {
   if (copyToClipboard) {
     await vscode.env.clipboard.writeText(agentName);
-    void showInfoMessage(
+    void vscode.window.showInformationMessage(
       `Could not auto-select agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
     );
     return {
@@ -52,7 +51,7 @@ async function handleSelectionFallback(
       fallbackAction: 'clipboard',
     };
   } else {
-    void showWarningMessage(
+    void vscode.window.showWarningMessage(
       `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
     );
     return {
@@ -118,7 +117,7 @@ export async function selectAgentInMainView(
       });
 
       if (showSuccessMessage) {
-        void showInfoMessage(
+        void vscode.window.showInformationMessage(
           `Agent "${agentName}" is now selected in the main view.`,
         );
       }

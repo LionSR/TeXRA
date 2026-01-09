@@ -643,17 +643,25 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
+    // SET semantics: backend sends accumulated values, we store directly
+    // (no accumulation here - backend handles accumulation in UsageStatsManager)
+    // Use ?? (nullish coalescing) not || to preserve 0 and NaN as intentional values
     const normalized = {
-      inputTokens: Number(usage?.inputTokens) || 0,
-      outputTokens: Number(usage?.outputTokens) || 0,
-      cost: Number(usage?.cost) || 0,
+      inputTokens: Number(usage?.inputTokens ?? 0),
+      outputTokens: Number(usage?.outputTokens ?? 0),
+      cost: Number(usage?.cost ?? 0),
+      cacheReadInputTokens: Number(usage?.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens: Number(usage?.cacheCreationInputTokens ?? 0),
     };
     if (
       normalized.inputTokens === 0 &&
       normalized.outputTokens === 0 &&
       normalized.cost === 0
     ) {
-      this.clearRunUsage(targetStream, runId);
+      // Empty usage means nothing to store.
+      // Note: We only check input/output/cost, not cache tokens separately.
+      // Cost is calculated upstream and already includes cache creation charges
+      // (Anthropic: 1.25x input price), so cost=0 implies no cache creation billing.
       return;
     }
     this.runUsage.set(targetStream, runId, normalized);

@@ -44,18 +44,12 @@ import {
   NODE_NO_RETRY,
   NODE_NO_WAIT,
 } from '@agent/implementations/flows/common';
+import { buildInitialToolUsePrompts } from '@utils/prompt';
 import type { TodoItem } from '@eventBus/schemas';
 import { bus } from '@eventBus/ProgressEventBus';
 
-// Internal imports
-
-// Service types and helper functions (direct calls, no closures)
-import {
-  prepareInitialState,
-  applyFollowUpMessage,
-  type ToolUseServices,
-  type ToolUseFlowParams,
-} from './tooluse';
+// Service types
+import { type ToolUseServices, type ToolUseFlowParams } from './tooluse';
 
 // ============================================================================
 // State Types
@@ -95,20 +89,11 @@ export interface ToolUseRunState {
   shouldSkipCycle: boolean;
   /** State slices (natively serializable) - reconstruct via fromSnapshot() */
   stateSlices: StateSlicesSnapshot | null;
-}
-
-/**
- * Create initial state for a tool-use flow run.
- *
- * Factory function for consistency with ReflectionFlow pattern
- * (which uses createInitialReflectionState).
- */
-export function createInitialToolUseState(): ToolUseRunState {
-  return {
-    conversation: [],
-    shouldSkipCycle: false,
-    stateSlices: null,
-  };
+  /**
+   * Tracks if user cancelled manual retry (timeout or explicit cancel).
+   * When true, flow record should be preserved so user can resume from last successful breakpoint.
+   */
+  userCancelledRetry?: boolean;
 }
 
 /**
@@ -248,12 +233,68 @@ class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: ToolUsePrepareResult }> {
-    // Call helper functions directly (no closure wrappers)
-    // prepareInitialState returns individual slices directly (no store wrapper)
-    const prepared = await prepareInitialState(this.services);
+    const { modelHandler, prompt, userVarChannels, logger, snapshot } =
+      this.services;
+
+    // Resume from snapshot if available
+    if (snapshot) {
+      logger.debug('Resuming tool-use session from saved state.');
+      const runState = AgentRunState.fromSnapshot(snapshot.run);
+      const workspaceState = AgentWorkspaceState.fromSnapshot(
+        snapshot.workspace,
+      );
+      const userChannels = {
+        input: Object.freeze({ ...snapshot.user.input }),
+        transient: { ...snapshot.user.transient },
+      };
+      return {
+        kind: 'success',
+        result: {
+          messages: snapshot.messages,
+          runState,
+          workspaceState,
+          userChannels,
+          shouldSkipCycle: true,
+        },
+      };
+    }
+
+    // Create fresh state for new sessions
+    const runState = new AgentRunState();
+    const workspaceState = AgentWorkspaceState.create();
+    const memoryEnabled = this.services.resolvedTools.some(
+      (t) => t.name === 'memory',
+    );
+
+    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
+      await buildInitialToolUsePrompts(
+        prompt,
+        userVarChannels.transient,
+        logger,
+        {
+          memoryEnabled,
+        },
+      );
+
+    const systemMessage = systemPrompt
+      ? `${systemPrompt}\n${instructionSuffix}`
+      : instructionSuffix;
+    const messages = await modelHandler.initializeMessages(
+      userPrefix,
+      userRequest,
+      undefined,
+      systemMessage,
+    );
+
     return {
       kind: 'success',
-      result: prepared,
+      result: {
+        messages,
+        runState,
+        workspaceState,
+        userChannels: userVarChannels,
+        shouldSkipCycle: false,
+      },
     };
   }
 
@@ -314,15 +355,6 @@ class ToolUseCycleNode<C> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  /** Emit todos update event to progress view. */
-  private emitTodosUpdate(todos: TodoItem[]): void {
-    bus.emit('updateTodos', {
-      stream: this.services.streamId,
-      executionId: this.services.executionId,
-      todos,
-    });
-  }
-
   async prep(shared: ToolUseRunShared): Promise<CycleNodePrepResult> {
     // Validate invariant: PrepareNode must have run before us
     assertPreparedState(shared.state);
@@ -349,7 +381,11 @@ class ToolUseCycleNode<C> extends Node<
       // Emit recovered todos to restore progress view UI after reload
       const recoveredTodos = prepRes.workspaceState.todos.todos;
       if (recoveredTodos.length > 0) {
-        this.emitTodosUpdate(recoveredTodos);
+        bus.emit('updateTodos', {
+          stream: this.services.streamId,
+          executionId: this.services.executionId,
+          todos: recoveredTodos,
+        });
       }
       return { kind: 'skipped' };
     }
@@ -391,7 +427,11 @@ class ToolUseCycleNode<C> extends Node<
 
     // Set up todo update callback to emit changes to the progress view
     prepRes.workspaceState.todos.setOnUpdate((todos: TodoItem[]) => {
-      this.emitTodosUpdate(todos);
+      bus.emit('updateTodos', {
+        stream: this.services.streamId,
+        executionId: this.services.executionId,
+        todos,
+      });
     });
 
     try {
@@ -412,11 +452,6 @@ class ToolUseCycleNode<C> extends Node<
       // Return messages explicitly to ensure they're synced in post()
       // cycleShared.messages was mutated during the cycle flow
       return { kind: 'success', messages: cycleShared.messages };
-    } catch (error) {
-      return {
-        kind: 'failed',
-        message: error instanceof Error ? error.message : String(error),
-      };
     } finally {
       // Clear the todo update callback to prevent memory leaks
       prepRes.workspaceState.todos.clearOnUpdate();
@@ -467,6 +502,8 @@ class ToolUseCycleNode<C> extends Node<
 
       case 'cancelled':
         // User cancelled - not an error, flow ends gracefully
+        // Mark state so flow record is preserved for resume from last successful breakpoint
+        shared.state.userCancelledRetry = true;
         // Return FINALIZE to exit flow (no finalize successor = flow ends)
         return FlowTransition.FINALIZE;
     }
@@ -497,14 +534,8 @@ class ToolUseWaitNode<C> extends Node<
    * PocketFlow compliance: Extract data, no blocking I/O here.
    */
   async prep(_shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
-    const checkInterruption = this.services.checkInterruption;
-
-    // Check interruption first - if interrupted, skip exec entirely
-    if (checkInterruption()) {
-      return { interrupted: true };
-    }
-
-    return { interrupted: false };
+    const interrupted = this.services.checkInterruption();
+    return { interrupted };
   }
 
   /**
@@ -530,7 +561,6 @@ class ToolUseWaitNode<C> extends Node<
     // Wait for follow-up (blocking I/O - errors caught by execFallback)
     const followUp = await session.waitForFollowUp(checkInterruption);
 
-    // Check interruption after wait
     if (!followUp || checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
@@ -563,14 +593,18 @@ class ToolUseWaitNode<C> extends Node<
       return FlowTransition.DEFAULT;
     }
 
+    // Notify that follow-up was consumed (updates queued message UI)
+    this.services.onFollowUpConsumed?.();
+
     // Apply follow-up (state mutation in post - correct)
     const session = this.services.session;
     await session.markRunning();
-    shared.state.conversation = await applyFollowUpMessage(
-      this.services,
-      execRes.followUp,
-      shared.state.conversation,
-    );
+    this.services.logger.userMessage(execRes.followUp);
+    shared.state.conversation =
+      await this.services.modelHandler.createUserFollowUpMessages(
+        shared.state.conversation,
+        execRes.followUp,
+      );
 
     // Loop back to CycleNode
     return FlowTransition.CONTINUE;
