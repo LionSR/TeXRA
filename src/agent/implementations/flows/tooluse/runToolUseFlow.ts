@@ -154,12 +154,22 @@ export async function runToolUseFlow<C = unknown>(
     status = END_GROUP_STATUS.ERROR;
     throw error;
   } finally {
-    // Clean up flow record on completion.
+    // Clean up flow record on completion - but preserve if user cancelled retry
+    // so they can resume from the last successful breakpoint.
     // When VS Code reloads mid-execution, this block never runs, preserving
     // the record for sessions that were genuinely interrupted mid-wait.
     try {
       const kv = getExecutionStore(executionId);
-      await kv.delete(`flow:${executionId}`);
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+      const sharedState = flowRecord?.shared as { state?: { userCancelledRetry?: boolean } } | undefined;
+      const userCancelledRetry = sharedState?.state?.userCancelledRetry === true;
+
+      if (userCancelledRetry) {
+        // Preserve flow record for resume - user can continue from last successful breakpoint
+        logger.debug('Flow record preserved after retry cancellation for resume capability');
+      } else {
+        await kv.delete(`flow:${executionId}`);
+      }
     } catch {
       // Ignore cleanup errors - non-critical
     }
