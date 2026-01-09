@@ -463,6 +463,19 @@ interface InvocationResultHandlerOptions {
 }
 
 /**
+ * Mark flow as stopped without normal completion.
+ *
+ * Sets shouldStop=true to halt the flow, and endTurn=false to indicate
+ * this was not a normal model completion (e.g., due to cancellation,
+ * failure, or empty response). This distinction is important for
+ * determining whether to persist state for resume.
+ */
+function markFlowStopped(state: { shouldStop: boolean; endTurn: boolean }): void {
+  state.shouldStop = true;
+  state.endTurn = false;
+}
+
+/**
  * Handles common invocation result cases in post().
  *
  * This is the single source of truth for handling:
@@ -499,8 +512,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
   // Handle user cancellation (do NOT record error - distinguishes from failure)
   if (result.kind === 'cancelled') {
     retryState.lastError = undefined;
-    state.shouldStop = true;
-    state.endTurn = false; // Not a normal completion
+    markFlowStopped(state);
     return null;
   }
 
@@ -510,8 +522,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
       message: result.message,
       retryable: false, // Already exhausted retries
     };
-    state.shouldStop = true;
-    state.endTurn = false; // Not a normal completion
+    markFlowStopped(state);
     return null;
   }
 
@@ -524,8 +535,7 @@ export function handleInvocationResult<T extends { response: unknown }>(
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       retryable: false,
     };
-    state.shouldStop = true;
-    state.endTurn = false; // Not a normal completion
+    markFlowStopped(state);
     return null;
   }
 
