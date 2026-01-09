@@ -1,16 +1,14 @@
 // Local imports - memory view
 import { COMMANDS, ELEMENT_IDS, LABELS } from '../constants.js';
 import { memoryViewState } from '../memoryViewState.js';
+// Local imports - common helpers
 import { clearElement, safeGetElementById } from '@common/domUtils.js';
+import {
+  formatBytes,
+  formatLineCount,
+  formatUpdatedDate,
+} from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
-
-const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 /**
  * Renders memory items and manages item markup.
@@ -80,43 +78,10 @@ export class MemoryRenderer {
   }
 
   buildMeta(item) {
-    const size = this.formatBytes(item.size ?? 0);
-    const lines = this.formatLines(item.lineCount ?? 0);
-    const updated = this.formatDate(item.mtime);
+    const size = formatBytes(item.size ?? 0);
+    const lines = formatLineCount(item.lineCount ?? 0);
+    const updated = formatUpdatedDate(item.mtime);
     return [size, lines, updated].filter(Boolean).join(' · ');
-  }
-
-  formatDate(value) {
-    if (!value) {
-      return 'Updated: unknown';
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return 'Updated: unknown';
-    }
-    return `Updated ${DATE_FORMATTER.format(date)}`;
-  }
-
-  formatLines(count) {
-    if (count === 1) {
-      return '1 line';
-    }
-    return `${count} lines`;
-  }
-
-  formatBytes(bytes) {
-    if (bytes < 1024) {
-      return `${bytes} B`;
-    }
-
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let value = bytes / 1024;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    return `${value.toFixed(1)} ${units[unitIndex]}`;
   }
 }
 

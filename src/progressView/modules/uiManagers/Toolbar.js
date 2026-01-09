@@ -1,6 +1,7 @@
 // Local imports - progress view
-// Local imports
 import { TOOLBAR_BUTTONS, ELEMENT_IDS } from '../constants.js';
+// Local imports - common helpers
+import { safeGetElementById } from '@common/domUtils.js';
 import { createIconButton } from '@common/templateUtils.js';
 
 /**
@@ -8,7 +9,7 @@ import { createIconButton } from '@common/templateUtils.js';
  */
 export class Toolbar {
   render(sessionKind = 'workflow') {
-    const container = document.getElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
+    const container = safeGetElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!container) {
       console.error('Toolbar.render: toolbarContainer not found');
       return;
