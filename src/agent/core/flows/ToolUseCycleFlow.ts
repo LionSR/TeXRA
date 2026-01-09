@@ -40,21 +40,21 @@ import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
-import { createRetryState, type RetryState } from './RetryState';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import {
-  type InvocationResult,
-  RetryableInvocationNode,
-  handleInvocationResult,
-} from './RetryState';
 import {
   finalizeToolUseCycle,
   type ToolUseCycleOptions,
   type ToolUseCycleServices,
   type ToolUseCycleParams,
 } from './CycleServices';
+import {
+  type InvocationResult,
+  type RetryState,
+  RetryableInvocationNode,
+  handleInvocationResult,
+} from './RetryState';
 
 interface ToolValidationDiagnostics {
   type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
