@@ -1301,39 +1301,33 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const instruction = this._getElement('instruction');
     if (instruction && message.text) {
       instruction.value = message.text;
-
-      // Hide progress indicator
-      const progressContainer = document.getElementById(
-        'polishProgressContainer',
-      );
-      if (progressContainer) {
-        progressContainer.style.display = 'none';
-      }
-
-      vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: 'Instruction text has been polished!',
-      });
+      this._hidePolishProgress();
+      this._showInfo('Instruction text has been polished!');
       mainViewState.save();
     }
     this._postHandle();
   }
 
   handleInstructionTextPolishError(message) {
-    // Hide progress indicator
+    this._hidePolishProgress();
+    this._showInfo(`Error polishing text: ${message.error || 'Unknown error'}`);
+    this._postHandle();
+  }
+
+  _hidePolishProgress() {
     const progressContainer = document.getElementById(
       'polishProgressContainer',
     );
     if (progressContainer) {
       progressContainer.style.display = 'none';
     }
+  }
 
-    // Show error message
+  _showInfo(text) {
     vscode.postMessage({
       command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-      text: `Error polishing text: ${message.error || 'Unknown error'}`,
+      text,
     });
-    this._postHandle();
   }
 
   handleInstructionTextTranscribed(message) {
@@ -1341,16 +1335,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (instruction && message.text) {
       const startPos = instruction.selectionStart;
       const endPos = instruction.selectionEnd;
-      const textBefore = instruction.value.substring(0, startPos);
-      const textAfter = instruction.value.substring(endPos);
-      instruction.value = textBefore + message.text + textAfter;
-      const newCursorPos = startPos + message.text.length;
-      instruction.setSelectionRange(newCursorPos, newCursorPos);
+      instruction.value =
+        instruction.value.substring(0, startPos) +
+        message.text +
+        instruction.value.substring(endPos);
+      instruction.setSelectionRange(
+        startPos + message.text.length,
+        startPos + message.text.length,
+      );
       instruction.focus();
-      vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: 'Instruction text transcribed!',
-      });
+      this._showInfo('Instruction text transcribed!');
       mainViewState.save();
     }
     recordingManager.setRecording(false);

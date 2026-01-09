@@ -224,109 +224,48 @@ export class FileInputManager extends BaseDomHandler {
   }
 
   _setupRefreshIcons() {
-    const refreshConfigs = [
+    // Simple refresh buttons that just send a single command with notifyWhenEmpty
+    const simpleRefreshButtons = [
       {
-        buttonIds: ['refreshInputFileButton'],
-        getRequests: () => [
-          {
-            command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
-            payload: {
-              notifyWhenEmpty: true,
-            },
-          },
-        ],
+        id: 'refreshInputFileButton',
+        command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
       },
       {
-        buttonIds: ['refreshReferenceFileButton'],
-        getRequests: () => [
-          {
-            command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
-            payload: {
-              notifyWhenEmpty: true,
-            },
-          },
-        ],
+        id: 'refreshReferenceFileButton',
+        command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
       },
       {
-        buttonIds: ['refreshAuxiliaryFileButton'],
-        getRequests: () => [
-          {
-            command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
-            payload: {
-              notifyWhenEmpty: true,
-            },
-          },
-        ],
+        id: 'refreshAuxiliaryFileButton',
+        command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
       },
       {
-        buttonIds: ['refreshMediaFileButton'],
-        getRequests: () => [
-          {
-            command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
-            payload: {
-              notifyWhenEmpty: true,
-            },
-          },
-        ],
+        id: 'refreshMediaFileButton',
+        command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
       },
       {
-        buttonIds: ['refreshEditedFileButton'],
-        getRequests: () => {
-          const baseFile = safeGetElementValue(BASE_FILE);
-          return [
-            {
-              command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-              payload: {
-                preserveBaseFile: true,
-              },
-            },
-            {
-              command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
-              payload: {
-                baseFile,
-                preserveSelection: safeGetElementValue(EDITED_FILE),
-                notifyWhenEmpty: true,
-              },
-            },
-          ];
-        },
-      },
-      {
-        buttonIds: ['refreshCommitButton'],
-        getRequests: () => [
-          {
-            command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
-            payload: {
-              notifyWhenEmpty: true,
-            },
-          },
-        ],
+        id: 'refreshCommitButton',
+        command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
       },
     ];
 
-    const wiredElements = new Set();
-    const registerElement = (element, handler) => {
-      if (!(element instanceof HTMLElement) || wiredElements.has(element)) {
-        return;
-      }
-      this.addListener(element, 'click', handler);
-      wiredElements.add(element);
-    };
+    simpleRefreshButtons.forEach(({ id, command }) => {
+      this.addListener(id, 'click', () => {
+        this.vscode.postMessage({ command, notifyWhenEmpty: true });
+      });
+    });
 
-    refreshConfigs.forEach((config) => {
-      const handler = () => {
-        const requests = config.getRequests ? config.getRequests() : [];
-        requests.forEach(({ command, payload = {} }) => {
-          this.vscode.postMessage({
-            command,
-            ...payload,
-          });
-        });
-      };
-
-      (config.buttonIds ?? []).forEach((id) => {
-        const element = document.getElementById(id);
-        registerElement(element, handler);
+    // Edited file refresh requires multiple commands with dynamic payload
+    this.addListener('refreshEditedFileButton', 'click', () => {
+      const baseFile = safeGetElementValue(BASE_FILE);
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+        preserveBaseFile: true,
+      });
+      this.vscode.postMessage({
+        command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
+        baseFile,
+        preserveSelection: safeGetElementValue(EDITED_FILE),
+        notifyWhenEmpty: true,
       });
     });
   }
