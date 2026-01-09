@@ -13,6 +13,7 @@ messageHandler.setup();
 document.addEventListener('DOMContentLoaded', () => {
   memoryViewDomHandler.events.setup();
   vscode.postMessage({ command: MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA });
+  vscode.postMessage({ command: MEMORY_VIEW_COMMANDS.GET_MEMORY_ENABLED });
 });
 
 window.addEventListener('beforeunload', () => {
