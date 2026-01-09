@@ -184,15 +184,9 @@ export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
  * Called at the start of each cycle to clear transient fields.
  */
 function resetToolUseState(shared: ToolUseCycleShared): void {
-  resetCycleState(shared, []);
-  shared.response = undefined;
-  shared.toolCalls = undefined;
-  shared.text = undefined;
-  // Reset cycle metrics for next cycle
+  resetCycleState(shared, ['response', 'toolCalls', 'text', 'cycleNormalizedUsage']);
   shared.cycleResponseTimeMs = 0;
-  shared.cycleNormalizedUsage = undefined;
-  // Note: cycleIndex is incremented, not reset
-  // Note: endTurn is reset by resetCycleState (part of base fields)
+  // Note: cycleIndex is incremented in ToolUseProcessNode.post(), not reset here
 }
 
 /**
