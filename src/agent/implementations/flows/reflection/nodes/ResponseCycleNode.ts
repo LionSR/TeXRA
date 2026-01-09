@@ -41,6 +41,7 @@ import {
   finalizeRound,
   type CycleStateSlices,
 } from '@agent/core/flows/CycleServices';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -68,6 +69,32 @@ type CycleExecResult =
   | ({ kind: 'success'; endTurn: boolean } & CycleCompletionResult &
       CycleStateSlices)
   | { kind: 'error'; error: Error };
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Initialize cycle fields on shared state for native nesting.
+ * Resets all transient cycle state before running the cycle flow.
+ */
+function initializeCycleFields(
+  shared: ReflectionFlowShared,
+  messages: ProviderMessage[],
+  outputLocation: AgentFileLocation,
+): void {
+  shared.messages = messages;
+  shared.outputLocation = outputLocation;
+  shared.endTurn = false;
+  shared.shouldStop = false;
+  shared.outputExists = false;
+  shared.systemPrompt = undefined;
+  shared.responseObject = undefined;
+  shared.responseTimeMs = undefined;
+  shared.stopReason = undefined;
+  shared.processedResponse = undefined;
+  shared.lastError = undefined;
+}
 
 // ============================================================================
 // Node Implementation
@@ -161,18 +188,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // === NATIVE NESTING: Populate cycle fields directly on shared ===
-      shared.messages = initializedMessages;
-      shared.outputLocation = prepRes.outputLocation;
-      shared.endTurn = false;
-      shared.shouldStop = false;
-      shared.outputExists = false;
-      shared.systemPrompt = undefined;
-      shared.responseObject = undefined;
-      shared.responseTimeMs = undefined;
-      shared.stopReason = undefined;
-      shared.processedResponse = undefined;
-      shared.lastError = undefined;
+      // Initialize cycle fields for native nesting
+      initializeCycleFields(shared, initializedMessages, prepRes.outputLocation);
 
       // Create and run the flow directly on shared (native nesting)
       // Spread parent services directly - no intermediate cycleOptions object
