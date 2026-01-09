@@ -1,28 +1,23 @@
 /**
- * ToolUseFlowContext - Factory and helpers for tool-use flow services.
- * Services pass context values directly; nodes call helpers without closures.
+ * ToolUseFlowContext - Factory for tool-use flow services.
  */
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { AgentRunState } from '@agent/core/AgentState';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
 import { getDefaultToolRegistry } from '@tools/registry';
-import { buildInitialToolUsePrompts } from '@utils/prompt';
 import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   ToolUseSessionLifecycle,
   type IToolUseSession,
 } from './ToolUseSessionLifecycle';
 
-import type { ToolUseServices, PrepareStateResult } from './ToolUseServices';
+import type { ToolUseServices } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
 // ============================================================================
@@ -73,88 +68,6 @@ export interface ToolUseFlowContext<C = unknown> {
 
   /** Dispose context resources */
   dispose(): void;
-}
-
-// ============================================================================
-// Helper Functions (called directly by nodes, no closure wrappers)
-// ============================================================================
-
-/**
- * Prepare initial state for tool-use session (new or resumed from snapshot).
- *
- * Returns individual state slices directly instead of wrapping in AgentSharedStore.
- * This eliminates the convert→pass→convert overhead pattern.
- */
-export async function prepareInitialState<C>(
-  services: ToolUseServices<C>,
-): Promise<PrepareStateResult> {
-  const { modelHandler, prompt, userVarChannels, logger, snapshot } = services;
-
-  if (snapshot) {
-    logger.debug('Resuming tool-use session from saved state.');
-
-    // Reconstruct state slices directly from snapshot (v2 schema - no wrapper)
-    const runState = AgentRunState.fromSnapshot(snapshot.run);
-    const workspaceState = AgentWorkspaceState.fromSnapshot(snapshot.workspace);
-    // User channels from snapshot with frozen input
-    const userChannels = {
-      input: Object.freeze({ ...snapshot.user.input }),
-      transient: { ...snapshot.user.transient },
-    };
-
-    return {
-      messages: snapshot.messages,
-      runState,
-      workspaceState,
-      userChannels,
-      shouldSkipCycle: true,
-    };
-  }
-
-  // Create fresh state for new sessions
-  const runState = new AgentRunState();
-  const workspaceState = AgentWorkspaceState.create();
-
-  // Check if memory tool is enabled for this session
-  const memoryEnabled = services.resolvedTools.some((t) => t.name === 'memory');
-
-  const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-    await buildInitialToolUsePrompts(
-      prompt,
-      userVarChannels.transient,
-      logger,
-      {
-        memoryEnabled,
-      },
-    );
-
-  const messages = await modelHandler.initializeMessages(
-    userPrefix,
-    userRequest,
-    undefined,
-    systemPrompt ? `${systemPrompt}\n${instructionSuffix}` : instructionSuffix,
-  );
-
-  return {
-    messages,
-    runState,
-    workspaceState,
-    userChannels: userVarChannels,
-    shouldSkipCycle: false,
-  };
-}
-
-/** Apply a follow-up message to the conversation. */
-export async function applyFollowUpMessage<C>(
-  services: ToolUseServices<C>,
-  followUp: string,
-  messages: ProviderMessage[],
-): Promise<ProviderMessage[]> {
-  services.logger.userMessage(followUp);
-  return await services.modelHandler.createUserFollowUpMessages(
-    messages,
-    followUp,
-  );
 }
 
 // ============================================================================
