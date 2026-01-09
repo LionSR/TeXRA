@@ -86,12 +86,5 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 export function executionToEndStatus(
   status: ExecutionStatus,
 ): 'error' | 'stopped' {
-  switch (status) {
-    case EXECUTION_STATUS.COMPLETED:
-      return 'stopped';
-    case EXECUTION_STATUS.INTERRUPTED:
-      return 'error';
-    case EXECUTION_STATUS.ERROR:
-      return 'error';
-  }
+  return status === EXECUTION_STATUS.COMPLETED ? 'stopped' : 'error';
 }
