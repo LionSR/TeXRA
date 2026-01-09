@@ -73,6 +73,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Get active run context (stream and resolved runId).
+   * @param {string} [runIdHint] - Optional runId to use instead of resolving
+   * @returns {{ stream: string, runId: string } | null}
+   */
+  _getActiveRunContext(runIdHint) {
+    const stream = state.activeStream || null;
+    if (!stream) return null;
+    const runId = runIdHint ?? state.resolveActiveRunId(stream);
+    return runId ? { stream, runId } : null;
+  }
+
+  /**
    * Refresh instruction panel for the active run.
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
@@ -82,14 +94,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const stream = state.activeStream || null;
-    const activeRunId = runId ?? state.resolveActiveRunId(stream);
-    if (!activeRunId) {
+    const ctx = this._getActiveRunContext(runId);
+    if (!ctx) {
       dom.instructionPanel.hide();
       return;
     }
 
-    const instruction = state.getRunInstruction(stream, activeRunId);
+    const instruction = state.getRunInstruction(ctx.stream, ctx.runId);
     if (instruction && instruction.text) {
       dom.instructionPanel.show(instruction.text, instruction.metadata);
     } else {
@@ -102,11 +113,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {string} [runId] - Optional runId to use instead of resolving
    */
   _refreshOutputsForActiveRun(runId) {
-    const stream = state.activeStream || null;
-    const activeRunId = runId ?? state.resolveActiveRunId(stream);
-    const filesByRound = activeRunId
-      ? (state.getRunFiles(stream, activeRunId) ?? {})
-      : {};
+    const ctx = this._getActiveRunContext(runId);
+    const filesByRound = ctx ? (state.getRunFiles(ctx.stream, ctx.runId) ?? {}) : {};
     // Hide round headers for tool-use agents where round numbers don't have meaning
     const showRoundHeaders = state.activeSessionKind !== 'toolUse';
     dom.fileList.update(filesByRound, { showRoundHeaders });
@@ -154,12 +162,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * arrives with forceRebuild: false (same stream, incremental update).
    *
    * @param {string} newSessionKind - The new session kind being switched to
+   * @returns {boolean} true if state was cleared
    */
   _clearSessionKindState(newSessionKind) {
-    if (newSessionKind !== state.activeSessionKind && state.activeSessionKind) {
+    const shouldClear =
+      newSessionKind !== state.activeSessionKind && state.activeSessionKind;
+    if (shouldClear) {
       state.taskGroups.clear();
       dom.taskGroups.clear();
     }
+    return shouldClear;
   }
 
   /**
