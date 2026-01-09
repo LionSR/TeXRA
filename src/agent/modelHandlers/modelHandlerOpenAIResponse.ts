@@ -1696,7 +1696,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Build tool result as plain text - JSON wastes tokens
-    const combinedText = formatToolResultAsText(result, finalResult.attachmentSummary);
+    const combinedText = formatToolResultAsText(
+      result,
+      finalResult.attachmentSummary,
+    );
 
     let outputPayload: string | ResponseFunctionCallOutputItemList;
 
