@@ -281,21 +281,15 @@ export class HistoryRenderer {
   }
 
   applyToggleStates() {
-    const entries = historyViewState.toggleStates.entries();
-    for (const [id, expanded] of entries) {
+    for (const [id, expanded] of historyViewState.toggleStates.entries()) {
       const collapsible = document.querySelector(
         `.${CLASS_NAMES.COLLAPSIBLE}[data-id="${id}"]`,
       );
-      if (!collapsible) {
-        continue;
-      }
+      if (!collapsible) continue;
+
+      // vscode-collapsible has reflect:true on open property - setting .open syncs the attribute
       if ('open' in collapsible) {
         collapsible.open = Boolean(expanded);
-      }
-      if (expanded) {
-        collapsible.setAttribute('open', '');
-      } else {
-        collapsible.removeAttribute('open');
       }
     }
   }
