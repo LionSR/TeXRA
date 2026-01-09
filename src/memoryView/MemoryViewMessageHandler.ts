@@ -35,6 +35,7 @@ import { getToolUseMemoryEnabled } from '@utils/config/constants';
 import {
   MemoryPathMessageSchema,
   MemoryDeleteMessageSchema,
+  MemoryEnabledMessageSchema,
 } from '@webview/types/messages';
 
 interface MemoryViewItem {
@@ -165,36 +166,36 @@ export class MemoryViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
+    const enabled = getToolUseMemoryEnabled();
+    await webview.postMessage({
+      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
+      enabled,
+    });
+  }
+
   private async handleGetMemoryEnabled(
     _message: unknown,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const enabled = getToolUseMemoryEnabled();
-    await view.webview.postMessage({
-      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled,
-    });
+    await this.sendMemoryEnabled(view.webview);
   }
 
   private async handleSetMemoryEnabled(
     message: unknown,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const enabled =
-      typeof message === 'object' &&
-      message !== null &&
-      'enabled' in message &&
-      typeof (message as { enabled: unknown }).enabled === 'boolean'
-        ? (message as { enabled: boolean }).enabled
-        : false;
+    await this.withValidatedMessage(
+      MemoryEnabledMessageSchema,
+      message,
+      'setMemoryEnabled',
+      async ({ enabled }) => {
+        await setConfig('texra.toolUse.memory.enabled', enabled);
 
-    await setConfig('texra.toolUse.memory.enabled', enabled);
-
-    // Confirm the update back to the webview
-    await view.webview.postMessage({
-      command: MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled,
-    });
+        // Confirm the update back to the webview
+        await this.sendMemoryEnabled(view.webview);
+      },
+    );
   }
 
   private async loadMemoryItems(): Promise<MemoryViewItem[]> {
