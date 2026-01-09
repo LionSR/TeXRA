@@ -79,7 +79,9 @@ export function buildFileListRender(files) {
 
       const metaParts = [];
       if (file.varName) {
-        metaParts.push(`<span class="file-var">[${encodeHtml(file.varName)}]</span>`);
+        metaParts.push(
+          `<span class="file-var">[${encodeHtml(file.varName)}]</span>`,
+        );
       }
       if (file.source && file.source !== 'unknown') {
         const sourceText = file.internal

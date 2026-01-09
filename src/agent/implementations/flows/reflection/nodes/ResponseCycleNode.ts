@@ -189,7 +189,11 @@ export class ResponseCycleNode<C = unknown> extends Node<
 
     try {
       // Initialize cycle fields for native nesting
-      initializeCycleFields(shared, initializedMessages, prepRes.outputLocation);
+      initializeCycleFields(
+        shared,
+        initializedMessages,
+        prepRes.outputLocation,
+      );
 
       // Create and run the flow directly on shared (native nesting)
       // Spread parent services directly - no intermediate cycleOptions object
