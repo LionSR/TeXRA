@@ -89,8 +89,7 @@ export class InstructionManager extends BaseWebviewManager {
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
+    if (!this.getWebview()) {
       return;
     }
     try {
@@ -114,49 +113,49 @@ export class InstructionManager extends BaseWebviewManager {
       this.addMultipleFilesIfValid(
         fileContext,
         'inputFiles',
-        !!message.inputFilesActive,
+        Boolean(message.inputFilesActive),
         message.inputFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'referenceFiles',
-        !!message.referenceFilesActive,
+        Boolean(message.referenceFilesActive),
         message.referenceFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'auxiliaryFiles',
-        !!message.auxiliaryFilesActive,
+        Boolean(message.auxiliaryFilesActive),
         message.auxiliaryFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'mediaFiles',
-        !!message.mediaFilesActive,
+        Boolean(message.mediaFilesActive),
         message.mediaFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'outputFiles',
-        !!message.outputFilesActive,
+        Boolean(message.outputFilesActive),
         message.outputFiles,
       );
 
       try {
         const result = await polishTextWithAI(message.text, fileContext);
         if (result.success) {
-          webviewView.webview.postMessage({
+          this.postMessage({
             command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
             text: result.text,
           });
         } else {
-          webviewView.webview.postMessage({
+          this.postMessage({
             command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
             error: result.error ?? 'Error polishing text',
           });
         }
       } catch (error) {
-        webviewView.webview.postMessage({
+        this.postMessage({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
           error: toErrorMessage(error),
         });
@@ -166,7 +165,7 @@ export class InstructionManager extends BaseWebviewManager {
         );
       }
     } catch (error) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
         error: toErrorMessage(error),
       });
@@ -184,8 +183,7 @@ export class InstructionManager extends BaseWebviewManager {
   }
 
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
+    if (!this.getWebview()) {
       return;
     }
     try {
@@ -197,7 +195,7 @@ export class InstructionManager extends BaseWebviewManager {
       const relativePath = path.join(PASTED_DIR, fileName);
       await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
       await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
       });
