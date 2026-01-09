@@ -38,34 +38,49 @@ export interface ToolUseFlowContext<C = unknown> {
 }
 
 // ============================================================================
-// Tool Resolution Helper
+// Tool Resolution
 // ============================================================================
 
-interface ResolveToolsParams {
-  tools: AgentToolUseSetting['tools'];
+interface ToolResolutionContext {
   toolRegistry: IToolRegistry;
   logger: { warn: (msg: string) => void };
 }
 
-/** Resolve tool definitions from setting, validating against registry. */
-function resolveTools(params: ResolveToolsParams): ToolDefinition[] {
-  const { tools, toolRegistry, logger } = params;
+/** Normalize tool config to a ToolDefinition. */
+function normalizeToolConfig(
+  config: string | ToolDefinition,
+): ToolDefinition {
+  return typeof config === 'string' ? { name: config } : config;
+}
 
+/**
+ * Resolve tool definitions from agent settings, validating against registry.
+ * Optionally injects the memory tool if enabled in user settings.
+ */
+function resolveTools(
+  tools: AgentToolUseSetting['tools'],
+  ctx: ToolResolutionContext,
+): ToolDefinition[] {
+  const { toolRegistry, logger } = ctx;
   const toolConfigs = Array.isArray(tools) ? tools : [];
+
+  // Resolve configured tools
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
 
-  for (const t of toolConfigs) {
-    const def = typeof t === 'string' ? { name: t } : t;
+  for (const config of toolConfigs) {
+    const def = normalizeToolConfig(config);
+
     if (!toolRegistry.has(def.name)) {
       logger.warn(`Tool "${def.name}" not found in registry`);
       continue;
     }
+
     resolved.push(def);
     resolvedNames.add(def.name);
   }
 
-  // Inject memory tool if enabled and not already present
+  // Auto-inject memory tool if enabled and not already configured
   if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
     const memoryTool = toolRegistry.get('memory');
     if (memoryTool) {
@@ -91,11 +106,7 @@ export function createToolUseFlowContext<C = unknown>(
   const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
-  const resolvedTools = resolveTools({
-    tools: setting.tools,
-    toolRegistry,
-    logger,
-  });
+  const resolvedTools = resolveTools(setting.tools, { toolRegistry, logger });
 
   const services: ToolUseServices<C> = {
     ...init,
