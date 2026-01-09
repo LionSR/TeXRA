@@ -36,6 +36,7 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 
+import { AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { type FlowRecord } from '@agent/node/persisted-flow';
@@ -56,11 +57,7 @@ import {
   createReflectionFlow,
   type ReflectionFlowShared,
 } from './ReflectionFlow';
-import {
-  createFreshWorkspaceSnapshot,
-  createInitialReflectionState,
-  ReflectionFlowStateSchema,
-} from './ReflectionFlowState';
+import { ReflectionFlowStateSchema } from './ReflectionFlowState';
 import { createBaseFileLocations } from './helpers';
 import type { ReflectionServices } from './ReflectionServices';
 
@@ -277,10 +274,19 @@ export async function runReflectionFlow<C = unknown>(
 
     // Create fresh state if not resuming
     if (!shared) {
-      shared = createInitialReflectionState(
+      shared = {
+        currentRound: 0,
         totalRounds,
-        AgentWorkspaceState.create().toSnapshot(),
-      );
+        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+        context: null,
+        outputLocation: null,
+        conversation: [],
+        runStateSnapshot: new AgentRunState().toSnapshot(),
+        roundStateSnapshots: [],
+        roundOutputs: [],
+        continueRounds: true,
+        endTurn: false,
+      };
     }
 
     // Create RoundPersistedFlow with the start node
@@ -301,7 +307,7 @@ export async function runReflectionFlow<C = unknown>(
           });
         },
         resetForNextRound: (s) => {
-          s.workspaceSnapshot = createFreshWorkspaceSnapshot();
+          s.workspaceSnapshot = AgentWorkspaceState.create().toSnapshot();
         },
         checkInterruption,
         onFlowEnd: (_shared, flowEndStatus) => {

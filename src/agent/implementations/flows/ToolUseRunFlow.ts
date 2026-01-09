@@ -98,20 +98,6 @@ export interface ToolUseRunState {
 }
 
 /**
- * Create initial state for a tool-use flow run.
- *
- * Factory function for consistency with ReflectionFlow pattern
- * (which uses createInitialReflectionState).
- */
-export function createInitialToolUseState(): ToolUseRunState {
-  return {
-    conversation: [],
-    shouldSkipCycle: false,
-    stateSlices: null,
-  };
-}
-
-/**
  * Shared context passed through the flow.
  *
  * Contains only mutable runtime state. All dependencies (session, interruption
