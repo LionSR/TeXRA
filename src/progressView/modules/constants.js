@@ -25,6 +25,7 @@ export const ELEMENT_IDS = {
   RUN_SELECTOR_CONTAINER: 'runSelectorRow',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
+  CONTEXT_STATE: 'contextState',
   TODO_LIST_CONTAINER: 'todoListContainer',
   TODO_LIST: 'todoList',
   INSTRUCTION_CONTAINER: 'instructionContainer',

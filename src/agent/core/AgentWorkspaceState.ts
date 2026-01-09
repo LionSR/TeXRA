@@ -42,11 +42,6 @@ export type ResponseAssemblyState = z.output<
   typeof ResponseAssemblyStateSchema
 >;
 
-/** Create a fresh ResponseAssemblyState */
-export function createResponseAssemblyState(): ResponseAssemblyState {
-  return { lastResponse: '', accumulatedOutput: '' };
-}
-
 /** Schema for FileInteractionState serialization */
 export const FileInteractionStateSnapshotSchema = z.object({
   readFiles: z.array(z.string()).prefault([]),
@@ -241,11 +236,6 @@ export const ReasoningCacheStateSchema = z.object({
 /** Reasoning cache state - plain object type derived from schema */
 export type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-/** Create a fresh ReasoningCacheState */
-export function createReasoningCacheState(): ReasoningCacheState {
-  return { thinkingBlocks: [], thinkingAdded: false };
-}
-
 /** Get the primary thinking block, or null if none */
 export function getReasoningPrimaryBlock(
   state: ReasoningCacheState,
@@ -277,11 +267,6 @@ export interface ServerToolContentState {
   contentBlocks: ServerToolContentBlock[];
   /** Full assistant content blocks from last response, excluding tool_use. Typed as unknown[] for cross-provider compatibility. */
   lastAssistantContent: unknown[];
-}
-
-/** Create a fresh ServerToolContentState */
-export function createServerToolContentState(): ServerToolContentState {
-  return { contentBlocks: [], lastAssistantContent: [] };
 }
 
 /** Reset server tool content state to initial values */
@@ -422,11 +407,11 @@ export class AgentWorkspaceState {
   /** Factory method to create a fresh AgentWorkspaceState */
   static create(): AgentWorkspaceState {
     return new AgentWorkspaceState(
-      createResponseAssemblyState(),
+      ResponseAssemblyStateSchema.parse({}),
       new MediaAttachmentState(),
-      createReasoningCacheState(),
+      ReasoningCacheStateSchema.parse({}),
       new FileInteractionState(),
-      createServerToolContentState(),
+      { contentBlocks: [], lastAssistantContent: [] },
       new TodoState(),
     );
   }
@@ -439,7 +424,7 @@ export class AgentWorkspaceState {
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning, // Plain object - schema already validates
       FileInteractionState.fromSnapshot(parsed.interactions),
-      createServerToolContentState(), // Ephemeral - not serialized
+      { contentBlocks: [], lastAssistantContent: [] }, // Ephemeral - not serialized
       TodoState.fromSnapshot(parsed.todos),
     );
   }

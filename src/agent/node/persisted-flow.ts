@@ -116,9 +116,8 @@ export class PersistedFlow<
    */
   protected async stepWithResult(): Promise<StepResult<S>> {
     const key = `flow:${this.runId}`;
-    const flow = (await this.kv.read<FlowRecord>(key))!;
+    const flow = await this.kv.read<FlowRecord>(key);
 
-    // Validate flow record structure
     if (!flow || !Array.isArray(flow.nodes)) {
       throw new Error('Invalid or corrupted flow record');
     }
@@ -143,18 +142,9 @@ export class PersistedFlow<
       throw new Error('Missing shared state in flow record');
     }
 
-    let action: Action | undefined;
-
-    try {
-      cursor.setParams(params as any);
-      // Propagate services to node (services are runtime dependencies, not persisted)
-      cursor.setServices(this._services);
-      action = await cursor._run(shared);
-    } catch (e) {
-      // Don't write anything when node execution fails
-      // Let the upper layer handle retries or error recovery
-      throw e;
-    }
+    cursor.setParams(params as any);
+    cursor.setServices(this._services);
+    const action = await cursor._run(shared);
 
     flow.nodes.push({ action });
     flow.shared = this.serializeShared(shared);

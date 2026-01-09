@@ -54,6 +54,7 @@ describe('AgentUsageReporter', () => {
 
       assert.equal(streamEvents.length, 1);
       // storageKey is THE single source of truth - no runId needed
+      // Cache tokens are passed through for display
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         storageKey,
@@ -61,6 +62,7 @@ describe('AgentUsageReporter', () => {
           inputTokens: 10,
           outputTokens: 5,
           cost: 0.25,
+          cacheCreationInputTokens: 4,
         },
       });
       // Verify statistics were logged with storageKey
@@ -105,12 +107,109 @@ describe('AgentUsageReporter', () => {
       reporter.report(stats, storageKey);
 
       assert.equal(streamEvents.length, 1);
+      // Cache tokens are passed through for display
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         storageKey,
         usage: {
           inputTokens: 6,
           outputTokens: 2,
+          cost: 0.1,
+          cacheCreationInputTokens: 1,
+        },
+      });
+    } finally {
+      disposeStream();
+    }
+  });
+
+  it('passes through both cacheRead and cacheCreation tokens', () => {
+    const streamId = 'stream:test';
+    const storageKey = 'task-group-789' as StorageKey;
+    const streamEvents: unknown[] = [];
+    const disposeStream = bus.on('updateStreamUsage', (payload) => {
+      streamEvents.push(payload);
+    });
+
+    const loggerStub = {
+      statistics: () => {
+        /* no-op */
+      },
+    } as unknown as AgentLogger;
+
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.Workflow,
+    );
+
+    const stats: ExtendedTokenUsageStats = {
+      inputTokens: 100,
+      outputTokens: 50,
+      cost: 1.5,
+      cacheReadInputTokens: 80, // Cache hits (discounted)
+      cacheCreationInputTokens: 20, // Cache writes (1.25x for Anthropic)
+    };
+
+    try {
+      reporter.report(stats, storageKey);
+
+      assert.equal(streamEvents.length, 1);
+      // Both cache token types should be passed through
+      assert.deepEqual(streamEvents[0], {
+        stream: streamId,
+        storageKey,
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cost: 1.5,
+          cacheReadInputTokens: 80,
+          cacheCreationInputTokens: 20,
+        },
+      });
+    } finally {
+      disposeStream();
+    }
+  });
+
+  it('omits cache tokens when zero or undefined', () => {
+    const streamId = 'stream:test';
+    const storageKey = 'task-group-000' as StorageKey;
+    const streamEvents: unknown[] = [];
+    const disposeStream = bus.on('updateStreamUsage', (payload) => {
+      streamEvents.push(payload);
+    });
+
+    const loggerStub = {
+      statistics: () => {
+        /* no-op */
+      },
+    } as unknown as AgentLogger;
+
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.Workflow,
+    );
+
+    // No cache tokens in stats
+    const stats: ExtendedTokenUsageStats = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cost: 0.1,
+    };
+
+    try {
+      reporter.report(stats, storageKey);
+
+      assert.equal(streamEvents.length, 1);
+      // Cache tokens should be omitted when not present
+      assert.deepEqual(streamEvents[0], {
+        stream: streamId,
+        storageKey,
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
           cost: 0.1,
         },
       });

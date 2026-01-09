@@ -36,27 +36,28 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
+import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
-import { createRetryState, type RetryState } from './RetryState';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import {
-  type InvocationResult,
-  RetryableInvocationNode,
-  handleInvocationResult,
-} from './RetryState';
 import {
   finalizeToolUseCycle,
   type ToolUseCycleOptions,
   type ToolUseCycleServices,
   type ToolUseCycleParams,
 } from './CycleServices';
+import {
+  type InvocationResult,
+  type RetryState,
+  RetryableInvocationNode,
+  handleInvocationResult,
+} from './RetryState';
 
 interface ToolValidationDiagnostics {
-  type: 'validation_error';
+  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
   issues: any;
   formatted: Array<{
     path: string;
@@ -106,7 +107,7 @@ function normalizeToolCallError(
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
-        type: 'validation_error',
+        type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
         issues,
         formatted: issues.map((issue) => ({
           path: Array.isArray(issue.path) ? issue.path.join('.') : '',
@@ -183,15 +184,14 @@ export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
  * Called at the start of each cycle to clear transient fields.
  */
 function resetToolUseState(shared: ToolUseCycleShared): void {
-  resetCycleState(shared, []);
-  shared.response = undefined;
-  shared.toolCalls = undefined;
-  shared.text = undefined;
-  // Reset cycle metrics for next cycle
+  resetCycleState(shared, [
+    'response',
+    'toolCalls',
+    'text',
+    'cycleNormalizedUsage',
+  ]);
   shared.cycleResponseTimeMs = 0;
-  shared.cycleNormalizedUsage = undefined;
-  // Note: cycleIndex is incremented, not reset
-  // Note: endTurn is reset by resetCycleState (part of base fields)
+  // Note: cycleIndex is incremented in ToolUseProcessNode.post(), not reset here
 }
 
 /**

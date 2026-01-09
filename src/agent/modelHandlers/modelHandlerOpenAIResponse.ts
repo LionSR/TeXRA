@@ -37,6 +37,7 @@ import { extractScratchpad } from '@utils/text/xmlUtils';
 // Local file imports
 import {
   formatAttachmentSummary,
+  formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1641,29 +1642,43 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     text?: string,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
-    if (text) {
+
+    // When using previous_response_id (response chaining), the previous response's
+    // output items (reasoning, web_search_call, function_call) are already in
+    // OpenAI's server-side history. We should only send NEW items (function_call_output).
+    // Including them again causes "Duplicate item found" errors.
+    const isResponseChaining = Boolean(this.previousResponseId);
+
+    if (text && !isResponseChaining) {
+      // Only include assistant text when not chaining (it's in previous response)
       messages.push(this.createAssistantMessage(text));
     }
 
-    // Include server tool content blocks (reasoning, web_search_call) from workspace state
+    // Include server tool content blocks (reasoning, web_search_call) from workspace state.
     // These need to be preserved when both server and local tools are in the same response.
     // Reasoning items must be included when web_search_call references them.
+    // SKIP when response chaining - these items are already in previous_response_id context.
+    // Always clear after processing to prevent accumulation across cycles.
     if (workspaceState?.serverToolContent.contentBlocks.length) {
-      // Filter to only OpenAI server tool content (reasoning + web_search_call)
-      const openaiBlocks = workspaceState.serverToolContent.contentBlocks
-        .filter(isOpenAIServerToolContent)
-        .map((block) => block as ResponseInputItem);
-      messages.push(...openaiBlocks);
-      // Clear after consuming to prevent duplicates - use reset method for consistency
+      if (!isResponseChaining) {
+        const openaiBlocks = workspaceState.serverToolContent.contentBlocks
+          .filter(isOpenAIServerToolContent)
+          .map((block) => block as ResponseInputItem);
+        messages.push(...openaiBlocks);
+      }
       workspaceState.resetServerToolContent();
     }
 
-    const callMsg: ResponseFunctionToolCall = {
-      type: 'function_call',
-      call_id: call.callId,
-      name: call.name,
-      arguments: call.raw.arguments,
-    };
+    // function_call is part of the previous response output when chaining,
+    // so only include it when NOT using previous_response_id
+    const callMsg: ResponseFunctionToolCall | undefined = isResponseChaining
+      ? undefined
+      : {
+          type: 'function_call',
+          call_id: call.callId,
+          name: call.name,
+          arguments: call.raw.arguments,
+        };
 
     // Create mutable copy for adding attachmentSummary/files
     const finalResult: ToolResultPayload = { ...result };
@@ -1694,15 +1709,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       finalResult.attachmentSummary = formatAttachmentSummary(attachments);
     }
 
-    const primaryText = isNonEmptyString(result.output)
-      ? result.output
-      : isNonEmptyString(result.summary)
-        ? result.summary
-        : undefined;
-    const summaryPayload = JSON.stringify(finalResult, null, 2);
-    const combinedText = primaryText
-      ? `${primaryText}\n\n${summaryPayload}`
-      : summaryPayload;
+    // Build tool result as plain text - JSON wastes tokens
+    const combinedText = formatToolResultAsText(
+      result,
+      finalResult.attachmentSummary,
+    );
 
     let outputPayload: string | ResponseFunctionCallOutputItemList;
 
@@ -1735,7 +1746,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output: outputPayload,
     };
 
-    messages.push(callMsg, resultMsg);
+    // When response chaining, only push function_call_output (callMsg is undefined)
+    // When not chaining, push both function_call and function_call_output
+    if (callMsg) {
+      messages.push(callMsg, resultMsg);
+    } else {
+      messages.push(resultMsg);
+    }
     return messages;
   }
 
