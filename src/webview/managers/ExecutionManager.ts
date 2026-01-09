@@ -111,11 +111,7 @@ export class ExecutionManager {
   }
 
   private mapMediaPath(f: string | null): string | null {
-    if (!f) return null;
-    if (isPastedImage(f)) {
-      return getPastedImageFullPath(f);
-    }
-    return f;
+    return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
   }
 
   private composeBaseAgentConfig(

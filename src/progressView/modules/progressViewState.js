@@ -100,20 +100,13 @@ class TaskGroups {
   }
 
   getChildIds(parentId) {
-    const children = this.childrenByParent.get(parentId);
-    if (!children) {
-      return [];
-    }
-
-    return [...children];
+    return [...(this.childrenByParent.get(parentId) ?? [])];
   }
 
   _addChild(parentId, childId) {
-    let children = this.childrenByParent.get(parentId);
-    if (!children) {
-      children = new Set();
-      this.childrenByParent.set(parentId, children);
-    }
+    const existing = this.childrenByParent.get(parentId);
+    const children = existing ?? new Set();
+    if (!existing) this.childrenByParent.set(parentId, children);
     children.add(childId);
     this.parentByChild.set(childId, parentId);
   }
@@ -272,15 +265,7 @@ export class ProgressViewState {
   }
 
   _resolveStreamId(streamId) {
-    if (streamId != null) {
-      return streamId;
-    }
-
-    if (this.activeStream != null) {
-      return this.activeStream;
-    }
-
-    return null;
+    return streamId ?? this.activeStream ?? null;
   }
 
   /**
