@@ -139,6 +139,32 @@
   text-decoration: underline;
 }
 
+.getting-started-actions {
+  margin-top: var(--spacing-small);
+}
+
+.getting-started-actions .dropdown-container {
+  display: inline-block;
+}
+
+.getting-started-actions .dropdown-menu {
+  min-width: 180px;
+}
+
+.dropdown-link {
+  display: block;
+  padding: var(--spacing-tiny) var(--spacing-small);
+  color: var(--vscode-foreground);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.dropdown-link:hover {
+  background: var(--vscode-list-hoverBackground);
+  text-decoration: none;
+}
+
 /* Login banner - promotional style */
 .login-banner {
   background: linear-gradient(

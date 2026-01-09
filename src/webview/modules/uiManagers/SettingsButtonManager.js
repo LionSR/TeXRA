@@ -56,6 +56,11 @@ export class SettingsButtonManager extends BaseDomHandler {
       checkboxIds: CHECK_BOXES_TOOL_USE,
     });
 
+    this._initializeSimpleMenuToggle({
+      buttonId: ELEMENT_IDS.GET_STARTED_DROPDOWN_BUTTON,
+      menuId: ELEMENT_IDS.GET_STARTED_DROPDOWN_MENU,
+    });
+
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
     });
@@ -73,6 +78,10 @@ export class SettingsButtonManager extends BaseDomHandler {
       {
         menu: safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_OPTIONS),
         button: safeGetElementById(ELEMENT_IDS.TOGGLE_TOOL_CONFIG),
+      },
+      {
+        menu: safeGetElementById(ELEMENT_IDS.GET_STARTED_DROPDOWN_MENU),
+        button: safeGetElementById(ELEMENT_IDS.GET_STARTED_DROPDOWN_BUTTON),
       },
     ];
 
@@ -162,6 +171,45 @@ export class SettingsButtonManager extends BaseDomHandler {
         menu.requestUpdate?.();
       }
     }
+  }
+
+  /**
+   * Initialize a simple menu toggle without checkbox state tracking.
+   * Used for dropdown menus that contain links rather than checkboxes.
+   * @param {object} config - Configuration object
+   * @param {string} config.buttonId - ID of the toggle button
+   * @param {string} config.menuId - ID of the context menu
+   */
+  _initializeSimpleMenuToggle({ buttonId, menuId }) {
+    const button = safeGetElementById(buttonId);
+    const menu = safeGetElementById(menuId);
+
+    if (!button || !menu) {
+      return;
+    }
+
+    this._ensureMenuUsesSlotContent(menu);
+
+    button.setAttribute('aria-haspopup', 'true');
+
+    const updateAriaExpanded = () => {
+      const expanded = Boolean(menu.show);
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    };
+
+    const handleButtonClick = (event) => {
+      event.stopPropagation();
+      menu.show = !menu.show;
+    };
+
+    this.addListener(button, 'click', handleButtonClick);
+
+    // Observe the "show" attribute so we react when the menu closes itself
+    const observer = new MutationObserver(updateAriaExpanded);
+    observer.observe(menu, { attributes: true, attributeFilter: ['show'] });
+    this._menuObservers.push(observer);
+
+    updateAriaExpanded();
   }
 
   _setupSettingsButtons() {

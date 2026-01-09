@@ -108,6 +108,8 @@ export const ELEMENT_IDS = {
   DEPENDENCY_RECHECK_BUTTON: 'dependencyRecheckButton',
   DEPENDENCY_DISMISS_BUTTON: 'dependencyDismissButton',
   GETTING_STARTED_BANNER: 'gettingStartedBanner',
+  GET_STARTED_DROPDOWN_BUTTON: 'getStartedDropdownButton',
+  GET_STARTED_DROPDOWN_MENU: 'getStartedDropdownMenu',
   LOGIN_BANNER: 'loginBanner',
   LOGIN_BANNER_BUTTON: 'loginBannerButton',
   LOGIN_BANNER_DISMISS_BUTTON: 'loginBannerDismissButton',

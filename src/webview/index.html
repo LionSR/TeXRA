@@ -640,6 +640,41 @@
           style="display: none"
         >
           <span class="getting-started-text"></span>
+          <div class="getting-started-actions">
+            <div class="dropdown-container dropdown-left">
+              <vscode-button
+                id="getStartedDropdownButton"
+                appearance="primary"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                Get started
+                <span slot="end" class="codicon codicon-chevron-down"></span>
+              </vscode-button>
+              <vscode-context-menu
+                id="getStartedDropdownMenu"
+                class="dropdown-menu"
+              >
+                <div class="dropdown-menu-content">
+                  <a
+                    href="command:texra.openGettingStarted"
+                    class="dropdown-link"
+                    >Walkthrough</a
+                  >
+                  <a
+                    href="https://github.com/codespaces/new?repo=LionSR/TeXRA"
+                    class="dropdown-link"
+                    >GitHub Codespaces</a
+                  >
+                  <a
+                    href="https://marketplace.visualstudio.com/items?itemName=LionSR.texra"
+                    class="dropdown-link"
+                    >VS Code Marketplace</a
+                  >
+                </div>
+              </vscode-context-menu>
+            </div>
+          </div>
         </div>
 
         <!-- Login Banner -->
