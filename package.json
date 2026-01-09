@@ -1327,6 +1327,13 @@
         "title": "Show Tasks",
         "category": "TeXRA",
         "icon": "$(eye)"
+      },
+      {
+        "command": "texra.openProgressViewInTab",
+        "title": "Open Tasks in Editor Tab",
+        "shortTitle": "Open in Tab",
+        "category": "TeXRA",
+        "icon": "$(multiple-windows)"
       }
     ],
     "walkthroughs": [
@@ -1509,6 +1516,11 @@
           "command": "texra.auth.accountMenu",
           "when": "view == texra.progressView",
           "group": "navigation@7"
+        },
+        {
+          "command": "texra.openProgressViewInTab",
+          "when": "view == texra.progressView",
+          "group": "navigation@8"
         },
         {
           "command": "texra.folderExplorer.newFile",
