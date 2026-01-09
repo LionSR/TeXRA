@@ -147,6 +147,10 @@ export function getSelectOptionElements(element) {
 }
 
 export function getSelectedOptionElement(element) {
+  if (!isSelectLikeElement(element)) {
+    return null;
+  }
+
   const options = getSelectOptionElements(element);
   if (options.length === 0) {
     return null;
