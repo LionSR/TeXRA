@@ -712,13 +712,17 @@ export async function handleProgressViewToolEditApprovalAction(
   }
 
   if (payload.action === 'approve') {
-    entry.settle({ accepted: true });
+    // Read the current content from the proposed file - user may have modified it in the diff view
+    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+    entry.settle({ accepted: true, appliedContent });
     return;
   }
 
   if (payload.action === 'approveAll') {
     enableSessionApprovalBypass();
-    entry.settle({ accepted: true });
+    // Read the current content from the proposed file - user may have modified it in the diff view
+    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+    entry.settle({ accepted: true, appliedContent });
     return;
   }
 
