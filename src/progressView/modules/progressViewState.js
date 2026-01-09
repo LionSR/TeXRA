@@ -430,44 +430,23 @@ export class ProgressViewState {
   _collectRunCandidates(streamId) {
     const candidates = new Set();
 
-    const instructionRuns = this.runInstructions.getStreamMap(streamId);
-    if (instructionRuns) {
-      for (const runId of instructionRuns.keys()) {
-        if (runId) {
-          candidates.add(runId);
+    // Helper to add all keys from a Map
+    const addKeys = (map) => {
+      if (map) {
+        for (const runId of map.keys()) {
+          if (runId) candidates.add(runId);
         }
       }
-    }
+    };
 
-    const fileRuns = this.runFiles.getStreamMap(streamId);
-    if (fileRuns) {
-      for (const runId of fileRuns.keys()) {
-        if (runId) {
-          candidates.add(runId);
-        }
-      }
-    }
+    // Collect from all run-scoped data sources
+    addKeys(this.runInstructions.getStreamMap(streamId));
+    addKeys(this.runFiles.getStreamMap(streamId));
+    addKeys(this.runMissingOutputs.getStreamMap(streamId));
+    addKeys(this.runUsage.getStreamMap(streamId));
 
-    const missingRuns = this.runMissingOutputs.getStreamMap(streamId);
-    if (missingRuns) {
-      for (const runId of missingRuns.keys()) {
-        if (runId) {
-          candidates.add(runId);
-        }
-      }
-    }
-
-    const usageRuns = this.runUsage.getStreamMap(streamId);
-    if (usageRuns) {
-      for (const runId of usageRuns.keys()) {
-        if (runId) {
-          candidates.add(runId);
-        }
-      }
-    }
-
-    const groups = this.taskGroups.getGroupMap();
-    for (const group of groups.values()) {
+    // Add root task group IDs (groups without parents)
+    for (const group of this.taskGroups.getGroupMap().values()) {
       if (group && !group.parentGroupId) {
         candidates.add(group.id);
       }
