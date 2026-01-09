@@ -60,6 +60,7 @@ import {
   formatLatexdiff,
   formatStatistics,
 } from './logFormatters/dataFormatters.js';
+import { formatContextManagement } from './logFormatters/contextManagementFormatters.js';
 import {
   formatUserMessage,
   formatProgressStatus,
@@ -121,6 +122,7 @@ export class LogEntryFormatter {
       missingOutputs: safe(withPayloadAndId(formatMissingOutputs), 'missing outputs'),
       latexdiff: safe(withPayloadAndId(formatLatexdiff), 'latexdiff'),
       statistics: safe(withPayloadAndId(formatStatistics), 'statistics'),
+      contextManagement: safe(withPayloadAndId(formatContextManagement), 'context management'),
       // Context state is displayed in the footer, not inline in logs
       contextState: () => null,
       userMessage: safe(
