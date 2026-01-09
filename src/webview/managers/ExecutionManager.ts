@@ -141,46 +141,46 @@ export class ExecutionManager {
   }
 
   handleFileOperation(message: any): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.baseFile,
       message.editedFile,
-    );
+    ]);
   }
 
   handleHousekeeping(message: any): void {
-    void vscode.commands.executeCommand(`texra.${message.command}`);
+    this.executeCommand(message.command);
   }
 
   handleSingleOperation(message: any): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.agent,
       message.model,
-    );
+    ]);
   }
 
-  async handleMultipleOperation(message: any): Promise<void> {
+  handleMultipleOperation(message: any): void {
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
     const outputFilesStr = Array.isArray(message.outputFiles)
       ? message.outputFiles.join(', ')
       : '';
-
     logger.info(
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
 
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.agent,
       message.model,
       message.outputFiles,
-    );
+    ]);
+  }
+
+  private executeCommand(command: string, args: unknown[] = []): void {
+    void vscode.commands.executeCommand(`texra.${command}`, ...args);
   }
 }
