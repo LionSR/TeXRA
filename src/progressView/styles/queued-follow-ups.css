@@ -5,6 +5,7 @@
 
 /* Collapsible container styling */
 .queued-follow-ups-collapsible {
+  width: 100%;
   border-radius: var(--radius);
   background-color: var(--vscode-inputValidation-infoBackground);
   border: 1px solid var(--vscode-inputValidation-infoBorder);
