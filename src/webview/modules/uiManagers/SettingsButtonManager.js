@@ -251,6 +251,25 @@ export class SettingsButtonManager extends BaseDomHandler {
   _setupDropdowns() {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
+      const resolveSessionTypeFromEvent = (event, radioGroup) => {
+        const target = event?.target;
+        if (target instanceof HTMLElement) {
+          const radio = isTagName(target, 'vscode-radio')
+            ? target
+            : target.closest?.('vscode-radio');
+          if (radio instanceof HTMLElement) {
+            const radioValue =
+              radio.dataset.sessionType || radio.getAttribute('value');
+            const parsed = parseSessionType(radioValue);
+            if (parsed) {
+              return parsed;
+            }
+          }
+        }
+
+        return parseSessionType(radioGroup?.value);
+      };
+
       const handleSessionTypeSelection = (sessionType) => {
         const normalized =
           parseSessionType(sessionType) ?? SESSION_TYPES.WORKFLOW;
@@ -279,8 +298,8 @@ export class SettingsButtonManager extends BaseDomHandler {
           this._setLastRadioSessionType(initialSessionType);
         }
 
-        this.addListener(radioGroup, 'change', () => {
-          const sessionType = parseSessionType(radioGroup.value);
+        this.addListener(radioGroup, 'change', (event) => {
+          const sessionType = resolveSessionTypeFromEvent(event, radioGroup);
           if (!sessionType) {
             return;
           }
