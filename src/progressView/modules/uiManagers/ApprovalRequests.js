@@ -124,9 +124,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
         ? `${diffParts.join(' / ')} ${lineLabel} changed`
         : 'No line changes';
 
-    metaElem.textContent = parts.join(' • ');
-    if (parts.length > 0) metaElem.append(' • ');
-
     const diffContainer = document.createElement('span');
     diffContainer.className = 'approval-request__diff';
     diffContainer.title = tooltip;
@@ -149,6 +146,14 @@ export class ApprovalRequests extends BaseUIRequestManager {
     labelSpan.textContent = `${total} ${lineLabel}`;
     diffContainer.appendChild(labelSpan);
 
+    // Build final meta content
+    metaElem.textContent = '';
+    if (parts.length > 0) {
+      metaElem.append(parts.join(' • '));
+      if (diffContainer.childElementCount > 0) {
+        metaElem.append(' • ');
+      }
+    }
     metaElem.appendChild(diffContainer);
   }
 
