@@ -213,8 +213,7 @@ export const normalizeToolUseLog = (structured) => {
 
   // Extract tool name from either toolName or tool field
   const rawToolName = parsed.toolName ?? parsed.tool;
-  const toolName =
-    typeof rawToolName === 'string' ? rawToolName.trim() : '';
+  const toolName = typeof rawToolName === 'string' ? rawToolName.trim() : '';
 
   // Detect user feedback: when userInstruction is present, this is user-provided
   // guidance rather than a system error, even if isError is true
