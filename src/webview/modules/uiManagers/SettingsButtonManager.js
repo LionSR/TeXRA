@@ -272,15 +272,46 @@ export class SettingsButtonManager extends BaseDomHandler {
 
       const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup) {
-        // Initialize last session type from radio group
-        // Only set if we can determine a valid initial value to avoid masking the first user interaction
-        const initialSessionType = parseSessionType(radioGroup.value);
+        // Helper to extract session type from a radio element
+        const getRadioSessionType = (radio) => {
+          if (!(radio instanceof HTMLElement)) {
+            return undefined;
+          }
+          return parseSessionType(
+            radio.dataset.sessionType || radio.getAttribute('value'),
+          );
+        };
+
+        // Helper to find the checked radio's session type in the group
+        // Note: vscode-radio-group has no .value property, must scan radios
+        const getCheckedSessionType = () => {
+          const radios = radioGroup.querySelectorAll('vscode-radio');
+          for (const radio of radios) {
+            if (radio.checked || radio.hasAttribute('checked')) {
+              return getRadioSessionType(radio);
+            }
+          }
+          return undefined;
+        };
+
+        // Initialize last session type from the currently checked radio
+        const initialSessionType = getCheckedSessionType();
         if (initialSessionType) {
           this._setLastRadioSessionType(initialSessionType);
         }
 
-        this.addListener(radioGroup, 'change', () => {
-          const sessionType = parseSessionType(radioGroup.value);
+        this.addListener(radioGroup, 'change', (event) => {
+          // The change event bubbles from the clicked vscode-radio element
+          // event.target is the radio, not the group (group has no .value)
+          const target = event?.target;
+          let sessionType;
+          if (isTagName(target, 'vscode-radio')) {
+            sessionType = getRadioSessionType(target);
+          }
+          // Fallback: scan for checked radio (e.g., keyboard navigation)
+          if (!sessionType) {
+            sessionType = getCheckedSessionType();
+          }
           if (!sessionType) {
             return;
           }
