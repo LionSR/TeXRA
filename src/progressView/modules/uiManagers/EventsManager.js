@@ -10,6 +10,14 @@ import {
 } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
+// Classes that support toggle icon updates
+const TOGGLE_ICON_CLASSES = [
+  'banner-details',
+  'file-list-details',
+  'latexdiff-details',
+  'statistics-details',
+];
+
 /**
  * Manages event handling and state application.
  */
@@ -72,13 +80,15 @@ export class EventsManager {
       'click',
       (e) => {
         const element = e.target.closest('[data-command]');
-        if (element && element.dataset.command) {
-          const data = { command: element.dataset.command };
-          if (element.dataset.file) data.file = element.dataset.file;
-          if (element.dataset.base) data.base = element.dataset.base;
-          if (element.dataset.prev) data.prev = element.dataset.prev;
-          vscode.postMessage(data);
-        }
+        if (!element?.dataset.command) return;
+
+        const { command, file, base, prev } = element.dataset;
+        vscode.postMessage({
+          command,
+          ...(file && { file }),
+          ...(base && { base }),
+          ...(prev && { prev }),
+        });
       },
       true,
     );
@@ -139,7 +149,7 @@ export class EventsManager {
       }
     }
 
-    // Handle banner-details and file-list-details toggle events
+    // Handle toggle events for collapsible details elements
     document.addEventListener(
       'toggle',
       (e) => {
@@ -148,17 +158,14 @@ export class EventsManager {
           return;
         }
 
-        if (
-          target.classList.contains('banner-details') ||
-          target.classList.contains('file-list-details') ||
-          target.classList.contains('latexdiff-details') ||
-          target.classList.contains('statistics-details')
-        ) {
-          const toggleIcon = target.querySelector('.toggle-icon');
-          if (toggleIcon) {
-            const isOpen = target.open;
-            setChevronIconHorizontal(toggleIcon, isOpen);
-          }
+        const hasToggleClass = TOGGLE_ICON_CLASSES.some((cls) =>
+          target.classList.contains(cls),
+        );
+        if (!hasToggleClass) return;
+
+        const toggleIcon = target.querySelector('.toggle-icon');
+        if (toggleIcon) {
+          setChevronIconHorizontal(toggleIcon, target.open);
         }
       },
       true,
