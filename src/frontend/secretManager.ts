@@ -94,7 +94,7 @@ export class SecretManager {
   }
 
   public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
-    return (await this.lookupApiKey(provider)) !== undefined;
+    return !!(await this.lookupApiKey(provider));
   }
 
   public static async getApiProviderQuickPickItems(): Promise<
