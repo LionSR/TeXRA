@@ -669,15 +669,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const outputFilesArray = [...allFiles];
 
-    // Determine if multiple outputs mode is active (explicit config takes priority)
-    let useMultipleOutputs: boolean;
-    if (taskState.agentConfig.useMultipleOutputs !== undefined) {
-      useMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
-    } else if (taskState.activeFiles.output !== undefined) {
-      useMultipleOutputs = taskState.activeFiles.output;
-    } else {
-      useMultipleOutputs = outputFilesArray.length > 1;
-    }
+    // Determine if multiple outputs mode is active
+    // Priority: explicit config > activeFiles flag > infer from file count
+    const useMultipleOutputs =
+      taskState.agentConfig.useMultipleOutputs ??
+      taskState.activeFiles.output ??
+      outputFilesArray.length > 1;
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agentConfig.agent,
