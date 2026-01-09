@@ -9,20 +9,26 @@
  * - State persistence via PersistedFlow
  */
 
+// Local imports - agent runtime and storage
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
+import { isExtensionDeactivating } from '@agent/runtime/extensionLifecycle';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
   unregisterInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-
 import { PersistedFlow, type FlowRecord } from '@agent/node/persisted-flow';
+
+// Local imports - common
 import {
   EXECUTION_STATUS,
   executionToEndStatus,
 } from '@common/constants/streamStatus';
+
+// Local imports - logger
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 
+// Local imports - tool-use flow
 import { createToolUseRunFlow, type ToolUseRunShared } from '../ToolUseRunFlow';
 import {
   createToolUseFlowContext,
@@ -159,16 +165,27 @@ export async function runToolUseFlow<C = unknown>(
     // When VS Code reloads mid-execution, this block never runs, preserving
     // the record for sessions that were genuinely interrupted mid-wait.
     try {
-      const kv = getExecutionStore(executionId);
-      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      const sharedState = flowRecord?.shared as { state?: { userCancelledRetry?: boolean } } | undefined;
-      const userCancelledRetry = sharedState?.state?.userCancelledRetry === true;
-
-      if (userCancelledRetry) {
-        // Preserve flow record for resume - user can continue from last successful breakpoint
-        logger.debug('Flow record preserved after retry cancellation for resume capability');
+      if (isExtensionDeactivating()) {
+        logger.debug(
+          'Skipping tool-use flow record cleanup during extension deactivation',
+        );
       } else {
-        await kv.delete(`flow:${executionId}`);
+        const kv = getExecutionStore(executionId);
+        const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+        const sharedState = flowRecord?.shared as
+          | { state?: { userCancelledRetry?: boolean } }
+          | undefined;
+        const userCancelledRetry =
+          sharedState?.state?.userCancelledRetry === true;
+
+        if (userCancelledRetry) {
+          // Preserve flow record for resume - user can continue from last successful breakpoint
+          logger.debug(
+            'Flow record preserved after retry cancellation for resume capability',
+          );
+        } else {
+          await kv.delete(`flow:${executionId}`);
+        }
       }
     } catch {
       // Ignore cleanup errors - non-critical

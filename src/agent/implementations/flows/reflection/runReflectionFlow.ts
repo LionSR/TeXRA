@@ -19,39 +19,51 @@
  * - PersistedFlow handles persistence transparently
  */
 
+// Local imports - agent output
 import type { RoundOutput, IOutputHandler } from '@agent/output';
 import { OutputHandler } from '@agent/output';
+
+// Local imports - agent runtime and storage
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
+import { isExtensionDeactivating } from '@agent/runtime/extensionLifecycle';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   StreamTabId,
   StorageKeyManager,
 } from '@agent/types/IdentifierTypes';
+
+// Local imports - agent core and flow
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import { AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
+import { type FlowRecord } from '@agent/node/persisted-flow';
+import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
 import {
   registerInterruptible,
   unregisterInterruptible,
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 
-import { AgentRunState } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { type FlowRecord } from '@agent/node/persisted-flow';
-import { RoundPersistedFlow } from '@agent/node/round-persisted-flow';
+// Local imports - common
 import { normalizeRunId } from '@common/constants/runIds';
 import {
   EXECUTION_STATUS,
   executionToEndStatus,
   type ExecutionStatus,
 } from '@common/constants/streamStatus';
+
+// Local imports - logger
 import type { AgentLogStage } from '@logger/AgentLogger';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
+
+// Local imports - utilities
 import { PromptBuilder } from '@utils/prompt';
 import { TaskRunFileService, type AgentFileLocation } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
+// Local imports - reflection flow
 import {
   createReflectionFlow,
   type ReflectionFlowShared,
@@ -320,13 +332,17 @@ export async function runReflectionFlow<C = unknown>(
     // Only delete flow record on successful completion
     // Keep it for interrupted/error flows to enable resume
     // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
-    if (status === END_GROUP_STATUS.STOPPED) {
+    if (status === END_GROUP_STATUS.STOPPED && !isExtensionDeactivating()) {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors
       }
+    } else if (isExtensionDeactivating()) {
+      logger.debug(
+        'Skipping reflection flow record cleanup during extension deactivation',
+      );
     }
 
     if (createdRunStage) {

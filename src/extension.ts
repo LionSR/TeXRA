@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
+import { initializeExtensionLifecycle } from '@agent/runtime/extensionLifecycle';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
@@ -104,6 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
   agentDirectories.initialize(context);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
+  initializeExtensionLifecycle();
   FileLister.initialize(context);
   // Initialize server-side key access with SupabaseClient as auth provider
   initializeServerSideKeyAccess(context, {
