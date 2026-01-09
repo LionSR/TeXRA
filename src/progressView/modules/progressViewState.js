@@ -265,6 +265,12 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
+    /**
+     * Tracks the stream that was last rendered to the DOM.
+     * Used by frontend to detect stream switches independently.
+     * This is the SINGLE SOURCE OF TRUTH for stream switch detection.
+     */
+    this.lastRenderedStream = '';
     this.streams = new Set();
     this.agentTypeFilter = 'all';
     this.pendingFilterUpdate = false;
