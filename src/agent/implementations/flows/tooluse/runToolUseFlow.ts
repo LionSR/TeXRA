@@ -11,7 +11,7 @@
 
 // Local imports - agent runtime and storage
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import { isExtensionDeactivating } from '@agent/runtime/extensionLifecycle';
+import { shouldPreserveFlowRecord } from '@agent/runtime/flowRecordUtils';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import {
   registerInterruptible,
@@ -165,27 +165,22 @@ export async function runToolUseFlow<C = unknown>(
     // When VS Code reloads mid-execution, this block never runs, preserving
     // the record for sessions that were genuinely interrupted mid-wait.
     try {
-      if (isExtensionDeactivating()) {
-        logger.debug(
-          'Skipping tool-use flow record cleanup during extension deactivation',
-        );
-      } else {
-        const kv = getExecutionStore(executionId);
-        const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-        const sharedState = flowRecord?.shared as
-          | { state?: { userCancelledRetry?: boolean } }
-          | undefined;
-        const userCancelledRetry =
-          sharedState?.state?.userCancelledRetry === true;
+      const kv = getExecutionStore(executionId);
+      const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
+      const sharedState = flowRecord?.shared as
+        | { state?: { userCancelledRetry?: boolean } }
+        | undefined;
+      const userCancelledRetry =
+        sharedState?.state?.userCancelledRetry === true;
+      const shouldPreserve = shouldPreserveFlowRecord(
+        status,
+        userCancelledRetry,
+      );
 
-        if (userCancelledRetry) {
-          // Preserve flow record for resume - user can continue from last successful breakpoint
-          logger.debug(
-            'Flow record preserved after retry cancellation for resume capability',
-          );
-        } else {
-          await kv.delete(`flow:${executionId}`);
-        }
+      if (shouldPreserve) {
+        logger.debug('Preserving tool-use flow record for resume capability');
+      } else {
+        await kv.delete(`flow:${executionId}`);
       }
     } catch {
       // Ignore cleanup errors - non-critical

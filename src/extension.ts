@@ -6,7 +6,10 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import { initializeExtensionLifecycle } from '@agent/runtime/extensionLifecycle';
+import {
+  disposeExtensionLifecycle,
+  initializeExtensionLifecycle,
+} from '@agent/runtime/extensionLifecycle';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
@@ -331,6 +334,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
   disposeStatusListener?.();
+  disposeExtensionLifecycle();
 
   // Flush any pending usage logs before deactivating
   await UsageLogService.dispose();

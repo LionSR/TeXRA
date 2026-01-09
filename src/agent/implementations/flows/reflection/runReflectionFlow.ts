@@ -25,7 +25,7 @@ import { OutputHandler } from '@agent/output';
 
 // Local imports - agent runtime and storage
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
-import { isExtensionDeactivating } from '@agent/runtime/extensionLifecycle';
+import { shouldPreserveFlowRecord } from '@agent/runtime/flowRecordUtils';
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type {
   StreamTabId,
@@ -332,17 +332,15 @@ export async function runReflectionFlow<C = unknown>(
     // Only delete flow record on successful completion
     // Keep it for interrupted/error flows to enable resume
     // Note: END_GROUP_STATUS.STOPPED means "completed" (not user-stopped)
-    if (status === END_GROUP_STATUS.STOPPED && !isExtensionDeactivating()) {
+    if (shouldPreserveFlowRecord(status, false)) {
+      logger.debug('Preserving reflection flow record for resume capability');
+    } else {
       try {
         const kv = getExecutionStore(executionId);
         await kv.delete(`flow:${executionId}`);
       } catch {
         // Ignore cleanup errors
       }
-    } else if (isExtensionDeactivating()) {
-      logger.debug(
-        'Skipping reflection flow record cleanup during extension deactivation',
-      );
     }
 
     if (createdRunStage) {
