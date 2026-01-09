@@ -16,7 +16,10 @@ import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { COMMANDS } from '@progressView/modules/constants.js';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { RetryRequestPrompt, ToolEditApprovalPrompt } from '@eventBus/types';
+import type {
+  RetryRequestPrompt,
+  ToolEditApprovalPrompt,
+} from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
 
 /**

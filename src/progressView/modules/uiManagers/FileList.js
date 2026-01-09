@@ -61,7 +61,9 @@ export class FileList {
         container.appendChild(roundGroup);
       }
 
-      files.forEach((file) => this._renderFileItem(template, target, file, round));
+      files.forEach((file) =>
+        this._renderFileItem(template, target, file, round),
+      );
     }
 
     // Show/hide collapsible based on whether files were actually rendered
