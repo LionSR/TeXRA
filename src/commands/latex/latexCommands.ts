@@ -159,14 +159,10 @@ async function handleGetTeXCount(): Promise<void> {
                 headerMatch ? `Headers: ${headerMatch[1]}` : null,
                 captionMatch ? `Captions: ${captionMatch[1]}` : null,
                 mathInlineMatch ? `Inline math: ${mathInlineMatch[1]}` : null,
-                mathDisplayMatch
-                  ? `Display math: ${mathDisplayMatch[1]}`
-                  : null,
+                mathDisplayMatch ? `Display math: ${mathDisplayMatch[1]}` : null,
               ]
-                .filter(
-                  (item): item is string => item !== null && item !== undefined,
-                ) // Type guard to remove nulls
-                .map((label) => ({ label })); // Convert strings to QuickPickItems
+                .filter((item): item is string => item !== null)
+                .map((label) => ({ label }));
 
               // Show results in QuickPick
               await vscode.window.showQuickPick(stats, {
