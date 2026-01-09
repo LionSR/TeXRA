@@ -243,13 +243,8 @@ export class RunSelector {
       this._ensureDropdown();
     }
 
-    if (!this._container && this._domReady) {
-      const containerElem = safeGetElementById(
-        ELEMENT_IDS.RUN_SELECTOR_CONTAINER,
-      );
-      if (containerElem) {
-        this._container = containerElem;
-      }
+    if (!this._container) {
+      this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     }
 
     const container = this._container;
