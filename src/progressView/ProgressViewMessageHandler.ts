@@ -33,7 +33,7 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import { pathToLocation } from '@utils/files';
+import { pathToLocation, flexibleFS, createExternalLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -65,6 +65,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
+
+  /**
+   * Stores model's original output when compare view is opened.
+   * Key: edited file path, Value: { content, streamId }
+   * Used to detect user modifications and inform the model via follow-up.
+   */
+  private readonly modelOutputBackups = new Map<
+    string,
+    { content: string; streamId: StreamTabId }
+  >();
 
   constructor(
     private readonly provider: ProgressViewProvider,
@@ -513,6 +523,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleCompareOriginal(
     message: BaseFileCommandMessage,
   ): Promise<void> {
+    // Backup model's original output before user can modify it in the diff view
+    const streamId = this.provider.state.activeStream;
+    if (streamId && message.file) {
+      try {
+        const fileLocation = createExternalLocation(message.file);
+        const content = await flexibleFS.read(fileLocation);
+        this.modelOutputBackups.set(message.file, { content, streamId });
+      } catch {
+        // Ignore backup errors - don't block the compare operation
+      }
+    }
+
     await this.executeWithBaseFile(message, 'Compare original', (file, base) =>
       vscode.commands.executeCommand(
         'texra.compare',
@@ -546,6 +568,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleAcceptFile(
     message: BaseFileCommandMessage,
   ): Promise<void> {
+    // Check if user modified the model's output before accepting
+    const backup = message.file ? this.modelOutputBackups.get(message.file) : null;
+    let currentContent: string | null = null;
+
+    if (backup) {
+      try {
+        const fileLocation = createExternalLocation(message.file);
+        currentContent = await flexibleFS.read(fileLocation);
+      } catch {
+        // Ignore read errors
+      }
+    }
+
     await this.executeWithBaseFile(message, 'Accept', (file, base) =>
       vscode.commands.executeCommand(
         'texra.acceptEdited',
@@ -554,6 +589,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         pathToLocation(file),
       ),
     );
+
+    // Inform the model about user modifications via follow-up
+    if (backup && currentContent !== null && currentContent !== backup.content) {
+      const fileName = path.basename(message.file);
+      const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
+
+      await vscode.commands.executeCommand('texra.sendFollowUp', {
+        stream: backup.streamId,
+        text: followUpText,
+      });
+    }
+
+    // Clean up backup
+    if (message.file) {
+      this.modelOutputBackups.delete(message.file);
+    }
   }
 
   private async handleMergeFile(
