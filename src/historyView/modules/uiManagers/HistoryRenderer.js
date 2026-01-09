@@ -287,7 +287,7 @@ export class HistoryRenderer {
       );
       if (!collapsible) continue;
 
-      // Use .open property for <details> elements - it automatically manages the attribute
+      // vscode-collapsible has reflect:true on open property - setting .open syncs the attribute
       if ('open' in collapsible) {
         collapsible.open = Boolean(expanded);
       }
