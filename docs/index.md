@@ -7,20 +7,23 @@ hero:
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/
-    - theme: alt
-      text: Install from Marketplace
-      link: vscode:extension/texra-ai.texra
-    - theme: alt
-      text: Try it on Web
-      link: /launch
-    - theme: alt
-      text: View on GitHub
-      link: https://github.com/texra-ai/texra-issues
 ---
+
+<div class="hero-buttons">
+  <div class="dropdown">
+    <button class="dropdown-button brand">
+      Get started
+      <span class="chevron">▼</span>
+    </button>
+    <div class="dropdown-menu">
+      <a href="/guide/">Documentation</a>
+      <a href="vscode:extension/texra-ai.texra">VS Code</a>
+      <a href="/launch">GitHub Codespaces</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra">VS Code Marketplace</a>
+    </div>
+  </div>
+  <a href="https://github.com/texra-ai/texra-issues" class="alt-button">View on GitHub</a>
+</div>
 
 <div class="workflow-container">
   <div class="workflow-steps">
@@ -144,6 +147,98 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
 If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra.ai).
 
 <style>
+/* Hero buttons with dropdown */
+.hero-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: -1rem 0 2rem;
+  flex-wrap: wrap;
+}
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropdown-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.dropdown-button.brand {
+  background: var(--vp-c-brand);
+  color: white;
+}
+.dropdown-button.brand:hover {
+  background: var(--vp-c-brand-dark);
+}
+.dropdown-button .chevron {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+.dropdown:hover .chevron {
+  transform: rotate(180deg);
+}
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--vp-c-bg-elv);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: all 0.2s;
+  z-index: 100;
+}
+.dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.dropdown-menu a {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: background 0.15s;
+}
+.dropdown-menu a:first-child {
+  border-radius: 8px 8px 0 0;
+}
+.dropdown-menu a:last-child {
+  border-radius: 0 0 8px 8px;
+}
+.dropdown-menu a:hover {
+  background: var(--vp-c-bg-soft);
+}
+.alt-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--vp-c-brand);
+  background: transparent;
+  border: 1px solid var(--vp-c-brand);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.alt-button:hover {
+  background: var(--vp-c-brand-soft);
+}
+
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
