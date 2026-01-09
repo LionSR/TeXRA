@@ -14,14 +14,9 @@ import {
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
-import {
-  type ReflectionFlowShared,
-  type RoundContext,
-} from '../ReflectionFlowState';
-import type {
-  ReflectionFlowParams,
-  ReflectionServices,
-} from '../ReflectionServices';
+import { getFilesForRound } from '../helpers';
+import type { ReflectionFlowShared, RoundContext } from '../ReflectionFlowState';
+import type { ReflectionFlowParams, ReflectionServices } from '../ReflectionServices';
 
 interface MediaPrepInput {
   files: FileLocation[];
@@ -43,24 +38,17 @@ export class MediaExtractionNode<C = unknown> extends Node<
 
   async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
     const { config, fileService, modelHandler } = this.services;
-    const { currentRound, context } = shared;
+    const { currentRound, roundOutputs, context } = shared;
 
-    const workspaceState = AgentWorkspaceState.fromSnapshot(
-      shared.workspaceSnapshot,
-    );
-
+    const workspaceState = AgentWorkspaceState.fromSnapshot(shared.workspaceSnapshot);
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
-      if (config.mediaFile) {
-        extraMediaFiles.push(fileService.createLocation(config.mediaFile));
-      }
-      for (const mediaPath of config.mediaFiles) {
-        extraMediaFiles.push(fileService.createLocation(mediaPath));
-      }
+      if (config.mediaFile) extraMediaFiles.push(fileService.createLocation(config.mediaFile));
+      for (const p of config.mediaFiles) extraMediaFiles.push(fileService.createLocation(p));
     }
 
     return {
-      files: context?.filesForRound ?? [],
+      files: getFilesForRound(currentRound, roundOutputs, config, fileService),
       currentRound,
       supportsVision: modelHandler.capabilities.supportsVision,
       extraMediaFiles,
