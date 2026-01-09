@@ -157,50 +157,29 @@ export async function buildFileAttachment({
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
-  let stats: { size: number } | undefined;
-  try {
-    stats = await WorkspaceFS.stat(resolved.relative);
-  } catch (err) {
-    throw new ToolError(
-      `Failed to inspect attachment ${display}: ${toErrorMessage(err)}`,
-    );
-  }
+  const stats = await WorkspaceFS.stat(resolved.relative).catch((err) => {
+    throw new ToolError(`Failed to inspect attachment ${display}: ${toErrorMessage(err)}`);
+  });
 
   if (stats.size > maxBytes) {
     const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
-    throw new ToolError(
-      `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
-    );
+    throw new ToolError(`Attachment ${display} exceeds maximum size of ${limitMb} MiB.`);
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await WorkspaceFS.readFileBytes(resolved.relative);
-  } catch (err) {
-    throw new ToolError(
-      `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
-    );
-  }
+  const buffer = await WorkspaceFS.readFileBytes(resolved.relative).catch((err) => {
+    throw new ToolError(`Failed to read attachment ${display}: ${toErrorMessage(err)}`);
+  });
 
-  const inferredMime =
-    mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
-
-  const base64Payload = includeBase64 ? buffer.toString('base64') : undefined;
+  const inferredMime = mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
+  const base64Data = includeBase64 ? buffer.toString('base64') : undefined;
   const bytes = Uint8Array.from(buffer);
   buffer.fill(0);
 
-  const attachment: ToolFileAttachment = {
+  return {
     path: display,
     mimeType: inferredMime,
     bytes,
+    ...(description ? { description } : {}),
+    ...(base64Data ? { base64Data } : {}),
   };
-
-  if (description) {
-    attachment.description = description;
-  }
-  if (base64Payload) {
-    attachment.base64Data = base64Payload;
-  }
-
-  return attachment;
 }
