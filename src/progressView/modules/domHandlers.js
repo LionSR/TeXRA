@@ -74,10 +74,6 @@ class ProgressViewDomHandler extends BaseDomHandler {
     this.retryRequests.setup();
     this.events.applyToggleStates();
   }
-
-  disposeUI() {
-    this.dispose();
-  }
 }
 
 export const progressViewDomHandler = new ProgressViewDomHandler();

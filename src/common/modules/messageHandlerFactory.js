@@ -7,12 +7,7 @@ import { BaseWebviewMessageHandler } from './BaseWebviewMessageHandler.js';
  * @returns {BaseWebviewMessageHandler}
  */
 export function createMessageHandler(handlers) {
-  class ViewMessageHandler extends BaseWebviewMessageHandler {
-    constructor() {
-      super();
-      this._handlers = handlers;
-    }
-  }
-
-  return new ViewMessageHandler();
+  const instance = new BaseWebviewMessageHandler();
+  instance._handlers = handlers;
+  return instance;
 }

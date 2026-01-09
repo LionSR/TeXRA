@@ -4,14 +4,7 @@ import { ELEMENT_IDS, CLASS_NAMES } from '../constants.js';
 // Local imports - common
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
-import { safeGetElementById } from '@common/domUtils.js';
-
-const toggleHidden = (element, isHidden) => {
-  if (!element) {
-    return;
-  }
-  element.classList.toggle(CLASS_NAMES.HIDDEN, isHidden);
-};
+import { safeGetElementById, toggleHidden } from '@common/domUtils.js';
 
 /**
  * Manages the agents table rendering and interactions.

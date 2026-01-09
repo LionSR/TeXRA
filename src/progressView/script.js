@@ -16,6 +16,6 @@ bootstrapWebview({
   },
   onDispose: () => {
     messageHandler.dispose();
-    progressViewDomHandler.disposeUI();
+    progressViewDomHandler.dispose();
   },
 });

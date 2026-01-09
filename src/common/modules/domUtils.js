@@ -111,6 +111,13 @@ export function safeGetElementChecked(id) {
   return element.checked;
 }
 
+export function toggleHidden(element, isHidden) {
+  if (!element) {
+    return;
+  }
+  element.classList.toggle('is-hidden', isHidden);
+}
+
 export function setElementDisabled(element, disabled) {
   if (!element) {
     return;

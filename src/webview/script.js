@@ -15,9 +15,9 @@ import { bootstrapWebview } from '@common/viewBootstrap.js';
 import { vscode } from '@common/webviewContext.js';
 
 bootstrapWebview({
-  initializeState: () => mainViewState.initialize(),
   setupHandlers: () => setupHandlers({ requestData: false }),
   onDomReady: () => {
+    mainViewState.initialize();
     instructionManager.setup();
     mainViewDomHandler.initializeUI();
     setupHandlers({ requestData: true });

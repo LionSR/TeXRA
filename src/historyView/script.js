@@ -15,7 +15,8 @@ bootstrapWebview({
     vscode.postMessage({ command: HISTORY_VIEW_COMMANDS.GET_HISTORY_DATA });
   },
   onDispose: () => {
-    historyViewDomHandler.dispose();
+    historyViewDomHandler.events.dispose();
+    historyViewDomHandler.searchManager.dispose();
     messageHandler.dispose();
   },
 });

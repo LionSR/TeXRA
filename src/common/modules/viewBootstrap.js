@@ -5,14 +5,12 @@
  * @param {Object} options
  * @param {Function} [options.initializeState]
  * @param {Function} [options.setupHandlers]
- * @param {Function} [options.beforeDomReady]
  * @param {Function} [options.onDomReady]
  * @param {Function} [options.onDispose]
  */
 export function bootstrapWebview({
   initializeState,
   setupHandlers,
-  beforeDomReady,
   onDomReady,
   onDispose,
 } = {}) {
@@ -22,10 +20,6 @@ export function bootstrapWebview({
 
   if (setupHandlers) {
     setupHandlers();
-  }
-
-  if (beforeDomReady) {
-    beforeDomReady();
   }
 
   document.addEventListener('DOMContentLoaded', () => {
