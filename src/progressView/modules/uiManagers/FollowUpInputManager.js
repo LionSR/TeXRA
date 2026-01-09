@@ -157,26 +157,15 @@ export class FollowUpInputManager {
   }
 
   focus(options = {}) {
-    if (!this.textarea || !this._isContainerVisible) {
-      return;
-    }
-
-    const { scrollIntoView = false } = options;
+    if (!this.textarea || !this._isContainerVisible) return;
 
     this._clearPendingFocus();
-
     this._focusTimer = window.setTimeout(() => {
       this._focusTimer = null;
-      if (!this.textarea || !this._isContainerVisible) {
-        return;
-      }
+      if (!this.textarea || !this._isContainerVisible) return;
 
       this.textarea.focus();
-
-      if (
-        scrollIntoView &&
-        typeof this.textarea.scrollIntoView === 'function'
-      ) {
+      if (options.scrollIntoView) {
         this.textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }, 0);

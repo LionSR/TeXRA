@@ -171,65 +171,49 @@ export class EventsManager {
       true,
     );
 
-    // Handle clicks on file links inside file-list-details blocks
-    document.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const link = e.target.closest('.file-link');
-      if (link && link.dataset.file) {
+    // Unified click handler for document-level interactions
+    document.addEventListener('click', async (e) => {
+      if (!(e.target instanceof Element)) return;
+
+      // File link clicks
+      const fileLink = e.target.closest('.file-link');
+      if (fileLink?.dataset.file) {
         vscode.postMessage({
           command: COMMANDS.OPEN_FILE,
-          file: link.dataset.file,
+          file: fileLink.dataset.file,
         });
-      }
-    });
-
-    // Handle copy actions for banner content
-    document.addEventListener('click', async (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const copyButton = e.target.closest('.banner-content-copy');
-      if (!copyButton) {
         return;
       }
 
-      // Prevent collapsible from toggling when clicking action buttons
-      e.stopPropagation();
-
-      const contentElem = copyButton
-        .closest('.banner-details')
-        ?.querySelector('.banner-content');
-      if (!contentElem) {
-        return;
-      }
-
-      const rawContent = contentElem.dataset.rawContent;
-      const textToCopy = rawContent ?? contentElem.textContent ?? '';
-      if (!textToCopy.trim()) {
-        return;
-      }
-
-      await copyWithFeedback(copyButton, textToCopy, {
-        defaultTitle:
-          copyButton.dataset.defaultTitle ||
-          copyButton.getAttribute('title') ||
-          'Copy content',
-        successTitle: copyButton.dataset.successTitle || 'Copied!',
-      });
-    });
-
-    // Handle clicks on LaTeX references within logs
-    document.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const ref = e.target.closest('.latex-ref');
-      if (ref && ref.dataset.label) {
+      // LaTeX reference clicks
+      const latexRef = e.target.closest('.latex-ref');
+      if (latexRef?.dataset.label) {
         vscode.postMessage({
           command: COMMANDS.OPEN_LABEL,
-          label: ref.dataset.label,
+          label: latexRef.dataset.label,
+        });
+        return;
+      }
+
+      // Banner content copy
+      const copyButton = e.target.closest('.banner-content-copy');
+      if (copyButton) {
+        e.stopPropagation();
+        const contentElem = copyButton
+          .closest('.banner-details')
+          ?.querySelector('.banner-content');
+        if (!contentElem) return;
+
+        const textToCopy =
+          contentElem.dataset.rawContent ?? contentElem.textContent ?? '';
+        if (!textToCopy.trim()) return;
+
+        await copyWithFeedback(copyButton, textToCopy, {
+          defaultTitle:
+            copyButton.dataset.defaultTitle ||
+            copyButton.getAttribute('title') ||
+            'Copy content',
+          successTitle: copyButton.dataset.successTitle || 'Copied!',
         });
       }
     });
