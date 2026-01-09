@@ -26,6 +26,22 @@ import {
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
+/**
+ * Check if event target is a valid, visible agent select element.
+ * @param {EventTarget|null} target - Event target to validate
+ * @returns {HTMLElement|null} Valid select element or null
+ */
+function getValidAgentSelect(target) {
+  if (
+    !(target instanceof HTMLElement) ||
+    !isSelectLikeElement(target) ||
+    target.classList.contains('agent-select--hidden')
+  ) {
+    return null;
+  }
+  return target;
+}
+
 export class SettingsButtonManager extends BaseDomHandler {
   constructor(
     vscodeInstance = vscode,
@@ -329,14 +345,8 @@ export class SettingsButtonManager extends BaseDomHandler {
 
     AGENT_SELECT_LIST.forEach((id) => {
       this.addListener(id, 'focus', (event) => {
-        const target = event.currentTarget;
-        if (
-          !(target instanceof HTMLElement) ||
-          !isSelectLikeElement(target) ||
-          target.classList.contains('agent-select--hidden')
-        ) {
-          return;
-        }
+        const select = getValidAgentSelect(event.currentTarget);
+        if (!select) return;
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
           key: 'agentPicker',
@@ -345,15 +355,9 @@ export class SettingsButtonManager extends BaseDomHandler {
       });
 
       this.addListener(id, 'change', (event) => {
-        const target = event.currentTarget;
-        if (
-          !(target instanceof HTMLElement) ||
-          !isSelectLikeElement(target) ||
-          target.classList.contains('agent-select--hidden')
-        ) {
-          return;
-        }
-        this._handleAgentSelection(target);
+        const select = getValidAgentSelect(event.currentTarget);
+        if (!select) return;
+        this._handleAgentSelection(select);
       });
     });
 
