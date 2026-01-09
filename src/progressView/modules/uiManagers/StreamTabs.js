@@ -152,19 +152,18 @@ export class StreamTabs {
 
     const statusEl = streamTab.querySelector('.tab-status');
     if (statusEl) {
-      // Remove old status classes dynamically from STREAM_STATUS values
-      // This ensures the class list stays in sync with constants
-      Object.values(STREAM_STATUS).forEach((s) =>
-        statusEl.classList.remove(`is-${s}`),
-      );
-      // READY means execution completed - display as stopped (no active indicator)
-      const normalizedStatus =
-        status === STREAM_STATUS.READY
+      // Remove old status classes
+      for (const s of Object.values(STREAM_STATUS)) {
+        statusEl.classList.remove(`is-${s}`);
+      }
+      // READY means execution completed - display as stopped
+      const displayStatus =
+        status === STREAM_STATUS.READY || !status
           ? STREAM_STATUS.STOPPED
-          : status || STREAM_STATUS.STOPPED;
-      statusEl.classList.add(`is-${normalizedStatus}`);
+          : status;
+      statusEl.classList.add(`is-${displayStatus}`);
       statusEl.dataset.status =
-        normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+        displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
       updated = true;
     }
 

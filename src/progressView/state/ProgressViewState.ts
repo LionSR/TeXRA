@@ -632,7 +632,8 @@ export class ProgressViewState {
       typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
     const buckets = hasLegacyFormat
       ? [raw.workflow, raw.toolUse].filter(
-          (b): b is Record<string, unknown> => typeof b === 'object' && b !== null,
+          (b): b is Record<string, unknown> =>
+            typeof b === 'object' && b !== null,
         )
       : [raw];
 
@@ -649,7 +650,10 @@ export class ProgressViewState {
           continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, parseResult.data as TaskState);
+        this.taskStates.set(
+          stream as StreamTabId,
+          parseResult.data as TaskState,
+        );
         loaded += 1;
       }
     }

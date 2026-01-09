@@ -49,6 +49,17 @@ export class UsageSummary {
   }
 
   /**
+   * Sync footer visibility based on whether usage or context are displayed.
+   * @param {HTMLElement|null} footer - The footer element
+   */
+  _syncFooterVisibility(footer) {
+    if (!footer) return;
+    this._ensureContextElem();
+    const contextVisible = this._contextElem?.hidden === false;
+    footer.hidden = !contextVisible;
+  }
+
+  /**
    * Cache the context element if not already cached.
    */
   _ensureContextElem() {
@@ -82,18 +93,11 @@ export class UsageSummary {
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
       this._summaryElem.removeAttribute('aria-label');
-      // Only hide footer if context state is also not visible
-      this._ensureContextElem();
-      const contextVisible = this._contextElem?.hidden === false;
-      if (footer && !contextVisible) {
-        footer.hidden = true;
-      }
+      this._syncFooterVisibility(footer);
       return;
     }
 
-    if (footer) {
-      footer.hidden = false;
-    }
+    if (footer) footer.hidden = false;
 
     const formattedInput = formatTokens(inputTokens);
     const formattedOutput = formatTokens(outputTokens);
@@ -198,12 +202,9 @@ export class UsageSummary {
     this._contextElem.hidden = true;
 
     // Hide footer if usage is also empty
-    const usageEmpty = !this._summaryElem?.textContent;
-    if (usageEmpty) {
+    if (!this._summaryElem?.textContent) {
       const footer = this._getFooter();
-      if (footer) {
-        footer.hidden = true;
-      }
+      if (footer) footer.hidden = true;
     }
   }
 }

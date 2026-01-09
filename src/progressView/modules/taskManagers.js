@@ -337,26 +337,17 @@ export class TaskGroupDomManager {
     let latestTime = 0;
 
     for (const [id, element] of this.groupElements.entries()) {
-      if (!element) {
-        continue;
-      }
+      if (!element) continue;
 
       const group = progressViewState.taskGroups.get(id);
-      if (!group) {
-        continue;
-      }
+      if (!group) continue;
 
+      // Skip hidden root groups or collapsed child groups
       const isRootGroup = !group.parentGroupId;
-      if (isRootGroup) {
-        if (element.hidden) {
-          continue;
-        }
-      } else if (
-        !(element instanceof HTMLDetailsElement) ||
-        element.open !== true
-      ) {
-        continue;
-      }
+      const isVisible = isRootGroup
+        ? !element.hidden
+        : element instanceof HTMLDetailsElement && element.open === true;
+      if (!isVisible) continue;
 
       if (group.startTime > latestTime) {
         latestGroup = id;
