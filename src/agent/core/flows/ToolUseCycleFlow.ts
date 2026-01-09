@@ -77,26 +77,13 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  // Handle null/undefined
   if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
-
-  // Handle primitives (boolean, number) - pass through with warning
-  if (typeof raw === 'boolean' || typeof raw === 'number') {
-    logger.warn(
-      `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
-    );
-    return raw;
-  }
-
-  // Handle objects/arrays - pass through directly
   if (typeof raw !== 'string') {
-    return raw;
+    return raw; // Objects, arrays, primitives pass through directly
   }
-
-  // Handle strings - try to parse as JSON
   try {
     return JSON.parse(raw);
   } catch {
@@ -112,28 +99,11 @@ function isZodValidationError(
   error: unknown,
 ): error is { issues: Array<Record<string, unknown>> } {
   return (
-    error !== null &&
     typeof error === 'object' &&
+    error !== null &&
     'issues' in error &&
     Array.isArray((error as { issues?: unknown }).issues)
   );
-}
-
-/** Format a Zod issue into a readable diagnostic entry. */
-function formatZodIssue(issue: Record<string, unknown>): {
-  path: string;
-  message: string;
-  expected?: unknown;
-  received?: unknown;
-  code?: string;
-} {
-  return {
-    path: Array.isArray(issue.path) ? issue.path.join('.') : '',
-    message: String(issue.message ?? ''),
-    expected: issue.expected,
-    received: issue.received,
-    code: typeof issue.code === 'string' ? issue.code : undefined,
-  };
 }
 
 /**
@@ -143,25 +113,26 @@ function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ToolValidationDiagnostics } {
-  // Handle Zod validation errors with structured diagnostics
   if (isZodValidationError(error)) {
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
         issues: error.issues,
-        formatted: error.issues.map(formatZodIssue),
+        formatted: error.issues.map((issue) => ({
+          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
+          message: String(issue.message ?? ''),
+          expected: issue.expected,
+          received: issue.received,
+          code: typeof issue.code === 'string' ? issue.code : undefined,
+        })),
       },
     };
   }
 
-  // Handle standard errors and unknown types
-  const message =
-    error instanceof Error
-      ? `${toolName}: ${error.message}`
-      : `${toolName}: ${String(error)}`;
-
-  return { message };
+  const errorMessage =
+    error instanceof Error ? error.message : String(error);
+  return { message: `${toolName}: ${errorMessage}` };
 }
 
 // ============================================================================
@@ -895,7 +866,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
   /**
    * Collect valid file locations from tool result attachments.
    * Filters out invalid paths and non-existent files.
-   * Uses parallel file existence checks for better performance.
    */
   private async collectValidMediaLocations(
     files: ToolResult['files'],
@@ -904,29 +874,22 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return [];
     }
 
-    const results = await Promise.all(
-      files.map(async (attachment) => {
-        const path = attachment.path;
-
-        // Skip invalid paths
-        if (typeof path !== 'string' || path.trim() === '') {
-          return null;
+    const validLocations: FileLocation[] = [];
+    for (const attachment of files) {
+      const filePath = attachment.path;
+      if (typeof filePath !== 'string' || filePath.trim() === '') {
+        continue;
+      }
+      const location = pathToLocation(filePath);
+      try {
+        if (await AbsoluteFS.exists(location.absolutePath)) {
+          validLocations.push(location);
         }
-
-        const location = pathToLocation(path);
-
-        // Check if file exists (ignore errors)
-        try {
-          return (await AbsoluteFS.exists(location.absolutePath))
-            ? location
-            : null;
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    return results.filter((loc): loc is FileLocation => loc !== null);
+      } catch {
+        // Ignore files that can't be accessed
+      }
+    }
+    return validLocations;
   }
 
   /**
