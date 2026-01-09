@@ -58,7 +58,7 @@ import {
 
 interface ToolValidationDiagnostics {
   type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: any;
+  issues: Array<Record<string, unknown>>;
   formatted: Array<{
     path: string;
     message: string;
@@ -895,6 +895,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
   /**
    * Collect valid file locations from tool result attachments.
    * Filters out invalid paths and non-existent files.
+   * Uses parallel file existence checks for better performance.
    */
   private async collectValidMediaLocations(
     files: ToolResult['files'],
@@ -903,29 +904,27 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return [];
     }
 
-    const validLocations: FileLocation[] = [];
+    const results = await Promise.all(
+      files.map(async (attachment) => {
+        const path = attachment.path;
 
-    for (const attachment of files) {
-      const path = attachment.path;
-
-      // Skip invalid paths
-      if (typeof path !== 'string' || path.trim() === '') {
-        continue;
-      }
-
-      const location = pathToLocation(path);
-
-      // Check if file exists (ignore errors)
-      try {
-        if (await AbsoluteFS.exists(location.absolutePath)) {
-          validLocations.push(location);
+        // Skip invalid paths
+        if (typeof path !== 'string' || path.trim() === '') {
+          return null;
         }
-      } catch {
-        // Ignore file access errors
-      }
-    }
 
-    return validLocations;
+        const location = pathToLocation(path);
+
+        // Check if file exists (ignore errors)
+        try {
+          return (await AbsoluteFS.exists(location.absolutePath)) ? location : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    return results.filter((loc): loc is FileLocation => loc !== null);
   }
 
   /**
