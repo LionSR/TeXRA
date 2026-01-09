@@ -85,7 +85,11 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
@@ -487,13 +491,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
             this.logger.error(errMsg);
             throw new Error(errMsg);
           }
-          if (effectiveContextWindow - inputTokens < options.max_tokens) {
-            const reducedMaxTokens = Math.max(
-              0,
-              effectiveContextWindow - inputTokens - 10,
+          const availableTokens = effectiveContextWindow - inputTokens;
+          if (availableTokens < options.max_tokens) {
+            const originalMaxTokens = options.max_tokens;
+            const reducedMaxTokens = computeReducedMaxTokens(
+              availableTokens,
+              TOKEN_SAFETY_BUFFER,
             );
-            const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
-            this.logger.warn(warnMsg);
+            const utilizationPercent =
+              (inputTokens / effectiveContextWindow) * 100;
+            this.logger.logContextManagement(
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow: effectiveContextWindow,
+                utilizationBefore: utilizationPercent,
+                originalMaxTokens,
+                reducedMaxTokens,
+                details: 'Anthropic: max_tokens reduced to fit context window',
+              },
+            );
             options.max_tokens = reducedMaxTokens;
 
             if (
