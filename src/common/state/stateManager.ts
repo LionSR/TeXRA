@@ -21,6 +21,7 @@ export enum WorkspaceStateKey {
 export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
   MODEL_LIST_VERSION = 'modelListVersion',
+  MEMORY_ENABLED = 'texra.memory.enabled',
 }
 
 // Prefix used for per-instruction suppression flags
