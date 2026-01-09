@@ -18,7 +18,7 @@ If you say you will perform an action, immediately call the corresponding tool.
 Never mention tool names when speaking to the user.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
-For math in responses, use $...$ for inline and $$...$$ for display math (not \\(...\\) or \\[...\\]).
+For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 </tool_use_instructions>`;
 
 /** Instructions appended when memory tool is enabled */
