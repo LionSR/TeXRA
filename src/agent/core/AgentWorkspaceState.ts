@@ -115,28 +115,36 @@ export class FileInteractionState {
     }
 
     const perCallEdits = new Map<string, { added: number; removed: number }>();
-    let added = 0;
-    let removed = 0;
+    let totalAdded = 0;
+    let totalRemoved = 0;
 
     for (const entry of edits) {
       const path = entry?.path;
       if (!path) continue;
 
-      const existing = this.edits.get(path) ?? { added: 0, removed: 0 };
       const deltaAdded = entry.lineChanges?.added ?? 0;
       const deltaRemoved = entry.lineChanges?.removed ?? 0;
 
-      existing.added += deltaAdded;
-      existing.removed += deltaRemoved;
-      this.edits.set(path, existing);
+      // Update cumulative edits
+      const cumulative = this.edits.get(path);
+      if (cumulative) {
+        cumulative.added += deltaAdded;
+        cumulative.removed += deltaRemoved;
+      } else {
+        this.edits.set(path, { added: deltaAdded, removed: deltaRemoved });
+      }
 
-      const current = perCallEdits.get(path) ?? { added: 0, removed: 0 };
-      current.added += deltaAdded;
-      current.removed += deltaRemoved;
-      perCallEdits.set(path, current);
+      // Update per-call edits
+      const current = perCallEdits.get(path);
+      if (current) {
+        current.added += deltaAdded;
+        current.removed += deltaRemoved;
+      } else {
+        perCallEdits.set(path, { added: deltaAdded, removed: deltaRemoved });
+      }
 
-      added += deltaAdded;
-      removed += deltaRemoved;
+      totalAdded += deltaAdded;
+      totalRemoved += deltaRemoved;
     }
 
     const editsForCall = [...perCallEdits.entries()].map(([path, diff]) => ({
@@ -147,7 +155,10 @@ export class FileInteractionState {
           : undefined,
     }));
 
-    const lineChanges = added || removed ? { added, removed } : undefined;
+    const lineChanges =
+      totalAdded || totalRemoved
+        ? { added: totalAdded, removed: totalRemoved }
+        : undefined;
     return { edits: editsForCall, lineChanges };
   }
 }
