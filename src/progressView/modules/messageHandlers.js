@@ -175,34 +175,57 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Clear DOM panels when active stream is removed or all streams deleted.
+   * Shared between handleDeleteStream and handleDeleteAll.
+   */
+  _clearActivePanels() {
+    dom.instructionPanel.hide();
+    dom.runSelector.clear();
+    dom.todoList.clear();
+    dom.queuedFollowUps.clear();
+    dom.fileList.clear();
+    dom.usageSummary.clearContextDisplay();
+  }
+
+  /**
+   * Sync agent filter radio button UI with current state.
+   */
+  _syncAgentFilterRadios() {
+    const radioGroup = document.getElementById(
+      ELEMENT_IDS.AGENT_FILTER_CONTAINER,
+    );
+    if (!radioGroup) {
+      return;
+    }
+    radioGroup.value = state.agentTypeFilter;
+    for (const radio of radioGroup.querySelectorAll('vscode-radio')) {
+      const isActive = radio.value === state.agentTypeFilter;
+      radio.checked = isActive;
+      radio.setAttribute('aria-checked', String(isActive));
+      radio.toggleAttribute('checked', isActive);
+    }
+  }
+
+  /**
    * Update run-scoped metadata (instructions, usage, files) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
    * @param {Object} message - Message containing runInstructions, runUsage, runFiles
    */
   _updateRunMetadata(stream, message) {
-    if (message.runInstructions) {
-      Object.entries(message.runInstructions).forEach(
-        ([runId, instruction]) => {
+    const updates = [
+      [message.runInstructions, state.setRunInstruction.bind(state)],
+      [message.runUsage, state.setRunUsage.bind(state)],
+      [message.runFiles, state.setRunFiles.bind(state)],
+    ];
+    for (const [data, setter] of updates) {
+      if (data) {
+        for (const [runId, value] of Object.entries(data)) {
           if (runId) {
-            state.setRunInstruction(stream, runId, instruction);
+            setter(stream, runId, value);
           }
-        },
-      );
-    }
-
-    if (message.runUsage) {
-      Object.entries(message.runUsage).forEach(([runId, usage]) => {
-        state.setRunUsage(stream, runId, usage);
-      });
-    }
-
-    if (message.runFiles) {
-      Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
-        if (runId) {
-          state.setRunFiles(stream, runId, filesByRound);
         }
-      });
+      }
     }
   }
 
@@ -283,45 +306,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.pendingFilterUpdate = false;
     }
     state.resetExecutionIdAvailability();
-    // Preserve ERROR status when updates omit status, so errored streams
-    // remain marked as error instead of reverting to stopped. Other statuses
-    // (like RUNNING) should not be preserved when omitted, as undefined means
-    // the stream has completed (READY status is deleted from the status map).
+
+    // Process streams - preserve ERROR status when omitted
     const streams = (message.streams ?? []).map((s) => {
-      let status = s.status;
-      if (status === undefined) {
-        const cachedStatus = state.streamStatuses.get(s.name);
-        // Only preserve ERROR status; other statuses should not persist
-        status =
-          cachedStatus === STREAM_STATUS.ERROR ? cachedStatus : undefined;
-      }
-      if (status) {
-        state.streamStatuses.set(s.name, status);
-      } else {
-        state.streamStatuses.delete(s.name);
-      }
+      // Only preserve ERROR status; undefined means completed
+      const cachedError = state.streamStatuses.get(s.name);
+      const status =
+        s.status ??
+        (cachedError === STREAM_STATUS.ERROR ? cachedError : undefined);
+      state.streamStatuses.set(s.name, status);
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
     });
 
     state.setStreams(streams.map((s) => s.name));
-
     dom.streamTabs.update(streams, message.activeStream);
-
-    // Update agent filter radio group selection
-    const radioGroup = document.getElementById(
-      ELEMENT_IDS.AGENT_FILTER_CONTAINER,
-    );
-    if (radioGroup) {
-      radioGroup.value = state.agentTypeFilter;
-      // Also update the checked state on individual radio buttons
-      radioGroup.querySelectorAll('vscode-radio').forEach((radio) => {
-        const isActive = radio.value === state.agentTypeFilter;
-        radio.checked = isActive;
-        radio.setAttribute('aria-checked', isActive ? 'true' : 'false');
-        radio.toggleAttribute('checked', isActive);
-      });
-    }
+    this._syncAgentFilterRadios();
 
     this._updatePlaceholderVisibility();
 
@@ -1000,16 +1000,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearContextState(message.stream);
       if (deletingActiveStream) {
         state.activeStream = '';
-        // Reset lastRenderedStream since the rendered stream was deleted
         state.lastRenderedStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
-        dom.instructionPanel.hide();
-        dom.runSelector.clear();
-        dom.todoList.clear();
-        dom.queuedFollowUps.clear();
-        dom.fileList.clear();
-        dom.usageSummary.clearContextDisplay();
+        this._clearActivePanels();
       }
     }
 
@@ -1022,21 +1016,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.resetExecutionIdAvailability();
     state.clearStreams();
     state.activeStream = '';
-    // Reset lastRenderedStream since all streams are deleted
     state.lastRenderedStream = '';
-    dom.instructionPanel.hide();
     state.clearRunInstructions();
     state.clearRunFiles();
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     state.clearAllTodos();
     state.clearAllQueuedFollowUps();
-    state.clearContextState(); // Clear all context state entries
-    dom.runSelector.clear();
-    dom.todoList.clear();
-    dom.queuedFollowUps.clear();
-    dom.fileList.clear();
-    dom.usageSummary.clearContextDisplay();
+    state.clearContextState();
+    this._clearActivePanels();
     this._updatePlaceholderVisibility();
   }
 
