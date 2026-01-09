@@ -49,10 +49,6 @@ export async function cleanupLatexBackups(
   }
   const workspaceAbsolute = fileLocation.absolutePath;
 
-  if (!workspaceAbsolute) {
-    return;
-  }
-
   const { dir, base, name } = path.parse(workspaceAbsolute);
   const backupCandidates = new Set<string>([
     path.join(dir, `${base}.bak`),

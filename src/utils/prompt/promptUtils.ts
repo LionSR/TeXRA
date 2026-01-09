@@ -41,21 +41,13 @@ async function getXmlFormatFromFile(file: string): Promise<string> {
 export async function getXmlFormatFromFiles(
   files: string[],
 ): Promise<string | null> {
-  try {
-    if (!files || files.length === 0) {
-      return null;
-    }
-
-    const xmlPromises = files.map((file) => getXmlFormatFromFile(file));
-    const xmlContents = await Promise.all(xmlPromises);
-    return xmlContents.join('\n');
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error formatting files as XML: ${toErrorMessage(err)}`,
-    );
-    throw err;
+  if (files.length === 0) {
+    return null;
   }
+
+  const xmlPromises = files.map((file) => getXmlFormatFromFile(file));
+  const xmlContents = await Promise.all(xmlPromises);
+  return xmlContents.join('\n');
 }
 
 /**
@@ -64,19 +56,10 @@ export async function getXmlFormatFromFiles(
  * @returns Comma-separated string of file paths
  */
 export function getListOfFiles(files: string[] | null | undefined): string {
-  try {
-    if (!files || files.length === 0) {
-      return '';
-    }
-    return files
-      .filter(
-        (f): f is string => f !== null && f !== undefined && f.trim() !== '',
-      )
-      .join(', ');
-  } catch (err) {
-    logger.error(CHANNEL, `Error creating file list: ${toErrorMessage(err)}`);
-    throw err;
+  if (!files || files.length === 0) {
+    return '';
   }
+  return files.filter((f) => f.trim() !== '').join(', ');
 }
 
 /**

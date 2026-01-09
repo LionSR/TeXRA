@@ -96,13 +96,17 @@ function notifyProgressViewApprovalBypassState(): void {
   });
 }
 
-async function ensureStorageDir(): Promise<string> {
-  if (!initialized || !storageDirectory) {
+function getStorageDir(): string {
+  if (!storageDirectory) {
     throw new Error('Tool edit approval has not been initialized.');
   }
-
-  await fs.mkdir(storageDirectory, { recursive: true });
   return storageDirectory;
+}
+
+async function ensureStorageDir(): Promise<string> {
+  const dir = getStorageDir();
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
 }
 
 function resolveTempExtension(targetPath: string): string {
@@ -432,9 +436,7 @@ async function closeApprovalEditors(
 async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  if (!initialized) {
-    throw new Error('Tool edit approval has not been initialized.');
-  }
+  getStorageDir(); // Validates initialization
 
   const { path, originalContent, proposedContent, sourceTool, streamId } =
     request;
