@@ -112,16 +112,10 @@ export class EditFileTool extends defineTool({
     // an explicit read again.
     recordToolFileRead(targetPath);
 
-    const replacementSummary =
-      replace_all === true
-        ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
-        : 'Replaced 1 occurrence.';
-    const summary =
-      replace_all === true
-        ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
-            occurrences === 1 ? '' : 's'
-          }`
-        : `Edited ${targetPath}: replaced 1 occurrence`;
+    const count = replace_all === true ? occurrences : 1;
+    const pluralSuffix = count === 1 ? '' : 's';
+    const replacementSummary = `Replaced ${count} occurrence${pluralSuffix}.`;
+    const summary = `Edited ${targetPath}: replaced ${count} occurrence${pluralSuffix}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       targetPath,
