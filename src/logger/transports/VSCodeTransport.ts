@@ -16,6 +16,9 @@ import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
 import { bus } from '@eventBus/ProgressEventBus';
 
+// Pre-compute valid message types for O(1) lookup
+const VALID_MESSAGE_TYPES = new Set<unknown>(Object.values(MESSAGE_TYPES));
+
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
   streamName: string;
@@ -35,10 +38,6 @@ export class VSCodeTransport extends Transport {
     this.streamName = options.streamName;
     this.isAgentChannel = options.isAgentChannel;
     this.includeStructuredData = options.includeStructuredData;
-  }
-
-  private isValidMessageType(type: unknown): type is MessageType {
-    return Object.values(MESSAGE_TYPES).includes(type as MessageType);
   }
 
   log(info: any, callback: () => void): void {
@@ -122,37 +121,29 @@ export class VSCodeTransport extends Transport {
   }): void {
     if (!this.isAgentChannel) return;
 
-    const validatedMessageType: MessageType = this.isValidMessageType(
-      event.messageType,
-    )
-      ? event.messageType
+    const messageType: MessageType = VALID_MESSAGE_TYPES.has(event.messageType)
+      ? (event.messageType as MessageType)
       : MESSAGE_TYPES.DEFAULT;
 
     const level = event.level as 'debug' | 'info' | 'warn' | 'error';
-    const { shouldEmit, debugMode } = getEmitFilter({
-      level,
-      messageType: validatedMessageType,
-    });
+    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
     if (!shouldEmit) return;
-
-    const logMessage: LogMessageData = {
-      id: randomUUID(),
-      text: event.message,
-      level,
-      timestamp: new Date(event.timestamp).getTime(),
-      groupId: event.groupId,
-      messageType: validatedMessageType,
-      verbose: debugMode,
-      data: event.data,
-    };
 
     bus.emit('addLogMessage', {
       stream: this.streamName,
-      logMessage,
+      logMessage: {
+        id: randomUUID(),
+        text: event.message,
+        level,
+        timestamp: new Date(event.timestamp).getTime(),
+        groupId: event.groupId,
+        messageType,
+        verbose: debugMode,
+        data: event.data,
+      },
     });
 
-    // Emit context state updates for context-related message types
-    this.maybeEmitContextState(validatedMessageType, event.data);
+    this.maybeEmitContextState(messageType, event.data);
   }
 
   /**
