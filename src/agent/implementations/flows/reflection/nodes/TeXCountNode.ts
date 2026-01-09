@@ -21,7 +21,7 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-interface TeXCountPrepInput {
+interface PrepInput {
   files: FileLocation[];
   attachTeXCount: boolean;
   context: RoundContext | null;
@@ -36,7 +36,7 @@ export class TeXCountNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ReflectionFlowShared): Promise<TeXCountPrepInput> {
+  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService } = this.services;
     return {
       files: getFilesForRound(
@@ -50,24 +50,21 @@ export class TeXCountNode<C = unknown> extends Node<
     };
   }
 
-  async exec(prepRes: TeXCountPrepInput): Promise<string | null> {
+  async exec(prepRes: PrepInput): Promise<string | null> {
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
       return null;
     }
     return getTeXCountStats(prepRes.files.map((f) => f.absolutePath));
   }
 
-  async execFallback(
-    _prepRes: TeXCountPrepInput,
-    error: Error,
-  ): Promise<string | null> {
+  async execFallback(_prepRes: PrepInput, error: Error): Promise<string | null> {
     this.services.logger.debug(`TeXCount skipped: ${error.message}`);
     return null;
   }
 
   async post(
     shared: ReflectionFlowShared,
-    _prepRes: TeXCountPrepInput,
+    _prepRes: PrepInput,
     execRes: string | null,
   ): Promise<string | undefined> {
     if (execRes && shared.context) {

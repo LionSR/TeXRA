@@ -1,8 +1,5 @@
 /**
  * MediaExtractionNode - Extracts media files (figures, TikZ, PDFs) from LaTeX files.
- *
- * Note: exec() mutates workspaceState via latexMediaManager. This is acceptable
- * because NODE_NO_RETRY means no retries, so no duplicate mutations possible.
  */
 
 import { Node } from '@agent/node';
@@ -24,7 +21,7 @@ import type {
   ReflectionServices,
 } from '../ReflectionServices';
 
-interface MediaPrepInput {
+interface PrepInput {
   files: FileLocation[];
   currentRound: number;
   supportsVision: boolean;
@@ -42,19 +39,22 @@ export class MediaExtractionNode<C = unknown> extends Node<
     super(NODE_NO_RETRY, NODE_NO_WAIT);
   }
 
-  async prep(shared: ReflectionFlowShared): Promise<MediaPrepInput> {
+  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService, modelHandler } = this.services;
     const { currentRound, roundOutputs, context } = shared;
 
     const workspaceState = AgentWorkspaceState.fromSnapshot(
       shared.workspaceSnapshot,
     );
+
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
-      if (config.mediaFile)
+      if (config.mediaFile) {
         extraMediaFiles.push(fileService.createLocation(config.mediaFile));
-      for (const p of config.mediaFiles)
+      }
+      for (const p of config.mediaFiles) {
         extraMediaFiles.push(fileService.createLocation(p));
+      }
     }
 
     return {
@@ -67,7 +67,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     };
   }
 
-  async exec(prepRes: MediaPrepInput): Promise<FileLocation[] | null> {
+  async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       return null;
     }
@@ -95,7 +95,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   async execFallback(
-    _prepRes: MediaPrepInput,
+    _prepRes: PrepInput,
     error: Error,
   ): Promise<FileLocation[] | null> {
     this.services.logger.debug(`Media extraction skipped: ${error.message}`);
@@ -104,10 +104,9 @@ export class MediaExtractionNode<C = unknown> extends Node<
 
   async post(
     shared: ReflectionFlowShared,
-    prepRes: MediaPrepInput,
+    prepRes: PrepInput,
     mediaFiles: FileLocation[] | null,
   ): Promise<string | undefined> {
-    // Always update workspace snapshot since prep() reconstructed it
     shared.workspaceSnapshot = prepRes.workspaceState.toSnapshot();
 
     if (mediaFiles && mediaFiles.length > 0 && shared.context) {
