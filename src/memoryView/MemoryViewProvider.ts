@@ -51,7 +51,10 @@ export class MemoryViewProvider
     });
 
     if (!isNew && this._view) {
-      await this.messageHandler.sendMemoryData(this._view.webview);
+      await Promise.all([
+        this.messageHandler.sendMemoryData(this._view.webview),
+        this.messageHandler.sendMemoryEnabled(this._view.webview),
+      ]);
     }
   }
 }

@@ -276,3 +276,10 @@ export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
 });
 
 export type MemoryDeleteMessage = z.infer<typeof MemoryDeleteMessageSchema>;
+
+/** Memory enabled toggle message */
+export const MemoryEnabledMessageSchema = z.object({
+  enabled: z.boolean(),
+});
+
+export type MemoryEnabledMessage = z.infer<typeof MemoryEnabledMessageSchema>;
