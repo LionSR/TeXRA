@@ -462,7 +462,14 @@ interface InvocationResultHandlerOptions {
   operationName: string;
 }
 
-/** Helper to mark flow as stopped without normal completion. */
+/**
+ * Mark flow as stopped without normal completion.
+ *
+ * Sets shouldStop=true to halt the flow, and endTurn=false to indicate
+ * this was not a normal model completion (e.g., due to cancellation,
+ * failure, or empty response). This distinction is important for
+ * determining whether to persist state for resume.
+ */
 function markFlowStopped(state: { shouldStop: boolean; endTurn: boolean }): void {
   state.shouldStop = true;
   state.endTurn = false;
