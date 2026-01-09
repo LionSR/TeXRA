@@ -83,101 +83,53 @@ export class LogEntryFormatter {
   }
 
   _buildFormatterMap() {
+    // Helper to wrap formatter functions with error handling
+    const safe = (fn, label) => (message) => safeFormat(() => fn(message), label);
+
+    // Common pattern extractors for cleaner formatter definitions
+    const withPayloadAndMeta = (fn) => (message) =>
+      fn(message.normalizedPayload, message.id, message.groupId, message.timestamp);
+    const withPayloadAndId = (fn) => (message) =>
+      fn(message.normalizedPayload, message.id);
+
     return {
-      thinking: (message) =>
-        safeFormat(
-          () =>
-            formatBannerContent(
-              message.normalizedPayload,
-              'Thinking',
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'thinking',
-        ),
-      scratchpad: (message) =>
-        safeFormat(
-          () =>
-            formatBannerContent(
-              message.normalizedPayload,
-              'Scratchpad',
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'scratchpad',
-        ),
-      toolUse: (message) =>
-        safeFormat(
-          () =>
-            formatToolUse(
-              message.normalizedPayload,
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'tool use',
-        ),
-      webSearch: (message) =>
-        safeFormat(
-          () =>
-            formatWebSearch(
-              message.normalizedPayload,
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'web search',
-        ),
-      modelResponse: (message) =>
-        safeFormat(
-          () =>
-            formatModelResponse({
-              id: message.id,
-              groupId: message.groupId,
-              timestamp: message.timestamp,
-              verbose: message.verbose,
-              content: message.normalizedPayload,
-              level: message.level,
-            }),
-          'Assistant',
-        ),
-      fileList: (message) =>
-        safeFormat(
-          () => formatFileList(message.normalizedPayload, message.id),
-          'file list',
-        ),
-      missingOutputs: (message) =>
-        safeFormat(
-          () => formatMissingOutputs(message.normalizedPayload, message.id),
-          'missing outputs',
-        ),
-      latexdiff: (message) =>
-        safeFormat(
-          () => formatLatexdiff(message.normalizedPayload, message.id),
-          'latexdiff',
-        ),
-      statistics: (message) =>
-        safeFormat(
-          () => formatStatistics(message.normalizedPayload, message.id),
-          'statistics',
-        ),
+      thinking: safe(
+        withPayloadAndMeta((payload, id, groupId, ts) =>
+          formatBannerContent(payload, 'Thinking', id, groupId, ts)),
+        'thinking',
+      ),
+      scratchpad: safe(
+        withPayloadAndMeta((payload, id, groupId, ts) =>
+          formatBannerContent(payload, 'Scratchpad', id, groupId, ts)),
+        'scratchpad',
+      ),
+      toolUse: safe(withPayloadAndMeta(formatToolUse), 'tool use'),
+      webSearch: safe(withPayloadAndMeta(formatWebSearch), 'web search'),
+      modelResponse: safe(
+        (message) =>
+          formatModelResponse({
+            id: message.id,
+            groupId: message.groupId,
+            timestamp: message.timestamp,
+            verbose: message.verbose,
+            content: message.normalizedPayload,
+            level: message.level,
+          }),
+        'Assistant',
+      ),
+      fileList: safe(withPayloadAndId(formatFileList), 'file list'),
+      missingOutputs: safe(withPayloadAndId(formatMissingOutputs), 'missing outputs'),
+      latexdiff: safe(withPayloadAndId(formatLatexdiff), 'latexdiff'),
+      statistics: safe(withPayloadAndId(formatStatistics), 'statistics'),
       // Context state is displayed in the footer, not inline in logs
       contextState: () => null,
-      userMessage: (message) =>
-        safeFormat(
-          () =>
-            formatUserMessage(
-              message.normalizedPayload,
-              message.id,
-              message.timestamp,
-            ),
-          'user message',
-        ),
-      progressStatus: (message) =>
-        safeFormat(() => formatProgressStatus(message), 'progress status'),
-      error: (message) => safeFormat(() => formatError(message), 'error'),
+      userMessage: safe(
+        (message) =>
+          formatUserMessage(message.normalizedPayload, message.id, message.timestamp),
+        'user message',
+      ),
+      progressStatus: safe((message) => formatProgressStatus(message), 'progress status'),
+      error: safe((message) => formatError(message), 'error'),
     };
   }
 
