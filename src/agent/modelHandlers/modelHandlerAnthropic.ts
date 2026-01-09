@@ -586,9 +586,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Add thinking block clearing strategy if reasoning is enabled
         // NOTE: The Anthropic API doesn't support a trigger for thinking clearing,
         // so we implement client-side triggering by only including the edit when
-        // token count exceeds the threshold (or when count is unavailable).
+        // token count is measured and exceeds the threshold.
         const shouldClearThinking =
-          measuredInputTokens === undefined ||
+          measuredInputTokens !== undefined &&
           measuredInputTokens >= triggerTokens;
 
         if (
