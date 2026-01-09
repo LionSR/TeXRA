@@ -250,7 +250,15 @@ export class ProgressViewProvider
 
     // Frontend detects stream switches using its own lastRenderedStream tracking.
     // Backend just sends data with action: 'render', frontend decides if rebuild needed.
-    this.eventHandler.refreshStreamSurface(activeStream || '');
+    //
+    // IMPORTANT: Only call refreshStreamSurface('') if there truly are no streams.
+    // If activeStream is empty but streams exist in state, this is likely a temporary
+    // filter mismatch (e.g., during resume flow). Calling refreshStreamSurface('')
+    // would send action: 'clear' and wipe the frontend display incorrectly.
+    const hasStreams = this.state.streamTabs.keys().length > 0;
+    if (activeStream || !hasStreams) {
+      this.eventHandler.refreshStreamSurface(activeStream || '');
+    }
 
     this._pendingUpdateOptions = null;
   }
