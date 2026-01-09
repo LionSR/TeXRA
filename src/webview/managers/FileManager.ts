@@ -263,76 +263,107 @@ export class FileManager extends BaseWebviewManager {
     const currentOpenFile = await vscode.commands.executeCommand<string>(
       'texra.getCurrentFile',
     );
-    if (currentOpenFile) {
-      let commitCheckFile: string | null = null;
-      if (fileType === 'edited') {
-        const baseFile = message.baseFile;
-        if (baseFile) {
-          const baseFileName = path.basename(baseFile, path.extname(baseFile));
-          const currentFileName = path.basename(
-            currentOpenFile,
-            path.extname(currentOpenFile),
-          );
-          if (
-            currentFileName.startsWith(baseFileName) &&
-            currentFileName !== baseFileName
-          ) {
-            this.postMessage({
-              command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-              filePath: currentOpenFile,
-              fileType,
-            });
-            commitCheckFile = currentOpenFile;
-          } else {
-            vscode.window.showInformationMessage(
-              'The current file is not a valid edited version of the base file.',
-            );
-          }
-        } else {
-          vscode.window.showInformationMessage(
-            'Please select a base file first.',
-          );
-        }
-      } else {
-        let filePathToSelect = currentOpenFile;
-        if (fileType === 'base') {
-          const derivedBaseFile =
-            this._deriveBaseFileFromLatexDiff(currentOpenFile);
-          if (derivedBaseFile) {
-            const baseExists = await WorkspaceFS.exists(derivedBaseFile);
-            if (baseExists) {
-              await this.handleRequestBaseFile({
-                command: 'requestBaseFile',
-                preserveBaseFile: true,
-              });
-              filePathToSelect = derivedBaseFile;
-            } else {
-              logger.info(
-                CHANNEL,
-                `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
-              );
-              vscode.window.showInformationMessage(
-                `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
-              );
-            }
-          }
-        }
 
-        this.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
-          filePath: filePathToSelect,
-          fileType,
-        });
-        commitCheckFile = currentOpenFile;
-      }
-      if (commitCheckFile) {
-        await this._maybeSelectCommitFromDiffFile(commitCheckFile);
-      }
-    } else {
+    if (!currentOpenFile) {
       vscode.window.showInformationMessage(
         'No file is currently open or the file is not part of the workspace.',
       );
+      return;
     }
+
+    // Handle edited file type separately due to base file validation
+    if (fileType === 'edited') {
+      await this.handleGetCurrentEditedFile(currentOpenFile, message.baseFile);
+      return;
+    }
+
+    // Handle base and other file types
+    const filePathToSelect = await this.resolveFilePathForType(
+      currentOpenFile,
+      fileType,
+    );
+
+    this.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+      filePath: filePathToSelect,
+      fileType,
+    });
+
+    await this._maybeSelectCommitFromDiffFile(currentOpenFile);
+  }
+
+  /**
+   * Handle selection of current file as edited file.
+   * Validates that the file is a valid edited version of the base file.
+   */
+  private async handleGetCurrentEditedFile(
+    currentOpenFile: string,
+    baseFile?: string,
+  ): Promise<void> {
+    if (!baseFile) {
+      vscode.window.showInformationMessage('Please select a base file first.');
+      return;
+    }
+
+    const baseFileName = path.basename(baseFile, path.extname(baseFile));
+    const currentFileName = path.basename(
+      currentOpenFile,
+      path.extname(currentOpenFile),
+    );
+
+    const isValidEditedFile =
+      currentFileName.startsWith(baseFileName) &&
+      currentFileName !== baseFileName;
+
+    if (!isValidEditedFile) {
+      vscode.window.showInformationMessage(
+        'The current file is not a valid edited version of the base file.',
+      );
+      return;
+    }
+
+    this.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_CURRENT_FILE,
+      filePath: currentOpenFile,
+      fileType: 'edited',
+    });
+
+    await this._maybeSelectCommitFromDiffFile(currentOpenFile);
+  }
+
+  /**
+   * Resolve file path for base file type, deriving from latex diff if applicable.
+   */
+  private async resolveFilePathForType(
+    currentOpenFile: string,
+    fileType: string,
+  ): Promise<string> {
+    if (fileType !== 'base') {
+      return currentOpenFile;
+    }
+
+    const derivedBaseFile = this._deriveBaseFileFromLatexDiff(currentOpenFile);
+    if (!derivedBaseFile) {
+      return currentOpenFile;
+    }
+
+    const baseExists = await WorkspaceFS.exists(derivedBaseFile);
+    if (!baseExists) {
+      logger.info(
+        CHANNEL,
+        `Derived base file ${derivedBaseFile} from ${currentOpenFile} does not exist on disk`,
+      );
+      vscode.window.showInformationMessage(
+        `The base file ${derivedBaseFile} could not be found. Keeping ${currentOpenFile} selected.`,
+      );
+      return currentOpenFile;
+    }
+
+    await this.handleRequestBaseFile({
+      command: 'requestBaseFile',
+      preserveBaseFile: true,
+    });
+    return derivedBaseFile;
   }
 
   private async _maybeSelectCommitFromDiffFile(
@@ -493,34 +524,27 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private async getOpenedFiles(): Promise<string[]> {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
+    if (!WorkspaceFS.getPath()) {
       logger.warn(CHANNEL, 'No workspace path found for opened files');
       return [];
     }
 
-    // Use tabGroups to get only files actually open in tabs
-    // (workspace.textDocuments includes closed files still in memory)
-    const openedFiles: string[] = [];
-    for (const tabGroup of vscode.window.tabGroups.all) {
-      for (const tab of tabGroup.tabs) {
-        // TabInputText: regular text files (.tex, .md, etc.)
-        // TabInputCustom: media files opened in custom editors (images, PDFs)
-        const input = tab.input;
-        if (
+    // Extract file URIs from all tabs (text files and custom editors like images/PDFs)
+    const fileUris = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .map((tab) => tab.input)
+      .filter(
+        (input): input is vscode.TabInputText | vscode.TabInputCustom =>
           input instanceof vscode.TabInputText ||
-          input instanceof vscode.TabInputCustom
-        ) {
-          const uri = input.uri;
-          if (uri.scheme === 'file') {
-            openedFiles.push(workspace.asRelativePath(uri.fsPath, false));
-          }
-        }
-      }
-    }
+          input instanceof vscode.TabInputCustom,
+      )
+      .map((input) => input.uri)
+      .filter((uri) => uri.scheme === 'file');
 
-    // Remove duplicates (same file can be open in multiple tab groups)
-    const relevantFiles = [...new Set(openedFiles)];
+    // Convert to relative paths and deduplicate
+    const relevantFiles = [
+      ...new Set(fileUris.map((uri) => workspace.asRelativePath(uri.fsPath, false))),
+    ];
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
