@@ -251,25 +251,15 @@ export class RunSelector {
   }
 
   _getSortedRuns() {
+    const toTime = (val) => {
+      if (typeof val === 'number') return val;
+      if (!val) return 0;
+      const parsed = Date.parse(val);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
     return Array.from(this._runs.values()).sort((a, b) => {
-      const aTime =
-        typeof a.startTime === 'number'
-          ? a.startTime
-          : a.startTime
-            ? Date.parse(a.startTime)
-            : 0;
-      const bTime =
-        typeof b.startTime === 'number'
-          ? b.startTime
-          : b.startTime
-            ? Date.parse(b.startTime)
-            : 0;
-      const safeATime = Number.isNaN(aTime) ? 0 : aTime;
-      const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
-      if (safeATime === safeBTime) {
-        return a.id.localeCompare(b.id);
-      }
-      return safeATime - safeBTime;
+      const diff = toTime(a.startTime) - toTime(b.startTime);
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
     });
   }
 
