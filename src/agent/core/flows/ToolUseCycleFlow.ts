@@ -522,6 +522,12 @@ class ToolUseProcessNode<C> extends BaseNode<
         usage,
         prepRes.responseTimeMs ?? 0,
       );
+      // Emit context state for UI display (centralized for all model handlers)
+      const { inputTokens } = normalizedUsage;
+      const { contextWindow } = services.modelHandler.config;
+      if (inputTokens > 0 && contextWindow > 0) {
+        services.logger.logContextState(inputTokens, contextWindow);
+      }
     }
 
     const endTurn = services.modelHandler.isEndTurnStop(stopReason);
