@@ -94,8 +94,11 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     if (bypassButton) {
       const allowBypass = request.allowBypass !== false;
+      const isActive = Boolean(this.isBypassActive);
       bypassButton.toggleAttribute('disabled', !allowBypass);
-      bypassButton.checked = Boolean(this.isBypassActive);
+      // VS Code web components require both property and attribute for visual sync
+      bypassButton.checked = isActive;
+      bypassButton.toggleAttribute('checked', isActive);
     }
   }
 
