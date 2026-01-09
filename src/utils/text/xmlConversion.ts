@@ -27,14 +27,19 @@ const CHANNEL = 'xmlConversion';
 logger.initialize(CHANNEL);
 
 /**
- * Cached promise for pandoc availability check.
- * Uses a single promise variable - once resolved, will always return same value.
+ * Cached pandoc availability check.
+ * Caches positive results permanently, but clears on failure to allow retry
+ * (e.g., if user installs pandoc mid-session).
  */
 let pandocCheckPromise: Promise<boolean> | null = null;
 
 async function isPandocAvailable(): Promise<boolean> {
   if (pandocCheckPromise === null) {
-    pandocCheckPromise = checkToolInstalled('pandoc', false).catch(() => false);
+    pandocCheckPromise = checkToolInstalled('pandoc', false).catch(() => {
+      // Clear cache on failure to allow retry next time
+      pandocCheckPromise = null;
+      return false;
+    });
   }
   return pandocCheckPromise;
 }
