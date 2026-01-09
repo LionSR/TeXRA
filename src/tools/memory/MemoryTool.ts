@@ -143,7 +143,15 @@ export class MemoryTool extends defineTool({
   ): Promise<ToolResult> {
     const resolvedPath = this.resolveMemoryPath(inputPath);
     const exists = await StorageFS.exists(resolvedPath);
+
+    // Handle non-existent root directory gracefully - return empty listing
+    // instead of error (consistent with MemoryViewMessageHandler behavior)
     if (!exists) {
+      if (resolvedPath === MEMORY_STORAGE_ROOT) {
+        return {
+          output: `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
+        };
+      }
       throw new ToolError(
         `The path ${inputPath} does not exist. Please provide a valid path.`,
       );
