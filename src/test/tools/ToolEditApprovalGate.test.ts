@@ -88,7 +88,10 @@ describe('Tool edit approval gating', () => {
 
     assert.strictEqual(appendCalled, false);
     assert.strictEqual(result.isError, true);
-    assert.strictEqual(result.error, 'Rejected by user');
+    // Rejection message is explicit; user feedback goes to userInstruction
+    assert.strictEqual(result.error, 'User rejected file_op for summary.txt.');
+    assert.strictEqual(result.output, 'User rejected file_op for summary.txt.');
+    assert.strictEqual(result.userInstruction, 'Rejected by user');
   });
 
   it('write_file skips approval when disabled via config', async () => {
