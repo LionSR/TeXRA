@@ -28,9 +28,7 @@ export const yamlCommands = {
   testYamlBrackets: 'texra.testYamlBrackets',
 };
 
-export async function handleTestAgentLoading(
-  _context: vscode.ExtensionContext,
-): Promise<void> {
+export async function handleTestAgentLoading(): Promise<void> {
   try {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
@@ -81,9 +79,7 @@ export async function handleTestAgentLoading(
   }
 }
 
-export async function handleLoadSpecificAgent(
-  _context: vscode.ExtensionContext,
-): Promise<void> {
+export async function handleLoadSpecificAgent(): Promise<void> {
   try {
     // Get agent name from user
     const agentName = await vscode.window.showInputBox({
@@ -133,9 +129,7 @@ export async function handleLoadSpecificAgent(
   }
 }
 
-export async function handleParseYaml(
-  _context: vscode.ExtensionContext,
-): Promise<void> {
+export async function handleParseYaml(): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({
       allowedExtensions: ['.yaml', '.yml'],
@@ -237,17 +231,19 @@ export async function handleTestYamlBrackets(
   }
 }
 
-export function registerYamlCommands(context: vscode.ExtensionContext) {
+export function registerYamlCommands(
+  context: vscode.ExtensionContext,
+): typeof yamlCommands {
   context.subscriptions.push(
-    vscode.commands.registerCommand(yamlCommands.testAgentLoading, () =>
-      handleTestAgentLoading(context),
+    vscode.commands.registerCommand(
+      yamlCommands.testAgentLoading,
+      handleTestAgentLoading,
     ),
-    vscode.commands.registerCommand(yamlCommands.loadSpecificAgent, () =>
-      handleLoadSpecificAgent(context),
+    vscode.commands.registerCommand(
+      yamlCommands.loadSpecificAgent,
+      handleLoadSpecificAgent,
     ),
-    vscode.commands.registerCommand(yamlCommands.parseYaml, () =>
-      handleParseYaml(context),
-    ),
+    vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
     vscode.commands.registerCommand(yamlCommands.testYamlBrackets, () =>
       handleTestYamlBrackets(context),
     ),

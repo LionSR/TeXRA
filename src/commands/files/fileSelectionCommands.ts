@@ -58,7 +58,7 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
 
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
-) {
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.selectInputFile', selectInputFile),
     vscode.commands.registerCommand('texra.selectInputFiles', selectInputFiles),
@@ -181,15 +181,21 @@ async function selectOutputFiles(
 }
 
 async function selectEditedFile(): Promise<string | null> {
-  const result = await selectFile({
-    openLabel: 'Select Edited File',
-    filters: {},
-  });
-  if (result) {
-    vscode.window.showInformationMessage(`Selected edited file: ${result}`);
-    logger.info(CHANNEL, `Selected edited file: ${result}`);
+  try {
+    const result = await selectFile({
+      openLabel: 'Select Edited File',
+      filters: {},
+    });
+    if (result) {
+      const message = `Selected edited file: ${result}`;
+      vscode.window.showInformationMessage(message);
+      logger.info(CHANNEL, message);
+    }
+    return result;
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, 'Error selecting edited file', err);
+    return null;
   }
-  return result;
 }
 
 async function getCurrentFile(): Promise<string | null> {
@@ -214,15 +220,25 @@ async function getCurrentFile(): Promise<string | null> {
 }
 
 async function selectBaseFile(): Promise<string | null> {
-  const result = await selectFile({
-    openLabel: 'Select Base File',
-    filters: {
-      'Text files': getIncludedExtensions('input').map((ext) =>
-        ext.replace('.', ''),
-      ),
-    },
-  });
-  return result ?? null;
+  try {
+    const result = await selectFile({
+      openLabel: 'Select Base File',
+      filters: {
+        'Text files': getIncludedExtensions('input').map((ext) =>
+          ext.replace('.', ''),
+        ),
+      },
+    });
+    if (result) {
+      const message = `Selected base file: ${result}`;
+      vscode.window.showInformationMessage(message);
+      logger.info(CHANNEL, message);
+    }
+    return result ?? null;
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, 'Error selecting base file', err);
+    return null;
+  }
 }
 
 export const fileSelectionCommands = {
