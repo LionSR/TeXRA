@@ -40,20 +40,21 @@ export function buildStreamInfos(
     let sessionCategory =
       taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
 
-    // Filter logic: streams without category only show when filter is "all"
+    // Filter logic: check if stream matches the current filter
     if (!sessionCategory) {
+      // Streams without category only show when filter is "all"
       if (filter !== 'all') {
         return acc;
       }
-      // Default to Workflow for display purposes only when filter is "all"
       sessionCategory = AgentCategory.Workflow;
-    } else {
-      // Inline filter matching: check if session category matches filter
-      const matchesFilter =
-        filter === 'all' ||
-        (filter === 'toolUse' && sessionCategory === AgentCategory.ToolUse) ||
-        (filter === 'workflow' && sessionCategory === AgentCategory.Workflow);
-      if (!matchesFilter) {
+    } else if (filter !== 'all') {
+      // Check if session category matches filter
+      const filterMap: Record<AgentFilter, AgentCategory | null> = {
+        all: null,
+        toolUse: AgentCategory.ToolUse,
+        workflow: AgentCategory.Workflow,
+      };
+      if (filterMap[filter] !== sessionCategory) {
         return acc;
       }
     }
@@ -69,13 +70,13 @@ export function buildStreamInfos(
       ? isRemoteAgent(rawAgentName)
       : (hints.isRemote ?? false);
     const executionId = state.getExecutionId(id);
+
     // Build label: tool-use shows agent only, workflows show agent + file basename
-    const label =
-      sessionCategory === AgentCategory.ToolUse
-        ? agentName
-        : inputFile
-          ? `${agentName}: ${path.basename(inputFile)}`
-          : agentName;
+    let label = agentName;
+    if (sessionCategory !== AgentCategory.ToolUse && inputFile) {
+      label = `${agentName}: ${path.basename(inputFile)}`;
+    }
+
     acc.push({
       name: id,
       label,
