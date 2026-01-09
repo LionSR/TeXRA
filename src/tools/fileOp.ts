@@ -94,7 +94,7 @@ export class FileOpTool extends defineTool({
 
         const userDiffNote = formatUnifiedApprovalUserDiff(
           path,
-          finalContent,
+          proposed,
           appliedContent,
         );
 
@@ -166,7 +166,7 @@ export class FileOpTool extends defineTool({
         const appliedContent = await WorkspaceFS.read(path);
         const userDiffNote = formatUnifiedApprovalUserDiff(
           path,
-          finalContent,
+          proposedContent,
           appliedContent,
         );
 

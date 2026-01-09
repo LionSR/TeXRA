@@ -81,7 +81,7 @@ export class WriteFileTool extends defineTool({
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       input.path,
-      finalContent,
+      proposedContent,
       appliedContent,
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
