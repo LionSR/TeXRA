@@ -50,11 +50,6 @@ const service = new LaTeXdiffService(CHANNEL);
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
-/** Select the primary file to use, preferring baseFile over inputFile. */
-function selectFile(baseFile: string, inputFile: string): string {
-  return baseFile ?? inputFile;
-}
-
 /**
  * Ensures the required latexdiff tool is installed before running a command.
  * @param tool The tool name to verify.
@@ -182,7 +177,7 @@ async function handleLatexdiff(
     return;
   }
 
-  const fileToUse = selectFile(baseFile, inputFile);
+  const fileToUse = baseFile ?? inputFile;
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff'))) {
       return;
@@ -223,7 +218,7 @@ async function handleLatexdiffvc(
   baseFile: string,
   commitHash: string,
 ) {
-  const fileToUse = selectFile(baseFile, inputFile);
+  const fileToUse = baseFile ?? inputFile;
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
@@ -272,7 +267,7 @@ async function handlePackLatexdiffvc(
       CHANNEL,
       `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
     );
-    const fileToUse = selectFile(baseFile, inputFile);
+    const fileToUse = baseFile ?? inputFile;
     await runPackLatexdiffvc(fileToUse, commitHash, clean);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diff', err);
@@ -314,7 +309,7 @@ async function handleCleanLatexdiffvc(
       CHANNEL,
       `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
     );
-    const fileToUse = selectFile(baseFile, inputFile);
+    const fileToUse = baseFile ?? inputFile;
     await runCleanLatexdiffvc(fileToUse, commitHash);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diff', err);
