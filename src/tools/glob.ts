@@ -96,7 +96,7 @@ export class GlobTool extends defineTool({
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
     return {
-      summary: `glob "${input.pattern}" under ${display}`,
+      summary: `Matched: "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };
   }

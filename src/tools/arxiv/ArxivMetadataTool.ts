@@ -82,7 +82,7 @@ export class ArxivMetadataTool extends defineTool({
     };
 
     return {
-      summary: `Retrieved metadata for arXiv ID ${metadata.id}`,
+      summary: `Retrieved: ${metadata.id}`,
       output: JSON.stringify(metadata, null, 2),
     };
   }
