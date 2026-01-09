@@ -54,6 +54,19 @@ function getDefaultState() {
   };
 }
 
+const INTERACTIVE_ELEMENT_SELECTORS = [
+  'select',
+  'button',
+  'input',
+  'vscode-button',
+  'vscode-toolbar-button',
+  'vscode-single-select',
+  'vscode-textarea',
+  'vscode-textfield',
+  'vscode-checkbox',
+  'vscode-radio',
+].join(', ');
+
 function setFileSelectionGroupDisabled(isDisabled) {
   const container = document.querySelector('.file-selection-group');
   if (!(container instanceof HTMLElement)) {
@@ -61,29 +74,14 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   container.classList.toggle('file-selection-group--disabled', isDisabled);
-  if (isDisabled) {
-    container.setAttribute('aria-disabled', 'true');
-  } else {
-    container.removeAttribute('aria-disabled');
-  }
+  container.toggleAttribute('aria-disabled', isDisabled);
 
   const interactiveElements = container.querySelectorAll(
-    [
-      'select',
-      'button',
-      'input',
-      'vscode-button',
-      'vscode-toolbar-button',
-      'vscode-single-select',
-      'vscode-textarea',
-      'vscode-textfield',
-      'vscode-checkbox',
-      'vscode-radio',
-    ].join(', '),
+    INTERACTIVE_ELEMENT_SELECTORS,
   );
-  interactiveElements.forEach((element) => {
-    setElementDisabled(element, isDisabled);
-  });
+  interactiveElements.forEach((element) =>
+    setElementDisabled(element, isDisabled),
+  );
 }
 
 function getSelectDefaultValue(selectId, fallback) {

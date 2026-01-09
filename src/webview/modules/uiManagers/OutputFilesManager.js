@@ -34,35 +34,15 @@ export class OutputFilesManager {
     outputFilesDiv.innerHTML = '';
     const inputFile = inputFileDiv?.value;
 
-    if (inputFile) {
-      if (state.outputFiles && state.outputFiles.length > 0) {
-        state.outputFiles.forEach((file) => {
-          this.fileList.add(OUTPUT_FILES_ID, file);
-        });
-      } else if (
-        this.fileSelect.getAgentDefaultOutputFiles().length > 0 &&
-        (!state.outputFiles || state.outputFiles.length === 0)
-      ) {
-        this.fileSelect.getAgentDefaultOutputFiles().forEach((file) => {
-          this.fileList.add(OUTPUT_FILES_ID, file);
-        });
-      } else {
-        this.fileList.add(OUTPUT_FILES_ID, inputFileDiv?.value);
-        if (state.inputFiles && state.inputFiles.length > 0) {
-          state.inputFiles.forEach((file) => {
-            if (file !== inputFile) {
-              this.fileList.add(OUTPUT_FILES_ID, file);
-            }
-          });
-        }
-      }
-    }
+    // Determine initial files to display (priority order)
+    const initialFiles = this._getInitialOutputFiles(state, inputFile);
+    initialFiles.forEach((file) => this.fileList.add(OUTPUT_FILES_ID, file));
 
-    const openedFiles = this.state.get()?.openedFiles ?? [];
-    openedFiles.forEach((file) => {
-      this.fileList.add(OUTPUT_FILES_ID, file);
-    });
+    // Add any opened files from workspace
+    const openedFiles = state?.openedFiles ?? [];
+    openedFiles.forEach((file) => this.fileList.add(OUTPUT_FILES_ID, file));
 
+    // Show placeholder if empty
     if (outputFilesDiv.children.length === 0) {
       const placeholder = document.createElement('div');
       placeholder.className = 'file-list-placeholder';
@@ -72,6 +52,28 @@ export class OutputFilesManager {
     }
 
     this.state.save();
+  }
+
+  /** Determine which files to initially show based on state priority */
+  _getInitialOutputFiles(state, inputFile) {
+    if (!inputFile) return [];
+
+    // Priority 1: Previously saved output files
+    if (state.outputFiles?.length > 0) {
+      return state.outputFiles;
+    }
+
+    // Priority 2: Agent default output files
+    const agentDefaults = this.fileSelect.getAgentDefaultOutputFiles();
+    if (agentDefaults.length > 0) {
+      return agentDefaults;
+    }
+
+    // Priority 3: Input file + additional input files
+    const files = [inputFile];
+    const additionalInputs =
+      state.inputFiles?.filter((f) => f !== inputFile) ?? [];
+    return files.concat(additionalInputs);
   }
 
   /** Toggle visibility of the output files container */
