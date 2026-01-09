@@ -1099,6 +1099,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const reasoningTokens =
       rawUsage.output_tokens_details?.reasoning_tokens ?? 0;
 
+    // Emit context state for UI display (fallback for when token counting doesn't emit it)
+    if (inputTokens > 0 && this.config.contextWindow > 0) {
+      this.logger.logContextState(inputTokens, this.config.contextWindow);
+    }
+
     // Calculate percentage cached
     const percentageCached =
       inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;

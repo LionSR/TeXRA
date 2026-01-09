@@ -940,6 +940,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const { inputTokens, outputTokens, reasoningTokens } =
       this.computeTokenCounts(rawUsage);
 
+    // Emit context state for UI display (fallback for when token counting doesn't emit it)
+    if (inputTokens > 0 && this.config.contextWindow > 0) {
+      this.logger.logContextState(inputTokens, this.config.contextWindow);
+    }
+
     const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
     const percentageCached =
       inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
