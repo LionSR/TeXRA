@@ -67,7 +67,9 @@ export class ProgressEventHandler {
    * Update agentTypeFilter to match the session category if needed.
    * Only updates when filter is not 'all' and doesn't already match.
    */
-  private maybeUpdateFilterForCategory(category: AgentCategory | undefined): void {
+  private maybeUpdateFilterForCategory(
+    category: AgentCategory | undefined,
+  ): void {
     if (
       category &&
       this.state.agentTypeFilter !== 'all' &&

@@ -63,7 +63,7 @@ export class CrossrefDoiTool extends defineTool({
     };
 
     return {
-      summary: `Retrieved Crossref metadata for DOI ${metadata.doi}`,
+      summary: `Retrieved: DOI ${metadata.doi}`,
       output: JSON.stringify(metadata, null, 2),
     };
   }
