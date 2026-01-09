@@ -17,6 +17,7 @@ import type {
   StorageKey,
   StreamTabId,
 } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
@@ -457,18 +458,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         // Defensive fallback: executionId and outputFiles are persisted independently,
         // so edge cases (data migration, partial state) could leave files without executionId.
         // Extract directory from actual file paths.
-        for (const infos of runOutputs.values()) {
-          for (const info of infos) {
-            if (
-              info.location.kind === 'runStorage' ||
-              info.location.kind === 'workspace'
-            ) {
-              directoryToReveal = path.dirname(info.location.absolutePath);
-              break;
-            }
-          }
-          if (directoryToReveal) break;
-        }
+        directoryToReveal = this.findOutputDirectory(runOutputs);
       }
 
       if (!directoryToReveal) {
@@ -617,10 +607,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
 
     const outputFilesArray = [...allFiles];
-    const useMultipleOutputs =
-      taskState.agentConfig.useMultipleOutputs ??
-      taskState.activeFiles.output ??
-      outputFilesArray.length > 1;
+
+    // Determine if multiple outputs mode is active (explicit config takes priority)
+    let useMultipleOutputs: boolean;
+    if (taskState.agentConfig.useMultipleOutputs !== undefined) {
+      useMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
+    } else if (taskState.activeFiles.output !== undefined) {
+      useMultipleOutputs = taskState.activeFiles.output;
+    } else {
+      useMultipleOutputs = outputFilesArray.length > 1;
+    }
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agentConfig.agent,
@@ -667,5 +663,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
     await execute(message.file, message.base);
+  }
+
+  /**
+   * Find the directory of the first valid output file from run outputs.
+   * Returns undefined if no suitable file location is found.
+   */
+  private findOutputDirectory(
+    runOutputs: Map<number, OutputFileInfo[]>,
+  ): string | undefined {
+    for (const infos of runOutputs.values()) {
+      for (const info of infos) {
+        const kind = info.location.kind;
+        if (kind === 'runStorage' || kind === 'workspace') {
+          return path.dirname(info.location.absolutePath);
+        }
+      }
+    }
+    return undefined;
   }
 }
