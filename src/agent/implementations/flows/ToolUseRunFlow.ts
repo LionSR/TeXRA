@@ -271,13 +271,14 @@ class ToolUsePrepareNode<C> extends Node<
         },
       );
 
+    const systemMessage = systemPrompt
+      ? `${systemPrompt}\n${instructionSuffix}`
+      : instructionSuffix;
     const messages = await modelHandler.initializeMessages(
       userPrefix,
       userRequest,
       undefined,
-      systemPrompt
-        ? `${systemPrompt}\n${instructionSuffix}`
-        : instructionSuffix,
+      systemMessage,
     );
 
     return {
@@ -446,11 +447,6 @@ class ToolUseCycleNode<C> extends Node<
       // Return messages explicitly to ensure they're synced in post()
       // cycleShared.messages was mutated during the cycle flow
       return { kind: 'success', messages: cycleShared.messages };
-    } catch (error) {
-      return {
-        kind: 'failed',
-        message: error instanceof Error ? error.message : String(error),
-      };
     } finally {
       // Clear the todo update callback to prevent memory leaks
       prepRes.workspaceState.todos.clearOnUpdate();
@@ -531,14 +527,8 @@ class ToolUseWaitNode<C> extends Node<
    * PocketFlow compliance: Extract data, no blocking I/O here.
    */
   async prep(_shared: ToolUseRunShared): Promise<WaitNodePrepResult> {
-    const checkInterruption = this.services.checkInterruption;
-
-    // Check interruption first - if interrupted, skip exec entirely
-    if (checkInterruption()) {
-      return { interrupted: true };
-    }
-
-    return { interrupted: false };
+    const interrupted = this.services.checkInterruption();
+    return { interrupted };
   }
 
   /**
@@ -564,7 +554,6 @@ class ToolUseWaitNode<C> extends Node<
     // Wait for follow-up (blocking I/O - errors caught by execFallback)
     const followUp = await session.waitForFollowUp(checkInterruption);
 
-    // Check interruption after wait
     if (!followUp || checkInterruption()) {
       return { kind: 'stop', reason: 'interrupted' };
     }
