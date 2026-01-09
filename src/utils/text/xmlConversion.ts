@@ -35,10 +35,12 @@ let pandocCheckPromise: Promise<boolean> | null = null;
 
 async function isPandocAvailable(): Promise<boolean> {
   if (pandocCheckPromise === null) {
-    pandocCheckPromise = checkToolInstalled('pandoc', false).catch(() => {
-      // Clear cache on failure to allow retry next time
-      pandocCheckPromise = null;
-      return false;
+    pandocCheckPromise = checkToolInstalled('pandoc', false).then((result) => {
+      // Clear cache on negative result to allow retry next time
+      if (!result) {
+        pandocCheckPromise = null;
+      }
+      return result;
     });
   }
   return pandocCheckPromise;
