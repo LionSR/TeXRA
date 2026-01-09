@@ -622,7 +622,7 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  // Caller (mergeCommands.ts) handles error display via showLoggedErrorMessage
+  // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
   const ctx = await resolveAgentBase('merge', {
     agent: 'merge',
     model,
