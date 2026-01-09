@@ -4,9 +4,7 @@
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
@@ -20,53 +18,22 @@ import {
 import type { ToolUseServices } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
-// ============================================================================
-// Context Initialization
-// ============================================================================
-
-/**
- * Configuration for creating tool-use flow services.
- *
- * Extends BaseFlowContextInit with tool-use specific fields.
- */
+/** Configuration for creating tool-use flow services. */
 export interface ToolUseFlowContextInit<
   C = unknown,
 > extends BaseFlowContextInit<C> {
-  /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
-
-  /** Optional tool registry override */
   toolRegistry?: IToolRegistry;
-
-  /** Optional snapshot for session resume */
   resumeSnapshot?: ToolUseSessionSnapshot | null;
-
-  /** Optional usage tracking callback */
   getUsageRecorder?: () => RoundFinalizedCallback;
-
-  /** Optional callback when a queued follow-up is consumed */
   onFollowUpConsumed?: () => void;
 }
 
-// ============================================================================
-// Context Object (simple object, not a class)
-// ============================================================================
-
-/**
- * Tool-use flow context returned by factory function.
- * Contains services and lifecycle methods.
- */
+/** Tool-use flow context returned by factory function. */
 export interface ToolUseFlowContext<C = unknown> {
-  /** Services for flow execution */
   services: ToolUseServices<C>;
-
-  /** Session lifecycle manager */
   session: ToolUseSessionLifecycle;
-
-  /** Interrupt the session */
   interrupt(): void;
-
-  /** Dispose context resources */
   dispose(): void;
 }
 
@@ -119,15 +86,9 @@ function resolveTools(params: ResolveToolsParams): ToolDefinition[] {
 export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
 ): ToolUseFlowContext<C> {
-  const {
-    setting,
-    logger,
-    streamId,
-    toolRegistry: customRegistry,
-    resumeSnapshot,
-  } = init;
+  const { setting, logger, streamId, resumeSnapshot } = init;
 
-  const toolRegistry = customRegistry ?? getDefaultToolRegistry();
+  const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
   const resolvedTools = resolveTools({
@@ -136,10 +97,9 @@ export function createToolUseFlowContext<C = unknown>(
     logger,
   });
 
-  // Spread init directly - it already contains setting, logger, etc.
   const services: ToolUseServices<C> = {
     ...init,
-    toolRegistry, // May differ from init if defaulted
+    toolRegistry,
     session: sessionLifecycle,
     resolvedTools,
     snapshot: resumeSnapshot ?? null,

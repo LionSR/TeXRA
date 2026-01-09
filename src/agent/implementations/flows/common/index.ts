@@ -1,10 +1,7 @@
 /**
  * Common agent flow infrastructure.
  *
- * Re-exports from:
- * - AgentRunFlowRunner: Flow runner utilities
- * - BaseFlowServices: Base types, accessors, and cycle options builder
+ * Exports base types, constants, and service interfaces for all flow types.
  */
 
-export * from './AgentRunFlowRunner';
 export * from './BaseFlowServices';
