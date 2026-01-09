@@ -107,45 +107,16 @@ export function applyLatexQuotesFormatting(text: string): string {
  * already escaped are preserved so the helper is idempotent.
  */
 export function escapeTextttUnderscores(text: string): string {
-  const textttRegex = /\\texttt\{([^}]*)\}/g;
-  let totalReplacements = 0;
-
-  const processedText = text.replaceAll(
-    textttRegex,
-    (_match, rawContent: string) => {
-      let replacementCount = 0;
-      // (?<!\\)_ matches underscore not preceded by backslash
-      // This ensures we don't double-escape already escaped underscores
-      const processedContent = rawContent.replaceAll(/(?<!\\)_/g, () => {
-        replacementCount += 1;
-        totalReplacements += 1;
-        return '\\_';
-      });
-
-      logger.debug(
-        CHANNEL,
-        `Escaped ${replacementCount} underscores in texttt block`,
-      );
-
-      return `\\texttt{${processedContent}}`;
-    },
+  // (?<!\\)_ matches underscore not preceded by backslash
+  // This ensures we don't double-escape already escaped underscores
+  return text.replaceAll(
+    /\\texttt\{([^}]*)\}/g,
+    (_, content: string) => `\\texttt{${content.replaceAll(/(?<!\\)_/g, '\\_')}}`,
   );
-
-  logger.debug(
-    CHANNEL,
-    `Finished escaping texttt underscores: ${totalReplacements} replacements total`,
-  );
-
-  return processedText;
 }
 
-/**
- * Helper function to convert Unicode characters to LaTeX commands
- * within math environments only
- */
-export function replaceMathUnicode(text: string): string {
-  // Map of Unicode characters to their LaTeX equivalents
-  const mathUnicodeMap: { [key: string]: string } = {
+// Map of Unicode characters to their LaTeX equivalents
+const MATH_UNICODE_MAP: { [key: string]: string } = {
     // Greek letters (alphabetical)
     α: '\\alpha', // alpha
     β: '\\beta', // beta
@@ -299,53 +270,55 @@ export function replaceMathUnicode(text: string): string {
 
     // Combining Diacritics (experimental - may need pre-processing for ideal LaTeX)
     // '̇': '\\dot{}', // combining dot above (U+0307) - User commented out
-  };
+};
 
-  // Environment patterns to search for
-  const mathEnvironments = [
-    { start: '\\begin{equation}', end: '\\end{equation}' },
-    { start: '\\begin{equation*}', end: '\\end{equation*}' },
-    { start: '\\begin{align}', end: '\\end{align}' },
-    { start: '\\begin{align*}', end: '\\end{align*}' },
-    { start: '\\begin{aligned}', end: '\\end{aligned}' },
-    { start: '\\begin{multline}', end: '\\end{multline}' },
-    { start: '\\begin{gather}', end: '\\end{gather}' },
-    { start: '\\begin{cases}', end: '\\end{cases}' },
-    { start: '\\[', end: '\\]' },
-    { start: '$$', end: '$$' },
-  ];
+// Math environment delimiters to search for
+const MATH_ENVIRONMENTS = [
+  { start: '\\begin{equation}', end: '\\end{equation}' },
+  { start: '\\begin{equation*}', end: '\\end{equation*}' },
+  { start: '\\begin{align}', end: '\\end{align}' },
+  { start: '\\begin{align*}', end: '\\end{align*}' },
+  { start: '\\begin{aligned}', end: '\\end{aligned}' },
+  { start: '\\begin{multline}', end: '\\end{multline}' },
+  { start: '\\begin{gather}', end: '\\end{gather}' },
+  { start: '\\begin{cases}', end: '\\end{cases}' },
+  { start: '\\[', end: '\\]' },
+  { start: '$$', end: '$$' },
+];
 
-  // Process each math environment
-  for (const env of mathEnvironments) {
+/**
+ * Convert Unicode characters and HTML sub/sup tags to LaTeX within math content.
+ */
+function convertMathContent(content: string): string {
+  let result = content;
+  for (const [unicode, latex] of Object.entries(MATH_UNICODE_MAP)) {
+    result = result.replaceAll(unicode, latex);
+  }
+  return result
+    .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
+    .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
+}
+
+/**
+ * Helper function to convert Unicode characters to LaTeX commands
+ * within math environments only
+ */
+export function replaceMathUnicode(text: string): string {
+  // Process each block math environment
+  for (const env of MATH_ENVIRONMENTS) {
     let startIdx = 0;
-    // Continue searching for math environments from where we left off
     while ((startIdx = text.indexOf(env.start, startIdx)) !== -1) {
       const envStart = startIdx + env.start.length;
       const envEnd = text.indexOf(env.end, envStart);
 
-      // If we can't find the end, skip this instance
       if (envEnd === -1) {
         startIdx += env.start.length;
         continue;
       }
 
-      // Extract the content of the math environment
       const mathContent = text.substring(envStart, envEnd);
+      const replacedContent = convertMathContent(mathContent);
 
-      // Apply Unicode replacements within the math content
-      // Replace Unicode characters with LaTeX commands, then HTML sub/sup tags
-      const replacedContent = Object.entries(mathUnicodeMap)
-        .reduce(
-          (content, [unicode, latex]) =>
-            content.replaceAll(new RegExp(unicode, 'g'), latex),
-          mathContent,
-        )
-        // Replace HTML subscript tags with LaTeX subscript syntax
-        .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
-        // Replace HTML superscript tags with LaTeX superscript syntax
-        .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
-
-      // Replace the original math content with the processed one
       if (replacedContent !== mathContent) {
         text =
           text.substring(0, envStart) +
@@ -353,29 +326,14 @@ export function replaceMathUnicode(text: string): string {
           text.substring(envEnd);
       }
 
-      // Move past this environment
       startIdx = envStart + replacedContent.length;
     }
   }
 
-  // Also handle inline math with $ ... $
-  const inlineMathPattern = /\$(.*?)\$/g;
-  text = text.replaceAll(inlineMathPattern, (_match, p1) => {
-    // Replace Unicode characters with LaTeX commands, then HTML sub/sup tags
-    const content = Object.entries(mathUnicodeMap)
-      .reduce(
-        (c, [unicode, latex]) => c.replaceAll(new RegExp(unicode, 'g'), latex),
-        p1 as string,
-      )
-      // Replace HTML subscript tags with LaTeX subscript syntax
-      .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
-      // Replace HTML superscript tags with LaTeX superscript syntax
-      .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
-
-    return `$${content}$`;
+  // Handle inline math with $ ... $
+  return text.replaceAll(/\$(.*?)\$/g, (_, p1: string) => {
+    return `$${convertMathContent(p1)}$`;
   });
-
-  return text;
 }
 
 /**
