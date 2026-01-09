@@ -917,7 +917,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
         // Check if file exists (ignore errors)
         try {
-          return (await AbsoluteFS.exists(location.absolutePath)) ? location : null;
+          return (await AbsoluteFS.exists(location.absolutePath))
+            ? location
+            : null;
         } catch {
           return null;
         }

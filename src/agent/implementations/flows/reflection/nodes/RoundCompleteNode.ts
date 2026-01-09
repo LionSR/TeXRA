@@ -84,7 +84,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
     }
 
     // Continue to next round
-    logger.debug(`Round ${displayCurrent} complete, continuing to round ${displayNext}`);
+    logger.debug(
+      `Round ${displayCurrent} complete, continuing to round ${displayNext}`,
+    );
     return { kind: 'continue' };
   }
 

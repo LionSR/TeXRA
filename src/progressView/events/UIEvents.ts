@@ -48,7 +48,8 @@ function registerEvent<K extends ProgressEvent>(
 ): void {
   bus.on(
     event,
-    (payload) => withEventErrorHandling(MODULE, context, () => handler(payload)),
+    (payload) =>
+      withEventErrorHandling(MODULE, context, () => handler(payload)),
     { signal },
   );
 }
@@ -63,11 +64,41 @@ export function registerUIEvents(
   signal: AbortSignal,
 ): void {
   // Retry events
-  registerEvent(bus, 'showRetryRequest', callbacks.showRetryRequest, 'failed to show retry request', signal);
-  registerEvent(bus, 'resolveRetryRequest', (p) => callbacks.resolveRetryRequest(p.streamId), 'failed to resolve retry request', signal);
+  registerEvent(
+    bus,
+    'showRetryRequest',
+    callbacks.showRetryRequest,
+    'failed to show retry request',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolveRetryRequest',
+    (p) => callbacks.resolveRetryRequest(p.streamId),
+    'failed to resolve retry request',
+    signal,
+  );
 
   // Approval events
-  registerEvent(bus, 'showToolEditApprovalPrompt', callbacks.showToolEditApprovalPrompt, 'failed to show approval prompt', signal);
-  registerEvent(bus, 'resolveToolEditApprovalPrompt', (p) => callbacks.resolveToolEditApprovalPrompt(p.requestId), 'failed to resolve approval prompt', signal);
-  registerEvent(bus, 'updateToolEditApprovalBypassState', (p) => callbacks.updateToolEditApprovalBypassState(p.bypassActive), 'failed to update approval bypass state', signal);
+  registerEvent(
+    bus,
+    'showToolEditApprovalPrompt',
+    callbacks.showToolEditApprovalPrompt,
+    'failed to show approval prompt',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'resolveToolEditApprovalPrompt',
+    (p) => callbacks.resolveToolEditApprovalPrompt(p.requestId),
+    'failed to resolve approval prompt',
+    signal,
+  );
+  registerEvent(
+    bus,
+    'updateToolEditApprovalBypassState',
+    (p) => callbacks.updateToolEditApprovalBypassState(p.bypassActive),
+    'failed to update approval bypass state',
+    signal,
+  );
 }
