@@ -101,14 +101,17 @@ export class WebviewUpdater {
   /**
    * Update log content for a specific stream.
    *
-   * Behavior based on flags:
-   * - `clearContent: true` → Explicitly clear DOM content (for stream deletion, no active stream)
-   * - `forceRebuild: true` with messages → Clear and rebuild with new content (stream switch)
-   * - `forceRebuild: true` without messages → Preserve existing content (safety guard)
-   * - `forceRebuild: false` → Incremental update only (metadata changes)
+   * Action types:
+   * - `'render'` (default): Send data to display. Frontend detects stream switch
+   *   by comparing message.stream with its lastRenderedStream. If stream changed,
+   *   frontend clears and rebuilds. If same stream, frontend does incremental update.
+   * - `'clear'`: Explicitly clear DOM content (for stream deletion, no active stream).
+   *   Frontend always clears, even without messages.
    *
-   * @param forceRebuild - Whether a full DOM rebuild is intended
-   * @param clearContent - Whether to explicitly clear content (use for intentional clearing)
+   * This design moves stream switch detection to the frontend (which tracks
+   * lastRenderedStream) and removes the need for backend to track render state.
+   *
+   * @param action - The action type: 'render' (default) or 'clear'
    */
   updateLogContent(
     stream: StreamTabId,
@@ -120,8 +123,7 @@ export class WebviewUpdater {
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
-    forceRebuild: boolean = false,
-    clearContent: boolean = false,
+    action: 'render' | 'clear' = 'render',
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -132,8 +134,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
-      forceRebuild,
-      clearContent,
+      action,
     });
   }
 
