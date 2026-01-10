@@ -21,10 +21,6 @@ import { WorkspaceFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 
-// Local imports - tools
-
-// Local imports - utils
-
 const WriteInputSchema = z.strictObject({
   path: z.string(),
   content: z.string(),
@@ -73,15 +69,11 @@ export class WriteFileTool extends defineTool({
       finalContent,
     );
 
-    // Record the file as "read" after writing so subsequent edits don't require
-    // an explicit read. This is especially important for new files that were
-    // just created - without this, any immediate edit would fail with
-    // "prior read required" even though the user just wrote the file.
     recordToolFileRead(input.path);
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       input.path,
-      finalContent,
+      proposedContent,
       appliedContent,
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';

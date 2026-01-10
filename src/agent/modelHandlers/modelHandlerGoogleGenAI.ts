@@ -75,6 +75,10 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
+import {
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -192,42 +196,36 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const requestedLevel = this.capabilities.reasoningEffort;
     const isGemini3 = this.isGemini3Model();
 
-    if (requestedLevel === ReasoningEffort.NONE) {
-      if (isGemini3) {
-        // Gemini 3 Pro only supports LOW/HIGH; Flash supports MINIMAL but still requires
-        // thought signatures. Use LOW for minimal latency when thinking is "disabled".
-        this.logger.warn(
-          "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
-        );
+    switch (requestedLevel) {
+      case ReasoningEffort.NONE:
+        if (isGemini3) {
+          this.logger.warn(
+            "Gemini 3 models can't fully disable thinking. Using thinking_level 'LOW'.",
+          );
+          return ThinkingLevel.LOW;
+        }
+        return undefined;
+
+      case ReasoningEffort.LOW:
         return ThinkingLevel.LOW;
-      }
-      return undefined;
-    }
 
-    if (requestedLevel === ReasoningEffort.LOW) {
-      return ThinkingLevel.LOW;
-    }
+      case ReasoningEffort.MEDIUM:
+        // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
+        if (isGemini3 && this.config.fullName.includes('-pro')) {
+          this.logger.debug(
+            'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
+          );
+          return ThinkingLevel.HIGH;
+        }
+        return ThinkingLevel.MEDIUM;
 
-    if (requestedLevel === ReasoningEffort.MEDIUM) {
-      // Gemini 3 Pro only supports LOW/HIGH; MEDIUM falls back to HIGH for Pro
-      if (isGemini3 && this.config.fullName.includes('-pro')) {
-        this.logger.debug(
-          'Gemini 3 Pro does not support MEDIUM thinking level. Using HIGH.',
-        );
+      case ReasoningEffort.HIGH:
+      case ReasoningEffort.XHIGH:
         return ThinkingLevel.HIGH;
-      }
-      return ThinkingLevel.MEDIUM;
-    }
 
-    // HIGH and XHIGH both map to ThinkingLevel.HIGH (the maximum in Google's SDK)
-    if (
-      requestedLevel === ReasoningEffort.HIGH ||
-      requestedLevel === ReasoningEffort.XHIGH
-    ) {
-      return ThinkingLevel.HIGH;
+      default:
+        return undefined;
     }
-
-    return undefined;
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -470,8 +468,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
-        // Emit context state for UI display
-        this.logger.logContextState(totalTokens, this.config.contextWindow);
         if (totalTokens > this.config.contextWindow) {
           this.logger.error(
             `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
@@ -480,15 +476,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             `Token count of message exceeds context window: ${totalTokens} > ${this.config.contextWindow}`,
           );
         }
-        if (
-          this.config.contextWindow - totalTokens <
-          (generationConfig.maxOutputTokens ?? 8192)
-        ) {
-          this.logger.warn(
-            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${generationConfig.maxOutputTokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - totalTokens}.`,
+        const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
+        const availableTokens = this.config.contextWindow - totalTokens;
+        if (availableTokens < originalMaxTokens) {
+          const reducedMaxTokens = computeReducedMaxTokens(
+            availableTokens,
+            TOKEN_SAFETY_BUFFER,
           );
-          generationConfig.maxOutputTokens =
-            this.config.contextWindow - totalTokens - 10;
+          const utilizationPercent =
+            (totalTokens / this.config.contextWindow) * 100;
+          this.logger.logContextManagement(
+            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: totalTokens,
+              contextWindow: this.config.contextWindow,
+              utilizationBefore: utilizationPercent,
+              originalMaxTokens,
+              reducedMaxTokens,
+              details: 'Google: maxOutputTokens reduced to fit context window',
+            },
+          );
+          generationConfig.maxOutputTokens = reducedMaxTokens;
         }
       } catch (err) {
         // Re-throw context window violations - these are intentional validation errors
@@ -497,6 +506,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           throw err;
         }
         // Soft failure for token counting API errors - proceed without adjustment
+        // Log warning to match OpenAI/Anthropic handler behavior for consistency
         this.logger.warn(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );
@@ -1118,7 +1128,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
-    // Note: workspace state already updated above (lines 1062-1063)
     const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,

@@ -10,6 +10,14 @@ import {
 } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
+// Classes that support toggle icon updates
+const TOGGLE_ICON_CLASSES = [
+  'banner-details',
+  'file-list-details',
+  'latexdiff-details',
+  'statistics-details',
+];
+
 /**
  * Manages event handling and state application.
  */
@@ -72,13 +80,15 @@ export class EventsManager {
       'click',
       (e) => {
         const element = e.target.closest('[data-command]');
-        if (element && element.dataset.command) {
-          const data = { command: element.dataset.command };
-          if (element.dataset.file) data.file = element.dataset.file;
-          if (element.dataset.base) data.base = element.dataset.base;
-          if (element.dataset.prev) data.prev = element.dataset.prev;
-          vscode.postMessage(data);
-        }
+        if (!element?.dataset.command) return;
+
+        const { command, file, base, prev } = element.dataset;
+        vscode.postMessage({
+          command,
+          ...(file && { file }),
+          ...(base && { base }),
+          ...(prev && { prev }),
+        });
       },
       true,
     );
@@ -139,7 +149,7 @@ export class EventsManager {
       }
     }
 
-    // Handle banner-details and file-list-details toggle events
+    // Handle toggle events for collapsible details elements
     document.addEventListener(
       'toggle',
       (e) => {
@@ -148,81 +158,62 @@ export class EventsManager {
           return;
         }
 
-        if (
-          target.classList.contains('banner-details') ||
-          target.classList.contains('file-list-details') ||
-          target.classList.contains('latexdiff-details') ||
-          target.classList.contains('statistics-details')
-        ) {
-          const toggleIcon = target.querySelector('.toggle-icon');
-          if (toggleIcon) {
-            const isOpen = target.open;
-            setChevronIconHorizontal(toggleIcon, isOpen);
-          }
+        const hasToggleClass = TOGGLE_ICON_CLASSES.some((cls) =>
+          target.classList.contains(cls),
+        );
+        if (!hasToggleClass) return;
+
+        const toggleIcon = target.querySelector('.toggle-icon');
+        if (toggleIcon) {
+          setChevronIconHorizontal(toggleIcon, target.open);
         }
       },
       true,
     );
 
-    // Handle clicks on file links inside file-list-details blocks
-    document.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const link = e.target.closest('.file-link');
-      if (link && link.dataset.file) {
+    // Unified click handler for document-level interactions
+    document.addEventListener('click', async (e) => {
+      if (!(e.target instanceof Element)) return;
+
+      // File link clicks
+      const fileLink = e.target.closest('.file-link');
+      if (fileLink?.dataset.file) {
         vscode.postMessage({
           command: COMMANDS.OPEN_FILE,
-          file: link.dataset.file,
+          file: fileLink.dataset.file,
         });
-      }
-    });
-
-    // Handle copy actions for banner content
-    document.addEventListener('click', async (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const copyButton = e.target.closest('.banner-content-copy');
-      if (!copyButton) {
         return;
       }
 
-      // Prevent collapsible from toggling when clicking action buttons
-      e.stopPropagation();
-
-      const contentElem = copyButton
-        .closest('.banner-details')
-        ?.querySelector('.banner-content');
-      if (!contentElem) {
-        return;
-      }
-
-      const rawContent = contentElem.dataset.rawContent;
-      const textToCopy = rawContent ?? contentElem.textContent ?? '';
-      if (!textToCopy.trim()) {
-        return;
-      }
-
-      await copyWithFeedback(copyButton, textToCopy, {
-        defaultTitle:
-          copyButton.dataset.defaultTitle ||
-          copyButton.getAttribute('title') ||
-          'Copy content',
-        successTitle: copyButton.dataset.successTitle || 'Copied!',
-      });
-    });
-
-    // Handle clicks on LaTeX references within logs
-    document.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element)) {
-        return;
-      }
-      const ref = e.target.closest('.latex-ref');
-      if (ref && ref.dataset.label) {
+      // LaTeX reference clicks
+      const latexRef = e.target.closest('.latex-ref');
+      if (latexRef?.dataset.label) {
         vscode.postMessage({
           command: COMMANDS.OPEN_LABEL,
-          label: ref.dataset.label,
+          label: latexRef.dataset.label,
+        });
+        return;
+      }
+
+      // Banner content copy
+      const copyButton = e.target.closest('.banner-content-copy');
+      if (copyButton) {
+        e.stopPropagation();
+        const contentElem = copyButton
+          .closest('.banner-details')
+          ?.querySelector('.banner-content');
+        if (!contentElem) return;
+
+        const textToCopy =
+          contentElem.dataset.rawContent ?? contentElem.textContent ?? '';
+        if (!textToCopy.trim()) return;
+
+        await copyWithFeedback(copyButton, textToCopy, {
+          defaultTitle:
+            copyButton.dataset.defaultTitle ||
+            copyButton.getAttribute('title') ||
+            'Copy content',
+          successTitle: copyButton.dataset.successTitle || 'Copied!',
         });
       }
     });

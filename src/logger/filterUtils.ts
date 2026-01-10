@@ -14,11 +14,8 @@ export interface FilterResult {
   debugMode: boolean;
 }
 
-/**
- * Get the current debug mode setting.
- * Single source of truth for debug mode configuration.
- */
-export function getDebugMode(): boolean {
+/** Get the current debug mode setting. */
+function getDebugMode(): boolean {
   return getConfig<boolean>('texra.logger.debugMode', false);
 }
 
@@ -29,23 +26,12 @@ export function getDebugMode(): boolean {
  * This filtering logic is shared between:
  * - VSCodeTransport.emitLogEvent() (winston transport path)
  * - AgentLogger.createStream() (stream-based logging path)
- *
- * @param options - The log level and message type to filter
- * @returns Object with shouldEmit boolean and debugMode state
  */
 export function getEmitFilter(options: FilterOptions): FilterResult {
   const debugMode = getDebugMode();
-
-  // Always filter INTERNAL messages from progress view
-  // (these are implementation details, not user-facing content)
-  if (options.messageType === MESSAGE_TYPES.INTERNAL) {
-    return { shouldEmit: false, debugMode };
-  }
-
-  // Filter debug-level messages when not in debug mode
-  if (options.level === 'debug' && !debugMode) {
-    return { shouldEmit: false, debugMode };
-  }
-
-  return { shouldEmit: true, debugMode };
+  // Filter: INTERNAL messages always hidden; debug-level messages hidden unless debugMode
+  const shouldEmit =
+    options.messageType !== MESSAGE_TYPES.INTERNAL &&
+    (options.level !== 'debug' || debugMode);
+  return { shouldEmit, debugMode };
 }

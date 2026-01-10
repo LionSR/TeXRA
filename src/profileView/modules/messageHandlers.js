@@ -22,34 +22,21 @@ export class ProfileViewMessageHandler extends BaseWebviewMessageHandler {
     // - []: no models available (unauthenticated, or Max tier with failed config fetch)
     // - string[]: specific models allowed (Max tier with successful config)
     // Note: undefined fallback to [] handles potential message serialization edge cases
-    const allowedModels =
-      message.allowedModels === undefined ? [] : message.allowedModels;
-
-    // Update state
-    profileViewState.updateProfile({
+    const profileData = {
       authenticated: message.authenticated,
       user: message.user,
       tier: message.tier,
       remoteAgents: message.remoteAgents,
       apiAccessMode: message.apiAccessMode,
       enabledProviders: message.enabledProviders ?? [],
-      allowedModels,
+      allowedModels:
+        message.allowedModels === undefined ? [] : message.allowedModels,
       tierConstants: message.tierConstants,
       accessExpiresAt: message.accessExpiresAt ?? null,
-    });
+    };
 
-    // Update UI
-    profileViewDomHandler.agentsTable.render({
-      authenticated: message.authenticated,
-      user: message.user,
-      tier: message.tier,
-      remoteAgents: message.remoteAgents,
-      apiAccessMode: message.apiAccessMode,
-      enabledProviders: message.enabledProviders ?? [],
-      allowedModels,
-      tierConstants: message.tierConstants,
-      accessExpiresAt: message.accessExpiresAt ?? null,
-    });
+    profileViewState.updateProfile(profileData);
+    profileViewDomHandler.agentsTable.render(profileData);
   }
 }
 

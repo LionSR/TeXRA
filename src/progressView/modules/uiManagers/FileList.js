@@ -42,47 +42,29 @@ export class FileList {
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
 
-    // Tool-use mode: files append directly to container without round headers
-    // Workflow mode: each round gets its own collapsible details with a header
-
     let hasFiles = false;
-    rounds.forEach((round) => {
+    for (const round of rounds) {
       const files = filesByRound[round];
-      if (!Array.isArray(files)) {
-        if (files !== undefined) {
-          console.warn(
-            `FileList.update: Expected array for round ${round}, got:`,
-            typeof files,
-            files,
-          );
-        }
-        return;
-      }
-      if (files.length === 0) return;
+      if (!Array.isArray(files) || files.length === 0) continue;
 
       hasFiles = true;
 
+      // Determine target container based on mode
+      let target = container;
       if (showRoundHeaders) {
-        // Workflow mode: create collapsible round group for each round
         const roundGroup = createFromTemplate('roundHeaderTemplate');
-        if (!roundGroup) return;
-        // roundGroup is the vscode-collapsible root element
+        if (!roundGroup) continue;
         roundGroup.setAttribute('title', `r${round}`);
         const roundContent = roundGroup.querySelector('.round-content');
-        if (!roundContent) return;
-
-        files.forEach((file) => {
-          this._renderFileItem(template, roundContent, file, round);
-        });
-
+        if (!roundContent) continue;
+        target = roundContent;
         container.appendChild(roundGroup);
-      } else {
-        // Tool-use mode: append files directly to container
-        files.forEach((file) => {
-          this._renderFileItem(template, container, file, round);
-        });
       }
-    });
+
+      files.forEach((file) =>
+        this._renderFileItem(template, target, file, round),
+      );
+    }
 
     // Show/hide collapsible based on whether files were actually rendered
     setVisibilityState(collapsible, hasFiles);
@@ -139,10 +121,9 @@ export class FileList {
 
     // Handle diff stats (use schema field names: added/removed)
     if (statsSpan) {
-      if (file.diff?.added !== undefined && file.diff?.removed !== undefined) {
-        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
-      } else if (file.diff?.added !== undefined) {
-        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
+      const statsHtml = this._buildDiffStatsHtml(file.diff);
+      if (statsHtml) {
+        statsSpan.innerHTML = statsHtml;
       } else {
         statsSpan.remove();
       }
@@ -165,65 +146,65 @@ export class FileList {
    * @private
    */
   updateFileButtons(clone, file, effectiveBase) {
-    const buttonConfigs = [
-      {
-        selector: '.compare-btn',
-        command: COMMANDS.COMPARE_ORIGINAL,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.accept-btn',
-        command: COMMANDS.ACCEPT_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.merge-btn',
-        command: COMMANDS.MERGE_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.diff-btn',
-        command: COMMANDS.LATEXDIFF_FILE,
-        condition: effectiveBase,
-      },
-      {
-        selector: '.prev-btn',
-        command: COMMANDS.COMPARE_PREVIOUS,
-        condition: file.lineage?.diffBase?.absolutePath,
-        configure: (btn, basePath) => {
-          btn.dataset.prev = file.lineage?.diffBase?.absolutePath;
-          if (basePath) {
-            btn.dataset.base = basePath;
-          }
-        },
-      },
+    const filePath = file.location.absolutePath;
+    const diffBase = file.lineage?.diffBase?.absolutePath;
+
+    // Standard buttons that use effectiveBase
+    const standardButtons = [
+      { selector: '.compare-btn', command: COMMANDS.COMPARE_ORIGINAL },
+      { selector: '.accept-btn', command: COMMANDS.ACCEPT_FILE },
+      { selector: '.merge-btn', command: COMMANDS.MERGE_FILE },
+      { selector: '.diff-btn', command: COMMANDS.LATEXDIFF_FILE },
     ];
 
-    buttonConfigs.forEach(({ selector, command, condition, configure }) => {
-      const button = clone.querySelector(selector);
-      if (!button) {
-        return;
-      }
-      if (condition) {
-        button.dataset.command = command;
-        button.dataset.file = file.location.absolutePath;
-        if (configure) {
-          configure(button, effectiveBase);
-        } else {
-          button.dataset.base = effectiveBase;
-        }
+    for (const { selector, command } of standardButtons) {
+      const btn = clone.querySelector(selector);
+      if (!btn) continue;
+      if (effectiveBase) {
+        btn.dataset.command = command;
+        btn.dataset.file = filePath;
+        btn.dataset.base = effectiveBase;
       } else {
-        button.style.display = 'none';
+        btn.style.display = 'none';
       }
-    });
+    }
 
-    // Add dataset for the file path link
+    // Previous button has special handling
+    const prevBtn = clone.querySelector('.prev-btn');
+    if (prevBtn) {
+      if (diffBase) {
+        prevBtn.dataset.command = COMMANDS.COMPARE_PREVIOUS;
+        prevBtn.dataset.file = filePath;
+        prevBtn.dataset.prev = diffBase;
+        if (effectiveBase) prevBtn.dataset.base = effectiveBase;
+      } else {
+        prevBtn.style.display = 'none';
+      }
+    }
+
+    // File path link
     const filePathSpan = clone.querySelector('.file-path');
     if (filePathSpan) {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
-      filePathSpan.dataset.file = file.location.absolutePath;
+      filePathSpan.dataset.file = filePath;
     }
+  }
+
+  /**
+   * Build HTML for diff stats display.
+   * @private
+   * @param {Object|undefined} diff - Diff stats with added/removed counts
+   * @returns {string|null} HTML string or null if no stats to show
+   */
+  _buildDiffStatsHtml(diff) {
+    if (diff?.added === undefined) return null;
+    const addedSpan = `<span class="added">+${diff.added}</span>`;
+    const removedSpan =
+      diff.removed !== undefined
+        ? `<span class="removed">-${diff.removed}</span>`
+        : '';
+    return addedSpan + removedSpan;
   }
 
   /**

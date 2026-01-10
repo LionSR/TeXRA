@@ -254,15 +254,14 @@ export class LaTeXdiffService {
         }
       }
 
-      const summary = [
-        'LaTeX diff operations completed:',
-        results.success.length > 0
-          ? `\nSuccessful:\n${results.success.join('\n')}`
-          : '',
-        results.failed.length > 0
-          ? `\nFailed:\n${results.failed.join('\n')}`
-          : '',
-      ].join('');
+      const summaryParts = ['LaTeX diff operations completed:'];
+      if (results.success.length > 0) {
+        summaryParts.push(`Successful:\n${results.success.join('\n')}`);
+      }
+      if (results.failed.length > 0) {
+        summaryParts.push(`Failed:\n${results.failed.join('\n')}`);
+      }
+      const summary = summaryParts.join('\n');
 
       logger.info(this.channel, summary);
 
@@ -279,29 +278,30 @@ export class LaTeXdiffService {
   async runDiffForRound(
     baseLocation: FileLocation,
     outputLocation: FileLocation,
-    _round: number,
+    round: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const baseFile = baseLocation.absolutePath;
-      const outputFile = outputLocation.absolutePath;
-      const baseExists = await flexibleFS.exists(baseLocation);
-      const outputExists = await flexibleFS.exists(outputLocation);
-      if (baseExists && outputExists) {
-        return await this.runDiff(
-          baseLocation,
-          outputLocation,
-          '_diff',
-          false,
-          mathMarkup,
-          options,
-        );
+      const [baseExists, outputExists] = await Promise.all([
+        flexibleFS.exists(baseLocation),
+        flexibleFS.exists(outputLocation),
+      ]);
+
+      if (!baseExists || !outputExists) {
+        const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
+        logger.warn(this.channel, message);
+        return { success: false, message };
       }
 
-      const message = `Could not generate latexdiff for round ${_round}. Files not found: ${baseFile} or ${outputFile}`;
-      logger.warn(this.channel, message);
-      return { success: false, message };
+      return await this.runDiff(
+        baseLocation,
+        outputLocation,
+        '_diff',
+        false,
+        mathMarkup,
+        options,
+      );
     } catch (err) {
       return this.logDiffError('Error in runDiffForRound', err);
     }
@@ -314,36 +314,35 @@ export class LaTeXdiffService {
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const outputFile1 = firstLocation.absolutePath;
-      const outputFile2 = secondLocation.absolutePath;
-      const firstExists = await flexibleFS.exists(firstLocation);
-      const secondExists = await flexibleFS.exists(secondLocation);
-      if (firstExists && secondExists) {
-        const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
-        const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
+      const [firstExists, secondExists] = await Promise.all([
+        flexibleFS.exists(firstLocation),
+        flexibleFS.exists(secondLocation),
+      ]);
 
-        if (!firstRoundMatch || !secondRoundMatch) {
-          const message = 'Could not extract round numbers from file names';
-          logger.warn(this.channel, message);
-          return { success: false, message };
-        }
-
-        const firstRound = firstRoundMatch[1];
-        const secondRound = secondRoundMatch[1];
-        const diffSuffix = `_diffr${secondRound}r${firstRound}`;
-        return await this.runDiff(
-          firstLocation,
-          secondLocation,
-          diffSuffix,
-          false,
-          mathMarkup,
-          options,
-        );
+      if (!firstExists || !secondExists) {
+        const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
+        logger.warn(this.channel, message);
+        return { success: false, message };
       }
 
-      const message = `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`;
-      logger.warn(this.channel, message);
-      return { success: false, message };
+      const firstRoundMatch = firstLocation.absolutePath.match(/_r(\d+)_/);
+      const secondRoundMatch = secondLocation.absolutePath.match(/_r(\d+)_/);
+
+      if (!firstRoundMatch || !secondRoundMatch) {
+        const message = 'Could not extract round numbers from file names';
+        logger.warn(this.channel, message);
+        return { success: false, message };
+      }
+
+      const diffSuffix = `_diffr${secondRoundMatch[1]}r${firstRoundMatch[1]}`;
+      return await this.runDiff(
+        firstLocation,
+        secondLocation,
+        diffSuffix,
+        false,
+        mathMarkup,
+        options,
+      );
     } catch (err) {
       return this.logDiffError('Error in runDiffBetweenRounds', err);
     }

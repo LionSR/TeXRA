@@ -49,12 +49,11 @@ export function checkForMassiveRepetition(
       longestMatch.length > REPETITION_DETECTION_THRESHOLD;
 
     if (massiveRepetitionDetected) {
-      logger.error(CHANNEL, `Repetition ratio: ${ratio}`);
+      const preview = longestMatch.slice(0, REPETITION_PREVIEW_LENGTH);
       logger.error(
         CHANNEL,
-        `Longest matching substring(preview): ${longestMatch.slice(0, REPETITION_PREVIEW_LENGTH)}`,
+        `Massive repetition detected - ratio: ${ratio}, preview: ${preview}. Stopping process.`,
       );
-      logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
     }
 
     return {

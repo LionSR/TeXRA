@@ -200,6 +200,13 @@ export async function refreshModelListIfNeeded(): Promise<void> {
   }
 }
 
+/** Default options for global settings that should only be set if not already configured */
+const GLOBAL_IF_UNSET = {
+  target: vscode.ConfigurationTarget.Global,
+  prefix: false,
+  ifUnset: true,
+} as const;
+
 /**
  * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
  */
@@ -215,105 +222,52 @@ export async function configureLatexSettings() {
         'extension',
         'LaTeX Workshop extension detected, configuring settings',
       );
-      // Update LaTeX Workshop build settings
-      await updateConfig(
-        'latex-workshop.latex.external.build.args',
-        ['--output-directory=build', '-f', '-pdf'],
-        {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        },
-      );
 
-      await updateConfig('latex-workshop.latex.outDir', '%DIR%/build/', {
-        target: vscode.ConfigurationTarget.Global,
-        prefix: false,
-        ifUnset: true,
-      });
-
-      // Add nonstopmode magic arguments for LaTeX Workshop
-      await updateConfig(
-        'latex-workshop.latex.magic.args',
+      // Define all settings to configure
+      const settings: Array<[string, unknown]> = [
+        // LaTeX Workshop build settings
         [
-          '-synctex=1',
-          '-interaction=nonstopmode',
-          '-file-line-error',
-          '%DOCFILE%',
-          '-pdf',
-          '-f',
+          'latex-workshop.latex.external.build.args',
+          ['--output-directory=build', '-f', '-pdf'],
         ],
-        {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        },
-      );
+        ['latex-workshop.latex.outDir', '%DIR%/build/'],
+        [
+          'latex-workshop.latex.magic.args',
+          [
+            '-synctex=1',
+            '-interaction=nonstopmode',
+            '-file-line-error',
+            '%DOC%',
+            '-pdf',
+            '-f',
+          ],
+        ],
+        ['latex-workshop.formatting.latex', 'latexindent'],
+        // Language-specific editor settings
+        [
+          '[latex]',
+          { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
+        ],
+        ['[latex]', { 'intellisense.update.delay': 1000 }],
+        ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
+        // Explorer settings
+        ['explorer.autoRevealExclude', { 'build/': true }],
+        ['explorer.autoReveal', false],
+      ];
 
-      // Configure LaTeX formatting
-      await updateConfig('latex-workshop.formatting.latex', 'latexindent', {
-        target: vscode.ConfigurationTarget.Global,
-        prefix: false,
-        ifUnset: true,
-      });
-
-      // Configure word wrap for LaTeX files
-      await updateConfig(
-        '[latex]',
-        {
-          'editor.wordWrap': 'on',
-          'files.autoSave': 'afterDelay',
-        },
-        {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        },
-      );
-
-      // Also add word wrap for yaml files
-      await updateConfig(
-        '[yaml]',
-        {
-          'editor.wordWrap': 'on',
-          'files.autoSave': 'afterDelay',
-        },
-        {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        },
-      );
-
-      // Configure explorer settings to not automatically reveal build directory
-      await updateConfig(
-        'explorer.autoRevealExclude',
-        { 'build/': true },
-        {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        },
-      );
-
-      // Disable automatic revealing of files in explorer
-      await updateConfig('explorer.autoReveal', false, {
-        target: vscode.ConfigurationTarget.Global,
-        prefix: false,
-        ifUnset: true,
-      });
+      // Apply all settings
+      for (const [key, value] of settings) {
+        await updateConfig(key, value, GLOBAL_IF_UNSET);
+      }
 
       const isWindsurf = vscode.env.appName?.toLowerCase().includes('windsurf');
 
       if (!isWindsurf) {
-        const activityBarKey = 'workbench.activityBar.location';
-
-        // Update activity bar location only if unset
-        await updateConfig(activityBarKey, 'default', {
-          target: vscode.ConfigurationTarget.Global,
-          prefix: false,
-          ifUnset: true,
-        });
+        await updateConfig(
+          'workbench.activityBar.location',
+          'default',
+          GLOBAL_IF_UNSET,
+        );
         logger.info('extension', 'Activity bar location set to default');
       }
 

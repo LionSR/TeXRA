@@ -85,22 +85,21 @@ export class TaskGroupManager extends PersistentMapManager<
     const affected: StreamTabId[] = [];
 
     for (const [streamId, groups] of this.items.entries()) {
-      let updated = false;
+      const runningGroups = [...groups.values()].filter(
+        (g) => g.status === STREAM_STATUS.RUNNING,
+      );
 
-      for (const group of groups.values()) {
-        if (group.status === STREAM_STATUS.RUNNING) {
-          group.status = STREAM_STATUS.ERROR;
-          group.endTime = now;
-          updated = true;
-        }
+      if (runningGroups.length === 0) continue;
+
+      for (const group of runningGroups) {
+        group.status = STREAM_STATUS.ERROR;
+        group.endTime = now;
       }
 
-      if (updated) {
-        affected.push(streamId);
-        this.logger.debug(
-          `Marked running task groups in stream ${streamId} as ERROR after reload`,
-        );
-      }
+      affected.push(streamId);
+      this.logger.debug(
+        `Marked ${runningGroups.length} running task groups in stream ${streamId} as ERROR after reload`,
+      );
     }
 
     if (affected.length > 0) {

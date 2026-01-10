@@ -33,6 +33,16 @@ import {
 import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo } from './types';
 
+/** Shared XMLParser configuration for scratchpad output extraction */
+const XML_PARSER_OPTIONS = {
+  ignoreAttributes: false,
+  parseTagValue: true,
+  textNodeName: 'content',
+  attributeNamePrefix: '',
+  processEntities: false,
+  ignoreDeclaration: true,
+} as const;
+
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -136,14 +146,7 @@ export class XmlOutputManager {
       return texLocation;
     }
 
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      parseTagValue: true,
-      textNodeName: 'content',
-      attributeNamePrefix: '',
-      processEntities: false,
-      ignoreDeclaration: true,
-    });
+    const parser = new XMLParser(XML_PARSER_OPTIONS);
     const root = parser.parse(outputContent);
 
     const latexDocument = extractContentFromXMLbyTag(root, documentTag);
@@ -202,22 +205,32 @@ export class XmlOutputManager {
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-
-    // Count expected document tags before processing
     const expectedDocumentCount = this.countDocumentTags(outputContent);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
+    const tryFallbackExtraction = async (): Promise<
+      OutputFileInfo[] | null
+    > => {
+      const fallbackDocs = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocs) {
+        this.warnPartialExtraction(
+          outputLocation,
+          expectedDocumentCount,
+          fallbackDocs.length,
+        );
+        return this.processMultipleLatexDocuments(fallbackDocs, outputLocation);
+      }
+      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
+      return null;
+    };
+
     try {
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        parseTagValue: true,
-        textNodeName: 'content',
-        attributeNamePrefix: '',
-        processEntities: false,
-        ignoreDeclaration: true,
-      });
+      const parser = new XMLParser(XML_PARSER_OPTIONS);
       const root = parser.parse(outputContent);
 
       const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
@@ -229,46 +242,17 @@ export class XmlOutputManager {
         );
         return this.processMultipleLatexDocuments(documents, outputLocation);
       }
+
       this.logger.debugInternal(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
       );
-      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackDocuments) {
-        this.warnPartialExtraction(
-          outputLocation,
-          expectedDocumentCount,
-          fallbackDocuments.length,
-        );
-        return this.processMultipleLatexDocuments(
-          fallbackDocuments,
-          outputLocation,
-        );
-      }
-      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
-      return [];
+      return (await tryFallbackExtraction()) ?? [];
     } catch (err) {
       this.logger.debugInternal(
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
       );
-      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackDocuments) {
-        this.warnPartialExtraction(
-          outputLocation,
-          expectedDocumentCount,
-          fallbackDocuments.length,
-        );
-        return this.processMultipleLatexDocuments(
-          fallbackDocuments,
-          outputLocation,
-        );
-      }
-      this.warnPartialExtraction(outputLocation, expectedDocumentCount, 0);
+      const result = await tryFallbackExtraction();
+      if (result) return result;
       throw err;
     }
   }
@@ -370,11 +354,10 @@ export class XmlOutputManager {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
     );
-    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
+    return this.splitScratchpadMultipleOutputXml(
       outputLocation,
       this.agentSetting.documentTag,
     );
-    return processedOutputFiles;
   }
 
   async ensureCorrectXmlStructure(

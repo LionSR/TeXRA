@@ -61,6 +61,9 @@ export class RoundCompleteNode<C = unknown> extends Node<
     const { currentRound, totalRounds, continueRounds } = prepRes;
 
     const nextRound = currentRound + 1;
+    // Display rounds as 1-indexed for user-friendly logging
+    const displayCurrent = currentRound + 1;
+    const displayNext = nextRound + 1;
 
     // Check for interruption
     if (checkInterruption()) {
@@ -82,7 +85,7 @@ export class RoundCompleteNode<C = unknown> extends Node<
 
     // Continue to next round
     logger.debug(
-      `Round ${currentRound + 1} complete, continuing to round ${nextRound + 1}`,
+      `Round ${displayCurrent} complete, continuing to round ${displayNext}`,
     );
     return { kind: 'continue' };
   }

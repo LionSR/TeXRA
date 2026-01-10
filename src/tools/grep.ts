@@ -39,40 +39,26 @@ export function buildArguments(
 ): string[] {
   const args: string[] = ['--color=never'];
 
+  // Output mode flags
   if (outputMode === 'files_with_matches') {
     args.push('--files-with-matches');
   } else if (outputMode === 'count') {
     args.push('--count');
   }
 
-  if (input.glob) {
-    args.push('--glob', input.glob);
-  }
+  // Filter options
+  if (input.glob) args.push('--glob', input.glob);
+  if (input.type) args.push('--type', input.type);
+  if (input['-i']) args.push('-i');
+  if (input.multiline) args.push('--multiline', '--multiline-dotall');
 
-  if (input.type) {
-    args.push('--type', input.type);
-  }
-
-  if (input['-i']) {
-    args.push('-i');
-  }
-
-  if (input.multiline) {
-    args.push('--multiline', '--multiline-dotall');
-  }
-
+  // Context flags (only for content mode)
   if (outputMode === 'content') {
-    if (input['-n']) {
-      args.push('-n');
-    }
-    if (typeof input['-A'] === 'number') {
-      args.push('-A', String(input['-A']));
-    }
-    if (typeof input['-B'] === 'number') {
-      args.push('-B', String(input['-B']));
-    }
-    if (typeof input['-C'] === 'number') {
-      args.push('-C', String(input['-C']));
+    if (input['-n']) args.push('-n');
+    for (const flag of ['-A', '-B', '-C'] as const) {
+      const value = input[flag];
+      // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
+      if (value != null) args.push(flag, String(value));
     }
   }
 
@@ -80,16 +66,9 @@ export function buildArguments(
 }
 
 function applyHeadLimit(output: string | null, headLimit?: number): string {
-  if (!output) {
-    return '';
-  }
-
-  if (!headLimit || headLimit <= 0) {
-    return output;
-  }
-
-  const lines = output.split(/\r?\n/);
-  return lines.slice(0, headLimit).join('\n');
+  if (!output) return '';
+  if (!headLimit || headLimit <= 0) return output;
+  return output.split(/\r?\n/).slice(0, headLimit).join('\n');
 }
 
 export class GrepTool extends defineTool({

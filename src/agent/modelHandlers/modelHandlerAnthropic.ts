@@ -85,7 +85,11 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
-import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from './contextManagementConstants';
+import {
+  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  computeReducedMaxTokens,
+  TOKEN_SAFETY_BUFFER,
+} from './contextManagementConstants';
 import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
@@ -482,20 +486,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
           const { input_tokens: inputTokens } = responseTokenCount;
           measuredInputTokens = inputTokens;
           this.logger.debug(`Token count of message: ${inputTokens}`);
-          // Emit context state for UI display
-          this.logger.logContextState(inputTokens, effectiveContextWindow);
           if (inputTokens > effectiveContextWindow) {
             const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
             this.logger.error(errMsg);
             throw new Error(errMsg);
           }
-          if (effectiveContextWindow - inputTokens < options.max_tokens) {
-            const reducedMaxTokens = Math.max(
-              0,
-              effectiveContextWindow - inputTokens - 10,
+          const availableTokens = effectiveContextWindow - inputTokens;
+          if (availableTokens < options.max_tokens) {
+            const originalMaxTokens = options.max_tokens;
+            const reducedMaxTokens = computeReducedMaxTokens(
+              availableTokens,
+              TOKEN_SAFETY_BUFFER,
             );
-            const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
-            this.logger.warn(warnMsg);
+            const utilizationPercent =
+              (inputTokens / effectiveContextWindow) * 100;
+            this.logger.logContextManagement(
+              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow: effectiveContextWindow,
+                utilizationBefore: utilizationPercent,
+                originalMaxTokens,
+                reducedMaxTokens,
+                details: 'Anthropic: max_tokens reduced to fit context window',
+              },
+            );
             options.max_tokens = reducedMaxTokens;
 
             if (
@@ -570,9 +586,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Add thinking block clearing strategy if reasoning is enabled
         // NOTE: The Anthropic API doesn't support a trigger for thinking clearing,
         // so we implement client-side triggering by only including the edit when
-        // token count exceeds the threshold (or when count is unavailable).
+        // token count is measured and exceeds the threshold.
         const shouldClearThinking =
-          measuredInputTokens === undefined ||
+          measuredInputTokens !== undefined &&
           measuredInputTokens >= triggerTokens;
 
         if (
@@ -698,7 +714,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * The response includes applied_edits when server-side context editing was performed.
    */
   private logContextManagementFromResponse(response: BetaMessage): void {
-    // Access context_management from response - uses SDK types where available
     const contextManagement = (
       response as BetaMessage & {
         context_management?: BetaContextManagementResponse | null;
@@ -710,64 +725,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     const contextWindow = this.config.contextWindow;
+    const totalInputTokens =
+      response.usage.input_tokens +
+      (response.usage.cache_read_input_tokens ?? 0) +
+      (response.usage.cache_creation_input_tokens ?? 0);
+
     type AppliedEdit =
       | BetaClearToolUses20250919EditResponse
       | BetaClearThinking20251015EditResponse;
 
     for (const edit of contextManagement.applied_edits as AppliedEdit[]) {
-      if (
-        edit.type === 'clear_tool_uses_20250919' &&
-        edit.cleared_input_tokens &&
-        edit.cleared_input_tokens > 0
-      ) {
-        const typedEdit = edit as BetaClearToolUses20250919EditResponse;
-        const clearedTokens = typedEdit.cleared_input_tokens;
-        const clearedToolUses = typedEdit.cleared_tool_uses ?? 0;
-        const utilizationReduction = (clearedTokens / contextWindow) * 100;
-
-        this.logger.logContextManagement(
-          `Cleared ${clearedToolUses} tool use(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
-          {
-            action: 'clear_tool_uses',
-            tokensBefore: response.usage.input_tokens + clearedTokens,
-            tokensAfter: response.usage.input_tokens,
-            contextWindow,
-            utilizationBefore:
-              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
-              100,
-            utilizationAfter:
-              (response.usage.input_tokens / contextWindow) * 100,
-            details: `Anthropic server-side: cleared ${clearedToolUses} tool use(s)`,
-          },
-        );
+      const clearedTokens = edit.cleared_input_tokens;
+      if (!clearedTokens || clearedTokens <= 0) {
+        continue;
       }
 
-      if (
-        edit.type === 'clear_thinking_20251015' &&
-        edit.cleared_input_tokens &&
-        edit.cleared_input_tokens > 0
-      ) {
-        const typedEdit = edit as BetaClearThinking20251015EditResponse;
-        const clearedTokens = typedEdit.cleared_input_tokens;
-        const clearedTurns = typedEdit.cleared_thinking_turns ?? 0;
-        const utilizationReduction = (clearedTokens / contextWindow) * 100;
+      const isToolUses = edit.type === 'clear_tool_uses_20250919';
+      const clearedCount = isToolUses
+        ? ((edit as BetaClearToolUses20250919EditResponse).cleared_tool_uses ??
+          0)
+        : ((edit as BetaClearThinking20251015EditResponse)
+            .cleared_thinking_turns ?? 0);
+      const itemLabel = isToolUses ? 'tool use(s)' : 'thinking turn(s)';
+      const action = isToolUses ? 'clear_tool_uses' : 'clear_thinking';
+      const utilizationReduction = (clearedTokens / contextWindow) * 100;
 
-        this.logger.logContextManagement(
-          `Cleared ${clearedTurns} thinking turn(s): ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
-          {
-            action: 'clear_thinking',
-            tokensBefore: response.usage.input_tokens + clearedTokens,
-            tokensAfter: response.usage.input_tokens,
-            contextWindow,
-            utilizationBefore:
-              ((response.usage.input_tokens + clearedTokens) / contextWindow) *
-              100,
-            utilizationAfter:
-              (response.usage.input_tokens / contextWindow) * 100,
-            details: `Anthropic server-side: cleared ${clearedTurns} thinking turn(s)`,
-          },
-        );
-      }
+      this.logger.logContextManagement(
+        `Cleared ${clearedCount} ${itemLabel}: ${clearedTokens.toLocaleString()} tokens freed (${utilizationReduction.toFixed(1)}% of context)`,
+        {
+          action,
+          tokensBefore: totalInputTokens + clearedTokens,
+          tokensAfter: totalInputTokens,
+          contextWindow,
+          utilizationBefore:
+            ((totalInputTokens + clearedTokens) / contextWindow) * 100,
+          utilizationAfter: (totalInputTokens / contextWindow) * 100,
+          details: `Anthropic server-side: cleared ${clearedCount} ${itemLabel}`,
+        },
+      );
     }
   }
 
@@ -1508,18 +1503,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
     }
 
-    const inputTokens = rawUsage.input_tokens ?? 0;
+    // Anthropic SDK docs: "Total input tokens in a request is the summation
+    // of `input_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`."
+    const baseInputTokens = rawUsage.input_tokens ?? 0;
     const outputTokens = rawUsage.output_tokens ?? 0;
     const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
     const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
 
-    // Calculate percentage cached
+    // Total input tokens for context measurement (includes all cached tokens)
+    const totalInputTokens =
+      baseInputTokens + cacheReadTokens + cacheCreationTokens;
+
+    // Calculate percentage cached (relative to total)
     const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
     const percentageCached =
-      inputTokens > 0 ? (totalCacheTokens / inputTokens) * 100 : 0;
+      totalInputTokens > 0 ? (totalCacheTokens / totalInputTokens) * 100 : 0;
 
     return {
-      inputTokens,
+      inputTokens: totalInputTokens,
       outputTokens,
       cost: this.computePrice(rawUsage),
       responseTimeMs,
@@ -1699,24 +1700,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return false;
     }
 
-    // We should continue if:
-    // 1. We hit the max tokens limit (stopReason === 'max_tokens')
-    // 2. AND we don't have an end tag (meaning the response is incomplete)
-    if (
-      stopReason === ANTHROPIC_STOP.MAX_TOKENS &&
-      !hasEndTag(agentSetting, newResponse)
-    ) {
-      return true;
+    // Continue if we hit max tokens OR stop sequence without an end tag
+    const shouldContinue =
+      (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
+        stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
+      !hasEndTag(agentSetting, newResponse);
+
+    if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
+      this.logger.debug('Response complete (end tag found)');
     }
-    if (stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
-      if (!hasEndTag(agentSetting, newResponse)) {
-        return true;
-      } else {
-        this.logger.debug('Response complete (end tag found)');
-        return false;
-      }
-    }
-    return false;
+
+    return shouldContinue;
   }
 
   /**

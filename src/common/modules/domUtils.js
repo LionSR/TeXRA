@@ -76,13 +76,47 @@ export function safeSetElementValue(id, value) {
   element.value = value;
 }
 
+/**
+ * Set checked state on an element (checkbox, radio, toggle button).
+ * VS Code web components require both property and attribute for visual sync.
+ * @param {HTMLElement} element - The element to update
+ * @param {boolean} checked - The checked state
+ */
+export function setElementCheckedState(element, checked) {
+  if (!element) return;
+  element.checked = checked;
+  element.toggleAttribute('checked', checked);
+  element.setAttribute('aria-checked', String(checked));
+}
+
 export function safeSetElementChecked(id, checked) {
   const element = document.getElementById(id);
   if (!element) {
     console.warn(`Element with id '${id}' not found`);
     return;
   }
-  element.checked = checked;
+  setElementCheckedState(element, checked);
+}
+
+/**
+ * Set the active radio in a group of vscode-radio elements.
+ * @param {HTMLElement} radioGroup - The radio group container
+ * @param {string} value - The value to select
+ * @param {string} [selector='vscode-radio'] - Selector for radio elements
+ */
+export function setRadioGroupValue(
+  radioGroup,
+  value,
+  selector = 'vscode-radio',
+) {
+  if (!radioGroup) return;
+  if ('value' in radioGroup) {
+    radioGroup.value = value;
+  }
+  for (const radio of radioGroup.querySelectorAll(selector)) {
+    const isActive = radio.value === value;
+    setElementCheckedState(radio, isActive);
+  }
 }
 
 export function safeGetElementById(id) {
@@ -112,21 +146,10 @@ export function safeGetElementChecked(id) {
 }
 
 export function setElementDisabled(element, disabled) {
-  if (!element) {
+  if (!(element instanceof Element)) {
     return;
   }
-
-  if ('disabled' in element) {
-    try {
-      element.disabled = disabled;
-    } catch (error) {
-      // Ignore assignment errors from custom elements without writable props
-    }
-  }
-
-  if (element instanceof Element) {
-    element.toggleAttribute('disabled', Boolean(disabled));
-  }
+  element.toggleAttribute('disabled', Boolean(disabled));
 }
 
 export function setElementsDisabled(idsOrElements, disabled) {
@@ -147,9 +170,6 @@ export function setElementsDisabled(idsOrElements, disabled) {
 }
 
 export function isSelectLikeElement(element) {
-  if (!element) {
-    return false;
-  }
   return isVsCodeSelectElement(element);
 }
 
@@ -171,7 +191,7 @@ export function getSelectedOptionElement(element) {
   }
 
   const currentValue = element.value;
-  if (currentValue !== undefined && currentValue !== null) {
+  if (currentValue != null) {
     const matchingOption = options.find(
       (option) => option.value === currentValue,
     );
@@ -183,9 +203,7 @@ export function getSelectedOptionElement(element) {
   return (
     options.find(
       (option) => option.hasAttribute('selected') || option.selected,
-    ) ??
-    options[0] ??
-    null
+    ) ?? options[0]
   );
 }
 

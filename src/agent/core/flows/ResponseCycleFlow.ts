@@ -126,22 +126,17 @@ export type ResponseCycleShared = CycleFields & CycleTransientFields;
 export function assertCycleFieldsPopulated<T extends object>(
   shared: T,
 ): asserts shared is T & ResponseCycleShared {
-  // Required fields that must be defined (not undefined)
-  const requiredDefined = [
-    'messages',
-    'shouldStop',
-    'endTurn',
-    'outputExists',
-  ] as const;
   const obj = shared as Record<string, unknown>;
-  for (const field of requiredDefined) {
+  const requiredFields = ['messages', 'shouldStop', 'endTurn', 'outputExists'];
+
+  for (const field of requiredFields) {
     if (obj[field] === undefined) {
       throw new Error(
         `Cycle field '${field}' must be populated before running cycle flow`,
       );
     }
   }
-  // outputLocation must be non-null (downstream code uses it directly)
+
   if (obj['outputLocation'] === undefined || obj['outputLocation'] === null) {
     throw new Error(
       `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
@@ -537,19 +532,32 @@ class ResponseProcessNode<C> extends BaseNode<
         prepRes.responseTimeMs ?? 0,
       );
 
+      // Emit context state for UI display (centralized for all model handlers)
+      const { inputTokens } = normalizedUsage;
+      const { contextWindow } = modelHandler.config;
+      if (inputTokens > 0 && contextWindow > 0) {
+        logger.logContextState(inputTokens, contextWindow);
+      }
+
       const repetitionResult = checkForMassiveRepetition(
         prepRes.lastResponse,
         newResponse,
       );
 
       if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        logger.error(
-          `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
+        const preview = newResponse.substring(
+          0,
+          REPETITION_DETECTION_THRESHOLD,
         );
-        logger.error('Massive repetition detected - skipping this response');
-        logger.error('Message structure when repetition detected:');
+        const skeleton = JSON.stringify(
+          messageToSkeleton(prepRes.messages),
+          null,
+          2,
+        );
         logger.error(
-          JSON.stringify(messageToSkeleton(prepRes.messages), null, 2),
+          `Massive repetition detected - skipping this response\n` +
+            `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
+            `Message structure:\n${skeleton}`,
         );
       }
 

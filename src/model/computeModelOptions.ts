@@ -17,24 +17,13 @@ function formatContext(context: number): string {
  * Format cost values for display
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (
-    inputPrice === null ||
-    inputPrice === undefined ||
-    outputPrice === null ||
-    outputPrice === undefined
-  ) {
-    return '';
-  }
+  if (inputPrice === undefined || outputPrice === undefined) return '';
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
 /**
  * Check if a model is available via personal API keys.
  * Called only when server-side access is not available and user is in "Use My Own Keys" mode.
- *
- * @param config - Model configuration
- * @param hasOpenRouter - Whether user has OpenRouter API key
- * @returns Whether the model is available via personal keys
  */
 async function checkPersonalKeyAvailability(
   config: {
@@ -49,27 +38,25 @@ async function checkPersonalKeyAvailability(
     return hasOpenRouter;
   }
 
+  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
   const provider = config.provider;
-
-  // Check provider-specific API key
-  if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
-    try {
-      const hasProviderKey = await SecretManager.apiKeyExists(
-        provider as ApiProvider,
-      );
-      if (hasProviderKey) {
-        return true;
-      }
-      // Check OpenRouter as fallback for models that support it
-      return !!(config.openrouterFullName && hasOpenRouter);
-    } catch (error) {
-      console.warn(`Failed to check API key for ${provider}:`, error);
-      return false;
-    }
+  if (!SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+    return true;
   }
 
-  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
-  return true;
+  // Check provider-specific API key
+  try {
+    const hasProviderKey = await SecretManager.apiKeyExists(
+      provider as ApiProvider,
+    );
+    if (hasProviderKey) return true;
+
+    // Fall back to OpenRouter for models that support it
+    return Boolean(config.openrouterFullName && hasOpenRouter);
+  } catch (error) {
+    console.warn(`Failed to check API key for ${provider}:`, error);
+    return false;
+  }
 }
 
 /**
@@ -113,51 +100,59 @@ export async function computeModelOptions(): Promise<string> {
 
       const provider = config.provider;
 
-      // Determine availability - server-side checks are sync after priming
-      // Note: openRouterOnly models can't use server-side relay (they need OpenRouter API)
-      const hasServerSideForModel =
-        hasAnyServerSideAccess &&
-        !config.openRouterOnly &&
-        serverSideKeyService.isProviderOnServer(provider) &&
-        serverSideKeyService.canUseModelSync(model);
-
-      let available = hasServerSideForModel;
-
-      // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
-      // Allow these even in "Use Included Access" mode since included access is never possible.
-      if (!available && config.openRouterOnly) {
+      // Determine model availability with clear priority order
+      let available = false;
+      if (config.openRouterOnly) {
+        // openRouterOnly models NEVER use server-side - always need OpenRouter key
         available = hasOpenRouter;
-      }
-
-      // For other models, only check personal keys if:
-      // 1. Not available via server-side, AND
-      // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
-      if (!available && !useIncludedAccess && !config.openRouterOnly) {
+      } else if (
+        hasAnyServerSideAccess &&
+        serverSideKeyService.isProviderOnServer(provider) &&
+        serverSideKeyService.canUseModelSync(model)
+      ) {
+        // Server-side relay available for this model
+        available = true;
+      } else if (!useIncludedAccess) {
+        // Fall back to personal API keys (only when not in "Use Included Access" mode)
         available = await checkPersonalKeyAvailability(config, hasOpenRouter);
       }
 
       // Build option tag with data attributes
-      const requiresKeyAttr = available
-        ? ''
-        : ' data-requires-key="true" class="disabled-option disabled-model"';
-      const providerAttr = provider ? ` data-provider="${provider}"` : '';
       const contextStr =
         config.contextWindow !== undefined
           ? formatContext(config.contextWindow)
           : '';
-      const contextAttr = contextStr ? ` data-context="${contextStr}"` : '';
       const costStr = formatCost(config.inputPrice, config.outputPrice);
-      const costAttr = costStr ? ` data-cost="${costStr}"` : '';
 
+      const attrs = [`value="${model}"`];
+      if (!available) {
+        attrs.push(
+          'data-requires-key="true" class="disabled-option disabled-model"',
+        );
+      }
+      if (provider) {
+        attrs.push(`data-provider="${provider}"`);
+      }
+      if (contextStr) {
+        attrs.push(`data-context="${contextStr}"`);
+      }
+      if (costStr) {
+        attrs.push(`data-cost="${costStr}"`);
+      }
+
+      // Build description from context and cost
       const descriptionParts: string[] = [];
-      if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
-      if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
-      const descriptionAttr =
-        descriptionParts.length > 0
-          ? ` description="${descriptionParts.join(' | ')}"`
-          : '';
+      if (contextStr) {
+        descriptionParts.push(`Context: ${contextStr}`);
+      }
+      if (costStr) {
+        descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
+      }
+      if (descriptionParts.length > 0) {
+        attrs.push(`description="${descriptionParts.join(' | ')}"`);
+      }
 
-      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${model}</vscode-option>`;
+      return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
     }),
   );
 

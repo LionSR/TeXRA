@@ -8,6 +8,7 @@ import {
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
+import { formatResultCount } from '@tools/utils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -37,28 +38,9 @@ export class DiagnosticsTool extends defineTool({
   protected async execute(input: DiagnosticsInput): Promise<ToolResult> {
     const { command, path } = input;
     const { messages, severity } = await this.collectDiagnostics(path);
-
-    switch (command) {
-      case 'list':
-        return this.createResult({
-          command,
-          path,
-          summary: `Diagnostics list for ${path}`,
-          severity,
-          messages,
-        });
-      case 'count':
-        return this.createResult({
-          command,
-          path,
-          summary: `Diagnostics count for ${path}`,
-          severity,
-        });
-      default:
-        throw new ToolError(
-          `Diagnostics tool error: Unrecognized command '${command}'. Expected 'list' or 'count'.`,
-        );
-    }
+    const summary = `Diagnostics ${command} for ${path}`;
+    const includeMessages = command === 'list' ? messages : undefined;
+    return this.createResult(path, command, summary, severity, includeMessages);
   }
 
   /**
@@ -86,59 +68,44 @@ export class DiagnosticsTool extends defineTool({
    * Wrap diagnostics data in the shared tool result format.
    */
   private createResult(
-    args:
-      | {
-          command: 'list';
-          path: string;
-          summary: string;
-          severity: DiagnosticsSeverityCounts;
-          messages: Diagnostic[];
-        }
-      | {
-          command: 'count';
-          path: string;
-          summary: string;
-          severity: DiagnosticsSeverityCounts;
-        },
+    path: string,
+    command: 'list' | 'count',
+    summary: string,
+    severity: DiagnosticsSeverityCounts,
+    messages?: Diagnostic[],
   ): ToolResult {
-    const payload: DiagnosticsPayload = {
-      path: args.path,
-      command: args.command,
-      severity: args.severity,
-      ...('messages' in args ? { messages: args.messages } : {}),
-    };
+    const payload: DiagnosticsPayload = { path, command, severity };
+    if (messages) {
+      payload.messages = messages;
+    }
 
-    // Build human-readable output
-    const { errors = 0, warnings = 0, info = 0, hints = 0 } = args.severity;
+    const { errors = 0, warnings = 0, info = 0, hints = 0 } = severity;
     const counts = [
-      errors > 0 && `${errors} error${errors === 1 ? '' : 's'}`,
-      warnings > 0 && `${warnings} warning${warnings === 1 ? '' : 's'}`,
+      errors > 0 && formatResultCount(errors, 'error'),
+      warnings > 0 && formatResultCount(warnings, 'warning'),
       info > 0 && `${info} info`,
-      hints > 0 && `${hints} hint${hints === 1 ? '' : 's'}`,
+      hints > 0 && formatResultCount(hints, 'hint'),
     ]
       .filter(Boolean)
       .join(', ');
 
-    // For 'list' command, include actual diagnostic messages so model can see them
-    // Always include file path so model knows which file diagnostics belong to
-    let output: string;
-    const header = `${args.path}: ${counts || 'No issues found'}`;
-    if ('messages' in args && args.messages.length > 0) {
-      const messageLines = args.messages.map((d) => {
-        const line = d.range.start.line + 1; // VS Code lines are 0-indexed
-        const severity =
-          ['error', 'warning', 'info', 'hint'][d.severity] ?? 'unknown';
-        return `  ${line}: [${severity}] ${d.message}`;
-      });
-      output = `${header}\n\n${messageLines.join('\n')}`;
-    } else {
-      output = header;
-    }
+    const header = `${path}: ${counts || 'No issues found'}`;
+    const output =
+      messages && messages.length > 0
+        ? `${header}\n\n${this.formatMessages(messages)}`
+        : header;
 
-    return {
-      summary: args.summary,
-      output,
-      diagnostics: payload,
-    };
+    return { summary, output, diagnostics: payload };
+  }
+
+  private formatMessages(messages: Diagnostic[]): string {
+    const severityLabels = ['error', 'warning', 'info', 'hint'] as const;
+    return messages
+      .map((d) => {
+        const line = d.range.start.line + 1;
+        const label = severityLabels[d.severity] ?? 'unknown';
+        return `  ${line}: [${label}] ${d.message}`;
+      })
+      .join('\n');
   }
 }

@@ -9,15 +9,98 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 
-const sortComparators = {
-  time: (a: StreamTabInfo, b: StreamTabInfo) =>
+const sortComparators: Record<
+  string,
+  (a: StreamTabInfo, b: StreamTabInfo) => number
+> = {
+  time: (a, b) =>
     (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
     (a.lastTimestamp ?? a.creationTimestamp ?? 0),
-  inputFile: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
-  agent: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.agent ?? '').localeCompare(b.agent ?? ''),
-} as const;
+  inputFile: (a, b) => (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
+  agent: (a, b) => (a.agent ?? '').localeCompare(b.agent ?? ''),
+};
+
+/**
+ * Check if a session category matches the given filter.
+ * Returns the category to use (defaulting to Workflow) or null if filtered out.
+ */
+function matchesFilter(
+  category: AgentCategory | undefined,
+  filter: AgentFilter,
+): AgentCategory | null {
+  if (filter === 'all') {
+    return category ?? AgentCategory.Workflow;
+  }
+
+  if (!category) {
+    return null;
+  }
+
+  const expectedCategory =
+    filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
+
+  return category === expectedCategory ? category : null;
+}
+
+/**
+ * Build a StreamTabInfo object for a single stream ID.
+ * Returns null if the stream doesn't match the filter.
+ */
+function buildStreamInfo(
+  state: ProgressViewState,
+  id: string,
+  statuses: Map<string, string> | undefined,
+  filter: AgentFilter,
+): StreamTabInfo | null {
+  const taskState = state.getTaskState(id);
+  const hints = state.getStreamHints(id);
+  const logs = state.streamTabs.getMessages(id);
+  const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+  const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
+  const inputFile = taskState?.agentConfig.inputFile ?? '';
+  const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
+  const agentName = getCleanAgentName(rawAgentName);
+  const rawCategory =
+    taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
+
+  const sessionCategory = matchesFilter(rawCategory, filter);
+  if (sessionCategory === null) {
+    return null;
+  }
+
+  const agentType =
+    taskState?.agentConfig.session?.agentType ??
+    taskState?.agentConfig.agentType;
+  const isToolAgent = sessionCategory === AgentCategory.ToolUse;
+  const isRemote = taskState
+    ? isRemoteAgent(rawAgentName)
+    : (hints.isRemote ?? false);
+  const executionId = state.getExecutionId(id);
+
+  const label =
+    sessionCategory !== AgentCategory.ToolUse && inputFile
+      ? `${agentName}: ${path.basename(inputFile)}`
+      : agentName;
+
+  return {
+    name: id,
+    label,
+    model: taskState?.agentConfig.model,
+    agent: taskState?.agentConfig.agent,
+    agentType,
+    agentSessionKind: sessionCategory,
+    uiTraits: { sessionKind: sessionCategory, isToolAgent },
+    hasMultipleOutputs: taskState
+      ? taskState.agentConfig.useMultipleOutputs
+      : (hints.hasMultipleOutputs ?? false),
+    isRemote,
+    lastTimestamp,
+    inputFile,
+    creationTimestamp,
+    status: statuses?.get(id),
+    executionId,
+  };
+}
 
 /**
  * Build metadata objects for all streams in the given state.
@@ -27,84 +110,12 @@ export function buildStreamInfos(
   statuses?: Map<string, string>,
   filter: AgentFilter = 'all',
 ): StreamTabInfo[] {
-  const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
-    const taskState = state.getTaskState(id);
-    const hints = state.getStreamHints(id);
-    const logs = state.streamTabs.getMessages(id);
-    const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-    const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
-    const inputFile = taskState?.agentConfig.inputFile ?? '';
-    // Extract clean agent name (strip source: prefix if present)
-    const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
-    const agentName = getCleanAgentName(rawAgentName);
-    let sessionCategory =
-      taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
+  const infos = state.streamTabs
+    .keys()
+    .map((id) => buildStreamInfo(state, id, statuses, filter))
+    .filter((info): info is StreamTabInfo => info !== null);
 
-    // Filter logic: check if stream matches the current filter
-    if (!sessionCategory) {
-      // Streams without category only show when filter is "all"
-      if (filter !== 'all') {
-        return acc;
-      }
-      sessionCategory = AgentCategory.Workflow;
-    } else if (filter !== 'all') {
-      // Check if session category matches filter
-      const filterMap: Record<AgentFilter, AgentCategory | null> = {
-        all: null,
-        toolUse: AgentCategory.ToolUse,
-        workflow: AgentCategory.Workflow,
-      };
-      if (filterMap[filter] !== sessionCategory) {
-        return acc;
-      }
-    }
-
-    const agentType =
-      taskState?.agentConfig.session?.agentType ??
-      taskState?.agentConfig.agentType;
-    const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
-    // and isRemoteAgent can reliably determine the source. When taskState is null,
-    // rawAgentName is just the clean name from the stream ID, so fall back to the hint.
-    const isRemote = taskState
-      ? isRemoteAgent(rawAgentName)
-      : (hints.isRemote ?? false);
-    const executionId = state.getExecutionId(id);
-
-    // Build label: tool-use shows agent only, workflows show agent + file basename
-    let label = agentName;
-    if (sessionCategory !== AgentCategory.ToolUse && inputFile) {
-      label = `${agentName}: ${path.basename(inputFile)}`;
-    }
-
-    acc.push({
-      name: id,
-      label,
-      model: taskState?.agentConfig.model,
-      agent: taskState?.agentConfig.agent,
-      agentType,
-      agentSessionKind: sessionCategory,
-      uiTraits: {
-        sessionKind: sessionCategory,
-        isToolAgent,
-      },
-      // useMultipleOutputs is the single source of truth (workflow-only concept).
-      // When taskState is null, fall back to the hint from setActiveStream event.
-      hasMultipleOutputs: taskState
-        ? taskState.agentConfig.useMultipleOutputs
-        : (hints.hasMultipleOutputs ?? false),
-      isRemote,
-      lastTimestamp,
-      inputFile,
-      creationTimestamp,
-      status: statuses?.get(id),
-      executionId,
-    });
-    return acc;
-  }, []);
-
-  const comparator =
-    sortComparators[state.streamSortOrder as keyof typeof sortComparators];
+  const comparator = sortComparators[state.streamSortOrder];
   if (comparator) {
     infos.sort(comparator);
   }

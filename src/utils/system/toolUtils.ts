@@ -203,22 +203,22 @@ export async function checkToolInstalled(
   toolOrConfig: string | ToolConfig,
   showError: boolean = true,
 ): Promise<boolean> {
-  try {
-    // Get the config object - either passed directly or looked up by string key
-    const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
-    const config =
-      typeof toolOrConfig === 'string'
-        ? TOOL_CONFIGS[toolOrConfig]
-        : toolOrConfig;
+  // Get the config object - either passed directly or looked up by string key
+  const isStringKey = typeof toolOrConfig === 'string';
+  const toolName = isStringKey ? toolOrConfig : null;
+  const config = isStringKey ? TOOL_CONFIGS[toolOrConfig] : toolOrConfig;
 
-    if (!config) {
-      throw new Error(`Unknown tool: ${toolOrConfig}`);
+  if (!config) {
+    if (showError) {
+      vscode.window.showErrorMessage(`Unknown tool: ${toolOrConfig}`);
     }
+    return false;
+  }
 
-    // Generate default command if not specified
-    const command =
-      config.command || (toolName ? `${toolName} --version` : null);
+  // Generate default command if not specified
+  const command = config.command || (toolName ? `${toolName} --version` : null);
 
+  try {
     if (!command) {
       throw new Error(
         'No command specified and tool name could not be determined',
@@ -252,38 +252,39 @@ export async function checkToolInstalled(
       return false;
     };
 
+    // Parse command string into executable and args
+    const parseCommand = (
+      cmd: string,
+    ): { cmdName: string; args: string[] } | null => {
+      const stringArgs = shellParse(cmd).filter(
+        (arg): arg is string => typeof arg === 'string',
+      );
+      if (stringArgs.length === 0) return null;
+      const [cmdName, ...args] = stringArgs;
+      return { cmdName, args };
+    };
+
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
-        const parsedArgs = shellParse(cmd);
-        const stringArgs = parsedArgs.filter(
-          (arg): arg is string => typeof arg === 'string',
-        );
-        if (stringArgs.length === 0) continue;
-        const [cmdName, ...args] = stringArgs;
-        if (executeWithFallback(cmdName, args)) {
+        const parsed = parseCommand(cmd);
+        if (!parsed) continue;
+        if (executeWithFallback(parsed.cmdName, parsed.args)) {
           isInstalled = true;
           break;
         }
       }
     } else {
-      const parsedArgs = shellParse(command);
-      const stringArgs = parsedArgs.filter(
-        (arg): arg is string => typeof arg === 'string',
-      );
-      if (stringArgs.length === 0) {
+      // Single command: validate first, then execute
+      const parsed = parseCommand(command);
+      if (!parsed) {
         throw new Error('Invalid command: no executable found');
       }
-      const [cmdName, ...args] = stringArgs;
-      isInstalled = executeWithFallback(cmdName, args);
+      isInstalled = executeWithFallback(parsed.cmdName, parsed.args);
     }
 
     if (!isInstalled && showError) {
-      const actions: string[] = [];
-      if (config.openDocsCommand) {
-        actions.push('View Installation Guide');
-      }
-
+      const actions = config.openDocsCommand ? ['View Installation Guide'] : [];
       const choice = await vscode.window.showErrorMessage(
         config.errorMessage,
         ...actions,
@@ -299,12 +300,8 @@ export async function checkToolInstalled(
     return isInstalled;
   } catch (err) {
     if (showError) {
-      const config =
-        typeof toolOrConfig === 'string'
-          ? TOOL_CONFIGS[toolOrConfig]
-          : toolOrConfig;
       const errorMessage =
-        config?.errorMessage || `Failed to check tool installation: ${err}`;
+        config.errorMessage || `Failed to check tool installation: ${err}`;
       vscode.window.showErrorMessage(errorMessage);
     }
     return false;

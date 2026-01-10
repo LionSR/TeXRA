@@ -21,8 +21,6 @@ import { WorkspaceFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 
-// Local imports - tools
-
 const FileOpInputSchema = z.strictObject({
   command: z.enum(['read', 'write', 'append']),
   path: z.string(),
@@ -48,12 +46,9 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'write': {
-        // eslint-disable-next-line eqeqeq
+        // eslint-disable-next-line eqeqeq -- intentional nullish check
         if (content == null) {
-          return {
-            error: 'content parameter is required for write',
-            isError: true,
-          };
+          throw new ToolError('content parameter is required for write');
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -88,13 +83,11 @@ export class FileOpTool extends defineTool({
           finalContent,
         );
 
-        // Record file as "read" after writing so subsequent edits don't require
-        // an explicit read - especially important for newly created files.
         recordToolFileRead(path);
 
         const userDiffNote = formatUnifiedApprovalUserDiff(
           path,
-          finalContent,
+          proposed,
           appliedContent,
         );
 
@@ -106,12 +99,9 @@ export class FileOpTool extends defineTool({
         };
       }
       case 'append': {
-        // eslint-disable-next-line eqeqeq
+        // eslint-disable-next-line eqeqeq -- intentional nullish check
         if (content == null) {
-          return {
-            error: 'content parameter is required for append',
-            isError: true,
-          };
+          throw new ToolError('content parameter is required for append');
         }
         const exists = await WorkspaceFS.exists(path);
         const readGate = requireFileReadForEdit(path, exists);
@@ -158,15 +148,11 @@ export class FileOpTool extends defineTool({
           await WorkspaceFS.appendFile(path, appendedSegment);
         }
 
-        // Record file as "read" after appending so subsequent edits don't require
-        // an explicit read - especially important for newly created files.
         recordToolFileRead(path);
-
-        // Report the actual applied content after append
         const appliedContent = await WorkspaceFS.read(path);
         const userDiffNote = formatUnifiedApprovalUserDiff(
           path,
-          finalContent,
+          proposedContent,
           appliedContent,
         );
 
