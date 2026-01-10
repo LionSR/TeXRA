@@ -7,8 +7,6 @@ import { BibEntry, parseBibFile } from 'bibtex';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const DIRECTIVE_PATTERN_SOURCE =
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}';
 const CITE_COMMANDS = [
   'cite',
   'citet',
@@ -25,16 +23,18 @@ const CITE_COMMANDS = [
   'Parencite',
   'Footcite',
 ];
-function createDirectivePattern(): RegExp {
-  return new RegExp(DIRECTIVE_PATTERN_SOURCE, 'g');
-}
 
-function createCitationPattern(): RegExp {
-  return new RegExp(
-    `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
-    'g',
-  );
-}
+// Compiled regex patterns (matchAll clones the regex, so module-level is safe)
+const DIRECTIVE_PATTERN = new RegExp(
+  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
+  'g',
+);
+
+const CITATION_PATTERN = new RegExp(
+  `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
+  'g',
+);
+
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
 export interface BibliographyReferenceResult {
@@ -70,9 +70,8 @@ function normalizeBibPath(baseDir: string, target: string): string {
 
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
   const paths = new Set<string>();
-  const directivePattern = createDirectivePattern();
 
-  for (const match of content.matchAll(directivePattern)) {
+  for (const match of content.matchAll(DIRECTIVE_PATTERN)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const normalized = normalizeBibPath(baseDir, raw);
@@ -87,9 +86,8 @@ function collectBibliographyPaths(baseDir: string, content: string): string[] {
 
 function collectCitationKeys(content: string): string[] {
   const keys = new Set<string>();
-  const citationPattern = createCitationPattern();
 
-  for (const match of content.matchAll(citationPattern)) {
+  for (const match of content.matchAll(CITATION_PATTERN)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const key = raw.trim();
