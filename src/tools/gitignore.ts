@@ -2,12 +2,12 @@
 import * as os from 'os';
 import * as path from 'path';
 
-// Third-party imports
-import { Minimatch } from 'minimatch';
-
 // Local imports - utils
 import { toPosixPath } from '@utils/core';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { createGlobMatcher } from './utils';
 
 type GitignoreRule = {
   matcher: (value: string) => boolean;
@@ -32,16 +32,6 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
 };
 
 let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
-
-function createGlobMatcher(pattern: string): (value: string) => boolean {
-  const matcher = new Minimatch(pattern, {
-    dot: true,
-    matchBase: true,
-    nocase: false,
-  });
-
-  return (value: string) => matcher.match(value.replaceAll('\\', '/'));
-}
 
 function expandGitignorePattern(
   pattern: string,
