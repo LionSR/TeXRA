@@ -144,16 +144,6 @@ export class MediaAttachmentProcessor {
     return { kind: 'audio', mediaType, data: mediaData };
   }
 
-  private async processMedia(
-    mediaFile: string,
-    fileExtension: string,
-  ): Promise<ProcessedMediaResult> {
-    const ext = fileExtension.toLowerCase();
-    return this.isAudio(ext)
-      ? this.processAudio(mediaFile, ext)
-      : this.processImage(mediaFile, ext);
-  }
-
   public async loadEntries(
     mediaFiles: FileLocation[],
   ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
@@ -236,7 +226,10 @@ export class MediaAttachmentProcessor {
     const fileExtension = path.extname(absolutePath).toLowerCase();
 
     try {
-      const processed = await this.processMedia(absolutePath, fileExtension);
+      // Process as audio or image based on mime type
+      const processed = this.isAudio(fileExtension)
+        ? await this.processAudio(absolutePath, fileExtension)
+        : await this.processImage(absolutePath, fileExtension);
       this.logger.debug(
         `Processed ${processed.kind}: ${displayPath}, type: ${processed.mediaType}`,
       );
@@ -284,12 +277,9 @@ export class MediaAttachmentProcessor {
       processed.kind === 'image' &&
       this.shouldReturnNativePdf(processed, fileExtension)
     ) {
-      const pdfData = Array.isArray(processed.data)
-        ? processed.data[0]
-        : processed.data;
       const entry = this.createEntry(
         path.basename(mediaFile),
-        pdfData,
+        this.getFirstItem(processed.data),
         processed.mediaType,
         processed.kind,
         absolutePath,
@@ -299,9 +289,7 @@ export class MediaAttachmentProcessor {
       return entry;
     }
 
-    const dataParts = Array.isArray(processed.data)
-      ? processed.data
-      : [processed.data];
+    const dataParts = this.normalizeToArray(processed.data);
     const isImage = processed.kind === 'image';
     const derivedFromConversion =
       isImage &&
@@ -363,5 +351,15 @@ export class MediaAttachmentProcessor {
   private isAudio(ext: string): boolean {
     const mimeType = getMimeType(ext);
     return mimeType !== null && mimeType.startsWith('audio/');
+  }
+
+  /** Normalize data to array for consistent processing */
+  private normalizeToArray(data: string | string[]): string[] {
+    return Array.isArray(data) ? data : [data];
+  }
+
+  /** Get the first data item (for single-item scenarios) */
+  private getFirstItem(data: string | string[]): string {
+    return Array.isArray(data) ? data[0] : data;
   }
 }
