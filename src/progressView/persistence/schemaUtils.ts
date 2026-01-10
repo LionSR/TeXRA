@@ -7,6 +7,15 @@ import { z } from 'zod';
 export const RoundKeySchema = z.coerce.number().int();
 
 /**
+ * Parse unknown data as a record, returning empty object for invalid inputs.
+ */
+function asRecord(data: unknown): Record<string, unknown> {
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : {};
+}
+
+/**
  * Factory for creating round map schemas that transform { roundNum: items[] } to Map<number, T[]>.
  * Filters out invalid round keys and empty item arrays.
  *
@@ -39,14 +48,8 @@ export function createRunMapSchema<T>(
   roundMapSchema: z.ZodType<Map<number, T[]>>,
 ): z.ZodType<Map<string, Map<number, T[]>>> {
   return z.unknown().transform((data): Map<string, Map<number, T[]>> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const record = data as Record<string, unknown>;
     const runMap = new Map<string, Map<number, T[]>>();
-
-    for (const [runId, value] of Object.entries(record)) {
+    for (const [runId, value] of Object.entries(asRecord(data))) {
       if (!value || typeof value !== 'object') continue;
       const result = roundMapSchema.safeParse(value);
       if (result.success && result.data.size > 0) {
@@ -71,18 +74,11 @@ export function createSingleValueRunMapSchema<T>(
   const isEmpty = options?.isEmpty;
 
   return z.unknown().transform((data): Map<string, T> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const record = data as Record<string, unknown>;
     const runMap = new Map<string, T>();
-
-    for (const [runId, value] of Object.entries(record)) {
+    for (const [runId, value] of Object.entries(asRecord(data))) {
       if (!value || typeof value !== 'object') continue;
       const result = itemSchema.safeParse(value);
-      if (result.success) {
-        if (isEmpty?.(result.data)) continue;
+      if (result.success && !isEmpty?.(result.data)) {
         runMap.set(runId, result.data);
       }
     }

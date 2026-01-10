@@ -46,8 +46,8 @@ function matchesFilter(
 }
 
 /**
- * Build a StreamTabInfo object for a single stream ID.
- * Returns null if the stream doesn't match the filter.
+ * Build a single StreamTabInfo for the given stream ID.
+ * Returns null if the stream should be filtered out.
  */
 function buildStreamInfo(
   state: ProgressViewState,
@@ -58,50 +58,47 @@ function buildStreamInfo(
   const taskState = state.getTaskState(id);
   const hints = state.getStreamHints(id);
   const logs = state.streamTabs.getMessages(id);
-  const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-  const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
-  const inputFile = taskState?.agentConfig.inputFile ?? '';
-  const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
-  const agentName = getCleanAgentName(rawAgentName);
   const rawCategory =
     taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
 
+  // Filter check: returns resolved category or null if filtered out
   const sessionCategory = matchesFilter(rawCategory, filter);
   if (sessionCategory === null) {
     return null;
   }
 
-  const agentType =
-    taskState?.agentConfig.session?.agentType ??
-    taskState?.agentConfig.agentType;
+  const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
+  const agentName = getCleanAgentName(rawAgentName);
+  const inputFile = taskState?.agentConfig.inputFile ?? '';
   const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-  const isRemote = taskState
-    ? isRemoteAgent(rawAgentName)
-    : (hints.isRemote ?? false);
-  const executionId = state.getExecutionId(id);
 
+  // Build label: tool-use shows agent only, workflows show agent + file basename
   const label =
-    sessionCategory !== AgentCategory.ToolUse && inputFile
-      ? `${agentName}: ${path.basename(inputFile)}`
-      : agentName;
+    isToolAgent || !inputFile
+      ? agentName
+      : `${agentName}: ${path.basename(inputFile)}`;
 
   return {
     name: id,
     label,
     model: taskState?.agentConfig.model,
     agent: taskState?.agentConfig.agent,
-    agentType,
+    agentType:
+      taskState?.agentConfig.session?.agentType ??
+      taskState?.agentConfig.agentType,
     agentSessionKind: sessionCategory,
     uiTraits: { sessionKind: sessionCategory, isToolAgent },
     hasMultipleOutputs: taskState
       ? taskState.agentConfig.useMultipleOutputs
       : (hints.hasMultipleOutputs ?? false),
-    isRemote,
-    lastTimestamp,
+    isRemote: taskState
+      ? isRemoteAgent(rawAgentName)
+      : (hints.isRemote ?? false),
+    lastTimestamp: logs.at(-1)?.timestamp,
     inputFile,
-    creationTimestamp,
+    creationTimestamp: logs[0]?.timestamp,
     status: statuses?.get(id),
-    executionId,
+    executionId: state.getExecutionId(id),
   };
 }
 

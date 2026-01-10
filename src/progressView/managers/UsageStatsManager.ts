@@ -29,43 +29,48 @@ const FiniteNumber = z.coerce
  * Schema for parsing TokenUsageStats with safe number coercion.
  * Uses canonical schema as source of truth - compile-time assertion ensures sync.
  */
-const TokenUsageStatsParsingBaseSchema = z.object({
-  // Required fields from canonical schema
-  inputTokens: FiniteNumber,
-  outputTokens: FiniteNumber,
-  cost: FiniteNumber,
-  // Optional fields from canonical schema (default to 0 for accumulation)
-  cacheReadInputTokens: FiniteNumber.optional().default(0),
-  cacheCreationInputTokens: FiniteNumber.optional().default(0),
-});
-
-const TokenUsageStatsParsingSchema = TokenUsageStatsParsingBaseSchema.catch({
-  inputTokens: 0,
-  outputTokens: 0,
-  cost: 0,
-  cacheReadInputTokens: 0,
-  cacheCreationInputTokens: 0,
-});
+const TokenUsageStatsParsingSchema = z
+  .object({
+    inputTokens: FiniteNumber,
+    outputTokens: FiniteNumber,
+    cost: FiniteNumber,
+    cacheReadInputTokens: FiniteNumber.optional().default(0),
+    cacheCreationInputTokens: FiniteNumber.optional().default(0),
+  })
+  .catch({
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  });
 
 // Compile-time assertion: parsing schema output must be assignable to canonical type.
-// This fails at compile time if TokenUsageStatsParsingSchema produces incompatible fields.
 type _AssertSchemaCompatible =
   z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
     ? true
     : never;
 void (true as _AssertSchemaCompatible);
 
-// Runtime assertion: ensure all canonical keys are handled
-const canonicalKeys = TokenUsageStatsSchema.keyof().options;
+// Runtime assertion: ensure parsing schema covers all canonical keys
+const canonicalKeys = new Set(TokenUsageStatsSchema.keyof().options);
 const parsingKeys = new Set(
-  Object.keys(TokenUsageStatsParsingBaseSchema.shape),
+  Object.keys(TokenUsageStatsParsingSchema._def.innerType.shape),
 );
-const missingKeys = canonicalKeys.filter((k) => !parsingKeys.has(k));
-if (missingKeys.length > 0) {
-  throw new Error(
-    `TokenUsageStatsParsingSchema missing keys from canonical schema: ${missingKeys.join(', ')}`,
-  );
+for (const key of canonicalKeys) {
+  if (!parsingKeys.has(key)) {
+    throw new Error(`TokenUsageStatsParsingSchema missing key: ${key}`);
+  }
 }
+
+/** Zero-initialized usage stats constant */
+const EMPTY_USAGE: TokenUsageStats = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cost: 0,
+  cacheReadInputTokens: 0,
+  cacheCreationInputTokens: 0,
+};
 
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
@@ -78,20 +83,9 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Returns zero-initialized usage stats */
-function emptyUsageStats(): TokenUsageStats {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    cost: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-  };
-}
-
 /** Accumulates usage stats from an iterable into a single total */
 function sumUsageStats(items: Iterable<TokenUsageStats>): TokenUsageStats {
-  const total = emptyUsageStats();
+  const total = { ...EMPTY_USAGE };
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;

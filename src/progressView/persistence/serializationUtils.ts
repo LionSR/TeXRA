@@ -11,22 +11,16 @@
  * @returns Plain object structure with all Maps converted to Records
  *
  * @example
- * // Depth 1: Map → Record
- * mapsToRecords(new Map([['a', 1]]), 1) // { a: 1 }
- *
- * // Depth 2: Map<K, Map<K, V>> → Record<K, Record<K, V>>
- * mapsToRecords(new Map([['run1', new Map([[1, 'v']])]]), 2) // { run1: { '1': 'v' } }
+ * mapsToRecords(new Map([['a', 1]]), 1)                         // { a: 1 }
+ * mapsToRecords(new Map([['run1', new Map([[1, 'v']])]]), 2)    // { run1: { '1': 'v' } }
  */
 function mapsToRecords(value: unknown, depth: number): unknown {
-  if (depth <= 0 || !(value instanceof Map)) {
-    return value;
-  }
-  return Object.fromEntries(
-    Array.from((value as Map<unknown, unknown>).entries(), ([k, v]) => [
-      String(k),
-      mapsToRecords(v, depth - 1),
-    ]),
-  );
+  if (depth <= 0 || !(value instanceof Map)) return value;
+  const entries = [...value].map(([k, v]) => [
+    String(k),
+    mapsToRecords(v, depth - 1),
+  ]);
+  return Object.fromEntries(entries);
 }
 
 /**

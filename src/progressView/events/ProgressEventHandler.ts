@@ -498,13 +498,11 @@ export class ProgressEventHandler {
     });
   };
 
-  /** Convert Map<number, T[]> to Record<number, T[]> for webview (from OutputEvents.ts) */
+  /** Convert Map<number, T[]> to Record for webview, or undefined if empty */
   private toRoundRecord<T>(
-    rounds?: Map<number, T[]>,
+    rounds: Map<number, T[]> | undefined,
   ): Record<number, T[]> | undefined {
-    return rounds && rounds.size > 0
-      ? Object.fromEntries(rounds.entries())
-      : undefined;
+    return rounds?.size ? Object.fromEntries(rounds) : undefined;
   }
 
   // ============================================================================

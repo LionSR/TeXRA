@@ -48,13 +48,11 @@ export class WebviewUpdater {
     taskState?: TaskState,
   ): InstructionUpdate | undefined {
     const text = taskState?.agentConfig?.instruction?.trim();
-    if (!text) {
-      return undefined;
-    }
+    if (!text) return undefined;
 
-    const lineCount = text.split(/\r?\n/).length;
-    const showToggle = lineCount > 6 || text.length > 600;
-    return showToggle ? { text, metadata: { showToggle: true } } : { text };
+    // Show toggle for long instructions (>6 lines or >600 chars)
+    const isLong = text.split(/\r?\n/).length > 6 || text.length > 600;
+    return isLong ? { text, metadata: { showToggle: true } } : { text };
   }
 
   /**

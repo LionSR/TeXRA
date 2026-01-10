@@ -294,7 +294,7 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.ensureMissingOutputsLoaded();
   }
 
-  /** Load missing outputs from persistence */
+  /** Load missing outputs from persistence or migrate legacy data */
   private async loadMissingOutputs(): Promise<void> {
     const saved = this.storage.get<Record<string, unknown>>(
       WorkspaceStateKey.MISSING_OUTPUTS,
@@ -303,31 +303,24 @@ export class OutputFilesManager extends PersistentMapManager<
 
     if (saved && Object.keys(saved).length > 0) {
       this._missingOutputs = this.deserializeMissingOutputs(saved);
-      return;
-    }
-
-    const migrated = await this.migrateLegacyMissingOutputs();
-    if (!migrated) {
+    } else if (!(await this.migrateLegacyMissingOutputs())) {
       this._missingOutputs.clear();
     }
   }
 
+  /** Ensure missing outputs are loaded (lazy initialization with memoization) */
   private async ensureMissingOutputsLoaded(): Promise<void> {
-    if (this.missingOutputsLoaded) {
-      return;
-    }
+    if (this.missingOutputsLoaded) return;
 
-    if (!this.missingOutputsLoadPromise) {
-      this.missingOutputsLoadPromise = this.loadMissingOutputs()
-        .then(() => {
-          this.missingOutputsLoaded = true;
-        })
-        .catch((error) => {
-          this.logger.error('Failed to load missing outputs', { data: error });
-          this.missingOutputsLoadPromise = null;
-          throw error;
-        });
-    }
+    this.missingOutputsLoadPromise ??= this.loadMissingOutputs()
+      .then(() => {
+        this.missingOutputsLoaded = true;
+      })
+      .catch((error) => {
+        this.logger.error('Failed to load missing outputs', { data: error });
+        this.missingOutputsLoadPromise = null;
+        throw error;
+      });
 
     await this.missingOutputsLoadPromise;
   }

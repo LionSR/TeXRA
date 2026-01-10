@@ -286,8 +286,7 @@ export class ProgressViewState {
   /**
    * Resolve and optionally persist the active run ID for a stream.
    *
-   * This method determines which run (task group) should be active for display
-   * in the progress view. The resolution strategy:
+   * Resolution strategy:
    * 1. If a specific runId is requested, validate it exists and use it
    * 2. Otherwise, check for a previously active runId
    * 3. If only one run exists, use that
@@ -308,18 +307,12 @@ export class ProgressViewState {
   ): string | null {
     const persist = options?.persist ?? true;
 
-    // Helper to persist and return a resolved runId
-    const resolve = (runId: string | null): string | null => {
-      if (runId && persist) {
-        this.setActiveRunId(stream, runId);
-      }
-      return runId;
-    };
-
     // 1. If specific runId requested, validate it exists
     if (requested) {
       const candidates = this.collectRunCandidates(stream);
-      return candidates.has(requested) ? resolve(requested) : null;
+      if (!candidates.has(requested)) return null;
+      if (persist) this.setActiveRunId(stream, requested);
+      return requested;
     }
 
     // 2. Use existing active run if set
@@ -328,12 +321,13 @@ export class ProgressViewState {
 
     // 3. Auto-select: single candidate or latest
     const candidates = this.collectRunCandidates(stream);
-    if (candidates.size === 1) {
-      const [only] = candidates;
-      return resolve(only);
-    }
+    const runId =
+      candidates.size === 1 ? [...candidates][0] : this.findLatestRunId(stream);
 
-    return resolve(this.findLatestRunId(stream));
+    if (runId && persist) {
+      this.setActiveRunId(stream, runId);
+    }
+    return runId;
   }
 
   private collectRunCandidates(stream: StreamTabId): Set<string> {
@@ -644,6 +638,7 @@ export class ProgressViewState {
 
   /**
    * Extract task state entries from either legacy or flat format.
+   * Legacy format had { workflow: {...}, toolUse: {...} } structure.
    */
   private extractTaskStateEntries(
     raw: Record<string, unknown>,
@@ -651,26 +646,15 @@ export class ProgressViewState {
     const isLegacyFormat =
       typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
 
-    if (!isLegacyFormat) {
-      return Object.entries(raw).filter(
-        ([, value]) => value && typeof value === 'object',
-      );
-    }
+    const buckets = isLegacyFormat ? [raw.workflow, raw.toolUse] : [raw];
 
-    // Legacy format: collect from workflow and toolUse sub-objects
-    const entries: Array<[string, unknown]> = [];
-    for (const bucket of [raw.workflow, raw.toolUse]) {
-      if (bucket && typeof bucket === 'object') {
-        for (const [stream, value] of Object.entries(
-          bucket as Record<string, unknown>,
-        )) {
-          if (value && typeof value === 'object') {
-            entries.push([stream, value]);
-          }
-        }
-      }
-    }
-    return entries;
+    return buckets.flatMap((bucket) =>
+      bucket && typeof bucket === 'object'
+        ? Object.entries(bucket as Record<string, unknown>).filter(
+            ([, value]) => value && typeof value === 'object',
+          )
+        : [],
+    );
   }
 
   /**
