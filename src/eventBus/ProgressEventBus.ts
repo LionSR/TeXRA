@@ -110,11 +110,16 @@ class ProgressEventBus implements ProgressEventBusLike {
     const cleanup = () => this.emitter.off(event, listener);
     options?.signal?.addEventListener('abort', cleanup, { once: true });
 
-    // Replay buffered events for this event type and remove them from buffer
-    this.buffer
-      .filter((item) => item.event === event)
-      .forEach((item) => listener(item.payload as ProgressEventPayloads[K]));
-    this.buffer = this.buffer.filter((item) => item.event !== event);
+    // Replay buffered events for this event type and remove them (single pass)
+    const remaining: typeof this.buffer = [];
+    for (const item of this.buffer) {
+      if (item.event === event) {
+        listener(item.payload as ProgressEventPayloads[K]);
+      } else {
+        remaining.push(item);
+      }
+    }
+    this.buffer = remaining;
 
     return cleanup;
   }
