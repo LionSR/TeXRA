@@ -17,16 +17,9 @@ export {
   addCdataToTagsMultiple,
 } from './xmlCdata';
 
-// Re-export from format detection module
+// Re-export from conversion module (includes OutputFormat enum)
 export {
   OutputFormat,
-  detectInputFormat,
-  containsHtml,
-  containsLatex,
-} from './xmlFormatDetection';
-
-// Re-export from conversion module
-export {
   convertLatexToMarkdown,
   convertHtmlToMarkdown,
   convertWithPandoc,

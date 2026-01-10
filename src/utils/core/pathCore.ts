@@ -44,14 +44,9 @@ export function normalizeLatexPath(value: string): string {
 
 /**
  * Get the file extension in lowercase.
- * Consolidates the common `.toLowerCase().endsWith()` pattern.
- *
- * @example
- * getExtensionLowercase('Document.TEX') // returns '.tex'
- * getExtensionLowercase('file') // returns ''
- * getExtensionLowercase('/my.project/file') // returns '' (dot is in directory, not filename)
+ * Internal helper for hasExtension - not exported.
  */
-export function getExtensionLowercase(filePath: string): string {
+function getExtensionLowercase(filePath: string): string {
   if (!filePath) return '';
   return path.extname(filePath).toLowerCase();
 }
