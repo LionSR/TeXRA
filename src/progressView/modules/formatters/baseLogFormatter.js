@@ -10,7 +10,7 @@ import { setElementDataset, initToggleIcon } from './htmlBuilders.js';
  * @param {HTMLElement} element - Details element
  * @param {boolean} [shouldOpen] - Whether element should be open
  */
-export const applyOpenState = (element, shouldOpen) => {
+export function applyOpenState(element, shouldOpen) {
   if (
     !(element instanceof HTMLElement) ||
     element.tagName !== 'DETAILS' ||
@@ -21,7 +21,7 @@ export const applyOpenState = (element, shouldOpen) => {
 
   element.open = shouldOpen;
   initToggleIcon(element, shouldOpen);
-};
+}
 
 /**
  * Create a banner entry from template
@@ -37,7 +37,7 @@ export const applyOpenState = (element, shouldOpen) => {
  * @param {string} [options.templateId='bannerDetailsTemplate'] - Template ID
  * @returns {{element: HTMLElement, contentElem: HTMLElement|null, copyButton: HTMLElement|null, summaryElem: HTMLElement|null}|null}
  */
-export const createBannerEntry = ({
+export function createBannerEntry({
   logId,
   groupId,
   timestamp,
@@ -47,7 +47,7 @@ export const createBannerEntry = ({
   contentClass,
   open = false,
   templateId = 'bannerDetailsTemplate',
-}) => {
+}) {
   const element = createFromTemplate(templateId);
   if (!element) return null;
 
@@ -92,7 +92,7 @@ export const createBannerEntry = ({
     copyButton,
     summaryElem: element.querySelector('.details-summary'),
   };
-};
+}
 
 /**
  * Safely execute a formatting function with error handling
@@ -100,14 +100,14 @@ export const createBannerEntry = ({
  * @param {string} errorContext - Context for error message
  * @returns {*} Result of formatter or null if error
  */
-export const safeFormat = (formatter, errorContext) => {
+export function safeFormat(formatter, errorContext) {
   try {
     return formatter();
   } catch (e) {
     console.error(`Error parsing ${errorContext}:`, e);
     return null;
   }
-};
+}
 
 /**
  * Resolve whether a details element should be open
@@ -116,18 +116,14 @@ export const safeFormat = (formatter, errorContext) => {
  * @param {Set<string>} autoExpandedTypes - Set of types that auto-expand
  * @returns {boolean|undefined}
  */
-export const resolveOpenState = (messageType, options, autoExpandedTypes) => {
-  if (!options) {
-    return undefined;
-  }
+export function resolveOpenState(messageType, options, autoExpandedTypes) {
+  if (!options) return undefined;
 
-  if (options.preservedOpen !== undefined) {
-    return options.preservedOpen;
-  }
+  // Preserved state takes precedence
+  if (options.preservedOpen !== undefined) return options.preservedOpen;
 
-  if (options.defaultOpen && autoExpandedTypes.has(messageType)) {
-    return true;
-  }
+  // Auto-expand certain types when defaultOpen is set
+  if (options.defaultOpen && autoExpandedTypes.has(messageType)) return true;
 
   return undefined;
-};
+}
