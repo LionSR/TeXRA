@@ -124,20 +124,30 @@ export async function computeModelOptions(): Promise<string> {
           : '';
       const costStr = formatCost(config.inputPrice, config.outputPrice);
 
-      const attrs = [
-        `value="${model}"`,
-        !available &&
+      const attrs = [`value="${model}"`];
+      if (!available) {
+        attrs.push(
           'data-requires-key="true" class="disabled-option disabled-model"',
-        provider && `data-provider="${provider}"`,
-        contextStr && `data-context="${contextStr}"`,
-        costStr && `data-cost="${costStr}"`,
-      ].filter(Boolean);
+        );
+      }
+      if (provider) {
+        attrs.push(`data-provider="${provider}"`);
+      }
+      if (contextStr) {
+        attrs.push(`data-context="${contextStr}"`);
+      }
+      if (costStr) {
+        attrs.push(`data-cost="${costStr}"`);
+      }
 
       // Build description from context and cost
-      const descriptionParts = [
-        contextStr && `Context: ${contextStr}`,
-        costStr && `Cost (in/out per 1M): ${costStr}`,
-      ].filter(Boolean);
+      const descriptionParts: string[] = [];
+      if (contextStr) {
+        descriptionParts.push(`Context: ${contextStr}`);
+      }
+      if (costStr) {
+        descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
+      }
       if (descriptionParts.length > 0) {
         attrs.push(`description="${descriptionParts.join(' | ')}"`);
       }

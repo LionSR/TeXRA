@@ -100,7 +100,10 @@ export async function executeCommand(
     let result;
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
-      logger.debug(logChannel, `Running command: ${shellQuote([cmd, ...args])}`);
+      logger.debug(
+        logChannel,
+        `Running command: ${shellQuote([cmd, ...args])}`,
+      );
       result = await execa(cmd, args, execaOptions);
     } else {
       logger.debug(logChannel, `Running command: ${command}`);
