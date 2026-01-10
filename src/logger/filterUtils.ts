@@ -14,11 +14,8 @@ export interface FilterResult {
   debugMode: boolean;
 }
 
-/**
- * Get the current debug mode setting.
- * Single source of truth for debug mode configuration.
- */
-export function getDebugMode(): boolean {
+/** Get the current debug mode setting. */
+function getDebugMode(): boolean {
   return getConfig<boolean>('texra.logger.debugMode', false);
 }
 

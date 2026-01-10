@@ -234,56 +234,38 @@ export class AgentLogger {
     logger.initialize(this.channelId, this.isAgentLogger);
   }
 
-  /**
-   * Log a debug message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Internal helper to log at any level with consistent options handling. */
+  private log(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    options: LogOptions = {},
+  ): void {
+    logger[level](this.channelId, message, {
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
+  }
+
+  /** Log a debug message. Falls back to current group ID if not specified. */
   debug(message: string, options: LogOptions = {}): void {
-    logger.debug(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('debug', message, options);
   }
 
-  /**
-   * Log an info message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log an info message. Falls back to current group ID if not specified. */
   info(message: string, options: LogOptions = {}): void {
-    logger.info(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('info', message, options);
   }
 
-  /**
-   * Log a warning message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log a warning message. Falls back to current group ID if not specified. */
   warn(message: string, options: LogOptions = {}): void {
-    logger.warn(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('warn', message, options);
   }
 
-  /**
-   * Log an error message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log an error message. Falls back to current group ID if not specified. */
   error(message: string, options: LogOptions = {}): void {
-    logger.error(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('error', message, options);
   }
 
   /**
