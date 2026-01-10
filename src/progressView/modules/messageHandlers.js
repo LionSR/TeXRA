@@ -192,7 +192,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       newSessionKind,
       currentSessionKind: state.activeSessionKind,
       shouldClear,
-      taskGroupCount: state.taskGroups?.size ?? 0,
+      taskGroupCount: state.taskGroups?.groups?.size ?? 0,
     });
     if (shouldClear) {
       _logEvent('TASK_GROUPS_CLEARED', {
