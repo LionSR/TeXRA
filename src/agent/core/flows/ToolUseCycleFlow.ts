@@ -36,7 +36,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
+import {
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  formatZodIssuesForDiagnostics,
+  type ValidationErrorDiagnostics,
+} from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -56,76 +60,71 @@ import {
   handleInvocationResult,
 } from './RetryState';
 
-interface ToolValidationDiagnostics {
-  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: any;
-  formatted: Array<{
-    path: string;
-    message: string;
-    expected?: unknown;
-    received?: unknown;
-    code?: string;
-  }>;
-}
-
+/**
+ * Parse tool input, handling various input formats from different model providers.
+ * Returns parsed JSON if input is a JSON string, otherwise returns input as-is.
+ */
 function parseToolInput(
   raw: unknown,
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw === null) {
+  if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
 
-  if (typeof raw === 'boolean' || typeof raw === 'number') {
-    logger.warn(
-      `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
-    );
+  if (typeof raw !== 'string') {
     return raw;
   }
 
-  if (typeof raw !== 'string') return raw ?? {};
   try {
     return JSON.parse(raw);
-  } catch (error) {
+  } catch {
     logger.warn(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
-      { data: error },
     );
     return raw;
   }
 }
 
+/**
+ * Check if an error has Zod-like issues array (duck typing).
+ * Handles both real ZodError and error-like objects with issues.
+ */
+function hasZodIssues(
+  error: unknown,
+): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'issues' in error &&
+    Array.isArray((error as { issues?: unknown }).issues)
+  );
+}
+
+/**
+ * Normalize a tool call error into a user-friendly message with optional diagnostics.
+ * Uses shared formatting utilities from @tools/result for consistency.
+ */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
-): { message: string; diagnostics?: ToolValidationDiagnostics } {
-  if (error && typeof error === 'object' && 'issues' in error) {
-    const zodError = error as { issues?: any[] };
-    const issues = Array.isArray(zodError.issues) ? zodError.issues : [];
-    return {
-      message: `${toolName}: Invalid parameters provided`,
-      diagnostics: {
-        type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-        issues,
-        formatted: issues.map((issue) => ({
-          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
-          message: issue.message,
-          expected: issue.expected,
-          received: issue.received,
-          code: issue.code,
-        })),
-      },
-    };
+): { message: string; diagnostics?: ValidationErrorDiagnostics } {
+  if (!hasZodIssues(error)) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { message: `${toolName}: ${errorMessage}` };
   }
 
-  const fallbackMessage =
-    error instanceof Error
-      ? `${toolName}: ${error.message}`
-      : `${toolName}: ${String(error)}`;
-
-  return { message: fallbackMessage };
+  const issues = error.issues as ValidationErrorDiagnostics['issues'];
+  return {
+    message: `${toolName}: Invalid parameters provided`,
+    diagnostics: {
+      type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+      issues,
+      formatted: formatZodIssuesForDiagnostics(issues),
+    },
+  };
 }
 
 // ============================================================================
@@ -180,21 +179,6 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
 export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
 
 /**
- * Reset tool-use cycle state for a new iteration.
- * Called at the start of each cycle to clear transient fields.
- */
-function resetToolUseState(shared: ToolUseCycleShared): void {
-  resetCycleState(shared, [
-    'response',
-    'toolCalls',
-    'text',
-    'cycleNormalizedUsage',
-  ]);
-  shared.cycleResponseTimeMs = 0;
-  // Note: cycleIndex is incremented in ToolUseProcessNode.post(), not reset here
-}
-
-/**
  * Shared state for tool-use cycle flows.
  *
  * Uses flat structure (like ResponseCycleFlow) for consistency.
@@ -239,7 +223,13 @@ class ToolUsePrepNode<C> extends BaseNode<
 
     // Reset at the start of each cycle so downstream nodes observe a clean
     // runtime state before enriching it with model responses.
-    resetToolUseState(shared);
+    resetCycleState(shared, [
+      'response',
+      'toolCalls',
+      'text',
+      'cycleNormalizedUsage',
+    ]);
+    shared.cycleResponseTimeMs = 0;
 
     const { modelName, agentName } = this.services;
     await maybeSaveDebugObject({
@@ -415,8 +405,6 @@ type ToolUseProcessExecResult =
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
       responseTimeMs?: number;
-      createAssistantMessage?: boolean;
-      lastResponseUpdate?: string;
     };
 
 /**
@@ -522,6 +510,12 @@ class ToolUseProcessNode<C> extends BaseNode<
         usage,
         prepRes.responseTimeMs ?? 0,
       );
+      // Emit context state for UI display (centralized for all model handlers)
+      const { inputTokens } = normalizedUsage;
+      const { contextWindow } = services.modelHandler.config;
+      if (inputTokens > 0 && contextWindow > 0) {
+        services.logger.logContextState(inputTokens, contextWindow);
+      }
     }
 
     const endTurn = services.modelHandler.isEndTurnStop(stopReason);
@@ -536,8 +530,6 @@ class ToolUseProcessNode<C> extends BaseNode<
         lastAssistantContent,
         normalizedUsage,
         responseTimeMs: prepRes.responseTimeMs,
-        createAssistantMessage: Boolean(text),
-        lastResponseUpdate: text ?? undefined,
       };
     }
 
@@ -585,42 +577,38 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Finalize cycle using direct values (no round object needed)
-    await finalizeToolUseCycle({
-      cycleIndex: shared.cycleIndex,
-      responseTimeMs: shared.cycleResponseTimeMs,
-      normalizedUsage: shared.cycleNormalizedUsage ?? null,
+    await finalizeToolUseCycle(
+      shared.cycleIndex,
+      shared.cycleResponseTimeMs,
+      shared.cycleNormalizedUsage ?? null,
       run,
       onRoundFinalized,
-    });
+    );
     run.incrementRounds();
 
+    shared.stopReason = execRes.stopReason;
+
     if (execRes.endTurn) {
-      // Apply side effects for end turn
       shared.toolCalls = undefined;
-      if (execRes.createAssistantMessage && execRes.text) {
+      shared.shouldStop = true;
+      shared.endTurn = true;
+      if (execRes.text) {
         shared.messages.push(
           services.modelHandler.createAssistantMessage(execRes.text),
         );
         workspace.assembly.lastResponse = execRes.text;
       }
-      // Clear ephemeral state
       workspace.resetServerToolContent();
       workspace.resetReasoning();
-      shared.shouldStop = true;
-      shared.endTurn = true; // Normal completion (model said end_turn)
-      shared.stopReason = execRes.stopReason;
       return FlowTransition.COMPLETE;
     }
 
-    // Apply side effects for continuing with tool calls
+    // Continue with tool calls
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    shared.stopReason = execRes.stopReason;
-    // Increment cycle index and reset metrics for next cycle
     shared.cycleIndex += 1;
     shared.cycleResponseTimeMs = 0;
     shared.cycleNormalizedUsage = undefined;
-
     return FlowTransition.DEFAULT;
   }
 }
@@ -843,31 +831,40 @@ class ToolUseDispatchNode<C> extends BaseNode<
       data: toolUseLog,
     });
 
-    if (result.files && result.files.length > 0) {
-      const toAdd: FileLocation[] = [];
-      for (const attachment of result.files) {
-        const candidate = attachment.path;
-        if (typeof candidate !== 'string' || candidate.trim() === '') {
-          continue;
-        }
-        // Convert to FileLocation - pathToLocation handles both absolute and relative paths,
-        // including external paths outside the workspace
-        const location = pathToLocation(candidate);
-        try {
-          // Use AbsoluteFS for file existence check to support external paths
-          const exists = await AbsoluteFS.exists(location.absolutePath);
-          if (exists) {
-            toAdd.push(location);
-          }
-        } catch (_err) {
-          // Ignore errors when checking existence
-        }
+    // Process media file attachments if present
+    const mediaLocations = await this.collectValidMediaLocations(result.files);
+    if (mediaLocations.length > 0) {
+      workspace.media.addMediaFiles(mediaLocations);
+    }
+  }
+
+  /**
+   * Collect valid file locations from tool result attachments.
+   * Filters out invalid paths and non-existent files.
+   */
+  private async collectValidMediaLocations(
+    files: ToolResult['files'],
+  ): Promise<FileLocation[]> {
+    if (!files || files.length === 0) {
+      return [];
+    }
+
+    const validLocations: FileLocation[] = [];
+    for (const attachment of files) {
+      const filePath = attachment.path;
+      if (typeof filePath !== 'string' || filePath.trim() === '') {
+        continue;
       }
-      if (toAdd.length > 0) {
-        // addMediaFiles handles deduplication (both within toAdd and against existing files)
-        workspace.media.addMediaFiles(toAdd);
+      const location = pathToLocation(filePath);
+      try {
+        if (await AbsoluteFS.exists(location.absolutePath)) {
+          validLocations.push(location);
+        }
+      } catch {
+        // Ignore files that can't be accessed
       }
     }
+    return validLocations;
   }
 
   /**

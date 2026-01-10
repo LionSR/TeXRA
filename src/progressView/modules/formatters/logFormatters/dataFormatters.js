@@ -23,47 +23,68 @@ import { formatTokens } from '../timestampUtils.js';
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} File list element or null
  */
-export const formatFileList = (normalizedPayload, logId) => {
+export function formatFileList(normalizedPayload, logId) {
   const element = createFromTemplate('fileListDetailsTemplate');
   if (!element) return null;
+
   const contentElem = element.querySelector('.file-list-content');
   const summaryElem = element.querySelector('.summary-text');
   initToggleIcon(element, false);
 
-  let parsed =
-    normalizeFileListEntries(normalizedPayload?.structured) || undefined;
-
+  // Try structured data first, then fall back to parsing decodedText
+  let parsed = normalizeFileListEntries(normalizedPayload?.structured);
   if (!parsed && normalizedPayload?.decodedText) {
     try {
-      const parsedJson = JSON.parse(normalizedPayload.decodedText);
-      parsed = normalizeFileListEntries(parsedJson) || undefined;
-    } catch (_err) {
+      parsed = normalizeFileListEntries(
+        JSON.parse(normalizedPayload.decodedText),
+      );
+    } catch {
       // Fall through to raw display
     }
   }
 
+  // Raw fallback when parsing fails
   if (!parsed) {
-    const rawContent = normalizedPayload?.decodedText ?? '';
     if (summaryElem) summaryElem.textContent = 'Files (raw)';
     if (contentElem) {
-      contentElem.innerHTML = `<pre>${encodeHtml(rawContent)}</pre>`;
+      contentElem.innerHTML = `<pre>${encodeHtml(normalizedPayload?.decodedText ?? '')}</pre>`;
       if (logId) contentElem.dataset.logId = logId;
     }
     return element;
   }
 
   const renderData = buildFileListRender(parsed);
-  const items = renderData?.items ?? '';
-  const summary = renderData?.summary ?? 'Files';
-
-  if (summaryElem) summaryElem.textContent = summary;
+  if (summaryElem) summaryElem.textContent = renderData?.summary ?? 'Files';
   if (contentElem) {
-    contentElem.innerHTML = items;
+    contentElem.innerHTML = renderData?.items ?? '';
     if (logId) contentElem.dataset.logId = logId;
   }
 
   return element;
-};
+}
+
+/**
+ * Create XML link element from file info
+ * @param {string} xmlFile - XML file path
+ * @param {string} documentTag - Expected document tag
+ * @returns {HTMLElement|null} XML link element or null
+ */
+function createXmlLinkElement(xmlFile, documentTag) {
+  const xmlEscaped = encodeHtml(xmlFile);
+  const xmlFileName = encodeHtml(getBasename(xmlFile));
+  const tagInfo = documentTag
+    ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
+    : '';
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<div class="xml-link-container">
+    <i class="codicon codicon-file-code"></i>
+    <span>Open XML to check tag consistency:</span>
+    <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileName}</span>
+    ${tagInfo}
+  </div>`;
+  return wrapper.firstElementChild;
+}
 
 /**
  * Format missing outputs entry
@@ -71,15 +92,8 @@ export const formatFileList = (normalizedPayload, logId) => {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Missing outputs element or null
  */
-export const formatMissingOutputs = (normalizedPayload, logId) => {
-  const element = createFromTemplate('missingOutputsDetailsTemplate');
-  if (!element) return null;
-  const contentElem = element.querySelector('.file-list-content');
-  const summaryElem = element.querySelector('.summary-text');
-  initToggleIcon(element, false);
-
+export function formatMissingOutputs(normalizedPayload, logId) {
   const parsed = normalizeMissingOutputsPayload(normalizedPayload?.structured);
-
   if (!parsed) {
     console.warn('Missing structured data for missing outputs log entry');
     return null;
@@ -87,63 +101,41 @@ export const formatMissingOutputs = (normalizedPayload, logId) => {
 
   const { missing, xmlFile, documentTag } = parsed;
 
-  const items = missing
-    .map((f) => {
-      const filePath = String(f);
-      const escaped = encodeHtml(filePath);
-      const fileName = getBasename(filePath);
-      const fileNameEscaped = encodeHtml(fileName);
-      return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
-    })
-    .join('');
-
-  let xmlLink = '';
-  if (xmlFile) {
-    const xmlEscaped = encodeHtml(xmlFile);
-    const xmlFileName = getBasename(xmlFile);
-    const xmlFileNameEscaped = encodeHtml(xmlFileName);
-    const tagInfo = documentTag
-      ? `<span class="document-tag">(Expected &lt;${encodeHtml(documentTag)}&gt; block)</span>`
-      : '';
-    xmlLink = `<div class="xml-link-container">
-        <i class="codicon codicon-file-code"></i>
-        <span>Open XML to check tag consistency:</span>
-        <span class="file-link clickable-link" data-file="${xmlEscaped}">${xmlFileNameEscaped}</span>
-        ${tagInfo}
-      </div>`;
-  }
-
+  // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = xmlLink;
-    const xmlElement = wrapper.firstElementChild;
-    if (!xmlElement) {
-      console.error('Failed to create XML link element from HTML:', xmlLink);
-      return null;
-    }
-    return xmlElement;
+    return createXmlLinkElement(xmlFile, documentTag);
   }
 
-  const summary = `Missing outputs (${missing.length})`;
+  const element = createFromTemplate('missingOutputsDetailsTemplate');
+  if (!element) return null;
 
-  if (summaryElem) summaryElem.textContent = summary;
+  initToggleIcon(element, false);
+
+  const summaryElem = element.querySelector('.summary-text');
+  if (summaryElem) {
+    summaryElem.textContent = `Missing outputs (${missing.length})`;
+  }
+
+  const contentElem = element.querySelector('.file-list-content');
   if (contentElem) {
-    contentElem.innerHTML = items;
+    contentElem.innerHTML = missing
+      .map((f) => {
+        const filePath = String(f);
+        const escaped = encodeHtml(filePath);
+        return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${encodeHtml(getBasename(filePath))}</span></li>`;
+      })
+      .join('');
     if (logId) contentElem.dataset.logId = logId;
   }
-  if (xmlLink && element) {
-    const div = document.createElement('div');
-    div.innerHTML = xmlLink;
-    const xmlElement = div.firstElementChild;
-    if (xmlElement) {
-      element.appendChild(xmlElement);
-    } else {
-      console.error('Failed to create XML link element from HTML:', xmlLink);
-    }
+
+  // Append XML link if present
+  if (xmlFile) {
+    const xmlElement = createXmlLinkElement(xmlFile, documentTag);
+    if (xmlElement) element.appendChild(xmlElement);
   }
 
   return element;
-};
+}
 
 // =============================================================================
 // Latexdiff Helpers
@@ -262,47 +254,65 @@ const buildLatexdiffEntryHtml = (entry) => {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Latexdiff element or null
  */
-export const formatLatexdiff = (normalizedPayload, logId) => {
+export function formatLatexdiff(normalizedPayload, logId) {
+  const entries = ensureLatexdiffArray(normalizedPayload?.structured);
+  if (!entries || entries.length === 0) return null;
+
   const element = createFromTemplate('latexdiffDetailsTemplate');
   if (!element) return null;
 
-  const contentElem = element.querySelector('.latexdiff-content');
-  const summaryElem = element.querySelector('.summary-text');
   initToggleIcon(element, true);
-
-  const entries = ensureLatexdiffArray(normalizedPayload?.structured);
-  if (!entries || entries.length === 0) {
-    return null;
-  }
 
   // Build HTML for all entries and collect first runId
   let aggregatedRunId = '';
-  const items = entries
-    .map((entry) => {
-      const runId = toStringOrEmpty(entry?.runId);
-      if (runId && !aggregatedRunId) {
-        aggregatedRunId = runId;
-      }
-      return buildLatexdiffEntryHtml(entry);
-    })
-    .join('');
-
-  const summary =
-    entries.length === 1
-      ? 'Latexdiff result'
-      : `Latexdiff results (${entries.length})`;
-
-  if (summaryElem) summaryElem.textContent = summary;
-  if (contentElem) {
-    contentElem.innerHTML = items;
-    if (logId) contentElem.dataset.logId = logId;
-    if (aggregatedRunId) {
-      contentElem.dataset.runId = aggregatedRunId;
+  const items = entries.map((entry) => {
+    const runId = toStringOrEmpty(entry?.runId);
+    if (runId && !aggregatedRunId) {
+      aggregatedRunId = runId;
     }
+    return buildLatexdiffEntryHtml(entry);
+  });
+
+  const summaryElem = element.querySelector('.summary-text');
+  if (summaryElem) {
+    summaryElem.textContent =
+      entries.length === 1
+        ? 'Latexdiff result'
+        : `Latexdiff results (${entries.length})`;
+  }
+
+  const contentElem = element.querySelector('.latexdiff-content');
+  if (contentElem) {
+    contentElem.innerHTML = items.join('');
+    if (logId) contentElem.dataset.logId = logId;
+    if (aggregatedRunId) contentElem.dataset.runId = aggregatedRunId;
   }
 
   return element;
-};
+}
+
+// Statistics field configuration: [key, icon, label, formatter]
+const STAT_FIELDS = [
+  ['inputTokens', 'codicon-arrow-up', 'Input tokens', formatTokens],
+  ['outputTokens', 'codicon-arrow-down', 'Output tokens', formatTokens],
+  ['cacheReadInputTokens', 'codicon-history', 'Cache hits', formatTokens],
+  ['cacheCreationInputTokens', 'codicon-save', 'Cache writes', formatTokens],
+  [
+    'percentageCached',
+    'codicon-graph-line',
+    'Cached %',
+    (v) => `${v.toFixed(2)}%`,
+  ],
+  [
+    'reasoningTokens',
+    'codicon-comment-discussion',
+    'Reasoning tokens',
+    formatTokens,
+  ],
+  ['toolUseTokens', 'codicon-tools', 'Tool tokens', formatTokens],
+  ['elapsedTime', 'codicon-clock', 'Elapsed time', (v) => `${v}s`],
+  ['cost', 'codicon-rocket', 'Cost', (v) => `$${v.toFixed(3)}`],
+];
 
 /**
  * Format statistics entry
@@ -310,84 +320,25 @@ export const formatLatexdiff = (normalizedPayload, logId) => {
  * @param {string} logId - Log entry ID
  * @returns {HTMLElement|null} Statistics element or null
  */
-export const formatStatistics = (normalizedPayload, logId) => {
+export function formatStatistics(normalizedPayload, logId) {
+  const parsed = normalizedPayload?.structured;
+  if (!parsed || typeof parsed !== 'object') return null;
+
   const element = createFromTemplate('statisticsDetailsTemplate');
   if (!element) return null;
-  const contentElem = element.querySelector('.statistics-content');
+
   initToggleIcon(element, false);
 
-  const parsed = normalizedPayload?.structured;
-  if (!parsed || typeof parsed !== 'object') {
-    return null;
-  }
+  const items = STAT_FIELDS.filter(([key]) => parsed[key] !== undefined).map(
+    ([key, icon, label, formatter]) =>
+      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${formatter(parsed[key])}</span>`,
+  );
 
-  const items = [];
-  const pushItem = (icon, label, value, suffix = '') => {
-    items.push(
-      `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
-    );
-  };
-
-  if (parsed.inputTokens !== undefined) {
-    pushItem(
-      'codicon-arrow-up',
-      'Input tokens',
-      formatTokens(parsed.inputTokens),
-    );
-  }
-  if (parsed.outputTokens !== undefined) {
-    pushItem(
-      'codicon-arrow-down',
-      'Output tokens',
-      formatTokens(parsed.outputTokens),
-    );
-  }
-  if (parsed.cacheReadInputTokens !== undefined) {
-    pushItem(
-      'codicon-history',
-      'Cache hits',
-      formatTokens(parsed.cacheReadInputTokens),
-    );
-  }
-  if (parsed.cacheCreationInputTokens !== undefined) {
-    pushItem(
-      'codicon-save',
-      'Cache writes',
-      formatTokens(parsed.cacheCreationInputTokens),
-    );
-  }
-  if (parsed.percentageCached !== undefined) {
-    pushItem(
-      'codicon-graph-line',
-      'Cached %',
-      `${parsed.percentageCached.toFixed(2)}%`,
-    );
-  }
-  if (parsed.reasoningTokens !== undefined) {
-    pushItem(
-      'codicon-comment-discussion',
-      'Reasoning tokens',
-      formatTokens(parsed.reasoningTokens),
-    );
-  }
-  if (parsed.toolUseTokens !== undefined) {
-    pushItem(
-      'codicon-tools',
-      'Tool tokens',
-      formatTokens(parsed.toolUseTokens),
-    );
-  }
-  if (parsed.elapsedTime !== undefined) {
-    pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
-  }
-  if (parsed.cost !== undefined) {
-    pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);
-  }
-
+  const contentElem = element.querySelector('.statistics-content');
   if (contentElem) {
     contentElem.innerHTML = items.join('');
     if (logId) contentElem.dataset.logId = logId;
   }
 
   return element;
-};
+}

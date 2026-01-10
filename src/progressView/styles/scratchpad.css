@@ -86,3 +86,16 @@
   max-height: var(--height-large);
   overflow: auto;
 }
+
+/* Diff line highlighting */
+.diff-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+}
+
+.diff-remove {
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+}
+
+.diff-hunk {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, #d29922);
+}

@@ -1,51 +1,20 @@
 /**
  * Main entry point for progress view formatters.
- * Provides the LogEntryFormatter class and all exports for backward compatibility.
+ * Provides the LogEntryFormatter class and minimal re-exports for external use.
  */
 
-// Re-export constants
-export {
-  BULLET_MARKUP,
-  EMOJI_BY_LEVEL,
-  QUERY_PREVIEW_MAX_LENGTH,
-} from './constants.js';
-
-// Re-export task group level (separate file to avoid circular imports)
-export { TaskGroupLevel } from './taskGroupLevel.js';
-
-// Re-export timestamp utilities
-export {
-  formatTokens,
-  formatDuration,
-  formatTimestamp,
-  MessageTimestampExtractor,
-} from './timestampUtils.js';
-
-// Re-export task group formatter
+// Re-exports for external modules (only what's actually imported externally)
+export { formatTokens } from './timestampUtils.js';
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter.js';
 
-// Re-export markdown renderer
-export {
-  getMarkdownRenderer,
-  processMarkdownContent,
-} from './markdownRenderer.js';
-
-// Import formatters for composition
+// Internal imports for LogEntryFormatter
 import { normalizeStructuredContent } from './normalizers.js';
 import {
   applyOpenState,
-  createBannerEntry,
   safeFormat,
   resolveOpenState,
 } from './baseLogFormatter.js';
-import {
-  getMarkdownRenderer,
-  processMarkdownContent,
-} from './markdownRenderer.js';
-import { EMOJI_BY_LEVEL } from './constants.js';
-import { encodeHtml } from '@common/htmlEncoding.js';
-
-// Import specialized formatters
+import { getMarkdownRenderer } from './markdownRenderer.js';
 import {
   formatBannerContent,
   formatModelResponse,
@@ -60,6 +29,7 @@ import {
   formatLatexdiff,
   formatStatistics,
 } from './logFormatters/dataFormatters.js';
+import { formatContextManagement } from './logFormatters/contextManagementFormatters.js';
 import {
   formatUserMessage,
   formatProgressStatus,
@@ -76,6 +46,13 @@ export class LogEntryFormatter {
     this._initializeMarkdown();
     this._formatters = this._buildFormatterMap();
     this._autoExpandedTypes = new Set(['thinking', 'scratchpad']);
+    // Message types that return null when their formatter produces no result
+    this._nullableTypes = new Set([
+      'thinking',
+      'scratchpad',
+      'modelResponse',
+      'contextState',
+    ]);
   }
 
   _initializeMarkdown() {
@@ -83,101 +60,58 @@ export class LogEntryFormatter {
   }
 
   _buildFormatterMap() {
+    // Helper to wrap formatter functions with error handling
+    const safe = (fn, label) => (m) => safeFormat(() => fn(m), label);
+
+    // Banner formatter factory for thinking/scratchpad
+    const banner = (title) => (m) =>
+      formatBannerContent(
+        m.normalizedPayload,
+        title,
+        m.id,
+        m.groupId,
+        m.timestamp,
+      );
+
+    // Data formatter factory for payload+id patterns
+    const data = (fn) => (m) => fn(m.normalizedPayload, m.id);
+
+    // Meta formatter factory for payload+id+groupId+timestamp patterns
+    const meta = (fn) => (m) =>
+      fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
+
     return {
-      thinking: (message) =>
-        safeFormat(
-          () =>
-            formatBannerContent(
-              message.normalizedPayload,
-              'Thinking',
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'thinking',
-        ),
-      scratchpad: (message) =>
-        safeFormat(
-          () =>
-            formatBannerContent(
-              message.normalizedPayload,
-              'Scratchpad',
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'scratchpad',
-        ),
-      toolUse: (message) =>
-        safeFormat(
-          () =>
-            formatToolUse(
-              message.normalizedPayload,
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'tool use',
-        ),
-      webSearch: (message) =>
-        safeFormat(
-          () =>
-            formatWebSearch(
-              message.normalizedPayload,
-              message.id,
-              message.groupId,
-              message.timestamp,
-            ),
-          'web search',
-        ),
-      modelResponse: (message) =>
-        safeFormat(
-          () =>
-            formatModelResponse({
-              id: message.id,
-              groupId: message.groupId,
-              timestamp: message.timestamp,
-              verbose: message.verbose,
-              content: message.normalizedPayload,
-              level: message.level,
-            }),
-          'Assistant',
-        ),
-      fileList: (message) =>
-        safeFormat(
-          () => formatFileList(message.normalizedPayload, message.id),
-          'file list',
-        ),
-      missingOutputs: (message) =>
-        safeFormat(
-          () => formatMissingOutputs(message.normalizedPayload, message.id),
-          'missing outputs',
-        ),
-      latexdiff: (message) =>
-        safeFormat(
-          () => formatLatexdiff(message.normalizedPayload, message.id),
-          'latexdiff',
-        ),
-      statistics: (message) =>
-        safeFormat(
-          () => formatStatistics(message.normalizedPayload, message.id),
-          'statistics',
-        ),
-      // Context state is displayed in the footer, not inline in logs
-      contextState: () => null,
-      userMessage: (message) =>
-        safeFormat(
-          () =>
-            formatUserMessage(
-              message.normalizedPayload,
-              message.id,
-              message.timestamp,
-            ),
-          'user message',
-        ),
-      progressStatus: (message) =>
-        safeFormat(() => formatProgressStatus(message), 'progress status'),
-      error: (message) => safeFormat(() => formatError(message), 'error'),
+      thinking: safe(banner('Thinking'), 'thinking'),
+      scratchpad: safe(banner('Scratchpad'), 'scratchpad'),
+      toolUse: safe(meta(formatToolUse), 'tool use'),
+      webSearch: safe(meta(formatWebSearch), 'web search'),
+      modelResponse: safe(
+        (m) =>
+          formatModelResponse({
+            id: m.id,
+            groupId: m.groupId,
+            timestamp: m.timestamp,
+            verbose: m.verbose,
+            content: m.normalizedPayload,
+            level: m.level,
+          }),
+        'Assistant',
+      ),
+      fileList: safe(data(formatFileList), 'file list'),
+      missingOutputs: safe(data(formatMissingOutputs), 'missing outputs'),
+      latexdiff: safe(data(formatLatexdiff), 'latexdiff'),
+      statistics: safe(data(formatStatistics), 'statistics'),
+      contextManagement: safe(
+        data(formatContextManagement),
+        'context management',
+      ),
+      contextState: () => null, // Displayed in footer, not inline
+      userMessage: safe(
+        (m) => formatUserMessage(m.normalizedPayload, m.id, m.timestamp),
+        'user message',
+      ),
+      progressStatus: safe(formatProgressStatus, 'progress status'),
+      error: safe(formatError, 'error'),
     };
   }
 
@@ -214,12 +148,7 @@ export class LogEntryFormatter {
         return result;
       }
 
-      if (
-        messageType === 'thinking' ||
-        messageType === 'scratchpad' ||
-        messageType === 'modelResponse' ||
-        messageType === 'contextState'
-      ) {
+      if (this._nullableTypes.has(messageType)) {
         return null;
       }
     }

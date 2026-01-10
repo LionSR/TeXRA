@@ -28,6 +28,20 @@ export class RecordingManager {
     private readonly commandConfig: RecordingManagerConfig,
   ) {}
 
+  private handleError(
+    webview: vscode.Webview,
+    error: unknown,
+    operation: string,
+  ): void {
+    const message = toErrorMessage(error);
+    vscode.window.showErrorMessage(`Error ${operation}: ${message}`);
+    logger.error(CHANNEL, `Error in ${operation}: ${message}`);
+    webview.postMessage({
+      command: this.commandConfig.recordingErrorCommand,
+      error: message,
+    });
+  }
+
   async start(
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
@@ -45,14 +59,7 @@ export class RecordingManager {
         });
       }
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error starting recording: ${toErrorMessage(error)}`,
-      );
-      logger.error(CHANNEL, `Error in start: ${toErrorMessage(error)}`);
-      webviewView.webview.postMessage({
-        command: this.commandConfig.recordingErrorCommand,
-        error: toErrorMessage(error),
-      });
+      this.handleError(webviewView.webview, error, 'starting recording');
     }
   }
 
@@ -96,14 +103,7 @@ export class RecordingManager {
         },
       );
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error stopping recording: ${toErrorMessage(error)}`,
-      );
-      logger.error(CHANNEL, `Error in stop: ${toErrorMessage(error)}`);
-      webviewView.webview.postMessage({
-        command: this.commandConfig.recordingErrorCommand,
-        error: toErrorMessage(error),
-      });
+      this.handleError(webviewView.webview, error, 'stopping recording');
       acknowledgeStop();
     }
   }

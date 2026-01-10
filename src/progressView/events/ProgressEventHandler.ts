@@ -1,29 +1,27 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent and usage types
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { StreamStatus } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
+import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { nestedMapToRecord } from '@progressView/persistence/serializationUtils';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import type {
-  StreamStatus,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
 import { registerUIEvents, type UICallbacks } from './UIEvents';
 import { withEventErrorHandling } from './errorHandling';
 
@@ -50,6 +48,33 @@ export class ProgressEventHandler {
     private readonly uiCallbacks: UICallbacks,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+  }
+
+  /**
+   * Check if webview is available and the stream is active.
+   * Common guard condition for event handlers that should only update
+   * the webview when it's visible and showing the relevant stream.
+   */
+  private canUpdateWebview(stream: StreamTabId): boolean {
+    return (
+      this.webviewUpdater.isAvailable() && stream === this.state.activeStream
+    );
+  }
+
+  /**
+   * Update agentTypeFilter to match the session category if needed.
+   * Only updates when filter is not 'all' and doesn't already match.
+   */
+  private maybeUpdateFilterForCategory(
+    category: AgentCategory | undefined,
+  ): void {
+    if (
+      category &&
+      this.state.agentTypeFilter !== 'all' &&
+      this.state.agentTypeFilter !== category
+    ) {
+      this.state.agentTypeFilter = category;
+    }
   }
 
   /**
@@ -104,24 +129,13 @@ export class ProgressEventHandler {
         const { stream, session, isRemote, hasMultipleOutputs } = payload;
         if (!stream) return;
 
-        // Use state's single source of truth for stream switch detection
-        const isStreamSwitch = this.state.isStreamSwitch(stream);
-
         await this.state.streamTabs.ensureStream(stream);
         this.state.updateStreamHints(stream, {
           sessionCategory: session?.agentCategory,
           isRemote,
           hasMultipleOutputs,
         });
-
-        if (
-          session?.agentCategory &&
-          this.state.agentTypeFilter !== 'all' &&
-          this.state.agentTypeFilter !== session.agentCategory
-        ) {
-          this.state.agentTypeFilter = session.agentCategory;
-        }
-
+        this.maybeUpdateFilterForCategory(session?.agentCategory);
         this.state.activeStream = stream;
         this.replayPendingTaskGroups(stream);
 
@@ -145,12 +159,10 @@ export class ProgressEventHandler {
         }
 
         if (this.webviewUpdater.isAvailable()) {
+          // Frontend detects stream switches using lastRenderedStream tracking.
           const activeRunId = this.refreshStreamSurface(stream, {
             updateInstruction: false,
-            forceRebuild: isStreamSwitch,
           });
-          // Mark stream as rendered for future switch detection
-          this.state.markStreamRendered(stream);
           this.sendInstructionUpdate(stream, activeRunId);
         }
       },
@@ -184,12 +196,8 @@ export class ProgressEventHandler {
         this.state.setTaskState(streamTabId, taskState);
         const sessionKind = taskState.agentConfig.session.agentCategory;
 
-        if (
-          this.state.activeStream === streamTabId &&
-          this.state.agentTypeFilter !== 'all' &&
-          this.state.agentTypeFilter !== sessionKind
-        ) {
-          this.state.agentTypeFilter = sessionKind;
+        if (this.state.activeStream === streamTabId) {
+          this.maybeUpdateFilterForCategory(sessionKind);
         }
 
         if (executionId) {
@@ -267,10 +275,7 @@ export class ProgressEventHandler {
       async () => {
         await this.state.taskGroups.updateGroup(data);
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          data.stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(data.stream)) {
           this.webviewUpdater.updateTaskGroup(data);
         }
       },
@@ -332,23 +337,13 @@ export class ProgressEventHandler {
           return;
         }
 
-        // Update fields if provided
-        if (logMessage.text !== undefined) existing.text = logMessage.text;
-        if (logMessage.messageType !== undefined)
-          existing.messageType = logMessage.messageType;
-        if (logMessage.level) existing.level = logMessage.level;
-        if (logMessage.timestamp !== undefined)
-          existing.timestamp = logMessage.timestamp;
-        if (logMessage.verbose !== undefined)
-          existing.verbose = logMessage.verbose;
-        if (logMessage.data !== undefined) existing.data = logMessage.data;
+        // Update fields from logMessage, preserving existing values for undefined fields
+        const { id: _id, ...updates } = logMessage;
+        Object.assign(existing, updates);
 
         await this.state.streamTabs.save();
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateLogMessage(stream, existing);
         }
       },
@@ -372,10 +367,10 @@ export class ProgressEventHandler {
           .getFiles(stream)
           .get(storageKey);
         const rounds = this.toRoundRecord(runFiles);
-        this.webviewUpdater.updateFiles(
-          stream,
-          rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-        );
+        this.webviewUpdater.updateFiles(stream, {
+          runId: storageKey,
+          ...(rounds && { rounds }),
+        });
       },
     );
   };
@@ -401,10 +396,10 @@ export class ProgressEventHandler {
           .getMissingOutputs(stream)
           .get(storageKey);
         const rounds = this.toRoundRecord(runMissing);
-        this.webviewUpdater.updateMissingOutputs(
-          stream,
-          rounds ? { runId: storageKey, rounds } : { runId: storageKey },
-        );
+        this.webviewUpdater.updateMissingOutputs(stream, {
+          runId: storageKey,
+          ...(rounds && { rounds }),
+        });
       },
     );
   };
@@ -418,10 +413,7 @@ export class ProgressEventHandler {
       'failed to handle clearMissingOutputs',
       async () => {
         await this.state.outputFiles.clearMissingOutputs(stream);
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
         }
       },
@@ -462,11 +454,7 @@ export class ProgressEventHandler {
           this.state.setActiveRunId(stream, storageKey);
         }
 
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream &&
-          accumulatedUsage
-        ) {
+        if (this.canUpdateWebview(stream) && accumulatedUsage) {
           // Send accumulated value to frontend (not the delta)
           // Frontend uses SET semantics to avoid double-counting
           this.webviewUpdater.updateRunUsage(
@@ -490,10 +478,7 @@ export class ProgressEventHandler {
       () => {
         // Store context state for replay when switching streams
         this.state.setContextState(stream, contextState);
-        if (
-          this.webviewUpdater.isAvailable() &&
-          stream === this.state.activeStream
-        ) {
+        if (this.canUpdateWebview(stream)) {
           this.webviewUpdater.updateContextState(stream, contextState);
         }
       },
@@ -507,10 +492,7 @@ export class ProgressEventHandler {
   }: ProgressEventPayloads['updateTodos']): void => {
     withEventErrorHandling('TodoEvents', 'failed to handle updateTodos', () => {
       this.state.setTodos(stream, todos);
-      if (
-        this.webviewUpdater.isAvailable() &&
-        stream === this.state.activeStream
-      ) {
+      if (this.canUpdateWebview(stream)) {
         this.webviewUpdater.updateTodos(stream, todos);
       }
     });
@@ -577,22 +559,27 @@ export class ProgressEventHandler {
 
   /**
    * Refresh all webview surface data for a specific stream.
-   * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
-   *   Required when switching streams or after data deletion. Defaults to false
-   *   for incremental updates.
+   *
+   * Sends UPDATE_LOGS with action: 'render' (or 'clear' if stream is empty).
+   * Frontend detects stream switches using its lastRenderedStream tracking
+   * and decides whether to do full rebuild or incremental update.
+   *
+   * @param options.updateInstruction - If true (default), also update instruction panel.
    * @returns The resolved active run ID, useful for callers that need to pass it
    *   to sendInstructionUpdate separately (when updateInstruction is false).
    */
   public refreshStreamSurface(
     stream: string,
-    options: { updateInstruction?: boolean; forceRebuild?: boolean } = {},
+    options: { updateInstruction?: boolean } = {},
   ): string | null {
     if (!this.webviewUpdater.isAvailable()) return null;
 
-    const { updateInstruction = true, forceRebuild = false } = options;
+    const { updateInstruction = true } = options;
 
     if (!stream) {
-      this.webviewUpdater.updateLogContent('', [], [], undefined, true);
+      // No active stream: explicitly clear content with action: 'clear'.
+      // This is an intentional clear (e.g., stream deleted, no streams left).
+      this.webviewUpdater.updateLogContent('', [], [], undefined, 'clear');
       this.webviewUpdater.updateFiles('', { reset: true });
       this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
@@ -628,43 +615,37 @@ export class ProgressEventHandler {
     // Groups already in state will be sent via updateLogContent.
     this.pendingTaskGroups.delete(stream);
 
-    this.webviewUpdater.updateLogContent(
-      stream,
-      messages,
-      groups,
-      {
-        runInstructions,
-        activeRunId,
-        runUsage: usageByRun,
-        runFiles: filesByRun,
-      },
-      forceRebuild,
-    );
+    // Get context state for this stream (ephemeral - not persisted)
+    const contextState = this.state.getContextState(stream);
+
+    // Send data with action: 'render' (default).
+    // Frontend detects stream switch by comparing stream with lastRenderedStream.
+    this.webviewUpdater.updateLogContent(stream, messages, groups, {
+      runInstructions,
+      activeRunId,
+      runUsage: usageByRun,
+      runFiles: filesByRun,
+      contextState,
+    });
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
     // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
     // messages here to avoid a race condition where reset: true would clear
     // the files just populated from UPDATE_LOGS.
 
+    // Reset and send all missing outputs in sequence
     this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
-    Object.entries(missingByRun).forEach(([runId, rounds]) => {
-      this.webviewUpdater.updateMissingOutputs(stream, {
-        runId,
-        rounds,
-      });
-    });
+    for (const [runId, rounds] of Object.entries(missingByRun)) {
+      this.webviewUpdater.updateMissingOutputs(stream, { runId, rounds });
+    }
 
     // Refresh todos for the stream (ephemeral state)
     // Always send update (empty array if undefined) to clear stale UI from previous stream
     const todos = this.state.getTodos(stream) ?? [];
     this.webviewUpdater.updateTodos(stream, todos);
 
-    // Refresh context state for the stream (ephemeral state)
-    // Only send if defined - frontend will show default state if not set
-    const contextState = this.state.getContextState(stream);
-    if (contextState !== undefined) {
-      this.webviewUpdater.updateContextState(stream, contextState);
-    }
+    // Context state is already included in updateLogContent above (via contextState field)
+    // No separate UPDATE_CONTEXT_STATE message needed here
 
     // Update status for current stream. Don't default to RUNNING - that causes a race
     // condition where the "already running" check in executeAgent fails. Let setupFlowUIState
@@ -729,6 +710,13 @@ export class ProgressEventHandler {
           ));
 
       if (needsFullRefresh) {
+        // Ensure filter matches the stream's category to prevent it from being filtered out.
+        // This is important when resuming from WAITING state - the stream must remain visible.
+        const streamCategory = this.getStreamCategory(stream);
+        if (streamCategory) {
+          this.maybeUpdateFilterForCategory(streamCategory);
+        }
+
         // Include current status in refresh map so frontend displays it correctly.
         const statusesForRefresh = StreamStatusService.getAll();
         statusesForRefresh.set(stream, status);
@@ -743,6 +731,19 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
+  }
+
+  /**
+   * Get the session category for a stream from taskState or hints.
+   * Returns undefined if category cannot be determined.
+   */
+  private getStreamCategory(stream: string): AgentCategory | undefined {
+    const taskState = this.state.getTaskState(stream);
+    if (taskState?.agentConfig?.session?.agentCategory) {
+      return taskState.agentConfig.session.agentCategory;
+    }
+    const hints = this.state.getStreamHints(stream);
+    return hints.sessionCategory;
   }
 
   /**
@@ -834,15 +835,12 @@ export class ProgressEventHandler {
       // sets state.activeStream. Without this, UPDATE_LOGS fails _isActiveStream check.
       this.webviewUpdater.updateAll(this.state, StreamStatusService.getAll());
 
-      // Force rebuild to clear any previous stream's content. The new task
-      // group must be added to state BEFORE this call (in TaskGroupEvents)
+      // The new task group must be added to state BEFORE this call (in TaskGroupEvents)
       // so UPDATE_LOGS includes it and the frontend renders it correctly.
+      // Frontend detects stream switches using lastRenderedStream tracking.
       const activeRunId = this.refreshStreamSurface(stream, {
         updateInstruction: false,
-        forceRebuild: true,
       });
-      // Mark stream as rendered for future switch detection
-      this.state.markStreamRendered(stream);
       this.sendInstructionUpdate(stream, activeRunId);
     }
   }

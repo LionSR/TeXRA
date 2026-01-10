@@ -10,6 +10,11 @@
   border: 1px solid var(--vscode-inputValidation-infoBorder);
 }
 
+/* Override vscode-collapsible display to respect hidden attribute */
+.queued-follow-ups-collapsible[hidden] {
+  display: none;
+}
+
 /* Override vscode-collapsible header padding */
 .queued-follow-ups-collapsible::part(header) {
   padding: var(--spacing-small) var(--spacing-medium);

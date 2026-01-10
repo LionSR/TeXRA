@@ -96,6 +96,30 @@ export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
 export type { GitignoreMatcher } from './gitignore';
 
 /**
+ * Pluralize a word based on count.
+ * Returns the singular form for count === 1, plural form otherwise.
+ */
+export function pluralize(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return count === 1 ? singular : (plural ?? `${singular}s`);
+}
+
+/**
+ * Format a result count with proper pluralization.
+ * Example: formatResultCount(3, 'result') returns "3 results"
+ */
+export function formatResultCount(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return `${count} ${pluralize(count, singular, plural)}`;
+}
+
+/**
  * Format tool output with a header and content.
  */
 export function formatToolOutput(
@@ -157,14 +181,11 @@ export async function buildFileAttachment({
     throw new ToolError(`Attachment not found: ${display}`);
   }
 
-  let stats: { size: number } | undefined;
-  try {
-    stats = await WorkspaceFS.stat(resolved.relative);
-  } catch (err) {
+  const stats = await WorkspaceFS.stat(resolved.relative).catch((err) => {
     throw new ToolError(
       `Failed to inspect attachment ${display}: ${toErrorMessage(err)}`,
     );
-  }
+  });
 
   if (stats.size > maxBytes) {
     const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
@@ -173,19 +194,17 @@ export async function buildFileAttachment({
     );
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await WorkspaceFS.readFileBytes(resolved.relative);
-  } catch (err) {
-    throw new ToolError(
-      `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
-    );
-  }
+  const buffer = await WorkspaceFS.readFileBytes(resolved.relative).catch(
+    (err) => {
+      throw new ToolError(
+        `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
+      );
+    },
+  );
 
   const inferredMime =
     mimeType ?? getMimeType(resolved.relative) ?? 'application/octet-stream';
-
-  const base64Payload = includeBase64 ? buffer.toString('base64') : undefined;
+  const base64Data = includeBase64 ? buffer.toString('base64') : undefined;
   const bytes = Uint8Array.from(buffer);
   buffer.fill(0);
 
@@ -194,13 +213,11 @@ export async function buildFileAttachment({
     mimeType: inferredMime,
     bytes,
   };
-
   if (description) {
     attachment.description = description;
   }
-  if (base64Payload) {
-    attachment.base64Data = base64Payload;
+  if (base64Data) {
+    attachment.base64Data = base64Data;
   }
-
   return attachment;
 }

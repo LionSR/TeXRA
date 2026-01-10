@@ -55,34 +55,30 @@ export class GlobTool extends defineTool({
     }
 
     // Process matches in parallel for better performance
-    const statPromises = matches.map(async (match) => {
-      let resolved;
-      try {
-        resolved = joinWorkspaceRelativePath(base.relative, match);
-      } catch (err) {
-        throw new ToolError(
-          `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
-        );
-      }
+    const statPromises = matches.map(
+      async (match): Promise<GlobMatchInfo | null> => {
+        let resolved;
+        try {
+          resolved = joinWorkspaceRelativePath(base.relative, match);
+        } catch (err) {
+          throw new ToolError(
+            `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
+          );
+        }
 
-      const relativePath = resolved.relative === '.' ? '.' : resolved.relative;
-      if (relativePath === '.' || gitignore.ignores(relativePath)) {
-        return null;
-      }
+        const relativePath =
+          resolved.relative === '.' ? '.' : resolved.relative;
+        if (relativePath === '.' || gitignore.ignores(relativePath)) {
+          return null;
+        }
 
-      try {
-        const stat = await WorkspaceFS.stat(relativePath);
-        return {
-          relativePath,
-          mtime: stat.mtime ?? 0,
-        };
-      } catch (_err) {
-        return { relativePath, mtime: 0 };
-      }
-    });
+        const stat = await WorkspaceFS.stat(relativePath).catch(() => null);
+        return { relativePath, mtime: stat?.mtime ?? 0 };
+      },
+    );
 
-    const decoratedWithNulls = await Promise.all(statPromises);
-    const decorated = decoratedWithNulls.filter(
+    const results = await Promise.all(statPromises);
+    const decorated = results.filter(
       (item): item is GlobMatchInfo => item !== null,
     );
 
@@ -96,7 +92,7 @@ export class GlobTool extends defineTool({
     const header = `Matches for pattern "${input.pattern}" under ${display}`;
     const lines = sorted.map((item) => toPosixPath(item.relativePath));
     return {
-      summary: `glob "${input.pattern}" under ${display}`,
+      summary: `Matched: "${input.pattern}" under ${display}`,
       output: formatToolOutput(header, lines, '(no matches)'),
     };
   }

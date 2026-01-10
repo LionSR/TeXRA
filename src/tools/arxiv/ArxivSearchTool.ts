@@ -9,19 +9,21 @@ import {
 } from 'arxiv-client';
 import { z } from 'zod';
 
-// Local imports - latex
+// Local imports
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
-import {
-  type ArxivSearchResult,
-  createArxivClient,
-  extractEntryIdentifier,
-  getAuthorNames,
-  normaliseArxivIdentifier,
-} from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
+import {
+  type ArxivSearchResult,
+  createArxivClient,
+  extractBasePaperMetadata,
+  normaliseArxivIdentifier,
+} from '@tools/latex/arxivShared';
+// eslint-disable-next-line import/order -- grouped with tools imports
+import { ToolError } from '@tools/result';
+// eslint-disable-next-line import/order -- grouped with tools imports
+import { pluralize } from '@tools/utils';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
@@ -124,19 +126,12 @@ export class ArxivSearchTool extends defineTool({
     }
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
-      const identifier = extractEntryIdentifier(entry.id);
+      const base = extractBasePaperMetadata(entry);
       return {
-        id: identifier ?? null,
-        doi: entry.doi?.id ?? null,
-        title:
-          typeof entry.title === 'string' ? entry.title.trim() : entry.title,
+        ...base,
         abstract: entry.summary ?? null,
-        published: entry.published ?? null,
-        updated: entry.updated ?? null,
-        authors: getAuthorNames(entry.authors),
-        primaryCategory: entry.primaryCategory ?? null,
-        arxivUrl: identifier
-          ? `https://arxiv.org/abs/${normaliseArxivIdentifier(identifier)}`
+        arxivUrl: base.id
+          ? `https://arxiv.org/abs/${normaliseArxivIdentifier(base.id)}`
           : null,
       };
     });
@@ -152,7 +147,7 @@ export class ArxivSearchTool extends defineTool({
 
     const fieldLabel = searchField !== 'all' ? ` (${searchField})` : '';
     return {
-      summary: `Found ${results.length} arXiv result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"${fieldLabel}`,
+      summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"${fieldLabel}`,
       output: JSON.stringify(payload, null, 2),
     };
   }

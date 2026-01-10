@@ -20,28 +20,17 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
-  return files?.length ? files : [];
+/** Normalize nullish file arrays to empty arrays */
+function toArray<T>(files: T[] | undefined | null): T[] {
+  return files ?? [];
 }
 
 export class ExecutionManager {
   async handleExecute(message: any): Promise<void> {
-    const isToolUseAgent = !!message.isToolUseAgent;
-    const config = isToolUseAgent
-      ? this.buildToolUseCommandPayload(message)
-      : await this.buildWorkflowCommandPayload(message);
+    const isToolUseAgent = Boolean(message.isToolUseAgent);
 
-    if (!config) {
-      return;
-    }
-
-    await vscode.commands.executeCommand('texra.execute', config);
-  }
-
-  private async buildWorkflowCommandPayload(
-    message: any,
-  ): Promise<AgentConfig | null> {
-    if (!message.inputFile) {
+    // Tool-use agents don't need input file validation
+    if (!isToolUseAgent && !message.inputFile) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
         'Please select an input file.',
@@ -50,90 +39,45 @@ export class ExecutionManager {
       if (choice === openDocs) {
         void vscode.commands.executeCommand('texra.openDoc', 'file-management');
       }
-      return null;
+      return;
     }
 
-    return this.composeWorkflowAgentConfig(message, {
-      agentCategory: AgentCategory.Workflow,
-    });
+    const config = this.composeAgentConfig(message, isToolUseAgent);
+    await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private buildToolUseCommandPayload(message: any): AgentConfig {
-    return this.composeToolUseAgentConfig(message, {
-      agentType: AgentType.ToolUse,
-      agentCategory: AgentCategory.ToolUse,
-    });
-  }
+  private composeAgentConfig(message: any, isToolUse: boolean): AgentConfig {
+    const session: AgentSessionDescriptor = isToolUse
+      ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
+      : { agentCategory: AgentCategory.Workflow };
 
-  private composeWorkflowAgentConfig(
-    message: any,
-    session: AgentSessionDescriptor,
-  ): AgentConfig {
-    const baseConfig = this.composeBaseAgentConfig(message, session);
-    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
-    const useMultipleOutputs = !!(
-      message.outputFilesActive || outputFiles.length > 1
-    );
+    const outputFiles = isToolUse ? [] : toArray<string>(message.outputFiles);
+    const useMultipleOutputs = isToolUse
+      ? false
+      : Boolean(message.outputFilesActive) || outputFiles.length > 1;
 
-    // toolConfig only applies to workflow agents
-    const toolConfig: ToolConfig = {
-      autoExtractFigure: message.autoExtractFigure,
-      autoExtractTikzFigure: message.autoExtractTikzFigure,
-      attachTeXCount: message.attachTeXCount,
-      attachDiagnostics: message.attachDiagnostics,
-      autoCompileInputPdf: message.autoCompileInputPdf,
-    };
+    const toolConfig: ToolConfig = isToolUse
+      ? DEFAULT_TOOL_CONFIG
+      : {
+          autoExtractFigure: message.autoExtractFigure,
+          autoExtractTikzFigure: message.autoExtractTikzFigure,
+          attachTeXCount: message.attachTeXCount,
+          attachDiagnostics: message.attachDiagnostics,
+          autoCompileInputPdf: message.autoCompileInputPdf,
+        };
 
-    return {
-      ...baseConfig,
-      toolConfig,
-      useMultipleOutputs,
-      outputFiles,
-    };
-  }
-
-  private composeToolUseAgentConfig(
-    message: any,
-    session: AgentSessionDescriptor,
-  ): AgentConfig {
-    const baseConfig = this.composeBaseAgentConfig(message, session);
-
-    return {
-      ...baseConfig,
-      // Tool-use agents use default (all-false) toolConfig
-      toolConfig: DEFAULT_TOOL_CONFIG,
-      // Tool-use runs intentionally stay single-output so the execution
-      // pipeline never attempts to resolve `_multiple` agent variants or
-      // manage output file selections that the UI disables for this mode.
-      useMultipleOutputs: false,
-      outputFiles: [],
-    };
-  }
-
-  private mapMediaPath(f: string | null): string | null {
-    if (!f) return null;
-    if (isPastedImage(f)) {
-      return getPastedImageFullPath(f);
-    }
-    return f;
-  }
-
-  private composeBaseAgentConfig(
-    message: any,
-    session: AgentSessionDescriptor,
-  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles' | 'toolConfig'> {
     return {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile ?? '',
-      inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
+      inputFiles: toArray<string>(message.inputFiles),
       referenceFile: message.referenceFile ?? null,
-      referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
+      referenceFiles: toArray<string>(message.referenceFiles),
       auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
+      auxiliaryFiles: toArray<string>(message.auxiliaryFiles),
       mediaFile: this.mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: getFilesIfNotEmpty<string>(
+      mediaFiles: toArray<string>(
         (message.mediaFiles ?? [])
           .map((f: string | null) => this.mapMediaPath(f))
           .filter((f: string | null): f is string => f !== null),
@@ -141,50 +85,57 @@ export class ExecutionManager {
       editedFile: null,
       agentType: session.agentType,
       session,
+      toolConfig,
+      useMultipleOutputs,
+      outputFiles,
     };
   }
 
+  private mapMediaPath(f: string | null): string | null {
+    return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
+  }
+
   handleFileOperation(message: any): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.baseFile,
       message.editedFile,
-    );
+    ]);
   }
 
   handleHousekeeping(message: any): void {
-    void vscode.commands.executeCommand(`texra.${message.command}`);
+    this.executeCommand(message.command);
   }
 
   handleSingleOperation(message: any): void {
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.agent,
       message.model,
-    );
+    ]);
   }
 
-  async handleMultipleOperation(message: any): Promise<void> {
+  handleMultipleOperation(message: any): void {
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
     const outputFilesStr = Array.isArray(message.outputFiles)
       ? message.outputFiles.join(', ')
       : '';
-
     logger.info(
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
 
-    void vscode.commands.executeCommand(
-      `texra.${message.command}`,
+    this.executeCommand(message.command, [
       message.inputFile,
       message.agent,
       message.model,
       message.outputFiles,
-    );
+    ]);
+  }
+
+  private executeCommand(command: string, args: unknown[] = []): void {
+    void vscode.commands.executeCommand(`texra.${command}`, ...args);
   }
 }

@@ -89,8 +89,7 @@ export class InstructionManager extends BaseWebviewManager {
   async handlePolishInstructionText(
     message: PolishInstructionMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
+    if (!this.getWebview()) {
       return;
     }
     try {
@@ -142,37 +141,26 @@ export class InstructionManager extends BaseWebviewManager {
         message.outputFiles,
       );
 
-      try {
-        const result = await polishTextWithAI(message.text, fileContext);
-        if (result.success) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
-            text: result.text,
-          });
-        } else {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-            error: result.error ?? 'Error polishing text',
-          });
-        }
-      } catch (error) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-          error: toErrorMessage(error),
+      const result = await polishTextWithAI(message.text, fileContext);
+      if (result.success) {
+        this.postMessage({
+          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
+          text: result.text,
         });
-        logger.error(
-          CHANNEL,
-          `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
-        );
+      } else {
+        this.postMessage({
+          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+          error: result.error ?? 'Error polishing text',
+        });
       }
     } catch (error) {
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
         error: toErrorMessage(error),
       });
       logger.error(
         CHANNEL,
-        `Error setting up text polishing: ${toErrorMessage(error)}`,
+        `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -184,8 +172,7 @@ export class InstructionManager extends BaseWebviewManager {
   }
 
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
+    if (!this.getWebview()) {
       return;
     }
     try {
@@ -197,7 +184,7 @@ export class InstructionManager extends BaseWebviewManager {
       const relativePath = path.join(PASTED_DIR, fileName);
       await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
       await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
-      webviewView.webview.postMessage({
+      this.postMessage({
         command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
       });

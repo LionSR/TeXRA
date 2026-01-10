@@ -51,6 +51,23 @@ export class MemoryEventsManager {
       });
     }
 
+    // Memory enabled toggle
+    const memoryEnabledToggle = safeGetElementById(
+      ELEMENT_IDS.MEMORY_ENABLED_TOGGLE,
+    );
+    if (memoryEnabledToggle) {
+      const toggleHandler = (event) => {
+        const enabled = event.target.checked;
+        vscode.postMessage({ command: COMMANDS.SET_MEMORY_ENABLED, enabled });
+      };
+      memoryEnabledToggle.addEventListener('change', toggleHandler);
+      this.handlers.push({
+        element: memoryEnabledToggle,
+        type: 'change',
+        handler: toggleHandler,
+      });
+    }
+
     const list = safeGetElementById(ELEMENT_IDS.MEMORY_LIST);
     if (!list) {
       return;

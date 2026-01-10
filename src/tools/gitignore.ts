@@ -2,12 +2,12 @@
 import * as os from 'os';
 import * as path from 'path';
 
-// Third-party imports
-import { Minimatch } from 'minimatch';
-
 // Local imports - utils
 import { toPosixPath } from '@utils/core';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { createGlobMatcher } from './utils';
 
 type GitignoreRule = {
   matcher: (value: string) => boolean;
@@ -32,16 +32,6 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
 };
 
 let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
-
-function createGlobMatcher(pattern: string): (value: string) => boolean {
-  const matcher = new Minimatch(pattern, {
-    dot: true,
-    matchBase: true,
-    nocase: false,
-  });
-
-  return (value: string) => matcher.match(value.replaceAll('\\', '/'));
-}
 
 function expandGitignorePattern(
   pattern: string,
@@ -116,48 +106,43 @@ function parseGitignore(content: string): GitignoreRule[] {
   return rules;
 }
 
+async function readGitignoreFile(
+  absolutePath: string,
+  readContent: () => Promise<string>,
+): Promise<GitignoreSource | null> {
+  try {
+    const content = await readContent();
+    return { absolutePath, rules: parseGitignore(content) };
+  } catch {
+    return null;
+  }
+}
+
 async function readWorkspaceGitignore(
   relativePath: string,
 ): Promise<GitignoreSource | null> {
-  try {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      return null;
-    }
-
-    const normalized = relativePath.replace(/^\/+/, '');
-    const exists = await WorkspaceFS.exists(normalized);
-    if (!exists) {
-      return null;
-    }
-
-    const content = await WorkspaceFS.read(normalized);
-    return {
-      absolutePath: path.join(workspacePath, normalized),
-      rules: parseGitignore(content),
-    };
-  } catch (_err) {
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
     return null;
   }
+  const normalized = relativePath.replace(/^\/+/, '');
+  const exists = await WorkspaceFS.exists(normalized);
+  if (!exists) {
+    return null;
+  }
+  return readGitignoreFile(path.join(workspacePath, normalized), () =>
+    WorkspaceFS.read(normalized),
+  );
 }
 
 async function readAbsoluteGitignore(
   absolutePath: string,
 ): Promise<GitignoreSource | null> {
-  try {
-    const exists = await AbsoluteFS.exists(absolutePath);
-    if (!exists) {
-      return null;
-    }
-
-    const content = await AbsoluteFS.read(absolutePath);
-    return {
-      absolutePath,
-      rules: parseGitignore(content),
-    };
-  } catch (_err) {
+  const exists = await AbsoluteFS.exists(absolutePath);
+  if (!exists) {
     return null;
   }
+  return readGitignoreFile(absolutePath, () => AbsoluteFS.read(absolutePath));
 }
 
 async function readGlobalGitignore(): Promise<GitignoreSource[]> {
@@ -194,18 +179,16 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
         readWorkspaceGitignore('.gitignore'),
       ]);
 
-    const sources: GitignoreSource[] = [
+    const sources = [
       ...globalSources,
-      ...(workspaceGlobalSource ? [workspaceGlobalSource] : []),
-      ...(workspaceSource ? [workspaceSource] : []),
-    ];
+      workspaceGlobalSource,
+      workspaceSource,
+    ].filter((source): source is GitignoreSource => source !== null);
 
     const rules = sources.flatMap((source) => source.rules);
     if (rules.length === 0) {
       return EMPTY_GITIGNORE_MATCHER;
     }
-
-    const ignoreFiles = sources.map((source) => source.absolutePath);
 
     return {
       hasRules: true,
@@ -222,9 +205,9 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
         }
         return ignored;
       },
-      ignoreFiles,
+      ignoreFiles: sources.map((source) => source.absolutePath),
     };
-  } catch (_err) {
+  } catch {
     return EMPTY_GITIGNORE_MATCHER;
   }
 }

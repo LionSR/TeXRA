@@ -9,10 +9,9 @@ import { flexibleFS, type FileLocation } from '@utils/files';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
-    if (text.length === 0) return 0;
-    return text.endsWith('\n')
-      ? text.split('\n').length - 1
-      : text.split('\n').length;
+    if (!text) return 0;
+    const lines = text.split('\n');
+    return text.endsWith('\n') ? lines.length - 1 : lines.length;
   }
 
   public async computeDiffStats(

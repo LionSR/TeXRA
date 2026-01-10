@@ -114,13 +114,13 @@ export class ExplorerOperations {
         const message =
           'This is a built-in agent prompt file and should not be modified directly.';
         const createCustom = 'Create Custom Copy';
-        vscode.window
-          .showWarningMessage(message, createCustom)
-          .then((selection) => {
-            if (selection === createCustom) {
-              this.createCustomCopy(uri);
-            }
-          });
+        const selection = await vscode.window.showWarningMessage(
+          message,
+          createCustom,
+        );
+        if (selection === createCustom) {
+          await this.createCustomCopy(uri);
+        }
       }
     } catch (err) {
       await showLoggedErrorMessage(CHANNEL, 'Error opening file', err);

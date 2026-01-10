@@ -68,6 +68,7 @@
           "@common/constants/streamStatus": "${streamStatusUri}",
           "@common/constants/todoStatus": "${todoStatusUri}",
           "@common/ToggleStateStore.js": "${toggleStateStoreUri}",
+          "@common/StreamScopedMap.js": "${streamScopedMapUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "@common/clipboardUtils.js": "${clipboardUtilsUri}",
@@ -437,6 +438,16 @@
                 <span>Statistics</span>
               </summary>
               <div class="statistics-content detail-content"></div>
+            </details>
+          </template>
+          <template id="contextManagementTemplate">
+            <details class="context-management-details detail-section">
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-history context-management-icon"></i>
+                <span class="context-management-title">Context Management</span>
+              </summary>
+              <div class="context-management-content detail-content"></div>
             </details>
           </template>
           <template id="groupDetailsTemplate">

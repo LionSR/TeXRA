@@ -15,18 +15,13 @@
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.0.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const LOG_USAGE_VERSION = '1.0.2';
 
 // =============================================================================
 // Types
@@ -54,7 +49,12 @@ interface UsageLogEntry {
 // Helpers
 // =============================================================================
 
-function jsonResponse(body: Record<string, unknown>, status: number): Response {
+function jsonResponse(
+  req: Request,
+  body: Record<string, unknown>,
+  status: number,
+): Response {
+  const corsHeaders = getCorsHeaders(req);
   return new Response(
     JSON.stringify({ _version: LOG_USAGE_VERSION, ...body }),
     {
@@ -64,8 +64,8 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
   );
 }
 
-function errorResponse(error: string, status: number): Response {
-  return jsonResponse({ success: false, accepted: 0, error }, status);
+function errorResponse(req: Request, error: string, status: number): Response {
+  return jsonResponse(req, { success: false, accepted: 0, error }, status);
 }
 
 /**
@@ -143,26 +143,25 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
 // =============================================================================
 
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Handle CORS
+  const { response } = handleCors(req);
+  if (response) return response;
 
   // Only accept POST requests
   if (req.method !== 'POST') {
-    return errorResponse('Method not allowed', 405);
+    return errorResponse(req, 'Method not allowed', 405);
   }
 
   // Check environment on each request (allows for hot-reload)
   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
-    return errorResponse('Server configuration error', 500);
+    return errorResponse(req, 'Server configuration error', 500);
   }
 
   try {
     // 1. Extract and validate JWT
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return errorResponse('Missing authorization token', 401);
+      return errorResponse(req, 'Missing authorization token', 401);
     }
 
     const jwtToken = authHeader.substring(7);
@@ -178,7 +177,7 @@ Deno.serve(async (req: Request) => {
     } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      return errorResponse('Invalid or expired token', 401);
+      return errorResponse(req, 'Invalid or expired token', 401);
     }
 
     // 3. Parse request body
@@ -186,17 +185,18 @@ Deno.serve(async (req: Request) => {
     try {
       body = await req.json();
     } catch {
-      return errorResponse('Invalid JSON body', 400);
+      return errorResponse(req, 'Invalid JSON body', 400);
     }
 
     // 4. Validate batch structure
     if (!body || typeof body !== 'object') {
-      return errorResponse('Invalid request body', 400);
+      return errorResponse(req, 'Invalid request body', 400);
     }
 
     const batch = body as Record<string, unknown>;
     if (!Array.isArray(batch.entries) || typeof batch.batchId !== 'string') {
       return errorResponse(
+        req,
         'Invalid batch format: expected { entries: [], batchId: string }',
         400,
       );
@@ -213,6 +213,7 @@ Deno.serve(async (req: Request) => {
 
     if (validEntries.length === 0) {
       return jsonResponse(
+        req,
         { success: true, accepted: 0, message: 'No valid entries in batch' },
         200,
       );
@@ -236,6 +237,7 @@ Deno.serve(async (req: Request) => {
 
     if (existingBatch && existingBatch.length > 0) {
       return jsonResponse(
+        req,
         {
           success: true,
           accepted: validEntries.length,
@@ -271,13 +273,17 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) {
       console.error('[LOG_USAGE] Insert error:', insertError.message);
-      return errorResponse('Failed to store usage logs', 500);
+      return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
     // 7. Return success response
-    return jsonResponse({ success: true, accepted: validEntries.length }, 200);
+    return jsonResponse(
+      req,
+      { success: true, accepted: validEntries.length },
+      200,
+    );
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
-    return errorResponse('Internal server error', 500);
+    return errorResponse(req, 'Internal server error', 500);
   }
 });

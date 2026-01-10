@@ -151,25 +151,19 @@ export function hasVisibilityAccess(
   permissions: string[],
   visibility: string | string[] | undefined | null,
 ): boolean {
-  // Handle undefined/null visibility - treat as public
-  if (!visibility) {
+  // Normalize to array and filter out non-strings
+  const visibilityArray = visibility
+    ? (Array.isArray(visibility) ? visibility : [visibility]).filter(
+        (v): v is string => typeof v === 'string',
+      )
+    : [];
+
+  // Empty/null visibility or 'public' tag means accessible to all
+  if (visibilityArray.length === 0 || visibilityArray.includes('public')) {
     return true;
   }
-  const visibilityArray = Array.isArray(visibility) ? visibility : [visibility];
-  // Filter out any undefined/null elements
-  const cleanedVisibility = visibilityArray.filter(
-    (v): v is string => typeof v === 'string',
-  );
-  // Empty visibility array is treated as public
-  if (cleanedVisibility.length === 0) {
-    return true;
-  }
-  // Public agents are always accessible
-  if (cleanedVisibility.includes('public')) {
-    return true;
-  }
-  // Check for any overlap between visibility and permissions
-  return cleanedVisibility.some((v) => permissions.includes(v));
+
+  return visibilityArray.some((v) => permissions.includes(v));
 }
 
 /**
@@ -234,22 +228,6 @@ export function getAuthCallbackUri(uriScheme: string): string {
 }
 
 /**
- * Get the environment-appropriate OAuth callback URI.
- * Uses vscode.env.asExternalUri() to handle different environments:
- * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
- * - Cursor: returns cursor://texra-ai.texra/auth-callback
- * - Codespaces: returns https://*.github.dev/extension-auth-callback
- * - Remote SSH: handles port forwarding automatically
- */
-export async function getExternalAuthCallbackUri(): Promise<string> {
-  const baseCallbackUri = vscode.Uri.parse(
-    getAuthCallbackUri(vscode.env.uriScheme),
-  );
-  const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-  return externalUri.toString();
-}
-
-/**
  * Result of parsing the external auth callback URI.
  * In Codespaces, VS Code adds a state parameter that must be preserved
  * for the callback routing to work.
@@ -265,30 +243,33 @@ export interface ExternalAuthCallbackInfo {
 
 /**
  * Get the external auth callback URI with parsed components.
+ * Uses vscode.env.asExternalUri() to handle different environments:
+ * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
+ * - Cursor: returns cursor://texra-ai.texra/auth-callback
+ * - Codespaces: returns https://*.github.dev/extension-auth-callback
+ * - Remote SSH: handles port forwarding automatically
+ *
  * In Codespaces, VS Code generates a state parameter that MUST be preserved
  * and passed through the OAuth flow for the callback routing to work.
- *
- * Without this, the callback URL gets the state URL-encoded into the path,
- * breaking VS Code's ability to route it to the extension.
  */
 export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
   const baseCallbackUri = vscode.Uri.parse(
     getAuthCallbackUri(vscode.env.uriScheme),
   );
   const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-
-  // Parse VS Code's state parameter if present (added in Codespaces/web)
-  const queryParams = new URLSearchParams(externalUri.query);
-  const vscodeState = queryParams.get('state');
-
-  // Build base URL without query params
+  const vscodeState = new URLSearchParams(externalUri.query).get('state');
   const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
 
-  return {
-    baseUrl,
-    vscodeState,
-    fullUrl: externalUri.toString(),
-  };
+  return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+}
+
+/**
+ * Get the environment-appropriate OAuth callback URI as a simple string.
+ * Use getExternalAuthCallbackInfo() when you need access to parsed components.
+ */
+export async function getExternalAuthCallbackUri(): Promise<string> {
+  const info = await getExternalAuthCallbackInfo();
+  return info.fullUrl;
 }
 
 /** Timeout for waiting for OAuth callback (2 minutes in ms) */

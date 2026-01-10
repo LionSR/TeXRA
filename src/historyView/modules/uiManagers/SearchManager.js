@@ -55,22 +55,23 @@ export class SearchManager {
   }
 
   navigateNext() {
-    if (this.state.totalMatches === 0) return;
-    const current = document.querySelector(`mark.${CLASS_NAMES.CURRENT_MATCH}`);
-    if (current) current.classList.remove(CLASS_NAMES.CURRENT_MATCH);
-    const nextIndex = (this.state.searchIndex + 1) % this.state.totalMatches;
-    this.state.setSearchIndex(nextIndex);
-    this.scrollToCurrentMatch();
+    this._navigateToIndex(
+      (this.state.searchIndex + 1) % this.state.totalMatches,
+    );
   }
 
   navigatePrev() {
+    this._navigateToIndex(
+      (this.state.searchIndex - 1 + this.state.totalMatches) %
+        this.state.totalMatches,
+    );
+  }
+
+  _navigateToIndex(index) {
     if (this.state.totalMatches === 0) return;
     const current = document.querySelector(`mark.${CLASS_NAMES.CURRENT_MATCH}`);
     if (current) current.classList.remove(CLASS_NAMES.CURRENT_MATCH);
-    const prevIndex =
-      (this.state.searchIndex - 1 + this.state.totalMatches) %
-      this.state.totalMatches;
-    this.state.setSearchIndex(prevIndex);
+    this.state.setSearchIndex(index);
     this.scrollToCurrentMatch();
   }
 
@@ -99,35 +100,23 @@ export class SearchManager {
   }
 
   expandAllCollapsibleSections() {
-    document
-      .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
-      .forEach((section) => {
-        if (!(section instanceof HTMLElement)) {
-          return;
-        }
-        if ('open' in section) {
-          section.open = true;
-        }
-        section.setAttribute('open', '');
-      });
+    this._setCollapsibleStates(() => true);
   }
 
   applySavedToggleStates() {
+    this._setCollapsibleStates((section) =>
+      Boolean(this.state.toggleStates.get(section.dataset.id)),
+    );
+  }
+
+  _setCollapsibleStates(getExpandedState) {
     document
       .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
       .forEach((section) => {
-        if (!(section instanceof HTMLElement)) {
-          return;
-        }
-        const id = section.dataset.id;
-        const expanded = this.state.toggleStates.get(id);
+        if (!(section instanceof HTMLElement)) return;
+        // vscode-collapsible has reflect:true on open property - setting .open syncs the attribute
         if ('open' in section) {
-          section.open = Boolean(expanded);
-        }
-        if (expanded) {
-          section.setAttribute('open', '');
-        } else {
-          section.removeAttribute('open');
+          section.open = getExpandedState(section);
         }
       });
   }

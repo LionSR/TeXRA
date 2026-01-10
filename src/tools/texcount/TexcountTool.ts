@@ -58,9 +58,7 @@ export class TexcountTool extends defineTool({
       };
     }
 
-    const summary = `texcount analysis for ${files.length} file${
-      files.length === 1 ? '' : 's'
-    }`;
+    const summary = `Analyzed: ${files.length} file${files.length === 1 ? '' : 's'}`;
 
     return {
       summary,

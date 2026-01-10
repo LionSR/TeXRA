@@ -23,6 +23,18 @@ import {
 } from './constants';
 import { toDisplayPath, formatSize, displayToStoragePath } from './memoryUtils';
 
+function formatLinesWithNumbers(
+  lines: string[],
+  startIndex: number = 0,
+): string[] {
+  return lines.map((line, index) => {
+    const lineNumber = (startIndex + index + 1)
+      .toString()
+      .padStart(LINE_NUMBER_WIDTH, ' ');
+    return `${lineNumber}\t${line}`;
+  });
+}
+
 const MemoryToolInputSchema = z.strictObject({
   command: z.enum([
     'view',
@@ -183,13 +195,7 @@ export class MemoryTool extends defineTool({
     const startIndex = Math.max(start - 1, 0);
     const endIndex = Math.min(end, lines.length);
     const selected = lines.slice(startIndex, endIndex);
-
-    const numbered = selected.map((line, index) => {
-      const lineNumber = (startIndex + index + 1)
-        .toString()
-        .padStart(LINE_NUMBER_WIDTH, ' ');
-      return `${lineNumber}\t${line}`;
-    });
+    const numbered = formatLinesWithNumbers(selected, startIndex);
 
     return {
       output: [
@@ -262,12 +268,7 @@ export class MemoryTool extends defineTool({
     await StorageFS.write(resolvedPath, updated);
 
     const updatedLines = updated.split(/\r?\n/);
-    const numbered = updatedLines.map((line, index) => {
-      const lineNumber = (index + 1)
-        .toString()
-        .padStart(LINE_NUMBER_WIDTH, ' ');
-      return `${lineNumber}\t${line}`;
-    });
+    const numbered = formatLinesWithNumbers(updatedLines);
 
     return {
       output: [

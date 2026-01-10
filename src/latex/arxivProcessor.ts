@@ -29,6 +29,30 @@ export class ArxivSourceProcessor {
     logger.initialize(this.channel);
   }
 
+  /**
+   * Determine file extension from content-type header.
+   * Handles tar, gzip, and tex content types.
+   */
+  private getExtensionFromContentType(contentType: string): string {
+    const isTar = contentType.includes('tar');
+    const isGzip = contentType.includes('gzip') || contentType.includes('gz');
+    const isTex = contentType.includes('tex') || contentType.includes('plain');
+
+    if (isTar && isGzip) {
+      return '.tar.gz';
+    }
+    if (isTar) {
+      return '.tar';
+    }
+    if (isGzip) {
+      return '.gz';
+    }
+    if (isTex) {
+      return '.tex';
+    }
+    return '';
+  }
+
   public isValidId(id: string): boolean {
     const extractedIds = arxivIdentifiers.extract(id);
     return extractedIds.length > 0 && extractedIds.includes(id);
@@ -80,21 +104,8 @@ export class ArxivSourceProcessor {
           );
         }
       } else {
-        const contentType = response.headers['content-type'];
-        let extension = '';
-        if (contentType) {
-          if (contentType.includes('tar')) {
-            extension = '.tar';
-          }
-          if (contentType.includes('gzip') || contentType.includes('gz')) {
-            extension = extension ? `${extension}.gz` : '.gz';
-          } else if (
-            contentType.includes('tex') ||
-            contentType.includes('plain')
-          ) {
-            extension = '.tex';
-          }
-        }
+        const contentType = response.headers['content-type'] ?? '';
+        const extension = this.getExtensionFromContentType(contentType);
         destPath = destBasePath + extension;
       }
 

@@ -910,11 +910,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (response.usage?.input_tokens) {
         this.conversationState.cumulativeInputTokens =
           response.usage.input_tokens;
-        // Emit context state for UI display (no native pre-request token counting)
-        this.logger.logContextState(
-          response.usage.input_tokens,
-          this.config.contextWindow,
-        );
       }
       // Reset compacted flag after successful request (ready for next compaction if needed)
       this.conversationState.isCompacted = false;
@@ -973,11 +968,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (response.usage?.input_tokens) {
       this.conversationState.cumulativeInputTokens =
         response.usage.input_tokens;
-      // Emit context state for UI display (no native pre-request token counting)
-      this.logger.logContextState(
-        response.usage.input_tokens,
-        this.config.contextWindow,
-      );
     }
     // Reset compacted flag after successful request (ready for next compaction if needed)
     this.conversationState.isCompacted = false;
@@ -1381,8 +1371,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    // Note: workspace state already updated above (lines 1108-1109)
     // Only need to handle case where prefill needs to be prepended
+    // (workspace state was already updated above with file content)
     if (!fileContent.includes(prefill)) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(
@@ -1669,16 +1659,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       workspaceState.resetServerToolContent();
     }
 
-    // function_call is part of the previous response output when chaining,
-    // so only include it when NOT using previous_response_id
-    const callMsg: ResponseFunctionToolCall | undefined = isResponseChaining
-      ? undefined
-      : {
-          type: 'function_call',
-          call_id: call.callId,
-          name: call.name,
-          arguments: call.raw.arguments,
-        };
+    // Always include function_call in messages for persistence and resume.
+    // When response chaining is active, the model already has this via previous_response_id,
+    // but we still need it in our local array so resumed sessions have complete history.
+    // The slicing logic (sentMessages) handles avoiding re-sends during chaining.
+    const callMsg: ResponseFunctionToolCall = {
+      type: 'function_call',
+      call_id: call.callId,
+      name: call.name,
+      arguments: call.raw.arguments,
+    };
 
     // Create mutable copy for adding attachmentSummary/files
     const finalResult: ToolResultPayload = { ...result };
@@ -1746,13 +1736,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output: outputPayload,
     };
 
-    // When response chaining, only push function_call_output (callMsg is undefined)
-    // When not chaining, push both function_call and function_call_output
-    if (callMsg) {
-      messages.push(callMsg, resultMsg);
-    } else {
-      messages.push(resultMsg);
-    }
+    // Always push both function_call and function_call_output for complete history.
+    // The slicing logic (sentMessages) handles avoiding re-sends during response chaining.
+    messages.push(callMsg, resultMsg);
     return messages;
   }
 
