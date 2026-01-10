@@ -7,6 +7,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { pluralize } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -102,14 +103,11 @@ export class EditFileTool extends defineTool({
       finalContent,
     );
 
-    // Record file as "read" after editing so subsequent edits don't require
-    // an explicit read again.
     recordToolFileRead(targetPath);
 
     const count = replace_all === true ? occurrences : 1;
-    const pluralSuffix = count === 1 ? '' : 's';
-    const replacementSummary = `Replaced ${count} occurrence${pluralSuffix}.`;
-    const summary = `Edited ${targetPath}: replaced ${count} occurrence${pluralSuffix}`;
+    const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
+    const summary = `Edited ${targetPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       targetPath,
