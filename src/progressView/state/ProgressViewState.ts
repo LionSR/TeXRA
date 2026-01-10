@@ -544,6 +544,7 @@ export class ProgressViewState {
       this.cleanupToolUseAgentRegistry();
     }
     this.saveExecutionIds();
+    this.saveActiveRunIds();
   }
 
   async clearAll(): Promise<void> {
