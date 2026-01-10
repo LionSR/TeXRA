@@ -285,7 +285,6 @@ export async function checkToolInstalled(
       isInstalled = executeWithFallback(parsed.cmdName, parsed.args);
     }
 
-
     if (!isInstalled && showError) {
       const actions = config.openDocsCommand ? ['View Installation Guide'] : [];
       const choice = await vscode.window.showErrorMessage(
