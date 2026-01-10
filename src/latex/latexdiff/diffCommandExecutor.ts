@@ -81,16 +81,16 @@ export class DiffCommandExecutor {
     );
   }
 
-  /** Insert --flatten flag at specified position if needed */
+  /** Insert --flatten flag at specified position if needed (returns new array) */
   private insertFlattenFlag(
     command: string[],
     position: number,
     useFlatten: boolean,
   ): string[] {
-    if (useFlatten) {
-      command.splice(position, 0, '--flatten');
+    if (!useFlatten) {
+      return command;
     }
-    return command;
+    return command.toSpliced(position, 0, '--flatten');
   }
 
   private buildLatexdiffCommand(
