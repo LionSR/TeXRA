@@ -36,7 +36,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
+import {
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  formatZodIssuesForDiagnostics,
+  type ValidationErrorDiagnostics,
+} from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -56,18 +60,6 @@ import {
   handleInvocationResult,
 } from './RetryState';
 
-interface ToolValidationDiagnostics {
-  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: Array<Record<string, unknown>>;
-  formatted: Array<{
-    path: string;
-    message: string;
-    expected?: unknown;
-    received?: unknown;
-    code?: string;
-  }>;
-}
-
 /**
  * Parse tool input, handling various input formats from different model providers.
  * Returns parsed JSON if input is a JSON string, otherwise returns input as-is.
@@ -77,26 +69,13 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  // Handle null/undefined
   if (raw === null || raw === undefined) {
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
-
-  // Handle primitives (boolean, number) - pass through with warning
-  if (typeof raw === 'boolean' || typeof raw === 'number') {
-    logger.warn(
-      `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
-    );
-    return raw;
-  }
-
-  // Handle objects/arrays - pass through directly
   if (typeof raw !== 'string') {
-    return raw;
+    return raw; // Objects, arrays, primitives pass through directly
   }
-
-  // Handle strings - try to parse as JSON
   try {
     return JSON.parse(raw);
   } catch {
@@ -107,61 +86,52 @@ function parseToolInput(
   }
 }
 
-/** Check if an error is a Zod validation error (has issues array). */
-function isZodValidationError(
+/**
+ * Check if an error has Zod-like issues array (duck typing).
+ * Handles both real ZodError and error-like objects with issues.
+ */
+function hasZodIssues(
   error: unknown,
-): error is { issues: Array<Record<string, unknown>> } {
+): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
   return (
-    error !== null &&
     typeof error === 'object' &&
+    error !== null &&
     'issues' in error &&
     Array.isArray((error as { issues?: unknown }).issues)
   );
 }
 
-/** Format a Zod issue into a readable diagnostic entry. */
-function formatZodIssue(issue: Record<string, unknown>): {
-  path: string;
-  message: string;
-  expected?: unknown;
-  received?: unknown;
-  code?: string;
-} {
-  return {
-    path: Array.isArray(issue.path) ? issue.path.join('.') : '',
-    message: String(issue.message ?? ''),
-    expected: issue.expected,
-    received: issue.received,
-    code: typeof issue.code === 'string' ? issue.code : undefined,
-  };
-}
-
 /**
  * Normalize a tool call error into a user-friendly message with optional diagnostics.
+ * Uses shared formatting utilities from @tools/result for consistency.
  */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
-): { message: string; diagnostics?: ToolValidationDiagnostics } {
-  // Handle Zod validation errors with structured diagnostics
-  if (isZodValidationError(error)) {
+): { message: string; diagnostics?: ValidationErrorDiagnostics } {
+  if (hasZodIssues(error)) {
+    // Cast issues to ZodIssue-like for the shared formatter
+    const issues = error.issues as Array<{
+      path: (string | number)[];
+      message: string;
+      expected?: unknown;
+      received?: unknown;
+      code?: string;
+    }>;
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-        issues: error.issues,
-        formatted: error.issues.map(formatZodIssue),
+        issues: issues as ValidationErrorDiagnostics['issues'],
+        formatted: formatZodIssuesForDiagnostics(
+          issues as ValidationErrorDiagnostics['issues'],
+        ),
       },
     };
   }
 
-  // Handle standard errors and unknown types
-  const message =
-    error instanceof Error
-      ? `${toolName}: ${error.message}`
-      : `${toolName}: ${String(error)}`;
-
-  return { message };
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return { message: `${toolName}: ${errorMessage}` };
 }
 
 // ============================================================================
@@ -895,7 +865,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
   /**
    * Collect valid file locations from tool result attachments.
    * Filters out invalid paths and non-existent files.
-   * Uses parallel file existence checks for better performance.
    */
   private async collectValidMediaLocations(
     files: ToolResult['files'],
@@ -904,29 +873,22 @@ class ToolUseDispatchNode<C> extends BaseNode<
       return [];
     }
 
-    const results = await Promise.all(
-      files.map(async (attachment) => {
-        const path = attachment.path;
-
-        // Skip invalid paths
-        if (typeof path !== 'string' || path.trim() === '') {
-          return null;
+    const validLocations: FileLocation[] = [];
+    for (const attachment of files) {
+      const filePath = attachment.path;
+      if (typeof filePath !== 'string' || filePath.trim() === '') {
+        continue;
+      }
+      const location = pathToLocation(filePath);
+      try {
+        if (await AbsoluteFS.exists(location.absolutePath)) {
+          validLocations.push(location);
         }
-
-        const location = pathToLocation(path);
-
-        // Check if file exists (ignore errors)
-        try {
-          return (await AbsoluteFS.exists(location.absolutePath))
-            ? location
-            : null;
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    return results.filter((loc): loc is FileLocation => loc !== null);
+      } catch {
+        // Ignore files that can't be accessed
+      }
+    }
+    return validLocations;
   }
 
   /**
