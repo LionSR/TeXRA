@@ -44,34 +44,25 @@ export async function compileLatex2Pdf(
       true,
     );
 
-    // Create environment variables with TEXINPUTS if TikZ input directory is configured
-    const env: Record<string, string> = {};
-
-    // Start with the current directory
-    let texInputs = '.:';
-
-    // Add the workspace path if configured to do so
+    // Build TEXINPUTS from configured paths
+    const texInputParts = ['.'];
     if (includeWorkspace) {
       const workspacePath = WorkspaceFS.getPath();
-      if (workspacePath) {
-        texInputs += `${workspacePath}:`;
+      if (workspacePath) texInputParts.push(workspacePath);
+    }
+    if (tikzInputDirectory?.trim()) {
+      texInputParts.push(tikzInputDirectory);
+    }
+
+    const env: Record<string, string> = {};
+    if (texInputParts.length > 1 || process.env.TEXINPUTS) {
+      // Build base path, append existing TEXINPUTS verbatim (preserving its trailing colon behavior)
+      let texInputs = texInputParts.join(':') + ':';
+      if (process.env.TEXINPUTS) {
+        texInputs += process.env.TEXINPUTS;
       }
-    }
-
-    // Add TikZ input directory if configured
-    if (tikzInputDirectory && tikzInputDirectory.trim() !== '') {
-      texInputs += `${tikzInputDirectory}:`;
-    }
-
-    // Append the existing TEXINPUTS if any
-    if (process.env.TEXINPUTS) {
-      texInputs += process.env.TEXINPUTS;
-    }
-
-    // Only set TEXINPUTS if we have something to set
-    if (texInputs !== '.:') {
       env.TEXINPUTS = texInputs;
-      logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
+      logger.debug(channel, `Setting TEXINPUTS to: ${env.TEXINPUTS}`);
     }
 
     const latexmkArgs = [
