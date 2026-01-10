@@ -681,7 +681,11 @@ export class ModelHandlerOpenAI<
         ).toLowerCase();
         const supportedFormats = ['wav', 'mp3'] as const;
 
-        if (!supportedFormats.includes(audioFormat as (typeof supportedFormats)[number])) {
+        if (
+          !supportedFormats.includes(
+            audioFormat as (typeof supportedFormats)[number],
+          )
+        ) {
           throw new Error(
             `Unsupported audio format "${audioFormat}". Valid formats: ${supportedFormats.join(', ')}`,
           );
