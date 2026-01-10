@@ -24,10 +24,6 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 /**
  * Check if a model is available via personal API keys.
  * Called only when server-side access is not available and user is in "Use My Own Keys" mode.
- *
- * @param config - Model configuration
- * @param hasOpenRouter - Whether user has OpenRouter API key
- * @returns Whether the model is available via personal keys
  */
 async function checkPersonalKeyAvailability(
   config: {
@@ -42,27 +38,25 @@ async function checkPersonalKeyAvailability(
     return hasOpenRouter;
   }
 
+  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
   const provider = config.provider;
-
-  // Check provider-specific API key
-  if (SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
-    try {
-      const hasProviderKey = await SecretManager.apiKeyExists(
-        provider as ApiProvider,
-      );
-      if (hasProviderKey) {
-        return true;
-      }
-      // Check OpenRouter as fallback for models that support it
-      return !!(config.openrouterFullName && hasOpenRouter);
-    } catch (error) {
-      console.warn(`Failed to check API key for ${provider}:`, error);
-      return false;
-    }
+  if (!SecretManager.API_PROVIDERS.includes(provider as ApiProvider)) {
+    return true;
   }
 
-  // Providers not in API_PROVIDERS don't require keys (e.g., COPILOT)
-  return true;
+  // Check provider-specific API key
+  try {
+    const hasProviderKey = await SecretManager.apiKeyExists(
+      provider as ApiProvider,
+    );
+    if (hasProviderKey) return true;
+
+    // Fall back to OpenRouter for models that support it
+    return Boolean(config.openrouterFullName && hasOpenRouter);
+  } catch (error) {
+    console.warn(`Failed to check API key for ${provider}:`, error);
+    return false;
+  }
 }
 
 /**
@@ -132,7 +126,8 @@ export async function computeModelOptions(): Promise<string> {
 
       const attrs = [
         `value="${model}"`,
-        !available && 'data-requires-key="true" class="disabled-option disabled-model"',
+        !available &&
+          'data-requires-key="true" class="disabled-option disabled-model"',
         provider && `data-provider="${provider}"`,
         contextStr && `data-context="${contextStr}"`,
         costStr && `data-cost="${costStr}"`,
