@@ -20,19 +20,14 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
-/**
- * OpenRouter reasoning_details array item types.
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
- */
+/** @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens */
 interface ReasoningDetailItem {
   type: 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted';
   id?: string | null;
-  format?: string;
-  index?: number;
-  text?: string; // for reasoning.text
-  summary?: string; // for reasoning.summary
-  data?: string; // for reasoning.encrypted
-  signature?: string | null; // for reasoning.text
+  text?: string;
+  summary?: string;
+  data?: string;
+  signature?: string | null;
 }
 
 /**
