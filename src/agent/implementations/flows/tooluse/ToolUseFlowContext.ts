@@ -41,33 +41,22 @@ export interface ToolUseFlowContext<C = unknown> {
 // Tool Resolution
 // ============================================================================
 
-interface ToolResolutionContext {
-  toolRegistry: IToolRegistry;
-  logger: { warn: (msg: string) => void };
-}
-
-/** Normalize tool config to a ToolDefinition. */
-function normalizeToolConfig(config: string | ToolDefinition): ToolDefinition {
-  return typeof config === 'string' ? { name: config } : config;
-}
-
 /**
  * Resolve tool definitions from agent settings, validating against registry.
  * Optionally injects the memory tool if enabled in user settings.
  */
 function resolveTools(
   tools: AgentToolUseSetting['tools'],
-  ctx: ToolResolutionContext,
+  toolRegistry: IToolRegistry,
+  logger: { warn: (msg: string) => void },
 ): ToolDefinition[] {
-  const { toolRegistry, logger } = ctx;
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
-  // Resolve configured tools
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
 
   for (const config of toolConfigs) {
-    const def = normalizeToolConfig(config);
+    const def = typeof config === 'string' ? { name: config } : config;
 
     if (!toolRegistry.has(def.name)) {
       logger.warn(`Tool "${def.name}" not found in registry`);
@@ -104,7 +93,7 @@ export function createToolUseFlowContext<C = unknown>(
   const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
-  const resolvedTools = resolveTools(setting.tools, { toolRegistry, logger });
+  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
 
   const services: ToolUseServices<C> = {
     ...init,

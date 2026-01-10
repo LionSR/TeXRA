@@ -179,21 +179,6 @@ export const ToolUseCycleFieldsSchema = BaseCycleFieldsSchema.extend({
 export type ToolUseCycleFields = z.infer<typeof ToolUseCycleFieldsSchema>;
 
 /**
- * Reset tool-use cycle state for a new iteration.
- * Called at the start of each cycle to clear transient fields.
- */
-function resetToolUseState(shared: ToolUseCycleShared): void {
-  resetCycleState(shared, [
-    'response',
-    'toolCalls',
-    'text',
-    'cycleNormalizedUsage',
-  ]);
-  shared.cycleResponseTimeMs = 0;
-  // Note: cycleIndex is incremented in ToolUseProcessNode.post(), not reset here
-}
-
-/**
  * Shared state for tool-use cycle flows.
  *
  * Uses flat structure (like ResponseCycleFlow) for consistency.
@@ -238,7 +223,13 @@ class ToolUsePrepNode<C> extends BaseNode<
 
     // Reset at the start of each cycle so downstream nodes observe a clean
     // runtime state before enriching it with model responses.
-    resetToolUseState(shared);
+    resetCycleState(shared, [
+      'response',
+      'toolCalls',
+      'text',
+      'cycleNormalizedUsage',
+    ]);
+    shared.cycleResponseTimeMs = 0;
 
     const { modelName, agentName } = this.services;
     await maybeSaveDebugObject({
@@ -586,13 +577,13 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Finalize cycle using direct values (no round object needed)
-    await finalizeToolUseCycle({
-      cycleIndex: shared.cycleIndex,
-      responseTimeMs: shared.cycleResponseTimeMs,
-      normalizedUsage: shared.cycleNormalizedUsage ?? null,
+    await finalizeToolUseCycle(
+      shared.cycleIndex,
+      shared.cycleResponseTimeMs,
+      shared.cycleNormalizedUsage ?? null,
       run,
       onRoundFinalized,
-    });
+    );
     run.incrementRounds();
 
     shared.stopReason = execRes.stopReason;
