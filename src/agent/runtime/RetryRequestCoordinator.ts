@@ -143,6 +143,23 @@ class RetryRequestCoordinatorImpl {
   }
 
   /**
+   * Handle a user action (retry or cancel) for a pending request.
+   * @returns true if the action was handled, false if no pending request
+   */
+  private handleUserAction(
+    streamId: string,
+    action: 'retry' | 'cancel',
+  ): boolean {
+    const req = this.getPendingRequest(streamId);
+    if (!req) return false;
+
+    const actionLabel = action === 'retry' ? 'requested' : 'cancelled';
+    req.logger.debug(`Retry ${actionLabel} for ${req.operation}`);
+    this.resolveRequest(streamId, { action });
+    return true;
+  }
+
+  /**
    * Trigger a retry for a stream. Called when user clicks the retry button.
    * Resolves the pending Promise with 'retry' action.
    *
@@ -150,14 +167,7 @@ class RetryRequestCoordinatorImpl {
    * @returns true if retry was triggered, false if no pending request
    */
   triggerRetry(streamId: string): boolean {
-    const req = this.requests.get(streamId);
-    if (!req || req.status !== 'pending') {
-      return false;
-    }
-
-    req.logger.debug(`Retry requested for ${req.operation}`);
-    this.resolveRequest(streamId, { action: 'retry' });
-    return true;
+    return this.handleUserAction(streamId, 'retry');
   }
 
   /**
@@ -168,24 +178,14 @@ class RetryRequestCoordinatorImpl {
    * @returns true if cancelled, false if no pending request
    */
   cancelRetry(streamId: string): boolean {
-    const req = this.requests.get(streamId);
-    if (!req || req.status !== 'pending') {
-      return false;
-    }
-
-    const { logger, operation } = req;
-    logger.debug(`Retry cancelled for ${operation}`);
-
-    this.resolveRequest(streamId, { action: 'cancel' });
-    return true;
+    return this.handleUserAction(streamId, 'cancel');
   }
 
   /**
    * Check if a retry request is pending for a stream.
    */
   hasPendingRequest(streamId: string): boolean {
-    const req = this.requests.get(streamId);
-    return req?.status === 'pending';
+    return this.getPendingRequest(streamId) !== null;
   }
 
   /**
@@ -195,10 +195,8 @@ class RetryRequestCoordinatorImpl {
    * @param streamId - The stream to clear
    */
   clearRequest(streamId: string): void {
-    const req = this.requests.get(streamId);
-    if (!req || req.status !== 'pending') {
-      return;
-    }
+    const req = this.getPendingRequest(streamId);
+    if (!req) return;
 
     clearTimeout(req.timeoutId);
     // Resolve with cancel to avoid hanging Promise and potential memory leak
@@ -211,13 +209,22 @@ class RetryRequestCoordinatorImpl {
   // ==========================================================================
 
   /**
+   * Get a pending request if it exists, or null otherwise.
+   * Type-safe accessor that narrows the discriminated union.
+   */
+  private getPendingRequest(
+    streamId: string,
+  ): (RetryRequestState & { status: 'pending' }) | null {
+    const req = this.requests.get(streamId);
+    return req?.status === 'pending' ? req : null;
+  }
+
+  /**
    * Resolve a pending request and clean up.
    */
   private resolveRequest(streamId: string, result: RetryResult): void {
-    const req = this.requests.get(streamId);
-    if (!req || req.status !== 'pending') {
-      return;
-    }
+    const req = this.getPendingRequest(streamId);
+    if (!req) return;
 
     clearTimeout(req.timeoutId);
     req.resolve(result);
