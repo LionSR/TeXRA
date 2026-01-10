@@ -545,8 +545,15 @@ class ResponseProcessNode<C> extends BaseNode<
       );
 
       if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        const preview = newResponse.substring(0, REPETITION_DETECTION_THRESHOLD);
-        const skeleton = JSON.stringify(messageToSkeleton(prepRes.messages), null, 2);
+        const preview = newResponse.substring(
+          0,
+          REPETITION_DETECTION_THRESHOLD,
+        );
+        const skeleton = JSON.stringify(
+          messageToSkeleton(prepRes.messages),
+          null,
+          2,
+        );
         logger.error(
           `Massive repetition detected - skipping this response\n` +
             `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
