@@ -181,7 +181,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   _clearSessionKindState(newSessionKind) {
     const shouldClear =
       newSessionKind !== state.activeSessionKind && state.activeSessionKind;
+    // DIAGNOSTIC: Track session kind state changes
+    console.log('[_clearSessionKindState] called:', {
+      newSessionKind,
+      currentSessionKind: state.activeSessionKind,
+      shouldClear,
+      taskGroupCount: state.taskGroups?.size ?? 0,
+    });
     if (shouldClear) {
+      console.warn(
+        '[_clearSessionKindState] CLEARING task groups! This may cause message loss.',
+      );
       state.taskGroups.clear();
       dom.taskGroups.clear();
     }
@@ -399,6 +409,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       'message.streams?.length': message.streams?.length,
       'state.activeStream (before)': state.activeStream,
       'state.lastRenderedStream': state.lastRenderedStream,
+      'state.activeSessionKind (before)': state.activeSessionKind,
     });
 
     // Save follow-up text for the previous stream before switching
@@ -445,6 +456,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     );
     const sessionKind = this._resolveSessionKind(activeStreamInfo);
     const isToolAgent = sessionKind === 'toolUse';
+
+    // DIAGNOSTIC: Log session kind resolution
+    console.log('[UPDATE_STREAMS] session kind resolution:', {
+      hasActiveStreamInfo: Boolean(activeStreamInfo),
+      'activeStreamInfo.agentSessionKind': activeStreamInfo?.agentSessionKind,
+      'activeStreamInfo.uiTraits?.sessionKind':
+        activeStreamInfo?.uiTraits?.sessionKind,
+      resolvedSessionKind: sessionKind,
+      'state.activeSessionKind (current)': state.activeSessionKind,
+    });
 
     // Only clear session state if we have confirmed stream info for the session kind change
     if (activeStreamInfo) {
