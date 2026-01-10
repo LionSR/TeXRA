@@ -50,9 +50,7 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export function registerCleanCommands(
-  context: vscode.ExtensionContext,
-): void {
+export function registerCleanCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.clean', handleClean),
     vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
@@ -118,16 +116,21 @@ async function handleCleanMultiple(
 }
 
 export async function handleClean(config: {
+  agent?: string;
+  model?: string;
+  inputFile?: string;
+  outputFiles?: string[];
+  useMultipleOutputs?: boolean;
   streamId?: string;
   skipProgressViewClear?: boolean;
-  [key: string]: unknown;
 }): Promise<void> {
   logger.debug(
     CHANNEL,
     `Clean command called with config: ${JSON.stringify(config)}`,
   );
 
-  if (!config.agent || !config.inputFile) {
+  const { agent, model, inputFile } = config;
+  if (!agent || !model || !inputFile) {
     await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
     return;
   }
@@ -145,28 +148,16 @@ export async function handleClean(config: {
       CHANNEL,
       `Running clean multiple with ${outputFiles.length} files`,
     );
-    const result = await runCleanMultiple(
-      config.model,
-      config.inputFile,
-      config.agent,
-      outputFiles,
-    );
-    showCleanResult(result, config.inputFile);
+    const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
+    showCleanResult(result, inputFile);
   } else {
     logger.info(CHANNEL, `Running clean single`);
-    const result = await runCleanSingle(
-      config.model,
-      config.inputFile,
-      config.agent,
-    );
-    showCleanResult(result, config.inputFile);
+    const result = await runCleanSingle(model, inputFile, agent);
+    showCleanResult(result, inputFile);
   }
 
   const streamId =
-    config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, {
-      useMultipleOutputs,
-    });
+    config.streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs });
 
   if (!config.skipProgressViewClear) {
     bus.emit('clearMissingOutputs', { stream: streamId });
