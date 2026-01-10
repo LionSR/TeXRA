@@ -1,14 +1,11 @@
 /**
  * Main entry point for progress view formatters.
- * Provides the LogEntryFormatter class and re-exports for external use.
+ * Provides the LogEntryFormatter class and minimal re-exports for external use.
  */
 
-// Re-exports for external modules
-export { BULLET_MARKUP, EMOJI_BY_LEVEL, QUERY_PREVIEW_MAX_LENGTH } from './constants.js';
-export { TaskGroupLevel } from './taskGroupLevel.js';
-export { formatTokens, formatDuration, formatTimestamp, MessageTimestampExtractor } from './timestampUtils.js';
+// Re-exports for external modules (only what's actually imported externally)
+export { formatTokens } from './timestampUtils.js';
 export { TaskGroupHeaderFormatter } from './taskGroupFormatter.js';
-export { getMarkdownRenderer, processMarkdownContent } from './markdownRenderer.js';
 
 // Internal imports for LogEntryFormatter
 import { normalizeStructuredContent } from './normalizers.js';
