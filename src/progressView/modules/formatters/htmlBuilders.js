@@ -27,15 +27,26 @@ export function buildToolUseSection(label, content) {
 `;
 }
 
+// Diff line prefix patterns
+// IMPORTANT: Longer prefixes (+++, ---) must appear before shorter ones (+, -)
+// to ensure correct matching priority in getDiffLineClass
+const DIFF_LINE_PATTERNS = [
+  { prefix: '@@', className: 'diff-hunk' },
+  { prefix: '+++', className: null }, // Header, not highlighted
+  { prefix: '---', className: null }, // Header, not highlighted
+  { prefix: '+', className: 'diff-add' },
+  { prefix: '-', className: 'diff-remove' },
+];
+
 /**
  * Get diff line class based on line content
  * @param {string} line - Line to check
  * @returns {string|null} CSS class or null if not a diff line
  */
 function getDiffLineClass(line) {
-  if (line.startsWith('@@')) return 'diff-hunk';
-  if (line.startsWith('+') && !line.startsWith('+++')) return 'diff-add';
-  if (line.startsWith('-') && !line.startsWith('---')) return 'diff-remove';
+  for (const { prefix, className } of DIFF_LINE_PATTERNS) {
+    if (line.startsWith(prefix)) return className;
+  }
   return null;
 }
 
@@ -45,17 +56,11 @@ function getDiffLineClass(line) {
  * @returns {boolean} True if text looks like diff output
  */
 function isDiffContent(text) {
-  const lines = text.split('\n').slice(0, 20); // Check first 20 lines
-  let diffMarkers = 0;
-  for (const line of lines) {
-    if (
-      line.startsWith('@@') ||
-      line.startsWith('+++') ||
-      line.startsWith('---')
-    ) {
-      diffMarkers++;
-    }
-  }
+  const lines = text.split('\n').slice(0, 20);
+  const diffMarkers = lines.filter(
+    (line) =>
+      line.startsWith('@@') || line.startsWith('+++') || line.startsWith('---'),
+  ).length;
   return diffMarkers >= 2;
 }
 
@@ -69,18 +74,17 @@ export function wrapInPre(text, className = '') {
   const classAttr = className ? ` class="${className}"` : '';
 
   // Apply diff highlighting if content looks like a diff
-  if (isDiffContent(text)) {
-    const highlightedLines = text.split('\n').map((line) => {
-      const diffClass = getDiffLineClass(line);
-      const encoded = encodeHtml(line);
-      return diffClass
-        ? `<span class="${diffClass}">${encoded}</span>`
-        : encoded;
-    });
-    return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
+  if (!isDiffContent(text)) {
+    return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
   }
 
-  return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
+  const highlightedLines = text.split('\n').map((line) => {
+    const diffClass = getDiffLineClass(line);
+    const encoded = encodeHtml(line);
+    return diffClass ? `<span class="${diffClass}">${encoded}</span>` : encoded;
+  });
+
+  return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
 }
 
 /**
