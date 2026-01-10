@@ -104,7 +104,11 @@ export function safeSetElementChecked(id, checked) {
  * @param {string} value - The value to select
  * @param {string} [selector='vscode-radio'] - Selector for radio elements
  */
-export function setRadioGroupValue(radioGroup, value, selector = 'vscode-radio') {
+export function setRadioGroupValue(
+  radioGroup,
+  value,
+  selector = 'vscode-radio',
+) {
   if (!radioGroup) return;
   if ('value' in radioGroup) {
     radioGroup.value = value;
