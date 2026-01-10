@@ -3,7 +3,7 @@ import { COMMANDS } from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
-import { addEventListenerSafely } from '@common/domUtils.js';
+import { addEventListenerSafely, setElementCheckedState } from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -94,11 +94,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     if (bypassButton) {
       const allowBypass = request.allowBypass !== false;
-      const isActive = Boolean(this.isBypassActive);
       bypassButton.toggleAttribute('disabled', !allowBypass);
-      // VS Code web components require both property and attribute for visual sync
-      bypassButton.checked = isActive;
-      bypassButton.toggleAttribute('checked', isActive);
+      setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
   }
 
