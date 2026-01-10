@@ -210,7 +210,9 @@ export class XmlOutputManager {
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
-    const tryFallbackExtraction = async (): Promise<OutputFileInfo[] | null> => {
+    const tryFallbackExtraction = async (): Promise<
+      OutputFileInfo[] | null
+    > => {
       const fallbackDocs = this.extractMultipleDocumentsbyRegex(
         outputContent,
         documentTag,

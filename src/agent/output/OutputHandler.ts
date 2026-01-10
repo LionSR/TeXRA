@@ -148,10 +148,9 @@ export class OutputHandler implements IOutputHandler {
     this.openedOutputs.clear();
 
     const supportFiles = this.collectRunSupportFiles();
-    this.runPreparation = this.fileService.prepareRunWorkspace(
-      this.baseFiles,
-      { linkFiles: supportFiles },
-    );
+    this.runPreparation = this.fileService.prepareRunWorkspace(this.baseFiles, {
+      linkFiles: supportFiles,
+    });
   }
 
   private getStorageKey(): StorageKey {
