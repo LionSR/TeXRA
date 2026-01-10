@@ -82,6 +82,7 @@ export function getToolUseFlowContext(
     entry &&
     'session' in entry &&
     entry.session &&
+    typeof entry.session === 'object' &&
     'appendFollowUp' in entry.session
   ) {
     return entry as ToolUseFlowContext<any>;
