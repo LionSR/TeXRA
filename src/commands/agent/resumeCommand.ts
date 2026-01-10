@@ -92,41 +92,25 @@ async function resumeFromSnapshot(
 
     // Resume using flow-first execution
     await resumeToolUseFromSnapshot(snapshot, (session) => {
-      // Combine all follow-ups into a single message
-      const allFollowUps: string[] = [];
+      // Combine explicit follow-up with queued ones into a single message
+      const allFollowUps = followUp
+        ? [followUp, ...queuedFollowUps]
+        : queuedFollowUps;
 
-      // Add explicit follow-up first if provided
-      if (followUp !== undefined) {
-        allFollowUps.push(followUp);
-      }
-
-      // Add queued follow-ups
-      allFollowUps.push(...queuedFollowUps);
-
-      // Send as single concatenated message
       if (allFollowUps.length > 0) {
-        const combinedMessage = allFollowUps.join('\n\n');
-        session.appendFollowUp(combinedMessage);
+        session.appendFollowUp(allFollowUps.join('\n\n'));
       }
     });
 
     return { success: true };
   } catch (error) {
+    // Use already-drained follow-ups if available, otherwise drain now
     const lostFollowUps =
-      queuedFollowUps.length > 0
-        ? queuedFollowUps
-        : ToolUseFollowUpQueue.drain(streamId);
-
-    const baseMessage = logErrorMessage(
-      CHANNEL,
-      'Failed to resume tool-use session',
-      error,
-    );
+      queuedFollowUps.length > 0 ? queuedFollowUps : ToolUseFollowUpQueue.drain(streamId);
     const lostCount = lostFollowUps.length;
 
-    await vscode.window.showWarningMessage(
-      `${baseMessage}${lostCount === 0 ? '' : formatLostFollowUpSuffix(lostCount)}`,
-    );
+    const baseMessage = logErrorMessage(CHANNEL, 'Failed to resume tool-use session', error);
+    await vscode.window.showWarningMessage(`${baseMessage}${formatLostFollowUpSuffix(lostCount)}`);
 
     return { success: false, lostFollowUps: lostCount };
   } finally {

@@ -333,11 +333,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleFilterStreams(message: any): Promise<void> {
-    const requestedFilter = message.filter;
-    const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
-      ? requestedFilter
+    this.provider.state.agentTypeFilter = isAgentTypeFilter(message.filter)
+      ? message.filter
       : 'all';
-    this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }
 
@@ -650,31 +648,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         workspaceOnly: true,
       },
     );
-    const allFiles = new Set<string>();
 
-    const declaredOutputs = Array.isArray(taskState.agentConfig.outputFiles)
-      ? taskState.agentConfig.outputFiles
-      : [];
-    for (const file of declaredOutputs) {
-      if (isNonEmptyString(file)) {
-        allFiles.add(file);
-      }
-    }
+    // Collect all output files from declared config and generated paths
+    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
+    const allFiles = [
+      ...(Array.isArray(declaredOutputs) ? declaredOutputs : []),
+      ...generatedPaths,
+    ].filter(isNonEmptyString);
+    const outputFilesArray = [...new Set(allFiles)];
 
-    for (const file of generatedPaths) {
-      if (isNonEmptyString(file)) {
-        allFiles.add(file);
-      }
-    }
-
-    const outputFilesArray = [...allFiles];
-
-    // Determine if multiple outputs mode is active
     // Priority: explicit config > activeFiles flag > infer from file count
     const useMultipleOutputs =
       taskState.agentConfig.useMultipleOutputs ??
       taskState.activeFiles.output ??
       outputFilesArray.length > 1;
+
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agentConfig.agent,
