@@ -71,7 +71,9 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
  * Returns null if session data is missing or invalid.
  * Logs warnings for corrupted data to help diagnose auth issues.
  */
-function parseStoredSession(sessionData: string | undefined): SupabaseSession | null {
+function parseStoredSession(
+  sessionData: string | undefined,
+): SupabaseSession | null {
   if (!sessionData) return null;
   try {
     const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
@@ -957,7 +959,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       };
 
       await this.storeSession(refreshed);
-      logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
+      logger.info(
+        'SupabaseAuthProvider',
+        'Token refreshed via custom endpoint',
+      );
       return refreshed;
     } catch (error) {
       logger.error(

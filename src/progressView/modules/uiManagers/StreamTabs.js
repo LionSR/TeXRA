@@ -200,8 +200,18 @@ export class StreamTabs {
     }
 
     // Property-based decorators - remove if condition false, apply icon if true
-    this._applyPropertyDecorator(tabEl, '.remote-agent', info.isRemote, 'remote');
-    this._applyPropertyDecorator(tabEl, '.multi-file', info.hasMultipleOutputs, 'multipleOutputs');
+    this._applyPropertyDecorator(
+      tabEl,
+      '.remote-agent',
+      info.isRemote,
+      'remote',
+    );
+    this._applyPropertyDecorator(
+      tabEl,
+      '.multi-file',
+      info.hasMultipleOutputs,
+      'multipleOutputs',
+    );
   }
 
   /**
