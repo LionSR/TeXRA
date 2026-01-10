@@ -2,17 +2,17 @@
 import { EventEmitter } from 'events';
 
 // Type imports
-import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type { ContextStateData } from '@logger/AgentLogger';
 import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
-import type { TaskState } from '@logger/TaskState';
 import type {
   AddTaskGroupPayload,
   RunScopedPayload,
+  SetActiveStreamPayload,
+  SetTaskStatePayload,
   UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
@@ -20,24 +20,6 @@ import type { RetryRequestPrompt, ToolEditApprovalPrompt } from './types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
-
-// SetActiveStreamPayload and SetTaskStatePayload are defined inline
-// because they reference types from external modules (AgentSessionDescriptor, TaskState)
-// that don't have schemas yet. These can be migrated when those modules are updated.
-interface SetActiveStreamPayload {
-  stream: StreamTabId | null;
-  session?: AgentSessionDescriptor | null;
-  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
-  isRemote?: boolean;
-  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
-  hasMultipleOutputs?: boolean;
-}
-
-interface SetTaskStatePayload {
-  streamTabId: StreamTabId;
-  executionId?: ExecutionId;
-  taskState: TaskState;
-}
 
 export interface ProgressEventPayloads {
   addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
