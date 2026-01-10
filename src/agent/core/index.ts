@@ -1,126 +1,23 @@
 /**
  * Agent core barrel export.
  *
- * Consolidates core agent types, schemas, and utilities.
+ * Exports commonly used types, enums, and classes.
+ * For less common exports, import directly from the specific file.
  */
 
-// Agent dataclass - types, enums, and settings
-export {
-  // Constants
-  MIN_TEMPERATURE,
-  MAX_TEMPERATURE,
-  WORKFLOW_TYPES,
-  TOOL_USE_TYPES,
-  // Enums and types
-  AgentSource,
-  AgentCategory,
-  AgentType,
-  type WorkflowAgentType,
-  type ToolUseAgentType,
-  // Schemas
-  AgentSettingBaseSchema,
-  AgentWorkflowSettingSchema,
-  AgentToolUseSettingSchema,
-  AgentSettingSchema,
-  AgentPromptSchema,
-  AgentDefinitionSchema,
-  XmlStructureMode,
-  // Types
-  type AgentSetting,
-  type AgentWorkflowSetting,
-  type AgentToolUseSetting,
-  type AgentPrompt,
-  type AgentDefinition,
-  type AgentSessionDescriptor,
-  // Functions
-  deriveAgentCategory,
-  resolveAgentSessionDescriptor,
-  getAgentSessionDescriptor,
-  isWorkflowSetting,
-  requireWorkflowSetting,
-  hasEndTag,
-  parseAgentSetting,
+// Most commonly used - enums and category types
+export { AgentCategory, AgentType, hasEndTag } from './AgentDataclass';
+export type {
+  AgentSetting,
+  AgentPrompt,
+  AgentWorkflowSetting,
+  AgentSessionDescriptor,
 } from './AgentDataclass';
 
-// Session schema
-export { AgentSessionDescriptorSchema } from './AgentSessionSchema';
+// Config types
+export type { AgentConfig } from './AgentConfig';
+export type { ToolConfig } from './ToolConfig';
 
-// Agent config
-export {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigInput,
-} from './AgentConfig';
-
-// Cycle options
-export {
-  UserVariableChannelsSchema,
-  type UserVariableChannels,
-  type AgentCycleBaseOptions,
-} from './AgentCycleOptions';
-
-// Tool config
-export {
-  DEFAULT_TOOL_CONFIG,
-  ToolConfigSchema,
-  type ToolConfig,
-} from './ToolConfig';
-
-// Tool types
-export { type ITool, type ToolResult } from './ToolTypes';
-
-// Response usage types
-export {
-  type ExtendedCompletionUsage,
-  type NativeUsagePayload,
-  type ProviderUsage,
-  type ResponseUsageBase,
-  type OpenAIAPIResponseUsage,
-  type AnthropicAPIResponseUsage,
-} from './ResponseUsage';
-
-// Run usage accumulator
-export {
-  RunUsageAccumulatorJSONSchema,
-  RunUsageAccumulator,
-  type RunUsageAccumulatorJSON,
-} from './RunUsageAccumulator';
-
-// Agent state
-export {
-  ConversationRoundStateSnapshotSchema,
-  AgentRunStateSnapshotSchema,
-  ConversationRoundState,
-  AgentRunState,
-  type ConversationRoundStateSnapshot,
-  type AgentRunStateSnapshot,
-} from './AgentState';
-
-// Agent workspace state
-export {
-  ThinkingBlockSchema,
-  ResponseAssemblyStateSchema,
-  FileInteractionStateSnapshotSchema,
-  MediaAttachmentStateSnapshotSchema,
-  ReasoningCacheStateSchema,
-  TodoStateSnapshotSchema,
-  AgentWorkspaceStateSnapshotSchema,
-  FileInteractionState,
-  MediaAttachmentState,
-  TodoState,
-  AgentWorkspaceState,
-  type ThinkingBlock,
-  type ResponseAssemblyState,
-  type FileInteractionStateSnapshot,
-  type MediaAttachmentStateSnapshot,
-  type ReasoningCacheState,
-  type TodoStateSnapshot,
-  type AgentWorkspaceSnapshot,
-  type ServerToolContentState,
-  getReasoningPrimaryBlock,
-  resetReasoningCacheState,
-  resetServerToolContentState,
-} from './AgentWorkspaceState';
-
-// Stream execution index
-export { StreamExecutionIndex } from './StreamExecutionIndex';
+// State classes - commonly instantiated
+export { AgentWorkspaceState } from './AgentWorkspaceState';
+export { ConversationRoundState } from './AgentState';
