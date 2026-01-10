@@ -61,12 +61,8 @@ export class DiffFileProcessor {
     ];
 
     for (const line of lines) {
-      // Skip TEX root comments
-      if (
-        line.startsWith('%!TEX root') ||
-        line.startsWith('% !TEX root') ||
-        line.startsWith('%! TEX root')
-      ) {
+      // Skip TEX root comments (handles various spacing: %!TEX, % !TEX, %! TEX)
+      if (/^%\s?!\s?TEX root/.test(line)) {
         continue;
       }
 
