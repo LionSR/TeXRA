@@ -83,27 +83,25 @@ export async function maybeSaveDebugObject({
   const { logger, modelName, executionId } = context;
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
-  const fileBase =
-    outputFile !== undefined
-      ? path.basename(outputFile, path.extname(outputFile))
-      : baseName;
-  const cont =
-    continuationCount !== undefined ? `_cont${continuationCount}` : '';
+  const fileBase = outputFile
+    ? path.basename(outputFile, path.extname(outputFile))
+    : baseName;
+  const cont = continuationCount ? `_cont${continuationCount}` : '';
   const modelPart = modelName ? `_${modelName.replaceAll(/[\\/]/g, '_')}` : '';
   const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
   try {
-    if (executionId) {
-      await ensureRunDir(executionId);
-      const relativePath = path.join(TASK_RUNS_DIR, executionId, debugFileName);
-      await StorageFS.writeJson(relativePath, object);
-      const debugFilePath = StorageFS.fullPath(relativePath);
-      logger.info(`Saved ${objectType} object to ${debugFilePath}`);
-    } else {
-      await WorkspaceFS.writeJson(debugFileName, object);
-      const debugFilePath = WorkspaceFS.fullPath(debugFileName);
-      logger.info(`Saved ${objectType} object to ${debugFilePath}`);
-    }
+    // Use appropriate file system based on whether we have an execution context
+    const filePath = executionId
+      ? path.join(TASK_RUNS_DIR, executionId, debugFileName)
+      : debugFileName;
+    const fs = executionId ? StorageFS : WorkspaceFS;
+
+    if (executionId) await ensureRunDir(executionId);
+    await fs.writeJson(filePath, object);
+
+    const debugFilePath = fs.fullPath(filePath);
+    logger.info(`Saved ${objectType} object to ${debugFilePath}`);
   } catch (error) {
     logger.error(`Failed to save ${objectType} object: ${error}`);
   }
