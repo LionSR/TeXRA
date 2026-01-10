@@ -44,12 +44,30 @@ interface SignInOption {
   method: AuthMethod;
 }
 
-/** Available sign-in methods with their display info */
-const SIGN_IN_OPTIONS: SignInOption[] = [
-  { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
-  { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
-  { label: '$(github) GitHub (VS Code)', description: 'Sign in using VS Code GitHub authentication', method: 'github' },
-];
+/** Build sign-in options based on enabled auth methods */
+function getSignInOptions(): SignInOption[] {
+  const options: SignInOption[] = [
+    { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
+    { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
+  ];
+
+  if (EMAIL_LOGIN_ENABLED) {
+    options.push({
+      label: '$(mail) Email',
+      description: 'Sign in with a magic link sent to your email',
+      method: 'email',
+    });
+  }
+
+  // VS Code GitHub auth is always last (fallback option)
+  options.push({
+    label: '$(github) GitHub (VS Code)',
+    description: 'Sign in using VS Code GitHub authentication',
+    method: 'github',
+  });
+
+  return options;
+}
 
 /**
  * Command to sign in to TeXRA account.
@@ -73,14 +91,7 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Build sign-in options (optionally include email if enabled)
-    const signInOptions = EMAIL_LOGIN_ENABLED
-      ? [
-          ...SIGN_IN_OPTIONS.slice(0, 2),
-          { label: '$(mail) Email', description: 'Sign in with a magic link sent to your email', method: 'email' as AuthMethod },
-          ...SIGN_IN_OPTIONS.slice(2),
-        ]
-      : SIGN_IN_OPTIONS;
+    const signInOptions = getSignInOptions();
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
       placeHolder: 'Choose a sign-in method',
