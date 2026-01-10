@@ -307,51 +307,33 @@ export class ProgressViewState {
     options?: { persist?: boolean },
   ): string | null {
     const persist = options?.persist ?? true;
-    const preferred = requested ?? null;
 
-    let candidates: Set<string> | null = null;
-    const ensureCandidates = (): Set<string> => {
-      if (!candidates) {
-        candidates = this.collectRunCandidates(stream);
+    // Helper to persist and return a resolved runId
+    const resolve = (runId: string | null): string | null => {
+      if (runId && persist) {
+        this.setActiveRunId(stream, runId);
       }
-      return candidates;
+      return runId;
     };
 
-    if (preferred) {
-      if (!ensureCandidates().has(preferred)) {
-        return null;
-      }
-      if (persist) {
-        this.setActiveRunId(stream, preferred);
-      }
-      return preferred;
+    // 1. If specific runId requested, validate it exists
+    if (requested) {
+      const candidates = this.collectRunCandidates(stream);
+      return candidates.has(requested) ? resolve(requested) : null;
     }
 
+    // 2. Use existing active run if set
     const current = this.getActiveRunId(stream);
-    if (current) {
-      return current;
+    if (current) return current;
+
+    // 3. Auto-select: single candidate or latest
+    const candidates = this.collectRunCandidates(stream);
+    if (candidates.size === 1) {
+      const [only] = candidates;
+      return resolve(only);
     }
 
-    const candidateSet = ensureCandidates();
-    if (candidateSet.size === 1) {
-      const only = candidateSet.values().next().value;
-      if (only) {
-        if (persist) {
-          this.setActiveRunId(stream, only);
-        }
-        return only;
-      }
-    }
-
-    const latest = this.findLatestRunId(stream);
-    if (latest) {
-      if (persist) {
-        this.setActiveRunId(stream, latest);
-      }
-      return latest;
-    }
-
-    return null;
+    return resolve(this.findLatestRunId(stream));
   }
 
   private collectRunCandidates(stream: StreamTabId): Set<string> {
@@ -624,7 +606,8 @@ export class ProgressViewState {
   }
 
   /**
-   * Load task states from persistence
+   * Load task states from persistence.
+   * Handles both current flat format and legacy workflow/toolUse format.
    */
   private async loadTaskStates(): Promise<void> {
     const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
@@ -635,35 +618,21 @@ export class ProgressViewState {
       return;
     }
 
-    // Extract buckets: either legacy format (workflow/toolUse sub-objects) or flat
-    const hasLegacyFormat =
-      typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
-    const buckets = hasLegacyFormat
-      ? [raw.workflow, raw.toolUse].filter(
-          (b): b is Record<string, unknown> =>
-            typeof b === 'object' && b !== null,
-        )
-      : [raw];
+    // Collect entries from legacy format (workflow/toolUse sub-objects) or flat format
+    const entries = this.extractTaskStateEntries(raw);
 
     let loaded = 0;
-    for (const record of buckets) {
-      for (const [stream, rawState] of Object.entries(record)) {
-        if (!rawState || typeof rawState !== 'object') continue;
-
-        const parseResult = TaskStateSchema.safeParse(rawState);
-        if (!parseResult.success) {
-          this.logger.debug(
-            `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
-          );
-          continue;
-        }
-
-        this.taskStates.set(
-          stream as StreamTabId,
-          parseResult.data as TaskState,
+    for (const [stream, rawState] of entries) {
+      const parseResult = TaskStateSchema.safeParse(rawState);
+      if (!parseResult.success) {
+        this.logger.debug(
+          `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
         );
-        loaded += 1;
+        continue;
       }
+
+      this.taskStates.set(stream as StreamTabId, parseResult.data as TaskState);
+      loaded += 1;
     }
 
     if (loaded > 0) {
@@ -671,6 +640,37 @@ export class ProgressViewState {
     }
 
     this.cleanupToolUseAgentRegistry();
+  }
+
+  /**
+   * Extract task state entries from either legacy or flat format.
+   */
+  private extractTaskStateEntries(
+    raw: Record<string, unknown>,
+  ): Array<[string, unknown]> {
+    const isLegacyFormat =
+      typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
+
+    if (!isLegacyFormat) {
+      return Object.entries(raw).filter(
+        ([, value]) => value && typeof value === 'object',
+      );
+    }
+
+    // Legacy format: collect from workflow and toolUse sub-objects
+    const entries: Array<[string, unknown]> = [];
+    for (const bucket of [raw.workflow, raw.toolUse]) {
+      if (bucket && typeof bucket === 'object') {
+        for (const [stream, value] of Object.entries(
+          bucket as Record<string, unknown>,
+        )) {
+          if (value && typeof value === 'object') {
+            entries.push([stream, value]);
+          }
+        }
+      }
+    }
+    return entries;
   }
 
   /**
