@@ -13,7 +13,7 @@ import { getSharedLogEntryFormatter } from './formatters/index.js';
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
 import { vscode } from '@common/webviewContext.js';
-import { scrollToBottom } from '@common/domUtils.js';
+import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
@@ -251,16 +251,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const radioGroup = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
-    if (!radioGroup) {
-      return;
-    }
-    radioGroup.value = state.agentTypeFilter;
-    for (const radio of radioGroup.querySelectorAll('vscode-radio')) {
-      const isActive = radio.value === state.agentTypeFilter;
-      radio.checked = isActive;
-      radio.setAttribute('aria-checked', String(isActive));
-      radio.toggleAttribute('checked', isActive);
-    }
+    setRadioGroupValue(radioGroup, state.agentTypeFilter);
   }
 
   /**

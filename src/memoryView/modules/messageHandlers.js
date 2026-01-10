@@ -3,7 +3,7 @@ import { memoryViewDomHandler } from './domHandlers.js';
 import { ELEMENT_IDS } from './constants.js';
 import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
-import { safeGetElementById, setElementDisabled } from '@common/domUtils.js';
+import { safeSetElementChecked, setElementsDisabled } from '@common/domUtils.js';
 
 /**
  * Handles messages from the extension for the memory view.
@@ -23,11 +23,8 @@ export class MemoryViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateMemoryEnabled(message) {
-    const toggle = safeGetElementById(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE);
-    if (toggle) {
-      toggle.checked = message.enabled;
-      setElementDisabled(toggle, false);
-    }
+    safeSetElementChecked(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, message.enabled);
+    setElementsDisabled(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, false);
   }
 }
 
