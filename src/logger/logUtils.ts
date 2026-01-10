@@ -21,8 +21,9 @@ interface ChannelContext {
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
 
+/** Key format matches LogChannelRegistry.getKey() for consistency. */
 function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
-  return `${isAgent ? 'agent' : 'default'}::${channel}`;
+  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
 function getStore(): Map<ChannelKey, ChannelContext> {
