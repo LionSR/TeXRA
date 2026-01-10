@@ -21,6 +21,43 @@ import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
 
+/** Validates that required file locations are provided, returns resolved base location */
+function validateFileLocations(
+  inputLocation: FileLocation,
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
+  errorMessage: string,
+): FileLocation | null {
+  const fileToUseLocation = baseLocation ?? inputLocation;
+  if (!fileToUseLocation || !editedLocation) {
+    vscode.window.showErrorMessage(errorMessage);
+    return null;
+  }
+  return fileToUseLocation;
+}
+
+/** Checks if both base and edited files exist */
+async function validateFilesExist(
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
+): Promise<boolean> {
+  if (!(await flexibleFS.exists(baseLocation))) {
+    vscode.window.showErrorMessage(
+      `Base file not found: ${baseLocation.absolutePath}`,
+    );
+    return false;
+  }
+
+  if (!(await flexibleFS.exists(editedLocation))) {
+    vscode.window.showErrorMessage(
+      `Edited file not found: ${editedLocation.absolutePath}`,
+    );
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Register comparison related commands
  */
@@ -40,26 +77,15 @@ async function handleCompare(
   editedLocation: FileLocation,
 ) {
   try {
-    const fileToUseLocation = baseLocation ?? inputLocation;
-    if (!fileToUseLocation || !editedLocation) {
-      vscode.window.showErrorMessage(
-        'Both base file and edited file must be selected for comparison',
-      );
-      return;
-    }
+    const fileToUseLocation = validateFileLocations(
+      inputLocation,
+      baseLocation,
+      editedLocation,
+      'Both base file and edited file must be selected for comparison',
+    );
+    if (!fileToUseLocation) return;
 
-    // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUseLocation))) {
-      vscode.window.showErrorMessage(
-        `Base file not found: ${fileToUseLocation.absolutePath}`,
-      );
-      return;
-    }
-
-    if (!(await flexibleFS.exists(editedLocation))) {
-      vscode.window.showErrorMessage(
-        `Edited file not found: ${editedLocation.absolutePath}`,
-      );
+    if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
       return;
     }
 
@@ -129,26 +155,15 @@ async function handleAcceptEdited(
   editedLocation: FileLocation,
 ) {
   try {
-    const fileToUseLocation = baseLocation ?? inputLocation;
-    if (!fileToUseLocation || !editedLocation) {
-      vscode.window.showErrorMessage(
-        'Both base file and edited file must be selected to accept changes',
-      );
-      return;
-    }
+    const fileToUseLocation = validateFileLocations(
+      inputLocation,
+      baseLocation,
+      editedLocation,
+      'Both base file and edited file must be selected to accept changes',
+    );
+    if (!fileToUseLocation) return;
 
-    // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUseLocation))) {
-      vscode.window.showErrorMessage(
-        `Base file not found: ${fileToUseLocation.absolutePath}`,
-      );
-      return;
-    }
-
-    if (!(await flexibleFS.exists(editedLocation))) {
-      vscode.window.showErrorMessage(
-        `Edited file not found: ${editedLocation.absolutePath}`,
-      );
+    if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
       return;
     }
 
