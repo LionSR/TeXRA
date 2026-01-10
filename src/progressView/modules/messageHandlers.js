@@ -290,24 +290,29 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {Object} message - Message containing runInstructions, runUsage, runFiles, contextState
    */
   _updateRunMetadata(stream, message) {
-    const updates = [
-      [message.runInstructions, state.setRunInstruction.bind(state)],
-      [message.runUsage, state.setRunUsage.bind(state)],
-      [message.runFiles, state.setRunFiles.bind(state)],
-    ];
-    for (const [data, setter] of updates) {
-      if (data) {
-        for (const [runId, value] of Object.entries(data)) {
-          if (runId) {
-            setter(stream, runId, value);
-          }
-        }
-      }
-    }
+    // Apply run-scoped metadata
+    this._applyRunData(stream, message.runInstructions, state.setRunInstruction);
+    this._applyRunData(stream, message.runUsage, state.setRunUsage);
+    this._applyRunData(stream, message.runFiles, state.setRunFiles);
 
-    // Context state is stream-scoped (not run-scoped), store if provided
+    // Context state is stream-scoped (not run-scoped)
     if (message.contextState) {
       state.setContextState(stream, message.contextState);
+    }
+  }
+
+  /**
+   * Apply run-scoped data using a setter function.
+   * @param {string} stream - The stream to update
+   * @param {Object|undefined} data - Data object keyed by runId
+   * @param {Function} setter - Setter function (stream, runId, value) => void
+   */
+  _applyRunData(stream, data, setter) {
+    if (!data) return;
+    for (const [runId, value] of Object.entries(data)) {
+      if (runId) {
+        setter.call(state, stream, runId, value);
+      }
     }
   }
 

@@ -97,12 +97,11 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Save current state to persistence */
   async save(): Promise<void> {
-    const serialized = [...this.items.entries()].map(([key, value]) => [
-      key,
-      this.serialize(value, key),
-    ]);
-    const obj = Object.fromEntries(serialized);
-    await this.storage.update(this.storageKey, obj);
+    const record: Record<string, unknown> = {};
+    for (const [key, value] of this.items) {
+      record[key] = this.serialize(value, key);
+    }
+    await this.storage.update(this.storageKey, record);
   }
 
   private async populateFromRecord(

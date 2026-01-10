@@ -199,31 +199,29 @@ export class StreamTabs {
       agentIcon.title = `Agent type: ${decorator.label}`;
     }
 
-    // Property-based decorators (remote, multipleOutputs)
-    const propertyDecorators = [
-      {
-        selector: '.remote-agent',
-        condition: info.isRemote,
-        property: 'remote',
-      },
-      {
-        selector: '.multi-file',
-        condition: info.hasMultipleOutputs,
-        property: 'multipleOutputs',
-      },
-    ];
+    // Property-based decorators - remove if condition false, apply icon if true
+    this._applyPropertyDecorator(tabEl, '.remote-agent', info.isRemote, 'remote');
+    this._applyPropertyDecorator(tabEl, '.multi-file', info.hasMultipleOutputs, 'multipleOutputs');
+  }
 
-    for (const { selector, condition, property } of propertyDecorators) {
-      const iconEl = tabEl.querySelector(selector);
-      if (!iconEl) continue;
+  /**
+   * Apply or remove a property-based decorator icon.
+   * @param {HTMLElement} tabEl - The tab element
+   * @param {string} selector - CSS selector for the icon element
+   * @param {boolean} condition - Whether to show the decorator
+   * @param {string} property - Property key in AGENT_DECORATORS.properties
+   */
+  _applyPropertyDecorator(tabEl, selector, condition, property) {
+    const iconEl = tabEl.querySelector(selector);
+    if (!iconEl) return;
 
-      if (condition) {
-        const { icon, hint } = AGENT_DECORATORS.properties[property];
-        applyCodiconClass(iconEl, icon);
-        iconEl.title = hint;
-      } else {
-        iconEl.remove();
-      }
+    if (!condition) {
+      iconEl.remove();
+      return;
     }
+
+    const { icon, hint } = AGENT_DECORATORS.properties[property];
+    applyCodiconClass(iconEl, icon);
+    iconEl.title = hint;
   }
 }
