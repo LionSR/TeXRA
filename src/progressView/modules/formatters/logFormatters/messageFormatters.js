@@ -46,33 +46,28 @@ export const formatUserMessage = (normalizedPayload, logId, timestamp) => {
  * @returns {HTMLElement} Progress status element
  */
 export const formatProgressStatus = (message) => {
-  const normalizedPayload = message.normalizedPayload ?? {};
-  const severity = message.level || 'info';
-  const date = new Date(message.timestamp ?? Date.now());
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatTimestamp(date);
+  const { normalizedPayload = {}, level = 'info', id, groupId, timestamp } = message;
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
+    new Date(timestamp ?? Date.now()),
+  );
 
   const summaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Status update';
   const detailText = stringifyForDisplay(normalizedPayload.structured);
-  const emoji = EMOJI_BY_LEVEL[severity] || '•';
+  const emoji = EMOJI_BY_LEVEL[level] || '•';
 
   const container = document.createElement('div');
-  setElementDataset(container, {
-    logId: message.id,
-    groupId: message.groupId,
-    timestamp: fullTimestamp,
-  });
+  setElementDataset(container, { logId: id, groupId, timestamp: fullTimestamp });
 
   const summaryLine = document.createElement('div');
   summaryLine.className = 'log-line';
-  summaryLine.innerHTML = `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> <span class="message-${severity}">${encodeHtml(summaryText)}</span>`;
+  summaryLine.innerHTML = `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> <span class="message-${level}">${encodeHtml(summaryText)}</span>`;
   container.appendChild(summaryLine);
 
   if (detailText) {
     const detailLine = document.createElement('pre');
-    detailLine.className = `log-line message-${severity}`;
+    detailLine.className = `log-line message-${level}`;
     detailLine.textContent = detailText;
     container.appendChild(detailLine);
   }
@@ -86,10 +81,10 @@ export const formatProgressStatus = (message) => {
  * @returns {HTMLElement|null} Error banner element or null
  */
 export const formatError = (message) => {
-  const normalizedPayload = message.normalizedPayload ?? {};
-  const date = new Date(message.timestamp ?? Date.now());
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatTimestamp(date);
+  const { normalizedPayload = {}, id, groupId, timestamp } = message;
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
+    new Date(timestamp ?? Date.now()),
+  );
 
   const summaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
@@ -118,8 +113,8 @@ export const formatError = (message) => {
   const detailText = detailLines.join('\n');
 
   const bannerEntry = createBannerEntry({
-    logId: message.id,
-    groupId: message.groupId,
+    logId: id,
+    groupId,
     timestamp: fullTimestamp,
     iconClass: 'codicon-error',
     labelText: `[${timeDisplay}] ${summaryText}`,
