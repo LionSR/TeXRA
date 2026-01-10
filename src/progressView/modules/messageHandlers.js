@@ -208,6 +208,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _clearRunScopedState(stream) {
     if (stream) {
+      // Clear stream-specific state
       state.clearExecutionIdAvailability(stream);
       state.clearActiveRun(stream);
       state.clearRunInstructions(stream);
@@ -219,6 +220,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearContextState(stream);
       state.clearFollowUpText(stream);
     } else {
+      // Clear all state
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
       state.clearRunInstructions();
@@ -290,29 +292,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {Object} message - Message containing runInstructions, runUsage, runFiles, contextState
    */
   _updateRunMetadata(stream, message) {
-    // Apply run-scoped metadata
-    this._applyRunData(stream, message.runInstructions, state.setRunInstruction);
-    this._applyRunData(stream, message.runUsage, state.setRunUsage);
-    this._applyRunData(stream, message.runFiles, state.setRunFiles);
+    // Apply run-scoped metadata (runId → value mappings)
+    const runDataSources = [
+      [message.runInstructions, state.setRunInstruction],
+      [message.runUsage, state.setRunUsage],
+      [message.runFiles, state.setRunFiles],
+    ];
+
+    for (const [data, setter] of runDataSources) {
+      if (!data) continue;
+      for (const [runId, value] of Object.entries(data)) {
+        if (runId) setter.call(state, stream, runId, value);
+      }
+    }
 
     // Context state is stream-scoped (not run-scoped)
     if (message.contextState) {
       state.setContextState(stream, message.contextState);
-    }
-  }
-
-  /**
-   * Apply run-scoped data using a setter function.
-   * @param {string} stream - The stream to update
-   * @param {Object|undefined} data - Data object keyed by runId
-   * @param {Function} setter - Setter function (stream, runId, value) => void
-   */
-  _applyRunData(stream, data, setter) {
-    if (!data) return;
-    for (const [runId, value] of Object.entries(data)) {
-      if (runId) {
-        setter.call(state, stream, runId, value);
-      }
     }
   }
 
