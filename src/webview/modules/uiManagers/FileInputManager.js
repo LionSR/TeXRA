@@ -95,6 +95,10 @@ export class FileInputManager extends BaseDomHandler {
         return;
       }
       const inputFile = e.target.value;
+
+      // Handle per-tab instruction switching
+      this.state.handleInputFileChange(inputFile);
+
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED,
         filePath: inputFile,
