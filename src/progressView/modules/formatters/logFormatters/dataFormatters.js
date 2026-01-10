@@ -35,7 +35,9 @@ export function formatFileList(normalizedPayload, logId) {
   let parsed = normalizeFileListEntries(normalizedPayload?.structured);
   if (!parsed && normalizedPayload?.decodedText) {
     try {
-      parsed = normalizeFileListEntries(JSON.parse(normalizedPayload.decodedText));
+      parsed = normalizeFileListEntries(
+        JSON.parse(normalizedPayload.decodedText),
+      );
     } catch {
       // Fall through to raw display
     }
@@ -274,7 +276,9 @@ export function formatLatexdiff(normalizedPayload, logId) {
   const summaryElem = element.querySelector('.summary-text');
   if (summaryElem) {
     summaryElem.textContent =
-      entries.length === 1 ? 'Latexdiff result' : `Latexdiff results (${entries.length})`;
+      entries.length === 1
+        ? 'Latexdiff result'
+        : `Latexdiff results (${entries.length})`;
   }
 
   const contentElem = element.querySelector('.latexdiff-content');

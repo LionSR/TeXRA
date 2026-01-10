@@ -146,7 +146,10 @@ export class Status {
       statusIndicator.dataset.status = cfg.label;
 
       const elementsToEnable = cfg.enable
-        .filter((id) => this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id))
+        .filter(
+          (id) =>
+            this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id),
+        )
         .map((id) => safeGetElementById(id))
         .filter(Boolean);
 
