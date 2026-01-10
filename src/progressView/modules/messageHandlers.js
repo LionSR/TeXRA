@@ -384,6 +384,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStreams(message) {
+    // DIAGNOSTIC: Log every UPDATE_STREAMS to understand reload failure
+    console.log('[UPDATE_STREAMS] received:', {
+      'message.activeStream': message.activeStream,
+      'message.streams?.length': message.streams?.length,
+      'state.activeStream (before)': state.activeStream,
+      'state.lastRenderedStream': state.lastRenderedStream,
+    });
+
     // Save follow-up text for the previous stream before switching
     const previousStream = state.activeStream;
     if (previousStream && previousStream !== message.activeStream) {
@@ -392,6 +400,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     try {
       state.activeStream = message.activeStream;
+      console.log('[UPDATE_STREAMS] state.activeStream set to:', state.activeStream);
       if (
         !state.pendingFilterUpdate &&
         message.agentFilter !== undefined &&
@@ -495,7 +504,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
+    // DIAGNOSTIC: Log every UPDATE_LOGS to understand reload failure
+    console.log('[UPDATE_LOGS] received:', {
+      'message.stream': message.stream,
+      'state.activeStream': state.activeStream,
+      'state.lastRenderedStream': state.lastRenderedStream,
+      'message.messages?.length': message.messages?.length,
+      'message.action': message.action,
+      '_isActiveStream': message.stream === state.activeStream,
+    });
+
     if (!this._isActiveStream(message)) {
+      // DIAGNOSTIC: This is the suspected bug - messages being dropped
+      console.warn('[UPDATE_LOGS] DROPPED - activeStream mismatch!', {
+        expected: state.activeStream,
+        received: message.stream,
+        messagesDropped: message.messages?.length ?? 0,
+      });
       this._updatePlaceholderVisibility();
       return;
     }
