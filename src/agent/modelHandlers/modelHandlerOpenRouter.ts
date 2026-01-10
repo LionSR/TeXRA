@@ -223,15 +223,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
 
     // Fall back to simple reasoning field (string)
-    const reasoning = message?.reasoning;
-    if (!reasoning) {
-      return null;
-    }
-    if (isNonEmptyString(reasoning)) {
-      return reasoning;
-    }
-
-    return null;
+    return isNonEmptyString(message?.reasoning) ? message.reasoning : null;
   }
 }
 

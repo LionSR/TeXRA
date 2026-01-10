@@ -120,9 +120,8 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
       logprobs: primaryChoice.logprobs ?? null,
     };
 
-    const usageCandidate =
+    const usage =
       base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage;
-    const usage = usageCandidate === null ? undefined : usageCandidate;
 
     return {
       ...base,
