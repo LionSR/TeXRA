@@ -11,6 +11,16 @@ import {
   OPENAI_COMPLETION_FINISH,
 } from '@agent/modelHandlers/types/StopReasonTypes';
 
+/** Known stop reasons that indicate token limit was hit */
+const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
+  OPENAI_CHAT_FINISH.LENGTH,
+  OPENAI_COMPLETION_FINISH.LENGTH,
+  ANTHROPIC_STOP.MAX_TOKENS,
+  MCP_STOP.MAX_TOKENS,
+  FinishReason.MAX_TOKENS,
+];
+
+/** Keywords for fallback string matching */
 const TOKEN_LIMIT_KEYWORDS = [
   'max_token',
   'max-token',
@@ -28,17 +38,9 @@ const TOKEN_LIMIT_KEYWORDS = [
 export function isTokenLimitStopReason(
   reason: ProviderStopReason | undefined,
 ): boolean {
-  if (reason === null || reason === undefined) {
-    return false;
-  }
+  if (!reason) return false;
 
-  if (
-    reason === OPENAI_CHAT_FINISH.LENGTH ||
-    reason === OPENAI_COMPLETION_FINISH.LENGTH ||
-    reason === ANTHROPIC_STOP.MAX_TOKENS ||
-    reason === MCP_STOP.MAX_TOKENS ||
-    reason === FinishReason.MAX_TOKENS
-  ) {
+  if (TOKEN_LIMIT_STOP_REASONS.includes(reason)) {
     return true;
   }
 

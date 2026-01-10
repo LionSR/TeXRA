@@ -27,27 +27,42 @@ export const linterCommands = {
   fixLinterIssues: 'texra.fixLinterIssues',
 };
 
+/** Guard options for LaTeX file operations */
+interface LaTeXGuardOptions {
+  action: string;
+  saveDocument?: boolean;
+}
+
+/**
+ * Get LaTeX file from active editor with guard checks.
+ * Returns the relative path if successful, null otherwise.
+ */
+async function getLatexFileOrFail({
+  action,
+  saveDocument = false,
+}: LaTeXGuardOptions): Promise<string | null> {
+  const guardResult = await getActiveEditorWithGuards({
+    allowedExtensions: ['.tex'],
+    resourceName: 'LaTeX',
+    saveDocument,
+  });
+
+  if (guardResult.status !== 'ok') {
+    logGuardFailure(CHANNEL, action, guardResult.status, 'LaTeX');
+    return null;
+  }
+  return guardResult.relativePath;
+}
+
 /**
  * Show linter messages for the current file
  */
 export async function handleShowLinterMessages(): Promise<void> {
   try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.tex'],
-      resourceName: 'LaTeX',
+    const relativePath = await getLatexFileOrFail({
+      action: 'show linter messages',
     });
-
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(
-        CHANNEL,
-        'show linter messages',
-        guardResult.status,
-        'LaTeX',
-      );
-      return;
-    }
-
-    const { relativePath } = guardResult;
+    if (!relativePath) return;
     logger.debug(CHANNEL, `Getting linter messages for ${relativePath}`);
 
     // Get linter messages
@@ -71,7 +86,9 @@ export async function handleShowLinterMessages(): Promise<void> {
 
     // Use logger instead of output channel
     logger.info(CHANNEL, `Linter messages for: ${relativePath}`);
-    formattedMessages.forEach((msg) => logger.info(CHANNEL, msg));
+    for (const msg of formattedMessages) {
+      logger.info(CHANNEL, msg);
+    }
 
     // Show a notification
     vscode.window.showInformationMessage(
@@ -87,22 +104,11 @@ export async function handleShowLinterMessages(): Promise<void> {
  */
 export async function handleCountLinterMessages(): Promise<void> {
   try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.tex'],
-      resourceName: 'LaTeX',
+    const relativePath = await getLatexFileOrFail({
+      action: 'count linter messages',
     });
+    if (!relativePath) return;
 
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(
-        CHANNEL,
-        'count linter messages',
-        guardResult.status,
-        'LaTeX',
-      );
-      return;
-    }
-
-    const { relativePath } = guardResult;
     logger.debug(CHANNEL, `Counting linter messages for ${relativePath}`);
 
     // Get linter messages - now uses the async version to ensure build is triggered
@@ -135,27 +141,14 @@ export async function handleCountLinterMessages(): Promise<void> {
 /**
  * Fix linter issues in the current file using Claude
  */
-export async function handleFixLinterIssues(
-  _context: vscode.ExtensionContext,
-): Promise<void> {
+export async function handleFixLinterIssues(): Promise<void> {
   try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.tex'],
-      resourceName: 'LaTeX',
+    const relativePath = await getLatexFileOrFail({
+      action: 'fix linter issues',
       saveDocument: true,
     });
+    if (!relativePath) return;
 
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(
-        CHANNEL,
-        'fix linter issues',
-        guardResult.status,
-        'LaTeX',
-      );
-      return;
-    }
-
-    const { relativePath } = guardResult;
     logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
 
     // Check if there are any linter issues
@@ -195,8 +188,9 @@ export function registerLinterCommands(context: vscode.ExtensionContext) {
       linterCommands.countLinterMessages,
       handleCountLinterMessages,
     ),
-    vscode.commands.registerCommand(linterCommands.fixLinterIssues, () =>
-      handleFixLinterIssues(context),
+    vscode.commands.registerCommand(
+      linterCommands.fixLinterIssues,
+      handleFixLinterIssues,
     ),
   );
   return linterCommands;
