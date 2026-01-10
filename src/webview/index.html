@@ -447,27 +447,27 @@
           <div class="instruction-header">
             <div class="instruction-header-leading">
               <div class="instruction-session-toggle">
-                <input type="hidden" id="sessionType" value="workflow" />
+                <input type="hidden" id="sessionType" value="toolUse" />
                 <vscode-radio-group
                   id="sessionTypeToggle"
                   aria-label="Choose the session type"
                   orientation="horizontal"
-                  value="workflow"
+                  value="toolUse"
                 >
-                  <vscode-radio
-                    value="workflow"
-                    data-session-type="workflow"
-                    checked
-                    title="Workflow agents automate document editing tasks"
-                  >
-                    Workflow
-                  </vscode-radio>
                   <vscode-radio
                     value="toolUse"
                     data-session-type="toolUse"
+                    checked
                     title="Chat agents execute commands and scripts"
                   >
                     Chat
+                  </vscode-radio>
+                  <vscode-radio
+                    value="workflow"
+                    data-session-type="workflow"
+                    title="Workflow agents automate document editing tasks"
+                  >
+                    Workflow
                   </vscode-radio>
                 </vscode-radio-group>
               </div>
@@ -529,19 +529,19 @@
                   <div class="agent-select-dropdowns">
                     <vscode-single-select
                       id="workflowAgent"
-                      class="agent-select agent-select--active"
+                      class="agent-select agent-select--hidden"
                       data-session-type="workflow"
                       aria-label="Workflow agent"
+                      tabindex="-1"
+                      aria-hidden="true"
                     >
                       ${workflowAgentOptions}
                     </vscode-single-select>
                     <vscode-single-select
                       id="toolUseAgent"
-                      class="agent-select agent-select--hidden"
+                      class="agent-select agent-select--active"
                       data-session-type="toolUse"
                       aria-label="Tool-use agent"
-                      tabindex="-1"
-                      aria-hidden="true"
                     >
                       ${toolUseAgentOptions}
                     </vscode-single-select>
