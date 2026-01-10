@@ -264,8 +264,9 @@ export function formatLatexdiff(normalizedPayload, logId) {
   // Build HTML for all entries and collect first runId
   let aggregatedRunId = '';
   const items = entries.map((entry) => {
-    if (!aggregatedRunId && entry?.runId) {
-      aggregatedRunId = String(entry.runId);
+    const runId = toStringOrEmpty(entry?.runId);
+    if (runId && !aggregatedRunId) {
+      aggregatedRunId = runId;
     }
     return buildLatexdiffEntryHtml(entry);
   });
