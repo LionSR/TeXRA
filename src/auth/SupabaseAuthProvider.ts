@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
+import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
@@ -77,6 +78,29 @@ function parseStoredSession(sessionData: string | undefined): SupabaseSession | 
   } catch {
     return null;
   }
+}
+
+/**
+ * Convert Supabase's native Session to our storage format.
+ * Handles the snake_case → camelCase and seconds → milliseconds conversions.
+ */
+function toStorableSession(
+  nativeSession: SupabaseNativeSession,
+  options?: { useCustomRefresh?: boolean },
+): SupabaseSession {
+  return {
+    id: nativeSession.user.id,
+    accessToken: nativeSession.access_token,
+    refreshToken: nativeSession.refresh_token,
+    account: {
+      id: nativeSession.user.id,
+      label: nativeSession.user.email || nativeSession.user.id,
+    },
+    expiresAt: nativeSession.expires_at
+      ? nativeSession.expires_at * 1000
+      : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+    useCustomRefresh: options?.useCustomRefresh,
+  };
 }
 
 /** Result of parsing auth callback URI */
@@ -865,19 +889,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return null;
       }
 
-      const refreshed: SupabaseSession = {
-        id: data.session.user.id,
-        accessToken: data.session.access_token,
-        refreshToken: data.session.refresh_token,
-        account: {
-          id: data.session.user.id,
-          label: data.session.user.email || data.session.user.id,
-        },
-        expiresAt: data.session.expires_at
-          ? data.session.expires_at * 1000
-          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-      };
-
+      const refreshed = toStorableSession(data.session);
       await this.storeSession(refreshed);
       return refreshed;
     } catch (error) {
