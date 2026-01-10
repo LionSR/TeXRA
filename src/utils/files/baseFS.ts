@@ -7,6 +7,11 @@ import * as vscode from 'vscode';
 
 type PathInput = string;
 
+/** Convert content to Buffer for writing. */
+function toBuffer(content: string | Uint8Array): Uint8Array {
+  return typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+}
+
 /**
  * Shared filesystem helpers backed by VS Code's workspace API.
  *
@@ -72,9 +77,7 @@ export abstract class BaseFS {
     target: PathInput,
     content: string | Uint8Array,
   ): Promise<void> {
-    const data =
-      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
-    await vscode.workspace.fs.writeFile(this.toUri(target), data);
+    await vscode.workspace.fs.writeFile(this.toUri(target), toBuffer(content));
   }
 
   public static async appendFile(
@@ -82,9 +85,7 @@ export abstract class BaseFS {
     target: PathInput,
     content: string | Uint8Array,
   ): Promise<void> {
-    const data =
-      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
-    await fs.promises.appendFile(this.preparePath(target), data);
+    await fs.promises.appendFile(this.preparePath(target), toBuffer(content));
   }
 
   public static async delete(

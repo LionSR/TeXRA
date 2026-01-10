@@ -74,12 +74,12 @@ export function getAuthorNames(
   maxAuthors?: number,
 ): string[] {
   const names = authors.map((author) => author.name);
-  return maxAuthors !== undefined ? names.slice(0, maxAuthors) : names;
+  return maxAuthors != null ? names.slice(0, maxAuthors) : names;
 }
 
-/** Normalize entry title by trimming if string */
-export function normalizeEntryTitle(title: string | unknown): string {
-  return typeof title === 'string' ? title.trim() : String(title);
+/** Normalize entry title by trimming */
+export function normalizeEntryTitle(title: unknown): string {
+  return String(title).trim();
 }
 
 /** Extract base paper metadata from an arXiv entry */
