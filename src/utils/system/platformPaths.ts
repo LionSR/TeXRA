@@ -139,16 +139,8 @@ export function getExtraDirs(): string[] {
     }
   }
 
-  for (const pattern of texDistPatterns) {
-    try {
-      const matches = glob.sync(pattern).sort().reverse();
-      dirs.push(...matches);
-    } catch (_err) {
-      // ignore glob errors
-    }
-  }
-
-  for (const pattern of texScriptPatterns) {
+  // Collect matches from all TeX-related patterns
+  for (const pattern of [...texDistPatterns, ...texScriptPatterns]) {
     try {
       const matches = glob.sync(pattern).sort().reverse();
       dirs.push(...matches);
@@ -238,29 +230,30 @@ export function findToolInCommonPaths(tool: string): string | null {
     env: { ...process.env, PATH: extendEnvPath() },
     reject: false,
   };
-  for (const name of candidates) {
-    try {
-      const result = execaSync('kpsewhich', [name], execOptions);
-      const found = result.stdout.trim();
-      if (result.exitCode === 0 && found) {
-        return found;
-      }
-    } catch (_err) {
-      // ignore kpsewhich errors
-    }
-  }
-  // Use platform-specific command to locate tools: 'where' on Windows, 'which' on Unix
+
+  // Try locating tools using external commands
   const locateCmd = process.platform === 'win32' ? 'where' : 'which';
-  for (const name of candidates) {
-    try {
-      const result = execaSync(locateCmd, [name], execOptions);
-      const found = result.stdout.split(/\r?\n/)[0]?.trim();
-      if (result.exitCode === 0 && found) {
-        return found;
+  const locateCommands = [
+    { cmd: 'kpsewhich', extractPath: (stdout: string) => stdout.trim() },
+    {
+      cmd: locateCmd,
+      extractPath: (stdout: string) => stdout.split(/\r?\n/)[0]?.trim() ?? '',
+    },
+  ];
+
+  for (const { cmd, extractPath } of locateCommands) {
+    for (const name of candidates) {
+      try {
+        const result = execaSync(cmd, [name], execOptions);
+        const found = extractPath(result.stdout);
+        if (result.exitCode === 0 && found) {
+          return found;
+        }
+      } catch (_err) {
+        // ignore command errors
       }
-    } catch (_err) {
-      // ignore locate command errors
     }
   }
+
   return null;
 }
