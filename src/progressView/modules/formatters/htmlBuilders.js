@@ -28,6 +28,8 @@ export function buildToolUseSection(label, content) {
 }
 
 // Diff line prefix patterns
+// IMPORTANT: Longer prefixes (+++, ---) must appear before shorter ones (+, -)
+// to ensure correct matching priority in getDiffLineClass
 const DIFF_LINE_PATTERNS = [
   { prefix: '@@', className: 'diff-hunk' },
   { prefix: '+++', className: null }, // Header, not highlighted
