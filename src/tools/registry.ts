@@ -1,6 +1,6 @@
 // Local imports - core types
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import { createToolRegistry } from '@agent/core/ToolTypes';
+import { MapToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
 import {
@@ -43,7 +43,7 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = createToolRegistry({
+    defaultRegistryInstance = new MapToolRegistry({
       str_replace_editor: new TextEditorTool(),
       diagnostics: new DiagnosticsTool(),
       bash: new BashTool(),
