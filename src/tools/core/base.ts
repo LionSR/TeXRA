@@ -1,11 +1,14 @@
 // Third-party imports
 import { ZodError, type ZodType } from 'zod';
 
-// Local imports - common
-
 // Local imports - core tool types (single source of truth)
 import type { ITool, ToolDefinition, ToolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
+import {
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  formatZodIssuesAsMessage,
+  formatZodIssuesForDiagnostics,
+} from '@tools/result';
 
 /**
  * Abstract base class for tool implementations.
@@ -51,13 +54,14 @@ export abstract class BaseTool<T> implements ITool {
       return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
-        // Include validation details in error message so model can self-correct
-        const issues = err.issues
-          .map((i) => `- ${i.path.join('.')}: ${i.message}`)
-          .join('\n');
         return {
-          error: `Invalid input:\n${issues}`,
+          error: formatZodIssuesAsMessage(err.issues),
           isError: true,
+          diagnostics: {
+            type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+            issues: err.issues,
+            formatted: formatZodIssuesForDiagnostics(err.issues),
+          },
         };
       }
       const message = toErrorMessage(err);
