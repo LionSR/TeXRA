@@ -26,12 +26,6 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
 
-// Local imports - approval helpers
-
-// Local imports - logging
-
-// Local imports - filesystem utilities
-
 // Constants
 const CHANNEL = 'TextEditorTool';
 logger.initialize(CHANNEL);
@@ -489,9 +483,10 @@ export class TextEditorTool extends defineTool({
       );
       const reviewMessage =
         'Review the changes and make sure they are as expected. Edit the file again if necessary.';
+      const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
       const successMsg = userDiffNote
-        ? `${successIntro} ${snippetOutput}${reviewMessage}\n\n${userDiffNote}`
-        : `${successIntro} ${snippetOutput}${reviewMessage}`;
+        ? `${baseMsg}\n\n${userDiffNote}`
+        : baseMsg;
 
       return {
         summary: `Updated ${filePath}`,
@@ -602,19 +597,17 @@ export class TextEditorTool extends defineTool({
       );
 
       const successIntro = `The file ${filePath} has been edited.`;
+      const snippetOutput = this.makeOutput(
+        snippetText,
+        'a snippet of the edited file',
+        startLine,
+      );
       const reviewNote =
         'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
+      const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
       const successMsg = userDiffNote
-        ? `${successIntro} ${this.makeOutput(
-            snippetText,
-            'a snippet of the edited file',
-            startLine,
-          )}${reviewNote}\n\n${userDiffNote}`
-        : `${successIntro} ${this.makeOutput(
-            snippetText,
-            'a snippet of the edited file',
-            startLine,
-          )}${reviewNote}`;
+        ? `${baseMsg}\n\n${userDiffNote}`
+        : baseMsg;
 
       return {
         summary: `Inserted text into ${filePath}`,
