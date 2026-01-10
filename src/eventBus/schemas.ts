@@ -3,6 +3,7 @@
  * Types are derived from schemas for single source of truth.
  */
 import { z } from 'zod';
+import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import {
   StreamTabIdSchema,
   ExecutionIdSchema,
@@ -13,6 +14,7 @@ import {
   type TaskGroupStatus,
 } from '@common/constants/streamStatus';
 import { TaskGroupSchema } from '@logger/LogTypes';
+import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
 /**
  * Re-export from types.ts to break circular dependency:
@@ -95,3 +97,36 @@ export const UpdateTodosPayloadSchema = z.strictObject({
   todos: z.array(TodoItemSchema),
 });
 export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
+
+// =============================================================================
+// Stream State Payloads
+// =============================================================================
+
+/** Payload for setting the active stream with optional session metadata */
+export const SetActiveStreamPayloadSchema = z.strictObject({
+  stream: StreamTabIdSchema.nullable(),
+  session: AgentSessionDescriptorSchema.nullish(),
+  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  isRemote: z.boolean().optional(),
+  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
+  hasMultipleOutputs: z.boolean().optional(),
+});
+export type SetActiveStreamPayload = z.infer<
+  typeof SetActiveStreamPayloadSchema
+>;
+
+/**
+ * Payload for setting task state on a stream.
+ *
+ * TaskStateSchema uses looseObject for validation efficiency (only validates
+ * discriminator fields), while the full TaskState type has all AgentConfig fields.
+ * We use pipe() to validate structure then cast to the full type, preserving
+ * error messages from the underlying schema.
+ */
+export const SetTaskStatePayloadSchema = z.strictObject({
+  streamTabId: StreamTabIdSchema,
+  executionId: ExecutionIdSchema.optional(),
+  // Validate with TaskStateSchema, then cast output to full TaskState type
+  taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),
+});
+export type SetTaskStatePayload = z.infer<typeof SetTaskStatePayloadSchema>;
