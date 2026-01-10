@@ -18,10 +18,6 @@ import type {
 } from './schemas';
 import type { RetryRequestPrompt, ToolEditApprovalPrompt } from './types';
 
-// Re-exports for consumers
-export type { StreamStatus };
-export type { TaskGroupStatus } from './schemas';
-
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
