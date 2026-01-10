@@ -6,12 +6,12 @@ import * as vscode from 'vscode';
 
 /** Normalize backslashes to forward slashes for consistent comparison */
 function toForwardSlashes(str: string): string {
-  return str.split('\\').join('/');
+  return str.replaceAll('\\', '/');
 }
 
 /** Convert forward slashes to platform-native separators */
 function toPlatformSeparators(str: string): string {
-  return str.split('/').join(path.sep);
+  return str.replaceAll('/', path.sep);
 }
 
 function sanitizeDirectories(directories: string[]): string[] {
