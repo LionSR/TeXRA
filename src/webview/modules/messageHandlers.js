@@ -559,28 +559,25 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _readAgentOptionMetadata(opt) {
-    let label = opt.dataset.label ?? '';
-    if (!label) {
-      const textLabel = opt.textContent?.trim();
-      if (textLabel) {
-        label = textLabel;
-      } else {
-        const valueAttr = opt.getAttribute('value');
-        label = valueAttr ?? '';
-      }
-      if (label) {
-        opt.dataset.label = label;
-      }
+    // Extract label with fallback chain: dataset.label > textContent > value attribute
+    const label =
+      opt.dataset.label ||
+      opt.textContent?.trim() ||
+      opt.getAttribute('value') ||
+      '';
+    if (label && !opt.dataset.label) {
+      opt.dataset.label = label;
     }
 
+    const { dataset } = opt;
     return {
       label,
-      isMultiple: opt.dataset.multiple === 'true',
-      isToolUse: opt.dataset.toolUse === 'true',
-      isRemote: opt.dataset.remote === 'true',
-      isCustom: opt.dataset.custom === 'true',
-      description: opt.dataset.description ?? '',
-      agentType: opt.dataset.agentType ?? '',
+      isMultiple: dataset.multiple === 'true',
+      isToolUse: dataset.toolUse === 'true',
+      isRemote: dataset.remote === 'true',
+      isCustom: dataset.custom === 'true',
+      description: dataset.description ?? '',
+      agentType: dataset.agentType ?? '',
     };
   }
 
@@ -939,27 +936,18 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   /** Clean up any pending agent waiters to prevent dangling MutationObservers. */
   _cleanupAgentWaiters() {
-    // Clean up waiters for both agent select types
-    [
-      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
-      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
-    ].forEach((id) => {
+    for (const id of Object.values(AGENT_SELECT_IDS)) {
       const waiterKey = `_disposeAgentWaiter_${id}`;
-      if (this[waiterKey]) {
-        this[waiterKey]();
-        this[waiterKey] = null;
-      }
-    });
+      this[waiterKey]?.();
+      this[waiterKey] = null;
+    }
   }
 
   dispose() {
     this._isDisposed = true;
-    if (this._disposeModelWaiter) {
-      this._disposeModelWaiter();
-      this._disposeModelWaiter = null;
-    }
+    this._disposeModelWaiter?.();
+    this._disposeModelWaiter = null;
     this._cleanupAgentWaiters();
-
     this._cleanupTooltipListeners();
     super.dispose();
     this._instructionEl = null;
