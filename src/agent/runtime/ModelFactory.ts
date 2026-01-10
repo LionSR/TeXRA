@@ -40,7 +40,7 @@ export class ModelFactory {
   static createHandler(config: ModelConfig): ModelHandler {
     const isOpenAI = config.provider === ModelProvider.OPENAI;
 
-    // Models requiring Responses API must bypass OpenRouter (e.g., deep research)
+    // OpenAI models requiring Responses API must bypass OpenRouter
     if (isOpenAI && config.requiresResponsesAPI) {
       logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
       return new ModelHandlerOpenAIResponse(config);
@@ -52,12 +52,13 @@ export class ModelFactory {
       getConfig<boolean>('texra.model.useOpenRouter', false);
     if (useOpenRouter) {
       config.openrouterFullName ||= `${config.provider}/${config.fullName}`;
-      return config.provider === ModelProvider.ANTHROPIC
-        ? new ModelHandlerAnthropicViaOpenRouter(config)
-        : new ModelHandlerOpenRouter(config);
+      if (config.provider === ModelProvider.ANTHROPIC) {
+        return new ModelHandlerAnthropicViaOpenRouter(config);
+      }
+      return new ModelHandlerOpenRouter(config);
     }
 
-    // Check for optional OpenAI Responses API usage
+    // OpenAI models with optional Responses API
     if (isOpenAI) {
       const useResponsesAPI =
         getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
@@ -68,12 +69,11 @@ export class ModelFactory {
       }
     }
 
-    // Use direct provider handler
+    // Direct provider handler
     const HandlerClass = PROVIDER_HANDLERS.get(config.provider);
     if (!HandlerClass) {
       throw new Error(`Unsupported model provider: ${config.provider}`);
     }
-
     logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
     return new HandlerClass(config);
   }

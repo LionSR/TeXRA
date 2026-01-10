@@ -126,35 +126,28 @@ export async function loadAgentSettingAndPrompts(
     const rawConfig = await loadYaml(resolution.definitionPath);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
-    const parent = config.inherits;
+    // Initialize with own settings/prompts (spread creates a mutable copy)
+    let settings: Partial<AgentSetting> = { ...config.settings };
+    let prompts: Partial<AgentPrompt> = { ...config.prompts };
 
-    let settings: Partial<AgentSetting> = {};
-    let prompts: Partial<AgentPrompt> = {};
-
-    if (parent) {
-      // Load parent settings and prompts recursively using the registry
-      const parentResolution = resolveAgent(`${entry.source}:${parent}`);
+    // Merge with parent if inheritance is specified
+    if (config.inherits) {
+      const parentResolution = resolveAgent(
+        `${entry.source}:${config.inherits}`,
+      );
       if (!parentResolution) {
         throw new Error(
-          `Unable to locate parent agent "${parent}" in source "${entry.source}".`,
+          `Unable to locate parent agent "${config.inherits}" in source "${entry.source}".`,
         );
       }
       const [parentSettings, parentPrompts] =
         await loadAgentSettingAndPrompts(parentResolution);
 
-      // Merge with parent settings and prompts
+      // Parent provides defaults, child overrides
       settings = deepmerge(parentSettings, config.settings, {
         arrayMerge: (_d, s) => s,
       });
       prompts = deepmerge(parentPrompts, config.prompts, {
-        arrayMerge: (_d, s) => s,
-      });
-    } else {
-      // No inheritance, just take own settings and prompts
-      settings = deepmerge({}, config.settings, {
-        arrayMerge: (_d, s) => s,
-      });
-      prompts = deepmerge({}, config.prompts, {
         arrayMerge: (_d, s) => s,
       });
     }
