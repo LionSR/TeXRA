@@ -17,14 +17,7 @@ function formatContext(context: number): string {
  * Format cost values for display
  */
 function formatCost(inputPrice?: number, outputPrice?: number): string {
-  if (
-    inputPrice === null ||
-    inputPrice === undefined ||
-    outputPrice === null ||
-    outputPrice === undefined
-  ) {
-    return '';
-  }
+  if (inputPrice === undefined || outputPrice === undefined) return '';
   return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
 }
 
@@ -113,51 +106,48 @@ export async function computeModelOptions(): Promise<string> {
 
       const provider = config.provider;
 
-      // Determine availability - server-side checks are sync after priming
-      // Note: openRouterOnly models can't use server-side relay (they need OpenRouter API)
-      const hasServerSideForModel =
-        hasAnyServerSideAccess &&
-        !config.openRouterOnly &&
-        serverSideKeyService.isProviderOnServer(provider) &&
-        serverSideKeyService.canUseModelSync(model);
-
-      let available = hasServerSideForModel;
-
-      // openRouterOnly models can NEVER use server-side relay - they always need OpenRouter key.
-      // Allow these even in "Use Included Access" mode since included access is never possible.
-      if (!available && config.openRouterOnly) {
+      // Determine model availability with clear priority order
+      let available = false;
+      if (config.openRouterOnly) {
+        // openRouterOnly models NEVER use server-side - always need OpenRouter key
         available = hasOpenRouter;
-      }
-
-      // For other models, only check personal keys if:
-      // 1. Not available via server-side, AND
-      // 2. User has NOT selected "Use Included Access" (i.e., using personal keys mode)
-      if (!available && !useIncludedAccess && !config.openRouterOnly) {
+      } else if (
+        hasAnyServerSideAccess &&
+        serverSideKeyService.isProviderOnServer(provider) &&
+        serverSideKeyService.canUseModelSync(model)
+      ) {
+        // Server-side relay available for this model
+        available = true;
+      } else if (!useIncludedAccess) {
+        // Fall back to personal API keys (only when not in "Use Included Access" mode)
         available = await checkPersonalKeyAvailability(config, hasOpenRouter);
       }
 
       // Build option tag with data attributes
-      const requiresKeyAttr = available
-        ? ''
-        : ' data-requires-key="true" class="disabled-option disabled-model"';
-      const providerAttr = provider ? ` data-provider="${provider}"` : '';
       const contextStr =
         config.contextWindow !== undefined
           ? formatContext(config.contextWindow)
           : '';
-      const contextAttr = contextStr ? ` data-context="${contextStr}"` : '';
       const costStr = formatCost(config.inputPrice, config.outputPrice);
-      const costAttr = costStr ? ` data-cost="${costStr}"` : '';
 
-      const descriptionParts: string[] = [];
-      if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
-      if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
-      const descriptionAttr =
-        descriptionParts.length > 0
-          ? ` description="${descriptionParts.join(' | ')}"`
-          : '';
+      const attrs = [
+        `value="${model}"`,
+        !available && 'data-requires-key="true" class="disabled-option disabled-model"',
+        provider && `data-provider="${provider}"`,
+        contextStr && `data-context="${contextStr}"`,
+        costStr && `data-cost="${costStr}"`,
+      ].filter(Boolean);
 
-      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${model}</vscode-option>`;
+      // Build description from context and cost
+      const descriptionParts = [
+        contextStr && `Context: ${contextStr}`,
+        costStr && `Cost (in/out per 1M): ${costStr}`,
+      ].filter(Boolean);
+      if (descriptionParts.length > 0) {
+        attrs.push(`description="${descriptionParts.join(' | ')}"`);
+      }
+
+      return `<vscode-option ${attrs.join(' ')}>${model}</vscode-option>`;
     }),
   );
 
