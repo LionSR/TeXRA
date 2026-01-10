@@ -204,11 +204,9 @@ export async function checkToolInstalled(
   showError: boolean = true,
 ): Promise<boolean> {
   // Get the config object - either passed directly or looked up by string key
-  const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
-  const config =
-    typeof toolOrConfig === 'string'
-      ? TOOL_CONFIGS[toolOrConfig]
-      : toolOrConfig;
+  const isStringKey = typeof toolOrConfig === 'string';
+  const toolName = isStringKey ? toolOrConfig : null;
+  const config = isStringKey ? TOOL_CONFIGS[toolOrConfig] : toolOrConfig;
 
   if (!config) {
     if (showError) {

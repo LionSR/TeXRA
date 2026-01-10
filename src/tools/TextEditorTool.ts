@@ -279,11 +279,8 @@ export class TextEditorTool extends defineTool({
         }
 
         initLine = startLine;
-        if (endLine === -1) {
-          fileContent = fileLines.slice(startLine - 1).join('\n');
-        } else {
-          fileContent = fileLines.slice(startLine - 1, endLine).join('\n');
-        }
+        const sliceEnd = endLine === -1 ? undefined : endLine;
+        fileContent = fileLines.slice(startLine - 1, sliceEnd).join('\n');
       }
 
       // Record read only after successful validation

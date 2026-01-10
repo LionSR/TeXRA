@@ -273,11 +273,7 @@ export function applyReplacements(
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
           const regex = new RegExp(pattern, category.flags);
-          // Type narrowing: if repl is a function, use it as callback; otherwise use as string
-          text =
-            typeof repl === 'function'
-              ? text.replace(regex, repl)
-              : text.replace(regex, repl);
+          text = text.replace(regex, repl);
         } catch (regexErr) {
           logger.error(
             CHANNEL,
