@@ -38,11 +38,6 @@ function getSessionDefaultAgent(sessionType) {
     : DEFAULT_WORKFLOW_AGENT;
 }
 
-/**
- * Default key for instructions when no input file is selected.
- */
-const DEFAULT_INSTRUCTION_KEY = '__default__';
-
 function getDefaultState() {
   return {
     sessionType: SESSION_TYPES.WORKFLOW,
@@ -56,7 +51,6 @@ function getDefaultState() {
     ),
     model: 'gemini3p',
     commit: 'HEAD',
-    instructionsByInputFile: {},
   };
 }
 
@@ -130,10 +124,6 @@ export class MainViewState {
     // which would trigger save() and capture partial/inconsistent DOM state.
     // Using a counter allows nesting (e.g., option update during restoration).
     this._saveBlockCount = 0;
-    // Track the last input file to detect changes for instruction switching
-    this._lastInputFile = null;
-    // Callback for when input file changes (instruction switching)
-    this._onInputFileChange = null;
   }
 
   /**
@@ -160,92 +150,6 @@ export class MainViewState {
    */
   isBlocked() {
     return this._saveBlockCount > 0;
-  }
-
-  /**
-   * Get the key used to store instructions for the current input file.
-   * @returns {string} The instruction storage key
-   */
-  _getInstructionKey() {
-    const inputFile = safeGetElementValue('inputFile');
-    return inputFile || DEFAULT_INSTRUCTION_KEY;
-  }
-
-  /**
-   * Get the instruction for a specific input file.
-   * @param {string} [key] - The input file path, or undefined for current
-   * @returns {string} The instruction text
-   */
-  getInstructionForTab(key) {
-    const state = this.stateManager.getState();
-    const instructionKey = key ?? this._getInstructionKey();
-    const instructions = state.instructionsByInputFile || {};
-    return instructions[instructionKey] || '';
-  }
-
-  /**
-   * Set the instruction for a specific input file.
-   * @param {string} instruction - The instruction text
-   * @param {string} [key] - The input file path, or undefined for current
-   */
-  setInstructionForTab(instruction, key) {
-    const state = this.stateManager.getState();
-    const instructionKey = key ?? this._getInstructionKey();
-    const instructions = state.instructionsByInputFile || {};
-
-    if (instruction && instruction.trim()) {
-      instructions[instructionKey] = instruction;
-    } else {
-      delete instructions[instructionKey];
-    }
-
-    this.stateManager.update({ instructionsByInputFile: instructions });
-  }
-
-  /**
-   * Register a callback to be notified when input file changes.
-   * The callback receives (newInstruction, oldInputFile, newInputFile).
-   * @param {Function} callback
-   */
-  onInputFileChange(callback) {
-    this._onInputFileChange = callback;
-  }
-
-  /**
-   * Handle input file change - save current instruction and load new one.
-   * Should be called when the input file selection changes.
-   * @param {string} newInputFile - The new input file path
-   * @returns {string} The instruction for the new input file
-   */
-  handleInputFileChange(newInputFile) {
-    const oldInputFile = this._lastInputFile;
-    const newKey = newInputFile || DEFAULT_INSTRUCTION_KEY;
-
-    // Don't process if input file hasn't changed
-    if (oldInputFile === newKey) {
-      return this.getInstructionForTab(newKey);
-    }
-
-    // Save current instruction for the old file (if any)
-    if (oldInputFile !== null) {
-      const currentInstruction = safeGetElementValue('instruction') || '';
-      if (currentInstruction.trim()) {
-        this.setInstructionForTab(currentInstruction, oldInputFile);
-      }
-    }
-
-    // Update tracked input file
-    this._lastInputFile = newKey;
-
-    // Get instruction for new file
-    const newInstruction = this.getInstructionForTab(newKey);
-
-    // Notify callback if registered
-    if (this._onInputFileChange) {
-      this._onInputFileChange(newInstruction, oldInputFile, newKey);
-    }
-
-    return newInstruction;
   }
 
   get() {
@@ -323,34 +227,7 @@ export class MainViewState {
         parseSessionType(mergedState.sessionType) ?? defaults.sessionType;
       mergedState.sessionType = sessionType;
 
-      // Migrate from legacy single instruction to per-tab format
-      const instructionsByInputFile = mergedState.instructionsByInputFile || {};
-      if (
-        mergedState.instruction &&
-        Object.keys(instructionsByInputFile).length === 0
-      ) {
-        // Legacy state: migrate single instruction to per-tab
-        const inputFile = mergedState.inputFile || DEFAULT_INSTRUCTION_KEY;
-        instructionsByInputFile[inputFile] = mergedState.instruction;
-        mergedState.instructionsByInputFile = instructionsByInputFile;
-      }
-
-      // Determine instruction key based on input file
-      const instructionKey =
-        mergedState.inputFile || DEFAULT_INSTRUCTION_KEY;
-      // Initialize last input file for change tracking
-      this._lastInputFile = instructionKey;
-
       VALUE_ELEMENTS.forEach((id) => {
-        // Handle instruction specially - load from per-tab storage
-        if (id === 'instruction') {
-          const instruction =
-            instructionsByInputFile[instructionKey] ??
-            mergedState[id] ??
-            '';
-          safeSetElementValue(id, instruction);
-          return;
-        }
         safeSetElementValue(id, mergedState[id] ?? '');
       });
 
@@ -405,32 +282,13 @@ export class MainViewState {
       return;
     }
 
-    // Preserve existing instructionsByInputFile from state
-    const existingState = this.stateManager.getState();
-    const instructionsByInputFile = existingState.instructionsByInputFile || {};
-
     const state = {
       latexdiffsVisible:
         safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT)?.style.display ===
         'block',
-      instructionsByInputFile,
     };
 
     VALUE_ELEMENTS.forEach((id) => {
-      // Handle instruction specially - store per input file
-      if (id === 'instruction') {
-        const instruction = safeGetElementValue(id);
-        const instructionKey = this._getInstructionKey();
-        if (instruction && instruction.trim()) {
-          state.instructionsByInputFile[instructionKey] = instruction;
-        } else {
-          delete state.instructionsByInputFile[instructionKey];
-        }
-        // Also store current instruction for backwards compatibility
-        state[id] = instruction;
-        return;
-      }
-
       const value = safeGetElementValue(id);
       if (value !== undefined) {
         state[id] = value;
