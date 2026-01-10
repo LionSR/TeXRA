@@ -25,9 +25,7 @@ export async function indentLatexFiles(
   fileLocations: FileLocation[],
   logger: Logger,
 ): Promise<void> {
-  for (const location of fileLocations) {
-    await indentLatexFile(location, logger);
-  }
+  await Promise.all(fileLocations.map((loc) => indentLatexFile(loc, logger)));
 }
 
 /** Clean up latexindent backup files after formatting. */

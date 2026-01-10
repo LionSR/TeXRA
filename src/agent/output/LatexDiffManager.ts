@@ -113,11 +113,7 @@ export class LatexDiffManager {
    * Get display label (basename) from FileLocation for UI/logging.
    */
   private getDisplayLabel(location: FileLocation): string {
-    return path.basename(
-      location.kind === 'workspace' || location.kind === 'runStorage'
-        ? location.relativePath
-        : location.absolutePath,
-    );
+    return path.basename(getComparablePath(location));
   }
 
   private async ensureWorkspaceDependency(
