@@ -184,11 +184,16 @@ export async function buildFileAttachment({
   const bytes = Uint8Array.from(buffer);
   buffer.fill(0);
 
-  return {
+  const attachment: ToolFileAttachment = {
     path: display,
     mimeType: inferredMime,
     bytes,
-    ...(description ? { description } : {}),
-    ...(base64Data ? { base64Data } : {}),
   };
+  if (description) {
+    attachment.description = description;
+  }
+  if (base64Data) {
+    attachment.base64Data = base64Data;
+  }
+  return attachment;
 }

@@ -73,12 +73,10 @@ export class DiagnosticsTool extends defineTool({
     severity: DiagnosticsSeverityCounts,
     messages?: Diagnostic[],
   ): ToolResult {
-    const payload: DiagnosticsPayload = {
-      path,
-      command,
-      severity,
-      ...(messages ? { messages } : {}),
-    };
+    const payload: DiagnosticsPayload = { path, command, severity };
+    if (messages) {
+      payload.messages = messages;
+    }
 
     const { errors = 0, warnings = 0, info = 0, hints = 0 } = severity;
     const counts = [
