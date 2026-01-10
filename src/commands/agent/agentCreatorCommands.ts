@@ -256,14 +256,9 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
           max_tokens: 2048,
         };
         const response = await anthropic.messages.create(params);
-        if (
-          response.content &&
-          Array.isArray(response.content) &&
-          response.content.length > 0 &&
-          response.content[0] &&
-          response.content[0].type === 'text'
-        ) {
-          const text = response.content[0].text.trim();
+        const firstContent = response.content[0];
+        if (firstContent?.type === 'text') {
+          const text = firstContent.text.trim();
           const match = text.match(/<yaml>([\s\S]*?)<\/yaml>/i);
           const candidate = match ? match[1].trim() : text;
           const validationErr = validateAgentYamlString(candidate);
@@ -306,13 +301,17 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
     await AbsoluteFS.write(filePath.fsPath, yamlContent);
     vscode.window.showInformationMessage(`Created agent at ${filePath.fsPath}`);
     const isMultipleOutput = outputChoice === 'Multiple output files';
-    await promptToAddAgentToConfig(agentName, false, {
-      isMultipleOutput,
-      baseAgentName: isMultipleOutput ? getBaseName(agentName) : undefined,
-      multipleAgentName: isMultipleOutput
-        ? agentName
-        : getMultipleName(agentName),
-    });
+    const configOptions = isMultipleOutput
+      ? {
+          isMultipleOutput: true as const,
+          baseAgentName: getBaseName(agentName),
+          multipleAgentName: agentName,
+        }
+      : {
+          isMultipleOutput: false as const,
+          multipleAgentName: getMultipleName(agentName),
+        };
+    await promptToAddAgentToConfig(agentName, false, configOptions);
     const doc = await vscode.workspace.openTextDocument(filePath);
     await vscode.window.showTextDocument(doc);
   } catch (err) {
