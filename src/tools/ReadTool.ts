@@ -116,7 +116,7 @@ export class ReadFileTool extends defineTool({
       requestedEndLine,
       truncated,
       rangeProvided: Boolean(input.range),
-      // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
+       
       rangeEndExceeded:
         input.range?.end != null && input.range.end > totalLines,
     });
