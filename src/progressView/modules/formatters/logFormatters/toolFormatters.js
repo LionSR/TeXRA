@@ -202,11 +202,16 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   const providerLabel = PROVIDER_LABELS[provider] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[status] ?? '';
 
-  // Build query preview
-  const queryPreview = query
-    ? `: "${query.length > QUERY_PREVIEW_MAX_LENGTH ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...' : query}"`
-    : '';
-  const titleText = `${providerLabel} Search${queryPreview}${statusSuffix}`;
+  // Build query preview with truncation if needed
+  let titleText = `${providerLabel} Search`;
+  if (query) {
+    const truncatedQuery =
+      query.length > QUERY_PREVIEW_MAX_LENGTH
+        ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...'
+        : query;
+    titleText += `: "${truncatedQuery}"`;
+  }
+  titleText += statusSuffix;
 
   if (headerLabel) headerLabel.textContent = titleText;
   if (iconElem) {
@@ -222,29 +227,21 @@ export function formatWebSearch(normalizedPayload, logId, groupId, timestamp) {
   }
 
   if (resultCount > 0) {
-    const resultItems = results
-      .map((r) => {
-        const url = r.url || '';
-        const title = r.title || r.domain || url;
-        const domain = r.domain || '';
-        const urlEscaped = encodeHtml(url);
-        const titleEscaped = encodeHtml(title);
-        const domainDisplay = domain
-          ? ` <span class="file-source">(${encodeHtml(domain)})</span>`
-          : '';
+    const resultItems = results.map((r) => {
+      const url = r.url || '';
+      const title = encodeHtml(r.title || r.domain || url);
+      const domainSuffix = r.domain
+        ? ` <span class="file-source">(${encodeHtml(r.domain)})</span>`
+        : '';
+      return `<li class="detail-item"><i class="codicon codicon-link"></i> <a href="${encodeHtml(url)}" class="web-search-link" target="_blank" rel="noopener noreferrer">${title}</a>${domainSuffix}</li>`;
+    });
 
-        return `<li class="detail-item">
-          <i class="codicon codicon-link"></i>
-          <a href="${urlEscaped}" class="web-search-link" target="_blank" rel="noopener noreferrer">${titleEscaped}</a>${domainDisplay}
-        </li>`;
-      })
-      .join('');
-
-    const resultsContent = `
-      <span class="file-list-summary">Results (${resultCount})</span>
-      <ul class="detail-list">${resultItems}</ul>
-    `;
-    sections.push(buildToolUseSection('Sources:', resultsContent));
+    sections.push(
+      buildToolUseSection(
+        'Sources:',
+        `<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems.join('')}</ul>`,
+      ),
+    );
   } else if (status === 'completed') {
     sections.push(
       buildToolUseSection(
