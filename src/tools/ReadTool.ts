@@ -116,7 +116,7 @@ export class ReadFileTool extends defineTool({
       requestedEndLine,
       truncated,
       rangeProvided: Boolean(input.range),
-       
+
       rangeEndExceeded:
         input.range?.end != null && input.range.end > totalLines,
     });
