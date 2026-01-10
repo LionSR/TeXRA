@@ -157,7 +157,8 @@ export async function handleClean(config: {
   }
 
   const streamId =
-    config.streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs });
+    config.streamId ||
+    getStreamTabId(agent, model, inputFile, { useMultipleOutputs });
 
   if (!config.skipProgressViewClear) {
     bus.emit('clearMissingOutputs', { stream: streamId });

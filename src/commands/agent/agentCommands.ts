@@ -9,9 +9,7 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'AgentCommands';
 logger.initialize(CHANNEL);
 
-export function registerAgentCommands(
-  context: vscode.ExtensionContext,
-): void {
+export function registerAgentCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.stopAgent', handleStopAgent),
   );
