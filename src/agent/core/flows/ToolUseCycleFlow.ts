@@ -36,7 +36,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-import { DIAGNOSTIC_TYPE_VALIDATION_ERROR } from '@tools/result';
+import {
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  formatZodIssuesForDiagnostics,
+  type ValidationErrorDiagnostics,
+} from '@tools/result';
 import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
@@ -55,18 +59,6 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-
-interface ToolValidationDiagnostics {
-  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: Array<Record<string, unknown>>;
-  formatted: Array<{
-    path: string;
-    message: string;
-    expected?: unknown;
-    received?: unknown;
-    code?: string;
-  }>;
-}
 
 /**
  * Parse tool input, handling various input formats from different model providers.
@@ -94,10 +86,13 @@ function parseToolInput(
   }
 }
 
-/** Check if an error is a Zod validation error (has issues array). */
-function isZodValidationError(
+/**
+ * Check if an error has Zod-like issues array (duck typing).
+ * Handles both real ZodError and error-like objects with issues.
+ */
+function hasZodIssues(
   error: unknown,
-): error is { issues: Array<Record<string, unknown>> } {
+): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -108,30 +103,34 @@ function isZodValidationError(
 
 /**
  * Normalize a tool call error into a user-friendly message with optional diagnostics.
+ * Uses shared formatting utilities from @tools/result for consistency.
  */
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
-): { message: string; diagnostics?: ToolValidationDiagnostics } {
-  if (isZodValidationError(error)) {
+): { message: string; diagnostics?: ValidationErrorDiagnostics } {
+  if (hasZodIssues(error)) {
+    // Cast issues to ZodIssue-like for the shared formatter
+    const issues = error.issues as Array<{
+      path: (string | number)[];
+      message: string;
+      expected?: unknown;
+      received?: unknown;
+      code?: string;
+    }>;
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-        issues: error.issues,
-        formatted: error.issues.map((issue) => ({
-          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
-          message: String(issue.message ?? ''),
-          expected: issue.expected,
-          received: issue.received,
-          code: typeof issue.code === 'string' ? issue.code : undefined,
-        })),
+        issues: issues as ValidationErrorDiagnostics['issues'],
+        formatted: formatZodIssuesForDiagnostics(
+          issues as ValidationErrorDiagnostics['issues'],
+        ),
       },
     };
   }
 
-  const errorMessage =
-    error instanceof Error ? error.message : String(error);
+  const errorMessage = error instanceof Error ? error.message : String(error);
   return { message: `${toolName}: ${errorMessage}` };
 }
 
