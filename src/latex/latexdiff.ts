@@ -294,7 +294,14 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      return await this.runDiff(baseLocation, outputLocation, '_diff', false, mathMarkup, options);
+      return await this.runDiff(
+        baseLocation,
+        outputLocation,
+        '_diff',
+        false,
+        mathMarkup,
+        options,
+      );
     } catch (err) {
       return this.logDiffError('Error in runDiffForRound', err);
     }
@@ -328,7 +335,14 @@ export class LaTeXdiffService {
       }
 
       const diffSuffix = `_diffr${secondRoundMatch[1]}r${firstRoundMatch[1]}`;
-      return await this.runDiff(firstLocation, secondLocation, diffSuffix, false, mathMarkup, options);
+      return await this.runDiff(
+        firstLocation,
+        secondLocation,
+        diffSuffix,
+        false,
+        mathMarkup,
+        options,
+      );
     } catch (err) {
       return this.logDiffError('Error in runDiffBetweenRounds', err);
     }

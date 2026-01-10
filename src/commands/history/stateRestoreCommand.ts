@@ -46,7 +46,10 @@ async function restoreState(state: TaskState) {
       }
       await storeStateForLater(state);
     } catch (error) {
-      logger.warn(CHANNEL, `Could not access webview: ${toErrorMessage(error)}`);
+      logger.warn(
+        CHANNEL,
+        `Could not access webview: ${toErrorMessage(error)}`,
+      );
       await storeStateForLater(state);
     }
   } catch (error) {
