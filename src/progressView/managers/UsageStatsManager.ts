@@ -199,7 +199,8 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /**
-   * Set all usage statistics (used during loading)
+   * Set all usage statistics (used during loading).
+   * Handles both RunUsageMap entries and legacy single TokenUsageStats entries.
    */
   setAll(
     stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
@@ -207,26 +208,37 @@ export class UsageStatsManager extends PersistentMapManager<
     const normalized: Map<StreamTabId, RunUsageMap> = new Map();
 
     for (const [stream, value] of stats.entries()) {
-      if (value instanceof Map) {
-        normalized.set(stream, new Map(value));
-        continue;
+      const runMap = this.normalizeToRunMap(value);
+      if (runMap) {
+        normalized.set(stream, runMap);
       }
-
-      if (!value || typeof value !== 'object') {
-        continue;
-      }
-
-      const usage = TokenUsageStatsParsingSchema.parse(value);
-      if (isEmptyUsage(usage)) {
-        continue;
-      }
-
-      const runMap: RunUsageMap = new Map();
-      runMap.set(normalizeRunId(null), usage);
-      normalized.set(stream, runMap);
     }
 
     super.setAll(normalized);
+  }
+
+  /**
+   * Normalize a value to RunUsageMap format.
+   * Returns null for invalid or empty values.
+   */
+  private normalizeToRunMap(value: unknown): RunUsageMap | null {
+    // Already a map - make a copy
+    if (value instanceof Map) {
+      return new Map(value as RunUsageMap);
+    }
+
+    // Validate object
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    // Parse as legacy single TokenUsageStats
+    const usage = TokenUsageStatsParsingSchema.parse(value);
+    if (isEmptyUsage(usage)) {
+      return null;
+    }
+
+    return new Map([[normalizeRunId(null), usage]]);
   }
 
   /**
