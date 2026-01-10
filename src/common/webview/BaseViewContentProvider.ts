@@ -178,6 +178,7 @@ export abstract class BaseViewContentProvider {
       { key: 'todoStatusUri', path: 'constants/todoStatus.js' },
       { key: 'agentTypesUri', path: 'constants/agentTypes.js' },
       { key: 'toggleStateStoreUri', path: 'modules/ToggleStateStore.js' },
+      { key: 'streamScopedMapUri', path: 'modules/StreamScopedMap.js' },
     ];
 
   /** Node module descriptors from node_modules */
