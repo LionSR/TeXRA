@@ -185,7 +185,12 @@ export function resetCycleState<T extends BaseCycleFields>(
   state: T,
   additionalFields: (keyof T)[] = [],
 ): void {
-  Object.assign(state, BASE_CYCLE_RESET_VALUES);
+  state.shouldStop = false;
+  state.endTurn = false;
+  state.responseTimeMs = undefined;
+  state.stopReason = undefined;
+  state.lastError = undefined;
+
   for (const field of additionalFields) {
     state[field] = undefined as T[typeof field];
   }
