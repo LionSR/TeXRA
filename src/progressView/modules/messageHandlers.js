@@ -18,6 +18,26 @@ import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
 
+/**
+ * ARCHITECTURAL NOTE: Task Groups have different semantics per session kind
+ *
+ * The "task group" abstraction is currently overloaded:
+ *
+ * - Workflow sessions: Each group is a distinct "run" (user can switch between runs,
+ *   only one visible at a time via run selector dropdown)
+ *
+ * - ToolUse sessions: Each group is a conversation "turn" (user message → agent
+ *   response with tool calls). All turns should always be visible as continuous
+ *   conversation history.
+ *
+ * This semantic mismatch requires special handling throughout (checking isToolUse
+ * before calling showRun). A cleaner design would separate these concepts:
+ * - WorkflowRunManager for workflow sessions (switching between runs)
+ * - ConversationTurnManager for toolUse sessions (append-only history)
+ *
+ * TODO: Consider refactoring to separate these concerns in a future PR.
+ */
+
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
@@ -280,8 +300,32 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _renderLogMessage(msg, logContent) {
     // dom.logEntries.append returns true if message was added to its group container
-    if (msg.groupId && dom.logEntries.append(msg)) return;
+    if (msg.groupId) {
+      const wasAppendedToGroup = dom.logEntries.append(msg);
+      // DIAGNOSTIC: Track grouped message handling
+      if (!wasAppendedToGroup) {
+        console.warn(
+          '[_renderLogMessage] Message has groupId but no container:',
+          {
+            messageType: msg.messageType,
+            id: msg.id,
+            groupId: msg.groupId,
+          },
+        );
+      }
+      if (wasAppendedToGroup) return;
+    }
     const formatted = this._entryFormatter.format(msg);
+    // DIAGNOSTIC: Log if formatter returns null
+    if (!formatted) {
+      console.warn('[_renderLogMessage] Formatter returned null for:', {
+        messageType: msg.messageType,
+        id: msg.id,
+        hasText: Boolean(msg.text),
+        hasData: Boolean(msg.data),
+        groupId: msg.groupId,
+      });
+    }
     appendFormatted(logContent, formatted);
   }
 
@@ -502,6 +546,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const logMessages = message.messages ?? [];
 
+    // Sort messages by timestamp to ensure chronological order
+    // Backend may send messages in arbitrary order during reload
+    const sortedMessages = [...logMessages].sort((a, b) => {
+      const timeA = a.timestamp ?? 0;
+      const timeB = b.timestamp ?? 0;
+      return timeA - timeB;
+    });
+
     // Action-based rebuild strategy (simpler than boolean flags):
     //
     // action: 'clear' → Explicitly clear DOM content (no active stream, stream deleted)
@@ -581,7 +633,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    logMessages.forEach((msg) => this._renderLogMessage(msg, logContent));
+    sortedMessages.forEach((msg) => {
+      this._renderLogMessage(msg, logContent);
+    });
     scrollToBottom(logContent);
 
     // Use validated run ID from state (set earlier via setActiveRunId after validation)

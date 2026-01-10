@@ -65,6 +65,10 @@ export class WebviewUpdater {
     activeStream: StreamTabId,
     agentFilter: AgentTypeFilter,
   ): void {
+    // DIAGNOSTIC: Log what we're sending to track reload issues
+    this.logger.debug(
+      `[UPDATE_STREAMS] sending: activeStream="${activeStream}", streams=${streams.length}, filter=${agentFilter}`,
+    );
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAMS,
       streams,
@@ -105,6 +109,10 @@ export class WebviewUpdater {
     },
     action: 'render' | 'clear' = 'render',
   ): void {
+    // DIAGNOSTIC: Log what we're sending to track reload issues
+    this.logger.debug(
+      `[UPDATE_LOGS] sending: stream="${stream}", messages=${messages.length}, groups=${groups.length}, action=${action}`,
+    );
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
       stream,
