@@ -598,8 +598,7 @@ class ToolUseProcessNode<C> extends BaseNode<
         );
         workspace.assembly.lastResponse = execRes.text;
       }
-      workspace.resetServerToolContent();
-      workspace.resetReasoning();
+      // Workspace cleanup (resetServerToolContent, resetReasoning) handled by FinalizeNode
       return FlowTransition.COMPLETE;
     }
 
@@ -959,6 +958,69 @@ class ToolUseDispatchNode<C> extends BaseNode<
   }
 }
 /**
+ * Finalizes the tool-use cycle by recording metrics and cleaning up workspace state.
+ * All flow exit paths route through this node to ensure proper cleanup.
+ *
+ * PocketFlow pattern:
+ * - Single finalization point in the flow graph
+ * - No guard flags needed (graph ensures single execution)
+ * - Services accessed via `this.services`
+ *
+ * PocketFlow compliance:
+ * - prep(): Extracts data for exec() (none needed for finalization)
+ * - exec(): Pure computation using prepRes (finalization is side-effect-free)
+ * - post(): Applies side effects and returns action
+ */
+class ToolUseCycleFinalizeNode<C> extends BaseNode<
+  ToolUseCycleShared,
+  ToolUseCycleParams<C>,
+  ToolUseCycleServices<C>
+> {
+  /**
+   * No preparation needed - this node just finalizes.
+   * PocketFlow compliance: prep() extracts data for exec().
+   */
+  async prep(_shared: ToolUseCycleShared): Promise<void> {
+    // No prep needed for finalize
+  }
+
+  /**
+   * Finalize the cycle by recording metrics.
+   *
+   * This is the SINGLE finalization point for ToolUseCycleFlow.
+   * The parent ToolUseCycleNode must pass onRoundFinalized
+   * to services for this to work correctly.
+   *
+   * PocketFlow compliance: exec() receives prepRes, returns compute result.
+   */
+  async exec(_prepRes: void): Promise<void> {
+    const { run, onRoundFinalized, workspace } = this.services;
+
+    // Reset workspace state on flow completion
+    workspace.resetServerToolContent();
+    workspace.resetReasoning();
+
+    // Invoke callback if provided
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
+  }
+
+  /**
+   * Flow ends here.
+   * PocketFlow compliance: post() applies side effects and returns action.
+   */
+  async post(
+    _shared: ToolUseCycleShared,
+    _prepRes: void,
+    _execRes: void,
+  ): Promise<string | undefined> {
+    // Flow ends here
+    return undefined;
+  }
+}
+
+/**
  * Creates a tool-use cycle flow with services injected via params.
  *
  * The returned flow uses the services pattern:
@@ -980,6 +1042,7 @@ export function createToolUseCycleFlow<C>(): Flow<
   const callNode = new ToolUseCallNode<C>();
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
+  const finalizeNode = new ToolUseCycleFinalizeNode<C>();
 
   // Main flow: prep → call → process → dispatch
   // Note: Retry (both auto and manual) is handled internally by PocketFlow Node
@@ -991,11 +1054,11 @@ export function createToolUseCycleFlow<C>(): Flow<
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  // COMPLETE transitions exit directly (no finalize node needed).
-  // Unlike ResponseCycleFlow which needs finalizeRound() for stats recording,
-  // ToolUseCycleFlow handles finalization inline in ProcessNode.post() for
-  // successful cycles. Error/interrupt paths don't need finalization since
-  // there's nothing to record.
+  // All completion paths route through finalize node (PocketFlow-native pattern)
+  prepNode.on(FlowTransition.COMPLETE, finalizeNode);
+  callNode.on(FlowTransition.COMPLETE, finalizeNode);
+  processNode.on(FlowTransition.COMPLETE, finalizeNode);
+  dispatchNode.on(FlowTransition.COMPLETE, finalizeNode);
 
   return new Flow<ToolUseCycleShared, ToolUseCycleParams<C>>(prepNode);
 }
