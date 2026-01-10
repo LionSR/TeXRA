@@ -93,58 +93,6 @@ export function buildFileContextFromTaskState(
 }
 
 /**
- * Build a formatted string describing file context for AI prompts.
- */
-function buildFileContextString(context: FileContext): string {
-  const lines: string[] = ['Current context:'];
-
-  if (context.agent) {
-    lines.push(`Agent: ${context.agent}`);
-  }
-
-  // Collect file entries
-  const fileEntries: Array<{ label: string; value: string }> = [];
-
-  // Single files
-  if (context.inputFile) {
-    fileEntries.push({ label: 'Input File', value: context.inputFile });
-  }
-  if (context.referenceFile) {
-    fileEntries.push({ label: 'Reference File', value: context.referenceFile });
-  }
-  if (context.auxiliaryFile) {
-    fileEntries.push({ label: 'Auxiliary File', value: context.auxiliaryFile });
-  }
-  if (context.mediaFile) {
-    fileEntries.push({ label: 'Figure File', value: context.mediaFile });
-  }
-
-  // File arrays
-  const arrays: Array<[string, string[] | undefined]> = [
-    ['Input Files', context.inputFiles],
-    ['Reference Files', context.referenceFiles],
-    ['Auxiliary Files', context.auxiliaryFiles],
-    ['Media Files', context.mediaFiles],
-    ['Output Files', context.outputFiles],
-  ];
-
-  for (const [label, files] of arrays) {
-    if (files && files.length > 0) {
-      fileEntries.push({ label, value: files.join(', ') });
-    }
-  }
-
-  if (fileEntries.length > 0) {
-    lines.push('', 'Files in the task:');
-    for (const { label, value } of fileEntries) {
-      lines.push(`${label}: ${value}`);
-    }
-  }
-
-  return lines.join('\n');
-}
-
-/**
  * Polishes instruction text using Claude AI model
  * Corrects spelling, grammar, and formatting for LaTeX, XML, and Markdown
  * Also corrects file references if fileContext is provided
@@ -161,9 +109,58 @@ export async function polishTextWithAI(
     const useCopilot = getConfig<boolean>('texra.model.useCopilot', false);
 
     // Build file context string if available
-    const fileContextString = fileContext
-      ? buildFileContextString(fileContext)
-      : '';
+    let fileContextString = '';
+    if (fileContext) {
+      const lines: string[] = ['Current context:'];
+
+      if (fileContext.agent) {
+        lines.push(`Agent: ${fileContext.agent}`);
+      }
+
+      const fileEntries: Array<{ label: string; value: string }> = [];
+
+      if (fileContext.inputFile) {
+        fileEntries.push({ label: 'Input File', value: fileContext.inputFile });
+      }
+      if (fileContext.referenceFile) {
+        fileEntries.push({
+          label: 'Reference File',
+          value: fileContext.referenceFile,
+        });
+      }
+      if (fileContext.auxiliaryFile) {
+        fileEntries.push({
+          label: 'Auxiliary File',
+          value: fileContext.auxiliaryFile,
+        });
+      }
+      if (fileContext.mediaFile) {
+        fileEntries.push({ label: 'Figure File', value: fileContext.mediaFile });
+      }
+
+      const arrays: Array<[string, string[] | undefined]> = [
+        ['Input Files', fileContext.inputFiles],
+        ['Reference Files', fileContext.referenceFiles],
+        ['Auxiliary Files', fileContext.auxiliaryFiles],
+        ['Media Files', fileContext.mediaFiles],
+        ['Output Files', fileContext.outputFiles],
+      ];
+
+      for (const [label, files] of arrays) {
+        if (files && files.length > 0) {
+          fileEntries.push({ label, value: files.join(', ') });
+        }
+      }
+
+      if (fileEntries.length > 0) {
+        lines.push('', 'Files in the task:');
+        for (const { label, value } of fileEntries) {
+          lines.push(`${label}: ${value}`);
+        }
+      }
+
+      fileContextString = lines.join('\n');
+    }
 
     // Setup the prompt
     const prompt = `Please review the following instruction text and correct any spelling errors, typos, grammatical mistakes, or punctuation issues. Preserve the original meaning and tone without adding new content or changing the structure unless necessary for clarity.
