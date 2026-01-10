@@ -42,22 +42,15 @@ export class LatexMediaManager {
     latexFile: FileLocation,
     figures: string[],
   ): Promise<void> {
-    if (!this.fileService?.hasRunDirectory()) {
-      return;
-    }
-
-    if (figures.length === 0) {
+    if (!this.fileService?.hasRunDirectory() || figures.length === 0) {
       return;
     }
 
     const baseDir = path.dirname(latexFile.absolutePath);
     const targetLocations = new Set<FileLocation>();
     for (const relative of figures) {
-      if (!relative) {
-        continue;
-      }
-      const trimmed = relative.trim();
-      if (trimmed.length === 0) {
+      const trimmed = relative?.trim();
+      if (!trimmed) {
         continue;
       }
       const absolutePath = path.normalize(path.join(baseDir, trimmed));
