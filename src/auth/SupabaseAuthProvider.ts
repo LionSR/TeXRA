@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
@@ -19,6 +18,7 @@ import {
   type OAuthProvider,
 } from './config';
 import { getServerSideKeyService } from './serverKeys';
+import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import type { SupabaseUriHandler } from './UriHandler';
 
 /** Response schema for GitHub token exchange Edge Function. */
