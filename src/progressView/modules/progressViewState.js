@@ -2,6 +2,7 @@
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
 import { ToggleStateStore } from '@common/ToggleStateStore.js';
+import { StreamScopedMap } from '@common/StreamScopedMap.js';
 
 /**
  * Manages task groups in the progress view.
@@ -250,12 +251,15 @@ export class ProgressViewState {
     this.runFiles = new RunScopedMap(streamResolver);
     this.runMissingOutputs = new RunScopedMap(streamResolver);
     this.runUsage = new RunScopedMap(streamResolver);
+    // Stream-scoped state using shared utility
     // Context state (input tokens, context window) per stream
-    this.contextState = new Map();
+    this.contextState = new StreamScopedMap(streamResolver);
     // Todo storage by stream ID
-    this.streamTodos = new Map();
+    this.streamTodos = new StreamScopedMap(streamResolver);
     // Queued follow-ups storage by stream ID
-    this.streamQueuedFollowUps = new Map();
+    this.streamQueuedFollowUps = new StreamScopedMap(streamResolver);
+    // Follow-up textarea text storage by stream ID (persists draft text per tab)
+    this.streamFollowUpText = new StreamScopedMap(streamResolver);
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -625,11 +629,10 @@ export class ProgressViewState {
    * @param {{ inputTokens: number, contextWindow: number, utilizationPercent: number }} state
    */
   setContextState(streamId, state) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !state) {
+    if (!state) {
       return;
     }
-    this.contextState.set(targetStream, {
+    this.contextState.set(streamId, {
       inputTokens: state.inputTokens ?? 0,
       contextWindow: state.contextWindow ?? 0,
       utilizationPercent: state.utilizationPercent ?? 0,
@@ -642,11 +645,7 @@ export class ProgressViewState {
    * @returns {{ inputTokens: number, contextWindow: number, utilizationPercent: number } | null}
    */
   getContextState(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return null;
-    }
-    return this.contextState.get(targetStream) || null;
+    return this.contextState.get(streamId) || null;
   }
 
   /**
@@ -657,10 +656,7 @@ export class ProgressViewState {
     if (streamId == null) {
       return this.contextState.clear();
     }
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream != null) {
-      this.contextState.delete(targetStream);
-    }
+    this.contextState.delete(streamId);
   }
 
   deleteRunMissingOutputs(streamId, runId) {
@@ -673,11 +669,7 @@ export class ProgressViewState {
    * @param {Array<{content: string, status: string, activeForm: string}>} todos - The todo items
    */
   setTodos(streamId, todos) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return;
-    }
-    this.streamTodos.set(targetStream, todos ?? []);
+    this.streamTodos.set(streamId, todos ?? []);
   }
 
   /**
@@ -686,11 +678,7 @@ export class ProgressViewState {
    * @returns {Array<{content: string, status: string, activeForm: string}>|null}
    */
   getTodos(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return null;
-    }
-    return this.streamTodos.get(targetStream) || null;
+    return this.streamTodos.get(streamId) || null;
   }
 
   /**
@@ -698,11 +686,7 @@ export class ProgressViewState {
    * @param {string} streamId - The stream ID
    */
   clearTodos(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return;
-    }
-    this.streamTodos.delete(targetStream);
+    this.streamTodos.delete(streamId);
   }
 
   /**
@@ -718,11 +702,7 @@ export class ProgressViewState {
    * @param {string[]} messages - The queued message texts
    */
   setQueuedFollowUps(streamId, messages) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return;
-    }
-    this.streamQueuedFollowUps.set(targetStream, messages ?? []);
+    this.streamQueuedFollowUps.set(streamId, messages ?? []);
   }
 
   /**
@@ -731,11 +711,7 @@ export class ProgressViewState {
    * @returns {string[]|null}
    */
   getQueuedFollowUps(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return null;
-    }
-    return this.streamQueuedFollowUps.get(targetStream) || null;
+    return this.streamQueuedFollowUps.get(streamId) || null;
   }
 
   /**
@@ -743,11 +719,7 @@ export class ProgressViewState {
    * @param {string} streamId - The stream ID
    */
   clearQueuedFollowUps(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return;
-    }
-    this.streamQueuedFollowUps.delete(targetStream);
+    this.streamQueuedFollowUps.delete(streamId);
   }
 
   /**
@@ -755,6 +727,43 @@ export class ProgressViewState {
    */
   clearAllQueuedFollowUps() {
     this.streamQueuedFollowUps.clear();
+  }
+
+  /**
+   * Set follow-up textarea text for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {string} text - The textarea text
+   */
+  setFollowUpText(streamId, text) {
+    if (text && text.trim()) {
+      this.streamFollowUpText.set(streamId, text);
+    } else {
+      this.streamFollowUpText.delete(streamId);
+    }
+  }
+
+  /**
+   * Get follow-up textarea text for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {string} The textarea text or empty string
+   */
+  getFollowUpText(streamId) {
+    return this.streamFollowUpText.get(streamId) || '';
+  }
+
+  /**
+   * Clear follow-up textarea text for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearFollowUpText(streamId) {
+    this.streamFollowUpText.delete(streamId);
+  }
+
+  /**
+   * Clear all follow-up textarea text across all streams.
+   */
+  clearAllFollowUpText() {
+    this.streamFollowUpText.clear();
   }
 }
 
