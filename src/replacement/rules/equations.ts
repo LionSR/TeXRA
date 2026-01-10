@@ -76,42 +76,37 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
         .split(/\s+/),
     });
 
-    // Initialize patterns object with generated patterns
+    // Greek letter notation fixes
+    // Examples: \a_ -> a_, \a^ -> a^
+    const letters = [...'abcdefghijklmnopqrstuvwyz'];
+    const letterNotationFixes = Object.fromEntries(
+      letters.flatMap((letter) => [
+        [`\\${letter}_`, `${letter}_`],
+        [`\\${letter}^`, `${letter}^`],
+      ]),
+    );
+
+    // Environment end command fixes
+    // Examples: \n\\nend{align} -> \n\end{align}
+    const environments =
+      'align equation itemize enumerate figure tikzpicture document'.split(' ');
+    const envEndFixes = Object.fromEntries(
+      environments.map((env) => [`\n\\\nend{${env}}`, `\n\\end{${env}}`]),
+    );
+
+    // Environment braces/brackets fixes
+    // Examples: {\align} -> {align}
+    const bracesFixes = generateEnvironmentBracesFixes(environments);
+
+    // Initialize patterns object with all generated patterns
     const patterns: { [key: string]: string } = {
       ...linebreakFixesPatterns,
       ...referencePatterns,
       ...groupedBackslashPatterns,
+      ...letterNotationFixes,
+      ...envEndFixes,
+      ...bracesFixes,
     };
-
-    // Greek letter notation fixes
-    // Examples:
-    // \a_ -> a_
-    // \a^ -> a^
-    // \x^ -> x^ [this should not be included]
-    const letters = [...'abcdefghijklmnopqrstuvwyz'];
-    letters.forEach((letter) => {
-      patterns[`\\${letter}_`] = `${letter}_`;
-      patterns[`\\${letter}^`] = `${letter}^`;
-    });
-
-    // ===== Environment end command fixes =====
-    // Examples:
-    // \n\\nend{align} -> \n\end{align}
-    // \n\\nend{document} -> \n\end{document}
-    const environments =
-      'align equation itemize enumerate figure tikzpicture document'.split(' ');
-    environments.forEach((env) => {
-      patterns[`\n\\\nend{${env}}`] = `\n\\end{${env}}`;
-    });
-
-    // ===== Environment braces/brackets fixes =====
-    // Examples:
-    // {\align} -> {align}
-    // {\document} -> {document}
-    const bracesEnvironments =
-      'align equation itemize enumerate figure tikzpicture document'.split(' ');
-    const bracesFixes = generateEnvironmentBracesFixes(bracesEnvironments);
-    Object.assign(patterns, bracesFixes);
 
     // ===================================================================
     // Manual replacements - for specific cases that need special handling

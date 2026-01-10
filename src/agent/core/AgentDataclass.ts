@@ -190,16 +190,13 @@ const normalizeAgentSettingInput = (input: unknown): unknown => {
     return input;
   }
   const obj = input as Record<string, unknown>;
-  if (obj.agentCategory === undefined) {
-    return {
-      ...obj,
-      agentCategory:
-        obj.agentType === AgentType.ToolUse
-          ? AgentCategory.ToolUse
-          : AgentCategory.Workflow,
-    };
+  if (obj.agentCategory !== undefined) {
+    return input;
   }
-  return input;
+  return {
+    ...obj,
+    agentCategory: deriveAgentCategory(obj.agentType as AgentType | undefined),
+  };
 };
 
 /**

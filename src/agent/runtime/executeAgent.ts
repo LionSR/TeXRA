@@ -70,7 +70,7 @@ import { END_GROUP_STATUS, type EndGroupStatus } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { updateQueuedFollowUpsUI } from '@progressView/utils/updateQueuedFollowUps';
 import { TaskRunFileService } from '@utils/files';
-import { agentConfigToTaskState } from '@utils/config';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { getStreamTabId } from '@/logger/streamUtils';
@@ -622,7 +622,7 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  // Caller (mergeCommands.ts) handles error display via showLoggedErrorMessage
+  // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
   const ctx = await resolveAgentBase('merge', {
     agent: 'merge',
     model,

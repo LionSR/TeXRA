@@ -21,12 +21,11 @@ function mapsToRecords(value: unknown, depth: number): unknown {
   if (depth <= 0 || !(value instanceof Map)) {
     return value;
   }
-  return Object.fromEntries(
-    Array.from((value as Map<unknown, unknown>).entries(), ([k, v]) => [
-      String(k),
-      mapsToRecords(v, depth - 1),
-    ]),
-  );
+  const entries: [string, unknown][] = [];
+  for (const [k, v] of value) {
+    entries.push([String(k), mapsToRecords(v, depth - 1)]);
+  }
+  return Object.fromEntries(entries);
 }
 
 /**

@@ -27,6 +27,17 @@ function logRefreshError(error: unknown, context: string): void {
 }
 
 /**
+ * Post options to webview. Synchronous since we don't handle postMessage result.
+ */
+function postOptionsToWebview(
+  webview: vscode.WebviewView,
+  command: string,
+  options: unknown,
+): void {
+  webview.webview.postMessage({ command, options });
+}
+
+/**
  * Registers main view commands for the extension
  * @param context - The VS Code extension context
  * @returns Object containing the registered commands
@@ -36,18 +47,16 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
     mainViewCommands.reset,
     async () => {
       const webviewView = await getMainWebview(CHANNEL);
-
-      if (webviewView) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state: {},
-        });
-      } else {
-        // Log warning when webview is not available
+      if (!webviewView) {
         vscode.window.showWarningMessage(
           'Main view is not available. Please ensure the TeXRA view is open.',
         );
+        return;
       }
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+        state: {},
+      });
     },
   );
 
@@ -62,10 +71,11 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
 
       try {
         const options = await computeModelOptions();
-        webview.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+        postOptionsToWebview(
+          webview,
+          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
           options,
-        });
+        );
       } catch (error) {
         logRefreshError(error, 'refresh model options');
       }
@@ -82,13 +92,13 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
       if (!webview) return;
 
       try {
-        // Reload agent index to pick up config changes
         await refresh();
         const options = await computeAgentOptions();
-        webview.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        postOptionsToWebview(
+          webview,
+          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
           options,
-        });
+        );
       } catch (error) {
         logRefreshError(error, 'refresh agent options');
       }
@@ -106,21 +116,21 @@ export function registerMainViewCommands(context: vscode.ExtensionContext) {
       if (!webview) return;
 
       try {
-        // Reload agent index first, then compute both in parallel
         await refresh();
         const [modelOptions, agentOptions] = await Promise.all([
           computeModelOptions(),
           computeAgentOptions(),
         ]);
-
-        webview.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          options: modelOptions,
-        });
-        webview.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-          options: agentOptions,
-        });
+        postOptionsToWebview(
+          webview,
+          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          modelOptions,
+        );
+        postOptionsToWebview(
+          webview,
+          MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          agentOptions,
+        );
       } catch (error) {
         logRefreshError(error, 'refresh options');
       }

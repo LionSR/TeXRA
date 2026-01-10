@@ -161,7 +161,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const onRoundFinalized = this.services.getUsageRecorder();
 
     try {
-      // === NATIVE NESTING: Populate cycle fields directly on shared ===
+      // Initialize cycle fields for native nesting
       shared.messages = initializedMessages;
       shared.outputLocation = prepRes.outputLocation;
       shared.endTurn = false;

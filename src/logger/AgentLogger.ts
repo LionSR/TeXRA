@@ -28,17 +28,29 @@ import type {
 import type { LogOptions } from './logOptions';
 
 /**
+ * Context management actions that can be logged.
+ * - compaction: OpenAI conversation compaction
+ * - clear_tool_uses: Anthropic server-side tool use clearing
+ * - clear_thinking: Anthropic server-side thinking clearing
+ * - truncation: Generic message/context truncation
+ * - max_tokens_reduced: Max output tokens reduced due to context pressure
+ */
+export const ContextManagementAction = z.enum([
+  'compaction',
+  'clear_tool_uses',
+  'clear_thinking',
+  'truncation',
+  'max_tokens_reduced',
+]);
+export type ContextManagementAction = z.infer<typeof ContextManagementAction>;
+
+/**
  * Context management event data for logging compaction, truncation, etc.
  * Schema-first definition following project conventions (CLAUDE.md).
  */
 export const ContextManagementDataSchema = z.object({
   /** Type of context management action */
-  action: z.enum([
-    'compaction',
-    'clear_tool_uses',
-    'clear_thinking',
-    'truncation',
-  ]),
+  action: ContextManagementAction,
   /** Tokens before the action */
   tokensBefore: z.number().nonnegative(),
   /** Tokens after the action (if known) */
@@ -51,6 +63,10 @@ export const ContextManagementDataSchema = z.object({
   utilizationAfter: z.number().nonnegative().optional(),
   /** Provider-specific details */
   details: z.string().optional(),
+  /** Original max tokens before reduction (for max_tokens_reduced action) */
+  originalMaxTokens: z.number().positive().optional(),
+  /** Reduced max tokens after adjustment (for max_tokens_reduced action) */
+  reducedMaxTokens: z.number().positive().optional(),
 });
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
@@ -218,56 +234,38 @@ export class AgentLogger {
     logger.initialize(this.channelId, this.isAgentLogger);
   }
 
-  /**
-   * Log a debug message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Internal helper to log at any level with consistent options handling. */
+  private log(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    options: LogOptions = {},
+  ): void {
+    logger[level](this.channelId, message, {
+      groupId: options.groupId ?? this.resolveActiveGroupId(),
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
+  }
+
+  /** Log a debug message. Falls back to current group ID if not specified. */
   debug(message: string, options: LogOptions = {}): void {
-    logger.debug(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('debug', message, options);
   }
 
-  /**
-   * Log an info message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log an info message. Falls back to current group ID if not specified. */
   info(message: string, options: LogOptions = {}): void {
-    logger.info(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('info', message, options);
   }
 
-  /**
-   * Log a warning message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log a warning message. Falls back to current group ID if not specified. */
   warn(message: string, options: LogOptions = {}): void {
-    logger.warn(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('warn', message, options);
   }
 
-  /**
-   * Log an error message with options object.
-   * Falls back to current group ID from AsyncLocalStorage if not specified.
-   */
+  /** Log an error message. Falls back to current group ID if not specified. */
   error(message: string, options: LogOptions = {}): void {
-    logger.error(this.channelId, message, {
-      groupId: options.groupId ?? this.resolveActiveGroupId(),
-      messageType: options.messageType,
-      isAgent: this.isAgentLogger,
-      data: options.data,
-    });
+    this.log('error', message, options);
   }
 
   /**
@@ -421,11 +419,7 @@ export class AgentLogger {
    */
   fileList(files: FileListEntry[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.info(summary, {
-      groupId,
-      messageType: MESSAGE_TYPES.FILE_LIST,
-      data: files,
-    });
+    this.logFileListData(summary, files, groupId);
   }
 
   /**
@@ -453,10 +447,19 @@ export class AgentLogger {
       sourceDisplay: category,
     }));
 
+    this.logFileListData(summary, entries, groupId);
+  }
+
+  /** Internal helper for FILE_LIST logging - shared by fileList and logFileCategory */
+  private logFileListData(
+    summary: string,
+    files: FileListEntry[],
+    groupId?: string,
+  ): void {
     this.info(summary, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
-      data: entries,
+      data: files,
     });
   }
 
@@ -464,13 +467,9 @@ export class AgentLogger {
    * Log missing output information.
    */
   missingOutputs(info: unknown, groupId?: string): void {
-    const missing =
-      typeof info === 'object' && info !== null && 'missing' in info
-        ? (info as { missing?: unknown[] }).missing
-        : undefined;
-    const count = missing?.length ?? 0;
-    const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
-    this.info(summary, {
+    const missing = (info as { missing?: unknown[] } | null)?.missing;
+    const count = Array.isArray(missing) ? missing.length : 0;
+    this.info(`${count} output file${count === 1 ? '' : 's'} missing`, {
       groupId,
       messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
       data: info,
@@ -511,14 +510,6 @@ export class AgentLogger {
     });
   }
 
-  /**
-   * Returns the currently active group ID, or undefined if no group is active.
-   * Convenience method to avoid the `withCurrentGroup((id) => id)` boilerplate.
-   */
-  getCurrentGroupId(): string | undefined {
-    return this.resolveActiveGroupId();
-  }
-
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
     const groupId = this.resolveActiveGroupId();
     if (!groupId) {
@@ -537,14 +528,14 @@ export class AgentLogger {
     fn: () => Promise<T> | T,
   ): Promise<T> {
     if (!groupId) {
-      return Promise.resolve(fn());
+      return fn();
     }
 
     return logger.runWithGroupContext(
       this.channelId,
       groupId,
       this.isAgentLogger,
-      async () => await fn(),
+      fn,
     );
   }
 

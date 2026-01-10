@@ -92,12 +92,11 @@ export class AgentHistoryManager {
     normalized: AgentHistoryItem[];
     mutated: boolean;
   } {
-    let mutated = false;
+    let hasLegacyEntries = false;
     const normalized: AgentHistoryItem[] = [];
 
     for (const rawEntry of entries) {
       if (!rawEntry || typeof rawEntry !== 'object') {
-        mutated = true;
         continue;
       }
 
@@ -111,20 +110,18 @@ export class AgentHistoryManager {
 
       const rawConfig = candidate.agentConfig || candidate.config;
       if (!candidate.id || !candidate.timestamp || !rawConfig) {
-        mutated = true;
         continue;
       }
 
-      // Legacy entries use 'config' field; mark for persistence with new 'agentConfig' field
+      // Track legacy entries that need migration
       if (candidate.config && !candidate.agentConfig) {
-        mutated = true;
+        hasLegacyEntries = true;
       }
 
       let normalizedConfig: AgentConfig;
       try {
         normalizedConfig = AgentConfigSchema.parse(rawConfig);
       } catch (error) {
-        mutated = true;
         logger.warn(CHANNEL, 'Discarding malformed agent history entry', {
           data: error,
         });
@@ -132,7 +129,6 @@ export class AgentHistoryManager {
       }
 
       if (!normalizedConfig.session) {
-        mutated = true;
         continue;
       }
 
@@ -143,10 +139,7 @@ export class AgentHistoryManager {
       });
     }
 
-    if (normalized.length !== entries.length) {
-      mutated = true;
-    }
-
+    const mutated = hasLegacyEntries || normalized.length !== entries.length;
     return { normalized, mutated };
   }
 
@@ -183,18 +176,13 @@ export class AgentHistoryManager {
    */
   public static async deleteHistoryItemById(id: string): Promise<boolean> {
     const history = await this.getHistory();
-    const initialLength = history.length;
-
-    // Filter out the item to delete
     const filteredHistory = history.filter((item) => item.id !== id);
 
-    if (filteredHistory.length !== initialLength) {
-      // Item was found and removed
-      await this.saveHistory(filteredHistory);
-      return true;
+    if (filteredHistory.length === history.length) {
+      return false;
     }
 
-    // Item was not found
-    return false;
+    await this.saveHistory(filteredHistory);
+    return true;
   }
 }

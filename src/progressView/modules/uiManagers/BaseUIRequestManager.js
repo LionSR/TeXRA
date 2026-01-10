@@ -148,6 +148,16 @@ export class BaseUIRequestManager {
   }
 
   /**
+   * Check if the agent requirement is satisfied.
+   * Returns true if tool agent is not required or if tool agent is active.
+   * @protected
+   * @returns {boolean}
+   */
+  _meetsAgentRequirement() {
+    return !this._config.requireToolAgent || this.isToolAgentActive;
+  }
+
+  /**
    * Toggle container visibility based on entries.
    * @protected
    */
@@ -156,11 +166,7 @@ export class BaseUIRequestManager {
       return;
     }
     const hasVisibleEntries = this.list.children.length > 0;
-    // Only require tool agent check if configured (default true for backward compat)
-    const agentCheck = this._config.requireToolAgent
-      ? this.isToolAgentActive
-      : true;
-    const shouldShow = agentCheck && hasVisibleEntries;
+    const shouldShow = this._meetsAgentRequirement() && hasVisibleEntries;
     setVisibilityState(this.container, shouldShow);
   }
 
@@ -174,12 +180,9 @@ export class BaseUIRequestManager {
     }
 
     const activeStream = this.activeStream;
-    // Only require tool agent check if configured (default true for backward compat)
-    const agentCheck = this._config.requireToolAgent
-      ? this.isToolAgentActive
-      : true;
     const shouldDisplay =
-      agentCheck && Boolean(activeStream && activeStream.length);
+      this._meetsAgentRequirement() &&
+      Boolean(activeStream && activeStream.length);
 
     const fragment = document.createDocumentFragment();
     for (const entry of this.requests.values()) {

@@ -1,3 +1,6 @@
+// Local imports - common
+import { globalSM, GlobalStateKey } from '@common/state/stateManager';
+
 // Local imports - config utils
 import * as logger from '@logger/logUtils';
 import { getConfig } from './configUtils';
@@ -66,7 +69,7 @@ export const DEBOUNCE_STATE_SAVE_MS = 500; // State persistence (slower, batched
 
 // Tool-use persistence defaults
 export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
-export const DEFAULT_TOOL_USE_MEMORY_ENABLED = false;
+export const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 // Retry defaults
 // Default to 0 automatic retries - users must click retry button
@@ -98,10 +101,17 @@ export function getToolUsePersistenceTtlHours(): number {
 
 /** Determine whether the memory tool is enabled for tool-use sessions. */
 export function getToolUseMemoryEnabled(): boolean {
-  return getConfig<boolean>(
-    'texra.toolUse.memory.enabled',
-    DEFAULT_TOOL_USE_MEMORY_ENABLED,
+  return (
+    globalSM?.get<boolean>(
+      GlobalStateKey.MEMORY_ENABLED,
+      DEFAULT_TOOL_USE_MEMORY_ENABLED,
+    ) ?? DEFAULT_TOOL_USE_MEMORY_ENABLED
   );
+}
+
+/** Set whether the memory tool is enabled for tool-use sessions. */
+export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
+  await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
 export function getModelRetryMaxAttempts(): number {

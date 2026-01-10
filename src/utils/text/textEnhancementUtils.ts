@@ -58,39 +58,38 @@ export interface FileContext {
 export function buildFileContextFromTaskState(
   taskState: TaskState,
 ): FileContext {
-  const context: FileContext = {};
   const { agentConfig } = taskState;
 
-  if (agentConfig.agent) {
-    context.agent = agentConfig.agent;
-  }
-
-  const assignString = (
-    value: string | null | undefined,
-    key: keyof FileContext,
-  ) => {
-    if (isNonEmptyString(value)) {
-      (context[key] as string) = value;
-    }
+  return {
+    ...(agentConfig.agent && { agent: agentConfig.agent }),
+    ...(isNonEmptyString(agentConfig.inputFile) && {
+      inputFile: agentConfig.inputFile,
+    }),
+    ...(agentConfig.inputFiles.length > 0 && {
+      inputFiles: agentConfig.inputFiles,
+    }),
+    ...(isNonEmptyString(agentConfig.referenceFile) && {
+      referenceFile: agentConfig.referenceFile,
+    }),
+    ...(agentConfig.referenceFiles.length > 0 && {
+      referenceFiles: agentConfig.referenceFiles,
+    }),
+    ...(isNonEmptyString(agentConfig.auxiliaryFile) && {
+      auxiliaryFile: agentConfig.auxiliaryFile,
+    }),
+    ...(agentConfig.auxiliaryFiles.length > 0 && {
+      auxiliaryFiles: agentConfig.auxiliaryFiles,
+    }),
+    ...(isNonEmptyString(agentConfig.mediaFile) && {
+      mediaFile: agentConfig.mediaFile,
+    }),
+    ...(agentConfig.mediaFiles.length > 0 && {
+      mediaFiles: agentConfig.mediaFiles,
+    }),
+    ...(agentConfig.outputFiles.length > 0 && {
+      outputFiles: agentConfig.outputFiles,
+    }),
   };
-
-  const assignArray = (value: string[], key: keyof FileContext) => {
-    if (value.length > 0) {
-      (context[key] as string[]) = value;
-    }
-  };
-
-  assignString(agentConfig.inputFile, 'inputFile');
-  assignArray(agentConfig.inputFiles, 'inputFiles');
-  assignString(agentConfig.referenceFile, 'referenceFile');
-  assignArray(agentConfig.referenceFiles, 'referenceFiles');
-  assignString(agentConfig.auxiliaryFile, 'auxiliaryFile');
-  assignArray(agentConfig.auxiliaryFiles, 'auxiliaryFiles');
-  assignString(agentConfig.mediaFile, 'mediaFile');
-  assignArray(agentConfig.mediaFiles, 'mediaFiles');
-  assignArray(agentConfig.outputFiles, 'outputFiles');
-
-  return context;
 }
 
 /**
@@ -112,59 +111,58 @@ export async function polishTextWithAI(
     // Build file context string if available
     let fileContextString = '';
     if (fileContext) {
-      fileContextString = 'Current context:\n';
+      const lines: string[] = ['Current context:'];
 
-      // Add agent and model information
       if (fileContext.agent) {
-        fileContextString += `Agent: ${fileContext.agent}\n`;
+        lines.push(`Agent: ${fileContext.agent}`);
       }
 
-      // Add files section header if there are any files
-      const hasFiles =
-        !!fileContext.inputFile ||
-        (fileContext.inputFiles?.length ?? 0) > 0 ||
-        !!fileContext.referenceFile ||
-        (fileContext.referenceFiles?.length ?? 0) > 0 ||
-        !!fileContext.auxiliaryFile ||
-        (fileContext.auxiliaryFiles?.length ?? 0) > 0 ||
-        !!fileContext.mediaFile ||
-        (fileContext.mediaFiles?.length ?? 0) > 0 ||
-        (fileContext.outputFiles?.length ?? 0) > 0;
+      const fileEntries: Array<{ label: string; value: string }> = [];
 
-      if (hasFiles) {
-        fileContextString += '\nFiles in the task:\n';
+      if (fileContext.inputFile) {
+        fileEntries.push({ label: 'Input File', value: fileContext.inputFile });
+      }
+      if (fileContext.referenceFile) {
+        fileEntries.push({
+          label: 'Reference File',
+          value: fileContext.referenceFile,
+        });
+      }
+      if (fileContext.auxiliaryFile) {
+        fileEntries.push({
+          label: 'Auxiliary File',
+          value: fileContext.auxiliaryFile,
+        });
+      }
+      if (fileContext.mediaFile) {
+        fileEntries.push({
+          label: 'Figure File',
+          value: fileContext.mediaFile,
+        });
+      }
 
-        // Add main input file
-        if (fileContext.inputFile) {
-          fileContextString += `Input File: ${fileContext.inputFile}\n`;
-        }
+      const arrays: Array<[string, string[] | undefined]> = [
+        ['Input Files', fileContext.inputFiles],
+        ['Reference Files', fileContext.referenceFiles],
+        ['Auxiliary Files', fileContext.auxiliaryFiles],
+        ['Media Files', fileContext.mediaFiles],
+        ['Output Files', fileContext.outputFiles],
+      ];
 
-        // Add arrays of files
-        const fileArrays = [
-          { name: 'Input Files', files: fileContext.inputFiles },
-          { name: 'Reference Files', files: fileContext.referenceFiles },
-          { name: 'Auxiliary Files', files: fileContext.auxiliaryFiles },
-          { name: 'Media Files', files: fileContext.mediaFiles },
-          { name: 'Output Files', files: fileContext.outputFiles },
-        ];
-
-        for (const { name, files } of fileArrays) {
-          if (files && files.length > 0) {
-            fileContextString += `${name}: ${files.join(', ')}\n`;
-          }
-        }
-
-        // Add single files
-        if (fileContext.referenceFile) {
-          fileContextString += `Reference File: ${fileContext.referenceFile}\n`;
-        }
-        if (fileContext.auxiliaryFile) {
-          fileContextString += `Auxiliary File: ${fileContext.auxiliaryFile}\n`;
-        }
-        if (fileContext.mediaFile) {
-          fileContextString += `Figure File: ${fileContext.mediaFile}\n`;
+      for (const [label, files] of arrays) {
+        if (files && files.length > 0) {
+          fileEntries.push({ label, value: files.join(', ') });
         }
       }
+
+      if (fileEntries.length > 0) {
+        lines.push('', 'Files in the task:');
+        for (const { label, value } of fileEntries) {
+          lines.push(`${label}: ${value}`);
+        }
+      }
+
+      fileContextString = lines.join('\n');
     }
 
     // Setup the prompt

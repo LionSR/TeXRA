@@ -49,12 +49,20 @@ export class UsageSummary {
   }
 
   /**
+   * Sync footer visibility based on whether context is displayed.
+   * @param {HTMLElement|null} footer - The footer element
+   */
+  _syncFooterVisibility(footer) {
+    if (!footer) return;
+    this._ensureContextElem();
+    footer.hidden = this._contextElem?.hidden !== false;
+  }
+
+  /**
    * Cache the context element if not already cached.
    */
   _ensureContextElem() {
-    if (!this._contextElem) {
-      this._contextElem = document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
-    }
+    this._contextElem ??= document.getElementById(ELEMENT_IDS.CONTEXT_STATE);
   }
 
   /**
@@ -82,18 +90,11 @@ export class UsageSummary {
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
       this._summaryElem.removeAttribute('aria-label');
-      // Only hide footer if context state is also not visible
-      this._ensureContextElem();
-      const contextVisible = this._contextElem?.hidden === false;
-      if (footer && !contextVisible) {
-        footer.hidden = true;
-      }
+      this._syncFooterVisibility(footer);
       return;
     }
 
-    if (footer) {
-      footer.hidden = false;
-    }
+    if (footer) footer.hidden = false;
 
     const formattedInput = formatTokens(inputTokens);
     const formattedOutput = formatTokens(outputTokens);
@@ -134,28 +135,20 @@ export class UsageSummary {
    * @returns {Object} Total usage with inputTokens, outputTokens, cost, and cache token counts
    */
   computeTotal() {
-    const stream = progressViewState.activeStream;
-    const activeRunId = progressViewState.resolveActiveRunId(stream);
-    if (stream && activeRunId) {
-      const usage = progressViewState.getRunUsage(stream, activeRunId);
-      if (usage) {
-        return {
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          cost: usage.cost ?? 0,
-          cacheReadInputTokens: usage.cacheReadInputTokens ?? 0,
-          cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
-        };
-      }
-    }
-
-    return {
+    const emptyUsage = {
       inputTokens: 0,
       outputTokens: 0,
       cost: 0,
       cacheReadInputTokens: 0,
       cacheCreationInputTokens: 0,
     };
+    const stream = progressViewState.activeStream;
+    const activeRunId = stream && progressViewState.resolveActiveRunId(stream);
+    if (!activeRunId) {
+      return emptyUsage;
+    }
+    const usage = progressViewState.getRunUsage(stream, activeRunId);
+    return usage ? { ...emptyUsage, ...usage } : emptyUsage;
   }
 
   /**
@@ -206,12 +199,9 @@ export class UsageSummary {
     this._contextElem.hidden = true;
 
     // Hide footer if usage is also empty
-    const usageEmpty = !this._summaryElem?.textContent;
-    if (usageEmpty) {
+    if (!this._summaryElem?.textContent) {
       const footer = this._getFooter();
-      if (footer) {
-        footer.hidden = true;
-      }
+      if (footer) footer.hidden = true;
     }
   }
 }

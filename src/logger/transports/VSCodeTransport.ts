@@ -11,9 +11,14 @@ import {
 } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
-import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
+import {
+  MESSAGE_TYPES,
+  MessageTypeSchema,
+  type MessageType,
+} from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
-import { getColorForLevel, serializeLogData } from '@logger/utils';
+import { getColorForLevel } from '@logger/utils';
+import { serializeError } from '@utils/core';
 import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
@@ -37,13 +42,11 @@ export class VSCodeTransport extends Transport {
     this.includeStructuredData = options.includeStructuredData;
   }
 
-  private isValidMessageType(type: unknown): type is MessageType {
-    return Object.values(MESSAGE_TYPES).includes(type as MessageType);
-  }
-
   log(info: any, callback: () => void): void {
     const { level, message, timestamp, messageType, groupId } = info;
-    const data = serializeLogData(info.data);
+    // Serialize errors for logging (inline from serializeLogData)
+    const data =
+      info.data instanceof Error ? serializeError(info.data) : info.data;
 
     this.writeToChannel(level, message, timestamp, data);
     this.emitLogEvent({
@@ -90,15 +93,10 @@ export class VSCodeTransport extends Transport {
     structuredData: unknown,
   ): void {
     const emoji = getColorForLevel(level);
-    const channelPrefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
-    const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
-    this.channel.appendLine(formattedMessage);
+    const prefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
+    this.channel.appendLine(`${emoji} [${timestamp}] ${prefix}${message}`);
 
-    if (
-      structuredData !== undefined &&
-      structuredData !== null &&
-      this.includeStructuredData?.()
-    ) {
+    if (structuredData != null && this.includeStructuredData?.()) {
       const dataString =
         typeof structuredData === 'string'
           ? structuredData
@@ -122,68 +120,65 @@ export class VSCodeTransport extends Transport {
   }): void {
     if (!this.isAgentChannel) return;
 
-    const validatedMessageType: MessageType = this.isValidMessageType(
+    // Use Zod schema with .catch() for O(1) validation with automatic fallback
+    const messageType = MessageTypeSchema.catch(MESSAGE_TYPES.DEFAULT).parse(
       event.messageType,
-    )
-      ? event.messageType
-      : MESSAGE_TYPES.DEFAULT;
+    );
 
     const level = event.level as 'debug' | 'info' | 'warn' | 'error';
-    const { shouldEmit, debugMode } = getEmitFilter({
-      level,
-      messageType: validatedMessageType,
-    });
+    const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
     if (!shouldEmit) return;
-
-    const logMessage: LogMessageData = {
-      id: randomUUID(),
-      text: event.message,
-      level,
-      timestamp: new Date(event.timestamp).getTime(),
-      groupId: event.groupId,
-      messageType: validatedMessageType,
-      verbose: debugMode,
-      data: event.data,
-    };
 
     bus.emit('addLogMessage', {
       stream: this.streamName,
-      logMessage,
+      logMessage: {
+        id: randomUUID(),
+        text: event.message,
+        level,
+        timestamp: new Date(event.timestamp).getTime(),
+        groupId: event.groupId,
+        messageType,
+        verbose: debugMode,
+        data: event.data,
+      },
     });
 
-    // Emit context state update for CONTEXT_MANAGEMENT messages
-    if (
-      validatedMessageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
-      event.data
-    ) {
-      // Validate using Zod schema at system boundary (CLAUDE.md schema-first approach)
-      const parseResult = ContextManagementDataSchema.safeParse(event.data);
-      if (!parseResult.success) {
-        return; // Skip invalid context data
+    this.maybeEmitContextState(messageType, event.data);
+  }
+
+  /**
+   * Parse and emit context state for CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
+   * Each message type uses a different schema and derivation logic.
+   */
+  private maybeEmitContextState(messageType: MessageType, data: unknown): void {
+    if (!data) return;
+
+    switch (messageType) {
+      case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
+        const parseResult = ContextManagementDataSchema.safeParse(data);
+        if (!parseResult.success) return;
+
+        const contextData = parseResult.data;
+        const inputTokens =
+          contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
+        const utilizationPercent =
+          contextData.utilizationAfter ??
+          (inputTokens / contextData.contextWindow) * 100;
+
+        this.emitContextState({
+          inputTokens,
+          contextWindow: contextData.contextWindow,
+          utilizationPercent,
+        });
+        break;
       }
+      case MESSAGE_TYPES.CONTEXT_STATE: {
+        const parseResult = ContextStateDataSchema.safeParse(data);
+        if (!parseResult.success) return;
 
-      const contextData = parseResult.data;
-      const inputTokens =
-        contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
-      const utilizationPercent =
-        contextData.utilizationAfter ??
-        (inputTokens / contextData.contextWindow) * 100;
-
-      this.emitContextState({
-        inputTokens,
-        contextWindow: contextData.contextWindow,
-        utilizationPercent,
-      });
-    }
-
-    // Emit context state update for CONTEXT_STATE messages (from token counting)
-    if (validatedMessageType === MESSAGE_TYPES.CONTEXT_STATE && event.data) {
-      const parseResult = ContextStateDataSchema.safeParse(event.data);
-      if (!parseResult.success) {
-        return; // Skip invalid context state data
+        this.emitContextState(parseResult.data);
+        break;
       }
-
-      this.emitContextState(parseResult.data);
     }
   }
 

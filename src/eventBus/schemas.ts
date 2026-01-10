@@ -3,6 +3,7 @@
  * Types are derived from schemas for single source of truth.
  */
 import { z } from 'zod';
+import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import {
   StreamTabIdSchema,
   ExecutionIdSchema,
@@ -13,6 +14,7 @@ import {
   type TaskGroupStatus,
 } from '@common/constants/streamStatus';
 import { TaskGroupSchema } from '@logger/LogTypes';
+import { TaskStateSchema, type TaskState } from '@logger/TaskState';
 
 /**
  * Re-export from types.ts to break circular dependency:
@@ -58,19 +60,19 @@ export const RunScopedPayloadSchema = z.strictObject({
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
 
-/**
- * Todo status constants - single source of truth for todo item states.
- * Used by tool-use agents for task tracking.
- */
+/** Todo status values - single source of truth for todo item states. */
+const todoStatusValues = ['pending', 'in_progress', 'completed'] as const;
+
+/** Todo status constants for programmatic access. */
 export const TODO_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
-} as const;
+} as const satisfies Record<string, (typeof todoStatusValues)[number]>;
 
 /** Status of a todo item */
 export const TodoStatusSchema = z
-  .enum([TODO_STATUS.PENDING, TODO_STATUS.IN_PROGRESS, TODO_STATUS.COMPLETED])
+  .enum(todoStatusValues)
   .describe('Current status of the task');
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 
@@ -95,3 +97,36 @@ export const UpdateTodosPayloadSchema = z.strictObject({
   todos: z.array(TodoItemSchema),
 });
 export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
+
+// =============================================================================
+// Stream State Payloads
+// =============================================================================
+
+/** Payload for setting the active stream with optional session metadata */
+export const SetActiveStreamPayloadSchema = z.strictObject({
+  stream: StreamTabIdSchema.nullable(),
+  session: AgentSessionDescriptorSchema.nullish(),
+  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  isRemote: z.boolean().optional(),
+  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
+  hasMultipleOutputs: z.boolean().optional(),
+});
+export type SetActiveStreamPayload = z.infer<
+  typeof SetActiveStreamPayloadSchema
+>;
+
+/**
+ * Payload for setting task state on a stream.
+ *
+ * TaskStateSchema uses looseObject for validation efficiency (only validates
+ * discriminator fields), while the full TaskState type has all AgentConfig fields.
+ * We use pipe() to validate structure then cast to the full type, preserving
+ * error messages from the underlying schema.
+ */
+export const SetTaskStatePayloadSchema = z.strictObject({
+  streamTabId: StreamTabIdSchema,
+  executionId: ExecutionIdSchema.optional(),
+  // Validate with TaskStateSchema, then cast output to full TaskState type
+  taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),
+});
+export type SetTaskStatePayload = z.infer<typeof SetTaskStatePayloadSchema>;

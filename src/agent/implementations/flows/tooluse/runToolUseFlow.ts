@@ -161,12 +161,17 @@ export async function runToolUseFlow<C = unknown>(
     try {
       const kv = getExecutionStore(executionId);
       const flowRecord = await kv.read<FlowRecord>(`flow:${executionId}`);
-      const sharedState = flowRecord?.shared as { state?: { userCancelledRetry?: boolean } } | undefined;
-      const userCancelledRetry = sharedState?.state?.userCancelledRetry === true;
+      const sharedState = flowRecord?.shared as
+        | { state?: { userCancelledRetry?: boolean } }
+        | undefined;
+      const userCancelledRetry =
+        sharedState?.state?.userCancelledRetry === true;
 
       if (userCancelledRetry) {
         // Preserve flow record for resume - user can continue from last successful breakpoint
-        logger.debug('Flow record preserved after retry cancellation for resume capability');
+        logger.debug(
+          'Flow record preserved after retry cancellation for resume capability',
+        );
       } else {
         await kv.delete(`flow:${executionId}`);
       }

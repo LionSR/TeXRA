@@ -64,6 +64,10 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
+import {
+  computeReducedMaxTokens,
+  HEURISTIC_TOKEN_BUFFER,
+} from './contextManagementConstants';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
@@ -217,11 +221,6 @@ export class ModelHandlerOpenAI<
       this.logger.debug(
         `Approximate token count of message: ${approximateInputTokens}`,
       );
-      // Emit context state for UI display
-      this.logger.logContextState(
-        approximateInputTokens,
-        this.config.contextWindow,
-      );
 
       if (approximateInputTokens > this.config.contextWindow) {
         const errorMsg = `Approximate token count of message exceeds context window: ${approximateInputTokens} > ${this.config.contextWindow}`;
@@ -237,25 +236,31 @@ export class ModelHandlerOpenAI<
         this.config.contextWindow - approximateInputTokens;
       const currentMax = baseParams[maxOutputKey];
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
-        const TOKEN_BUFFER = 5000;
-        const MIN_COMPLETION_TOKENS = 100;
+        const utilizationPercent =
+          (approximateInputTokens / this.config.contextWindow) * 100;
+        const reducedMaxTokens = computeReducedMaxTokens(
+          availableTokens,
+          HEURISTIC_TOKEN_BUFFER,
+        );
+        baseParams[maxOutputKey] = reducedMaxTokens;
 
-        if (availableTokens <= 0) {
-          baseParams[maxOutputKey] = 1;
-          this.logger.warn(
-            `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to 1 token.`,
-          );
-        } else {
-          const adjustedWithBuffer = Math.max(
-            MIN_COMPLETION_TOKENS,
-            availableTokens - TOKEN_BUFFER,
-          );
-          const adjusted = Math.min(availableTokens, adjustedWithBuffer);
-          baseParams[maxOutputKey] = adjusted;
-          this.logger.warn(
-            `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${adjusted}.`,
-          );
-        }
+        const isOverflow = availableTokens <= 0;
+        const detailsMsg = isOverflow
+          ? `OpenAI: ${maxOutputKey} forced to 1 due to context overflow`
+          : `OpenAI: ${maxOutputKey} reduced to fit context window`;
+        const logMsg = isOverflow
+          ? `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to ${reducedMaxTokens} token.`
+          : `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${reducedMaxTokens}.`;
+
+        this.logger.logContextManagement(logMsg, {
+          action: 'max_tokens_reduced',
+          tokensBefore: approximateInputTokens,
+          contextWindow: this.config.contextWindow,
+          utilizationBefore: utilizationPercent,
+          originalMaxTokens: currentMax,
+          reducedMaxTokens,
+          details: detailsMsg,
+        });
       }
     } catch (err) {
       // Re-throw context window violations - these are intentional validation errors
@@ -276,11 +281,7 @@ export class ModelHandlerOpenAI<
     finalResponse: ChatCompletion,
   ): void {
     const finalReasoning = this.processThinkingBlock(finalResponse);
-    if (finalReasoning === null) {
-      thinking.finalize();
-    } else {
-      thinking.finalize(finalReasoning);
-    }
+    thinking.finalize(finalReasoning ?? undefined);
 
     const finalOutput = finalResponse.choices?.[0]?.message?.content ?? '';
     output?.finalize(finalOutput);
@@ -674,23 +675,19 @@ export class ModelHandlerOpenAI<
         this.config.capabilities.supportsNativeAudio
       ) {
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
-        let audioFormat = media.media_type;
-        if (media.media_type.includes('/')) {
-          audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
+        // Extract format from mime type (e.g., 'wav' from 'audio/wav')
+        const audioFormat = (
+          media.media_type.split('/').pop() ?? media.media_type
+        ).toLowerCase();
+        const supportedFormats = ['wav', 'mp3'] as const;
+
+        if (!supportedFormats.includes(audioFormat as (typeof supportedFormats)[number])) {
+          throw new Error(
+            `Unsupported audio format "${audioFormat}". Valid formats: ${supportedFormats.join(', ')}`,
+          );
         }
 
-        type SupportedAudioFormat = 'wav' | 'mp3';
-        const normalizedAudioFormat = audioFormat.toLowerCase();
-        const supportedFormats = new Set<SupportedAudioFormat>(['wav', 'mp3']);
-        if (
-          !supportedFormats.has(normalizedAudioFormat as SupportedAudioFormat)
-        ) {
-          const errorMessage = `Unsupported audio format "${audioFormat}" for audio generation. Valid formats are: wav, mp3.`;
-          this.logger.error(errorMessage);
-          throw new Error(errorMessage);
-        }
-
-        const typedAudioFormat = normalizedAudioFormat as SupportedAudioFormat;
+        const typedAudioFormat = audioFormat as 'wav' | 'mp3';
 
         const audioContent: ChatCompletionContentPartInputAudio = {
           type: 'input_audio',
@@ -869,22 +866,17 @@ export class ModelHandlerOpenAI<
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
+      const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: PseudoPrefillMsgContentString,
-        });
+        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
       } else if (lastMessage && typeof lastMessage.content === 'string') {
         lastMessage.content = [
           { type: 'text', text: lastMessage.content },
-          { type: 'text', text: PseudoPrefillMsgContentString },
+          { type: 'text', text: pseudoPrefillMsg },
         ];
       }
-      this.logger.debug(
-        `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
-      );
+      this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
       return [endTurn, messages];
     }
 
@@ -927,8 +919,8 @@ export class ModelHandlerOpenAI<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    // Note: workspace state already updated above (lines 885-886)
     // Only need to handle case where prefill needs to be prepended
+    // (workspace state was already updated above with file content)
     if (!fileContent.includes(prefill)) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(

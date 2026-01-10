@@ -21,6 +21,7 @@ import {
   safeSetElementChecked,
   setChevronIcon,
   setElementDisabled,
+  setElementCheckedState,
   isSelectLikeElement,
   getSelectOptionElements,
   setExpandedState,
@@ -40,7 +41,7 @@ function getSessionDefaultAgent(sessionType) {
 
 function getDefaultState() {
   return {
-    sessionType: SESSION_TYPES.WORKFLOW,
+    sessionType: SESSION_TYPES.TOOL_USE,
     workflowAgent: getSelectDefaultValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       DEFAULT_WORKFLOW_AGENT,
@@ -54,6 +55,19 @@ function getDefaultState() {
   };
 }
 
+const INTERACTIVE_ELEMENT_SELECTORS = [
+  'select',
+  'button',
+  'input',
+  'vscode-button',
+  'vscode-toolbar-button',
+  'vscode-single-select',
+  'vscode-textarea',
+  'vscode-textfield',
+  'vscode-checkbox',
+  'vscode-radio',
+].join(', ');
+
 function setFileSelectionGroupDisabled(isDisabled) {
   const container = document.querySelector('.file-selection-group');
   if (!(container instanceof HTMLElement)) {
@@ -61,29 +75,14 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   container.classList.toggle('file-selection-group--disabled', isDisabled);
-  if (isDisabled) {
-    container.setAttribute('aria-disabled', 'true');
-  } else {
-    container.removeAttribute('aria-disabled');
-  }
+  container.toggleAttribute('aria-disabled', isDisabled);
 
   const interactiveElements = container.querySelectorAll(
-    [
-      'select',
-      'button',
-      'input',
-      'vscode-button',
-      'vscode-toolbar-button',
-      'vscode-single-select',
-      'vscode-textarea',
-      'vscode-textfield',
-      'vscode-checkbox',
-      'vscode-radio',
-    ].join(', '),
+    INTERACTIVE_ELEMENT_SELECTORS,
   );
-  interactiveElements.forEach((element) => {
-    setElementDisabled(element, isDisabled);
-  });
+  interactiveElements.forEach((element) =>
+    setElementDisabled(element, isDisabled),
+  );
 }
 
 function getSelectDefaultValue(selectId, fallback) {
@@ -99,6 +98,20 @@ function getSelectDefaultValue(selectId, fallback) {
     }
   }
   return fallback;
+}
+
+/**
+ * Set latexdiffs section visibility with consistent chevron and aria updates.
+ * @param {boolean} visible - Whether the section should be visible
+ */
+function setLatexdiffsVisible(visible) {
+  const content = safeGetElementById(ELEMENT_IDS.LATEXDIFFS_CONTENT);
+  const toggle = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
+  if (content && toggle) {
+    content.style.display = visible ? 'block' : 'none';
+    setChevronIcon(toggle, visible);
+    setExpandedState(content, '.latexdiffs-section', visible);
+  }
 }
 
 /**
@@ -154,7 +167,7 @@ export class MainViewState {
 
   /** Initialize UI with default state */
   setDefaults() {
-    this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
+    this.applySessionType(SESSION_TYPES.TOOL_USE, { skipSave: true });
 
     const workflowAgentDefault = getSelectDefaultValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
@@ -183,15 +196,7 @@ export class MainViewState {
       }
     });
 
-    const latexdiffsContent = safeGetElementById(
-      ELEMENT_IDS.LATEXDIFFS_CONTENT,
-    );
-    const toggleLatexdiffs = safeGetElementById(ELEMENT_IDS.TOGGLE_LATEXDIFFS);
-    if (latexdiffsContent && toggleLatexdiffs) {
-      latexdiffsContent.style.display = 'none';
-      setChevronIcon(toggleLatexdiffs, false);
-    }
-
+    setLatexdiffsVisible(false);
     this.save();
   }
 
@@ -260,18 +265,7 @@ export class MainViewState {
         }
       });
 
-      const latexdiffsContent = safeGetElementById(
-        ELEMENT_IDS.LATEXDIFFS_CONTENT,
-      );
-      const toggleLatexdiffs = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_LATEXDIFFS,
-      );
-      if (latexdiffsContent && toggleLatexdiffs) {
-        const visible = mergedState.latexdiffsVisible ?? false;
-        latexdiffsContent.style.display = visible ? 'block' : 'none';
-        setChevronIcon(toggleLatexdiffs, visible);
-        setExpandedState(latexdiffsContent, '.latexdiffs-section', visible);
-      }
+      setLatexdiffsVisible(mergedState.latexdiffsVisible ?? false);
 
       this.applySessionType(sessionType, { skipSave: true });
       fileList.hideEmpty(MULTIPLE_SELECTIONS);
@@ -358,16 +352,7 @@ export class MainViewState {
           const radioValue =
             radio.dataset.sessionType || radio.getAttribute('value');
           const isActive = radioValue === resolvedSessionType;
-          if ('checked' in radio) {
-            radio.checked = isActive;
-          }
-          if (isActive) {
-            radio.setAttribute('checked', '');
-            radio.setAttribute('aria-checked', 'true');
-          } else {
-            radio.removeAttribute('checked');
-            radio.setAttribute('aria-checked', 'false');
-          }
+          setElementCheckedState(radio, isActive);
         });
       } else {
         const buttons = toggleContainer.querySelectorAll('[data-session-type]');

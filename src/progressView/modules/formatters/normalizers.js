@@ -23,11 +23,27 @@ import yaml from 'yaml';
 import { getBasename } from '@common/pathUtils.js';
 
 /**
+ * Extract trimmed string from primary or fallback source
+ * @param {*} primary - Primary source value
+ * @param {*} fallback - Fallback source value
+ * @returns {string} Trimmed string or empty string
+ */
+function extractString(primary, fallback) {
+  if (typeof primary === 'string' && primary.trim()) {
+    return primary.trim();
+  }
+  if (typeof fallback === 'string' && fallback.trim()) {
+    return fallback.trim();
+  }
+  return '';
+}
+
+/**
  * Convert a value to a display-friendly string
  * @param {*} value - Value to stringify
  * @returns {string} Display string
  */
-export const stringifyForDisplay = (value) => {
+export function stringifyForDisplay(value) {
   if (value === undefined || value === null) {
     return '';
   }
@@ -37,29 +53,32 @@ export const stringifyForDisplay = (value) => {
   }
 
   try {
-    const yamlString = yaml.stringify(value);
+    const yamlString = yaml.stringify(value, {
+      lineWidth: 0, // Disable line wrapping to avoid block scalar indicators
+      blockQuote: false, // Prefer inline strings over block scalars
+    });
     return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
-  } catch (error) {
+  } catch {
     return String(value);
   }
-};
+}
 
 /**
  * Try to parse a string as JSON
  * @param {string} text - Text to parse
  * @returns {object|null} Parsed JSON or null
  */
-export const tryParseJson = (text) => {
+export function tryParseJson(text) {
   if (!text || typeof text !== 'string') {
     return null;
   }
 
   try {
     return JSON.parse(text);
-  } catch (error) {
+  } catch {
     return null;
   }
-};
+}
 
 /**
  * Normalize structured content from text and data
@@ -67,25 +86,21 @@ export const tryParseJson = (text) => {
  * @param {*} data - Optional structured data
  * @returns {{decodedText: string, structured: *}} Normalized payload
  */
-export const normalizeStructuredContent = (text, data) => {
+export function normalizeStructuredContent(text, data) {
   if (data !== undefined) {
-    return {
-      decodedText: '',
-      structured: data,
-    };
+    return { decodedText: '', structured: data };
   }
 
-  // Content is now passed as raw text (no longer HTML-encoded at source)
   const rawText = typeof text === 'string' ? text : '';
   return { decodedText: rawText, structured: tryParseJson(rawText) };
-};
+}
 
 /**
  * Normalize file list entries from structured data
  * @param {Array} structured - Raw file list array
  * @returns {Array|null} Normalized file entries or null
  */
-export const normalizeFileListEntries = (structured) => {
+export function normalizeFileListEntries(structured) {
   if (!Array.isArray(structured)) {
     return null;
   }
@@ -106,28 +121,25 @@ export const normalizeFileListEntries = (structured) => {
       varName: typeof file?.varName === 'string' ? file.varName : '',
     };
   });
-};
+}
 
 /**
  * Normalize missing outputs payload
  * @param {object} structured - Raw missing outputs data
  * @returns {{missing: Array, xmlFile: string|null, documentTag: string|null}|null} Normalized payload
  */
-export const normalizeMissingOutputsPayload = (structured) => {
+export function normalizeMissingOutputsPayload(structured) {
   if (!structured) return null;
+
+  const getNonEmptyString = (val) =>
+    typeof val === 'string' && val ? val : null;
 
   return {
     missing: Array.isArray(structured.missing) ? structured.missing : [],
-    xmlFile:
-      typeof structured.xmlFile === 'string' && structured.xmlFile
-        ? structured.xmlFile
-        : null,
-    documentTag:
-      typeof structured.documentTag === 'string' && structured.documentTag
-        ? structured.documentTag
-        : null,
+    xmlFile: getNonEmptyString(structured.xmlFile),
+    documentTag: getNonEmptyString(structured.documentTag),
   };
-};
+}
 
 /**
  * Ensure input is an array for latexdiff entries.
@@ -136,113 +148,99 @@ export const normalizeMissingOutputsPayload = (structured) => {
  * @param {*} structured - Input to check
  * @returns {Array|null} Input array or null if not an array
  */
-export const ensureLatexdiffArray = (structured) => {
-  if (!Array.isArray(structured)) return null;
-  return structured;
-};
+export function ensureLatexdiffArray(structured) {
+  return Array.isArray(structured) ? structured : null;
+}
+
+/**
+ * Check if value is a non-array object
+ * @param {*} value - Value to check
+ * @returns {boolean} True if non-null, non-array object
+ */
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Extract output content from possibly nested structure
+ * @param {*} candidate - Output candidate value
+ * @returns {*} Extracted output content
+ */
+function extractOutputContent(candidate) {
+  if (!isPlainObject(candidate)) return candidate;
+
+  // Extract nested output, stripping metadata fields
+  const {
+    output,
+    summary,
+    error,
+    isError,
+    diagnostics,
+    userInstruction,
+    ...rest
+  } = candidate;
+  return output !== undefined ? output : rest;
+}
 
 /**
  * Normalize tool use log entry
  * @param {object} structured - Raw tool use data
  * @returns {object|null} Normalized tool use log
  */
-export const normalizeToolUseLog = (structured) => {
-  if (
-    !structured ||
-    typeof structured !== 'object' ||
-    Array.isArray(structured)
-  ) {
-    return null;
-  }
+export function normalizeToolUseLog(structured) {
+  if (!isPlainObject(structured)) return null;
 
-  const parsed = structured;
-  const outputDetails =
-    parsed.output && typeof parsed.output === 'object' && parsed.output !== null
-      ? parsed.output
-      : {};
+  const outputDetails = isPlainObject(structured.output)
+    ? structured.output
+    : {};
+  const summaryText = extractString(structured.summary, outputDetails.summary);
+  const errorText = extractString(structured.error, outputDetails.error);
+  const userInstructionText = extractString(
+    structured.userInstruction,
+    outputDetails.userInstruction,
+  );
 
-  const summaryText =
-    (typeof parsed.summary === 'string' && parsed.summary.trim()) ||
-    (typeof outputDetails.summary === 'string' &&
-      outputDetails.summary.trim()) ||
-    '';
-
-  const errorText =
-    (typeof parsed.error === 'string' && parsed.error.trim()) ||
-    (typeof outputDetails.error === 'string' && outputDetails.error.trim()) ||
-    '';
-
+  // Use explicit undefined check to preserve null as a valid explicit value
   const outputCandidate =
-    parsed.output !== undefined ? parsed.output : outputDetails.output;
+    structured.output !== undefined ? structured.output : outputDetails.output;
+  const outputContent = extractOutputContent(outputCandidate);
 
-  // Extract the actual output content, avoiding redundant nesting
-  // If outputCandidate is an object with an 'output' field, use that directly
-  // Also exclude fields that are displayed elsewhere (error, isError, diagnostics, userInstruction)
-  let outputContent = outputCandidate;
-  if (
-    outputCandidate !== null &&
-    typeof outputCandidate === 'object' &&
-    !Array.isArray(outputCandidate)
-  ) {
-    const {
-      summary: _unusedSummary,
-      output,
-      error: _extractedError,
-      isError: _extractedIsError,
-      diagnostics: _extractedDiagnostics,
-      userInstruction: _extractedUserInstruction,
-      ...rest
-    } = outputCandidate;
-    // Prefer the nested output field if it exists, otherwise use remaining fields
-    outputContent = output !== undefined ? output : rest;
+  // Convert outputContent to display string
+  let outputText = '';
+  if (typeof outputContent === 'string') {
+    outputText = outputContent;
+  } else if (outputContent !== undefined) {
+    const isEmptyObject =
+      isPlainObject(outputContent) && Object.keys(outputContent).length === 0;
+    if (!isEmptyObject) {
+      outputText = stringifyForDisplay(outputContent);
+    }
   }
 
-  const outputText =
-    typeof outputContent === 'string'
-      ? outputContent
-      : outputContent !== undefined
-        ? stringifyForDisplay(outputContent)
-        : '';
-
-  const toolName =
-    typeof parsed.toolName === 'string'
-      ? parsed.toolName.trim()
-      : typeof parsed.tool === 'string'
-        ? parsed.tool.trim()
-        : '';
-
-  // Detect user feedback: when userInstruction is present, this is user-provided
-  // guidance rather than a system error, even if isError is true
-  const userInstructionText =
-    (typeof parsed.userInstruction === 'string' &&
-      parsed.userInstruction.trim()) ||
-    (typeof outputDetails.userInstruction === 'string' &&
-      outputDetails.userInstruction.trim()) ||
-    '';
+  const rawToolName = structured.toolName ?? structured.tool;
+  const toolName = typeof rawToolName === 'string' ? rawToolName.trim() : '';
   const isUserFeedback = userInstructionText.length > 0;
 
   return {
-    parsed,
+    parsed: structured,
     toolName,
     errorText,
     outputText,
     userInstructionText,
-    input: parsed.input,
-    isError: Boolean(
-      parsed.isError || outputDetails.isError || errorText.length > 0,
-    ),
+    input: structured.input,
+    isError: Boolean(structured.isError || outputDetails.isError || errorText),
     isUserFeedback,
     headerSummary: summaryText || (isUserFeedback ? '' : errorText),
   };
-};
+}
 
 /**
  * Extract and trim content from normalized payload
  * @param {Object} normalizedPayload - The normalized payload object
  * @returns {{decodedText: string, trimmed: string, isEmpty: boolean}}
  */
-export const extractTrimmedContent = (normalizedPayload) => {
+export function extractTrimmedContent(normalizedPayload) {
   const decodedText = normalizedPayload?.decodedText || '';
   const trimmed = decodedText.trim();
   return { decodedText, trimmed, isEmpty: !trimmed };
-};
+}

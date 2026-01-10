@@ -27,7 +27,8 @@ export class StreamTabsManager extends PersistentMapManager<
   }
 
   /**
-   * Add a log message to a stream
+   * Add a log message to a stream.
+   * Returns true if message was added, false if it updated an existing message.
    */
   async addMessage(
     stream: StreamTabId,
@@ -38,13 +39,16 @@ export class StreamTabsManager extends PersistentMapManager<
     const existingIndex = messages.findIndex(
       (entry) => entry.id === message.id,
     );
+
+    // Update existing message
     if (existingIndex >= 0) {
       messages[existingIndex] = message;
       await this.save();
       return false;
-    } else {
-      messages.push(message);
     }
+
+    // Add new message
+    messages.push(message);
 
     // Limit message history to prevent memory issues
     if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {

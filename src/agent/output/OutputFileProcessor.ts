@@ -27,6 +27,9 @@ import {
 import type { XmlOutputManager } from './XmlOutputManager';
 import type { OutputFileInfo, OutputXmlSummary } from './types';
 
+/** Pattern to detect scratchpad XML tags in prefills */
+const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
+
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
@@ -126,7 +129,7 @@ export class OutputFileProcessor {
 
       const hasScratchpadPrefill =
         agentSetting.prefills?.some((prefill) =>
-          /<scratchpad\s*>/i.test(prefill),
+          SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
       const hasDocumentTag = Boolean(agentSetting.documentTag);
       const shouldProcessXml =
@@ -197,97 +200,86 @@ export class OutputFileProcessor {
     processed: OutputFileInfo[],
     stage?: AgentLogStage,
   ): Promise<void> {
+    const execute = () => this.buildXmlSummary(round, rawOutput, processed);
+    await (stage ? stage.within(execute) : execute());
+  }
+
+  private async buildXmlSummary(
+    round: number,
+    rawOutput: FileLocation | null,
+    processed: OutputFileInfo[],
+  ): Promise<void> {
     const { agentSetting, logger } = this.ctx;
+    const data = this.ctx.ensureRoundData(round);
+    const singleFile =
+      processed.length === 1 ? processed[0].location.absolutePath : null;
 
-    const run = async () => {
-      const singleFile =
-        processed.length === 1 ? processed[0].location.absolutePath : null;
-      const data = this.ctx.ensureRoundData(round);
-      const sourceLocation = rawOutput ?? null;
+    const createEmptySummary = () => ({
+      tagContents: {},
+      documents: [] as string[],
+      singleOutputFile: singleFile,
+      sourceLocation: rawOutput,
+    });
 
-      if (!rawOutput?.absolutePath) {
-        data.xmlSummary = {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-        return;
-      }
-
-      try {
-        const rawContent = await flexibleFS.read(rawOutput);
-        const tagContents: Record<string, string | string[]> = {};
-        const documents: string[] = [];
-
-        const documentTag = agentSetting.documentTag;
-        const documentEntries = extractMultipleTextFromTag(
-          rawContent,
-          documentTag,
-        );
-        if (documentEntries.length > 0) {
-          const trimmedDocuments = documentEntries.map((entry) =>
-            entry.content.trim(),
-          );
-          if (trimmedDocuments.length === 1) {
-            tagContents[documentTag] = trimmedDocuments[0];
-          } else {
-            tagContents[documentTag] = trimmedDocuments;
-          }
-
-          for (const entry of documentEntries) {
-            const nameAttr = entry.name ? ` name="${entry.name}"` : '';
-            const trimmed = entry.content.trim();
-            documents.push(
-              `<${documentTag}${nameAttr}>${trimmed}</${documentTag}>`,
-            );
-          }
-        } else {
-          const singleDocument = extractTextFromTag(
-            rawContent,
-            documentTag,
-          ).trim();
-          if (singleDocument) {
-            tagContents[documentTag] = singleDocument;
-            documents.push(
-              `<${documentTag}>${singleDocument}</${documentTag}>`,
-            );
-          }
-        }
-
-        const scratchpadContent = extractTextFromTag(
-          rawContent,
-          'scratchpad',
-        ).trim();
-        if (scratchpadContent) {
-          tagContents.scratchpad = scratchpadContent;
-        }
-
-        data.xmlSummary = {
-          tagContents,
-          documents,
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-      } catch (error) {
-        logger.debug(
-          `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
-        );
-        data.xmlSummary = {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: singleFile,
-          sourceLocation,
-        };
-      }
-    };
-
-    if (stage) {
-      await stage.within(run);
+    if (!rawOutput?.absolutePath) {
+      data.xmlSummary = createEmptySummary();
       return;
     }
 
-    await run();
+    try {
+      const rawContent = await flexibleFS.read(rawOutput);
+      const tagContents: Record<string, string | string[]> = {};
+      const documents: string[] = [];
+      const documentTag = agentSetting.documentTag;
+
+      const documentEntries = extractMultipleTextFromTag(
+        rawContent,
+        documentTag,
+      );
+      if (documentEntries.length > 0) {
+        const trimmedDocuments = documentEntries.map((e) => e.content.trim());
+        tagContents[documentTag] =
+          trimmedDocuments.length === 1
+            ? trimmedDocuments[0]
+            : trimmedDocuments;
+
+        for (const entry of documentEntries) {
+          const nameAttr = entry.name ? ` name="${entry.name}"` : '';
+          documents.push(
+            `<${documentTag}${nameAttr}>${entry.content.trim()}</${documentTag}>`,
+          );
+        }
+      } else {
+        const singleDocument = extractTextFromTag(
+          rawContent,
+          documentTag,
+        ).trim();
+        if (singleDocument) {
+          tagContents[documentTag] = singleDocument;
+          documents.push(`<${documentTag}>${singleDocument}</${documentTag}>`);
+        }
+      }
+
+      const scratchpadContent = extractTextFromTag(
+        rawContent,
+        'scratchpad',
+      ).trim();
+      if (scratchpadContent) {
+        tagContents.scratchpad = scratchpadContent;
+      }
+
+      data.xmlSummary = {
+        tagContents,
+        documents,
+        singleOutputFile: singleFile,
+        sourceLocation: rawOutput,
+      };
+    } catch (error) {
+      logger.debug(
+        `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
+        { messageType: MESSAGE_TYPES.INTERNAL },
+      );
+      data.xmlSummary = createEmptySummary();
+    }
   }
 }
