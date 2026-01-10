@@ -96,19 +96,16 @@ export async function executeCommand(
     };
 
     const logChannel = options.channel ?? CHANNEL;
-    const result = Array.isArray(command)
-      ? await ((): Promise<Awaited<ReturnType<typeof execa>>> => {
-          const [cmd, ...args] = command;
-          logger.debug(
-            logChannel,
-            `Running command: ${shellQuote([cmd, ...args])}`,
-          );
-          return execa(cmd, args, execaOptions);
-        })()
-      : await ((): Promise<Awaited<ReturnType<typeof execa>>> => {
-          logger.debug(logChannel, `Running command: ${command}`);
-          return execa(command, { ...execaOptions, shell: true });
-        })();
+
+    let result;
+    if (Array.isArray(command)) {
+      const [cmd, ...args] = command;
+      logger.debug(logChannel, `Running command: ${shellQuote([cmd, ...args])}`);
+      result = await execa(cmd, args, execaOptions);
+    } else {
+      logger.debug(logChannel, `Running command: ${command}`);
+      result = await execa(command, { ...execaOptions, shell: true });
+    }
 
     const stdout = (result.stdout as string) ?? '';
     const stderr = (result.stderr as string) ?? '';
