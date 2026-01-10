@@ -81,6 +81,18 @@ export class DiffCommandExecutor {
     );
   }
 
+  /** Insert --flatten flag at specified position if needed */
+  private insertFlattenFlag(
+    command: string[],
+    position: number,
+    useFlatten: boolean,
+  ): string[] {
+    if (useFlatten) {
+      command.splice(position, 0, '--flatten');
+    }
+    return command;
+  }
+
   private buildLatexdiffCommand(
     inputFile: string,
     editedFile: string,
@@ -89,7 +101,7 @@ export class DiffCommandExecutor {
   ): string[] {
     const { mathMarkup, pictureEnvs } =
       this.getLatexdiffConfig(mathMarkupOverride);
-    const baseCommand = [
+    const command = [
       'latexdiff',
       '--encoding=utf8',
       '-c',
@@ -98,12 +110,7 @@ export class DiffCommandExecutor {
       inputFile,
       editedFile,
     ];
-
-    if (useFlatten) {
-      baseCommand.splice(1, 0, '--flatten');
-    }
-
-    return baseCommand;
+    return this.insertFlattenFlag(command, 1, useFlatten);
   }
 
   private buildLatexdiffVcCommand(
@@ -114,7 +121,7 @@ export class DiffCommandExecutor {
   ): string[] {
     const { mathMarkup, pictureEnvs } =
       this.getLatexdiffConfig(mathMarkupOverride);
-    const baseCommand = [
+    const command = [
       'latexdiff-vc',
       '--encoding=utf8',
       '-c',
@@ -126,12 +133,7 @@ export class DiffCommandExecutor {
       commitHash,
       inputFile,
     ];
-
-    if (useFlatten) {
-      baseCommand.splice(5, 0, '--flatten');
-    }
-
-    return baseCommand;
+    return this.insertFlattenFlag(command, 5, useFlatten);
   }
 
   private async executeWithFallback(
