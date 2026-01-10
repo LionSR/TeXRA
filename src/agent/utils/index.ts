@@ -8,5 +8,5 @@ export * from './debugMessageSaver';
 export * from './continuationMessage';
 export * from './mergeFileUtils';
 
-// Re-export prompt utilities from consolidated location
-export * from '@utils/prompt';
+// Note: Prompt utilities are NOT re-exported here.
+// Import directly from @utils/prompt when needed.
