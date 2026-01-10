@@ -50,7 +50,6 @@ export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
 // Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
 // This ensures type compatibility when assigning EndGroupStatus to TaskGroupStatus fields.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
   ? true
   : never;
