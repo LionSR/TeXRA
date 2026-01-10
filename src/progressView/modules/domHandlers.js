@@ -26,10 +26,11 @@ class ProgressViewDomHandler extends BaseDomHandler {
   constructor() {
     const usageSummary = new UsageSummary();
     const runSelector = new RunSelector();
+    const status = new Status();
     super({
       streamTabs: new StreamTabs(),
-      toolbar: new Toolbar(),
-      status: new Status(),
+      toolbar: new Toolbar(status),
+      status,
       usageSummary,
       fileList: new FileList(),
       runSelector,
