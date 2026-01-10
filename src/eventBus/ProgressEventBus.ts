@@ -101,27 +101,20 @@ class ProgressEventBus implements ProgressEventBusLike {
     listener: (payload: ProgressEventPayloads[K]) => void,
     options?: { signal?: AbortSignal },
   ): () => void {
-    // If already aborted, don't register
     if (options?.signal?.aborted) {
       return () => {};
     }
 
     this.emitter.on(event, listener);
 
-    // Auto-cleanup when signal aborts
     const cleanup = () => this.emitter.off(event, listener);
     options?.signal?.addEventListener('abort', cleanup, { once: true });
 
-    // Replay buffered events for this event type
-    const remaining: typeof this.buffer = [];
-    for (const item of this.buffer) {
-      if (item.event === event) {
-        listener(item.payload as ProgressEventPayloads[K]);
-      } else {
-        remaining.push(item);
-      }
-    }
-    this.buffer = remaining;
+    // Replay buffered events for this event type and remove them from buffer
+    this.buffer
+      .filter((item) => item.event === event)
+      .forEach((item) => listener(item.payload as ProgressEventPayloads[K]));
+    this.buffer = this.buffer.filter((item) => item.event !== event);
 
     return cleanup;
   }
