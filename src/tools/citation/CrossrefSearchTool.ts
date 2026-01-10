@@ -56,19 +56,13 @@ export class CrossrefSearchTool extends defineTool({
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
       rows: input.rows ?? CROSSREF_CONSTANTS.DEFAULT_ROWS,
+      ...(typeof input.offset === 'number' && { offset: input.offset }),
+      ...(input.sort && { sort: input.sort as WorkSortOptions }),
+      ...(input.order && {
+        order: input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC,
+      }),
+      ...(input.filter && { filter: input.filter }),
     };
-    if (typeof input.offset === 'number') {
-      options.offset = input.offset;
-    }
-    if (input.sort) {
-      options.sort = input.sort as WorkSortOptions;
-    }
-    if (input.order) {
-      options.order = input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC;
-    }
-    if (input.filter) {
-      options.filter = input.filter;
-    }
 
     let response: Awaited<ReturnType<typeof crossrefClient.works>>;
     try {
