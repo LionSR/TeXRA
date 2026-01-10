@@ -848,6 +848,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleAddTaskGroup(message) {
+    _logEvent('ADD_TASK_GROUP', {
+      'message.stream': message.stream,
+      'state.activeStream': state.activeStream,
+      'message.group?.id': message.group?.id,
+      'message.group?.parentGroupId': message.group?.parentGroupId,
+      isActiveStream: message.stream === state.activeStream,
+      'state.activeSessionKind': state.activeSessionKind,
+    });
     if (this._isActiveStream(message)) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
@@ -871,7 +879,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           state.deleteRunMissingOutputs(targetStream, message.group.id);
         }
         dom.runSelector.setActiveRun(newRunId);
-        dom.taskGroups.showRun(newRunId);
+        // For toolUse sessions, show ALL groups (conversation history) instead of
+        // filtering to only the new run. Workflow sessions filter to single run.
+        const isToolUse = state.activeSessionKind === 'toolUse';
+        _logEvent('ADD_GROUP_SHOW_RUN', {
+          isToolUse,
+          showRunArg: isToolUse ? null : newRunId,
+          newRunId,
+        });
+        dom.taskGroups.showRun(isToolUse ? null : newRunId);
         // Pass newRunId directly to avoid redundant resolveActiveRunId calls
         this._refreshInstructionForActiveRun(newRunId);
         this._refreshOutputsForActiveRun(newRunId);
