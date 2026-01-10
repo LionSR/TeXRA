@@ -1,9 +1,5 @@
 // Local imports - progress view
-import {
-  STREAM_STATUS,
-  ALL_TOOLBAR_BUTTON_IDS,
-  ELEMENT_IDS,
-} from '../constants.js';
+import { STREAM_STATUS, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 // Local imports - common helpers
 import { safeGetElementById, setElementsDisabled } from '@common/domUtils.js';
@@ -78,9 +74,18 @@ export class Status {
       },
     };
 
-    this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
+    this._currentButtonIds = [];
     this._buttonElements = null; // Cache for button elements
     this._executionAvailable = false;
+  }
+
+  /**
+   * Sets the current toolbar button IDs to filter which buttons to query.
+   * Call this after toolbar.render() to ensure status updates only query existing buttons.
+   * @param {string[]} buttonIds - The button IDs currently in the toolbar
+   */
+  setCurrentButtonIds(buttonIds) {
+    this._currentButtonIds = buttonIds || [];
   }
 
   setExecutionIdAvailability(hasExecution) {
@@ -91,8 +96,13 @@ export class Status {
   _applyExecutionAvailability() {
     const isAvailable = this._executionAvailable;
     const buttonsToUpdate = [];
+    // Only check execution-dependent buttons that exist in the current toolbar
+    const currentToolbarButtonIds = new Set(this._currentButtonIds);
 
     for (const buttonId of EXECUTION_DEPENDENT_BUTTONS) {
+      // Skip buttons not in the current toolbar to avoid console warnings
+      if (!currentToolbarButtonIds.has(buttonId)) continue;
+
       const button = safeGetElementById(buttonId);
       if (!button) continue;
 
@@ -121,9 +131,10 @@ export class Status {
     }
 
     // Query buttons fresh each time to handle toolbar re-rendering
-    const buttons = this.BUTTON_IDS.map((id) => safeGetElementById(id)).filter(
-      Boolean,
-    );
+    // Note: _currentButtonIds is set by Toolbar.render() which must be called first
+    const buttons = this._currentButtonIds
+      .map((id) => safeGetElementById(id))
+      .filter(Boolean);
 
     setElementsDisabled(buttons, true);
 
@@ -145,10 +156,13 @@ export class Status {
       statusIndicator.classList.add(cfg.className);
       statusIndicator.dataset.status = cfg.label;
 
+      // Filter to only buttons that exist in the current toolbar
+      const currentToolbarButtonIds = new Set(this._currentButtonIds);
       const elementsToEnable = cfg.enable
         .filter(
           (id) =>
-            this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id),
+            currentToolbarButtonIds.has(id) &&
+            (this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id)),
         )
         .map((id) => safeGetElementById(id))
         .filter(Boolean);
