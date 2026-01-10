@@ -150,7 +150,8 @@ export class Status {
         .filter(
           (el) =>
             el &&
-            (this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(el.id)),
+            (this._executionAvailable ||
+              !EXECUTION_DEPENDENT_BUTTONS.has(el.id)),
         );
       if (elementsToEnable.length > 0) {
         setElementsDisabled(elementsToEnable, false);
