@@ -24,10 +24,17 @@ const CITE_COMMANDS = [
   'Footcite',
 ];
 
-const DIRECTIVE_PATTERN_SOURCE =
-  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}';
+// Compiled regex patterns (matchAll clones the regex, so module-level is safe)
+const DIRECTIVE_PATTERN = new RegExp(
+  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}',
+  'g',
+);
 
-const CITATION_PATTERN_SOURCE = `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`;
+const CITATION_PATTERN = new RegExp(
+  `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
+  'g',
+);
+
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
 export interface BibliographyReferenceResult {
@@ -64,7 +71,7 @@ function normalizeBibPath(baseDir: string, target: string): string {
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
   const paths = new Set<string>();
 
-  for (const match of content.matchAll(new RegExp(DIRECTIVE_PATTERN_SOURCE, 'g'))) {
+  for (const match of content.matchAll(DIRECTIVE_PATTERN)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const normalized = normalizeBibPath(baseDir, raw);
@@ -80,7 +87,7 @@ function collectBibliographyPaths(baseDir: string, content: string): string[] {
 function collectCitationKeys(content: string): string[] {
   const keys = new Set<string>();
 
-  for (const match of content.matchAll(new RegExp(CITATION_PATTERN_SOURCE, 'g'))) {
+  for (const match of content.matchAll(CITATION_PATTERN)) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const key = raw.trim();
