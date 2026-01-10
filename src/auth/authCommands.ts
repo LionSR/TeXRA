@@ -37,11 +37,36 @@ type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 /** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
 
-/** All sign-in options shown to users */
+/** Sign-in option shown to users */
 interface SignInOption {
   label: string;
   description: string;
   method: AuthMethod;
+}
+
+/** Build sign-in options based on enabled auth methods */
+function getSignInOptions(): SignInOption[] {
+  const options: SignInOption[] = [
+    { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
+    { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
+  ];
+
+  if (EMAIL_LOGIN_ENABLED) {
+    options.push({
+      label: '$(mail) Email',
+      description: 'Sign in with a magic link sent to your email',
+      method: 'email',
+    });
+  }
+
+  // VS Code GitHub auth is always last (fallback option)
+  options.push({
+    label: '$(github) GitHub (VS Code)',
+    description: 'Sign in using VS Code GitHub authentication',
+    method: 'github',
+  });
+
+  return options;
 }
 
 /**
@@ -66,33 +91,7 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Build sign-in options from enabled auth methods
-    const signInOptions: SignInOption[] = [
-      {
-        label: '$(globe) Google',
-        description: 'Sign in with Google',
-        method: 'google' as AuthMethod,
-      },
-      {
-        label: '$(github) GitHub',
-        description: 'Sign in with GitHub via web browser',
-        method: 'github-browser' as AuthMethod,
-      },
-      ...(EMAIL_LOGIN_ENABLED
-        ? [
-            {
-              label: '$(mail) Email',
-              description: 'Sign in with a magic link sent to your email',
-              method: 'email' as AuthMethod,
-            },
-          ]
-        : []),
-      {
-        label: '$(github) GitHub (VS Code)',
-        description: 'Sign in using VS Code GitHub authentication',
-        method: 'github' as AuthMethod,
-      },
-    ];
+    const signInOptions = getSignInOptions();
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
       placeHolder: 'Choose a sign-in method',
