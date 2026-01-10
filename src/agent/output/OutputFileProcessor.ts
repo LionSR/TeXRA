@@ -232,11 +232,16 @@ export class OutputFileProcessor {
       const documents: string[] = [];
       const documentTag = agentSetting.documentTag;
 
-      const documentEntries = extractMultipleTextFromTag(rawContent, documentTag);
+      const documentEntries = extractMultipleTextFromTag(
+        rawContent,
+        documentTag,
+      );
       if (documentEntries.length > 0) {
         const trimmedDocuments = documentEntries.map((e) => e.content.trim());
         tagContents[documentTag] =
-          trimmedDocuments.length === 1 ? trimmedDocuments[0] : trimmedDocuments;
+          trimmedDocuments.length === 1
+            ? trimmedDocuments[0]
+            : trimmedDocuments;
 
         for (const entry of documentEntries) {
           const nameAttr = entry.name ? ` name="${entry.name}"` : '';
@@ -245,19 +250,30 @@ export class OutputFileProcessor {
           );
         }
       } else {
-        const singleDocument = extractTextFromTag(rawContent, documentTag).trim();
+        const singleDocument = extractTextFromTag(
+          rawContent,
+          documentTag,
+        ).trim();
         if (singleDocument) {
           tagContents[documentTag] = singleDocument;
           documents.push(`<${documentTag}>${singleDocument}</${documentTag}>`);
         }
       }
 
-      const scratchpadContent = extractTextFromTag(rawContent, 'scratchpad').trim();
+      const scratchpadContent = extractTextFromTag(
+        rawContent,
+        'scratchpad',
+      ).trim();
       if (scratchpadContent) {
         tagContents.scratchpad = scratchpadContent;
       }
 
-      data.xmlSummary = { tagContents, documents, singleOutputFile: singleFile, sourceLocation: rawOutput };
+      data.xmlSummary = {
+        tagContents,
+        documents,
+        singleOutputFile: singleFile,
+        sourceLocation: rawOutput,
+      };
     } catch (error) {
       logger.debug(
         `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
