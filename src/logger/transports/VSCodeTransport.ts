@@ -93,15 +93,10 @@ export class VSCodeTransport extends Transport {
     structuredData: unknown,
   ): void {
     const emoji = getColorForLevel(level);
-    const channelPrefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
-    const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
-    this.channel.appendLine(formattedMessage);
+    const prefix = this.isAgentChannel ? '' : `[${this.streamName}] `;
+    this.channel.appendLine(`${emoji} [${timestamp}] ${prefix}${message}`);
 
-    if (
-      structuredData !== undefined &&
-      structuredData !== null &&
-      this.includeStructuredData?.()
-    ) {
+    if (structuredData != null && this.includeStructuredData?.()) {
       const dataString =
         typeof structuredData === 'string'
           ? structuredData

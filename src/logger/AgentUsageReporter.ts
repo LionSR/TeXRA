@@ -38,31 +38,25 @@ export class AgentUsageReporter {
    * @param storageKey - THE key for storage (from context.storageKey) - REQUIRED
    */
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
-    const logStatistics = this.agentCategory === AgentCategory.Workflow;
-
-    // Pass through usage including cache tokens for display
-    const usage = {
-      inputTokens: stats.inputTokens,
-      outputTokens: stats.outputTokens,
-      cost: stats.cost,
-      ...(stats.cacheReadInputTokens && {
-        cacheReadInputTokens: stats.cacheReadInputTokens,
-      }),
-      ...(stats.cacheCreationInputTokens && {
-        cacheCreationInputTokens: stats.cacheCreationInputTokens,
-      }),
-    };
-
     // storageKey is THE single source of truth - no fallbacks, no round-trips
     bus.emit('updateStreamUsage', {
       stream: this.streamId,
       storageKey,
-      usage,
+      usage: {
+        inputTokens: stats.inputTokens,
+        outputTokens: stats.outputTokens,
+        cost: stats.cost,
+        ...(stats.cacheReadInputTokens && {
+          cacheReadInputTokens: stats.cacheReadInputTokens,
+        }),
+        ...(stats.cacheCreationInputTokens && {
+          cacheCreationInputTokens: stats.cacheCreationInputTokens,
+        }),
+      },
     });
 
-    // Log detailed statistics for display in the progress view
-    // Use storageKey for logging context as well
-    if (logStatistics) {
+    // Log detailed statistics for workflow agents
+    if (this.agentCategory === AgentCategory.Workflow) {
       this.logger.statistics(stats, storageKey);
     }
   }
