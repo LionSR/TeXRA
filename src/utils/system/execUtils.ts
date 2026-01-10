@@ -95,35 +95,25 @@ export async function executeCommand(
       input: options.stdin,
     };
 
-    let stdout: string;
-    let stderr: string;
-    let exitCode: number;
-    let timedOut: boolean;
+    const logChannel = options.channel ?? CHANNEL;
+    const result = Array.isArray(command)
+      ? await ((): Promise<Awaited<ReturnType<typeof execa>>> => {
+          const [cmd, ...args] = command;
+          logger.debug(
+            logChannel,
+            `Running command: ${shellQuote([cmd, ...args])}`,
+          );
+          return execa(cmd, args, execaOptions);
+        })()
+      : await ((): Promise<Awaited<ReturnType<typeof execa>>> => {
+          logger.debug(logChannel, `Running command: ${command}`);
+          return execa(command, { ...execaOptions, shell: true });
+        })();
 
-    if (Array.isArray(command)) {
-      // Use execa directly with argument array to avoid shell injection
-      const [cmd, ...args] = command;
-      const commandForLog = shellQuote([cmd, ...args]);
-      logger.debug(
-        options.channel ?? CHANNEL,
-        `Running command: ${commandForLog}`,
-      );
-      const result = await execa(cmd, args, execaOptions);
-      stdout = (result.stdout as string) ?? '';
-      stderr = (result.stderr as string) ?? '';
-      exitCode = result.exitCode ?? 1;
-      timedOut = result.timedOut ?? false;
-    } else {
-      logger.debug(options.channel ?? CHANNEL, `Running command: ${command}`);
-      const result = await execa(command, {
-        ...execaOptions,
-        shell: true,
-      });
-      stdout = (result.stdout as string) ?? '';
-      stderr = (result.stderr as string) ?? '';
-      exitCode = result.exitCode ?? 1;
-      timedOut = result.timedOut ?? false;
-    }
+    const stdout = (result.stdout as string) ?? '';
+    const stderr = (result.stderr as string) ?? '';
+    const exitCode = result.exitCode ?? 1;
+    const timedOut = result.timedOut ?? false;
 
     const shouldTruncate = options.truncate ?? false;
     const formatForLog = (output: string | null) =>
@@ -134,7 +124,7 @@ export async function executeCommand(
 
     if (normalizedStderr) {
       logger.debug(
-        options.channel ?? CHANNEL,
+        logChannel,
         `Command stderr: ${formatForLog(normalizedStderr)}`,
       );
     }

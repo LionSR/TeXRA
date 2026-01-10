@@ -268,6 +268,17 @@ export async function checkToolInstalled(
     const commands = Array.isArray(command) ? command : [command];
     isInstalled = commands.some(tryCommand);
 
+    // For single command with no executable, throw an error
+    if (!Array.isArray(command) && !isInstalled) {
+      const hasExecutable = shellParse(command).some(
+        (arg): arg is string => typeof arg === 'string',
+      );
+      if (!hasExecutable) {
+        throw new Error('Invalid command: no executable found');
+      }
+    }
+
+
     if (!isInstalled && showError) {
       const actions = config.openDocsCommand ? ['View Installation Guide'] : [];
       const choice = await vscode.window.showErrorMessage(
