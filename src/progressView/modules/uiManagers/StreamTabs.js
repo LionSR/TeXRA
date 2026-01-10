@@ -72,7 +72,9 @@ export class StreamTabs {
     if (streamNameElem) {
       const label = activeInfo?.label || '';
       streamNameElem.textContent = label;
-      streamNameElem.title = activeInfo ? this._buildTooltip(activeInfo, true) : '';
+      streamNameElem.title = activeInfo
+        ? this._buildTooltip(activeInfo, true)
+        : '';
       if (activeInfo?.name) {
         streamNameElem.dataset.stream = activeInfo.name;
       } else {
