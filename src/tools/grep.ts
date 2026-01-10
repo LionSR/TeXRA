@@ -55,12 +55,11 @@ export function buildArguments(
   // Context flags (only for content mode)
   if (outputMode === 'content') {
     if (input['-n']) args.push('-n');
-    // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
-    if (input['-A'] != null) args.push('-A', String(input['-A']));
-    // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
-    if (input['-B'] != null) args.push('-B', String(input['-B']));
-    // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
-    if (input['-C'] != null) args.push('-C', String(input['-C']));
+    for (const flag of ['-A', '-B', '-C'] as const) {
+      const value = input[flag];
+      // eslint-disable-next-line eqeqeq -- nullish check for .nullish() schema fields
+      if (value != null) args.push(flag, String(value));
+    }
   }
 
   return args;
