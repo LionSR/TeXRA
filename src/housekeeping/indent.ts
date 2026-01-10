@@ -72,10 +72,10 @@ export async function indentLatexFilesInDirectory(
 
   let indentedCount = 0;
 
+  /** Walks directory tree, calling onFile for each file */
   const walkDirectory = async (
     dirPath: string,
-    onTexFile: (fullPath: string, name: string) => Promise<void>,
-    onBackupFile: (fullPath: string, name: string) => Promise<void>,
+    onFile: (fullPath: string, name: string) => Promise<void>,
   ) => {
     const entries = await WorkspaceFS.readDir(dirPath);
     for (const [name, type] of entries) {
@@ -86,43 +86,44 @@ export async function indentLatexFilesInDirectory(
       const fullPath = path.join(dirPath, name);
 
       if (type === vscode.FileType.Directory) {
-        await walkDirectory(fullPath, onTexFile, onBackupFile);
+        await walkDirectory(fullPath, onFile);
       } else if (type === vscode.FileType.File) {
-        if (name.endsWith('.tex')) {
-          await onTexFile(fullPath, name);
-        } else if (isBackupFile(name)) {
-          await onBackupFile(fullPath, name);
-        }
+        await onFile(fullPath, name);
       }
     }
   };
 
   try {
-    await walkDirectory(
-      directory,
-      async (fullPath, _name) => {
-        if (progressCallback) {
-          progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
-        }
+    // Pass 1: Format .tex files
+    await walkDirectory(directory, async (fullPath, name) => {
+      if (!name.endsWith('.tex')) {
+        return;
+      }
+      if (progressCallback) {
+        progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
+      }
 
-        logger.debug(CHANNEL, `Processing file: ${fullPath}`);
-        try {
-          const success = await runLatexFormatter(fullPath);
-          if (success) {
-            logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
-            indentedCount++;
-          } else {
-            logger.error(CHANNEL, `Failed to format ${fullPath}`);
-          }
-        } catch (err) {
-          logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
+      logger.debug(CHANNEL, `Processing file: ${fullPath}`);
+      try {
+        const success = await runLatexFormatter(fullPath);
+        if (success) {
+          logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
+          indentedCount++;
+        } else {
+          logger.error(CHANNEL, `Failed to format ${fullPath}`);
         }
-      },
-      async (fullPath, _name) => {
+      } catch (err) {
+        logger.error(CHANNEL, `Error formatting file ${fullPath}: ${err}`);
+      }
+    });
+
+    // Pass 2: Clean up backup files created during formatting
+    await walkDirectory(directory, async (fullPath, name) => {
+      if (isBackupFile(name)) {
         logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
         await WorkspaceFS.delete(fullPath);
-      },
-    );
+      }
+    });
 
     logger.info(
       CHANNEL,
