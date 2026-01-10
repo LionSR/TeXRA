@@ -11,13 +11,14 @@ import {
 } from '@logger/AgentLogger';
 import { getEmitFilter } from '@logger/filterUtils';
 import type { LogMessageData } from '@logger/LogTypes';
-import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
+import {
+  MESSAGE_TYPES,
+  MessageTypeSchema,
+  type MessageType,
+} from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
 import { getColorForLevel, serializeLogData } from '@logger/utils';
 import { bus } from '@eventBus/ProgressEventBus';
-
-// Pre-compute valid message types for O(1) lookup
-const VALID_MESSAGE_TYPES = new Set<unknown>(Object.values(MESSAGE_TYPES));
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;
@@ -121,9 +122,10 @@ export class VSCodeTransport extends Transport {
   }): void {
     if (!this.isAgentChannel) return;
 
-    const messageType: MessageType = VALID_MESSAGE_TYPES.has(event.messageType)
-      ? (event.messageType as MessageType)
-      : MESSAGE_TYPES.DEFAULT;
+    // Use Zod schema with .catch() for O(1) validation with automatic fallback
+    const messageType = MessageTypeSchema.catch(MESSAGE_TYPES.DEFAULT).parse(
+      event.messageType,
+    );
 
     const level = event.level as 'debug' | 'info' | 'warn' | 'error';
     const { shouldEmit, debugMode } = getEmitFilter({ level, messageType });
