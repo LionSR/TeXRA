@@ -73,7 +73,14 @@ export function formatBannerContent(
  * @param {string} params.level - Log level
  * @returns {HTMLElement|null} Model response element or null
  */
-export function formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
+export function formatModelResponse({
+  id,
+  groupId,
+  timestamp,
+  verbose,
+  content,
+  level,
+}) {
   const trimmedContent = (content?.decodedText || '').trim();
   if (!trimmedContent) return null;
 
