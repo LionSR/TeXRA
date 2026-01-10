@@ -337,16 +337,9 @@ export class ProgressEventHandler {
           return;
         }
 
-        // Update fields if provided
-        if (logMessage.text !== undefined) existing.text = logMessage.text;
-        if (logMessage.messageType !== undefined)
-          existing.messageType = logMessage.messageType;
-        if (logMessage.level) existing.level = logMessage.level;
-        if (logMessage.timestamp !== undefined)
-          existing.timestamp = logMessage.timestamp;
-        if (logMessage.verbose !== undefined)
-          existing.verbose = logMessage.verbose;
-        if (logMessage.data !== undefined) existing.data = logMessage.data;
+        // Update fields from logMessage, preserving existing values for undefined fields
+        const { id: _id, ...updates } = logMessage;
+        Object.assign(existing, updates);
 
         await this.state.streamTabs.save();
 
@@ -640,13 +633,11 @@ export class ProgressEventHandler {
     // messages here to avoid a race condition where reset: true would clear
     // the files just populated from UPDATE_LOGS.
 
+    // Reset and send all missing outputs in sequence
     this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
-    Object.entries(missingByRun).forEach(([runId, rounds]) => {
-      this.webviewUpdater.updateMissingOutputs(stream, {
-        runId,
-        rounds,
-      });
-    });
+    for (const [runId, rounds] of Object.entries(missingByRun)) {
+      this.webviewUpdater.updateMissingOutputs(stream, { runId, rounds });
+    }
 
     // Refresh todos for the stream (ephemeral state)
     // Always send update (empty array if undefined) to clear stale UI from previous stream

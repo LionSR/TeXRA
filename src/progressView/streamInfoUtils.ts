@@ -46,6 +46,66 @@ function matchesFilter(
 }
 
 /**
+ * Build a StreamTabInfo object for a single stream ID.
+ * Returns null if the stream doesn't match the filter.
+ */
+function buildStreamInfo(
+  state: ProgressViewState,
+  id: string,
+  statuses: Map<string, string> | undefined,
+  filter: AgentFilter,
+): StreamTabInfo | null {
+  const taskState = state.getTaskState(id);
+  const hints = state.getStreamHints(id);
+  const logs = state.streamTabs.getMessages(id);
+  const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
+  const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
+  const inputFile = taskState?.agentConfig.inputFile ?? '';
+  const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
+  const agentName = getCleanAgentName(rawAgentName);
+  const rawCategory =
+    taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
+
+  const sessionCategory = matchesFilter(rawCategory, filter);
+  if (sessionCategory === null) {
+    return null;
+  }
+
+  const agentType =
+    taskState?.agentConfig.session?.agentType ??
+    taskState?.agentConfig.agentType;
+  const isToolAgent = sessionCategory === AgentCategory.ToolUse;
+  const isRemote = taskState
+    ? isRemoteAgent(rawAgentName)
+    : (hints.isRemote ?? false);
+  const executionId = state.getExecutionId(id);
+
+  const label =
+    sessionCategory !== AgentCategory.ToolUse && inputFile
+      ? `${agentName}: ${path.basename(inputFile)}`
+      : agentName;
+
+  return {
+    name: id,
+    label,
+    model: taskState?.agentConfig.model,
+    agent: taskState?.agentConfig.agent,
+    agentType,
+    agentSessionKind: sessionCategory,
+    uiTraits: { sessionKind: sessionCategory, isToolAgent },
+    hasMultipleOutputs: taskState
+      ? taskState.agentConfig.useMultipleOutputs
+      : (hints.hasMultipleOutputs ?? false),
+    isRemote,
+    lastTimestamp,
+    inputFile,
+    creationTimestamp,
+    status: statuses?.get(id),
+    executionId,
+  };
+}
+
+/**
  * Build metadata objects for all streams in the given state.
  */
 export function buildStreamInfos(
@@ -53,68 +113,10 @@ export function buildStreamInfos(
   statuses?: Map<string, string>,
   filter: AgentFilter = 'all',
 ): StreamTabInfo[] {
-  const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
-    const taskState = state.getTaskState(id);
-    const hints = state.getStreamHints(id);
-    const logs = state.streamTabs.getMessages(id);
-    const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
-    const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
-    const inputFile = taskState?.agentConfig.inputFile ?? '';
-    // Extract clean agent name (strip source: prefix if present)
-    const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
-    const agentName = getCleanAgentName(rawAgentName);
-    const rawCategory =
-      taskState?.agentConfig.session?.agentCategory ?? hints.sessionCategory;
-
-    // Filter check: returns resolved category or null if filtered out
-    const sessionCategory = matchesFilter(rawCategory, filter);
-    if (sessionCategory === null) {
-      return acc;
-    }
-
-    const agentType =
-      taskState?.agentConfig.session?.agentType ??
-      taskState?.agentConfig.agentType;
-    const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    // When taskState is available, rawAgentName has the full key (e.g., "remote:generic")
-    // and isRemoteAgent can reliably determine the source. When taskState is null,
-    // rawAgentName is just the clean name from the stream ID, so fall back to the hint.
-    const isRemote = taskState
-      ? isRemoteAgent(rawAgentName)
-      : (hints.isRemote ?? false);
-    const executionId = state.getExecutionId(id);
-
-    // Build label: tool-use shows agent only, workflows show agent + file basename
-    let label = agentName;
-    if (sessionCategory !== AgentCategory.ToolUse && inputFile) {
-      label = `${agentName}: ${path.basename(inputFile)}`;
-    }
-
-    acc.push({
-      name: id,
-      label,
-      model: taskState?.agentConfig.model,
-      agent: taskState?.agentConfig.agent,
-      agentType,
-      agentSessionKind: sessionCategory,
-      uiTraits: {
-        sessionKind: sessionCategory,
-        isToolAgent,
-      },
-      // useMultipleOutputs is the single source of truth (workflow-only concept).
-      // When taskState is null, fall back to the hint from setActiveStream event.
-      hasMultipleOutputs: taskState
-        ? taskState.agentConfig.useMultipleOutputs
-        : (hints.hasMultipleOutputs ?? false),
-      isRemote,
-      lastTimestamp,
-      inputFile,
-      creationTimestamp,
-      status: statuses?.get(id),
-      executionId,
-    });
-    return acc;
-  }, []);
+  const infos = state.streamTabs
+    .keys()
+    .map((id) => buildStreamInfo(state, id, statuses, filter))
+    .filter((info): info is StreamTabInfo => info !== null);
 
   const comparator = sortComparators[state.streamSortOrder];
   if (comparator) {
