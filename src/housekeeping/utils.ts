@@ -17,15 +17,13 @@ export function getAgentFirstNameChunk(agent: string): string {
   // Handles all agent sources: custom, local, remote, builtIn, builtInToolUse
   const cleanAgent = getCleanAgentName(agent);
 
-  let result: string;
   if (cleanAgent.startsWith('write-')) {
-    result = cleanAgent.split('-')[1];
-  } else {
-    result = cleanAgent.includes('_')
-      ? cleanAgent.split('_')[0]
-      : cleanAgent.split('-')[0];
+    return cleanAgent.split('-')[1];
   }
-  return result;
+  if (cleanAgent.includes('_')) {
+    return cleanAgent.split('_')[0];
+  }
+  return cleanAgent.split('-')[0];
 }
 
 export function getFilePatterns(
