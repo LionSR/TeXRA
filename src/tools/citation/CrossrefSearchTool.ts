@@ -8,10 +8,12 @@ import {
 } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
-// Local imports - metadata
+// Local imports
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
+// eslint-disable-next-line import/order -- grouped by semantic meaning
 import { defineTool } from '@tools/core/define';
+import { ToolError } from '@tools/result';
+import { pluralize } from '@tools/utils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS } from './constants';
@@ -105,7 +107,7 @@ export class CrossrefSearchTool extends defineTool({
     };
 
     return {
-      summary: `Found: ${results.length} result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
+      summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
     };
   }
