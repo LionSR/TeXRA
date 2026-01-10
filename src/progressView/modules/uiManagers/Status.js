@@ -131,9 +131,7 @@ export class Status {
     }
 
     // Query buttons fresh each time to handle toolbar re-rendering
-    // Only query buttons that exist in the current toolbar
-    // Create Set once for efficient .has() lookups in enable step
-    const currentToolbarButtonIds = new Set(this._currentButtonIds);
+    // Note: _currentButtonIds is set by Toolbar.render() which must be called first
     const buttons = this._currentButtonIds
       .map((id) => safeGetElementById(id))
       .filter(Boolean);
@@ -159,6 +157,7 @@ export class Status {
       statusIndicator.dataset.status = cfg.label;
 
       // Filter to only buttons that exist in the current toolbar
+      const currentToolbarButtonIds = new Set(this._currentButtonIds);
       const elementsToEnable = cfg.enable
         .filter(
           (id) =>
