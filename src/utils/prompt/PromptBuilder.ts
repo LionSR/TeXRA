@@ -29,7 +29,8 @@ MEMORY PROTOCOL:
 1. Use the \`view\` command of your \`memory\` tool to check for earlier progress.
 2. ... (work on the task) ...
    - As you make progress, record status, progress, and thoughts in your memory.
-   - Record user preferences and general style guidelines from the user.
+   - Record user preferences: writing style, coding conventions, formatting requirements, workflow preferences, and any explicit or implicit guidelines the user follows.
+   - When git is available, look into git history (commit messages, PR descriptions, recent changes) to understand project context, coding patterns, and conventions.
 
 Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
 
