@@ -1060,13 +1060,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.followUpInput.setRecording(true);
   }
 
+  // handleRecordingStopped and handleRecordingError both just stop recording
   handleRecordingStopped() {
     dom.followUpInput.setRecording(false);
   }
 
-  handleRecordingError() {
-    dom.followUpInput.setRecording(false);
-  }
+  handleRecordingError = this.handleRecordingStopped.bind(this);
 
   /**
    * Handle UPDATE_TODOS command from extension host.

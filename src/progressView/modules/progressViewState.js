@@ -5,7 +5,7 @@ import { ToggleStateStore } from '@common/ToggleStateStore.js';
 import { StreamScopedMap } from '@common/StreamScopedMap.js';
 
 /**
- * Manages task groups in the progress view.
+ * Manages task groups in the progress view with parent-child relationships.
  */
 class TaskGroups {
   constructor() {
@@ -19,38 +19,30 @@ class TaskGroups {
   }
 
   set(id, group) {
-    if (!id || !group) {
-      return;
-    }
+    if (!id || !group) return;
 
     const previousParentId = this.parentByChild.get(id);
     const nextParentId = group.parentGroupId || null;
 
-    if (previousParentId && previousParentId !== nextParentId) {
-      this._removeChild(previousParentId, id);
+    // Update parent-child links if parent changed
+    if (previousParentId !== nextParentId) {
+      if (previousParentId) this._unlinkChild(previousParentId, id);
+      if (nextParentId) this._linkChild(nextParentId, id);
+      else this.parentByChild.delete(id);
     }
 
     this.groups.set(id, group);
-
-    if (nextParentId) {
-      this._addChild(nextParentId, id);
-    } else {
-      this.parentByChild.delete(id);
-    }
   }
 
   delete(id) {
-    if (!id) {
-      return;
-    }
+    if (!id) return;
 
+    // Remove from parent's children
     const parentId = this.parentByChild.get(id);
-    if (parentId) {
-      this._removeChild(parentId, id);
-    } else {
-      this.parentByChild.delete(id);
-    }
+    if (parentId) this._unlinkChild(parentId, id);
+    this.parentByChild.delete(id);
 
+    // Orphan all children (clear their parent reference)
     const children = this.childrenByParent.get(id);
     if (children) {
       for (const childId of children) {
@@ -75,9 +67,7 @@ class TaskGroups {
   }
 
   /**
-   * Update an existing log group with a structured payload.
-   * Payload uses flat structure: { id, status, endTime } matching UpdateTaskGroupPayload.
-   * @param {{ id: string, status?: string, endTime?: number }} payload
+   * Update an existing group's status and endTime.
    */
   update(payload) {
     if (!payload?.id) return;
@@ -85,12 +75,8 @@ class TaskGroups {
     const group = this.groups.get(payload.id);
     if (!group) return;
 
-    if (payload.status) {
-      group.status = payload.status;
-    }
-    if (payload.endTime != null) {
-      group.endTime = payload.endTime;
-    }
+    if (payload.status) group.status = payload.status;
+    if (payload.endTime != null) group.endTime = payload.endTime;
 
     this.set(payload.id, group);
   }
@@ -99,19 +85,19 @@ class TaskGroups {
     return [...(this.childrenByParent.get(parentId) ?? [])];
   }
 
-  _addChild(parentId, childId) {
-    const existing = this.childrenByParent.get(parentId);
-    const children = existing ?? new Set();
-    if (!existing) this.childrenByParent.set(parentId, children);
+  _linkChild(parentId, childId) {
+    let children = this.childrenByParent.get(parentId);
+    if (!children) {
+      children = new Set();
+      this.childrenByParent.set(parentId, children);
+    }
     children.add(childId);
     this.parentByChild.set(childId, parentId);
   }
 
-  _removeChild(parentId, childId) {
+  _unlinkChild(parentId, childId) {
     const children = this.childrenByParent.get(parentId);
-    if (!children) {
-      return;
-    }
+    if (!children) return;
 
     children.delete(childId);
     if (this.parentByChild.get(childId) === parentId) {
@@ -126,28 +112,18 @@ class TaskGroups {
 /**
  * Manages stream status information.
  * Stores only non-ready statuses; 'ready' and falsy values trigger deletion.
+ * Extends Map directly to reduce boilerplate while adding semantic set logic.
  */
-class StreamStatuses {
-  constructor() {
-    this.statuses = new Map();
-  }
-
-  get(stream) {
-    return this.statuses.get(stream);
-  }
-
+class StreamStatuses extends Map {
   set(stream, status) {
-    if (!stream) return;
+    if (!stream) return this;
     // Only store meaningful statuses; 'ready' is the default state
     if (!status || status === 'ready') {
-      this.statuses.delete(stream);
+      this.delete(stream);
     } else {
-      this.statuses.set(stream, status);
+      super.set(stream, status);
     }
-  }
-
-  delete(stream) {
-    this.statuses.delete(stream);
+    return this;
   }
 }
 
@@ -157,49 +133,50 @@ class RunScopedMap {
     this._data = new Map();
   }
 
-  set(streamId, runId, value) {
+  /**
+   * Resolve stream and optionally validate runId.
+   * Returns null if validation fails.
+   */
+  _resolve(streamId, runId = null, requireRunId = false) {
     const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !runId) {
-      return;
-    }
+    if (targetStream == null) return null;
+    if (requireRunId && !runId) return null;
+    return targetStream;
+  }
 
-    let runs = this._data.get(targetStream);
+  set(streamId, runId, value) {
+    const stream = this._resolve(streamId, runId, true);
+    if (!stream) return;
+
+    let runs = this._data.get(stream);
     if (!runs) {
       runs = new Map();
-      this._data.set(targetStream, runs);
+      this._data.set(stream, runs);
     }
     runs.set(runId, value);
   }
 
   get(streamId, runId) {
-    if (!runId) {
-      return null;
-    }
-    const runs = this.getStreamMap(streamId);
-    return runs?.get(runId) ?? null;
+    if (!runId) return null;
+    return this.getStreamMap(streamId)?.get(runId) ?? null;
   }
 
   delete(streamId, runId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null || !runId) {
-      return;
-    }
-    const runs = this._data.get(targetStream);
-    if (!runs) {
-      return;
-    }
+    const stream = this._resolve(streamId, runId, true);
+    if (!stream) return;
+
+    const runs = this._data.get(stream);
+    if (!runs) return;
+
     runs.delete(runId);
     if (runs.size === 0) {
-      this._data.delete(targetStream);
+      this._data.delete(stream);
     }
   }
 
   clearStream(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return;
-    }
-    this._data.delete(targetStream);
+    const stream = this._resolve(streamId);
+    if (stream) this._data.delete(stream);
   }
 
   clearAll() {
@@ -207,11 +184,8 @@ class RunScopedMap {
   }
 
   getStreamMap(streamId) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return null;
-    }
-    return this._data.get(targetStream) ?? null;
+    const stream = this._resolve(streamId);
+    return stream ? (this._data.get(stream) ?? null) : null;
   }
 
   streamEntries() {
