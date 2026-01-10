@@ -1,6 +1,16 @@
 // Standard library imports
 import * as path from 'path';
 
+/** Extract base name from filename using round pattern */
+function extractBaseName(filename: string, includeRound: boolean): string {
+  const pattern = includeRound ? /^(.*?_r\d+)/ : /^(.*?)_r\d+/;
+  const match = path.parse(filename).name.match(pattern);
+  if (!match) {
+    throw new Error('Failed to extract base name from edited file');
+  }
+  return match[1];
+}
+
 export class DiffFileNameManager {
   generateDiffFileName(
     inputFile: string,
@@ -13,8 +23,7 @@ export class DiffFileNameManager {
 
     if (inputRoundMatch && editedRoundMatch) {
       return this.generateRoundBasedFileName(
-        inputFile,
-        editedFile,
+        editedFileName,
         inputRoundMatch,
         editedRoundMatch,
       );
@@ -24,8 +33,7 @@ export class DiffFileNameManager {
   }
 
   private generateRoundBasedFileName(
-    _inputFile: string,
-    editedFile: string,
+    editedFileName: string,
     inputRoundMatch: RegExpMatchArray,
     editedRoundMatch: RegExpMatchArray,
   ): string {
@@ -33,24 +41,12 @@ export class DiffFileNameManager {
     const secondRound = editedRoundMatch[1];
     const firstModel = inputRoundMatch[2];
     const secondModel = editedRoundMatch[2];
-    const editedFileName = path.basename(editedFile);
 
-    if (firstModel === secondModel) {
-      const baseNameMatch = path
-        .parse(editedFileName)
-        .name.match(/^(.*?_r\d+)/);
-      if (!baseNameMatch) {
-        throw new Error('Failed to extract base name from edited file');
-      }
-      return `${baseNameMatch[1]}_${secondModel}_diffr${secondRound}r${firstRound}.tex`;
-    } else {
-      const baseNameMatch = path
-        .parse(editedFileName)
-        .name.match(/^(.*?)_r\d+/);
-      if (!baseNameMatch) {
-        throw new Error('Failed to extract base name from edited file');
-      }
-      return `${baseNameMatch[1]}_diffr${secondRound}r${firstRound}.tex`;
-    }
+    const sameModel = firstModel === secondModel;
+    const baseName = extractBaseName(editedFileName, sameModel);
+
+    return sameModel
+      ? `${baseName}_${secondModel}_diffr${secondRound}r${firstRound}.tex`
+      : `${baseName}_diffr${secondRound}r${firstRound}.tex`;
   }
 }

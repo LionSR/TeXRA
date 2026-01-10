@@ -2,7 +2,15 @@
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
-// Local imports - core utilities
+/**
+ * OpenRouter reasoning_details item type.
+ * Defined locally since @openrouter/sdk/models subpath export requires moduleResolution: node16+
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ */
+type ReasoningDetailItem =
+  | { type: 'reasoning.text'; text?: string | null }
+  | { type: 'reasoning.encrypted'; data: string }
+  | { type: 'reasoning.summary'; summary: string };
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -21,23 +29,9 @@ import type {
 } from 'openai/resources/chat/completions';
 
 /**
- * OpenRouter reasoning_details array item types.
- * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
- */
-interface ReasoningDetailItem {
-  type: 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted';
-  id?: string | null;
-  format?: string;
-  index?: number;
-  text?: string; // for reasoning.text
-  summary?: string; // for reasoning.summary
-  data?: string; // for reasoning.encrypted
-  signature?: string | null; // for reasoning.text
-}
-
-/**
  * Extracts text content from OpenRouter reasoning_details array.
  * Handles the structured format with type-specific fields.
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
  */
 const extractTextFromReasoningDetails = (
   details: ReasoningDetailItem[] | unknown,
@@ -223,15 +217,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
 
     // Fall back to simple reasoning field (string)
-    const reasoning = message?.reasoning;
-    if (!reasoning) {
-      return null;
-    }
-    if (isNonEmptyString(reasoning)) {
-      return reasoning;
-    }
-
-    return null;
+    return isNonEmptyString(message?.reasoning) ? message.reasoning : null;
   }
 }
 
