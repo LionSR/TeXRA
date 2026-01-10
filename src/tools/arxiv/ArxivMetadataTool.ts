@@ -54,7 +54,10 @@ export class ArxivMetadataTool extends defineTool({
     }
 
     const targetEntry = entries[0];
-    const base = extractBasePaperMetadata(targetEntry, input.maxAuthors ?? undefined);
+    const base = extractBasePaperMetadata(
+      targetEntry,
+      input.maxAuthors ?? undefined,
+    );
     const includeAbstract = input.includeAbstract ?? true;
 
     const metadata: ArxivPaperMetadata = {
