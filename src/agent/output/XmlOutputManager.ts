@@ -33,6 +33,16 @@ import {
 import { getFileDirectory } from './displayUtils';
 import type { OutputFileInfo } from './types';
 
+/** Shared XMLParser configuration for scratchpad output extraction */
+const XML_PARSER_OPTIONS = {
+  ignoreAttributes: false,
+  parseTagValue: true,
+  textNodeName: 'content',
+  attributeNamePrefix: '',
+  processEntities: false,
+  ignoreDeclaration: true,
+} as const;
+
 export class XmlOutputManager {
   constructor(
     private readonly agentSetting: AgentSetting,
@@ -136,14 +146,7 @@ export class XmlOutputManager {
       return texLocation;
     }
 
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      parseTagValue: true,
-      textNodeName: 'content',
-      attributeNamePrefix: '',
-      processEntities: false,
-      ignoreDeclaration: true,
-    });
+    const parser = new XMLParser(XML_PARSER_OPTIONS);
     const root = parser.parse(outputContent);
 
     const latexDocument = extractContentFromXMLbyTag(root, documentTag);
@@ -207,7 +210,9 @@ export class XmlOutputManager {
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
-    const tryFallbackExtraction = async (): Promise<OutputFileInfo[] | null> => {
+    const tryFallbackExtraction = async (): Promise<
+      OutputFileInfo[] | null
+    > => {
       const fallbackDocs = this.extractMultipleDocumentsbyRegex(
         outputContent,
         documentTag,
@@ -225,14 +230,7 @@ export class XmlOutputManager {
     };
 
     try {
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        parseTagValue: true,
-        textNodeName: 'content',
-        attributeNamePrefix: '',
-        processEntities: false,
-        ignoreDeclaration: true,
-      });
+      const parser = new XMLParser(XML_PARSER_OPTIONS);
       const root = parser.parse(outputContent);
 
       const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
@@ -356,11 +354,10 @@ export class XmlOutputManager {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
     );
-    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
+    return this.splitScratchpadMultipleOutputXml(
       outputLocation,
       this.agentSetting.documentTag,
     );
-    return processedOutputFiles;
   }
 
   async ensureCorrectXmlStructure(
