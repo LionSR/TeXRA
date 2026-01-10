@@ -147,22 +147,17 @@ export type ResponseCycleShared = CycleFields & CycleTransientFields;
 export function assertCycleFieldsPopulated<T extends object>(
   shared: T,
 ): asserts shared is T & ResponseCycleShared {
-  // Required fields that must be defined (not undefined)
-  const requiredDefined = [
-    'messages',
-    'shouldStop',
-    'endTurn',
-    'outputExists',
-  ] as const;
   const obj = shared as Record<string, unknown>;
-  for (const field of requiredDefined) {
+  const requiredFields = ['messages', 'shouldStop', 'endTurn', 'outputExists'];
+
+  for (const field of requiredFields) {
     if (obj[field] === undefined) {
       throw new Error(
         `Cycle field '${field}' must be populated before running cycle flow`,
       );
     }
   }
-  // outputLocation must be non-null (downstream code uses it directly)
+
   if (obj['outputLocation'] === undefined || obj['outputLocation'] === null) {
     throw new Error(
       `Cycle field 'outputLocation' must be set to a valid location before running cycle flow`,
