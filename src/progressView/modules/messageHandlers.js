@@ -689,14 +689,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // DIAGNOSTIC: Final state after render
     const finalLogContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const computedStyle = finalLogContent
+      ? window.getComputedStyle(finalLogContent)
+      : null;
+    const firstChild = finalLogContent?.firstElementChild;
+    const firstChildStyle = firstChild
+      ? window.getComputedStyle(firstChild)
+      : null;
     _logEvent('FINAL_STATE', {
       logContentChildCount: finalLogContent?.childElementCount,
       logContentInnerHTMLLength: finalLogContent?.innerHTML?.length,
-      taskGroupStateCount: state.taskGroups?.size,
+      taskGroupStateCount: state.taskGroups?.groups?.size,
       taskGroupDOMCount:
         finalLogContent?.querySelectorAll('[data-group-id]')?.length,
       'state.activeSessionKind': state.activeSessionKind,
       'state.lastRenderedStream': state.lastRenderedStream,
+      // CSS visibility checks
+      logContentDisplay: computedStyle?.display,
+      logContentVisibility: computedStyle?.visibility,
+      logContentHidden: finalLogContent?.hidden,
+      firstChildDisplay: firstChildStyle?.display,
+      firstChildHidden: firstChild?.hidden,
     });
 
     this._updatePlaceholderVisibility();
