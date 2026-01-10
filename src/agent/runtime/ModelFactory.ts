@@ -38,31 +38,27 @@ const PROVIDER_HANDLERS = new Map<
 export class ModelFactory {
   /** Creates a model handler instance based on provider and routing configuration. */
   static createHandler(config: ModelConfig): ModelHandler {
+    const isOpenAI = config.provider === ModelProvider.OPENAI;
+
     // Models requiring Responses API must bypass OpenRouter (e.g., deep research)
-    if (
-      config.provider === ModelProvider.OPENAI &&
-      config.requiresResponsesAPI
-    ) {
+    if (isOpenAI && config.requiresResponsesAPI) {
       logger.debug(CHANNEL, 'Using OpenAI Responses API Handler (required)');
       return new ModelHandlerOpenAIResponse(config);
     }
 
-    // Route through OpenRouter if configured (takes precedence over optional Responses API)
+    // Route through OpenRouter if configured
     const useOpenRouter =
       config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false);
     if (useOpenRouter) {
-      if (!config.openrouterFullName) {
-        config.openrouterFullName = `${config.provider}/${config.fullName}`;
-      }
-      if (config.provider === ModelProvider.ANTHROPIC) {
-        return new ModelHandlerAnthropicViaOpenRouter(config);
-      }
-      return new ModelHandlerOpenRouter(config);
+      config.openrouterFullName ||= `${config.provider}/${config.fullName}`;
+      return config.provider === ModelProvider.ANTHROPIC
+        ? new ModelHandlerAnthropicViaOpenRouter(config)
+        : new ModelHandlerOpenRouter(config);
     }
 
-    // Check for optional OpenAI Responses API usage (only when not using OpenRouter)
-    if (config.provider === ModelProvider.OPENAI) {
+    // Check for optional OpenAI Responses API usage
+    if (isOpenAI) {
       const useResponsesAPI =
         getConfig<boolean>('texra.model.useOpenAIResponsesAPI', false) ||
         config.fullName.startsWith('gpt-oss');
