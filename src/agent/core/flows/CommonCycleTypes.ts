@@ -153,6 +153,19 @@ export function getDebugContext(
 }
 
 /**
+ * Resolve the effective temperature for model invocation.
+ * Defaults legacy zero/empty values to 1.0.
+ */
+export function resolveDefaultTemperature(
+  temperature: number | null | undefined,
+): number {
+  if (temperature === null || temperature === undefined || temperature === 0) {
+    return 1.0;
+  }
+  return temperature;
+}
+
+/**
  * Result type for nodes that can be skipped based on flow state.
  * Uses 'kind' discriminant for consistency with InvocationResult.
  */

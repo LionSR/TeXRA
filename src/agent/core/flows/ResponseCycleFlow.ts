@@ -13,6 +13,7 @@ import {
   BaseInvocationPrepResult,
   BaseInvocationSuccessData,
   getDebugContext,
+  resolveDefaultTemperature,
   resetCycleState,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
@@ -318,7 +319,7 @@ class ResponseModelInvocationNode<C> extends RetryableInvocationNode<
         const modelResponse = await services.modelHandler.createResponse({
           client: services.client,
           messages: prepRes.messages,
-          temperature: services.setting.temperature || 0.0,
+          temperature: resolveDefaultTemperature(services.setting.temperature),
           systemPrompt: prepRes.systemPrompt,
           endTag: services.setting.endTag,
           signal,

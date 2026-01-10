@@ -115,7 +115,7 @@ export const AgentSettingBaseSchema = z.strictObject({
     .min(MIN_TEMPERATURE)
     .max(MAX_TEMPERATURE)
     .nullable()
-    .prefault(0.0),
+    .prefault(1.0),
   requiredFiles: z.record(z.string(), z.string()).prefault({}),
   requiredFilesInternal: z.record(z.string(), z.string()).prefault({}),
   defaultOutputFiles: z.array(z.string()).prefault([]),

@@ -10,6 +10,7 @@ import {
   BaseInvocationSuccessData,
   resetCycleState,
   getDebugContext,
+  resolveDefaultTemperature,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
@@ -321,7 +322,7 @@ class ToolUseCallNode<C> extends RetryableInvocationNode<
       const response = await services.modelHandler.createResponse({
         client: services.client,
         messages: prepRes.messages,
-        temperature: services.setting.temperature ?? 0,
+        temperature: resolveDefaultTemperature(services.setting.temperature),
         signal,
         tools: services.setting.tools as ToolDefinition[] | undefined,
       });
