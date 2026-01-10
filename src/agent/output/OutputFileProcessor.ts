@@ -27,6 +27,9 @@ import {
 import type { XmlOutputManager } from './XmlOutputManager';
 import type { OutputFileInfo, OutputXmlSummary } from './types';
 
+/** Pattern to detect scratchpad XML tags in prefills */
+const SCRATCHPAD_TAG_PATTERN = /<scratchpad\s*>/i;
+
 export interface ProcessingContext {
   agentSetting: AgentWorkflowSetting;
   baseFiles: FileLocation[];
@@ -126,7 +129,7 @@ export class OutputFileProcessor {
 
       const hasScratchpadPrefill =
         agentSetting.prefills?.some((prefill) =>
-          /<scratchpad\s*>/i.test(prefill),
+          SCRATCHPAD_TAG_PATTERN.test(prefill),
         ) ?? false;
       const hasDocumentTag = Boolean(agentSetting.documentTag);
       const shouldProcessXml =
@@ -199,18 +202,17 @@ export class OutputFileProcessor {
   ): Promise<void> {
     const { agentSetting, logger } = this.ctx;
 
-    const run = async () => {
+    const execute = async () => {
       const singleFile =
         processed.length === 1 ? processed[0].location.absolutePath : null;
       const data = this.ctx.ensureRoundData(round);
-      const sourceLocation = rawOutput ?? null;
 
       if (!rawOutput?.absolutePath) {
         data.xmlSummary = {
           tagContents: {},
           documents: [],
           singleOutputFile: singleFile,
-          sourceLocation,
+          sourceLocation: rawOutput,
         };
         return;
       }
@@ -267,7 +269,7 @@ export class OutputFileProcessor {
           tagContents,
           documents,
           singleOutputFile: singleFile,
-          sourceLocation,
+          sourceLocation: rawOutput,
         };
       } catch (error) {
         logger.debug(
@@ -278,16 +280,11 @@ export class OutputFileProcessor {
           tagContents: {},
           documents: [],
           singleOutputFile: singleFile,
-          sourceLocation,
+          sourceLocation: rawOutput,
         };
       }
     };
 
-    if (stage) {
-      await stage.within(run);
-      return;
-    }
-
-    await run();
+    await (stage ? stage.within(execute) : execute());
   }
 }
