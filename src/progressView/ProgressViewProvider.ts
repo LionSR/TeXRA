@@ -224,6 +224,16 @@ export class ProgressViewProvider
    * @param options.forceRebuild - Force full DOM rebuild in frontend
    */
   public updateWebview(options?: { forceRebuild?: boolean }): void {
+    // DIAGNOSTIC: Track updateWebview calls
+    const stack = new Error().stack
+      ?.split('\n')
+      .slice(2, 5)
+      .map((s) => s.trim())
+      .join(' <- ');
+    this.logger.debug(
+      `[updateWebview] forceRebuild=${options?.forceRebuild}, caller: ${stack}`,
+    );
+
     if (!this._view && !this._panelView) return;
 
     if (!this.isAnyViewReady()) {
@@ -274,6 +284,11 @@ export class ProgressViewProvider
     } else {
       this._sidebarReady = true;
     }
+
+    // DIAGNOSTIC: Log reload flow
+    this.logger.debug(
+      `[markWebviewReady] activeStream="${this.state.activeStream}", streamTabs=${this.state.streamTabs.keys().length}`,
+    );
 
     // Clear pending options - we always force rebuild on first load anyway,
     // and that takes precedence over any pending options.
