@@ -173,9 +173,6 @@ export interface IModelHandler<
   /** Whether the handler supports processing attachments in tool results. */
   readonly canProcessToolResultAttachments: boolean;
 
-  /** Checks if the provider implements the OpenAI API. */
-  readonly isOpenaiCompatible: boolean;
-
   /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
 
