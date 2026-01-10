@@ -254,19 +254,37 @@ export async function checkToolInstalled(
       return false;
     };
 
-    // Parse and try a single command string
-    const tryCommand = (cmd: string): boolean => {
-      const parsedArgs = shellParse(cmd);
-      const stringArgs = parsedArgs.filter(
+    // Parse command string into executable and args
+    const parseCommand = (
+      cmd: string,
+    ): { cmdName: string; args: string[] } | null => {
+      const stringArgs = shellParse(cmd).filter(
         (arg): arg is string => typeof arg === 'string',
       );
-      if (stringArgs.length === 0) return false;
+      if (stringArgs.length === 0) return null;
       const [cmdName, ...args] = stringArgs;
-      return executeWithFallback(cmdName, args);
+      return { cmdName, args };
     };
 
-    const commands = Array.isArray(command) ? command : [command];
-    isInstalled = commands.some(tryCommand);
+    if (Array.isArray(command)) {
+      // Try each command in the array until one succeeds
+      for (const cmd of command) {
+        const parsed = parseCommand(cmd);
+        if (!parsed) continue;
+        if (executeWithFallback(parsed.cmdName, parsed.args)) {
+          isInstalled = true;
+          break;
+        }
+      }
+    } else {
+      // Single command: validate first, then execute
+      const parsed = parseCommand(command);
+      if (!parsed) {
+        throw new Error('Invalid command: no executable found');
+      }
+      isInstalled = executeWithFallback(parsed.cmdName, parsed.args);
+    }
+
 
     if (!isInstalled && showError) {
       const actions = config.openDocsCommand ? ['View Installation Guide'] : [];

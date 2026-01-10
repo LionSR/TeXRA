@@ -21,7 +21,9 @@ export function formatUserMessage(normalizedPayload, logId, timestamp) {
   const element = createFromTemplate('userMessageTemplate');
   if (!element) return null;
 
-  const { timeDisplay, tooltipTimestamp } = formatTimestamp(new Date(timestamp));
+  const { timeDisplay, tooltipTimestamp } = formatTimestamp(
+    new Date(timestamp),
+  );
 
   const timestampElem = element.querySelector('.user-message-timestamp');
   if (timestampElem) {
@@ -44,7 +46,13 @@ export function formatUserMessage(normalizedPayload, logId, timestamp) {
  * @returns {HTMLElement} Progress status element
  */
 export function formatProgressStatus(message) {
-  const { normalizedPayload = {}, level = 'info', id, groupId, timestamp } = message;
+  const {
+    normalizedPayload = {},
+    level = 'info',
+    id,
+    groupId,
+    timestamp,
+  } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp ?? Date.now()),
   );
