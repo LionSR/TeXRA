@@ -47,8 +47,16 @@ interface SignInOption {
 /** Build sign-in options based on enabled auth methods */
 function getSignInOptions(): SignInOption[] {
   const options: SignInOption[] = [
-    { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
-    { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
+    {
+      label: '$(globe) Google',
+      description: 'Sign in with Google',
+      method: 'google',
+    },
+    {
+      label: '$(github) GitHub',
+      description: 'Sign in with GitHub via web browser',
+      method: 'github-browser',
+    },
   ];
 
   if (EMAIL_LOGIN_ENABLED) {
