@@ -8,6 +8,13 @@ import { createIconButton } from '@common/templateUtils.js';
  * Manages toolbar rendering.
  */
 export class Toolbar {
+  /**
+   * @param {import('./Status.js').Status} [status] - Optional Status instance to notify on render
+   */
+  constructor(status) {
+    this._status = status;
+  }
+
   render(sessionKind = 'workflow') {
     const container = safeGetElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!container) {
@@ -16,7 +23,10 @@ export class Toolbar {
     }
     container.innerHTML = '';
     const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    const buttonIds = buttons.map((btn) => btn.id);
     container.dataset.agentMode = sessionKind;
+    // Notify Status of new button IDs to keep them in sync
+    this._status?.setCurrentButtonIds(buttonIds);
     buttons.forEach((def) => {
       try {
         const dataset = { command: def.command, ...(def.dataset ?? {}) };
