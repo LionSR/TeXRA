@@ -86,16 +86,16 @@ export class TodoList {
    * @returns {HTMLElement}
    */
   _createTodoItem(todo) {
-    const isInProgress = todo.status === TODO_STATUS.IN_PROGRESS;
-    const iconName =
-      STATUS_ICONS[todo.status] || STATUS_ICONS[TODO_STATUS.PENDING];
+    const { status } = todo;
+    const isInProgress = status === TODO_STATUS.IN_PROGRESS;
 
     const item = document.createElement('div');
-    item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
+    item.className = 'todo-item';
+    if (STATUS_CLASSES[status]) item.classList.add(STATUS_CLASSES[status]);
 
     const icon = document.createElement('i');
-    icon.className = `codicon codicon-${iconName} todo-item__icon`;
-    icon.classList.toggle('spin', isInProgress);
+    icon.className = `codicon codicon-${STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING]} todo-item__icon`;
+    if (isInProgress) icon.classList.add('spin');
 
     const content = document.createElement('span');
     content.className = 'todo-item__content';
