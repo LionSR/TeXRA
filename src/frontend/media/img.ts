@@ -158,9 +158,11 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
     `texra-resized-${crypto.randomUUID()}${ext}`,
   );
   const tool = await selectImageTool();
+  // ImageMagick v7+: use direct form (magick input -resize ... output)
+  // GraphicsMagick: requires 'convert' subcommand (gm convert input -resize ... output)
   const convertArgs = [
     tool,
-    'convert',
+    ...(tool === 'gm' ? ['convert'] : []),
     imagePath,
     '-resize',
     `${maxDimension}x${maxDimension}>`,
