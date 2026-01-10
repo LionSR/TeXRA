@@ -31,6 +31,13 @@ const CHANNEL = 'TextEditorTool';
 logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
 
+/** Maps API type versions to their corresponding tool names */
+const API_TYPE_TO_NAME = {
+  text_editor_20250429: 'str_replace_based_edit_tool',
+  text_editor_20250124: 'str_replace_editor',
+  text_editor_20241022: 'str_replace_editor',
+} as const;
+
 export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
@@ -75,10 +82,7 @@ export class TextEditorTool extends defineTool({
       | 'text_editor_20241022'
       | 'text_editor_20250429' = 'text_editor_20250124',
   ) {
-    const name =
-      apiType === 'text_editor_20250429'
-        ? 'str_replace_based_edit_tool'
-        : 'str_replace_editor';
+    const name = API_TYPE_TO_NAME[apiType];
     super({ name });
     this.apiType = apiType;
     this.name = name;

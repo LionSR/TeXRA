@@ -8,6 +8,7 @@ import {
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
 import * as logger from '@logger/logUtils';
+import { formatResultCount } from '@tools/utils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -80,10 +81,10 @@ export class DiagnosticsTool extends defineTool({
 
     const { errors = 0, warnings = 0, info = 0, hints = 0 } = severity;
     const counts = [
-      errors > 0 && `${errors} error${errors === 1 ? '' : 's'}`,
-      warnings > 0 && `${warnings} warning${warnings === 1 ? '' : 's'}`,
+      errors > 0 && formatResultCount(errors, 'error'),
+      warnings > 0 && formatResultCount(warnings, 'warning'),
       info > 0 && `${info} info`,
-      hints > 0 && `${hints} hint${hints === 1 ? '' : 's'}`,
+      hints > 0 && formatResultCount(hints, 'hint'),
     ]
       .filter(Boolean)
       .join(', ');
