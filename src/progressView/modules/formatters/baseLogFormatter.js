@@ -11,20 +11,15 @@ import { setElementDataset, initToggleIcon } from './htmlBuilders.js';
  * @param {boolean} [shouldOpen] - Whether element should be open
  */
 export const applyOpenState = (element, shouldOpen) => {
-  if (!(element instanceof HTMLElement) || element.tagName !== 'DETAILS') {
+  if (
+    !(element instanceof HTMLElement) ||
+    element.tagName !== 'DETAILS' ||
+    shouldOpen === undefined
+  ) {
     return;
   }
 
-  if (shouldOpen === undefined) {
-    return;
-  }
-
-  if (shouldOpen) {
-    element.setAttribute('open', '');
-  } else {
-    element.removeAttribute('open');
-  }
-
+  element.open = shouldOpen;
   initToggleIcon(element, shouldOpen);
 };
 
