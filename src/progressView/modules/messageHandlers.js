@@ -18,16 +18,31 @@ import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
 
+/**
+ * ARCHITECTURAL NOTE: Task Groups have different semantics per session kind
+ *
+ * The "task group" abstraction is currently overloaded:
+ *
+ * - Workflow sessions: Each group is a distinct "run" (user can switch between runs,
+ *   only one visible at a time via run selector dropdown)
+ *
+ * - ToolUse sessions: Each group is a conversation "turn" (user message → agent
+ *   response with tool calls). All turns should always be visible as continuous
+ *   conversation history.
+ *
+ * This semantic mismatch requires special handling throughout (checking isToolUse
+ * before calling showRun). A cleaner design would separate these concepts:
+ * - WorkflowRunManager for workflow sessions (switching between runs)
+ * - ConversationTurnManager for toolUse sessions (append-only history)
+ *
+ * TODO: Consider refactoring to separate these concerns in a future PR.
+ */
+
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
 const pendingLogUpdates = new Map();
 
-// DIAGNOSTIC: Event sequence counter for debugging reload issues
-let _eventSequence = 0;
-const _logEvent = (name, data) => {
-  console.log(`[SEQ ${++_eventSequence}] ${name}`, data);
-};
 
 // Create formatter instances
 
@@ -187,19 +202,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   _clearSessionKindState(newSessionKind) {
     const shouldClear =
       newSessionKind !== state.activeSessionKind && state.activeSessionKind;
-    // DIAGNOSTIC: Track session kind state changes
-    _logEvent('CLEAR_SESSION_KIND_STATE', {
-      newSessionKind,
-      currentSessionKind: state.activeSessionKind,
-      shouldClear,
-      taskGroupCount: state.taskGroups?.groups?.size ?? 0,
-    });
     if (shouldClear) {
-      _logEvent('TASK_GROUPS_CLEARED', {
-        reason: 'session kind change',
-        previousKind: state.activeSessionKind,
-        newKind: newSessionKind,
-      });
       state.taskGroups.clear();
       dom.taskGroups.clear();
     }
@@ -423,15 +426,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStreams(message) {
-    // DIAGNOSTIC: Log every UPDATE_STREAMS to understand reload failure
-    _logEvent('UPDATE_STREAMS', {
-      'message.activeStream': message.activeStream,
-      'message.streams?.length': message.streams?.length,
-      'state.activeStream (before)': state.activeStream,
-      'state.lastRenderedStream': state.lastRenderedStream,
-      'state.activeSessionKind (before)': state.activeSessionKind,
-    });
-
     // Save follow-up text for the previous stream before switching
     const previousStream = state.activeStream;
     if (previousStream && previousStream !== message.activeStream) {
@@ -440,7 +434,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     try {
       state.activeStream = message.activeStream;
-      console.log('[UPDATE_STREAMS] state.activeStream set to:', state.activeStream);
       if (
         !state.pendingFilterUpdate &&
         message.agentFilter !== undefined &&
@@ -476,16 +469,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     );
     const sessionKind = this._resolveSessionKind(activeStreamInfo);
     const isToolAgent = sessionKind === 'toolUse';
-
-    // DIAGNOSTIC: Log session kind resolution
-    _logEvent('SESSION_KIND_RESOLVE', {
-      hasActiveStreamInfo: Boolean(activeStreamInfo),
-      'activeStreamInfo.agentSessionKind': activeStreamInfo?.agentSessionKind,
-      'activeStreamInfo.uiTraits?.sessionKind':
-        activeStreamInfo?.uiTraits?.sessionKind,
-      resolvedSessionKind: sessionKind,
-      'state.activeSessionKind (current)': state.activeSessionKind,
-    });
 
     // Only clear session state if we have confirmed stream info for the session kind change
     if (activeStreamInfo) {
@@ -554,23 +537,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
-    // DIAGNOSTIC: Log every UPDATE_LOGS to understand reload failure
-    _logEvent('UPDATE_LOGS', {
-      'message.stream': message.stream,
-      'state.activeStream': state.activeStream,
-      'state.lastRenderedStream': state.lastRenderedStream,
-      'message.messages?.length': message.messages?.length,
-      'message.action': message.action,
-      '_isActiveStream': message.stream === state.activeStream,
-    });
-
     if (!this._isActiveStream(message)) {
-      // DIAGNOSTIC: This is the suspected bug - messages being dropped
-      console.warn('[UPDATE_LOGS] DROPPED - activeStream mismatch!', {
-        expected: state.activeStream,
-        received: message.stream,
-        messagesDropped: message.messages?.length ?? 0,
-      });
       this._updatePlaceholderVisibility();
       return;
     }
@@ -616,15 +583,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Full rebuild path: clear and rebuild
-    // DIAGNOSTIC: Track full rebuild clearing
-    _logEvent('FULL_REBUILD_START', {
-      'message.stream': message.stream,
-      'state.lastRenderedStream': state.lastRenderedStream,
-      isExplicitClear,
-      isStreamSwitch,
-      'message.groups?.length': message.groups?.length,
-      'message.messages?.length': message.messages?.length,
-    });
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
@@ -644,13 +602,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (groups.length > 0) {
       const parentGroups = groups.filter((g) => !g.parentGroupId);
-      // DIAGNOSTIC: Log group filtering
-      _logEvent('GROUP_FILTER', {
-        totalGroups: groups.length,
-        parentGroupsCount: parentGroups.length,
-        childGroupsCount: groups.length - parentGroups.length,
-        'state.activeSessionKind': state.activeSessionKind,
-      });
       dom.runSelector.setRuns(parentGroups);
       dom.taskGroups.renderInitial(groups);
 
@@ -661,17 +612,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           message.activeRunId,
           previousRunId,
         );
-        // DIAGNOSTIC: Log run selection
         const isToolUse = state.activeSessionKind === 'toolUse';
-        _logEvent('RUN_SELECTION', {
-          runIds,
-          'message.activeRunId': message.activeRunId,
-          previousRunId,
-          preferredRun,
-          isToolUse,
-          groupElementsSize: dom.taskGroups.groupElements?.size,
-          hasPreferredInElements: dom.taskGroups.groupElements?.has(preferredRun),
-        });
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
         // For toolUse sessions, show ALL groups (tool cycles) instead of filtering
@@ -693,17 +634,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    // DIAGNOSTIC: Log before rendering
-    _logEvent('RENDER_START', { messageCount: sortedMessages.length });
-    let renderedCount = 0;
     sortedMessages.forEach((msg) => {
       this._renderLogMessage(msg, logContent);
-      renderedCount++;
-    });
-    _logEvent('RENDER_COMPLETE', {
-      renderedCount,
-      logContentChildCount: logContent?.childElementCount,
-      logContentInnerHTMLLength: logContent?.innerHTML?.length,
     });
     scrollToBottom(logContent);
 
@@ -714,31 +646,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update lastRenderedStream AFTER successful render.
     // This is the single source of truth for stream switch detection.
     state.lastRenderedStream = message.stream;
-
-    // DIAGNOSTIC: Final state after render
-    const finalLogContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const computedStyle = finalLogContent
-      ? window.getComputedStyle(finalLogContent)
-      : null;
-    const firstChild = finalLogContent?.firstElementChild;
-    const firstChildStyle = firstChild
-      ? window.getComputedStyle(firstChild)
-      : null;
-    _logEvent('FINAL_STATE', {
-      logContentChildCount: finalLogContent?.childElementCount,
-      logContentInnerHTMLLength: finalLogContent?.innerHTML?.length,
-      taskGroupStateCount: state.taskGroups?.groups?.size,
-      taskGroupDOMCount:
-        finalLogContent?.querySelectorAll('[data-group-id]')?.length,
-      'state.activeSessionKind': state.activeSessionKind,
-      'state.lastRenderedStream': state.lastRenderedStream,
-      // CSS visibility checks
-      logContentDisplay: computedStyle?.display,
-      logContentVisibility: computedStyle?.visibility,
-      logContentHidden: finalLogContent?.hidden,
-      firstChildDisplay: firstChildStyle?.display,
-      firstChildHidden: firstChild?.hidden,
-    });
 
     this._updatePlaceholderVisibility();
   }
@@ -848,14 +755,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleAddTaskGroup(message) {
-    _logEvent('ADD_TASK_GROUP', {
-      'message.stream': message.stream,
-      'state.activeStream': state.activeStream,
-      'message.group?.id': message.group?.id,
-      'message.group?.parentGroupId': message.group?.parentGroupId,
-      isActiveStream: message.stream === state.activeStream,
-      'state.activeSessionKind': state.activeSessionKind,
-    });
     if (this._isActiveStream(message)) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
@@ -882,11 +781,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         // For toolUse sessions, show ALL groups (conversation history) instead of
         // filtering to only the new run. Workflow sessions filter to single run.
         const isToolUse = state.activeSessionKind === 'toolUse';
-        _logEvent('ADD_GROUP_SHOW_RUN', {
-          isToolUse,
-          showRunArg: isToolUse ? null : newRunId,
-          newRunId,
-        });
         dom.taskGroups.showRun(isToolUse ? null : newRunId);
         // Pass newRunId directly to avoid redundant resolveActiveRunId calls
         this._refreshInstructionForActiveRun(newRunId);
