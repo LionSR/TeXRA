@@ -134,13 +134,12 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
         // Refresh both model and agent options (model availability may change)
         void vscode.commands.executeCommand('texra.refreshAllOptions');
-        const any = await SecretManager.anyApiKeyExists();
+        const hasAnyKey = await SecretManager.anyApiKeyExists();
+        const bannerCommand = hasAnyKey
+          ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
+          : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER;
         const view = await getMainWebview();
-        view?.webview.postMessage({
-          command: any
-            ? MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER
-            : MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-        });
+        view?.webview.postMessage({ command: bannerCommand });
       } catch (err) {
         await showLoggedErrorMessage(
           CHANNEL,
