@@ -419,11 +419,7 @@ export class AgentLogger {
    */
   fileList(files: FileListEntry[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.info(summary, {
-      groupId,
-      messageType: MESSAGE_TYPES.FILE_LIST,
-      data: files,
-    });
+    this.logFileListData(summary, files, groupId);
   }
 
   /**
@@ -451,10 +447,19 @@ export class AgentLogger {
       sourceDisplay: category,
     }));
 
+    this.logFileListData(summary, entries, groupId);
+  }
+
+  /** Internal helper for FILE_LIST logging - shared by fileList and logFileCategory */
+  private logFileListData(
+    summary: string,
+    files: FileListEntry[],
+    groupId?: string,
+  ): void {
     this.info(summary, {
       groupId,
       messageType: MESSAGE_TYPES.FILE_LIST,
-      data: entries,
+      data: files,
     });
   }
 
@@ -503,14 +508,6 @@ export class AgentLogger {
       groupId,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
-  }
-
-  /**
-   * Returns the currently active group ID, or undefined if no group is active.
-   * Convenience method to avoid the `withCurrentGroup((id) => id)` boilerplate.
-   */
-  getCurrentGroupId(): string | undefined {
-    return this.resolveActiveGroupId();
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
