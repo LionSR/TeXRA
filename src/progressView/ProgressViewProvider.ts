@@ -275,6 +275,11 @@ export class ProgressViewProvider
       this._sidebarReady = true;
     }
 
+    // DIAGNOSTIC: Log reload flow
+    this.logger.debug(
+      `[markWebviewReady] activeStream="${this.state.activeStream}", streamTabs=${this.state.streamTabs.keys().length}`,
+    );
+
     // Clear pending options - we always force rebuild on first load anyway,
     // and that takes precedence over any pending options.
     this._pendingUpdateOptions = null;
