@@ -120,9 +120,10 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
       logprobs: primaryChoice.logprobs ?? null,
     };
 
-    const usageCandidate =
-      base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage;
-    const usage = usageCandidate === null ? undefined : usageCandidate;
+    // Convert null to undefined to match ChatCompletion type (usage: CompletionUsage | undefined)
+    const usage =
+      (base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage) ??
+      undefined;
 
     return {
       ...base,
