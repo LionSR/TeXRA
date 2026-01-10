@@ -69,10 +69,6 @@ export class WriteFileTool extends defineTool({
       finalContent,
     );
 
-    // Record the file as "read" after writing so subsequent edits don't require
-    // an explicit read. This is especially important for new files that were
-    // just created - without this, any immediate edit would fail with
-    // "prior read required" even though the user just wrote the file.
     recordToolFileRead(input.path);
 
     const userDiffNote = formatUnifiedApprovalUserDiff(

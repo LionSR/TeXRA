@@ -69,10 +69,32 @@ export const extractEntryIdentifier = (rawId: unknown): string | null => {
 };
 
 /** Extract author names, optionally limiting to maxAuthors */
-export const getAuthorNames = (
+export function getAuthorNames(
   authors: ArxivEntry['authors'],
   maxAuthors?: number,
-): string[] => {
+): string[] {
   const names = authors.map((author) => author.name);
   return maxAuthors !== undefined ? names.slice(0, maxAuthors) : names;
-};
+}
+
+/** Normalize entry title by trimming if string */
+export function normalizeEntryTitle(title: string | unknown): string {
+  return typeof title === 'string' ? title.trim() : String(title);
+}
+
+/** Extract base paper metadata from an arXiv entry */
+export function extractBasePaperMetadata(
+  entry: ArxivEntry,
+  maxAuthors?: number,
+): ArxivPaperBase {
+  const identifier = extractEntryIdentifier(entry.id);
+  return {
+    id: identifier,
+    doi: entry.doi?.id ?? null,
+    title: normalizeEntryTitle(entry.title),
+    published: entry.published ?? null,
+    updated: entry.updated ?? null,
+    authors: getAuthorNames(entry.authors, maxAuthors),
+    primaryCategory: entry.primaryCategory ?? null,
+  };
+}
