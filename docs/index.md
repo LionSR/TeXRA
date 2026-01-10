@@ -189,7 +189,7 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   display: inline-block;
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
-  background-color: transparent;
+  background-color: var(--vp-c-brand);
   color: white;
   font-weight: 500;
   text-decoration: none;
@@ -199,7 +199,7 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   background-color: var(--vp-c-brand-dark);
 }
 .cta-button-alt {
-  background-color: transparent;
+  background-color: var(--vp-c-bg);
   color: var(--vp-c-brand);
   border: 1px solid var(--vp-c-brand);
 }
@@ -213,24 +213,6 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-.workflow-intro {
-  text-align: center;
-  margin-bottom: 2.5rem;
-  width: 100%;
-}
-.workflow-intro h2 {
-  margin-bottom: 0.5rem;
-  font-size: 1.8rem;
-  background: linear-gradient(to right, var(--vp-c-brand), var(--vp-c-brand-dark));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.workflow-intro p {
-  font-size: 1.1rem;
-  color: var(--vp-c-text-2);
-  max-width: 640px;
-  margin: 0 auto;
 }
 .workflow-steps {
   display: flex;
@@ -292,7 +274,6 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
   position: relative;
 }
 .workflow-diff-image {
-  width: 100%;
   max-width: 100%;
   height: auto;
   border-radius: 4px;
@@ -337,9 +318,6 @@ If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra
     width: 100%;
     max-width: 300px;
     margin-bottom: 0.5rem;
-  }
-  .workflow-intro h2 {
-    font-size: 1.6rem;
   }
   .step-image {
     max-width: 220px;
