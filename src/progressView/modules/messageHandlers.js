@@ -647,17 +647,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           previousRunId,
         );
         // DIAGNOSTIC: Log run selection
+        const isToolUse = state.activeSessionKind === 'toolUse';
         _logEvent('RUN_SELECTION', {
           runIds,
           'message.activeRunId': message.activeRunId,
           previousRunId,
           preferredRun,
+          isToolUse,
           groupElementsSize: dom.taskGroups.groupElements?.size,
           hasPreferredInElements: dom.taskGroups.groupElements?.has(preferredRun),
         });
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
-        dom.taskGroups.showRun(preferredRun);
+        // For toolUse sessions, show ALL groups (tool cycles) instead of filtering
+        // to a single run. Workflow sessions filter to show only the selected run.
+        dom.taskGroups.showRun(isToolUse ? null : preferredRun);
       } else {
         dom.taskGroups.showRun(null);
       }
