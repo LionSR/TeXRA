@@ -55,27 +55,6 @@ import {
 // All debug options (context + file options) are derived at maybeSaveDebugObject call sites.
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-type ErrorLogger = { error: (msg: string) => void };
-
-/** Log detailed repetition detection error for debugging. */
-function logRepetitionDetected(
-  newResponse: string,
-  messages: ProviderMessage[],
-  logger: ErrorLogger,
-): void {
-  const preview = newResponse.substring(0, REPETITION_DETECTION_THRESHOLD);
-  const skeleton = JSON.stringify(messageToSkeleton(messages), null, 2);
-  logger.error(
-    `Massive repetition detected - skipping this response\n` +
-      `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
-      `Message structure:\n${skeleton}`,
-  );
-}
-
-// ============================================================================
 // Cycle Fields Schema (Extends Base)
 // ============================================================================
 
@@ -566,7 +545,13 @@ class ResponseProcessNode<C> extends BaseNode<
       );
 
       if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        logRepetitionDetected(newResponse, prepRes.messages, logger);
+        const preview = newResponse.substring(0, REPETITION_DETECTION_THRESHOLD);
+        const skeleton = JSON.stringify(messageToSkeleton(prepRes.messages), null, 2);
+        logger.error(
+          `Massive repetition detected - skipping this response\n` +
+            `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
+            `Message structure:\n${skeleton}`,
+        );
       }
 
       let processedResponse: string | undefined;
