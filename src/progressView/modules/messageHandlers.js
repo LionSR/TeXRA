@@ -23,6 +23,12 @@ const state = progressViewState;
 const dom = progressViewDomHandler;
 const pendingLogUpdates = new Map();
 
+// DIAGNOSTIC: Event sequence counter for debugging reload issues
+let _eventSequence = 0;
+const _logEvent = (name, data) => {
+  console.log(`[SEQ ${++_eventSequence}] ${name}`, data);
+};
+
 // Create formatter instances
 
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
@@ -182,16 +188,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const shouldClear =
       newSessionKind !== state.activeSessionKind && state.activeSessionKind;
     // DIAGNOSTIC: Track session kind state changes
-    console.log('[_clearSessionKindState] called:', {
+    _logEvent('CLEAR_SESSION_KIND_STATE', {
       newSessionKind,
       currentSessionKind: state.activeSessionKind,
       shouldClear,
       taskGroupCount: state.taskGroups?.size ?? 0,
     });
     if (shouldClear) {
-      console.warn(
-        '[_clearSessionKindState] CLEARING task groups! This may cause message loss.',
-      );
+      _logEvent('TASK_GROUPS_CLEARED', {
+        reason: 'session kind change',
+        previousKind: state.activeSessionKind,
+        newKind: newSessionKind,
+      });
       state.taskGroups.clear();
       dom.taskGroups.clear();
     }
@@ -290,7 +298,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _renderLogMessage(msg, logContent) {
     // dom.logEntries.append returns true if message was added to its group container
-    if (msg.groupId && dom.logEntries.append(msg)) return;
+    if (msg.groupId) {
+      const wasAppendedToGroup = dom.logEntries.append(msg);
+      // DIAGNOSTIC: Track grouped message handling
+      if (!wasAppendedToGroup) {
+        console.warn('[_renderLogMessage] Message has groupId but no container:', {
+          messageType: msg.messageType,
+          id: msg.id,
+          groupId: msg.groupId,
+        });
+      }
+      if (wasAppendedToGroup) return;
+    }
     const formatted = this._entryFormatter.format(msg);
     // DIAGNOSTIC: Log if formatter returns null
     if (!formatted) {
@@ -299,6 +318,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         id: msg.id,
         hasText: Boolean(msg.text),
         hasData: Boolean(msg.data),
+        groupId: msg.groupId,
       });
     }
     appendFormatted(logContent, formatted);
@@ -404,7 +424,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     // DIAGNOSTIC: Log every UPDATE_STREAMS to understand reload failure
-    console.log('[UPDATE_STREAMS] received:', {
+    _logEvent('UPDATE_STREAMS', {
       'message.activeStream': message.activeStream,
       'message.streams?.length': message.streams?.length,
       'state.activeStream (before)': state.activeStream,
@@ -458,7 +478,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const isToolAgent = sessionKind === 'toolUse';
 
     // DIAGNOSTIC: Log session kind resolution
-    console.log('[UPDATE_STREAMS] session kind resolution:', {
+    _logEvent('SESSION_KIND_RESOLVE', {
       hasActiveStreamInfo: Boolean(activeStreamInfo),
       'activeStreamInfo.agentSessionKind': activeStreamInfo?.agentSessionKind,
       'activeStreamInfo.uiTraits?.sessionKind':
@@ -535,7 +555,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateLogs(message) {
     // DIAGNOSTIC: Log every UPDATE_LOGS to understand reload failure
-    console.log('[UPDATE_LOGS] received:', {
+    _logEvent('UPDATE_LOGS', {
       'message.stream': message.stream,
       'state.activeStream': state.activeStream,
       'state.lastRenderedStream': state.lastRenderedStream,
@@ -589,12 +609,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Full rebuild path: clear and rebuild
     // DIAGNOSTIC: Track full rebuild clearing
-    console.log('[UPDATE_LOGS] Full rebuild - clearing task groups', {
+    _logEvent('FULL_REBUILD_START', {
       'message.stream': message.stream,
       'state.lastRenderedStream': state.lastRenderedStream,
       isExplicitClear,
       isStreamSwitch,
       'message.groups?.length': message.groups?.length,
+      'message.messages?.length': message.messages?.length,
     });
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
@@ -645,13 +666,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // DIAGNOSTIC: Log before rendering
-    console.log('[UPDATE_LOGS] Full rebuild - rendering', logMessages.length, 'messages');
+    _logEvent('RENDER_START', { messageCount: logMessages.length });
     let renderedCount = 0;
     logMessages.forEach((msg) => {
       this._renderLogMessage(msg, logContent);
       renderedCount++;
     });
-    console.log('[UPDATE_LOGS] After render loop:', {
+    _logEvent('RENDER_COMPLETE', {
       renderedCount,
       logContentChildCount: logContent?.childElementCount,
       logContentInnerHTMLLength: logContent?.innerHTML?.length,
@@ -668,13 +689,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // DIAGNOSTIC: Final state after render
     const finalLogContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    console.log('[UPDATE_LOGS] Final state after render:', {
+    _logEvent('FINAL_STATE', {
       logContentChildCount: finalLogContent?.childElementCount,
       logContentInnerHTMLLength: finalLogContent?.innerHTML?.length,
       taskGroupStateCount: state.taskGroups?.size,
       taskGroupDOMCount:
         finalLogContent?.querySelectorAll('[data-group-id]')?.length,
       'state.activeSessionKind': state.activeSessionKind,
+      'state.lastRenderedStream': state.lastRenderedStream,
     });
 
     this._updatePlaceholderVisibility();
