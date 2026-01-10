@@ -21,11 +21,98 @@ export const wolframScriptCommands = {
 const CHANNEL = 'WolframScriptCommands';
 logger.initialize(CHANNEL);
 
-/**
- * Show an error message with a link to Tool Integration docs.
- * @param message The error message to display.
- */
-// Removed showWolframError wrapper - using showLoggedMessageWithDocs directly
+/** Common CSS styles for Wolfram result webviews */
+const WOLFRAM_RESULT_STYLES = `
+  body {
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-editor-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 20px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  h2, h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-weight: 500;
+    color: var(--vscode-editor-foreground);
+  }
+
+  .file-info {
+    margin-bottom: 10px;
+    font-style: italic;
+  }
+
+  .input, .output, .error {
+    margin-bottom: 20px;
+  }
+
+  .error pre {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+  }
+
+  pre {
+    background-color: var(--vscode-textCodeBlock-background);
+    color: var(--vscode-editor-foreground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+    padding: 16px;
+    overflow: auto;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    white-space: pre-wrap;
+  }
+`;
+
+interface WolframResultContent {
+  output: string | null;
+  error: string | null;
+}
+
+/** Build HTML content sections for Wolfram result display */
+function buildResultSections(result: WolframResultContent): {
+  outputHtml: string;
+  errorHtml: string;
+} {
+  const errorHtml = result.error
+    ? `<div class="error"><h3>Error:</h3><pre>${result.error}</pre></div>`
+    : '';
+
+  const outputHtml = result.output
+    ? `<div class="output"><h3>Output:</h3><pre>${result.output}</pre></div>`
+    : '<div class="output"><h3>Output:</h3><pre>No output received.</pre></div>';
+
+  return { outputHtml, errorHtml };
+}
+
+/** Generate complete HTML for Wolfram result webview */
+function createResultHtml(
+  title: string,
+  heading: string,
+  inputSection: string,
+  result: WolframResultContent,
+): string {
+  const { outputHtml, errorHtml } = buildResultSections(result);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+  <title>${title}</title>
+  <style>${WOLFRAM_RESULT_STYLES}</style>
+</head>
+<body>
+  <h2>${heading}</h2>
+  ${inputSection}
+  ${outputHtml}
+  ${errorHtml}
+</body>
+</html>`;
+}
 
 export function registerWolframScriptCommands(
   context: vscode.ExtensionContext,
@@ -119,72 +206,13 @@ export function registerWolframScriptCommands(
           { enableScripts: true },
         );
 
-        const errorContent = result.error
-          ? `<div class="error"><h3>Error:</h3><pre>${result.error}</pre></div>`
-          : '';
-
-        const outputContent = result.output
-          ? `<div class="output"><h3>Output:</h3><pre>${result.output}</pre></div>`
-          : '<div class="output"><h3>Output:</h3><pre>No output received.</pre></div>';
-
-        panel.webview.html = `
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-            <title>Wolfram Language Result</title>
-            <style>
-              body {
-                font-family: var(--vscode-font-family);
-                color: var(--vscode-editor-foreground);
-                background-color: var(--vscode-editor-background);
-                padding: 20px;
-                margin: 0;
-                line-height: 1.5;
-              }
-              
-              h2, h3 {
-                margin-top: 0;
-                margin-bottom: 16px;
-                font-weight: 500;
-                color: var(--vscode-editor-foreground);
-              }
-              
-              .input, .output, .error {
-                margin-bottom: 20px;
-              }
-              
-              .error pre {
-                background-color: var(--vscode-inputValidation-errorBackground);
-                border: 1px solid var(--vscode-inputValidation-errorBorder);
-              }
-              
-              pre {
-                background-color: var(--vscode-textCodeBlock-background);
-                color: var(--vscode-editor-foreground);
-                border: 1px solid var(--vscode-panel-border);
-                border-radius: 3px;
-                padding: 16px;
-                overflow: auto;
-                font-family: var(--vscode-editor-font-family);
-                font-size: var(--vscode-editor-font-size);
-                white-space: pre-wrap;
-              }
-            </style>
-          </head>
-          <body>
-            <h2>Wolfram Language Execution</h2>
-            <div class="input">
-              <h3>Input:</h3>
-              <pre>${code}</pre>
-            </div>
-            ${outputContent}
-            ${errorContent}
-          </body>
-          </html>
-        `;
+        const inputSection = `<div class="input"><h3>Input:</h3><pre>${code}</pre></div>`;
+        panel.webview.html = createResultHtml(
+          'Wolfram Language Result',
+          'Wolfram Language Execution',
+          inputSection,
+          result,
+        );
       } catch (err) {
         await showLoggedMessageWithDocs(
           CHANNEL,
@@ -257,78 +285,15 @@ export function registerWolframScriptCommands(
           { enableScripts: true },
         );
 
-        const errorContent = result.error
-          ? `<div class="error"><h3>Error:</h3><pre>${result.error}</pre></div>`
-          : '';
-
-        const outputContent = result.output
-          ? `<div class="output"><h3>Output:</h3><pre>${result.output}</pre></div>`
-          : '<div class="output"><h3>Output:</h3><pre>No output received.</pre></div>';
-
-        panel.webview.html = `
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-            <title>Wolfram Script File Result</title>
-            <style>
-              body {
-                font-family: var(--vscode-font-family);
-                color: var(--vscode-editor-foreground);
-                background-color: var(--vscode-editor-background);
-                padding: 20px;
-                margin: 0;
-                line-height: 1.5;
-              }
-              
-              h2, h3 {
-                margin-top: 0;
-                margin-bottom: 16px;
-                font-weight: 500;
-                color: var(--vscode-editor-foreground);
-              }
-              
-              .file-info {
-                margin-bottom: 10px;
-                font-style: italic;
-              }
-              
-              .input, .output, .error {
-                margin-bottom: 20px;
-              }
-              
-              .error pre {
-                background-color: var(--vscode-inputValidation-errorBackground);
-                border: 1px solid var(--vscode-inputValidation-errorBorder);
-              }
-              
-              pre {
-                background-color: var(--vscode-textCodeBlock-background);
-                color: var(--vscode-editor-foreground);
-                border: 1px solid var(--vscode-panel-border);
-                border-radius: 3px;
-                padding: 16px;
-                overflow: auto;
-                font-family: var(--vscode-editor-font-family);
-                font-size: var(--vscode-editor-font-size);
-                white-space: pre-wrap;
-              }
-            </style>
-          </head>
-          <body>
-            <h2>Wolfram Script File Execution</h2>
-            <div class="file-info">File: ${filePath}</div>
-            <div class="input">
-              <h3>File Content (sample):</h3>
-              <pre>${sampleContent.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre>
-            </div>
-            ${outputContent}
-            ${errorContent}
-          </body>
-          </html>
-        `;
+        const escapedContent = sampleContent.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        const inputSection = `<div class="file-info">File: ${filePath}</div>
+          <div class="input"><h3>File Content (sample):</h3><pre>${escapedContent}</pre></div>`;
+        panel.webview.html = createResultHtml(
+          'Wolfram Script File Result',
+          'Wolfram Script File Execution',
+          inputSection,
+          result,
+        );
       } catch (err) {
         await showLoggedMessageWithDocs(
           CHANNEL,
