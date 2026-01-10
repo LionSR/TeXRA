@@ -80,24 +80,19 @@ class TaskGroups {
    * @param {{ id: string, status?: string, endTime?: number }} payload
    */
   update(payload) {
-    if (!payload) {
-      return;
+    if (!payload?.id) return;
+
+    const group = this.groups.get(payload.id);
+    if (!group) return;
+
+    if (payload.status) {
+      group.status = payload.status;
+    }
+    if (payload.endTime != null) {
+      group.endTime = payload.endTime;
     }
 
-    const { id, status, endTime } = payload;
-    const group = this.groups.get(id);
-    if (!group) {
-      return;
-    }
-
-    if (status) {
-      group.status = status;
-    }
-    if (endTime !== undefined && endTime !== null) {
-      group.endTime = endTime;
-    }
-
-    this.set(id, group);
+    this.set(payload.id, group);
   }
 
   getChildIds(parentId) {
