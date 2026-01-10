@@ -71,14 +71,7 @@ export abstract class BaseViewMessageHandler<
         this.channel,
         'getActiveView called but trackActiveView is not enabled',
       );
-      return undefined;
     }
-
-    if (!this._activeView) {
-      this.logger.warn(this.channel, 'No active webview available');
-      return undefined;
-    }
-
     return this._activeView;
   }
 

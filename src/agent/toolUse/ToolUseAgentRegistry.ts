@@ -78,12 +78,11 @@ export function getToolUseFlowContext(
 ): ToolUseFlowContext<any> | undefined {
   const entry = registry.get(streamTabId);
   // Type guard: check if it's a ToolUseFlowContext (has 'session' property with appendFollowUp method)
-  // This is more specific than checking 'services', which is shared by all BaseFlowContext subclasses
   if (
     entry &&
     'session' in entry &&
+    entry.session &&
     typeof entry.session === 'object' &&
-    entry.session !== null &&
     'appendFollowUp' in entry.session
   ) {
     return entry as ToolUseFlowContext<any>;
@@ -99,9 +98,11 @@ export function getToolUseFlowContext(
  * Remove registry entries for streams that no longer have an active session.
  */
 export function cleanupInactiveAgents(activeStreams: Set<StreamTabId>): void {
-  for (const streamId of registry.keys()) {
-    if (!activeStreams.has(streamId)) {
-      registry.delete(streamId);
-    }
+  // Collect keys to delete first to avoid modifying Map during iteration
+  const keysToDelete = [...registry.keys()].filter(
+    (streamId) => !activeStreams.has(streamId),
+  );
+  for (const streamId of keysToDelete) {
+    registry.delete(streamId);
   }
 }

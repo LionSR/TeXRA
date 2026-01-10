@@ -7,6 +7,7 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
+import { pluralize } from '@tools/utils';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -29,18 +30,12 @@ const EditInputSchema = z.strictObject({
 export type EditInput = z.infer<typeof EditInputSchema>;
 
 function countOccurrences(haystack: string, needle: string): number {
-  if (needle.length === 0) {
-    return 0;
-  }
+  if (needle.length === 0) return 0;
   let count = 0;
-  let index = 0;
-  while (index < haystack.length) {
-    const foundIndex = haystack.indexOf(needle, index);
-    if (foundIndex === -1) {
-      break;
-    }
-    count += 1;
-    index = foundIndex + needle.length;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count++;
+    index = haystack.indexOf(needle, index + needle.length);
   }
   return count;
 }
@@ -108,24 +103,15 @@ export class EditFileTool extends defineTool({
       finalContent,
     );
 
-    // Record file as "read" after editing so subsequent edits don't require
-    // an explicit read again.
     recordToolFileRead(targetPath);
 
-    const replacementSummary =
-      replace_all === true
-        ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
-        : 'Replaced 1 occurrence.';
-    const summary =
-      replace_all === true
-        ? `Edited ${targetPath}: replaced ${occurrences} occurrence${
-            occurrences === 1 ? '' : 's'
-          }`
-        : `Edited ${targetPath}: replaced 1 occurrence`;
+    const count = replace_all === true ? occurrences : 1;
+    const replacementSummary = `Replaced ${count} ${pluralize(count, 'occurrence')}.`;
+    const summary = `Edited ${targetPath}: replaced ${count} ${pluralize(count, 'occurrence')}`;
 
     const userDiffNote = formatUnifiedApprovalUserDiff(
       targetPath,
-      finalContent,
+      updatedContent,
       appliedContent,
     );
     const output = userDiffNote

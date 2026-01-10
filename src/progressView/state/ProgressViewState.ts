@@ -61,12 +61,6 @@ export class ProgressViewState {
   private _usageStats: UsageStatsManager;
   private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = '';
-  /**
-   * Tracks the stream that was last rendered to the webview.
-   * Used as single source of truth for stream switch detection.
-   * Reset when webview is cleaned up to force rebuild on next render.
-   */
-  private _lastRenderedStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly taskStates = new Map<StreamTabId, TaskState>();
@@ -143,32 +137,6 @@ export class ProgressViewState {
     this.saveActiveStream();
   }
 
-  // Stream switch detection (single source of truth)
-
-  /**
-   * Check if rendering the given stream would be a stream switch.
-   * Uses lastRenderedStream as the single source of truth.
-   */
-  isStreamSwitch(stream: StreamTabId): boolean {
-    return this._lastRenderedStream !== stream;
-  }
-
-  /**
-   * Mark a stream as having been rendered.
-   * Called after successfully rendering stream content to webview.
-   */
-  markStreamRendered(stream: StreamTabId): void {
-    this._lastRenderedStream = stream;
-  }
-
-  /**
-   * Clear rendered stream tracking.
-   * Called when webview is cleaned up to force rebuild on next render.
-   */
-  clearRenderedStreamTracking(): void {
-    this._lastRenderedStream = '';
-  }
-
   /**
    * Ensure the active stream is valid within the given set of available streams.
    *
@@ -176,8 +144,13 @@ export class ProgressViewState {
    * current active stream is not in the available set (e.g., due to filtering),
    * this method picks the first available stream and updates the state.
    *
+   * IMPORTANT: When availableStreams is empty, we preserve and return the current
+   * activeStream to avoid clearing content during temporary filter mismatches
+   * (e.g., during resume flow race conditions). The return value is always
+   * consistent with state._activeStream.
+   *
    * @param availableStreams - Array of stream IDs that are currently visible/available
-   * @returns The resolved active stream ID (may be empty string if no streams available)
+   * @returns The resolved active stream ID (current active if no streams available)
    */
   resolveActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const currentActive = this._activeStream;
@@ -187,16 +160,19 @@ export class ProgressViewState {
       return currentActive;
     }
 
-    // Otherwise, pick the first available stream (or empty if none)
-    const resolved = availableStreams[0] ?? '';
+    // Pick the first available stream, or preserve current if none available.
+    // Preserving current when availableStreams is empty prevents clearing content
+    // during temporary filter mismatches (e.g., during resume flow race conditions).
+    const resolved = availableStreams[0];
 
-    // Only update state if it actually changed
-    if (resolved !== currentActive) {
+    if (resolved && resolved !== currentActive) {
       this._activeStream = resolved;
       this.saveActiveStream();
     }
 
-    return resolved;
+    // Return resolved if valid, otherwise preserve current active.
+    // This keeps return value consistent with state._activeStream.
+    return resolved || currentActive;
   }
 
   get streamSortOrder(): string {
@@ -331,86 +307,53 @@ export class ProgressViewState {
     options?: { persist?: boolean },
   ): string | null {
     const persist = options?.persist ?? true;
-    const preferred = requested ?? null;
 
-    let candidates: Set<string> | null = null;
-    const ensureCandidates = (): Set<string> => {
-      if (!candidates) {
-        candidates = this.collectRunCandidates(stream);
+    // Helper to persist and return a resolved runId
+    const resolve = (runId: string | null): string | null => {
+      if (runId && persist) {
+        this.setActiveRunId(stream, runId);
       }
-      return candidates;
+      return runId;
     };
 
-    if (preferred) {
-      if (!ensureCandidates().has(preferred)) {
-        return null;
-      }
-      if (persist) {
-        this.setActiveRunId(stream, preferred);
-      }
-      return preferred;
+    // 1. If specific runId requested, validate it exists
+    if (requested) {
+      const candidates = this.collectRunCandidates(stream);
+      return candidates.has(requested) ? resolve(requested) : null;
     }
 
+    // 2. Use existing active run if set
     const current = this.getActiveRunId(stream);
-    if (current) {
-      return current;
+    if (current) return current;
+
+    // 3. Auto-select: single candidate or latest
+    const candidates = this.collectRunCandidates(stream);
+    if (candidates.size === 1) {
+      const [only] = candidates;
+      return resolve(only);
     }
 
-    const candidateSet = ensureCandidates();
-    if (candidateSet.size === 1) {
-      const only = candidateSet.values().next().value;
-      if (only) {
-        if (persist) {
-          this.setActiveRunId(stream, only);
-        }
-        return only;
-      }
-    }
-
-    const latest = this.findLatestRunId(stream);
-    if (latest) {
-      if (persist) {
-        this.setActiveRunId(stream, latest);
-      }
-      return latest;
-    }
-
-    return null;
+    return resolve(this.findLatestRunId(stream));
   }
 
   private collectRunCandidates(stream: StreamTabId): Set<string> {
     const candidates = new Set<string>();
 
-    const instructionRuns = this._runInstructions.getInstructions(stream);
-    for (const runId of instructionRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
+    // Helper to add all keys from a Map
+    const addKeys = (map: Map<string, unknown>): void => {
+      for (const runId of map.keys()) {
+        if (runId) candidates.add(runId);
       }
-    }
+    };
 
-    const fileRuns = this._outputFiles.getFiles(stream);
-    for (const runId of fileRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
+    // Collect from all run-scoped data sources
+    addKeys(this._runInstructions.getInstructions(stream));
+    addKeys(this._outputFiles.getFiles(stream));
+    addKeys(this._outputFiles.getMissingOutputs(stream));
+    addKeys(this._usageStats.getRunUsage(stream));
 
-    const missingRuns = this._outputFiles.getMissingOutputs(stream);
-    for (const runId of missingRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
-
-    const usageRuns = this._usageStats.getRunUsage(stream);
-    for (const runId of usageRuns.keys()) {
-      if (runId) {
-        candidates.add(runId);
-      }
-    }
-
-    const groups = this._taskGroups.getStreamGroups(stream);
-    for (const group of groups.values()) {
+    // Add root task group IDs (groups without parents)
+    for (const group of this._taskGroups.getStreamGroups(stream).values()) {
       if (!group.parentGroupId) {
         candidates.add(group.id);
       }
@@ -572,6 +515,7 @@ export class ProgressViewState {
 
   // Stream cleanup operations
   async clearStream(stream: StreamTabId): Promise<void> {
+    // Clear persisted manager data in parallel
     await Promise.all([
       this._streamTabs.delete(stream),
       this._taskGroups.delete(stream),
@@ -579,25 +523,28 @@ export class ProgressViewState {
       this._usageStats.delete(stream),
       this._runInstructions.clearStream(stream),
     ]);
+
+    // Clear ephemeral state
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
-    this.clearStreamHints(stream);
-    this.clearActiveRun(stream);
-    this.clearTodos(stream);
-    this.clearContextState(stream);
+    this._streamHints.delete(stream);
+    this._activeRunIds.delete(stream);
+    this._todos.delete(stream);
+    this._contextState.delete(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
-      const remainingStreams = this._streamTabs.keys();
-      this._activeStream = remainingStreams[0] || '';
+      this._activeStream = this._streamTabs.keys()[0] || '';
       this.saveActiveStream();
     }
 
+    // Persist changes
     if (removedState) {
       this.saveTaskStates();
       this.cleanupToolUseAgentRegistry();
     }
     this.saveExecutionIds();
+    this.saveActiveRunIds();
   }
 
   async clearAll(): Promise<void> {
@@ -663,11 +610,11 @@ export class ProgressViewState {
   }
 
   /**
-   * Load task states from persistence
+   * Load task states from persistence.
+   * Handles both current flat format and legacy workflow/toolUse format.
    */
   private async loadTaskStates(): Promise<void> {
     const raw = this.loadRecord(WorkspaceStateKey.TASK_STATES);
-
     this.taskStates.clear();
 
     if (Object.keys(raw).length === 0) {
@@ -675,48 +622,21 @@ export class ProgressViewState {
       return;
     }
 
-    const container = raw;
-    const buckets: Record<string, unknown>[] = [];
-
-    if (
-      typeof container.workflow === 'object' ||
-      typeof container.toolUse === 'object'
-    ) {
-      if (container.workflow && typeof container.workflow === 'object') {
-        buckets.push(container.workflow as Record<string, unknown>);
-      }
-      if (container.toolUse && typeof container.toolUse === 'object') {
-        buckets.push(container.toolUse as Record<string, unknown>);
-      }
-    } else {
-      buckets.push(container);
-    }
+    // Collect entries from legacy format (workflow/toolUse sub-objects) or flat format
+    const entries = this.extractTaskStateEntries(raw);
 
     let loaded = 0;
-
-    for (const record of buckets) {
-      for (const [stream, rawState] of Object.entries(record)) {
-        if (!rawState || typeof rawState !== 'object') {
-          continue;
-        }
-
-        // Validate against TaskState schema to catch corrupted/malformed state
-        const parseResult = TaskStateSchema.safeParse(rawState);
-        if (!parseResult.success) {
-          this.logger.debug(
-            `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
-          );
-          continue;
-        }
-
-        // Cast is safe: schema uses passthrough() for efficiency but data
-        // originated from a validated TaskState with full AgentConfig
-        this.taskStates.set(
-          stream as StreamTabId,
-          parseResult.data as TaskState,
+    for (const [stream, rawState] of entries) {
+      const parseResult = TaskStateSchema.safeParse(rawState);
+      if (!parseResult.success) {
+        this.logger.debug(
+          `Skipping invalid task state for stream ${stream}: ${parseResult.error.message}`,
         );
-        loaded += 1;
+        continue;
       }
+
+      this.taskStates.set(stream as StreamTabId, parseResult.data as TaskState);
+      loaded += 1;
     }
 
     if (loaded > 0) {
@@ -724,6 +644,37 @@ export class ProgressViewState {
     }
 
     this.cleanupToolUseAgentRegistry();
+  }
+
+  /**
+   * Extract task state entries from either legacy or flat format.
+   */
+  private extractTaskStateEntries(
+    raw: Record<string, unknown>,
+  ): Array<[string, unknown]> {
+    const isLegacyFormat =
+      typeof raw.workflow === 'object' || typeof raw.toolUse === 'object';
+
+    if (!isLegacyFormat) {
+      return Object.entries(raw).filter(
+        ([, value]) => value && typeof value === 'object',
+      );
+    }
+
+    // Legacy format: collect from workflow and toolUse sub-objects
+    const entries: Array<[string, unknown]> = [];
+    for (const bucket of [raw.workflow, raw.toolUse]) {
+      if (bucket && typeof bucket === 'object') {
+        for (const [stream, value] of Object.entries(
+          bucket as Record<string, unknown>,
+        )) {
+          if (value && typeof value === 'object') {
+            entries.push([stream, value]);
+          }
+        }
+      }
+    }
+    return entries;
   }
 
   /**
@@ -747,10 +698,10 @@ export class ProgressViewState {
 
   private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
     const current = this.storage.get<unknown>(key);
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      return current as Record<string, unknown>;
-    }
-    return {};
+    // Return as record only if it's a plain object (not array or null)
+    return current && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
   }
 
   /**

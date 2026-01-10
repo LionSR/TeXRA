@@ -4,9 +4,7 @@
 
 import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common';
-
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { ToolDefinition } from '@model';
@@ -20,54 +18,66 @@ import {
 import type { ToolUseServices } from './ToolUseServices';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 
-// ============================================================================
-// Context Initialization
-// ============================================================================
-
-/**
- * Configuration for creating tool-use flow services.
- *
- * Extends BaseFlowContextInit with tool-use specific fields.
- */
+/** Configuration for creating tool-use flow services. */
 export interface ToolUseFlowContextInit<
   C = unknown,
 > extends BaseFlowContextInit<C> {
-  /** Narrow setting to tool-use specific type */
   setting: AgentToolUseSetting;
-
-  /** Optional tool registry override */
   toolRegistry?: IToolRegistry;
-
-  /** Optional snapshot for session resume */
   resumeSnapshot?: ToolUseSessionSnapshot | null;
-
-  /** Optional usage tracking callback */
   getUsageRecorder?: () => RoundFinalizedCallback;
-
-  /** Optional callback when a queued follow-up is consumed */
   onFollowUpConsumed?: () => void;
 }
 
+/** Tool-use flow context returned by factory function. */
+export interface ToolUseFlowContext<C = unknown> {
+  services: ToolUseServices<C>;
+  session: ToolUseSessionLifecycle;
+  interrupt(): void;
+  dispose(): void;
+}
+
 // ============================================================================
-// Context Object (simple object, not a class)
+// Tool Resolution
 // ============================================================================
 
 /**
- * Tool-use flow context returned by factory function.
- * Contains services and lifecycle methods.
+ * Resolve tool definitions from agent settings, validating against registry.
+ * Optionally injects the memory tool if enabled in user settings.
  */
-export interface ToolUseFlowContext<C = unknown> {
-  /** Services for flow execution */
-  services: ToolUseServices<C>;
+function resolveTools(
+  tools: AgentToolUseSetting['tools'],
+  toolRegistry: IToolRegistry,
+  logger: { warn: (msg: string) => void },
+): ToolDefinition[] {
+  const toolConfigs = Array.isArray(tools) ? tools : [];
 
-  /** Session lifecycle manager */
-  session: ToolUseSessionLifecycle;
+  const resolved: ToolDefinition[] = [];
+  const resolvedNames = new Set<string>();
 
-  /** Interrupt the session */
-  interrupt(): void;
+  for (const config of toolConfigs) {
+    const def = typeof config === 'string' ? { name: config } : config;
 
-  /** Dispose context resources */
-  dispose(): void;
+    if (!toolRegistry.has(def.name)) {
+      logger.warn(`Tool "${def.name}" not found in registry`);
+      continue;
+    }
+
+    resolved.push(def);
+    resolvedNames.add(def.name);
+  }
+
+  // Auto-inject memory tool if enabled and not already configured
+  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
+    const memoryTool = toolRegistry.get('memory');
+    if (memoryTool) {
+      resolved.push(memoryTool.definition);
+    } else {
+      logger.warn('Memory tool not found in registry');
+    }
+  }
+
+  return resolved;
 }
 
 // ============================================================================
@@ -78,45 +88,16 @@ export interface ToolUseFlowContext<C = unknown> {
 export function createToolUseFlowContext<C = unknown>(
   init: ToolUseFlowContextInit<C>,
 ): ToolUseFlowContext<C> {
-  const {
-    setting,
-    logger,
-    streamId,
-    toolRegistry: customRegistry,
-    resumeSnapshot,
-  } = init;
+  const { setting, logger, streamId, resumeSnapshot } = init;
 
-  const toolRegistry = customRegistry ?? getDefaultToolRegistry();
+  const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
-  // Resolve tools once at construction time
-  const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
-  const resolvedTools: ToolDefinition[] = [];
-  const resolvedNames = new Set<string>();
-  for (const t of toolConfigs) {
-    const def = typeof t === 'string' ? { name: t } : t;
-    if (!toolRegistry.has(def.name)) {
-      logger.warn(`Tool "${def.name}" not found in registry`);
-      continue;
-    }
-    resolvedTools.push(def);
-    resolvedNames.add(def.name);
-  }
+  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
 
-  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
-    const memoryTool = toolRegistry.get('memory');
-    if (memoryTool) {
-      resolvedTools.push(memoryTool.definition);
-      resolvedNames.add('memory');
-    } else {
-      logger.warn('Memory tool not found in registry');
-    }
-  }
-
-  // Spread init directly - it already contains setting, logger, etc.
   const services: ToolUseServices<C> = {
     ...init,
-    toolRegistry, // May differ from init if defaulted
+    toolRegistry,
     session: sessionLifecycle,
     resolvedTools,
     snapshot: resumeSnapshot ?? null,

@@ -181,24 +181,9 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
-    const runs = this.items.get(stream);
-    if (!runs) {
-      return undefined;
-    }
-
-    const target = runs.get(storageKey);
-    if (!target) {
-      return undefined;
-    }
-
-    const entries: [number, OutputFileInfo[]][] = [];
-    for (const [round, infos] of target.entries()) {
-      if (Array.isArray(infos)) {
-        entries.push([round, infos]);
-      }
-    }
-
-    return new Map(entries);
+    const target = this.items.get(stream)?.get(storageKey);
+    // Return a copy to prevent external mutation
+    return target ? new Map(target) : undefined;
   }
 
   /**
@@ -234,11 +219,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
       for (const infos of runRounds.values()) {
         for (const info of infos) {
-          if (options.workspaceOnly) {
-            this.collectWorkspacePaths(paths, info);
-          } else {
-            this.collectAllPaths(paths, info);
-          }
+          this.collectPaths(paths, info, options.workspaceOnly ?? false);
         }
       }
     }
@@ -247,37 +228,29 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /**
-   * Collect all paths from an output file info (absolute paths).
+   * Collect paths from an output file info.
+   * @param target - Set to add paths to
+   * @param info - Output file info containing location and lineage
+   * @param workspaceOnly - If true, only collect workspace-scoped paths
    */
-  private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
-    target.add(info.location.absolutePath);
-    if (info.lineage?.original?.absolutePath) {
-      target.add(info.lineage.original.absolutePath);
-    }
-  }
-
-  /**
-   * Collect workspace paths from an output file info.
-   * Trust the discriminated union - the 'kind' field is the source of truth.
-   */
-  private collectWorkspacePaths(
+  private collectPaths(
     target: Set<string>,
     info: OutputFileInfo,
+    workspaceOnly: boolean,
   ): void {
-    // Current file
-    if (info.location.kind === 'workspace') {
-      target.add(info.location.absolutePath);
-    }
+    // All locations to check: main file and lineage files
+    const locations = [
+      info.location,
+      info.lineage?.original,
+      info.lineage?.diffBase,
+      info.lineage?.diffFile,
+    ];
 
-    // Lineage files (NEW STRUCTURE: original, diffBase, diffFile)
-    if (info.lineage?.original?.kind === 'workspace') {
-      target.add(info.lineage.original.absolutePath);
-    }
-    if (info.lineage?.diffBase?.kind === 'workspace') {
-      target.add(info.lineage.diffBase.absolutePath);
-    }
-    if (info.lineage?.diffFile?.kind === 'workspace') {
-      target.add(info.lineage.diffFile.absolutePath);
+    for (const loc of locations) {
+      if (!loc?.absolutePath) continue;
+      if (!workspaceOnly || loc.kind === 'workspace') {
+        target.add(loc.absolutePath);
+      }
     }
   }
 

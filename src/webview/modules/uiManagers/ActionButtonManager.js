@@ -89,11 +89,19 @@ export class ActionButtonManager extends BaseDomHandler {
         editedFile,
       });
 
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: `Merging files: ${inputFile} and ${editedFile}`,
-      });
+      this._showInfo(`Merging files: ${inputFile} and ${editedFile}`);
     });
+
+    const packCleanCommands = {
+      pack: {
+        single: MAIN_VIEW_COMMANDS.PACK_SINGLE,
+        multiple: MAIN_VIEW_COMMANDS.PACK_MULTIPLE,
+      },
+      clean: {
+        single: MAIN_VIEW_COMMANDS.CLEAN_SINGLE,
+        multiple: MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE,
+      },
+    };
 
     [
       { id: ELEMENT_IDS.PACK_BUTTON, action: 'pack' },
@@ -112,50 +120,42 @@ export class ActionButtonManager extends BaseDomHandler {
         const outputFilesActive =
           multipleFileSelections[`${ELEMENT_IDS.OUTPUT_FILES}Active`] ?? false;
         const useMultiple = outputFilesActive && outputFiles.length > 0;
+        const commands = packCleanCommands[action];
 
         if (useMultiple) {
-          const multipleCommand =
-            action === 'pack'
-              ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-              : MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE;
           this.vscode.postMessage({
-            command: multipleCommand,
+            command: commands.multiple,
             inputFile,
             agent,
             model,
             outputFiles,
           });
-
-          this.vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-            text: `${capitalize(action)}ing multiple files: ${[inputFile, ...outputFiles].join(', ')}`,
-          });
+          this._showInfo(
+            `${capitalize(action)}ing multiple files: ${[inputFile, ...outputFiles].join(', ')}`,
+          );
         } else {
           if (!inputFile || !agent || !model) {
-            this.vscode.postMessage({
-              command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-              text: 'Please select all required fields (input file, agent, and model)',
-            });
+            this._showInfo(
+              'Please select all required fields (input file, agent, and model)',
+            );
             return;
           }
-
-          const singleCommand =
-            action === 'pack'
-              ? MAIN_VIEW_COMMANDS.PACK_SINGLE
-              : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
           this.vscode.postMessage({
-            command: singleCommand,
+            command: commands.single,
             inputFile,
             agent,
             model,
           });
-
-          this.vscode.postMessage({
-            command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-            text: `${capitalize(action)}ing single file: ${inputFile}`,
-          });
+          this._showInfo(`${capitalize(action)}ing single file: ${inputFile}`);
         }
       });
+    });
+  }
+
+  _showInfo(text) {
+    this.vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text,
     });
   }
 
@@ -176,10 +176,9 @@ export class ActionButtonManager extends BaseDomHandler {
         editedFile,
       });
 
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: `Running LaTeX diff between ${baseFile} and ${editedFile}`,
-      });
+      this._showInfo(
+        `Running LaTeX diff between ${baseFile} and ${editedFile}`,
+      );
     });
 
     this.addListener(ELEMENT_IDS.LATEXDIFF_VC_BUTTON, 'click', () => {
@@ -198,10 +197,9 @@ export class ActionButtonManager extends BaseDomHandler {
         commitHash,
       });
 
-      this.vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
-      });
+      this._showInfo(
+        `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+      );
     });
 
     [
@@ -229,48 +227,38 @@ export class ActionButtonManager extends BaseDomHandler {
           clean: action === 'clean',
         });
 
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-          text: `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
-        });
+        this._showInfo(
+          `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+        );
       });
     });
   }
 
   _setupCompareButtons() {
-    this.addListener(ELEMENT_IDS.COMPARE_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
-      if (baseFile && editedFile) {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.COMPARE,
-          baseFile,
-          editedFile,
-        });
-      } else {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-          text: 'Please select both base and edited files to compare',
-        });
-      }
-    });
+    const setupCompareHandler = (buttonId, command, actionText) => {
+      this.addListener(buttonId, 'click', () => {
+        const baseFile = safeGetElementValue(BASE_FILE);
+        const editedFile = safeGetElementValue(EDITED_FILE);
+        if (baseFile && editedFile) {
+          this.vscode.postMessage({ command, baseFile, editedFile });
+        } else {
+          this._showInfo(
+            `Please select both base and edited files to ${actionText}`,
+          );
+        }
+      });
+    };
 
-    this.addListener(ELEMENT_IDS.ACCEPT_BUTTON, 'click', () => {
-      const baseFile = safeGetElementValue(BASE_FILE);
-      const editedFile = safeGetElementValue(EDITED_FILE);
-      if (baseFile && editedFile) {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
-          baseFile,
-          editedFile,
-        });
-      } else {
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-          text: 'Please select both base and edited files to accept changes',
-        });
-      }
-    });
+    setupCompareHandler(
+      ELEMENT_IDS.COMPARE_BUTTON,
+      MAIN_VIEW_COMMANDS.COMPARE,
+      'compare',
+    );
+    setupCompareHandler(
+      ELEMENT_IDS.ACCEPT_BUTTON,
+      MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
+      'accept changes',
+    );
   }
 
   setup() {

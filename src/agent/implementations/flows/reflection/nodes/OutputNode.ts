@@ -37,6 +37,28 @@ interface OutputPrepInput {
 type OutputExecResult = RoundOutput;
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+type WarnLogger = { warn: (msg: string) => void };
+
+/**
+ * Execute an operation that can fail gracefully.
+ * Logs warnings on failure but doesn't throw.
+ */
+async function tryOperation(
+  label: string,
+  operation: () => Promise<void>,
+  logger: WarnLogger,
+): Promise<void> {
+  try {
+    await operation();
+  } catch (error) {
+    logger.warn(`${label} failed: ${toErrorMessage(error)}`);
+  }
+}
+
+// ============================================================================
 // Node Implementation
 // ============================================================================
 
@@ -83,38 +105,38 @@ export class OutputNode<C = unknown> extends Node<
       logger.debug(`Processing output for round ${currentRound}`);
 
       if (ensureXmlStructure) {
-        try {
-          await outputHandler.ensureXmlStructure(
-            outputLocation,
-            setting.documentTag ?? 'document',
-          );
-        } catch (error) {
-          logger.warn(`XML structure failed: ${toErrorMessage(error)}`);
-        }
+        await tryOperation(
+          'XML structure',
+          () =>
+            outputHandler.ensureXmlStructure(
+              outputLocation,
+              setting.documentTag ?? 'document',
+            ),
+          logger,
+        );
       }
 
-      try {
-        await outputHandler.processOutputFiles(outputLocation, currentRound);
-      } catch (error) {
-        logger.warn(`Output processing failed: ${toErrorMessage(error)}`);
-      }
+      await tryOperation(
+        'Output processing',
+        () => outputHandler.processOutputFiles(outputLocation, currentRound),
+        logger,
+      );
 
       if (outputHandler.hasRoundOutputs(currentRound)) {
-        try {
-          await this.handleLatexdiff(currentRound, baseFiles);
-        } catch (error) {
-          logger.warn(`Latexdiff failed: ${toErrorMessage(error)}`);
-        }
+        await tryOperation(
+          'Latexdiff',
+          () => this.handleLatexdiff(currentRound, baseFiles),
+          logger,
+        );
       }
     }
 
-    try {
-      await outputHandler.finalizeRound(outputLocation, currentRound, {
-        endTurn,
-      });
-    } catch (error) {
-      logger.warn(`Round finalization failed: ${toErrorMessage(error)}`);
-    }
+    await tryOperation(
+      'Round finalization',
+      () =>
+        outputHandler.finalizeRound(outputLocation, currentRound, { endTurn }),
+      logger,
+    );
 
     // Get round artifacts - this is critical, throw if it fails
     return await outputHandler.getRoundArtifacts(currentRound);
@@ -156,22 +178,15 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<void> {
     const { outputHandler, logger } = this.services;
 
-    // Check if any base files exist
     const existingBase = await Promise.all(
-      baseFiles.map(async (f) => await flexibleFS.exists(f)),
+      baseFiles.map((f) => flexibleFS.exists(f)),
     );
-
-    if (!existingBase.some((e) => e)) {
+    if (!existingBase.some(Boolean)) {
       logger.debug('No base files found for latexdiff');
       return;
     }
 
     const mapping = outputHandler.getRoundMapping(currentRound);
-    if (!mapping) {
-      logger.debug('No round mapping found for latexdiff');
-      return;
-    }
-
     await outputHandler.diffManager.handleLatexdiffofOutput(
       currentRound,
       mapping,

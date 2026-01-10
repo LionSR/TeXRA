@@ -13,9 +13,6 @@ import type { EndGroupStatus } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 import type { LogUtilsOptions } from './logOptions';
 
-// Re-export for convenience
-export type { LogOptions } from './logOptions';
-
 type ChannelKey = string;
 
 interface ChannelContext {
@@ -24,15 +21,9 @@ interface ChannelContext {
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
 
-// Cache for initialized channels to avoid repeated registry.ensure() calls
-// This eliminates the overhead of Map lookup + string interpolation on every log
-const initializedChannels = new Map<
-  ChannelKey,
-  ReturnType<typeof registry.ensure>
->();
-
+/** Key format matches LogChannelRegistry.getKey() for consistency. */
 function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
-  return `${isAgent ? 'agent' : 'default'}::${channel}`;
+  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
 function getStore(): Map<ChannelKey, ChannelContext> {
@@ -71,27 +62,27 @@ function popGroupContext(
   const key = getChannelKey(channel, isAgent);
   const context = store.get(key);
 
+  // No context or empty stack - nothing to pop
   if (!context?.stack.length) {
+    return;
+  }
+
+  // Remove only the LAST occurrence of groupId from stack.
+  // This supports:
+  // 1. Non-LIFO group endings (different group IDs can end out of order)
+  // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
+  const lastIndex = context.stack.lastIndexOf(groupId);
+  if (lastIndex === -1) {
+    return;
+  }
+
+  // Create new stack without the removed element
+  const newStack = context.stack.toSpliced(lastIndex, 1);
+
+  if (newStack.length === 0) {
     store.delete(key);
   } else {
-    // Remove only the LAST occurrence of groupId from stack.
-    // This supports:
-    // 1. Non-LIFO group endings (different group IDs can end out of order)
-    // 2. Duplicate pushes of the same groupId (nested runWithGroupContext calls)
-    const lastIndex = context.stack.lastIndexOf(groupId);
-    if (lastIndex === -1) {
-      // groupId not found, nothing to pop
-      return;
-    }
-    const newStack = [
-      ...context.stack.slice(0, lastIndex),
-      ...context.stack.slice(lastIndex + 1),
-    ];
-    if (newStack.length === 0) {
-      store.delete(key);
-    } else {
-      store.set(key, { stack: newStack });
-    }
+    store.set(key, { stack: newStack });
   }
 
   contextStorage.enterWith(store);
@@ -101,65 +92,34 @@ function resolveActiveGroupByKey(
   key: ChannelKey,
   groupId: string | undefined,
 ): string | undefined {
-  if (groupId) {
-    return groupId;
-  }
-
-  const context = getContextByKey(key);
-  return context?.stack.at(-1);
-}
-
-function resolveActiveGroup(
-  channel: string,
-  groupId: string | undefined,
-  isAgent: boolean,
-): string | undefined {
-  return resolveActiveGroupByKey(getChannelKey(channel, isAgent), groupId);
+  if (groupId) return groupId;
+  return getContextByKey(key)?.stack.at(-1);
 }
 
 /**
- * Get a cached channel entry by pre-computed key.
- * Returns undefined if the entry doesn't exist.
+ * Get or create a channel entry.
+ * Delegates to registry which handles its own caching.
  */
-function getCachedEntryByKey(
-  key: ChannelKey,
-): ReturnType<typeof registry.ensure> | undefined {
-  return initializedChannels.get(key);
-}
-
-/**
- * Get or create a cached channel entry.
- * Single source of truth for channel initialization - eliminates repeated registry.ensure() calls.
- */
-function getCachedEntry(
+function getOrCreateEntry(
   channel: string,
   isAgent: boolean,
 ): ReturnType<typeof registry.ensure> {
-  const key = getChannelKey(channel, isAgent);
-  let entry = initializedChannels.get(key);
-  if (!entry) {
-    entry = registry.ensure(channel, { isAgent });
-    initializedChannels.set(key, entry);
-  }
-  return entry;
+  return registry.ensure(channel, { isAgent });
 }
 
+/**
+ * Get transport, creating the channel if needed for writes, or returning
+ * undefined for reads on non-existent channels.
+ */
 function getTransport(
   channel: string,
-  isAgent = false,
-): VSCodeTransport | undefined {
-  const key = getChannelKey(channel, isAgent);
-  return (
-    initializedChannels.get(key)?.transport ??
-    registry.getTransport(channel, { isAgent })
-  );
-}
-
-function getOrCreateTransport(
-  channel: string,
   isAgent: boolean,
-): VSCodeTransport {
-  return getCachedEntry(channel, isAgent).transport;
+  createIfMissing: boolean,
+): VSCodeTransport | undefined {
+  if (createIfMissing) {
+    return getOrCreateEntry(channel, isAgent).transport;
+  }
+  return registry.getTransport(channel, { isAgent });
 }
 
 function logWithGroup(
@@ -169,9 +129,8 @@ function logWithGroup(
   options: LogUtilsOptions = {},
 ): void {
   const isAgent = options.isAgent ?? false;
-  // Compute key once and reuse for both entry lookup and group resolution
   const key = getChannelKey(channel, isAgent);
-  const entry = getCachedEntryByKey(key) ?? getCachedEntry(channel, isAgent);
+  const entry = getOrCreateEntry(channel, isAgent);
   const activeGroupId = resolveActiveGroupByKey(key, options.groupId);
 
   entry.logger.log(level, message, {
@@ -182,7 +141,7 @@ function logWithGroup(
 }
 
 export function initialize(channel: string, isAgent = false): void {
-  getCachedEntry(channel, isAgent);
+  getOrCreateEntry(channel, isAgent);
 }
 
 export function startGroup(
@@ -192,7 +151,7 @@ export function startGroup(
   parentGroupId?: string,
   isAgent = false,
 ): string {
-  const transport = getOrCreateTransport(channel, isAgent);
+  const transport = getTransport(channel, isAgent, true)!;
   const groupId = id ?? randomUUID();
   pushGroupContext(channel, groupId, isAgent);
   return transport.startGroup(groupName, groupId, parentGroupId);
@@ -204,8 +163,7 @@ export function endGroup(
   status: EndGroupStatus = END_GROUP_STATUS.STOPPED,
   isAgent = false,
 ): void {
-  const transport = getTransport(channel, isAgent);
-  transport?.endGroup(groupId, status);
+  getTransport(channel, isAgent, false)?.endGroup(groupId, status);
   popGroupContext(channel, groupId, isAgent);
 }
 
@@ -213,7 +171,8 @@ export function getActiveGroupId(
   channel: string,
   isAgent = false,
 ): string | undefined {
-  return resolveActiveGroup(channel, undefined, isAgent);
+  const key = getChannelKey(channel, isAgent);
+  return resolveActiveGroupByKey(key, undefined);
 }
 
 export async function runWithGroupContext<T>(

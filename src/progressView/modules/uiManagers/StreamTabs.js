@@ -8,6 +8,9 @@ import {
   applyCodiconClass,
 } from '@common/iconConstants.js';
 
+// Pre-built status class names for efficient removal
+const STATUS_CLASSES = Object.values(STREAM_STATUS).map((s) => `is-${s}`);
+
 /**
  * Manages stream tab UI updates.
  */
@@ -52,13 +55,7 @@ export class StreamTabs {
         },
       });
       if (!tabEl) return;
-      const statusEl = tabEl.querySelector('.tab-status');
-      if (statusEl) {
-        const status = info.status || 'stopped';
-        statusEl.classList.add(`is-${status}`);
-        statusEl.dataset.status =
-          status.charAt(0).toUpperCase() + status.slice(1);
-      }
+      this._applyStatus(tabEl.querySelector('.tab-status'), info.status);
       // Apply agent decorators from shared config
       this._applyAgentDecorators(tabEl, info);
       if (info.name === activeStream) {
@@ -76,7 +73,7 @@ export class StreamTabs {
       const label = activeInfo?.label || '';
       streamNameElem.textContent = label;
       streamNameElem.title = activeInfo
-        ? this._buildActiveTitle(activeInfo)
+        ? this._buildTooltip(activeInfo, true)
         : '';
       if (activeInfo?.name) {
         streamNameElem.dataset.stream = activeInfo.name;
@@ -86,29 +83,54 @@ export class StreamTabs {
     }
   }
 
-  _buildTooltip(info) {
-    const parts = [];
-    if (info?.label) {
-      parts.push(info.label);
-    }
-    if (info?.model) {
-      parts.push(`Model: ${info.model}`);
-    }
-    if (info?.inputFile) {
-      parts.push(`Input: ${info.inputFile}`);
-    }
-    return parts.filter(Boolean).join(' • ');
-  }
+  /**
+   * Build tooltip text for a stream tab
+   * @param {Object} info - Stream info object
+   * @param {boolean} includeLastActivity - Whether to include last activity line
+   * @returns {string} Tooltip text
+   */
+  _buildTooltip(info, includeLastActivity = false) {
+    if (!info) return '';
 
-  _buildActiveTitle(info) {
-    const parts = [this._buildTooltip(info)];
-    if (info?.lastTimestamp) {
+    const parts = [
+      info.label,
+      info.model && `Model: ${info.model}`,
+      info.inputFile && `Input: ${info.inputFile}`,
+    ].filter(Boolean);
+
+    if (includeLastActivity && info.lastTimestamp) {
       const lastSeen = formatRelativeTime(info.lastTimestamp);
       if (lastSeen) {
         parts.push(`Last activity ${lastSeen}`);
       }
     }
-    return parts.filter(Boolean).join('\n');
+
+    // Use bullet separator for inline parts, newline for last activity
+    if (includeLastActivity && parts.length > 1) {
+      const lastPart = parts.pop();
+      return `${parts.join(' • ')}\n${lastPart}`;
+    }
+
+    return parts.join(' • ');
+  }
+
+  /**
+   * Apply status to a status element, handling class updates and dataset.
+   * @param {HTMLElement} statusEl - The status element to update
+   * @param {string} status - The status value
+   */
+  _applyStatus(statusEl, status) {
+    if (!statusEl) return;
+
+    // Remove all status classes efficiently
+    statusEl.classList.remove(...STATUS_CLASSES);
+
+    // READY means execution completed - display as stopped
+    const normalizedStatus =
+      status && status !== STREAM_STATUS.READY ? status : STREAM_STATUS.STOPPED;
+    statusEl.classList.add(`is-${normalizedStatus}`);
+    statusEl.dataset.status =
+      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
   }
 
   /**
@@ -152,19 +174,7 @@ export class StreamTabs {
 
     const statusEl = streamTab.querySelector('.tab-status');
     if (statusEl) {
-      // Remove old status classes dynamically from STREAM_STATUS values
-      // This ensures the class list stays in sync with constants
-      Object.values(STREAM_STATUS).forEach((s) =>
-        statusEl.classList.remove(`is-${s}`),
-      );
-      // READY means execution completed - display as stopped (no active indicator)
-      const normalizedStatus =
-        status === STREAM_STATUS.READY
-          ? STREAM_STATUS.STOPPED
-          : status || STREAM_STATUS.STOPPED;
-      statusEl.classList.add(`is-${normalizedStatus}`);
-      statusEl.dataset.status =
-        normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+      this._applyStatus(statusEl, status);
       updated = true;
     }
 
@@ -196,28 +206,39 @@ export class StreamTabs {
       agentIcon.title = `Agent type: ${decorator.label}`;
     }
 
-    // Remote agent icon
-    const remoteIcon = tabEl.querySelector('.remote-agent');
-    if (remoteIcon) {
-      if (info.isRemote) {
-        const { icon, hint } = AGENT_DECORATORS.properties.remote;
-        applyCodiconClass(remoteIcon, icon);
-        remoteIcon.title = hint;
-      } else {
-        remoteIcon.remove();
-      }
+    // Property-based decorators - remove if condition false, apply icon if true
+    this._applyPropertyDecorator(
+      tabEl,
+      '.remote-agent',
+      info.isRemote,
+      'remote',
+    );
+    this._applyPropertyDecorator(
+      tabEl,
+      '.multi-file',
+      info.hasMultipleOutputs,
+      'multipleOutputs',
+    );
+  }
+
+  /**
+   * Apply or remove a property-based decorator icon.
+   * @param {HTMLElement} tabEl - The tab element
+   * @param {string} selector - CSS selector for the icon element
+   * @param {boolean} condition - Whether to show the decorator
+   * @param {string} property - Property key in AGENT_DECORATORS.properties
+   */
+  _applyPropertyDecorator(tabEl, selector, condition, property) {
+    const iconEl = tabEl.querySelector(selector);
+    if (!iconEl) return;
+
+    if (!condition) {
+      iconEl.remove();
+      return;
     }
 
-    // Multiple outputs icon
-    const multiIcon = tabEl.querySelector('.multi-file');
-    if (multiIcon) {
-      if (info.hasMultipleOutputs) {
-        const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
-        applyCodiconClass(multiIcon, icon);
-        multiIcon.title = hint;
-      } else {
-        multiIcon.remove();
-      }
-    }
+    const { icon, hint } = AGENT_DECORATORS.properties[property];
+    applyCodiconClass(iconEl, icon);
+    iconEl.title = hint;
   }
 }

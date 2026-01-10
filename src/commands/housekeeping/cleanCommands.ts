@@ -1,9 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-import { showLoggedMessage } from '@common/errors';
+import { formatZodError, showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -16,6 +17,19 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
+
+// --- Schemas ---
+
+const RequiredString = z.string().min(1);
+
+/** For cleanSingle/cleanMultiple - all fields required */
+const CleanParamsSchema = z.object({
+  inputFile: RequiredString,
+  agent: RequiredString,
+  model: RequiredString,
+});
+
+// --- Helpers ---
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -36,33 +50,7 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-/** Validates and logs required parameters, returns false if any are missing */
-async function validateParams(
-  inputFile: string,
-  agent: string,
-  model: string,
-  commandName: string,
-): Promise<boolean> {
-  logger.debug(
-    CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-  );
-
-  if (!inputFile || !agent || !model) {
-    const missing = [];
-    if (!inputFile) missing.push('inputFile');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for ${commandName}: ${missing.join(', ')}`,
-    );
-    return false;
-  }
-  return true;
-}
-
-export function registerCleanCommands(context: vscode.ExtensionContext) {
+export function registerCleanCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.clean', handleClean),
     vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
@@ -76,15 +64,21 @@ async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
-) {
-  if (!(await validateParams(inputFile, agent, model, 'cleanSingle'))) {
+): Promise<void> {
+  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
+  if (!parsed.success) {
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid params for cleanSingle: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
 
-  const result = await runCleanSingle(model, inputFile, agent);
-  showCleanResult(result, inputFile);
+  const data = parsed.data;
+  const result = await runCleanSingle(data.model, data.inputFile, data.agent);
+  showCleanResult(result, data.inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile, {
+  const streamId = getStreamTabId(data.agent, data.model, data.inputFile, {
     useMultipleOutputs: false,
   });
   bus.emit('clearMissingOutputs', { stream: streamId });
@@ -95,71 +89,67 @@ async function handleCleanMultiple(
   agent: string,
   model: string,
   outputFiles: string[] = [],
-) {
-  if (!(await validateParams(inputFile, agent, model, 'cleanMultiple'))) {
+): Promise<void> {
+  const parsed = CleanParamsSchema.safeParse({ inputFile, agent, model });
+  if (!parsed.success) {
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid params for cleanMultiple: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
-  showCleanResult(result, inputFile);
+  const data = parsed.data;
+  const result = await runCleanMultiple(
+    data.model,
+    data.inputFile,
+    data.agent,
+    outputFiles,
+  );
+  showCleanResult(result, data.inputFile);
 
-  const streamId = getStreamTabId(agent, model, inputFile, {
+  const streamId = getStreamTabId(data.agent, data.model, data.inputFile, {
     useMultipleOutputs: true,
   });
   bus.emit('clearMissingOutputs', { stream: streamId });
 }
 
 export async function handleClean(config: {
+  agent?: string;
+  model?: string;
+  inputFile?: string;
+  outputFiles?: string[];
+  useMultipleOutputs?: boolean;
   streamId?: string;
   skipProgressViewClear?: boolean;
-  [key: string]: any;
-}) {
+}): Promise<void> {
   logger.debug(
     CHANNEL,
     `Clean command called with config: ${JSON.stringify(config)}`,
   );
 
-  if (!config.agent || !config.inputFile) {
+  const { agent, model, inputFile } = config;
+  if (!agent || !model || !inputFile) {
     await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
     return;
   }
 
-  const declaredOutputFiles = Array.isArray(config.outputFiles)
+  const outputFiles = Array.isArray(config.outputFiles)
     ? config.outputFiles
     : [];
   const useMultipleOutputs =
-    config.useMultipleOutputs ?? declaredOutputFiles.length > 1;
+    config.useMultipleOutputs ?? outputFiles.length > 1;
 
-  const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
-
-  if (useMultipleOutputs && outputFiles.length > 0) {
-    logger.info(
-      CHANNEL,
-      `Running clean multiple with ${outputFiles.length} files`,
-    );
-    const result = await runCleanMultiple(
-      config.model,
-      config.inputFile,
-      config.agent,
-      outputFiles,
-    );
-    showCleanResult(result, config.inputFile);
-  } else {
-    logger.info(CHANNEL, `Running clean single`);
-    const result = await runCleanSingle(
-      config.model,
-      config.inputFile,
-      config.agent,
-    );
-    showCleanResult(result, config.inputFile);
-  }
+  const result =
+    useMultipleOutputs && outputFiles.length > 0
+      ? await runCleanMultiple(model, inputFile, agent, outputFiles)
+      : await runCleanSingle(model, inputFile, agent);
+  showCleanResult(result, inputFile);
 
   const streamId =
     config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, {
-      useMultipleOutputs,
-    });
+    getStreamTabId(agent, model, inputFile, { useMultipleOutputs });
 
   if (!config.skipProgressViewClear) {
     bus.emit('clearMissingOutputs', { stream: streamId });

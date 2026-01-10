@@ -3,7 +3,10 @@ import { COMMANDS } from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
-import { addEventListenerSafely } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  setElementCheckedState,
+} from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -95,7 +98,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
     if (bypassButton) {
       const allowBypass = request.allowBypass !== false;
       bypassButton.toggleAttribute('disabled', !allowBypass);
-      bypassButton.checked = Boolean(this.isBypassActive);
+      setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
   }
 
@@ -104,57 +107,56 @@ export class ApprovalRequests extends BaseUIRequestManager {
    * @private
    */
   _updateMetaElement(metaElem, request) {
-    const toolSummary = request.sourceTool
-      ? `Requested by ${request.sourceTool}`
-      : '';
-    const added = Number.isFinite(request.addedLines)
-      ? Math.max(0, Number(request.addedLines))
-      : 0;
-    const removed = Number.isFinite(request.removedLines)
-      ? Math.max(0, Number(request.removedLines))
-      : 0;
+    const toCount = (v) => (Number.isFinite(v) ? Math.max(0, v) : 0);
+    const added = toCount(request.addedLines);
+    const removed = toCount(request.removedLines);
+    const total = added + removed;
+    const lineLabel = total === 1 ? 'line' : 'lines';
 
-    metaElem.textContent = '';
-
-    if (toolSummary) {
-      metaElem.append(document.createTextNode(toolSummary));
+    const parts = [];
+    if (request.sourceTool) {
+      parts.push(`Requested by ${request.sourceTool}`);
     }
+
+    // Build diff summary
+    const diffParts = [];
+    if (added > 0) diffParts.push(`+${added}`);
+    if (removed > 0) diffParts.push(`-${removed}`);
+    const tooltip =
+      diffParts.length > 0
+        ? `${diffParts.join(' / ')} ${lineLabel} changed`
+        : 'No line changes';
 
     const diffContainer = document.createElement('span');
     diffContainer.className = 'approval-request__diff';
+    diffContainer.title = tooltip;
 
-    const summaryParts = [];
     if (added > 0) {
-      const addedSpan = document.createElement('span');
-      addedSpan.className = 'approval-request__diff-added';
-      addedSpan.textContent = `+${added}`;
-      diffContainer.appendChild(addedSpan);
-      summaryParts.push(`+${added}`);
+      const span = document.createElement('span');
+      span.className = 'approval-request__diff-added';
+      span.textContent = `+${added}`;
+      diffContainer.appendChild(span);
     }
-
     if (removed > 0) {
-      const removedSpan = document.createElement('span');
-      removedSpan.className = 'approval-request__diff-removed';
-      removedSpan.textContent = `-${removed}`;
-      diffContainer.appendChild(removedSpan);
-      summaryParts.push(`-${removed}`);
+      const span = document.createElement('span');
+      span.className = 'approval-request__diff-removed';
+      span.textContent = `-${removed}`;
+      diffContainer.appendChild(span);
     }
 
-    const total = added + removed;
     const labelSpan = document.createElement('span');
     labelSpan.className = 'approval-request__diff-label';
-    labelSpan.textContent = `${total} ${total === 1 ? 'line' : 'lines'}`;
+    labelSpan.textContent = `${total} ${lineLabel}`;
     diffContainer.appendChild(labelSpan);
 
-    diffContainer.title =
-      summaryParts.length > 0
-        ? `${summaryParts.join(' / ')} ${total === 1 ? 'line' : 'lines'} changed`
-        : 'No line changes';
-
-    if (toolSummary && diffContainer.childElementCount > 0) {
-      metaElem.append(document.createTextNode(' • '));
+    // Build final meta content
+    metaElem.textContent = '';
+    if (parts.length > 0) {
+      metaElem.append(parts.join(' • '));
+      if (diffContainer.childElementCount > 0) {
+        metaElem.append(' • ');
+      }
     }
-
     metaElem.appendChild(diffContainer);
   }
 

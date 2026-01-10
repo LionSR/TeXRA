@@ -1,49 +1,25 @@
 // Standard library imports
 import { EventEmitter } from 'events';
 
-// Local imports - agent
-import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
+// Type imports
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type { ContextStateData } from '@logger/AgentLogger';
 import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
-import type { TaskState } from '@logger/TaskState';
-import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 import type {
   AddTaskGroupPayload,
-  UpdateTaskGroupPayload,
   RunScopedPayload,
+  SetActiveStreamPayload,
+  SetTaskStatePayload,
+  UpdateTaskGroupPayload,
   UpdateTodosPayload,
 } from './schemas';
-
-// Re-export for consumers that import from this module
-export type { StreamStatus };
-
-// Re-export schema types for consumers
-export type { TaskGroupStatus } from './schemas';
+import type { RetryRequestPrompt, ToolEditApprovalPrompt } from './types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
-
-// SetActiveStreamPayload and SetTaskStatePayload are defined inline
-// because they reference types from external modules (AgentSessionDescriptor, TaskState)
-// that don't have schemas yet. These can be migrated when those modules are updated.
-interface SetActiveStreamPayload {
-  stream: StreamTabId | null;
-  session?: AgentSessionDescriptor | null;
-  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
-  isRemote?: boolean;
-  /** Hint whether this agent uses multiple outputs (for UI display before TaskState is set) */
-  hasMultipleOutputs?: boolean;
-}
-
-interface SetTaskStatePayload {
-  streamTabId: StreamTabId;
-  executionId?: ExecutionId;
-  taskState: TaskState;
-}
 
 export interface ProgressEventPayloads {
   addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
@@ -83,7 +59,23 @@ export interface ProgressEventPayloads {
 
 export type ProgressEvent = keyof ProgressEventPayloads;
 
-class ProgressEventBus {
+/**
+ * Interface for the progress event bus.
+ * Used by event handler modules for testability and dependency injection.
+ */
+export interface ProgressEventBusLike {
+  on<K extends ProgressEvent>(
+    event: K,
+    listener: (payload: ProgressEventPayloads[K]) => void,
+    options?: { signal?: AbortSignal },
+  ): () => void;
+  emit<K extends ProgressEvent>(
+    event: K,
+    payload: ProgressEventPayloads[K],
+  ): void;
+}
+
+class ProgressEventBus implements ProgressEventBusLike {
   private emitter = new EventEmitter();
   private buffer: {
     event: ProgressEvent;
@@ -109,18 +101,16 @@ class ProgressEventBus {
     listener: (payload: ProgressEventPayloads[K]) => void,
     options?: { signal?: AbortSignal },
   ): () => void {
-    // If already aborted, don't register
     if (options?.signal?.aborted) {
       return () => {};
     }
 
     this.emitter.on(event, listener);
 
-    // Auto-cleanup when signal aborts
     const cleanup = () => this.emitter.off(event, listener);
     options?.signal?.addEventListener('abort', cleanup, { once: true });
 
-    // Replay buffered events for this event type
+    // Replay buffered events for this event type and remove them (single pass)
     const remaining: typeof this.buffer = [];
     for (const item of this.buffer) {
       if (item.event === event) {

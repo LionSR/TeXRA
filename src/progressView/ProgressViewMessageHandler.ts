@@ -17,6 +17,7 @@ import type {
   StorageKey,
   StreamTabId,
 } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { toErrorMessage } from '@common/errors';
@@ -33,7 +34,11 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import { pathToLocation } from '@utils/files';
+import {
+  pathToLocation,
+  flexibleFS,
+  createExternalLocation,
+} from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import {
@@ -65,6 +70,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private readonly recordingManager: RecordingManager;
+
+  /**
+   * Stores model's original output when compare view is opened.
+   * Key: edited file path, Value: { content, streamId }
+   * Used to detect user modifications and inform the model via follow-up.
+   */
+  private readonly modelOutputBackups = new Map<
+    string,
+    { content: string; streamId: StreamTabId }
+  >();
 
   constructor(
     private readonly provider: ProgressViewProvider,
@@ -318,11 +333,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleFilterStreams(message: any): Promise<void> {
-    const requestedFilter = message.filter;
-    const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
-      ? requestedFilter
+    this.provider.state.agentTypeFilter = isAgentTypeFilter(message.filter)
+      ? message.filter
       : 'all';
-    this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }
 
@@ -457,18 +470,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         // Defensive fallback: executionId and outputFiles are persisted independently,
         // so edge cases (data migration, partial state) could leave files without executionId.
         // Extract directory from actual file paths.
-        for (const infos of runOutputs.values()) {
-          for (const info of infos) {
-            if (
-              info.location.kind === 'runStorage' ||
-              info.location.kind === 'workspace'
-            ) {
-              directoryToReveal = path.dirname(info.location.absolutePath);
-              break;
-            }
-          }
-          if (directoryToReveal) break;
-        }
+        directoryToReveal = this.findOutputDirectory(runOutputs);
       }
 
       if (!directoryToReveal) {
@@ -513,6 +515,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleCompareOriginal(
     message: BaseFileCommandMessage,
   ): Promise<void> {
+    // Backup model's original output before user can modify it in the diff view
+    const streamId = this.provider.state.activeStream;
+    if (streamId && message.file) {
+      try {
+        const fileLocation = createExternalLocation(message.file);
+        const content = await flexibleFS.read(fileLocation);
+        this.modelOutputBackups.set(message.file, { content, streamId });
+      } catch {
+        // Ignore backup errors - don't block the compare operation
+      }
+    }
+
     await this.executeWithBaseFile(message, 'Compare original', (file, base) =>
       vscode.commands.executeCommand(
         'texra.compare',
@@ -546,6 +560,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleAcceptFile(
     message: BaseFileCommandMessage,
   ): Promise<void> {
+    // Check if user modified the model's output before accepting
+    const backup = message.file
+      ? this.modelOutputBackups.get(message.file)
+      : null;
+    let currentContent: string | null = null;
+
+    if (backup) {
+      try {
+        const fileLocation = createExternalLocation(message.file);
+        currentContent = await flexibleFS.read(fileLocation);
+      } catch {
+        // Ignore read errors
+      }
+    }
+
     await this.executeWithBaseFile(message, 'Accept', (file, base) =>
       vscode.commands.executeCommand(
         'texra.acceptEdited',
@@ -554,6 +583,26 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         pathToLocation(file),
       ),
     );
+
+    // Inform the model about user modifications via follow-up
+    if (
+      backup &&
+      currentContent !== null &&
+      currentContent !== backup.content
+    ) {
+      const fileName = path.basename(message.file);
+      const followUpText = `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`;
+
+      await vscode.commands.executeCommand('texra.sendFollowUp', {
+        stream: backup.streamId,
+        text: followUpText,
+      });
+    }
+
+    // Clean up backup
+    if (message.file) {
+      this.modelOutputBackups.delete(message.file);
+    }
   }
 
   private async handleMergeFile(
@@ -599,28 +648,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         workspaceOnly: true,
       },
     );
-    const allFiles = new Set<string>();
 
-    const declaredOutputs = Array.isArray(taskState.agentConfig.outputFiles)
-      ? taskState.agentConfig.outputFiles
-      : [];
-    for (const file of declaredOutputs) {
-      if (isNonEmptyString(file)) {
-        allFiles.add(file);
-      }
-    }
+    // Collect all output files from declared config and generated paths
+    const declaredOutputs = taskState.agentConfig.outputFiles ?? [];
+    const allFiles = [
+      ...(Array.isArray(declaredOutputs) ? declaredOutputs : []),
+      ...generatedPaths,
+    ].filter(isNonEmptyString);
+    const outputFilesArray = [...new Set(allFiles)];
 
-    for (const file of generatedPaths) {
-      if (isNonEmptyString(file)) {
-        allFiles.add(file);
-      }
-    }
-
-    const outputFilesArray = [...allFiles];
+    // Priority: explicit config > activeFiles flag > infer from file count
     const useMultipleOutputs =
       taskState.agentConfig.useMultipleOutputs ??
       taskState.activeFiles.output ??
       outputFilesArray.length > 1;
+
     await vscode.commands.executeCommand(command, {
       streamId: stream,
       agent: taskState.agentConfig.agent,
@@ -667,5 +709,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
     await execute(message.file, message.base);
+  }
+
+  /**
+   * Find the directory of the first valid output file from run outputs.
+   * Returns undefined if no suitable file location is found.
+   */
+  private findOutputDirectory(
+    runOutputs: Map<number, OutputFileInfo[]>,
+  ): string | undefined {
+    for (const infos of runOutputs.values()) {
+      for (const info of infos) {
+        const kind = info.location.kind;
+        if (kind === 'runStorage' || kind === 'workspace') {
+          return path.dirname(info.location.absolutePath);
+        }
+      }
+    }
+    return undefined;
   }
 }

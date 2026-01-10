@@ -179,11 +179,6 @@ export function setToolEditApprovalHandler(
   customHandler = handler;
 }
 
-function createApprovalRequestId(): string {
-  approvalCounter += 1;
-  return `approval-${Date.now().toString(36)}-${approvalCounter}`;
-}
-
 async function showProgressViewApprovalPrompt(
   requestId: string,
   request: ToolEditApprovalRequest,
@@ -436,7 +431,8 @@ async function nativeRequestApproval(
   const { path, originalContent, proposedContent, sourceTool, streamId } =
     request;
 
-  const requestId = createApprovalRequestId();
+  approvalCounter += 1;
+  const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
   const originalUri = await createTempFile('original', path, originalContent);
   const proposedUri = await createTempFile('proposed', path, proposedContent);
 
@@ -712,13 +708,17 @@ export async function handleProgressViewToolEditApprovalAction(
   }
 
   if (payload.action === 'approve') {
-    entry.settle({ accepted: true });
+    // Read the current content from the proposed file - user may have modified it in the diff view
+    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+    entry.settle({ accepted: true, appliedContent });
     return;
   }
 
   if (payload.action === 'approveAll') {
     enableSessionApprovalBypass();
-    entry.settle({ accepted: true });
+    // Read the current content from the proposed file - user may have modified it in the diff view
+    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+    entry.settle({ accepted: true, appliedContent });
     return;
   }
 
@@ -758,8 +758,11 @@ export function buildApprovalRejectedResult(
   // while still forwarding any user note as explicit instruction for the model.
   const note = userMessage?.trim();
   const result: ToolResult = {
+    // Use output to ensure the rejection message is always shown to the model.
+    // formatToolResultAsText prioritizes output over error/summary.
+    output: baseMessage,
     summary: baseMessage,
-    error: note && note.length > 0 ? note : baseMessage,
+    error: baseMessage,
     isError: true,
     ...(note && note.length > 0 ? { userInstruction: note } : {}),
   };

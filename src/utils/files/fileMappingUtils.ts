@@ -15,6 +15,14 @@ import { flexibleFS } from './flexibleFS';
 import type { FileLocation } from './taskRunStorage';
 
 /**
+ * Get the comparable path from a FileLocation.
+ * Returns relativePath for workspace/runStorage, absolutePath for external files.
+ */
+function getComparablePath(loc: FileLocation): string {
+  return loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
+}
+
+/**
  * Create a mapping between two file lists based on name similarity.
  * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
  * This ensures lookups work even when FileLocation objects are reconstructed.
@@ -37,12 +45,8 @@ export function createFileMapping(
     return fileMapping;
   }
 
-  // Use getComparablePath helper consistently for path extraction
-  const getPath = (loc: FileLocation): string =>
-    loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
-
   for (const target of targetFiles) {
-    const targetPath = getPath(target);
+    const targetPath = getComparablePath(target);
     const targetBaseName = path.basename(targetPath);
 
     let bestMatchSourcePath: string | null = null;
@@ -53,7 +57,7 @@ export function createFileMapping(
         continue;
       }
 
-      const sourcePath = getPath(sourceFile);
+      const sourcePath = getComparablePath(sourceFile);
       const sourceBaseName = path.basename(sourcePath);
 
       const sourceName = path.parse(sourceBaseName).name;
@@ -120,10 +124,7 @@ function buildReplacementLookup(
   for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
     if (!baseFile || !outputLoc) continue;
 
-    const outputFile =
-      outputLoc.kind !== 'external'
-        ? outputLoc.relativePath
-        : outputLoc.absolutePath;
+    const outputFile = getComparablePath(outputLoc);
 
     const baseSegments = getPathSegments(baseFile);
     const outputSegments = getPathSegments(outputFile);
@@ -176,7 +177,7 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${[...baseToOutputMap.entries()]
       .map(
         ([basePath, outputLoc]) =>
-          `${path.basename(basePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
+          `${path.basename(basePath)} -> ${path.basename(getComparablePath(outputLoc))}`,
       )
       .join(', ')}`,
   );
@@ -189,10 +190,7 @@ export async function replaceInputCommands(
   }
 
   for (const outputLocation of outputFiles) {
-    const outputPath =
-      outputLocation.kind !== 'external'
-        ? outputLocation.relativePath
-        : outputLocation.absolutePath;
+    const outputPath = getComparablePath(outputLocation);
 
     try {
       const content = await flexibleFS.read(outputLocation);
