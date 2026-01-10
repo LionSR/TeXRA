@@ -50,8 +50,9 @@ export class TaskGroupDomManager {
     detailsElem.appendChild(headerElement);
     detailsElem.appendChild(groupContainer);
 
-    // Restore collapsed state and track toggle changes
-    detailsElem.open = progressViewState.toggleStates.get(group.id) !== true;
+    // Restore collapsed state: toggleStates stores whether collapsed (true = collapsed)
+    const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
+    detailsElem.open = !isCollapsed;
     const toggleListener = () => {
       progressViewState.toggleStates.set(group.id, !detailsElem.open);
     };
