@@ -72,9 +72,7 @@ export class StreamTabs {
     if (streamNameElem) {
       const label = activeInfo?.label || '';
       streamNameElem.textContent = label;
-      streamNameElem.title = activeInfo
-        ? this._buildActiveTitle(activeInfo)
-        : '';
+      streamNameElem.title = activeInfo ? this._buildTooltip(activeInfo, true) : '';
       if (activeInfo?.name) {
         streamNameElem.dataset.stream = activeInfo.name;
       } else {
@@ -83,24 +81,35 @@ export class StreamTabs {
     }
   }
 
-  _buildTooltip(info) {
-    const parts = [
-      info?.label,
-      info?.model && `Model: ${info.model}`,
-      info?.inputFile && `Input: ${info.inputFile}`,
-    ];
-    return parts.filter(Boolean).join(' • ');
-  }
+  /**
+   * Build tooltip text for a stream tab
+   * @param {Object} info - Stream info object
+   * @param {boolean} includeLastActivity - Whether to include last activity line
+   * @returns {string} Tooltip text
+   */
+  _buildTooltip(info, includeLastActivity = false) {
+    if (!info) return '';
 
-  _buildActiveTitle(info) {
-    const parts = [this._buildTooltip(info)];
-    if (info?.lastTimestamp) {
+    const parts = [
+      info.label,
+      info.model && `Model: ${info.model}`,
+      info.inputFile && `Input: ${info.inputFile}`,
+    ].filter(Boolean);
+
+    if (includeLastActivity && info.lastTimestamp) {
       const lastSeen = formatRelativeTime(info.lastTimestamp);
       if (lastSeen) {
         parts.push(`Last activity ${lastSeen}`);
       }
     }
-    return parts.filter(Boolean).join('\n');
+
+    // Use bullet separator for inline parts, newline for last activity
+    if (includeLastActivity && parts.length > 1) {
+      const lastPart = parts.pop();
+      return `${parts.join(' • ')}\n${lastPart}`;
+    }
+
+    return parts.join(' • ');
   }
 
   /**

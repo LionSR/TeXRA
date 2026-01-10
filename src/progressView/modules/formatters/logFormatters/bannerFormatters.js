@@ -7,6 +7,22 @@ import { formatTimestamp } from '../timestampUtils.js';
 import { extractTrimmedContent } from '../normalizers.js';
 import { processMarkdownContent } from '../markdownRenderer.js';
 
+// Banner configuration by content type
+const BANNER_CONFIG = {
+  Thinking: {
+    iconClass: 'codicon-lightbulb',
+    labelText: 'Thinking',
+    copyTitle: 'Copy thinking',
+    contentClass: 'banner-content--thinking',
+  },
+  Scratchpad: {
+    iconClass: 'codicon-pencil',
+    labelText: 'Scratchpad',
+    copyTitle: 'Copy scratchpad',
+    contentClass: 'banner-content--scratchpad',
+  },
+};
+
 /**
  * Format thinking or scratchpad banner content
  * @param {object} normalizedPayload - Normalized payload with decodedText
@@ -16,41 +32,35 @@ import { processMarkdownContent } from '../markdownRenderer.js';
  * @param {string} timestamp - Timestamp
  * @returns {HTMLElement|null} Banner element or null
  */
-export const formatBannerContent = (
+export function formatBannerContent(
   normalizedPayload,
   contentType,
   logId,
   groupId,
   timestamp,
-) => {
+) {
   const { trimmed: trimmedContent, isEmpty } =
     extractTrimmedContent(normalizedPayload);
   if (isEmpty) return null;
 
-  const parsedMarkdown = processMarkdownContent(trimmedContent);
-  const isThinking = contentType.includes('Thinking');
+  const config = BANNER_CONFIG[contentType] || BANNER_CONFIG.Thinking;
   const bannerEntry = createBannerEntry({
     logId,
     groupId,
     timestamp,
-    iconClass: isThinking ? 'codicon-lightbulb' : 'codicon-pencil',
-    labelText: isThinking ? 'Thinking' : 'Scratchpad',
-    copyTitle: isThinking ? 'Copy thinking' : 'Copy scratchpad',
-    contentClass: isThinking
-      ? 'banner-content--thinking'
-      : 'banner-content--scratchpad',
+    ...config,
     open: false,
   });
 
-  if (!bannerEntry || !bannerEntry.contentElem) {
-    return bannerEntry ? bannerEntry.element : null;
+  if (!bannerEntry?.contentElem) {
+    return bannerEntry?.element ?? null;
   }
 
   bannerEntry.contentElem.dataset.rawContent = trimmedContent;
-  bannerEntry.contentElem.innerHTML = parsedMarkdown;
+  bannerEntry.contentElem.innerHTML = processMarkdownContent(trimmedContent);
 
   return bannerEntry.element;
-};
+}
 
 /**
  * Format a model response with markdown rendering
@@ -63,27 +73,13 @@ export const formatBannerContent = (
  * @param {string} params.level - Log level
  * @returns {HTMLElement|null} Model response element or null
  */
-export const formatModelResponse = ({
-  id,
-  groupId,
-  timestamp,
-  verbose,
-  content,
-  level,
-}) => {
-  if (!content) {
-    return null;
-  }
+export function formatModelResponse({ id, groupId, timestamp, verbose, content, level }) {
+  const trimmedContent = (content?.decodedText || '').trim();
+  if (!trimmedContent) return null;
 
-  const decodedContent = content.decodedText || '';
-  const trimmedContent = decodedContent.trim();
-  if (!trimmedContent) {
-    return null;
-  }
-
-  const date = new Date(timestamp);
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatTimestamp(date);
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
+    new Date(timestamp),
+  );
 
   const bannerEntry = createBannerEntry({
     logId: id,
@@ -96,9 +92,7 @@ export const formatModelResponse = ({
     open: true,
   });
 
-  if (!bannerEntry) {
-    return null;
-  }
+  if (!bannerEntry) return null;
 
   const { element, contentElem, summaryElem } = bannerEntry;
 
@@ -120,4 +114,4 @@ export const formatModelResponse = ({
   }
 
   return element;
-};
+}
