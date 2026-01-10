@@ -178,22 +178,15 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<void> {
     const { outputHandler, logger } = this.services;
 
-    // Check if any base files exist
     const existingBase = await Promise.all(
-      baseFiles.map(async (f) => await flexibleFS.exists(f)),
+      baseFiles.map((f) => flexibleFS.exists(f)),
     );
-
-    if (!existingBase.some((e) => e)) {
+    if (!existingBase.some(Boolean)) {
       logger.debug('No base files found for latexdiff');
       return;
     }
 
     const mapping = outputHandler.getRoundMapping(currentRound);
-    if (!mapping) {
-      logger.debug('No round mapping found for latexdiff');
-      return;
-    }
-
     await outputHandler.diffManager.handleLatexdiffofOutput(
       currentRound,
       mapping,
