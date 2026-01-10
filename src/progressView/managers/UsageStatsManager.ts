@@ -78,6 +78,30 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
+/** Returns zero-initialized usage stats */
+function emptyUsageStats(): TokenUsageStats {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  };
+}
+
+/** Accumulates usage stats from an iterable into a single total */
+function sumUsageStats(items: Iterable<TokenUsageStats>): TokenUsageStats {
+  const total = emptyUsageStats();
+  for (const usage of items) {
+    total.inputTokens += usage.inputTokens;
+    total.outputTokens += usage.outputTokens;
+    total.cost += usage.cost;
+    total.cacheReadInputTokens! += usage.cacheReadInputTokens ?? 0;
+    total.cacheCreationInputTokens! += usage.cacheCreationInputTokens ?? 0;
+  }
+  return total;
+}
+
 /** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
 const UsageDataSchema = createSingleValueRunMapSchema(
   TokenUsageStatsParsingSchema,
@@ -171,28 +195,7 @@ export class UsageStatsManager extends PersistentMapManager<
     if (!runs || runs.size === 0) {
       return undefined;
     }
-
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cost = 0;
-    let cacheReadInputTokens = 0;
-    let cacheCreationInputTokens = 0;
-
-    for (const usage of runs.values()) {
-      inputTokens += usage.inputTokens;
-      outputTokens += usage.outputTokens;
-      cost += usage.cost;
-      cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
-      cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
-    }
-
-    return {
-      inputTokens,
-      outputTokens,
-      cost,
-      cacheReadInputTokens,
-      cacheCreationInputTokens,
-    };
+    return sumUsageStats(runs.values());
   }
 
   /**
@@ -230,29 +233,14 @@ export class UsageStatsManager extends PersistentMapManager<
    * Calculate total usage across all streams
    */
   getTotalUsage(): TokenUsageStats {
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cost = 0;
-    let cacheReadInputTokens = 0;
-    let cacheCreationInputTokens = 0;
-
-    for (const usage of this.items.values()) {
-      for (const runUsage of usage.values()) {
-        inputTokens += runUsage.inputTokens;
-        outputTokens += runUsage.outputTokens;
-        cost += runUsage.cost;
-        cacheReadInputTokens += runUsage.cacheReadInputTokens ?? 0;
-        cacheCreationInputTokens += runUsage.cacheCreationInputTokens ?? 0;
+    // Flatten all run usage maps into a single iterable
+    const allUsage = (function* (items: Map<StreamTabId, RunUsageMap>) {
+      for (const runMap of items.values()) {
+        yield* runMap.values();
       }
-    }
+    })(this.items);
 
-    return {
-      inputTokens,
-      outputTokens,
-      cost,
-      cacheReadInputTokens,
-      cacheCreationInputTokens,
-    };
+    return sumUsageStats(allUsage);
   }
 
   /**
