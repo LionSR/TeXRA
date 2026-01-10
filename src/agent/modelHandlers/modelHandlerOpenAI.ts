@@ -675,23 +675,23 @@ export class ModelHandlerOpenAI<
         this.config.capabilities.supportsNativeAudio
       ) {
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
-        let audioFormat = media.media_type;
-        if (media.media_type.includes('/')) {
-          audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
-        }
+        // Extract format from mime type (e.g., 'wav' from 'audio/wav')
+        const audioFormat = (
+          media.media_type.split('/').pop() ?? media.media_type
+        ).toLowerCase();
+        const supportedFormats = ['wav', 'mp3'] as const;
 
-        type SupportedAudioFormat = 'wav' | 'mp3';
-        const normalizedAudioFormat = audioFormat.toLowerCase();
-        const supportedFormats = new Set<SupportedAudioFormat>(['wav', 'mp3']);
         if (
-          !supportedFormats.has(normalizedAudioFormat as SupportedAudioFormat)
+          !supportedFormats.includes(
+            audioFormat as (typeof supportedFormats)[number],
+          )
         ) {
-          const errorMessage = `Unsupported audio format "${audioFormat}" for audio generation. Valid formats are: wav, mp3.`;
-          this.logger.error(errorMessage);
-          throw new Error(errorMessage);
+          throw new Error(
+            `Unsupported audio format "${audioFormat}". Valid formats: ${supportedFormats.join(', ')}`,
+          );
         }
 
-        const typedAudioFormat = normalizedAudioFormat as SupportedAudioFormat;
+        const typedAudioFormat = audioFormat as 'wav' | 'mp3';
 
         const audioContent: ChatCompletionContentPartInputAudio = {
           type: 'input_audio',
@@ -870,22 +870,17 @@ export class ModelHandlerOpenAI<
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
-      const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
+      const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({
-          type: 'text',
-          text: PseudoPrefillMsgContentString,
-        });
+        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
       } else if (lastMessage && typeof lastMessage.content === 'string') {
         lastMessage.content = [
           { type: 'text', text: lastMessage.content },
-          { type: 'text', text: PseudoPrefillMsgContentString },
+          { type: 'text', text: pseudoPrefillMsg },
         ];
       }
-      this.logger.debug(
-        `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
-      );
+      this.logger.debug(`Added pseudo prefill: "${pseudoPrefillMsg}"`);
       return [endTurn, messages];
     }
 
@@ -928,8 +923,8 @@ export class ModelHandlerOpenAI<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    // Note: workspace state already updated above (lines 885-886)
     // Only need to handle case where prefill needs to be prepended
+    // (workspace state was already updated above with file content)
     if (!fileContent.includes(prefill)) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(

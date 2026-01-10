@@ -51,16 +51,16 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
     }
 
     const choice = chunk.choices[0];
+    if (!choice) {
+      return;
+    }
 
     // Check choice-level usage (Kimi format - usage is inside the choice object)
     const choiceUsage = (choice as { usage?: ChatCompletionChunk['usage'] })
-      ?.usage;
+      .usage;
     if (choiceUsage && !this.usageChunk) {
       // Store as if it were root-level usage for consistency
       this.usageChunk = { ...chunk, usage: choiceUsage };
-    }
-    if (!choice) {
-      return;
     }
 
     const { delta } = choice;
@@ -120,9 +120,12 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
       logprobs: primaryChoice.logprobs ?? null,
     };
 
-    const usageCandidate =
-      base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage;
-    const usage = usageCandidate === null ? undefined : usageCandidate;
+    // Convert null to undefined to match ChatCompletion type (usage: CompletionUsage | undefined)
+    const usage =
+      base.usage ??
+      this.usageChunk?.usage ??
+      this.lastChunkWithChoices?.usage ??
+      undefined;
 
     return {
       ...base,
@@ -140,13 +143,14 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
   }
 
   private buildToolCalls(): ChatCompletionMessageFunctionToolCall[] {
-    const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
-    for (const [index, call] of this.toolCalls.entries()) {
+    const result: ChatCompletionMessageFunctionToolCall[] = [];
+    for (const [callIndex, call] of this.toolCalls.entries()) {
+      // Skip empty tool calls (no id, name, or arguments)
       if (!call.id && !call.function.name && !call.function.arguments) {
         continue;
       }
-      toolCalls.push({
-        id: call.id || `tool_call_${index}`,
+      result.push({
+        id: call.id || `tool_call_${callIndex}`,
         type: 'function',
         function: {
           name: call.function.name,
@@ -154,7 +158,7 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
         },
       });
     }
-    return toolCalls;
+    return result;
   }
 
   private buildFallbackResponse(): ChatCompletion {
