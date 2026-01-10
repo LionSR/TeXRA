@@ -577,6 +577,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const logMessages = message.messages ?? [];
 
+    // Sort messages by timestamp to ensure chronological order
+    // Backend may send messages in arbitrary order during reload
+    const sortedMessages = [...logMessages].sort((a, b) => {
+      const timeA = a.timestamp ?? 0;
+      const timeB = b.timestamp ?? 0;
+      return timeA - timeB;
+    });
+
     // Action-based rebuild strategy (simpler than boolean flags):
     //
     // action: 'clear' → Explicitly clear DOM content (no active stream, stream deleted)
@@ -636,6 +644,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (groups.length > 0) {
       const parentGroups = groups.filter((g) => !g.parentGroupId);
+      // DIAGNOSTIC: Log group filtering
+      _logEvent('GROUP_FILTER', {
+        totalGroups: groups.length,
+        parentGroupsCount: parentGroups.length,
+        childGroupsCount: groups.length - parentGroups.length,
+        'state.activeSessionKind': state.activeSessionKind,
+      });
       dom.runSelector.setRuns(parentGroups);
       dom.taskGroups.renderInitial(groups);
 
@@ -679,9 +694,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // DIAGNOSTIC: Log before rendering
-    _logEvent('RENDER_START', { messageCount: logMessages.length });
+    _logEvent('RENDER_START', { messageCount: sortedMessages.length });
     let renderedCount = 0;
-    logMessages.forEach((msg) => {
+    sortedMessages.forEach((msg) => {
       this._renderLogMessage(msg, logContent);
       renderedCount++;
     });
