@@ -109,7 +109,10 @@ export class FileLister {
         return {
           extensions: getIncludedExtensions(fileType),
           ignoredExtensions: this.ignoredFileExtensions,
-          ignoredDirs: [...this.ignoredDirectories, ...this.ignoredInputDirectories],
+          ignoredDirs: [
+            ...this.ignoredDirectories,
+            ...this.ignoredInputDirectories,
+          ],
           ignoredKeywords: this.ignoredKeywords,
           ignoredFiles: this.ignoredInputFiles,
         };
@@ -126,7 +129,10 @@ export class FileLister {
           extensions: getIncludedExtensions('auxiliary'),
           ignoredExtensions: this.ignoredFileExtensions,
           ignoredDirs: this.ignoredDirectories,
-          ignoredKeywords: [...this.ignoredKeywords, ...this.ignoredAuxKeywords],
+          ignoredKeywords: [
+            ...this.ignoredKeywords,
+            ...this.ignoredAuxKeywords,
+          ],
         };
       case 'media':
         return {
