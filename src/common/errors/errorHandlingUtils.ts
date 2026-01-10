@@ -26,10 +26,10 @@
 
 // Third-party imports
 import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
 // Local imports - logging
-import * as logger from '@logger/logUtils';
 
 /**
  * Valid documentation identifiers for error messages.
