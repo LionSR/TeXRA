@@ -231,16 +231,23 @@ async function logFileCategoriesWithExistence(
   }
 }
 
+/** Result from processing a required file map */
+type RequiredFileMapResult = {
+  vars: UserVars;
+  files: LoadedFileEntry[];
+};
+
 async function processRequiredFileMap(
   fileMap: Record<string, string> | undefined,
-  userVars: UserVars,
   logger: AgentLogger,
   source: string,
   basePath?: string,
-): Promise<LoadedFileEntry[]> {
-  if (!fileMap) return [];
+): Promise<RequiredFileMapResult> {
+  if (!fileMap) return { vars: {}, files: [] };
 
+  const vars: UserVars = {};
   const files: LoadedFileEntry[] = [];
+
   for (const [varName, filePath] of Object.entries(fileMap)) {
     if (!filePath) continue;
 
@@ -248,7 +255,7 @@ async function processRequiredFileMap(
     const ok = await setVarFromFile(
       fullPath,
       varName,
-      userVars,
+      vars,
       logger,
       source,
       Boolean(basePath),
@@ -261,7 +268,7 @@ async function processRequiredFileMap(
       ...(basePath && { internal: true }),
     });
   }
-  return files;
+  return { vars, files };
 }
 
 async function getRequiredFileVars(
@@ -269,25 +276,22 @@ async function getRequiredFileVars(
   agentPath: string,
   logger: AgentLogger,
 ): Promise<FileVarsResult> {
-  const userVars: UserVars = {};
-
-  const [requiredFiles, internalFiles] = await Promise.all([
-    processRequiredFileMap(
-      agentSetting.requiredFiles,
-      userVars,
-      logger,
-      'requiredFiles',
-    ),
+  // Process file maps in parallel - each returns its own vars object to avoid shared mutation
+  const [required, internal] = await Promise.all([
+    processRequiredFileMap(agentSetting.requiredFiles, logger, 'requiredFiles'),
     processRequiredFileMap(
       agentSetting.requiredFilesInternal,
-      userVars,
       logger,
       'requiredFilesInternal',
       agentPath,
     ),
   ]);
 
-  return { vars: userVars, files: [...requiredFiles, ...internalFiles] };
+  // Merge vars from both results
+  return {
+    vars: { ...required.vars, ...internal.vars },
+    files: [...required.files, ...internal.files],
+  };
 }
 
 async function getPatternBasedFileVars(
