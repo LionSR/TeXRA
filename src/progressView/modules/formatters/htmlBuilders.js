@@ -28,13 +28,56 @@ export function buildToolUseSection(label, content) {
 }
 
 /**
- * Wrap text in a pre element with optional class
+ * Get diff line class based on line content
+ * @param {string} line - Line to check
+ * @returns {string|null} CSS class or null if not a diff line
+ */
+function getDiffLineClass(line) {
+  if (line.startsWith('@@')) return 'diff-hunk';
+  if (line.startsWith('+') && !line.startsWith('+++')) return 'diff-add';
+  if (line.startsWith('-') && !line.startsWith('---')) return 'diff-remove';
+  return null;
+}
+
+/**
+ * Check if text appears to be diff output
+ * @param {string} text - Text to check
+ * @returns {boolean} True if text looks like diff output
+ */
+function isDiffContent(text) {
+  const lines = text.split('\n').slice(0, 20); // Check first 20 lines
+  let diffMarkers = 0;
+  for (const line of lines) {
+    if (
+      line.startsWith('@@') ||
+      line.startsWith('+++') ||
+      line.startsWith('---')
+    ) {
+      diffMarkers++;
+    }
+  }
+  return diffMarkers >= 2;
+}
+
+/**
+ * Wrap text in a pre element with optional class and diff highlighting
  * @param {string} text - Text to wrap (will be HTML encoded)
  * @param {string} [className] - Optional CSS class
  * @returns {string} HTML string
  */
 export function wrapInPre(text, className = '') {
   const classAttr = className ? ` class="${className}"` : '';
+
+  // Apply diff highlighting if content looks like a diff
+  if (isDiffContent(text)) {
+    const highlightedLines = text.split('\n').map((line) => {
+      const diffClass = getDiffLineClass(line);
+      const encoded = encodeHtml(line);
+      return diffClass ? `<span class="${diffClass}">${encoded}</span>` : encoded;
+    });
+    return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
+  }
+
   return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
 }
 
