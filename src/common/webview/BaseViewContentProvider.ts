@@ -156,11 +156,17 @@ export abstract class BaseViewContentProvider {
       { key: 'commandsUri', path: 'webview/commands.js' },
       { key: 'webviewThemeHandlersUri', path: 'webview/themeHandlers.js' },
       { key: 'templateUtilsUri', path: 'modules/templateUtils.js' },
-      { key: 'recordingButtonManagerUri', path: 'modules/RecordingButtonManager.js' },
+      {
+        key: 'recordingButtonManagerUri',
+        path: 'modules/RecordingButtonManager.js',
+      },
       { key: 'textareaUtilsUri', path: 'modules/textareaUtils.js' },
       { key: 'htmlEncodingUri', path: 'modules/htmlEncoding.js' },
       { key: 'iconConstantsUri', path: 'modules/iconConstants.js' },
-      { key: 'baseWebviewMessageHandlerUri', path: 'modules/BaseWebviewMessageHandler.js' },
+      {
+        key: 'baseWebviewMessageHandlerUri',
+        path: 'modules/BaseWebviewMessageHandler.js',
+      },
       { key: 'baseFileUtilsUri', path: 'modules/files/baseFileUtils.js' },
       { key: 'domUtilsUri', path: 'modules/domUtils.js' },
       { key: 'baseDomHandlerUri', path: 'modules/BaseDomHandler.js' },
@@ -177,7 +183,10 @@ export abstract class BaseViewContentProvider {
   /** Node module descriptors from node_modules */
   private static readonly NODE_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [
-      { key: 'vscodeElementsBundleUri', path: '@vscode-elements/elements/dist/bundled.js' },
+      {
+        key: 'vscodeElementsBundleUri',
+        path: '@vscode-elements/elements/dist/bundled.js',
+      },
       { key: 'codiconUri', path: '@vscode/codicons/dist/codicon.css' },
       { key: 'codiconsFontUri', path: '@vscode/codicons/dist/codicon.ttf' },
     ];

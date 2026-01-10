@@ -193,7 +193,8 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     return this.checkFileType(
       target,
-      (t) => (t & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink,
+      (t) =>
+        (t & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink,
     );
   }
 
