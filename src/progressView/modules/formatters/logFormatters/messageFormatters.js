@@ -46,7 +46,13 @@ export const formatUserMessage = (normalizedPayload, logId, timestamp) => {
  * @returns {HTMLElement} Progress status element
  */
 export const formatProgressStatus = (message) => {
-  const { normalizedPayload = {}, level = 'info', id, groupId, timestamp } = message;
+  const {
+    normalizedPayload = {},
+    level = 'info',
+    id,
+    groupId,
+    timestamp,
+  } = message;
   const { fullTimestamp, timeDisplay, tooltipTimestamp } = formatTimestamp(
     new Date(timestamp ?? Date.now()),
   );
@@ -58,7 +64,11 @@ export const formatProgressStatus = (message) => {
   const emoji = EMOJI_BY_LEVEL[level] || '•';
 
   const container = document.createElement('div');
-  setElementDataset(container, { logId: id, groupId, timestamp: fullTimestamp });
+  setElementDataset(container, {
+    logId: id,
+    groupId,
+    timestamp: fullTimestamp,
+  });
 
   const summaryLine = document.createElement('div');
   summaryLine.className = 'log-line';
