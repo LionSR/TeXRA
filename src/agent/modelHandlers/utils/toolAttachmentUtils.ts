@@ -163,15 +163,11 @@ export function describeAttachments(
   attachments: ToolFileAttachment[],
 ): string[] {
   return attachments.map((file) => {
-    const path =
-      typeof file.path === 'string' && file.path.length > 0
-        ? file.path
-        : 'attachment';
-    const type =
-      typeof file.mimeType === 'string' && file.mimeType.length > 0
-        ? file.mimeType
-        : DEFAULT_ATTACHMENT_MIME_TYPE;
-    return `- ${path} (${type})`;
+    const filePath = isNonEmptyString(file.path) ? file.path : 'attachment';
+    const mimeType = isNonEmptyString(file.mimeType)
+      ? file.mimeType
+      : DEFAULT_ATTACHMENT_MIME_TYPE;
+    return `- ${filePath} (${mimeType})`;
   });
 }
 
@@ -202,6 +198,15 @@ export function formatAttachmentSummary(
   return formatAttachmentSummaryFromNotes(descriptions, variant);
 }
 
+const ATTACHMENT_SUMMARY_TEMPLATES: Record<AttachmentSummaryVariant, string> = {
+  'included-inline': 'Attachments included in this response:',
+  'metadata-fallback':
+    'Attachments available but returned as metadata only:',
+  'metadata-only': 'Attachments available:',
+};
+
+const READ_FILE_HINT = 'Use the read_file tool to read them.';
+
 /**
  * Format attachment summary from pre-built description notes.
  * Use this when descriptions come from multiple sources (e.g., Anthropic handler).
@@ -210,15 +215,11 @@ export function formatAttachmentSummaryFromNotes(
   notes: string,
   variant: AttachmentSummaryVariant = 'metadata-only',
 ): string {
-  switch (variant) {
-    case 'included-inline':
-      return `Attachments included in this response:\n${notes}`;
-    case 'metadata-fallback':
-      return `Attachments available but returned as metadata only:\n${notes}\nUse the read_file tool if you need the raw bytes.`;
-    case 'metadata-only':
-    default:
-      return `Attachments available:\n${notes}\nUse the read_file tool to read them.`;
-  }
+  const header = ATTACHMENT_SUMMARY_TEMPLATES[variant];
+  const needsReadHint = variant !== 'included-inline';
+  return needsReadHint
+    ? `${header}\n${notes}\n${READ_FILE_HINT}`
+    : `${header}\n${notes}`;
 }
 
 export async function loadAttachmentBuffer(

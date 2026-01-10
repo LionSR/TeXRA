@@ -67,12 +67,12 @@ function logRepetitionDetected(
   logger: ErrorLogger,
 ): void {
   const preview = newResponse.substring(0, REPETITION_DETECTION_THRESHOLD);
+  const skeleton = JSON.stringify(messageToSkeleton(messages), null, 2);
   logger.error(
-    `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${preview}`,
+    `Massive repetition detected - skipping this response\n` +
+      `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
+      `Message structure:\n${skeleton}`,
   );
-  logger.error('Massive repetition detected - skipping this response');
-  logger.error('Message structure when repetition detected:');
-  logger.error(JSON.stringify(messageToSkeleton(messages), null, 2));
 }
 
 // ============================================================================
