@@ -181,7 +181,8 @@ export class BaseUIRequestManager {
 
     const activeStream = this.activeStream;
     const shouldDisplay =
-      this._meetsAgentRequirement() && Boolean(activeStream && activeStream.length);
+      this._meetsAgentRequirement() &&
+      Boolean(activeStream && activeStream.length);
 
     const fragment = document.createDocumentFragment();
     for (const entry of this.requests.values()) {
