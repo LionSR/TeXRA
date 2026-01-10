@@ -106,11 +106,19 @@ async function resumeFromSnapshot(
   } catch (error) {
     // Use already-drained follow-ups if available, otherwise drain now
     const lostFollowUps =
-      queuedFollowUps.length > 0 ? queuedFollowUps : ToolUseFollowUpQueue.drain(streamId);
+      queuedFollowUps.length > 0
+        ? queuedFollowUps
+        : ToolUseFollowUpQueue.drain(streamId);
     const lostCount = lostFollowUps.length;
 
-    const baseMessage = logErrorMessage(CHANNEL, 'Failed to resume tool-use session', error);
-    await vscode.window.showWarningMessage(`${baseMessage}${formatLostFollowUpSuffix(lostCount)}`);
+    const baseMessage = logErrorMessage(
+      CHANNEL,
+      'Failed to resume tool-use session',
+      error,
+    );
+    await vscode.window.showWarningMessage(
+      `${baseMessage}${formatLostFollowUpSuffix(lostCount)}`,
+    );
 
     return { success: false, lostFollowUps: lostCount };
   } finally {
