@@ -122,29 +122,16 @@ export class FileInteractionState {
       const path = entry?.path;
       if (!path) continue;
 
-      const deltaAdded = entry.lineChanges?.added ?? 0;
-      const deltaRemoved = entry.lineChanges?.removed ?? 0;
+      const added = entry.lineChanges?.added ?? 0;
+      const removed = entry.lineChanges?.removed ?? 0;
 
       // Update cumulative edits
-      const cumulative = this.edits.get(path);
-      if (cumulative) {
-        cumulative.added += deltaAdded;
-        cumulative.removed += deltaRemoved;
-      } else {
-        this.edits.set(path, { added: deltaAdded, removed: deltaRemoved });
-      }
-
+      this.updateEditMap(this.edits, path, added, removed);
       // Update per-call edits
-      const current = perCallEdits.get(path);
-      if (current) {
-        current.added += deltaAdded;
-        current.removed += deltaRemoved;
-      } else {
-        perCallEdits.set(path, { added: deltaAdded, removed: deltaRemoved });
-      }
+      this.updateEditMap(perCallEdits, path, added, removed);
 
-      totalAdded += deltaAdded;
-      totalRemoved += deltaRemoved;
+      totalAdded += added;
+      totalRemoved += removed;
     }
 
     const editsForCall = [...perCallEdits.entries()].map(([path, diff]) => ({
@@ -155,11 +142,28 @@ export class FileInteractionState {
           : undefined,
     }));
 
-    const lineChanges =
-      totalAdded || totalRemoved
-        ? { added: totalAdded, removed: totalRemoved }
-        : undefined;
-    return { edits: editsForCall, lineChanges };
+    return {
+      edits: editsForCall,
+      lineChanges:
+        totalAdded || totalRemoved
+          ? { added: totalAdded, removed: totalRemoved }
+          : undefined,
+    };
+  }
+
+  private updateEditMap(
+    map: Map<string, { added: number; removed: number }>,
+    path: string,
+    added: number,
+    removed: number,
+  ): void {
+    const existing = map.get(path);
+    if (existing) {
+      existing.added += added;
+      existing.removed += removed;
+    } else {
+      map.set(path, { added, removed });
+    }
   }
 }
 
@@ -443,11 +447,14 @@ export class AgentWorkspaceState {
   /** Serialize to a snapshot. */
   toSnapshot(): AgentWorkspaceSnapshot {
     return {
-      assembly: { ...this.assembly },
+      assembly: {
+        lastResponse: this.assembly.lastResponse,
+        accumulatedOutput: this.assembly.accumulatedOutput,
+      },
       media: this.media.toSnapshot(),
       reasoning: {
-        ...this.reasoning,
         thinkingBlocks: [...this.reasoning.thinkingBlocks],
+        thinkingAdded: this.reasoning.thinkingAdded,
       },
       interactions: this.interactions.toSnapshot(),
       todos: this.todos.toSnapshot(),
