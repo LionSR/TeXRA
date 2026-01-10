@@ -130,46 +130,38 @@ export class FileLineageCalculator {
 
   /**
    * Find the base file that matches the given source name.
-   * Tries heuristics in priority order (first match wins):
-   * 1. Exact match: basename === source
+   * Single-pass algorithm that checks all priority heuristics:
+   * 1. Exact match: basename === source (immediate return)
    * 2. Names without extensions match
    * 3. Base name (no ext) matches source
    * 4. Source (no ext) matches base name
    */
   findMatchingBaseFile(source: string): FileLocation | undefined {
     const sourceNoExt = path.parse(source).name;
+    let priority2Match: FileLocation | undefined;
+    let priority3Match: FileLocation | undefined;
+    let priority4Match: FileLocation | undefined;
 
-    // Priority 1: Exact match
     for (const baseLoc of this.baseFiles) {
-      if (this.getBaseName(baseLoc) === source) {
+      const baseName = this.getBaseName(baseLoc);
+      const baseNameNoExt = path.parse(baseName).name;
+
+      // Priority 1: Exact match - return immediately
+      if (baseName === source) {
         return baseLoc;
+      }
+
+      // Track lower priority matches (first match for each priority wins)
+      if (!priority2Match && baseNameNoExt === sourceNoExt) {
+        priority2Match = baseLoc;
+      } else if (!priority3Match && baseNameNoExt === source) {
+        priority3Match = baseLoc;
+      } else if (!priority4Match && baseName === sourceNoExt) {
+        priority4Match = baseLoc;
       }
     }
 
-    // Priority 2: Names without extensions match
-    for (const baseLoc of this.baseFiles) {
-      const baseNameNoExt = path.parse(this.getBaseName(baseLoc)).name;
-      if (baseNameNoExt === sourceNoExt) {
-        return baseLoc;
-      }
-    }
-
-    // Priority 3: Base name (no ext) matches source exactly
-    for (const baseLoc of this.baseFiles) {
-      const baseNameNoExt = path.parse(this.getBaseName(baseLoc)).name;
-      if (baseNameNoExt === source) {
-        return baseLoc;
-      }
-    }
-
-    // Priority 4: Source (no ext) matches base name exactly
-    for (const baseLoc of this.baseFiles) {
-      if (this.getBaseName(baseLoc) === sourceNoExt) {
-        return baseLoc;
-      }
-    }
-
-    return undefined;
+    return priority2Match ?? priority3Match ?? priority4Match;
   }
 
   /**

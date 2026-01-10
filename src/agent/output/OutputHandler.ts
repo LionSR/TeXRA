@@ -117,10 +117,6 @@ export class OutputHandler implements IOutputHandler {
     });
   }
 
-  private collectRunSnapshotFiles(): FileLocation[] {
-    return this.baseFiles;
-  }
-
   private collectRunSupportFiles(): FileLocation[] {
     const extras = new Map<string, FileLocation>();
     const add = (value?: string | FileLocation | null) => {
@@ -151,10 +147,9 @@ export class OutputHandler implements IOutputHandler {
     this._storageKey = storageKey;
     this.openedOutputs.clear();
 
-    const snapshotTargets = this.collectRunSnapshotFiles();
     const supportFiles = this.collectRunSupportFiles();
     this.runPreparation = this.fileService.prepareRunWorkspace(
-      snapshotTargets,
+      this.baseFiles,
       { linkFiles: supportFiles },
     );
   }
