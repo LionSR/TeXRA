@@ -160,7 +160,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   const tool = await selectImageTool();
   const convertArgs = [
     tool,
-    ...(tool === 'gm' ? ['convert'] : []),
+    'convert',
     imagePath,
     '-resize',
     `${maxDimension}x${maxDimension}>`,
