@@ -282,6 +282,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // dom.logEntries.append returns true if message was added to its group container
     if (msg.groupId && dom.logEntries.append(msg)) return;
     const formatted = this._entryFormatter.format(msg);
+    // DIAGNOSTIC: Log if formatter returns null
+    if (!formatted) {
+      console.warn('[_renderLogMessage] Formatter returned null for:', {
+        messageType: msg.messageType,
+        id: msg.id,
+        hasText: Boolean(msg.text),
+        hasData: Boolean(msg.data),
+      });
+    }
     appendFormatted(logContent, formatted);
   }
 
@@ -606,7 +615,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.showRun(null);
     }
 
-    logMessages.forEach((msg) => this._renderLogMessage(msg, logContent));
+    // DIAGNOSTIC: Log before rendering
+    console.log('[UPDATE_LOGS] Full rebuild - rendering', logMessages.length, 'messages');
+    let renderedCount = 0;
+    logMessages.forEach((msg) => {
+      this._renderLogMessage(msg, logContent);
+      renderedCount++;
+    });
+    console.log('[UPDATE_LOGS] After render loop:', {
+      renderedCount,
+      logContentChildCount: logContent?.childElementCount,
+      logContentInnerHTMLLength: logContent?.innerHTML?.length,
+    });
     scrollToBottom(logContent);
 
     // Use validated run ID from state (set earlier via setActiveRunId after validation)
