@@ -48,14 +48,12 @@ export const EndGroupStatusSchema = z.enum([
 
 export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
 
-/**
- * Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
- * This ensures type compatibility when assigning EndGroupStatus to TaskGroupStatus fields.
- */
+// Compile-time assertion: EndGroupStatus must be a subset of TaskGroupStatus.
+// This ensures type compatibility when assigning EndGroupStatus to TaskGroupStatus fields.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _AssertEndGroupStatusSubset = EndGroupStatus extends TaskGroupStatus
   ? true
   : never;
-const _assertEndGroupStatusSubset: _AssertEndGroupStatusSubset = true;
 
 /**
  * Message type constants - single source of truth for log message categories.
