@@ -1371,8 +1371,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    // Note: workspace state already updated above (lines 1108-1109)
     // Only need to handle case where prefill needs to be prepended
+    // (workspace state was already updated above with file content)
     if (!fileContent.includes(prefill)) {
       workspaceState.assembly.accumulatedOutput = prefill + fileContent;
       await flexibleFS.write(
