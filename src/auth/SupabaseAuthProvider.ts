@@ -69,13 +69,25 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
 /**
  * Parse and validate stored session data.
  * Returns null if session data is missing or invalid.
+ * Logs warnings for corrupted data to help diagnose auth issues.
  */
 function parseStoredSession(sessionData: string | undefined): SupabaseSession | null {
   if (!sessionData) return null;
   try {
     const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
-    return parsed.success ? parsed.data : null;
-  } catch {
+    if (!parsed.success) {
+      logger.warn(
+        'SupabaseAuthProvider',
+        `Stored session has invalid schema: ${parsed.error.message}`,
+      );
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    logger.warn(
+      'SupabaseAuthProvider',
+      `Failed to parse stored session: ${toErrorMessage(error)}`,
+    );
     return null;
   }
 }
