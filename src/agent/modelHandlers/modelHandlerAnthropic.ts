@@ -1700,24 +1700,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return false;
     }
 
-    // We should continue if:
-    // 1. We hit the max tokens limit (stopReason === 'max_tokens')
-    // 2. AND we don't have an end tag (meaning the response is incomplete)
-    if (
-      stopReason === ANTHROPIC_STOP.MAX_TOKENS &&
-      !hasEndTag(agentSetting, newResponse)
-    ) {
-      return true;
+    // Continue if we hit max tokens OR stop sequence without an end tag
+    const shouldContinue =
+      (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
+        stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
+      !hasEndTag(agentSetting, newResponse);
+
+    if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
+      this.logger.debug('Response complete (end tag found)');
     }
-    if (stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
-      if (!hasEndTag(agentSetting, newResponse)) {
-        return true;
-      } else {
-        this.logger.debug('Response complete (end tag found)');
-        return false;
-      }
-    }
-    return false;
+
+    return shouldContinue;
   }
 
   /**
