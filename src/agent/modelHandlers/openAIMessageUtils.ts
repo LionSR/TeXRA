@@ -109,9 +109,16 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     working.forEach((message) => {
       if (Array.isArray(message.content)) {
         // Extract text from content array items and join with newlines
-        message.content = (message.content as Array<{ type?: string; text?: string }>)
-          .filter((item) => item.type === 'text' && typeof item.text === 'string')
-          .map((item) => item.text!)
+        // Filter defensively to handle null/undefined items
+        message.content = (message.content as Array<unknown>)
+          .filter(
+            (item): item is { type: string; text: string } =>
+              item !== null &&
+              typeof item === 'object' &&
+              (item as { type?: unknown }).type === 'text' &&
+              typeof (item as { text?: unknown }).text === 'string',
+          )
+          .map((item) => item.text)
           .join('\n');
       }
     });
