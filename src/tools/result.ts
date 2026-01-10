@@ -78,6 +78,71 @@ export type FlattenedEditRecord = z.infer<typeof FlattenedEditRecordSchema>;
  */
 export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
 
+/**
+ * Formatted Zod issue for model consumption.
+ * Provides structured information that helps models self-correct.
+ */
+export interface FormattedZodIssue {
+  path: string;
+  message: string;
+  expected?: unknown;
+  received?: unknown;
+  code?: string;
+}
+
+/**
+ * Structured validation error diagnostics.
+ * Used to provide rich error information to models for self-correction.
+ */
+export interface ValidationErrorDiagnostics {
+  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
+  issues: ZodIssue[];
+  formatted: FormattedZodIssue[];
+}
+
+/**
+ * Format Zod issues into structured diagnostics for model consumption.
+ * Single source of truth for Zod validation error formatting.
+ *
+ * Note: `expected` and `received` are only present on certain ZodIssue subtypes
+ * (e.g., invalid_type, invalid_literal), so we access them via casting.
+ *
+ * @param issues - Raw Zod issues array
+ * @returns Formatted issues with path, message, expected, received, code
+ */
+export function formatZodIssuesForDiagnostics(
+  issues: ZodIssue[],
+): FormattedZodIssue[] {
+  return issues.map((issue) => {
+    // Cast to access subtype-specific fields (expected/received)
+    const extendedIssue = issue as ZodIssue & {
+      expected?: unknown;
+      received?: unknown;
+    };
+    return {
+      path: issue.path.join('.'),
+      message: issue.message,
+      expected: extendedIssue.expected,
+      received: extendedIssue.received,
+      code: issue.code,
+    };
+  });
+}
+
+/**
+ * Format Zod issues as a simple error message string.
+ * Used for the error field in ToolResult.
+ *
+ * @param issues - Raw Zod issues array
+ * @returns Human-readable error message
+ */
+export function formatZodIssuesAsMessage(issues: ZodIssue[]): string {
+  const lines = issues.map((i) =>
+    i.path.length ? `- ${i.path.join('.')}: ${i.message}` : `- ${i.message}`,
+  );
+  return `Invalid input:\n${lines.join('\n')}`;
+}
+
 export interface DiagnosticsPayload {
   path: string;
   command: 'list' | 'count';
