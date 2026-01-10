@@ -107,7 +107,11 @@ function errorResponse(c: Context, error: string, status: number) {
 function buildSessionResponse(
   accessToken: string,
   refreshToken: string,
-  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+  user: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  },
 ) {
   const now = Math.floor(Date.now() / 1000);
   return {
