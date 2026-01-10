@@ -454,7 +454,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
 
     dom.toolbar.render(sessionKind);
-    dom.status.setSessionKind(sessionKind);
+    dom.status.setCurrentButtonIds(dom.toolbar.getCurrentButtonIds());
 
     const hasExecution = state.hasExecutionId(message.activeStream);
     dom.status.setExecutionIdAvailability(Boolean(hasExecution));
