@@ -132,8 +132,9 @@ export class Status {
 
     // Query buttons fresh each time to handle toolbar re-rendering
     // Only query buttons that exist in the current toolbar
+    // Create Set once for efficient .has() lookups in enable step
     const currentToolbarButtonIds = new Set(this._currentButtonIds);
-    const buttons = [...currentToolbarButtonIds]
+    const buttons = this._currentButtonIds
       .map((id) => safeGetElementById(id))
       .filter(Boolean);
 
