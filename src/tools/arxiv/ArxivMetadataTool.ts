@@ -7,8 +7,7 @@ import { ToolError } from '@tools/result';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
-  extractEntryIdentifier,
-  getAuthorNames,
+  extractBasePaperMetadata,
   normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
@@ -54,30 +53,16 @@ export class ArxivMetadataTool extends defineTool({
       throw new ToolError(`No metadata found for arXiv ID ${requestId}`);
     }
 
-    // Take the first result (should be the only one for ID lookup)
     const targetEntry = entries[0];
-
-    const authorNames = getAuthorNames(
-      targetEntry.authors,
-      input.maxAuthors ?? undefined,
-    );
+    const base = extractBasePaperMetadata(targetEntry, input.maxAuthors ?? undefined);
     const includeAbstract = input.includeAbstract ?? true;
 
     const metadata: ArxivPaperMetadata = {
-      id: extractEntryIdentifier(targetEntry.id) ?? requestId,
-      doi: targetEntry.doi?.id ?? null,
-      title:
-        typeof targetEntry.title === 'string'
-          ? targetEntry.title.trim()
-          : targetEntry.title,
-      published: targetEntry.published ?? null,
-      updated: targetEntry.updated ?? null,
-      authors: authorNames,
+      ...base,
+      id: base.id ?? requestId,
       journalReference: targetEntry.journalRef ?? null,
       comment: targetEntry.comment ?? null,
-      primaryCategory: targetEntry.primaryCategory ?? null,
       links: targetEntry.links ?? null,
-      // Conditionally include abstract field only when requested
       ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
     };
 
