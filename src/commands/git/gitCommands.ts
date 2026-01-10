@@ -24,61 +24,61 @@ export function registerGitCommands(context: vscode.ExtensionContext) {
   );
 }
 
-async function isGitRepository(): Promise<boolean> {
+function isGitRepository(): boolean {
   const workspacePath = WorkspaceFS.getPath();
-  if (workspacePath) {
-    const result = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
-      cwd: workspacePath,
-      reject: false,
-    });
-    return result.exitCode === 0;
+  if (!workspacePath) {
+    return false;
   }
-  return false;
+  const result = execaSync('git', ['rev-parse', '--is-inside-work-tree'], {
+    cwd: workspacePath,
+    reject: false,
+  });
+  return result.exitCode === 0;
 }
 
-async function getRecentCommits(): Promise<string[] | null> {
-  const isGitRepo = await isGitRepository();
-  if (!isGitRepo) {
+function getRecentCommits(): string[] | null {
+  if (!isGitRepository()) {
     return null;
   }
 
   const workspacePath = WorkspaceFS.getPath();
-  if (workspacePath) {
-    const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
-
-    // Validate numberOfCommits to prevent injection
-    if (
-      typeof numberOfCommits !== 'number' ||
-      numberOfCommits <= 0 ||
-      numberOfCommits > 1000
-    ) {
-      throw new Error(
-        'Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.',
-      );
-    }
-
-    const result = execaSync(
-      'git',
-      [
-        'log',
-        '-n',
-        numberOfCommits.toString(),
-        `--pretty=format:${COMMIT_LABEL_FORMAT}`,
-      ],
-      { cwd: workspacePath, reject: false },
-    );
-    if (result.exitCode !== 0) {
-      return [];
-    }
-    return result.stdout
-      .toString()
-      .split('\n')
-      .map((line) => line.trim());
+  if (!workspacePath) {
+    return [];
   }
-  return [];
+
+  const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
+
+  // Validate numberOfCommits to prevent injection
+  if (
+    typeof numberOfCommits !== 'number' ||
+    numberOfCommits <= 0 ||
+    numberOfCommits > 1000
+  ) {
+    throw new Error(
+      'Invalid numberOfCommits value. It must be a positive integer between 1 and 1000.',
+    );
+  }
+
+  const result = execaSync(
+    'git',
+    [
+      'log',
+      '-n',
+      numberOfCommits.toString(),
+      `--pretty=format:${COMMIT_LABEL_FORMAT}`,
+    ],
+    { cwd: workspacePath, reject: false },
+  );
+  if (result.exitCode !== 0) {
+    return [];
+  }
+  return result.stdout
+    .toString()
+    .split('\n')
+    .map((line) => line.trim());
 }
 
-async function findCommitInHistory(commitHash: string): Promise<string | null> {
+function findCommitInHistory(commitHash: string): string | null {
   if (typeof commitHash !== 'string') {
     return null;
   }
