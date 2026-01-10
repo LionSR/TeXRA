@@ -17,6 +17,7 @@ import {
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
+import { compileLatex2Pdf } from './texTools';
 
 /**
  * Get the appropriate path from a FileLocation based on its kind.
@@ -27,7 +28,6 @@ function getLocationPath(location: FileLocation): string {
     ? location.relativePath
     : location.absolutePath;
 }
-import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
