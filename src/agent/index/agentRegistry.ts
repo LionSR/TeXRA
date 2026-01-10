@@ -378,10 +378,16 @@ async function scanYaml(
 }
 
 function mapAgentType(value: string | undefined): AgentType {
-  if (value === 'toolUse' || value === AgentType.ToolUse)
-    return AgentType.ToolUse;
-  if (value === 'direct' || value === AgentType.Direct) return AgentType.Direct;
-  return AgentType.CoT;
+  switch (value) {
+    case 'toolUse':
+    case AgentType.ToolUse:
+      return AgentType.ToolUse;
+    case 'direct':
+    case AgentType.Direct:
+      return AgentType.Direct;
+    default:
+      return AgentType.CoT;
+  }
 }
 
 async function loadRemoteAgents(): Promise<AgentEntry[]> {
@@ -618,20 +624,14 @@ function filterVisible(
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
 
-  // Check if remote agents should auto-show (default: true)
-  const autoShowRemote = getConfig<boolean>(
-    'texra.remoteAgents.autoShow',
-    true,
+  const autoShowRemote = getConfig<boolean>('texra.remoteAgents.autoShow', true);
+
+  return entries.filter((e) =>
+    // Remote agents auto-show if enabled, otherwise check config
+    (autoShowRemote && e.source === 'remote') ||
+    configured.has(createKey(e.source, e.name)) ||
+    configured.has(e.name)
   );
-
-  return entries.filter((e) => {
-    // Auto-include remote agents if enabled (they don't need to be in texra.agents)
-    if (autoShowRemote && e.source === 'remote') return true;
-
-    const key = createKey(e.source, e.name);
-    // Match by full key (e.g., "custom:correct") OR by name only (e.g., "correct")
-    return configured.has(key) || configured.has(e.name);
-  });
 }
 
 function renderOptions(
@@ -656,23 +656,17 @@ function renderOptions(
 
 function renderOption(entry: AgentEntry): string {
   const key = `${entry.source}:${entry.name}`;
-  const attrs: string[] = [
+  const attrs = [
     `value="${encodeHtml(key)}"`,
     `data-label="${encodeHtml(entry.name)}"`,
     `data-source="${encodeHtml(entry.source)}"`,
-  ];
-
-  if (entry.multiplePath) attrs.push('data-multiple="true"');
-  if (entry.category === AgentCategory.ToolUse)
-    attrs.push('data-tool-use="true"');
-  if (shouldShowSourceIndicator(entry.source)) {
-    if (entry.source === 'remote') attrs.push('data-remote="true"');
-    if (entry.source === 'custom') attrs.push('data-custom="true"');
-  }
-  if (entry.description)
-    attrs.push(`data-description="${encodeHtml(entry.description)}"`);
-  if (entry.agentType)
-    attrs.push(`data-agent-type="${encodeHtml(entry.agentType)}"`);
+    entry.multiplePath && 'data-multiple="true"',
+    entry.category === AgentCategory.ToolUse && 'data-tool-use="true"',
+    entry.source === 'remote' && 'data-remote="true"',
+    entry.source === 'custom' && 'data-custom="true"',
+    entry.description && `data-description="${encodeHtml(entry.description)}"`,
+    entry.agentType && `data-agent-type="${encodeHtml(entry.agentType)}"`,
+  ].filter(Boolean);
 
   return `<vscode-option ${attrs.join(' ')}>${encodeHtml(entry.name)}</vscode-option>`;
 }
