@@ -43,7 +43,6 @@ const state = progressViewState;
 const dom = progressViewDomHandler;
 const pendingLogUpdates = new Map();
 
-
 // Create formatter instances
 
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
@@ -305,11 +304,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const wasAppendedToGroup = dom.logEntries.append(msg);
       // DIAGNOSTIC: Track grouped message handling
       if (!wasAppendedToGroup) {
-        console.warn('[_renderLogMessage] Message has groupId but no container:', {
-          messageType: msg.messageType,
-          id: msg.id,
-          groupId: msg.groupId,
-        });
+        console.warn(
+          '[_renderLogMessage] Message has groupId but no container:',
+          {
+            messageType: msg.messageType,
+            id: msg.id,
+            groupId: msg.groupId,
+          },
+        );
       }
       if (wasAppendedToGroup) return;
     }
