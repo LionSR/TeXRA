@@ -204,10 +204,17 @@ export async function activate(context: vscode.ExtensionContext) {
   // Log activation message to ensure the logger is working correctly
   logger.info('extension', 'TeXRA extension activated');
 
-  // Clean up UI state: mark running streams as ERROR.
-  // Note: Waiting stream detection is now lazy - happens when user sends follow-up.
-  // See followUpCommand.ts lazyDetectWaitingStatus() for details.
-  await progressViewProvider.cleanupTasksAfterRestart();
+  // Detect waiting streams BEFORE cleanup to preserve resumable sessions.
+  // This ensures streams with persisted flow records are marked WAITING (not ERROR),
+  // preventing loss of ability to resume interrupted sessions.
+  const { detectWaitingStreams } = await import(
+    '@agent/storage/detectWaitingStreams'
+  );
+  const executionIdMap = progressViewProvider.state.getAllExecutionIds();
+  const waitingStreams = await detectWaitingStreams(executionIdMap);
+
+  // Clean up UI state: mark running streams as ERROR (except waiting ones).
+  await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();

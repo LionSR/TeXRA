@@ -864,11 +864,32 @@ export class ProgressEventHandler {
   /**
    * Reset running tasks to ERROR status (used during webview reload)
    * Returns the list of affected streams for further processing
+   *
+   * Also sets WAITING status for streams with persisted flow records,
+   * ensuring resumable sessions are properly marked on extension reload.
    */
   resetRunningTasksToError(waitingStreams?: Set<string>): string[] {
     const affectedStreams: string[] = [];
     const waitingSet = waitingStreams ?? new Set<string>();
 
+    // First: Mark streams with persisted flow records as WAITING.
+    // This is critical on extension reload when StreamStatusService is empty.
+    // Without this, users don't know which sessions can be resumed.
+    for (const stream of waitingSet) {
+      const currentStatus = StreamStatusService.get(stream);
+      // Only set WAITING if not already RUNNING or WAITING
+      if (
+        currentStatus !== STREAM_STATUS.RUNNING &&
+        currentStatus !== STREAM_STATUS.WAITING
+      ) {
+        StreamStatusService.set(stream, STREAM_STATUS.WAITING, { emit: false });
+        this.logger.debug(
+          `Stream ${stream} set to WAITING (has persisted flow record)`,
+        );
+      }
+    }
+
+    // Second: Handle streams that were RUNNING but shouldn't be WAITING
     for (const [stream, status] of StreamStatusService.entries()) {
       if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
