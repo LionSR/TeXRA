@@ -117,12 +117,16 @@ export type SetActiveStreamPayload = z.infer<
 
 /**
  * Payload for setting task state on a stream.
- * Uses z.custom for taskState since TaskStateSchema is a validation-only schema
- * (uses looseObject) while the actual type has full AgentConfig fields.
+ *
+ * TaskStateSchema uses looseObject for validation efficiency (only validates
+ * discriminator fields), while the full TaskState type has all AgentConfig fields.
+ * We use pipe() to validate structure then cast to the full type, preserving
+ * error messages from the underlying schema.
  */
 export const SetTaskStatePayloadSchema = z.strictObject({
   streamTabId: StreamTabIdSchema,
   executionId: ExecutionIdSchema.optional(),
-  taskState: z.custom<TaskState>((val) => TaskStateSchema.safeParse(val).success),
+  // Validate with TaskStateSchema, then cast output to full TaskState type
+  taskState: TaskStateSchema.pipe(z.custom<TaskState>(() => true)),
 });
 export type SetTaskStatePayload = z.infer<typeof SetTaskStatePayloadSchema>;
