@@ -277,7 +277,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // 7. Return success response
-    return jsonResponse(req, { success: true, accepted: validEntries.length }, 200);
+    return jsonResponse(
+      req,
+      { success: true, accepted: validEntries.length },
+      200,
+    );
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
     return errorResponse(req, 'Internal server error', 500);

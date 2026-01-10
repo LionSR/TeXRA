@@ -292,19 +292,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {Object} message - Message containing runInstructions, runUsage, runFiles, contextState
    */
   _updateRunMetadata(stream, message) {
-    // Apply run-scoped metadata (runId → value mappings)
-    const runDataSources = [
-      [message.runInstructions, state.setRunInstruction],
-      [message.runUsage, state.setRunUsage],
-      [message.runFiles, state.setRunFiles],
-    ];
-
-    for (const [data, setter] of runDataSources) {
-      if (!data) continue;
-      for (const [runId, value] of Object.entries(data)) {
-        if (runId) setter.call(state, stream, runId, value);
-      }
-    }
+    // Apply run-scoped metadata
+    this._applyRunData(
+      stream,
+      message.runInstructions,
+      state.setRunInstruction,
+    );
+    this._applyRunData(stream, message.runUsage, state.setRunUsage);
+    this._applyRunData(stream, message.runFiles, state.setRunFiles);
 
     // Context state is stream-scoped (not run-scoped)
     if (message.contextState) {
