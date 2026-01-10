@@ -101,6 +101,14 @@ function getBasicVars(
   };
 }
 
+/** Combine a single file with an array, filtering out empty values */
+function combineFiles(
+  single: string | undefined,
+  multiple: string[],
+): string[] {
+  return [single, ...multiple].filter(Boolean) as string[];
+}
+
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
@@ -108,22 +116,22 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  const allInputFiles = [
+  const allInputFiles = combineFiles(
     agentConfig.inputFile,
-    ...agentConfig.inputFiles,
-  ].filter(Boolean) as string[];
-  const allReferenceFiles = [
+    agentConfig.inputFiles,
+  );
+  const allReferenceFiles = combineFiles(
     agentConfig.referenceFile,
-    ...agentConfig.referenceFiles,
-  ].filter(Boolean) as string[];
-  const allAuxiliaryFiles = [
+    agentConfig.referenceFiles,
+  );
+  const allAuxiliaryFiles = combineFiles(
     agentConfig.auxiliaryFile,
-    ...agentConfig.auxiliaryFiles,
-  ].filter(Boolean) as string[];
-  const allMediaFiles = [
+    agentConfig.auxiliaryFiles,
+  );
+  const allMediaFiles = combineFiles(
     agentConfig.mediaFile,
-    ...agentConfig.mediaFiles,
-  ].filter(Boolean) as string[];
+    agentConfig.mediaFiles,
+  );
 
   // Log file categories being loaded (processed sequentially to preserve UI display order)
   // Skip for tool-use agents as they don't need this UI feedback
@@ -223,55 +231,67 @@ async function logFileCategoriesWithExistence(
   }
 }
 
+/** Result from processing a required file map */
+type RequiredFileMapResult = {
+  vars: UserVars;
+  files: LoadedFileEntry[];
+};
+
+async function processRequiredFileMap(
+  fileMap: Record<string, string> | undefined,
+  logger: AgentLogger,
+  source: string,
+  basePath?: string,
+): Promise<RequiredFileMapResult> {
+  if (!fileMap) return { vars: {}, files: [] };
+
+  const vars: UserVars = {};
+  const files: LoadedFileEntry[] = [];
+
+  for (const [varName, filePath] of Object.entries(fileMap)) {
+    if (!filePath) continue;
+
+    const fullPath = basePath ? path.join(basePath, filePath) : filePath;
+    const ok = await setVarFromFile(
+      fullPath,
+      varName,
+      vars,
+      logger,
+      source,
+      Boolean(basePath),
+    );
+    files.push({
+      path: fullPath,
+      ok,
+      varName,
+      source,
+      ...(basePath && { internal: true }),
+    });
+  }
+  return { vars, files };
+}
+
 async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
 ): Promise<FileVarsResult> {
-  const userVars: UserVars = {};
-  const files: LoadedFileEntry[] = [];
-
-  if (agentSetting.requiredFiles) {
-    for (const [varName, filePath] of Object.entries(
-      agentSetting.requiredFiles,
-    )) {
-      if (filePath) {
-        const ok = await setVarFromFile(
-          filePath,
-          varName,
-          userVars,
-          logger,
-          'requiredFiles',
-        );
-        files.push({ path: filePath, ok, varName, source: 'requiredFiles' });
-      }
-    }
-  }
-
-  if (agentSetting.requiredFilesInternal) {
-    for (const [varName, filePath] of Object.entries(
+  // Process file maps in parallel - each returns its own vars object to avoid shared mutation
+  const [required, internal] = await Promise.all([
+    processRequiredFileMap(agentSetting.requiredFiles, logger, 'requiredFiles'),
+    processRequiredFileMap(
       agentSetting.requiredFilesInternal,
-    )) {
-      const fullPath = path.join(agentPath, filePath);
-      const ok = await setVarFromFile(
-        fullPath,
-        varName,
-        userVars,
-        logger,
-        'requiredFilesInternal',
-        true,
-      );
-      files.push({
-        path: fullPath,
-        ok,
-        varName,
-        source: 'requiredFilesInternal',
-        internal: true,
-      });
-    }
-  }
+      logger,
+      'requiredFilesInternal',
+      agentPath,
+    ),
+  ]);
 
-  return { vars: userVars, files };
+  // Merge vars from both results
+  return {
+    vars: { ...required.vars, ...internal.vars },
+    files: [...required.files, ...internal.files],
+  };
 }
 
 async function getPatternBasedFileVars(
@@ -387,11 +407,11 @@ export function getToolFlags(
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
-    const requestArray = Array.isArray(agentPrompt.userRequest)
-      ? agentPrompt.userRequest
-      : agentPrompt.userRequest
-        ? [agentPrompt.userRequest]
-        : [];
+    const requestArray = agentPrompt.userRequest
+      ? Array.isArray(agentPrompt.userRequest)
+        ? agentPrompt.userRequest
+        : [agentPrompt.userRequest]
+      : [];
     const configuredRounds =
       'rounds' in agentSetting ? agentSetting.rounds : undefined;
     flags.ROUNDS = Math.max(configuredRounds ?? 2, requestArray.length);
