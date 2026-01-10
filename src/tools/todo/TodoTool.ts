@@ -15,8 +15,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-// Local imports - logging
-
 const logger = new AgentLogger('TodoWriteTool');
 
 // Import todo schemas from single source of truth
