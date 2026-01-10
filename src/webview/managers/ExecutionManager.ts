@@ -28,21 +28,9 @@ function toArray<T>(files: T[] | undefined | null): T[] {
 export class ExecutionManager {
   async handleExecute(message: any): Promise<void> {
     const isToolUseAgent = Boolean(message.isToolUseAgent);
-    const config = isToolUseAgent
-      ? this.buildToolUseCommandPayload(message)
-      : await this.buildWorkflowCommandPayload(message);
 
-    if (!config) {
-      return;
-    }
-
-    await vscode.commands.executeCommand('texra.execute', config);
-  }
-
-  private async buildWorkflowCommandPayload(
-    message: any,
-  ): Promise<AgentConfig | null> {
-    if (!message.inputFile) {
+    // Tool-use agents don't need input file validation
+    if (!isToolUseAgent && !message.inputFile) {
       const openDocs = 'File Management Guide';
       const choice = await vscode.window.showErrorMessage(
         'Please select an input file.',
@@ -51,73 +39,36 @@ export class ExecutionManager {
       if (choice === openDocs) {
         void vscode.commands.executeCommand('texra.openDoc', 'file-management');
       }
-      return null;
+      return;
     }
 
-    return this.composeWorkflowAgentConfig(message, {
-      agentCategory: AgentCategory.Workflow,
-    });
+    const config = this.composeAgentConfig(message, isToolUseAgent);
+    await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private buildToolUseCommandPayload(message: any): AgentConfig {
-    return this.composeToolUseAgentConfig(message, {
-      agentType: AgentType.ToolUse,
-      agentCategory: AgentCategory.ToolUse,
-    });
-  }
-
-  private composeWorkflowAgentConfig(
+  private composeAgentConfig(
     message: any,
-    session: AgentSessionDescriptor,
+    isToolUse: boolean,
   ): AgentConfig {
-    const baseConfig = this.composeBaseAgentConfig(message, session);
-    const outputFiles = toArray<string>(message.outputFiles);
-    const useMultipleOutputs =
-      Boolean(message.outputFilesActive) || outputFiles.length > 1;
+    const session: AgentSessionDescriptor = isToolUse
+      ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
+      : { agentCategory: AgentCategory.Workflow };
 
-    // toolConfig only applies to workflow agents
-    const toolConfig: ToolConfig = {
-      autoExtractFigure: message.autoExtractFigure,
-      autoExtractTikzFigure: message.autoExtractTikzFigure,
-      attachTeXCount: message.attachTeXCount,
-      attachDiagnostics: message.attachDiagnostics,
-      autoCompileInputPdf: message.autoCompileInputPdf,
-    };
+    const outputFiles = isToolUse ? [] : toArray<string>(message.outputFiles);
+    const useMultipleOutputs = isToolUse
+      ? false
+      : Boolean(message.outputFilesActive) || outputFiles.length > 1;
 
-    return {
-      ...baseConfig,
-      toolConfig,
-      useMultipleOutputs,
-      outputFiles,
-    };
-  }
+    const toolConfig: ToolConfig = isToolUse
+      ? DEFAULT_TOOL_CONFIG
+      : {
+          autoExtractFigure: message.autoExtractFigure,
+          autoExtractTikzFigure: message.autoExtractTikzFigure,
+          attachTeXCount: message.attachTeXCount,
+          attachDiagnostics: message.attachDiagnostics,
+          autoCompileInputPdf: message.autoCompileInputPdf,
+        };
 
-  private composeToolUseAgentConfig(
-    message: any,
-    session: AgentSessionDescriptor,
-  ): AgentConfig {
-    const baseConfig = this.composeBaseAgentConfig(message, session);
-
-    return {
-      ...baseConfig,
-      // Tool-use agents use default (all-false) toolConfig
-      toolConfig: DEFAULT_TOOL_CONFIG,
-      // Tool-use runs intentionally stay single-output so the execution
-      // pipeline never attempts to resolve `_multiple` agent variants or
-      // manage output file selections that the UI disables for this mode.
-      useMultipleOutputs: false,
-      outputFiles: [],
-    };
-  }
-
-  private mapMediaPath(f: string | null): string | null {
-    return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
-  }
-
-  private composeBaseAgentConfig(
-    message: any,
-    session: AgentSessionDescriptor,
-  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles' | 'toolConfig'> {
     return {
       agent: message.agent,
       model: message.model,
@@ -137,7 +88,14 @@ export class ExecutionManager {
       editedFile: null,
       agentType: session.agentType,
       session,
+      toolConfig,
+      useMultipleOutputs,
+      outputFiles,
     };
+  }
+
+  private mapMediaPath(f: string | null): string | null {
+    return f && isPastedImage(f) ? getPastedImageFullPath(f) : f;
   }
 
   handleFileOperation(message: any): void {
