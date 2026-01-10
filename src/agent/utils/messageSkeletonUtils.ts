@@ -109,11 +109,7 @@ export function messageToSkeleton(
     ) {
       // Truncate large data strings
       result[key] = `[data: ${value.length} chars]`;
-    } else if (
-      typeof value === 'object' &&
-      value !== null &&
-      value !== undefined
-    ) {
+    } else if (typeof value === 'object' && value !== null) {
       // Recursively process nested objects using Record<string, unknown> overload
       result[key] = messageToSkeleton(
         value as Record<string, unknown>,
