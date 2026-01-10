@@ -135,26 +135,14 @@ export async function handleClean(config: {
     return;
   }
 
-  const declaredOutputFiles = Array.isArray(config.outputFiles)
-    ? config.outputFiles
-    : [];
-  const useMultipleOutputs =
-    config.useMultipleOutputs ?? declaredOutputFiles.length > 1;
+  const outputFiles = Array.isArray(config.outputFiles) ? config.outputFiles : [];
+  const useMultipleOutputs = config.useMultipleOutputs ?? outputFiles.length > 1;
 
-  const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
-
-  if (useMultipleOutputs && outputFiles.length > 0) {
-    logger.info(
-      CHANNEL,
-      `Running clean multiple with ${outputFiles.length} files`,
-    );
-    const result = await runCleanMultiple(model, inputFile, agent, outputFiles);
-    showCleanResult(result, inputFile);
-  } else {
-    logger.info(CHANNEL, `Running clean single`);
-    const result = await runCleanSingle(model, inputFile, agent);
-    showCleanResult(result, inputFile);
-  }
+  const result =
+    useMultipleOutputs && outputFiles.length > 0
+      ? await runCleanMultiple(model, inputFile, agent, outputFiles)
+      : await runCleanSingle(model, inputFile, agent);
+  showCleanResult(result, inputFile);
 
   const streamId =
     config.streamId ||
