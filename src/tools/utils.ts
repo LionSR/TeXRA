@@ -96,6 +96,30 @@ export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
 export type { GitignoreMatcher } from './gitignore';
 
 /**
+ * Pluralize a word based on count.
+ * Returns the singular form for count === 1, plural form otherwise.
+ */
+export function pluralize(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return count === 1 ? singular : (plural ?? `${singular}s`);
+}
+
+/**
+ * Format a result count with proper pluralization.
+ * Example: formatResultCount(3, 'result') returns "3 results"
+ */
+export function formatResultCount(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return `${count} ${pluralize(count, singular, plural)}`;
+}
+
+/**
  * Format tool output with a header and content.
  */
 export function formatToolOutput(
