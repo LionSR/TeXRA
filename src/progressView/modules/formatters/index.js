@@ -9,13 +9,33 @@ export { TaskGroupHeaderFormatter } from './taskGroupFormatter.js';
 
 // Internal imports for LogEntryFormatter
 import { normalizeStructuredContent } from './normalizers.js';
-import { applyOpenState, safeFormat, resolveOpenState } from './baseLogFormatter.js';
+import {
+  applyOpenState,
+  safeFormat,
+  resolveOpenState,
+} from './baseLogFormatter.js';
 import { getMarkdownRenderer } from './markdownRenderer.js';
-import { formatBannerContent, formatModelResponse } from './logFormatters/bannerFormatters.js';
-import { formatToolUse, formatWebSearch } from './logFormatters/toolFormatters.js';
-import { formatFileList, formatMissingOutputs, formatLatexdiff, formatStatistics } from './logFormatters/dataFormatters.js';
+import {
+  formatBannerContent,
+  formatModelResponse,
+} from './logFormatters/bannerFormatters.js';
+import {
+  formatToolUse,
+  formatWebSearch,
+} from './logFormatters/toolFormatters.js';
+import {
+  formatFileList,
+  formatMissingOutputs,
+  formatLatexdiff,
+  formatStatistics,
+} from './logFormatters/dataFormatters.js';
 import { formatContextManagement } from './logFormatters/contextManagementFormatters.js';
-import { formatUserMessage, formatProgressStatus, formatError, formatDefaultLogMessage } from './logFormatters/messageFormatters.js';
+import {
+  formatUserMessage,
+  formatProgressStatus,
+  formatError,
+  formatDefaultLogMessage,
+} from './logFormatters/messageFormatters.js';
 
 /**
  * Handles log entry formatting with markdown support.
@@ -45,13 +65,20 @@ export class LogEntryFormatter {
 
     // Banner formatter factory for thinking/scratchpad
     const banner = (title) => (m) =>
-      formatBannerContent(m.normalizedPayload, title, m.id, m.groupId, m.timestamp);
+      formatBannerContent(
+        m.normalizedPayload,
+        title,
+        m.id,
+        m.groupId,
+        m.timestamp,
+      );
 
     // Data formatter factory for payload+id patterns
     const data = (fn) => (m) => fn(m.normalizedPayload, m.id);
 
     // Meta formatter factory for payload+id+groupId+timestamp patterns
-    const meta = (fn) => (m) => fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
+    const meta = (fn) => (m) =>
+      fn(m.normalizedPayload, m.id, m.groupId, m.timestamp);
 
     return {
       thinking: safe(banner('Thinking'), 'thinking'),
@@ -74,7 +101,10 @@ export class LogEntryFormatter {
       missingOutputs: safe(data(formatMissingOutputs), 'missing outputs'),
       latexdiff: safe(data(formatLatexdiff), 'latexdiff'),
       statistics: safe(data(formatStatistics), 'statistics'),
-      contextManagement: safe(data(formatContextManagement), 'context management'),
+      contextManagement: safe(
+        data(formatContextManagement),
+        'context management',
+      ),
       contextState: () => null, // Displayed in footer, not inline
       userMessage: safe(
         (m) => formatUserMessage(m.normalizedPayload, m.id, m.timestamp),

@@ -611,7 +611,10 @@ function filterVisible(
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
 
-  const autoShowRemote = getConfig<boolean>('texra.remoteAgents.autoShow', true);
+  const autoShowRemote = getConfig<boolean>(
+    'texra.remoteAgents.autoShow',
+    true,
+  );
 
   function isVisible(entry: AgentEntry): boolean {
     // Remote agents auto-show when setting is enabled
