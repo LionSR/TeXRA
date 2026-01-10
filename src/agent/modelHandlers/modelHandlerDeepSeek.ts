@@ -197,11 +197,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    // Early return for empty input
-    if (calls.length === 0) {
-      return [];
-    }
-
     // Validate input arrays (consistent with Google handler)
     if (calls.length !== results.length) {
       throw new Error(
@@ -213,6 +208,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       throw new Error(
         `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${attachmentsPerCall.length} attachment arrays`,
       );
+    }
+
+    // Early return for empty input (after validation)
+    if (calls.length === 0) {
+      return [];
     }
 
     // Build assistant message with ALL tool calls and reasoning_content
