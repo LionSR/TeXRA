@@ -12,11 +12,16 @@ export class FollowUpQueue {
   private readonly queued: string[] = [];
   private resolver: ((value: string | null) => void) | null = null;
 
+  /** Resolves pending wait with value and clears resolver */
+  private resolveWait(value: string | null): void {
+    const resolver = this.resolver;
+    this.resolver = null;
+    resolver?.(value);
+  }
+
   enqueue(value: string): void {
     if (this.resolver) {
-      const resolver = this.resolver;
-      this.resolver = null;
-      resolver(value);
+      this.resolveWait(value);
     } else {
       this.queued.push(value);
     }
@@ -43,11 +48,7 @@ export class FollowUpQueue {
   }
 
   cancelWait(): void {
-    if (this.resolver) {
-      const resolver = this.resolver;
-      this.resolver = null;
-      resolver(null);
-    }
+    this.resolveWait(null);
   }
 
   clear(): void {

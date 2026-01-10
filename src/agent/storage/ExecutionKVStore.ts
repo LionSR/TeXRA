@@ -119,8 +119,7 @@ class StorageFSKVStore implements ExecutionKVStore {
       const entries = await StorageFS.readDir(dir);
       return entries
         .filter(([name, type]) => {
-          if (!isFile(type)) return false;
-          if (!name.endsWith('.json')) return false;
+          if (!isFile(type) || !name.endsWith('.json')) return false;
           const key = name.replace(/\.json$/, '');
           return !prefix || key.startsWith(prefix);
         })
@@ -204,33 +203,42 @@ class StorageFSRegistry implements ExecutionStorageRegistry {
     const deleted: ExecutionId[] = [];
 
     for (const executionId of executions) {
-      const metadataPath = path.join(
-        EXECUTIONS_DIR,
-        executionId,
-        '.metadata.json',
-      );
-      try {
-        const stats = await StorageFS.stat(metadataPath);
-        if (stats.mtime <= cutoff) {
-          await this.deleteExecution(executionId);
-          deleted.push(executionId);
-        }
-      } catch (error) {
-        // If metadata doesn't exist, check directory mtime
-        try {
-          const dirPath = path.join(EXECUTIONS_DIR, executionId);
-          const dirStats = await StorageFS.stat(dirPath);
-          if (dirStats.mtime <= cutoff) {
-            await this.deleteExecution(executionId);
-            deleted.push(executionId);
-          }
-        } catch {
-          // Skip if we can't stat the directory
-        }
+      const mtime = await this.getExecutionMtime(executionId);
+      if (mtime !== null && mtime <= cutoff) {
+        await this.deleteExecution(executionId);
+        deleted.push(executionId);
       }
     }
 
     return deleted;
+  }
+
+  /**
+   * Get the mtime of an execution, trying metadata first then directory.
+   * Returns null if mtime cannot be determined.
+   */
+  private async getExecutionMtime(
+    executionId: ExecutionId,
+  ): Promise<number | null> {
+    const metadataPath = path.join(
+      EXECUTIONS_DIR,
+      executionId,
+      '.metadata.json',
+    );
+    try {
+      const stats = await StorageFS.stat(metadataPath);
+      return stats.mtime;
+    } catch {
+      // Metadata doesn't exist, fall back to directory mtime
+    }
+
+    try {
+      const dirPath = path.join(EXECUTIONS_DIR, executionId);
+      const stats = await StorageFS.stat(dirPath);
+      return stats.mtime;
+    } catch {
+      return null; // Cannot determine mtime
+    }
   }
 }
 
