@@ -21,19 +21,19 @@ import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 const CHANNEL = 'CompareCommands';
 logger.initialize(CHANNEL);
 
-/** Validates that required file locations are provided */
+/** Validates that required file locations are provided, returns resolved base location */
 function validateFileLocations(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
   editedLocation: FileLocation,
   errorMessage: string,
-): { fileToUseLocation: FileLocation } | null {
+): FileLocation | null {
   const fileToUseLocation = baseLocation ?? inputLocation;
   if (!fileToUseLocation || !editedLocation) {
     vscode.window.showErrorMessage(errorMessage);
     return null;
   }
-  return { fileToUseLocation };
+  return fileToUseLocation;
 }
 
 /** Checks if both base and edited files exist */
@@ -77,15 +77,13 @@ async function handleCompare(
   editedLocation: FileLocation,
 ) {
   try {
-    const validated = validateFileLocations(
+    const fileToUseLocation = validateFileLocations(
       inputLocation,
       baseLocation,
       editedLocation,
       'Both base file and edited file must be selected for comparison',
     );
-    if (!validated) return;
-
-    const { fileToUseLocation } = validated;
+    if (!fileToUseLocation) return;
 
     if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
       return;
@@ -157,15 +155,13 @@ async function handleAcceptEdited(
   editedLocation: FileLocation,
 ) {
   try {
-    const validated = validateFileLocations(
+    const fileToUseLocation = validateFileLocations(
       inputLocation,
       baseLocation,
       editedLocation,
       'Both base file and edited file must be selected to accept changes',
     );
-    if (!validated) return;
-
-    const { fileToUseLocation } = validated;
+    if (!fileToUseLocation) return;
 
     if (!(await validateFilesExist(fileToUseLocation, editedLocation))) {
       return;
