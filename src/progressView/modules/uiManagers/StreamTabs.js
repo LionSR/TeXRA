@@ -8,6 +8,9 @@ import {
   applyCodiconClass,
 } from '@common/iconConstants.js';
 
+// Pre-built status class names for efficient removal
+const STATUS_CLASSES = Object.values(STREAM_STATUS).map((s) => `is-${s}`);
+
 /**
  * Manages stream tab UI updates.
  */
@@ -113,10 +116,8 @@ export class StreamTabs {
   _applyStatus(statusEl, status) {
     if (!statusEl) return;
 
-    // Remove old status classes
-    for (const s of Object.values(STREAM_STATUS)) {
-      statusEl.classList.remove(`is-${s}`);
-    }
+    // Remove all status classes efficiently
+    statusEl.classList.remove(...STATUS_CLASSES);
 
     // READY means execution completed - display as stopped
     const normalizedStatus =
