@@ -35,29 +35,15 @@ async function restoreState(state: TaskState) {
     // Use the specific view ID instead of the extension to avoid sidebar switching issues
     await vscode.commands.executeCommand('texra.mainView.focus');
 
-    // Try to get the webview directly using our safe command
-    try {
-      const webviewView = await getMainWebview(CHANNEL);
+    const webviewView = await getMainWebview(CHANNEL);
 
-      if (webviewView) {
-        // Send the state directly to the webview
-        webviewView.webview.postMessage({
-          command: 'restoreState',
-          state,
-        });
-
-        logger.info(CHANNEL, 'State restored using direct webview access');
-        logger.info(CHANNEL, 'Main webview state restoration requested');
-        return;
-      } else {
-        await storeStateForLater(state);
-      }
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Could not access webview directly: ${toErrorMessage(error)}`,
-      );
-
+    if (webviewView) {
+      webviewView.webview.postMessage({
+        command: 'restoreState',
+        state,
+      });
+      logger.info(CHANNEL, 'State restored using direct webview access');
+    } else {
       await storeStateForLater(state);
     }
 
