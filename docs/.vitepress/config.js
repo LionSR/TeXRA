@@ -67,9 +67,7 @@ const baseConfig = {
                 setTimeout(() => {
                   window.scrollTo(0, scrollPos);
                 }, 0);
-                
-                // Debugging
-                console.log('Tab clicked:', pdfPath);
+
                 return false;
               });
             });
@@ -82,16 +80,14 @@ const baseConfig = {
           setTimeout(initPdfTabs, 1000);
           
           // For single-page applications, re-init on URL changes
-          if (window.addEventListener) {
-            let lastUrl = location.href;
-            new MutationObserver(() => {
-              const url = location.href;
-              if (url !== lastUrl) {
-                lastUrl = url;
-                setTimeout(initPdfTabs, 500);
-              }
-            }).observe(document, {subtree: true, childList: true});
-          }
+          let lastUrl = location.href;
+          new MutationObserver(() => {
+            const url = location.href;
+            if (url !== lastUrl) {
+              lastUrl = url;
+              setTimeout(initPdfTabs, 500);
+            }
+          }).observe(document, {subtree: true, childList: true});
         }, 200);
       });
       `,
