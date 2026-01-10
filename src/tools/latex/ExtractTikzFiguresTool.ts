@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { type ToolFileAttachment } from '@tools/result';
-import { formatToolOutput } from '@tools/utils';
+import { formatResultCount, formatToolOutput } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
@@ -48,18 +48,14 @@ export class ExtractTikzFiguresTool extends defineTool({
     }
 
     const formattedEntries = tikzFigures.map(([label, pictures]) => {
-      const pictureCount = pictures.length;
-      const suffix = pictureCount === 1 ? '' : 's';
-      return `- ${label ?? '(unlabeled)'}: ${pictureCount} picture${suffix}`;
+      return `- ${label ?? '(unlabeled)'}: ${formatResultCount(pictures.length, 'picture')}`;
     });
     const outputs: string[] = [
       formatToolOutput(`TikZ figures in ${display}`, formattedEntries),
     ];
 
     const summaryParts = [
-      `Found ${tikzFigures.length} TikZ figure${
-        tikzFigures.length === 1 ? '' : 's'
-      } in ${display}.`,
+      `Found ${formatResultCount(tikzFigures.length, 'TikZ figure')} in ${display}.`,
     ];
 
     let attachments: ToolFileAttachment[] | undefined;
@@ -83,9 +79,7 @@ export class ExtractTikzFiguresTool extends defineTool({
         });
         attachments = compiledAttachments;
         summaryParts.push(
-          `Compiled ${limitedPaths.length} standalone PDF${
-            limitedPaths.length === 1 ? '' : 's'
-          }.`,
+          `Compiled ${formatResultCount(limitedPaths.length, 'standalone PDF')}.`,
         );
         outputs.push(
           formatToolOutput(
@@ -95,9 +89,7 @@ export class ExtractTikzFiguresTool extends defineTool({
         );
         if (limitReached) {
           summaryParts.push(
-            `Limited attachments to ${compiledAttachments.length} file${
-              compiledAttachments.length === 1 ? '' : 's'
-            }.`,
+            `Limited attachments to ${formatResultCount(compiledAttachments.length, 'file')}.`,
           );
         }
       } else {
