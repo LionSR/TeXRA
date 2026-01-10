@@ -588,6 +588,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Full rebuild path: clear and rebuild
+    // DIAGNOSTIC: Track full rebuild clearing
+    console.log('[UPDATE_LOGS] Full rebuild - clearing task groups', {
+      'message.stream': message.stream,
+      'state.lastRenderedStream': state.lastRenderedStream,
+      isExplicitClear,
+      isStreamSwitch,
+      'message.groups?.length': message.groups?.length,
+    });
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();
@@ -657,6 +665,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Update lastRenderedStream AFTER successful render.
     // This is the single source of truth for stream switch detection.
     state.lastRenderedStream = message.stream;
+
+    // DIAGNOSTIC: Final state after render
+    const finalLogContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    console.log('[UPDATE_LOGS] Final state after render:', {
+      logContentChildCount: finalLogContent?.childElementCount,
+      logContentInnerHTMLLength: finalLogContent?.innerHTML?.length,
+      taskGroupStateCount: state.taskGroups?.size,
+      taskGroupDOMCount:
+        finalLogContent?.querySelectorAll('[data-group-id]')?.length,
+      'state.activeSessionKind': state.activeSessionKind,
+    });
 
     this._updatePlaceholderVisibility();
   }
