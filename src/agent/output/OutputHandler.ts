@@ -48,11 +48,9 @@ export class OutputHandler implements IOutputHandler {
   private rounds: Map<number, RoundData>;
 
   public get outputFiles(): { [key: number]: OutputFileInfo[] } {
-    const result: { [key: number]: OutputFileInfo[] } = {};
-    this.rounds.forEach((data, round) => {
-      result[round] = data.outputs;
-    });
-    return result;
+    return Object.fromEntries(
+      [...this.rounds].map(([round, data]) => [round, data.outputs]),
+    );
   }
 
   public baseFiles: FileLocation[];
@@ -120,7 +118,7 @@ export class OutputHandler implements IOutputHandler {
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
-    return this.baseFiles.filter((candidate) => candidate !== null);
+    return this.baseFiles;
   }
 
   private collectRunSupportFiles(): FileLocation[] {
@@ -255,12 +253,12 @@ export class OutputHandler implements IOutputHandler {
         const originalLocation =
           mapping.originByOutput.get(locationPath) ?? null;
 
-        const isSameFile =
+        // Use baseLocation for diff, or originalLocation if it's a different file
+        const originalIsDifferentFile =
           originalLocation &&
-          getComparablePath(originalLocation) === locationPath;
+          getComparablePath(originalLocation) !== locationPath;
         const diffBaseLocation =
-          baseLocation ??
-          (originalLocation && !isSameFile ? originalLocation : null);
+          baseLocation ?? (originalIsDifferentFile ? originalLocation : null);
 
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
@@ -373,8 +371,7 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         const data = this.ensureRoundData(currRound);
-        const rawLocation = data.rawOutput ?? outputFile;
-        data.rawOutput = rawLocation;
+        data.rawOutput ??= outputFile;
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
@@ -433,8 +430,8 @@ export class OutputHandler implements IOutputHandler {
         await this.prepareRunWorkspaceIfNeeded();
 
         const data = this.ensureRoundData(currRound);
-        const rawLocation = data.rawOutput ?? outputLocation;
-        data.rawOutput = rawLocation;
+        data.rawOutput ??= outputLocation;
+        const rawLocation = data.rawOutput;
 
         if (
           Array.isArray(this.agentConfig.outputFiles) &&
@@ -462,20 +459,17 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public async getRoundArtifacts(round: number): Promise<RoundOutput> {
-    const data = this.rounds.get(round);
-    let fileInfos = data?.outputs;
-    if (!fileInfos) {
-      fileInfos = await this.gatherOutputFileInfo(round);
-      const updatedData = this.ensureRoundData(round);
-      updatedData.outputs = fileInfos;
+    const data = this.ensureRoundData(round);
+
+    if (data.outputs.length === 0) {
+      data.outputs = await this.gatherOutputFileInfo(round);
     }
 
-    const roundData = this.rounds.get(round);
     return {
       round,
-      rawOutput: roundData?.rawOutput ?? null,
-      outputs: fileInfos,
-      xmlSummary: roundData?.xmlSummary ?? this.getRoundXmlSummary(round),
+      rawOutput: data.rawOutput,
+      outputs: data.outputs,
+      xmlSummary: data.xmlSummary,
     };
   }
 
