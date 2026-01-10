@@ -117,7 +117,8 @@ export class ReadFileTool extends defineTool({
       truncated,
       rangeProvided: Boolean(input.range),
       // eslint-disable-next-line eqeqeq -- nullish check (null or undefined)
-      rangeEndExceeded: input.range?.end != null && input.range.end > totalLines,
+      rangeEndExceeded:
+        input.range?.end != null && input.range.end > totalLines,
     });
 
     return {
@@ -161,8 +162,12 @@ export class ReadFileTool extends defineTool({
       rangeProvided || truncated || startLine !== 1 || endLine !== totalLines;
 
     const rangeLabel =
-      startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
-    const base = isPartialRead ? `Read ${rangeLabel} of ${path}` : `Read ${path}`;
+      startLine === endLine
+        ? `line ${startLine}`
+        : `lines ${startLine}-${endLine}`;
+    const base = isPartialRead
+      ? `Read ${rangeLabel} of ${path}`
+      : `Read ${path}`;
 
     return rangeEndExceeded
       ? `${base} (requested end ${requestedEndLine} exceeds file length ${totalLines})`

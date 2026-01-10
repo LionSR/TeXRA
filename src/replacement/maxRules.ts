@@ -304,7 +304,13 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const tildeLettersMathbf = [...'axpvwz'];
     Object.assign(
       patterns,
-      generateNestedDecoratorShortcuts('tilde', 'mathbf', tildeLettersMathbf, 't', 'b'),
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbf,
+        't',
+        'b',
+      ),
     );
 
     // Tilde with mathbf - uppercase
@@ -312,7 +318,13 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const tildeLettersMathbfUppercase = [...'MTX'];
     Object.assign(
       patterns,
-      generateNestedDecoratorShortcuts('tilde', 'mathbf', tildeLettersMathbfUppercase, 't', 'b'),
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbfUppercase,
+        't',
+        'b',
+      ),
     );
 
     // Tilde with mathcal - uppercase
@@ -320,12 +332,20 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const tildeLettersMathcal = [...'HQSW'];
     Object.assign(
       patterns,
-      generateNestedDecoratorShortcuts('tilde', 'mathcal', tildeLettersMathcal, 't', 'c'),
+      generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathcal',
+        tildeLettersMathcal,
+        't',
+        'c',
+      ),
     );
 
     // Tilde with Greek letters
     // Example: \tilde{\gamma} -> \tga
-    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(' ');
+    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
+      ' ',
+    );
     Object.assign(
       patterns,
       Object.fromEntries(
@@ -338,7 +358,9 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Tilde with boldsymbol+Greek
     // Example: \tilde{\boldsymbol{\zeta}} -> \tbze
-    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(' ');
+    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
+      ' ',
+    );
     Object.assign(
       patterns,
       Object.fromEntries(
@@ -372,7 +394,13 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const hatMathbfLetters = [...'nv'];
     Object.assign(
       patterns,
-      generateNestedDecoratorShortcuts('hat', 'mathbf', hatMathbfLetters, 'h', 'b'),
+      generateNestedDecoratorShortcuts(
+        'hat',
+        'mathbf',
+        hatMathbfLetters,
+        'h',
+        'b',
+      ),
     );
 
     // Hat with boldsymbol+Greek
@@ -393,7 +421,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     Object.assign(patterns, generateBoldBackslashFixes('b', lowerLetters));
 
     // Automatically generate fixes for uppercase bold letters (e.g., \\bA -> \bA)
-    Object.assign(patterns, generateBoldBackslashFixes('b', mathbfUpperLetters));
+    Object.assign(
+      patterns,
+      generateBoldBackslashFixes('b', mathbfUpperLetters),
+    );
 
     // Fix for double backslashes in custom commands
     // Examples: \\bet -> \bet, \\bbf -> \bbf
@@ -401,7 +432,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     Object.assign(
       patterns,
       Object.fromEntries(
-        customShortcutFixes.map((shortcut) => [`\\\\${shortcut}`, `\\${shortcut}`]),
+        customShortcutFixes.map((shortcut) => [
+          `\\\\${shortcut}`,
+          `\\${shortcut}`,
+        ]),
       ),
     );
 

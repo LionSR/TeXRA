@@ -55,27 +55,32 @@ export class GlobTool extends defineTool({
     }
 
     // Process matches in parallel for better performance
-    const statPromises = matches.map(async (match): Promise<GlobMatchInfo | null> => {
-      let resolved;
-      try {
-        resolved = joinWorkspaceRelativePath(base.relative, match);
-      } catch (err) {
-        throw new ToolError(
-          `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
-        );
-      }
+    const statPromises = matches.map(
+      async (match): Promise<GlobMatchInfo | null> => {
+        let resolved;
+        try {
+          resolved = joinWorkspaceRelativePath(base.relative, match);
+        } catch (err) {
+          throw new ToolError(
+            `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
+          );
+        }
 
-      const relativePath = resolved.relative === '.' ? '.' : resolved.relative;
-      if (relativePath === '.' || gitignore.ignores(relativePath)) {
-        return null;
-      }
+        const relativePath =
+          resolved.relative === '.' ? '.' : resolved.relative;
+        if (relativePath === '.' || gitignore.ignores(relativePath)) {
+          return null;
+        }
 
-      const stat = await WorkspaceFS.stat(relativePath).catch(() => null);
-      return { relativePath, mtime: stat?.mtime ?? 0 };
-    });
+        const stat = await WorkspaceFS.stat(relativePath).catch(() => null);
+        return { relativePath, mtime: stat?.mtime ?? 0 };
+      },
+    );
 
     const results = await Promise.all(statPromises);
-    const decorated = results.filter((item): item is GlobMatchInfo => item !== null);
+    const decorated = results.filter(
+      (item): item is GlobMatchInfo => item !== null,
+    );
 
     const sorted = decorated.sort((a, b) => {
       if (b.mtime !== a.mtime) {

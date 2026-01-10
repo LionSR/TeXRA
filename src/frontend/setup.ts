@@ -237,14 +237,18 @@ export async function configureLatexSettings() {
             '-synctex=1',
             '-interaction=nonstopmode',
             '-file-line-error',
-            '%DOCFILE%',
+            '%DOC%',
             '-pdf',
             '-f',
           ],
         ],
         ['latex-workshop.formatting.latex', 'latexindent'],
         // Language-specific editor settings
-        ['[latex]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
+        [
+          '[latex]',
+          { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' },
+        ],
+        ['[latex]', { 'intellisense.update.delay': 1000 }],
         ['[yaml]', { 'editor.wordWrap': 'on', 'files.autoSave': 'afterDelay' }],
         // Explorer settings
         ['explorer.autoRevealExclude', { 'build/': true }],
