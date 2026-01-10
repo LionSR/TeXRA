@@ -2,7 +2,8 @@
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
-// Local imports - core utilities
+// OpenRouter SDK types for reasoning_details
+import type { Schema3 as ReasoningDetailItem } from '@openrouter/sdk/models';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -20,19 +21,10 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
-/** @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens */
-interface ReasoningDetailItem {
-  type: 'reasoning.text' | 'reasoning.summary' | 'reasoning.encrypted';
-  id?: string | null;
-  text?: string;
-  summary?: string;
-  data?: string;
-  signature?: string | null;
-}
-
 /**
  * Extracts text content from OpenRouter reasoning_details array.
  * Handles the structured format with type-specific fields.
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
  */
 const extractTextFromReasoningDetails = (
   details: ReasoningDetailItem[] | unknown,
