@@ -200,8 +200,7 @@ export function formatAttachmentSummary(
 
 const ATTACHMENT_SUMMARY_TEMPLATES: Record<AttachmentSummaryVariant, string> = {
   'included-inline': 'Attachments included in this response:',
-  'metadata-fallback':
-    'Attachments available but returned as metadata only:',
+  'metadata-fallback': 'Attachments available but returned as metadata only:',
   'metadata-only': 'Attachments available:',
 };
 
