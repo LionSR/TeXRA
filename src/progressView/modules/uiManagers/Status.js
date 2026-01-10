@@ -1,7 +1,7 @@
 // Local imports - progress view
 import {
   STREAM_STATUS,
-  ALL_TOOLBAR_BUTTON_IDS,
+  TOOLBAR_BUTTONS,
   ELEMENT_IDS,
 } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
@@ -78,9 +78,27 @@ export class Status {
       },
     };
 
-    this.BUTTON_IDS = ALL_TOOLBAR_BUTTON_IDS;
+    this._sessionKind = 'workflow';
     this._buttonElements = null; // Cache for button elements
     this._executionAvailable = false;
+  }
+
+  /**
+   * Sets the current session kind to filter which button IDs to query.
+   * Call this after toolbar.render() to ensure status updates only query existing buttons.
+   * @param {'workflow' | 'toolUse'} sessionKind - The session kind
+   */
+  setSessionKind(sessionKind) {
+    this._sessionKind = sessionKind || 'workflow';
+  }
+
+  /**
+   * Gets the button IDs for the current session kind.
+   * @returns {string[]} Array of button IDs that exist in the current toolbar
+   */
+  _getButtonIdsForSessionKind() {
+    const buttons = TOOLBAR_BUTTONS[this._sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    return buttons.map((btn) => btn.id);
   }
 
   setExecutionIdAvailability(hasExecution) {
@@ -91,8 +109,13 @@ export class Status {
   _applyExecutionAvailability() {
     const isAvailable = this._executionAvailable;
     const buttonsToUpdate = [];
+    // Only check execution-dependent buttons that exist in the current toolbar
+    const currentToolbarButtonIds = new Set(this._getButtonIdsForSessionKind());
 
     for (const buttonId of EXECUTION_DEPENDENT_BUTTONS) {
+      // Skip buttons not in the current toolbar to avoid console warnings
+      if (!currentToolbarButtonIds.has(buttonId)) continue;
+
       const button = safeGetElementById(buttonId);
       if (!button) continue;
 
@@ -121,7 +144,9 @@ export class Status {
     }
 
     // Query buttons fresh each time to handle toolbar re-rendering
-    const buttons = this.BUTTON_IDS.map((id) => safeGetElementById(id)).filter(
+    // Only query buttons that exist in the current session kind toolbar
+    const buttonIds = this._getButtonIdsForSessionKind();
+    const buttons = buttonIds.map((id) => safeGetElementById(id)).filter(
       Boolean,
     );
 
