@@ -113,11 +113,7 @@ export class LatexDiffManager {
    * Get display label (basename) from FileLocation for UI/logging.
    */
   private getDisplayLabel(location: FileLocation): string {
-    return path.basename(
-      location.kind === 'workspace' || location.kind === 'runStorage'
-        ? location.relativePath
-        : location.absolutePath,
-    );
+    return path.basename(getComparablePath(location));
   }
 
   private async ensureWorkspaceDependency(
@@ -146,8 +142,7 @@ export class LatexDiffManager {
     mapping: RoundFileMapping,
     stage?: AgentLogStage,
   ): Promise<void> {
-    const execute = () =>
-      this.performLatexdiffOperations(currRound, mapping);
+    const execute = () => this.performLatexdiffOperations(currRound, mapping);
 
     try {
       await (stage ? stage.within(execute) : execute());
@@ -171,9 +166,7 @@ export class LatexDiffManager {
     }
 
     const outputFiles = this.getOutputFiles()[currRound] ?? [];
-    const outputPaths = outputFiles.map(
-      (entry) => entry.location.absolutePath,
-    );
+    const outputPaths = outputFiles.map((entry) => entry.location.absolutePath);
     if (outputPaths.length === 0) {
       this.logger.warn(
         `No output files found for round ${currRound}, skipping latexdiff operations`,
