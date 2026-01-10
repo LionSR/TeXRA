@@ -8,6 +8,18 @@ import { createIconButton } from '@common/templateUtils.js';
  * Manages toolbar rendering.
  */
 export class Toolbar {
+  constructor() {
+    this._currentButtonIds = [];
+  }
+
+  /**
+   * Returns the button IDs currently rendered in the toolbar.
+   * @returns {string[]} Array of button IDs
+   */
+  getCurrentButtonIds() {
+    return this._currentButtonIds;
+  }
+
   render(sessionKind = 'workflow') {
     const container = safeGetElementById(ELEMENT_IDS.TOOLBAR_CONTAINER);
     if (!container) {
@@ -16,6 +28,7 @@ export class Toolbar {
     }
     container.innerHTML = '';
     const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
+    this._currentButtonIds = buttons.map((btn) => btn.id);
     container.dataset.agentMode = sessionKind;
     buttons.forEach((def) => {
       try {
