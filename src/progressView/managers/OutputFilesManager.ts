@@ -233,11 +233,19 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /**
    * Collect all paths from an output file info (absolute paths).
+   * Includes main file location and all lineage files.
    */
   private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
     target.add(info.location.absolutePath);
+    // Lineage files (original, diffBase, diffFile)
     if (info.lineage?.original?.absolutePath) {
       target.add(info.lineage.original.absolutePath);
+    }
+    if (info.lineage?.diffBase?.absolutePath) {
+      target.add(info.lineage.diffBase.absolutePath);
+    }
+    if (info.lineage?.diffFile?.absolutePath) {
+      target.add(info.lineage.diffFile.absolutePath);
     }
   }
 
