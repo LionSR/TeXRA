@@ -100,22 +100,16 @@ export async function finalizeRound(slices: CycleStateSlices): Promise<void> {
   }
 }
 
-/** Input for tool-use cycle finalization. */
-export interface ToolUseCycleFinalizeInput {
-  cycleIndex: number;
-  responseTimeMs: number;
-  normalizedUsage: NormalizedUsage | null;
-  run: BaseCycleStateSlices['run'];
-  onRoundFinalized?: RoundFinalizedCallback;
-}
-
 /** Finalize a tool-use cycle by recording metrics directly. */
 export async function finalizeToolUseCycle(
-  input: ToolUseCycleFinalizeInput,
+  cycleIndex: number,
+  responseTimeMs: number,
+  normalizedUsage: NormalizedUsage | null,
+  run: AgentRunState,
+  onRoundFinalized?: RoundFinalizedCallback,
 ): Promise<void> {
-  const { cycleIndex, responseTimeMs, normalizedUsage, run } = input;
   run.recordCycleMetrics(cycleIndex, responseTimeMs, normalizedUsage);
-  if (input.onRoundFinalized) {
-    await input.onRoundFinalized(run);
+  if (onRoundFinalized) {
+    await onRoundFinalized(run);
   }
 }
