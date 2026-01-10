@@ -8,6 +8,13 @@ import { createFromTemplate } from '@common/templateUtils.js';
 import { initToggleIcon } from '../htmlBuilders.js';
 import { formatTokens } from '../timestampUtils.js';
 
+// Actions that show tokens freed stat
+const TOKENS_FREED_ACTIONS = new Set([
+  'clear_tool_uses',
+  'clear_thinking',
+  'compaction',
+]);
+
 /**
  * Action display configuration
  * @type {Record<string, {icon: string, label: string, color: string}>}
@@ -112,9 +119,7 @@ export const formatContextManagement = (normalizedPayload, logId) => {
 
   // For clearing actions, show tokens freed
   if (
-    (action === 'clear_tool_uses' ||
-      action === 'clear_thinking' ||
-      action === 'compaction') &&
+    TOKENS_FREED_ACTIONS.has(action) &&
     tokensBefore !== undefined &&
     tokensAfter !== undefined
   ) {
