@@ -28,17 +28,14 @@ function matchesFilter(
   category: AgentCategory | undefined,
   filter: AgentFilter,
 ): AgentCategory | null {
-  // When filter is 'all', accept everything (default to Workflow if no category)
   if (filter === 'all') {
     return category ?? AgentCategory.Workflow;
   }
 
-  // No category means we can't match a specific filter
   if (!category) {
     return null;
   }
 
-  // Map filter values to expected categories
   const expectedCategory =
     filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
 

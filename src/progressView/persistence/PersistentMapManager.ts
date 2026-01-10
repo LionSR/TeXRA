@@ -69,14 +69,12 @@ export abstract class PersistentMapManager<K extends string, V> {
     this.items = new Map(entries);
   }
 
-  /** Serialize a value before saving */
+  /** Serialize a value before saving. Override for custom serialization. */
   protected serialize(value: V, _key: K): unknown {
-    return value as unknown;
+    return value;
   }
 
-  /**
-   * Deserialize a persisted value. Can perform async operations like cleanup.
-   */
+  /** Deserialize a persisted value. Override for custom deserialization. */
   protected async deserialize(data: unknown, _key: K): Promise<V> {
     return data as V;
   }
@@ -88,7 +86,7 @@ export abstract class PersistentMapManager<K extends string, V> {
       {},
     );
 
-    if (saved && Object.keys(saved).length > 0) {
+    if (Object.keys(saved).length > 0) {
       await this.populateFromRecord(saved);
     } else {
       this.items.clear();
