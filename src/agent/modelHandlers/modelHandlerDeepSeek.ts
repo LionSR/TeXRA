@@ -210,6 +210,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       );
     }
 
+    // Early return for empty input (after validation)
     if (calls.length === 0) {
       return [];
     }
