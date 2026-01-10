@@ -4,6 +4,16 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+/** Normalize backslashes to forward slashes for consistent comparison */
+function toForwardSlashes(str: string): string {
+  return str.split('\\').join('/');
+}
+
+/** Convert forward slashes to platform-native separators */
+function toPlatformSeparators(str: string): string {
+  return str.split('/').join(path.sep);
+}
+
 function sanitizeDirectories(directories: string[]): string[] {
   return directories
     .map((dir) => dir.trim())
@@ -60,8 +70,7 @@ function getRelativePathPreservingSymlinks(
 
   // If root is the workspace root, return the workspace-relative path
   if (workspaceRoot && path.normalize(root) === path.normalize(workspaceRoot)) {
-    // Normalize separators to platform-native
-    return wsRelative.split('/').join(path.sep);
+    return toPlatformSeparators(wsRelative);
   }
 
   // root is a subdirectory - compute path from workspace-relative path
@@ -73,14 +82,13 @@ function getRelativePathPreservingSymlinks(
   }
 
   // Both paths are workspace-relative, compute relative path between them
-  // Normalize to forward slashes for consistent comparison
-  const wsRelativeNorm = wsRelative.split('\\').join('/');
-  const rootRelativeNorm = rootRelative.split('\\').join('/');
+  const wsRelativeNorm = toForwardSlashes(wsRelative);
+  const rootRelativeNorm = toForwardSlashes(rootRelative);
 
   if (wsRelativeNorm.startsWith(rootRelativeNorm + '/')) {
     // File is under root, strip the root prefix
     const result = wsRelativeNorm.slice(rootRelativeNorm.length + 1);
-    return result.split('/').join(path.sep);
+    return toPlatformSeparators(result);
   }
 
   // File is not under root in workspace structure, use path.relative
