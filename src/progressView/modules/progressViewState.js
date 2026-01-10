@@ -125,6 +125,7 @@ class TaskGroups {
 
 /**
  * Manages stream status information.
+ * Stores only non-ready statuses; 'ready' and falsy values trigger deletion.
  */
 class StreamStatuses {
   constructor() {
@@ -136,14 +137,13 @@ class StreamStatuses {
   }
 
   set(stream, status) {
-    if (!stream) {
-      return;
-    }
+    if (!stream) return;
+    // Only store meaningful statuses; 'ready' is the default state
     if (!status || status === 'ready') {
       this.statuses.delete(stream);
-      return;
+    } else {
+      this.statuses.set(stream, status);
     }
-    this.statuses.set(stream, status);
   }
 
   delete(stream) {

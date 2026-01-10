@@ -52,19 +52,9 @@ export class WebviewUpdater {
       return undefined;
     }
 
-    const metadata = WebviewUpdater.computeInstructionMetadata(text);
-    return metadata ? { text, metadata } : { text };
-  }
-
-  private static computeInstructionMetadata(
-    text: string,
-  ): InstructionUpdate['metadata'] | undefined {
     const lineCount = text.split(/\r?\n/).length;
-    const shouldShowToggle = lineCount > 6 || text.length > 600;
-    if (!shouldShowToggle) {
-      return undefined;
-    }
-    return { showToggle: true };
+    const showToggle = lineCount > 6 || text.length > 600;
+    return showToggle ? { text, metadata: { showToggle: true } } : { text };
   }
 
   /**
