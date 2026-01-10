@@ -1,110 +1,142 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+/**
+ * Get Agent Config Edge Function - Fetches remote agent configurations.
+ *
+ * Authentication: JWT token in Authorization header
+ *
+ * Endpoints:
+ * - POST /get-agent-config - Fetch agent YAML config by name
+ */
 
-serve(async (req) => {
+import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
+import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const VERSION = '1.1.0';
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function jsonResponse(
+  req: Request,
+  body: Record<string, unknown>,
+  status: number,
+): Response {
+  const corsHeaders = getCorsHeaders(req);
+  return new Response(JSON.stringify({ _version: VERSION, ...body }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function errorResponse(req: Request, error: string, status: number): Response {
+  return jsonResponse(req, { error }, status);
+}
+
+// =============================================================================
+// Environment
+// =============================================================================
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+// =============================================================================
+// Request Handler
+// =============================================================================
+
+Deno.serve(async (req: Request) => {
+  // Handle CORS
+  const { corsHeaders, response } = handleCors(req);
+  if (response) return response;
+
+  // Only accept POST
+  if (req.method !== 'POST') {
+    return errorResponse(req, 'Method not allowed', 405);
+  }
+
+  // Check environment
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('[GET_AGENT_CONFIG] Missing required environment variables');
+    return errorResponse(req, 'Server configuration error', 500);
+  }
+
   try {
+    // 1. Extract and validate auth
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorResponse(req, 'Unauthorized', 401);
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
     // User client: uses user's JWT for auth verification and RLS-protected queries
-    // This ensures RLS policies on remote_agents table are enforced
     const userClient = createClient(supabaseUrl, serviceRoleKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Admin client: uses only SERVICE_ROLE_KEY for storage operations
-    // This bypasses bucket policies (safe because we already verify access via RLS)
+    // Admin client: bypasses bucket policies for storage operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify user with their JWT
+    // 2. Verify user
     const {
       data: { user },
       error: userError,
     } = await userClient.auth.getUser();
+
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorResponse(req, 'Invalid token', 401);
     }
 
-    // Get agent name from request
-    const { agentName } = await req.json();
-    if (!agentName) {
-      return new Response(JSON.stringify({ error: 'agentName required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // 3. Get agent name from request
+    let body: { agentName?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return errorResponse(req, 'Invalid JSON body', 400);
     }
 
-    // Fetch agent metadata using userClient (RLS enforces access control)
-    // RLS policies check user permissions/whitelist - unauthorized users won't see the agent
+    if (!body.agentName) {
+      return errorResponse(req, 'agentName required', 400);
+    }
+
+    // 4. Fetch agent metadata (RLS enforces access control)
     const { data: agent, error: agentError } = await userClient
       .from('remote_agents')
       .select('id, name, description, storage_path, visibility, agent_category')
-      .eq('name', agentName)
+      .eq('name', body.agentName)
       .single();
 
     if (agentError || !agent) {
-      return new Response(
-        JSON.stringify({
-          error: 'Agent not found or access denied',
-        }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      return errorResponse(req, 'Agent not found or access denied', 404);
     }
 
-    // Fetch YAML from storage using adminClient (bypasses bucket policies)
-    // Safe because access was already verified via RLS on remote_agents table
+    // 5. Fetch YAML from storage (admin client bypasses bucket policies)
     const { data: fileData, error: storageError } = await adminClient.storage
       .from('agent-configs')
       .download(agent.storage_path);
 
     if (storageError || !fileData) {
-      console.error('Storage error:', storageError);
-      return new Response(
-        JSON.stringify({
-          error: 'Failed to load agent configuration',
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      console.error('[GET_AGENT_CONFIG] Storage error:', storageError);
+      return errorResponse(req, 'Failed to load agent configuration', 500);
     }
 
-    // Read file content (in memory only, never persisted)
+    // 6. Return config
     const yamlContent = await fileData.text();
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      req,
+      {
         config: yamlContent,
         name: agent.name,
         description: agent.description,
-        visibility: agent.visibility, // string[] - array of groups
-        agentCategory: agent.agent_category, // 'workflow' or 'toolUse'
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        visibility: agent.visibility,
+        agentCategory: agent.agent_category,
       },
+      200,
     );
   } catch (err) {
-    console.error('Edge function error:', err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error('[GET_AGENT_CONFIG] Error:', err);
+    return errorResponse(req, 'Internal server error', 500);
   }
 });
