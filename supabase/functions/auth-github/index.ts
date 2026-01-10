@@ -17,7 +17,7 @@
 import { Hono } from 'jsr:@hono/hono@4';
 import { createClient } from 'jsr:@supabase/supabase-js@2.89.0';
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
-import { getAllowedOrigin, getCorsHeaders } from '../_shared/cors.ts';
+import { handleCors } from '../_shared/cors.ts';
 
 // =============================================================================
 // Constants
@@ -58,24 +58,11 @@ type Variables = {
 
 const app = new Hono<{ Variables: Variables }>();
 
-// Custom CORS middleware using shared utilities
+// CORS middleware using shared utilities
 app.use('*', async (c, next) => {
-  const origin = c.req.header('Origin') || null;
-  const allowedOrigin = getAllowedOrigin(origin);
-
-  if (!allowedOrigin) {
-    return c.text('Forbidden', 403);
-  }
-
-  // Set CORS headers using shared config
-  const corsHeaders = getCorsHeaders(c.req.raw);
+  const { corsHeaders, response } = handleCors(c.req.raw);
+  if (response) return response;
   c.set('corsHeaders', corsHeaders);
-
-  // Handle preflight
-  if (c.req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
   await next();
 });
 
@@ -102,12 +89,42 @@ app.use('*', async (c, next) => {
 // Helpers
 // =============================================================================
 
+type Context = Parameters<Parameters<typeof app.post>[1]>[0];
+
 function jsonResponse(
-  c: Parameters<Parameters<typeof app.post>[1]>[0],
+  c: Context,
   body: Record<string, unknown>,
   status: number,
 ) {
   return c.json({ _version: VERSION, ...body }, status, c.get('corsHeaders'));
+}
+
+function errorResponse(c: Context, error: string, status: number) {
+  return jsonResponse(c, { error }, status);
+}
+
+/** Build session response payload used by both exchange and refresh. */
+function buildSessionResponse(
+  accessToken: string,
+  refreshToken: string,
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: now + ACCESS_TOKEN_EXPIRY_SECONDS,
+    expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
+    token_type: 'bearer',
+    user: {
+      id: user.id,
+      email: user.email,
+      user_metadata: {
+        avatar_url: user.user_metadata?.avatar_url,
+        user_name: user.user_metadata?.user_name,
+      },
+    },
+  };
 }
 
 async function validateGitHubToken(
@@ -231,12 +248,12 @@ app.post('/exchange', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body?.github_token) {
-      return jsonResponse(c, { error: 'github_token required' }, 400);
+      return errorResponse(c, 'github_token required', 400);
     }
 
     const githubResult = await validateGitHubToken(body.github_token);
     if ('error' in githubResult) {
-      return jsonResponse(c, { error: githubResult.error }, 401);
+      return errorResponse(c, githubResult.error, 401);
     }
 
     const { user: githubUser, email } = githubResult;
@@ -293,7 +310,7 @@ app.post('/exchange', async (c) => {
         });
 
         if (error || !newUser?.user) {
-          return jsonResponse(c, { error: 'Failed to create user' }, 500);
+          return errorResponse(c, 'Failed to create user', 500);
         }
         userId = newUser.user.id;
       }
@@ -336,8 +353,6 @@ app.post('/exchange', async (c) => {
     const refreshToken =
       crypto.randomUUID().replace(/-/g, '') +
       crypto.randomUUID().replace(/-/g, '');
-    const now = Math.floor(Date.now() / 1000);
-    const expiresAt = now + ACCESS_TOKEN_EXPIRY_SECONDS;
 
     // Store session
     const { error: sessionError } = await supabase.from('sessions').insert({
@@ -353,33 +368,26 @@ app.post('/exchange', async (c) => {
 
     if (sessionError) {
       console.error('[AUTH] Session storage failed:', sessionError.message);
-      return jsonResponse(c, { error: 'Failed to create session' }, 500);
+      return errorResponse(c, 'Failed to create session', 500);
     }
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
 
     return jsonResponse(
       c,
-      {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: expiresAt,
-        expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
-        token_type: 'bearer',
-        user: {
-          id: userId,
-          email: userEmail,
-          user_metadata: {
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
-          },
+      buildSessionResponse(accessToken, refreshToken, {
+        id: userId,
+        email: userEmail,
+        user_metadata: {
+          avatar_url: githubUser.avatar_url,
+          user_name: githubUser.login,
         },
-      },
+      }),
       200,
     );
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
-    return jsonResponse(c, { error: 'Internal server error' }, 500);
+    return errorResponse(c, 'Internal server error', 500);
   }
 });
 
@@ -388,7 +396,7 @@ app.post('/refresh', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body?.refresh_token) {
-      return jsonResponse(c, { error: 'refresh_token required' }, 400);
+      return errorResponse(c, 'refresh_token required', 400);
     }
 
     const supabase = c.get('supabase');
@@ -402,20 +410,20 @@ app.post('/refresh', async (c) => {
       .single();
 
     if (sessionError || !session) {
-      return jsonResponse(c, { error: 'Invalid refresh token' }, 401);
+      return errorResponse(c, 'Invalid refresh token', 401);
     }
 
     // Check expiry
     if (new Date(session.not_after) < new Date()) {
       await supabase.from('sessions').delete().eq('id', session.id);
-      return jsonResponse(c, { error: 'Refresh token expired' }, 401);
+      return errorResponse(c, 'Refresh token expired', 401);
     }
 
     // Get user
     const { data: userData, error: userError } =
       await supabase.auth.admin.getUserById(session.user_id);
     if (userError || !userData?.user) {
-      return jsonResponse(c, { error: 'User not found' }, 401);
+      return errorResponse(c, 'User not found', 401);
     }
 
     const user = userData.user;
@@ -426,7 +434,6 @@ app.post('/refresh', async (c) => {
       user.app_metadata || {},
     );
 
-    const now = Math.floor(Date.now() / 1000);
     await supabase
       .from('sessions')
       .update({ updated_at: new Date().toISOString() })
@@ -436,30 +443,20 @@ app.post('/refresh', async (c) => {
 
     return jsonResponse(
       c,
-      {
-        access_token: accessToken,
-        refresh_token: body.refresh_token,
-        expires_at: now + ACCESS_TOKEN_EXPIRY_SECONDS,
-        expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
-        token_type: 'bearer',
-        user: {
-          id: user.id,
-          email: user.email,
-          user_metadata: {
-            avatar_url: user.user_metadata?.avatar_url,
-            user_name: user.user_metadata?.user_name,
-          },
-        },
-      },
+      buildSessionResponse(accessToken, body.refresh_token, {
+        id: user.id,
+        email: user.email,
+        user_metadata: user.user_metadata,
+      }),
       200,
     );
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
-    return jsonResponse(c, { error: 'Internal server error' }, 500);
+    return errorResponse(c, 'Internal server error', 500);
   }
 });
 
 // 404 for other routes
-app.all('*', (c) => jsonResponse(c, { error: 'Not found' }, 404));
+app.all('*', (c) => errorResponse(c, 'Not found', 404));
 
 Deno.serve(app.fetch);
