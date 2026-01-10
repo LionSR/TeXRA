@@ -15,13 +15,36 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
-// Local imports
-import {
-  OutputFormat,
-  detectInputFormat,
-  containsHtml,
-  containsLatex,
-} from './xmlFormatDetection';
+// ─────────────────────────────────────────────────────────────────────────────
+// Format Detection (inlined from xmlFormatDetection.ts - only used here)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export enum OutputFormat {
+  HTML = 'html',
+  LaTeX = 'latex',
+  MARKDOWN = 'markdown',
+}
+
+const HTML_PATTERN = /<(?:br|p|div|strong|em|code|pre|h[1-6]|ul|ol|li)\b[^>]*>/;
+const LATEX_PATTERN = /\\(?:begin|end|section|subsection|textbf|textit|item)\{/;
+
+function detectInputFormat(text: string): OutputFormat {
+  if (LATEX_PATTERN.test(text)) {
+    return OutputFormat.LaTeX;
+  }
+  if (HTML_PATTERN.test(text)) {
+    return OutputFormat.HTML;
+  }
+  return OutputFormat.MARKDOWN;
+}
+
+function containsHtml(text: string): boolean {
+  return HTML_PATTERN.test(text);
+}
+
+function containsLatex(text: string): boolean {
+  return LATEX_PATTERN.test(text);
+}
 
 const CHANNEL = 'xmlConversion';
 logger.initialize(CHANNEL);

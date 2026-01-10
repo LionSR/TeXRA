@@ -1,6 +1,3 @@
-// Local imports - core utilities
-import { contentToString as convertContentToString } from '@utils/core';
-
 /** Options for normalizing OpenAI-style chat messages. */
 export interface NormalizeOpenAIMessageContentOptions {
   /** Merge consecutive messages that share the same role. */
@@ -48,7 +45,7 @@ function mergeMessageContent(
       return;
     }
 
-    if (prevContent == null || prevContent === '') {
+    if (prevContent === null || prevContent === undefined || prevContent === '') {
       previous.content = clonedCurrent;
     }
     return;
@@ -65,7 +62,7 @@ function mergeMessageContent(
     return;
   }
 
-  if (prevContent == null) {
+  if (prevContent === null || prevContent === undefined) {
     previous.content = currContent;
   }
 }
@@ -111,7 +108,18 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
   if (asString) {
     working.forEach((message) => {
       if (Array.isArray(message.content)) {
-        message.content = convertContentToString(message.content);
+        // Extract text from content array items and join with newlines
+        // Filter defensively to handle null/undefined items
+        message.content = (message.content as Array<unknown>)
+          .filter(
+            (item): item is { type: string; text: string } =>
+              item !== null &&
+              typeof item === 'object' &&
+              (item as { type?: unknown }).type === 'text' &&
+              typeof (item as { text?: unknown }).text === 'string',
+          )
+          .map((item) => item.text)
+          .join('\n');
       }
     });
   }

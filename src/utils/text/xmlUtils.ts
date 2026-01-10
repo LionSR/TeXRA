@@ -3,8 +3,7 @@
  *
  * This module re-exports from focused submodules:
  * - xmlCdata: CDATA section handling
- * - xmlFormatDetection: Format detection (HTML, LaTeX, Markdown)
- * - xmlConversion: Format conversion (Pandoc, Turndown)
+ * - xmlConversion: Format conversion (Pandoc, Turndown) with inlined format detection
  * - xmlExtraction: Content extraction from XML/LaTeX
  *
  * Import directly from the specific module when possible for better tree-shaking.
@@ -17,30 +16,16 @@ export {
   addCdataToTagsMultiple,
 } from './xmlCdata';
 
-// Re-export from format detection module
-export {
-  OutputFormat,
-  detectInputFormat,
-  containsHtml,
-  containsLatex,
-} from './xmlFormatDetection';
-
 // Re-export from conversion module
-export {
-  convertLatexToMarkdown,
-  convertHtmlToMarkdown,
-  convertWithPandoc,
-  formatContent,
-} from './xmlConversion';
+// Note: convertLatexToMarkdown, convertHtmlToMarkdown, convertWithPandoc are internal helpers
+export { OutputFormat, formatContent } from './xmlConversion';
 
 // Re-export from extraction module
+// Note: extractLatexFromMarkdown, extractLatexBetweenDocumentClass, filterTagsFromText are internal
 export {
   DOCUMENT_NAME_REGEX,
   extractTextFromTag,
-  extractLatexFromMarkdown,
-  extractLatexBetweenDocumentClass,
   extractMultipleTextFromTag,
-  filterTagsFromText,
   extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
   extractScratchpad,
