@@ -84,16 +84,11 @@ export class StreamTabs {
   }
 
   _buildTooltip(info) {
-    const parts = [];
-    if (info?.label) {
-      parts.push(info.label);
-    }
-    if (info?.model) {
-      parts.push(`Model: ${info.model}`);
-    }
-    if (info?.inputFile) {
-      parts.push(`Input: ${info.inputFile}`);
-    }
+    const parts = [
+      info?.label,
+      info?.model && `Model: ${info.model}`,
+      info?.inputFile && `Input: ${info.inputFile}`,
+    ];
     return parts.filter(Boolean).join(' • ');
   }
 
