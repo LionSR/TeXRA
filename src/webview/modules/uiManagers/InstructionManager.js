@@ -45,6 +45,7 @@ export class InstructionManager extends BaseDomHandler {
       [SESSION_TYPES.TOOL_USE]: 0,
     };
     this._textarea = null;
+    this._boundInputFileChangeHandler = this._handleInputFileChange.bind(this);
   }
 
   /**
@@ -80,6 +81,27 @@ export class InstructionManager extends BaseDomHandler {
     };
 
     awaitTextareaUpgrade(target, () => applySetup());
+
+    // Register for input file change notifications to switch instructions
+    if (this.state?.onInputFileChange) {
+      this.state.onInputFileChange(this._boundInputFileChangeHandler);
+    }
+  }
+
+  /**
+   * Handle input file change - update textarea with the instruction for the new file.
+   * @param {string} newInstruction - The instruction for the new input file
+   */
+  _handleInputFileChange(newInstruction) {
+    if (!this._textarea) {
+      return;
+    }
+
+    // Update the textarea with the instruction for the new tab
+    this._textarea.value = newInstruction || '';
+
+    // Dispatch input event to trigger placeholder rotation update
+    this._textarea.dispatchEvent(new Event('input'));
   }
 
   _setupPlaceholderRotation(target, textarea) {
@@ -220,6 +242,10 @@ export class InstructionManager extends BaseDomHandler {
   dispose() {
     this._stopRotation();
     this._textarea = null;
+    // Clear the input file change callback
+    if (this.state?.onInputFileChange) {
+      this.state.onInputFileChange(null);
+    }
     super.dispose();
   }
 }
