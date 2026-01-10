@@ -285,7 +285,9 @@ export function registerWolframScriptCommands(
           { enableScripts: true },
         );
 
-        const escapedContent = sampleContent.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        const escapedContent = sampleContent
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
         const inputSection = `<div class="file-info">File: ${filePath}</div>
           <div class="input"><h3>File Content (sample):</h3><pre>${escapedContent}</pre></div>`;
         panel.webview.html = createResultHtml(

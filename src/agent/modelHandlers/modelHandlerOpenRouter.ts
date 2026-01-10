@@ -2,8 +2,15 @@
 import OpenAI from 'openai';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
-// OpenRouter SDK types for reasoning_details
-import type { Schema3 as ReasoningDetailItem } from '@openrouter/sdk/models';
+/**
+ * OpenRouter reasoning_details item type.
+ * Defined locally since @openrouter/sdk/models subpath export requires moduleResolution: node16+
+ * @see https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ */
+type ReasoningDetailItem =
+  | { type: 'reasoning.text'; text?: string | null }
+  | { type: 'reasoning.encrypted'; data: string }
+  | { type: 'reasoning.summary'; summary: string };
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
