@@ -73,9 +73,11 @@ function parseToolInput(
     logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
   }
+
   if (typeof raw !== 'string') {
-    return raw; // Objects, arrays, primitives pass through directly
+    return raw;
   }
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -109,29 +111,20 @@ function normalizeToolCallError(
   toolName: string,
   error: unknown,
 ): { message: string; diagnostics?: ValidationErrorDiagnostics } {
-  if (hasZodIssues(error)) {
-    // Cast issues to ZodIssue-like for the shared formatter
-    const issues = error.issues as Array<{
-      path: (string | number)[];
-      message: string;
-      expected?: unknown;
-      received?: unknown;
-      code?: string;
-    }>;
-    return {
-      message: `${toolName}: Invalid parameters provided`,
-      diagnostics: {
-        type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-        issues: issues as ValidationErrorDiagnostics['issues'],
-        formatted: formatZodIssuesForDiagnostics(
-          issues as ValidationErrorDiagnostics['issues'],
-        ),
-      },
-    };
+  if (!hasZodIssues(error)) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { message: `${toolName}: ${errorMessage}` };
   }
 
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  return { message: `${toolName}: ${errorMessage}` };
+  const issues = error.issues as ValidationErrorDiagnostics['issues'];
+  return {
+    message: `${toolName}: Invalid parameters provided`,
+    diagnostics: {
+      type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+      issues,
+      formatted: formatZodIssuesForDiagnostics(issues),
+    },
+  };
 }
 
 // ============================================================================
@@ -421,8 +414,6 @@ type ToolUseProcessExecResult =
       lastAssistantContent?: unknown[];
       normalizedUsage?: NormalizedUsage;
       responseTimeMs?: number;
-      createAssistantMessage?: boolean;
-      lastResponseUpdate?: string;
     };
 
 /**
@@ -548,8 +539,6 @@ class ToolUseProcessNode<C> extends BaseNode<
         lastAssistantContent,
         normalizedUsage,
         responseTimeMs: prepRes.responseTimeMs,
-        createAssistantMessage: Boolean(text),
-        lastResponseUpdate: text ?? undefined,
       };
     }
 
@@ -606,33 +595,29 @@ class ToolUseProcessNode<C> extends BaseNode<
     });
     run.incrementRounds();
 
+    shared.stopReason = execRes.stopReason;
+
     if (execRes.endTurn) {
-      // Apply side effects for end turn
       shared.toolCalls = undefined;
-      if (execRes.createAssistantMessage && execRes.text) {
+      shared.shouldStop = true;
+      shared.endTurn = true;
+      if (execRes.text) {
         shared.messages.push(
           services.modelHandler.createAssistantMessage(execRes.text),
         );
         workspace.assembly.lastResponse = execRes.text;
       }
-      // Clear ephemeral state
       workspace.resetServerToolContent();
       workspace.resetReasoning();
-      shared.shouldStop = true;
-      shared.endTurn = true; // Normal completion (model said end_turn)
-      shared.stopReason = execRes.stopReason;
       return FlowTransition.COMPLETE;
     }
 
-    // Apply side effects for continuing with tool calls
+    // Continue with tool calls
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    shared.stopReason = execRes.stopReason;
-    // Increment cycle index and reset metrics for next cycle
     shared.cycleIndex += 1;
     shared.cycleResponseTimeMs = 0;
     shared.cycleNormalizedUsage = undefined;
-
     return FlowTransition.DEFAULT;
   }
 }
