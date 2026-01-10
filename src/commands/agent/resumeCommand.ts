@@ -93,9 +93,10 @@ async function resumeFromSnapshot(
     // Resume using flow-first execution
     await resumeToolUseFromSnapshot(snapshot, (session) => {
       // Combine explicit follow-up with queued ones into a single message
-      const allFollowUps = followUp
-        ? [followUp, ...queuedFollowUps]
-        : queuedFollowUps;
+      const allFollowUps =
+        followUp !== undefined
+          ? [followUp, ...queuedFollowUps]
+          : queuedFollowUps;
 
       if (allFollowUps.length > 0) {
         session.appendFollowUp(allFollowUps.join('\n\n'));
