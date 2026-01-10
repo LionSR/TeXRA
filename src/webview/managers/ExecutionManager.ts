@@ -46,10 +46,7 @@ export class ExecutionManager {
     await vscode.commands.executeCommand('texra.execute', config);
   }
 
-  private composeAgentConfig(
-    message: any,
-    isToolUse: boolean,
-  ): AgentConfig {
+  private composeAgentConfig(message: any, isToolUse: boolean): AgentConfig {
     const session: AgentSessionDescriptor = isToolUse
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
       : { agentCategory: AgentCategory.Workflow };
