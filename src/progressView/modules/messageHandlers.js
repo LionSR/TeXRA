@@ -1065,7 +1065,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleRecordingError() {
-    dom.followUpInput.setRecording(false);
+    this.handleRecordingStopped();
   }
 
   /**
