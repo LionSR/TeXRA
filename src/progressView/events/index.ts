@@ -7,4 +7,3 @@ export {
   type ApprovalCallbacks,
 } from './UIEvents';
 export { type ProgressEventBusLike } from './types';
-export type { StreamStatus } from '@eventBus/ProgressEventBus';

@@ -13,9 +13,6 @@ import type { EndGroupStatus } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 import type { LogUtilsOptions } from './logOptions';
 
-// Re-export for convenience
-export type { LogOptions } from './logOptions';
-
 type ChannelKey = string;
 
 interface ChannelContext {
@@ -24,15 +21,9 @@ interface ChannelContext {
 
 const contextStorage = new AsyncLocalStorage<Map<ChannelKey, ChannelContext>>();
 
-// Cache for initialized channels to avoid repeated registry.ensure() calls
-// This eliminates the overhead of Map lookup + string interpolation on every log
-const initializedChannels = new Map<
-  ChannelKey,
-  ReturnType<typeof registry.ensure>
->();
-
+/** Key format matches LogChannelRegistry.getKey() for consistency. */
 function getChannelKey(channel: string, isAgent: boolean): ChannelKey {
-  return `${isAgent ? 'agent' : 'default'}::${channel}`;
+  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
 }
 
 function getStore(): Map<ChannelKey, ChannelContext> {
@@ -106,20 +97,14 @@ function resolveActiveGroupByKey(
 }
 
 /**
- * Get or create a cached channel entry.
- * Single source of truth for channel initialization.
+ * Get or create a channel entry.
+ * Delegates to registry which handles its own caching.
  */
 function getOrCreateEntry(
   channel: string,
   isAgent: boolean,
 ): ReturnType<typeof registry.ensure> {
-  const key = getChannelKey(channel, isAgent);
-  let entry = initializedChannels.get(key);
-  if (!entry) {
-    entry = registry.ensure(channel, { isAgent });
-    initializedChannels.set(key, entry);
-  }
-  return entry;
+  return registry.ensure(channel, { isAgent });
 }
 
 /**
@@ -131,11 +116,10 @@ function getTransport(
   isAgent: boolean,
   createIfMissing: boolean,
 ): VSCodeTransport | undefined {
-  const key = getChannelKey(channel, isAgent);
-  const cached = initializedChannels.get(key);
-  if (cached) return cached.transport;
-  if (createIfMissing) return getOrCreateEntry(channel, isAgent).transport;
-  return undefined;
+  if (createIfMissing) {
+    return getOrCreateEntry(channel, isAgent).transport;
+  }
+  return registry.getTransport(channel, { isAgent });
 }
 
 function logWithGroup(

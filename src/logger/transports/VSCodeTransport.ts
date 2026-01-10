@@ -17,7 +17,8 @@ import {
   type MessageType,
 } from '@logger/messageTypes';
 import type { EndGroupStatus } from '@logger/messageTypes';
-import { getColorForLevel, serializeLogData } from '@logger/utils';
+import { getColorForLevel } from '@logger/utils';
+import { serializeError } from '@utils/core';
 import { bus } from '@eventBus/ProgressEventBus';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
@@ -43,7 +44,8 @@ export class VSCodeTransport extends Transport {
 
   log(info: any, callback: () => void): void {
     const { level, message, timestamp, messageType, groupId } = info;
-    const data = serializeLogData(info.data);
+    // Serialize errors for logging (inline from serializeLogData)
+    const data = info.data instanceof Error ? serializeError(info.data) : info.data;
 
     this.writeToChannel(level, message, timestamp, data);
     this.emitLogEvent({
