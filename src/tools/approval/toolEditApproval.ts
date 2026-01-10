@@ -179,11 +179,6 @@ export function setToolEditApprovalHandler(
   customHandler = handler;
 }
 
-function createApprovalRequestId(): string {
-  approvalCounter += 1;
-  return `approval-${Date.now().toString(36)}-${approvalCounter}`;
-}
-
 async function showProgressViewApprovalPrompt(
   requestId: string,
   request: ToolEditApprovalRequest,
@@ -436,7 +431,8 @@ async function nativeRequestApproval(
   const { path, originalContent, proposedContent, sourceTool, streamId } =
     request;
 
-  const requestId = createApprovalRequestId();
+  approvalCounter += 1;
+  const requestId = `approval-${Date.now().toString(36)}-${approvalCounter}`;
   const originalUri = await createTempFile('original', path, originalContent);
   const proposedUri = await createTempFile('proposed', path, proposedContent);
 
