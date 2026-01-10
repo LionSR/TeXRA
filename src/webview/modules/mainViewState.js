@@ -41,7 +41,7 @@ function getSessionDefaultAgent(sessionType) {
 
 function getDefaultState() {
   return {
-    sessionType: SESSION_TYPES.WORKFLOW,
+    sessionType: SESSION_TYPES.TOOL_USE,
     workflowAgent: getSelectDefaultValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       DEFAULT_WORKFLOW_AGENT,
@@ -167,7 +167,7 @@ export class MainViewState {
 
   /** Initialize UI with default state */
   setDefaults() {
-    this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
+    this.applySessionType(SESSION_TYPES.TOOL_USE, { skipSave: true });
 
     const workflowAgentDefault = getSelectDefaultValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],

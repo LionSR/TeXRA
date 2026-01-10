@@ -3,7 +3,10 @@ import { COMMANDS } from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
-import { addEventListenerSafely, setElementCheckedState } from '@common/domUtils.js';
+import {
+  addEventListenerSafely,
+  setElementCheckedState,
+} from '@common/domUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
