@@ -33,7 +33,10 @@ export class MemoryViewMessageHandler extends BaseWebviewMessageHandler {
       safeSetElementChecked(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, message.enabled);
       setElementsDisabled(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, false);
     } catch (error) {
-      console.error('[MemoryView] Failed to update memory enabled state:', error);
+      console.error(
+        '[MemoryView] Failed to update memory enabled state:',
+        error,
+      );
     }
   }
 }
