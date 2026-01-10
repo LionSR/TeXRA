@@ -217,6 +217,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearTodos(stream);
       state.clearQueuedFollowUps(stream);
       state.clearContextState(stream);
+      state.clearFollowUpText(stream);
     } else {
       state.resetExecutionIdAvailability();
       state.clearAllActiveRuns();
@@ -227,6 +228,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllTodos();
       state.clearAllQueuedFollowUps();
       state.clearContextState();
+      state.clearAllFollowUpText();
     }
   }
 
@@ -373,6 +375,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStreams(message) {
+    // Save follow-up text for the previous stream before switching
+    const previousStream = state.activeStream;
+    if (previousStream && previousStream !== message.activeStream) {
+      dom.followUpInput.saveTextForStream(previousStream);
+    }
+
     try {
       state.activeStream = message.activeStream;
       if (
@@ -428,6 +436,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
     dom.followUpInput.setContainerVisibility(Boolean(isToolAgent && container));
 
+    // Restore follow-up text for the new stream
+    if (message.activeStream && previousStream !== message.activeStream) {
+      dom.followUpInput.restoreTextForStream(message.activeStream);
+    }
+
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
     dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
 
@@ -456,6 +469,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllPendingInstructions();
       state.clearAllTodos();
       state.clearAllQueuedFollowUps();
+      state.clearAllFollowUpText();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
