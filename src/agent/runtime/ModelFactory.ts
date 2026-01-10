@@ -51,7 +51,7 @@ export class ModelFactory {
       config.openRouterOnly ||
       getConfig<boolean>('texra.model.useOpenRouter', false);
     if (useOpenRouter) {
-      config.openrouterFullName ??= `${config.provider}/${config.fullName}`;
+      config.openrouterFullName ||= `${config.provider}/${config.fullName}`;
       return config.provider === ModelProvider.ANTHROPIC
         ? new ModelHandlerAnthropicViaOpenRouter(config)
         : new ModelHandlerOpenRouter(config);
