@@ -214,4 +214,45 @@ export class FollowUpInputManager {
     button.toggleAttribute('hidden', !showButton);
     button.toggleAttribute('disabled', !showButton);
   }
+
+  /**
+   * Save the current textarea text to state for the given stream.
+   * @param {string} streamId - The stream ID to save text for
+   */
+  saveTextForStream(streamId) {
+    if (!this.textarea || !streamId) {
+      return;
+    }
+    progressViewState.setFollowUpText(streamId, this.textarea.value);
+  }
+
+  /**
+   * Restore the textarea text from state for the given stream.
+   * @param {string} streamId - The stream ID to restore text for
+   */
+  restoreTextForStream(streamId) {
+    if (!this.textarea) {
+      return;
+    }
+    const text = progressViewState.getFollowUpText(streamId);
+    this.textarea.value = text || '';
+  }
+
+  /**
+   * Get the current textarea value.
+   * @returns {string} The current textarea text
+   */
+  getText() {
+    return this.textarea?.value || '';
+  }
+
+  /**
+   * Set the textarea value.
+   * @param {string} text - The text to set
+   */
+  setText(text) {
+    if (this.textarea) {
+      this.textarea.value = text || '';
+    }
+  }
 }
