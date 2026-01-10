@@ -33,6 +33,18 @@ const STATUS_ICONS = {
 };
 
 /**
+ * Determine the title prefix based on tool state.
+ * @param {boolean} isUserFeedback - Whether this is user feedback
+ * @param {boolean} isError - Whether this is an error state
+ * @returns {string} The title prefix
+ */
+function getToolTitlePrefix(isUserFeedback, isError) {
+  if (isUserFeedback) return 'User Feedback';
+  if (isError) return 'Tool Error';
+  return 'Tool Use';
+}
+
+/**
  * Create and initialize a tool-style element from template
  * @param {string} logId - Log entry ID
  * @param {string} groupId - Group ID
@@ -97,11 +109,7 @@ export function formatToolUse(normalizedPayload, logId, groupId, timestamp) {
   const { element, headerLabel, contentElem } = toolElement;
 
   // Build title based on state
-  const titlePrefix = isUserFeedback
-    ? 'User Feedback'
-    : showAsError
-      ? 'Tool Error'
-      : 'Tool Use';
+  const titlePrefix = getToolTitlePrefix(isUserFeedback, showAsError);
   const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
   const titleText = normalizedToolLog.headerSummary
     ? `${titleBase} — ${normalizedToolLog.headerSummary}`
