@@ -646,6 +646,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           message.activeRunId,
           previousRunId,
         );
+        // DIAGNOSTIC: Log run selection
+        _logEvent('RUN_SELECTION', {
+          runIds,
+          'message.activeRunId': message.activeRunId,
+          previousRunId,
+          preferredRun,
+          groupElementsSize: dom.taskGroups.groupElements?.size,
+          hasPreferredInElements: dom.taskGroups.groupElements?.has(preferredRun),
+        });
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
         dom.taskGroups.showRun(preferredRun);
