@@ -1650,7 +1650,7 @@
     "typescript-eslint": "^8.52.0",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1",
-    "zod-v3-to-v4": "^1.11.0"
+    "zod-v3-to-v4": "^1.12.1"
   },
   "repository": {
     "type": "git",
@@ -1714,7 +1714,7 @@
     "minimatch": "^10.1.1",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.15.0",
+    "openai": "^6.16.0",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.0.0",
     "shell-quote": "^1.8.3",
