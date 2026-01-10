@@ -97,18 +97,6 @@ export const BaseCycleFieldsSchema = z.object({
 export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
 
 /**
- * Reset values for base cycle fields (excludes messages which persists).
- * Co-located with schema as single source of truth for reset behavior.
- */
-export const BASE_CYCLE_RESET_VALUES: Omit<BaseCycleFields, 'messages'> = {
-  shouldStop: false,
-  endTurn: false,
-  responseTimeMs: undefined,
-  stopReason: undefined,
-  lastError: undefined,
-};
-
-/**
  * Unified debug context used across all cycle flows.
  * Provides consistent logging and execution tracking.
  *
@@ -125,36 +113,12 @@ export interface CycleDebugContext {
 }
 
 /**
- * Minimal services interface for deriving debug context.
- * Both ResponseCycleServices and ToolUseCycleServices satisfy this.
- */
-export interface DebugContextServices {
-  logger: AgentLogger;
-  executionId?: ExecutionId;
-}
-
-/**
- * Parameters for creating debug context (fields not available in services).
- */
-export interface DebugContextParams {
-  modelName?: string;
-  isRemote?: boolean;
-}
-
-/**
  * Derive CycleDebugContext from services at call site.
- *
- * This eliminates redundant storage of logger/executionId in shared state.
- * Call this at each `maybeSaveDebugObject` invocation instead of storing
- * the context in shared or passing through prep/exec results.
- *
- * @param services - Services containing logger and context
- * @param params - Additional params not available from services (modelName, isRemote)
- * @returns CycleDebugContext for maybeSaveDebugObject
+ * Eliminates redundant storage of logger/executionId in shared state.
  */
 export function getDebugContext(
-  services: DebugContextServices,
-  params: DebugContextParams,
+  services: { logger: AgentLogger; executionId?: ExecutionId },
+  params: { modelName?: string; isRemote?: boolean },
 ): CycleDebugContext {
   return {
     logger: services.logger,
