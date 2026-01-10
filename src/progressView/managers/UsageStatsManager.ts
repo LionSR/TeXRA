@@ -35,8 +35,8 @@ const TokenUsageStatsParsingBaseSchema = z.object({
   outputTokens: FiniteNumber,
   cost: FiniteNumber,
   // Optional fields from canonical schema (default to 0 for accumulation)
-  cacheReadInputTokens: FiniteNumber.optional().default(0),
-  cacheCreationInputTokens: FiniteNumber.optional().default(0),
+  cacheReadInputTokens: FiniteNumber.optional().prefault(0),
+  cacheCreationInputTokens: FiniteNumber.optional().prefault(0),
 });
 
 const TokenUsageStatsParsingSchema = TokenUsageStatsParsingBaseSchema.catch({
