@@ -407,11 +407,15 @@ export function getToolFlags(
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
-    const requestArray = agentPrompt.userRequest
-      ? Array.isArray(agentPrompt.userRequest)
-        ? agentPrompt.userRequest
-        : [agentPrompt.userRequest]
-      : [];
+    const { userRequest } = agentPrompt;
+    let requestArray: string[];
+    if (Array.isArray(userRequest)) {
+      requestArray = userRequest;
+    } else if (userRequest) {
+      requestArray = [userRequest];
+    } else {
+      requestArray = [];
+    }
     const configuredRounds =
       'rounds' in agentSetting ? agentSetting.rounds : undefined;
     flags.ROUNDS = Math.max(configuredRounds ?? 2, requestArray.length);
