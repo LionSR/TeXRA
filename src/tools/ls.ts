@@ -71,11 +71,9 @@ export class LsTool extends defineTool({
     }
 
     const ignoreMatchers = input.ignore.map(createGlobMatcher);
-    const matchesCustomIgnore =
-      input.ignore.length === 0
-        ? () => false
-        : (entryPath: string) =>
-            ignoreMatchers.some((matcher) => matcher(entryPath));
+    // Empty array.some() returns false, so no special case needed
+    const matchesCustomIgnore = (entryPath: string): boolean =>
+      ignoreMatchers.some((matcher) => matcher(entryPath));
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(relative);
