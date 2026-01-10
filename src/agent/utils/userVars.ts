@@ -121,15 +121,15 @@ async function getFileVars(
     agentConfig.inputFiles,
   );
   const allReferenceFiles = combineFiles(
-    agentConfig.referenceFile,
+    agentConfig.referenceFile ?? undefined,
     agentConfig.referenceFiles,
   );
   const allAuxiliaryFiles = combineFiles(
-    agentConfig.auxiliaryFile,
+    agentConfig.auxiliaryFile ?? undefined,
     agentConfig.auxiliaryFiles,
   );
   const allMediaFiles = combineFiles(
-    agentConfig.mediaFile,
+    agentConfig.mediaFile ?? undefined,
     agentConfig.mediaFiles,
   );
 
