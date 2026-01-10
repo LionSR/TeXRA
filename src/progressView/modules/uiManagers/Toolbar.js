@@ -13,15 +13,6 @@ export class Toolbar {
    */
   constructor(status) {
     this._status = status;
-    this._currentButtonIds = [];
-  }
-
-  /**
-   * Returns the button IDs currently rendered in the toolbar.
-   * @returns {string[]} Array of button IDs (defensive copy)
-   */
-  getCurrentButtonIds() {
-    return [...this._currentButtonIds];
   }
 
   render(sessionKind = 'workflow') {
@@ -32,10 +23,10 @@ export class Toolbar {
     }
     container.innerHTML = '';
     const buttons = TOOLBAR_BUTTONS[sessionKind] ?? TOOLBAR_BUTTONS.workflow;
-    this._currentButtonIds = buttons.map((btn) => btn.id);
+    const buttonIds = buttons.map((btn) => btn.id);
     container.dataset.agentMode = sessionKind;
     // Notify Status of new button IDs to keep them in sync
-    this._status?.setCurrentButtonIds(this._currentButtonIds);
+    this._status?.setCurrentButtonIds(buttonIds);
     buttons.forEach((def) => {
       try {
         const dataset = { command: def.command, ...(def.dataset ?? {}) };
