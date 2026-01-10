@@ -22,6 +22,7 @@ import { scrollToBottom, setRadioGroupValue } from '@common/domUtils.js';
 const state = progressViewState;
 const dom = progressViewDomHandler;
 const pendingLogUpdates = new Map();
+const pendingLogRebuilds = new Map();
 
 // Create formatter instances
 
@@ -491,11 +492,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       this._focusFollowUpIfWaiting(streamStatus);
     }
 
+    const pendingRebuild = pendingLogRebuilds.get(state.activeStream);
+    if (pendingRebuild) {
+      pendingLogRebuilds.delete(state.activeStream);
+      this.handleUpdateLogs(pendingRebuild);
+    }
+
     this._refreshActiveRunPanels();
   }
 
   handleUpdateLogs(message) {
     if (!this._isActiveStream(message)) {
+      if (!state.activeStream && message.stream) {
+        pendingLogRebuilds.set(message.stream, message);
+      }
       this._updatePlaceholderVisibility();
       return;
     }
@@ -1027,6 +1037,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const deletingActiveStream = message.stream === state.activeStream;
     pendingLogUpdates.clear();
+    pendingLogRebuilds.delete(message.stream);
     state.removeStream(message.stream);
     state.streamStatuses.delete(message.stream);
     this._clearRunScopedState(message.stream);
@@ -1044,6 +1055,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     pendingLogUpdates.clear();
+    pendingLogRebuilds.clear();
     state.toggleStates.clearAll();
     state.clearStreams();
     state.activeStream = '';
