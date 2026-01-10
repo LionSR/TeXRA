@@ -37,12 +37,19 @@ type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 /** Email login is disabled due to remote configuration issues */
 const EMAIL_LOGIN_ENABLED = false;
 
-/** All sign-in options shown to users */
+/** Sign-in option shown to users */
 interface SignInOption {
   label: string;
   description: string;
   method: AuthMethod;
 }
+
+/** Available sign-in methods with their display info */
+const SIGN_IN_OPTIONS: SignInOption[] = [
+  { label: '$(globe) Google', description: 'Sign in with Google', method: 'google' },
+  { label: '$(github) GitHub', description: 'Sign in with GitHub via web browser', method: 'github-browser' },
+  { label: '$(github) GitHub (VS Code)', description: 'Sign in using VS Code GitHub authentication', method: 'github' },
+];
 
 /**
  * Command to sign in to TeXRA account.
@@ -66,33 +73,14 @@ export async function signIn(): Promise<void> {
       return;
     }
 
-    // Build sign-in options from enabled auth methods
-    const signInOptions: SignInOption[] = [
-      {
-        label: '$(globe) Google',
-        description: 'Sign in with Google',
-        method: 'google' as AuthMethod,
-      },
-      {
-        label: '$(github) GitHub',
-        description: 'Sign in with GitHub via web browser',
-        method: 'github-browser' as AuthMethod,
-      },
-      ...(EMAIL_LOGIN_ENABLED
-        ? [
-            {
-              label: '$(mail) Email',
-              description: 'Sign in with a magic link sent to your email',
-              method: 'email' as AuthMethod,
-            },
-          ]
-        : []),
-      {
-        label: '$(github) GitHub (VS Code)',
-        description: 'Sign in using VS Code GitHub authentication',
-        method: 'github' as AuthMethod,
-      },
-    ];
+    // Build sign-in options (optionally include email if enabled)
+    const signInOptions = EMAIL_LOGIN_ENABLED
+      ? [
+          ...SIGN_IN_OPTIONS.slice(0, 2),
+          { label: '$(mail) Email', description: 'Sign in with a magic link sent to your email', method: 'email' as AuthMethod },
+          ...SIGN_IN_OPTIONS.slice(2),
+        ]
+      : SIGN_IN_OPTIONS;
 
     const selected = await vscode.window.showQuickPick(signInOptions, {
       placeHolder: 'Choose a sign-in method',
