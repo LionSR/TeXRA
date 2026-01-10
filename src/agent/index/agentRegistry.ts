@@ -298,33 +298,45 @@ async function scanDirectory(
   }
 }
 
-function groupByBaseName(
-  files: string[],
-): Map<string, { base?: string; multiple?: string }> {
-  const groups = new Map<string, { base?: string; multiple?: string }>();
+/**
+ * Generic helper to group items by base name, separating base vs _multiple variants.
+ */
+function groupByVariants<T>(
+  items: T[],
+  getName: (item: T) => string,
+): Map<string, { base?: T; multiple?: T }> {
+  const groups = new Map<string, { base?: T; multiple?: T }>();
 
-  for (const file of files) {
-    const name = path.basename(file, '.yaml');
-    const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
-    const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
+  for (const item of items) {
+    const name = getName(item);
+    const isMultiple = isMultipleVariant(name);
+    const baseName = isMultiple ? getBaseName(name) : name;
 
     const group = groups.get(baseName) ?? {};
     if (isMultiple) {
-      group.multiple = file;
+      group.multiple = item;
     } else {
-      group.base = file;
+      group.base = item;
     }
     groups.set(baseName, group);
   }
 
+  return groups;
+}
+
+function groupByBaseName(
+  files: string[],
+): Map<string, { base?: string; multiple?: string }> {
+  const groups = groupByVariants(files, (f) => path.basename(f, '.yaml'));
+
   // Filter: must have base, or promote _multiple-only to base
   const result = new Map<string, { base?: string; multiple?: string }>();
-  for (const [name, paths] of groups) {
-    if (paths.base) {
-      result.set(name, paths);
-    } else if (paths.multiple) {
+  for (const [name, { base, multiple }] of groups) {
+    if (base) {
+      result.set(name, { base, multiple });
+    } else if (multiple) {
       // Only _multiple exists, use it as base
-      result.set(`${name}${MULTIPLE_SUFFIX}`, { base: paths.multiple });
+      result.set(`${name}${MULTIPLE_SUFFIX}`, { base: multiple });
     }
   }
 
@@ -396,27 +408,7 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
-
-    // Group remote agents by base name (same pattern as local agents)
-    // This ensures consistency: both "criticize" and "criticize_multiple" from
-    // the database become a single entry with multiplePath set
-    const grouped = new Map<
-      string,
-      { base?: (typeof remotes)[0]; multiple?: (typeof remotes)[0] }
-    >();
-
-    for (const r of remotes) {
-      const isMultiple = isMultipleVariant(r.name);
-      const baseName = isMultiple ? getBaseName(r.name) : r.name;
-
-      const group = grouped.get(baseName) ?? {};
-      if (isMultiple) {
-        group.multiple = r;
-      } else {
-        group.base = r;
-      }
-      grouped.set(baseName, group);
-    }
+    const grouped = groupByVariants(remotes, (r) => r.name);
 
     // Build entries from grouped agents
     const entries: AgentEntry[] = [];
@@ -433,15 +425,12 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
       const category = isToolUse
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
-      // Derive agentType from category (toolUse category -> ToolUse type, otherwise CoT)
       const agentType = isToolUse ? AgentType.ToolUse : AgentType.CoT;
 
       entries.push({
         name: entryName,
         source: 'remote' as AgentSource,
         path: '',
-        // Set multiplePath to indicate multiple output support (for UI indicator)
-        // True if _multiple variant exists, or if this IS a _multiple-only agent
         multiplePath: multiple ? multiple.name : undefined,
         category,
         agentType,
@@ -588,34 +577,32 @@ const SOURCE_PRIORITY: AgentSource[] = [
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
  * Custom agents override built-in agents with the same name.
- * Remote agents are NEVER deduplicated - they always show separately.
+ * Remote agents use source:name keys to prevent deduplication.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
-  const byName = new Map<string, AgentEntry>();
-  const remoteEntries: AgentEntry[] = [];
+  const byKey = new Map<string, AgentEntry>();
 
   for (const entry of entries) {
-    // Remote agents never get deduplicated - always show them
-    if (entry.source === 'remote') {
-      remoteEntries.push(entry);
-      continue;
-    }
+    // Remote agents use source:name key to preserve uniqueness
+    // Local agents use just name to allow custom overriding builtIn
+    const key =
+      entry.source === 'remote' ? `${entry.source}:${entry.name}` : entry.name;
 
-    const existing = byName.get(entry.name);
+    const existing = byKey.get(key);
     if (!existing) {
-      byName.set(entry.name, entry);
+      byKey.set(key, entry);
       continue;
     }
 
-    // Keep the one with higher priority (lower index in SOURCE_PRIORITY)
+    // Keep higher priority source (lower SOURCE_PRIORITY index)
     const existingPriority = SOURCE_PRIORITY.indexOf(existing.source);
     const entryPriority = SOURCE_PRIORITY.indexOf(entry.source);
     if (entryPriority < existingPriority) {
-      byName.set(entry.name, entry);
+      byKey.set(key, entry);
     }
   }
 
-  return [...byName.values(), ...remoteEntries];
+  return [...byKey.values()];
 }
 
 function filterVisible(
@@ -626,12 +613,17 @@ function filterVisible(
 
   const autoShowRemote = getConfig<boolean>('texra.remoteAgents.autoShow', true);
 
-  return entries.filter((e) =>
-    // Remote agents auto-show if enabled, otherwise check config
-    (autoShowRemote && e.source === 'remote') ||
-    configured.has(createKey(e.source, e.name)) ||
-    configured.has(e.name)
-  );
+  function isVisible(entry: AgentEntry): boolean {
+    // Remote agents auto-show when setting is enabled
+    if (entry.source === 'remote' && autoShowRemote) return true;
+    // Check if explicitly configured by source:name or just name
+    return (
+      configured.has(createKey(entry.source, entry.name)) ||
+      configured.has(entry.name)
+    );
+  }
+
+  return entries.filter(isVisible);
 }
 
 function renderOptions(
