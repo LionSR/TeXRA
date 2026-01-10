@@ -614,12 +614,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           message.activeRunId,
           previousRunId,
         );
-        const isToolUse = state.activeSessionKind === 'toolUse';
         state.setActiveRunId(message.stream, preferredRun);
         dom.runSelector.setActiveRun(preferredRun);
-        // For toolUse sessions, show ALL groups (tool cycles) instead of filtering
-        // to a single run. Workflow sessions filter to show only the selected run.
-        dom.taskGroups.showRun(isToolUse ? null : preferredRun);
+        dom.taskGroups.showRun(preferredRun);
       } else {
         dom.taskGroups.showRun(null);
       }
@@ -780,10 +777,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           state.deleteRunMissingOutputs(targetStream, message.group.id);
         }
         dom.runSelector.setActiveRun(newRunId);
-        // For toolUse sessions, show ALL groups (conversation history) instead of
-        // filtering to only the new run. Workflow sessions filter to single run.
-        const isToolUse = state.activeSessionKind === 'toolUse';
-        dom.taskGroups.showRun(isToolUse ? null : newRunId);
+        dom.taskGroups.showRun(newRunId);
         // Pass newRunId directly to avoid redundant resolveActiveRunId calls
         this._refreshInstructionForActiveRun(newRunId);
         this._refreshOutputsForActiveRun(newRunId);
