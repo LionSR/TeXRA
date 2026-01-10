@@ -76,13 +76,43 @@ export function safeSetElementValue(id, value) {
   element.value = value;
 }
 
+/**
+ * Set checked state on an element (checkbox, radio, toggle button).
+ * VS Code web components require both property and attribute for visual sync.
+ * @param {HTMLElement} element - The element to update
+ * @param {boolean} checked - The checked state
+ */
+export function setElementCheckedState(element, checked) {
+  if (!element) return;
+  element.checked = checked;
+  element.toggleAttribute('checked', checked);
+  element.setAttribute('aria-checked', String(checked));
+}
+
 export function safeSetElementChecked(id, checked) {
   const element = document.getElementById(id);
   if (!element) {
     console.warn(`Element with id '${id}' not found`);
     return;
   }
-  element.checked = checked;
+  setElementCheckedState(element, checked);
+}
+
+/**
+ * Set the active radio in a group of vscode-radio elements.
+ * @param {HTMLElement} radioGroup - The radio group container
+ * @param {string} value - The value to select
+ * @param {string} [selector='vscode-radio'] - Selector for radio elements
+ */
+export function setRadioGroupValue(radioGroup, value, selector = 'vscode-radio') {
+  if (!radioGroup) return;
+  if ('value' in radioGroup) {
+    radioGroup.value = value;
+  }
+  for (const radio of radioGroup.querySelectorAll(selector)) {
+    const isActive = radio.value === value;
+    setElementCheckedState(radio, isActive);
+  }
 }
 
 export function safeGetElementById(id) {
