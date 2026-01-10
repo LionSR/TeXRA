@@ -7,7 +7,7 @@ import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
-import { agentConfigToTaskState } from '@utils/config';
+import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { HistoryIdMessageSchema } from '@webview/types/messages';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 
