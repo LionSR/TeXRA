@@ -21,6 +21,7 @@ import {
   safeSetElementChecked,
   setChevronIcon,
   setElementDisabled,
+  setElementCheckedState,
   isSelectLikeElement,
   getSelectOptionElements,
   setExpandedState,
@@ -351,16 +352,7 @@ export class MainViewState {
           const radioValue =
             radio.dataset.sessionType || radio.getAttribute('value');
           const isActive = radioValue === resolvedSessionType;
-          if ('checked' in radio) {
-            radio.checked = isActive;
-          }
-          if (isActive) {
-            radio.setAttribute('checked', '');
-            radio.setAttribute('aria-checked', 'true');
-          } else {
-            radio.removeAttribute('checked');
-            radio.setAttribute('aria-checked', 'false');
-          }
+          setElementCheckedState(radio, isActive);
         });
       } else {
         const buttons = toggleContainer.querySelectorAll('[data-session-type]');
