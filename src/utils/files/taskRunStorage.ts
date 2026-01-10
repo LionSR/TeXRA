@@ -317,11 +317,6 @@ export class TaskRunFileService {
     return WorkspaceFS.getPath();
   }
 
-  // Direct access to activeExecutionId for internal use
-  private get activeExecutionId(): ExecutionId | undefined {
-    return this.metadata.executionId;
-  }
-
   public getExecutionId(): ExecutionId | undefined {
     return this.metadata.executionId;
   }
@@ -331,10 +326,9 @@ export class TaskRunFileService {
   }
 
   private async ensureRunDirectory(): Promise<void> {
-    if (!this.activeExecutionId) {
-      return;
-    }
-    await ensureRunDir(this.activeExecutionId);
+    const executionId = this.metadata.executionId;
+    if (!executionId) return;
+    await ensureRunDir(executionId);
   }
 
   /**
@@ -355,7 +349,7 @@ export class TaskRunFileService {
       mirrorBaseFiles?: boolean;
     } = {},
   ): Promise<void> {
-    const executionId = this.activeExecutionId;
+    const executionId = this.metadata.executionId;
     if (!executionId) {
       return;
     }
@@ -371,22 +365,14 @@ export class TaskRunFileService {
     await this.ensureRunDirectory();
 
     const linkTargets = new Set<FileLocation>();
-    const registerLink = (candidate?: FileLocation | null) => {
-      if (!candidate) {
-        return;
-      }
-      linkTargets.add(candidate);
-    };
 
     if (options.mirrorBaseFiles !== false) {
-      // Use baseFiles directly - they're already FileLocations
-      for (const base of baseFiles) {
-        linkTargets.add(base);
-      }
+      baseFiles.forEach((base) => linkTargets.add(base));
     }
 
+    // Add extra link files, filtering out any null/undefined entries
     for (const extra of options.linkFiles ?? []) {
-      registerLink(extra);
+      if (extra) linkTargets.add(extra);
     }
 
     const captureTasks = baseFiles.map(async (target) => {
@@ -488,7 +474,7 @@ export class TaskRunFileService {
     }
 
     // Always route to run storage when executionId is available
-    const executionId = this.activeExecutionId;
+    const executionId = this.metadata.executionId;
     if (executionId) {
       const runDir = getRunDir(executionId);
       const runAbsolute = path.join(runDir, resolved.relativePath);
@@ -529,7 +515,7 @@ export class TaskRunFileService {
     }
 
     // Check if run storage is enabled
-    const executionId = this.activeExecutionId;
+    const executionId = this.metadata.executionId;
     if (executionId && this.useRunStorage) {
       const runDir = this.metadata.runDirectory;
       if (runDir) {
@@ -564,7 +550,7 @@ export class TaskRunFileService {
       return location;
     }
 
-    const executionId = this.activeExecutionId;
+    const executionId = this.metadata.executionId;
     if (!executionId) {
       return location;
     }
