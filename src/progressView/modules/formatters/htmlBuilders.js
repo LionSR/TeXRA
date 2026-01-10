@@ -73,7 +73,9 @@ export function wrapInPre(text, className = '') {
     const highlightedLines = text.split('\n').map((line) => {
       const diffClass = getDiffLineClass(line);
       const encoded = encodeHtml(line);
-      return diffClass ? `<span class="${diffClass}">${encoded}</span>` : encoded;
+      return diffClass
+        ? `<span class="${diffClass}">${encoded}</span>`
+        : encoded;
     });
     return `<pre${classAttr}>${highlightedLines.join('\n')}</pre>`;
   }
