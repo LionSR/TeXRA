@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Register handlers for VSCode messages after the DOM is ready
   messageHandler.setup();
   progressViewDomHandler.toolbar.render('workflow');
+  progressViewDomHandler.status.setSessionKind('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setup();
