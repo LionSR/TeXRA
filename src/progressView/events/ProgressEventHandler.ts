@@ -719,6 +719,13 @@ export class ProgressEventHandler {
           ));
 
       if (needsFullRefresh) {
+        // Ensure filter matches the stream's category to prevent it from being filtered out.
+        // This is important when resuming from WAITING state - the stream must remain visible.
+        const streamCategory = this.getStreamCategory(stream);
+        if (streamCategory) {
+          this.maybeUpdateFilterForCategory(streamCategory);
+        }
+
         // Include current status in refresh map so frontend displays it correctly.
         const statusesForRefresh = StreamStatusService.getAll();
         statusesForRefresh.set(stream, status);
@@ -733,6 +740,19 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStreamStatus(stream, status, lastTimestamp);
       }
     }
+  }
+
+  /**
+   * Get the session category for a stream from taskState or hints.
+   * Returns undefined if category cannot be determined.
+   */
+  private getStreamCategory(stream: string): AgentCategory | undefined {
+    const taskState = this.state.getTaskState(stream);
+    if (taskState?.agentConfig?.session?.agentCategory) {
+      return taskState.agentConfig.session.agentCategory;
+    }
+    const hints = this.state.getStreamHints(stream);
+    return hints.sessionCategory;
   }
 
   /**
