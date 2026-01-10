@@ -256,6 +256,8 @@ export class ProgressViewState {
     this.streamTodos = new Map();
     // Queued follow-ups storage by stream ID
     this.streamQueuedFollowUps = new Map();
+    // Follow-up textarea text storage by stream ID (persists draft text per tab)
+    this.streamFollowUpText = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -755,6 +757,55 @@ export class ProgressViewState {
    */
   clearAllQueuedFollowUps() {
     this.streamQueuedFollowUps.clear();
+  }
+
+  /**
+   * Set follow-up textarea text for a stream.
+   * @param {string} streamId - The stream ID
+   * @param {string} text - The textarea text
+   */
+  setFollowUpText(streamId, text) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    if (text && text.trim()) {
+      this.streamFollowUpText.set(targetStream, text);
+    } else {
+      this.streamFollowUpText.delete(targetStream);
+    }
+  }
+
+  /**
+   * Get follow-up textarea text for a stream.
+   * @param {string} streamId - The stream ID
+   * @returns {string} The textarea text or empty string
+   */
+  getFollowUpText(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return '';
+    }
+    return this.streamFollowUpText.get(targetStream) || '';
+  }
+
+  /**
+   * Clear follow-up textarea text for a specific stream.
+   * @param {string} streamId - The stream ID
+   */
+  clearFollowUpText(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return;
+    }
+    this.streamFollowUpText.delete(targetStream);
+  }
+
+  /**
+   * Clear all follow-up textarea text across all streams.
+   */
+  clearAllFollowUpText() {
+    this.streamFollowUpText.clear();
   }
 }
 
