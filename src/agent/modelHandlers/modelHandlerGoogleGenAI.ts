@@ -506,6 +506,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           throw err;
         }
         // Soft failure for token counting API errors - proceed without adjustment
+        // Log warning to match OpenAI/Anthropic handler behavior for consistency
         this.logger.warn(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );
@@ -1127,7 +1128,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
-    // Note: workspace state already updated above (lines 1062-1063)
     const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
