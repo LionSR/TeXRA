@@ -78,7 +78,7 @@ export class LogChannelRegistry {
   }
 
   private getKey(channel: string, isAgent: boolean): string {
-    return `${channel}::${isAgent ? 'agent' : 'shared'}`;
+    return isAgent ? `${channel}::agent` : `${channel}::shared`;
   }
 }
 

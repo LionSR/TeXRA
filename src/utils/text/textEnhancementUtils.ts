@@ -135,7 +135,10 @@ export async function polishTextWithAI(
         });
       }
       if (fileContext.mediaFile) {
-        fileEntries.push({ label: 'Figure File', value: fileContext.mediaFile });
+        fileEntries.push({
+          label: 'Figure File',
+          value: fileContext.mediaFile,
+        });
       }
 
       const arrays: Array<[string, string[] | undefined]> = [
