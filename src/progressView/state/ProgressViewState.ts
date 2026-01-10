@@ -515,6 +515,7 @@ export class ProgressViewState {
 
   // Stream cleanup operations
   async clearStream(stream: StreamTabId): Promise<void> {
+    // Clear persisted manager data in parallel
     await Promise.all([
       this._streamTabs.delete(stream),
       this._taskGroups.delete(stream),
@@ -522,25 +523,28 @@ export class ProgressViewState {
       this._usageStats.delete(stream),
       this._runInstructions.clearStream(stream),
     ]);
+
+    // Clear ephemeral state
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
-    this.clearStreamHints(stream);
-    this.clearActiveRun(stream);
-    this.clearTodos(stream);
-    this.clearContextState(stream);
+    this._streamHints.delete(stream);
+    this._activeRunIds.delete(stream);
+    this._todos.delete(stream);
+    this._contextState.delete(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
-      const remainingStreams = this._streamTabs.keys();
-      this._activeStream = remainingStreams[0] || '';
+      this._activeStream = this._streamTabs.keys()[0] || '';
       this.saveActiveStream();
     }
 
+    // Persist changes
     if (removedState) {
       this.saveTaskStates();
       this.cleanupToolUseAgentRegistry();
     }
     this.saveExecutionIds();
+    this.saveActiveRunIds();
   }
 
   async clearAll(): Promise<void> {
@@ -694,10 +698,10 @@ export class ProgressViewState {
 
   private loadRecord(key: WorkspaceStateKey): Record<string, unknown> {
     const current = this.storage.get<unknown>(key);
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      return current as Record<string, unknown>;
-    }
-    return {};
+    // Return as record only if it's a plain object (not array or null)
+    return current && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
   }
 
   /**
