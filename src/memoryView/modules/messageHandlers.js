@@ -25,7 +25,10 @@ export class MemoryViewMessageHandler extends BaseWebviewMessageHandler {
     memoryViewDomHandler.renderMemoryItems(message.items);
   }
 
-  handleUpdateMemoryEnabled(message) {
+  async handleUpdateMemoryEnabled(message) {
+    // Wait for vscode-checkbox web component to be defined before setting state
+    // Without this, setting checked on un-upgraded element can be lost during upgrade
+    await customElements.whenDefined('vscode-checkbox');
     safeSetElementChecked(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, message.enabled);
     setElementsDisabled(ELEMENT_IDS.MEMORY_ENABLED_TOGGLE, false);
   }
