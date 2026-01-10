@@ -17,6 +17,16 @@ import {
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
+
+/**
+ * Get the appropriate path from a FileLocation based on its kind.
+ * Uses relativePath for workspace files, absolutePath for external files.
+ */
+function getLocationPath(location: FileLocation): string {
+  return location.kind !== 'external'
+    ? location.relativePath
+    : location.absolutePath;
+}
 import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
@@ -122,10 +132,7 @@ export class TikzPictureManager {
       });
 
       const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-      const buildDir =
-        buildDirLocation.kind !== 'external'
-          ? buildDirLocation.relativePath
-          : buildDirLocation.absolutePath;
+      const buildDir = getLocationPath(buildDirLocation);
       const fileRelativePath = path.join(buildDir, filename);
 
       // Use fileService if available (run-storage aware), otherwise create workspace location
@@ -161,10 +168,7 @@ export class TikzPictureManager {
   ): Promise<FileLocation[]> {
     try {
       const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
-      const inputDir =
-        latexFile.kind !== 'external'
-          ? path.dirname(latexFile.relativePath)
-          : path.dirname(latexFile.absolutePath);
+      const inputDir = path.dirname(getLocationPath(latexFile));
       const buildRelativePath = path.join(inputDir, 'build', inputName);
 
       // Create build directory location (run-storage aware if fileService available)
@@ -211,10 +215,7 @@ export class TikzPictureManager {
           const pdfFilename = path
             .basename(texLocation.absolutePath)
             .replace(/\.tex$/, '.pdf');
-          const texDir =
-            texLocation.kind !== 'external'
-              ? path.dirname(texLocation.relativePath)
-              : path.dirname(texLocation.absolutePath);
+          const texDir = path.dirname(getLocationPath(texLocation));
           const pdfRelativePath = path.join(texDir, pdfFilename);
 
           const pdfLocation = this.fileService

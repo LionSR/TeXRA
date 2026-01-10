@@ -37,10 +37,7 @@ export async function selectFiles(
   options: FileDialogOptions,
 ): Promise<string[] | null> {
   const defaultUri =
-    options.defaultUri ??
-    (options.currentFile
-      ? getDefaultUri(options.currentFile)
-      : getDefaultUri(''));
+    options.defaultUri ?? getDefaultUri(options.currentFile ?? '');
   if (!defaultUri) {
     vscode.window.showErrorMessage('No workspace folder open');
     return null;
