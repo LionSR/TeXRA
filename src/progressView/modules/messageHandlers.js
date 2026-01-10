@@ -286,6 +286,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Apply run-scoped data to state using the provided setter.
+   * @param {string} stream - The stream to update
+   * @param {Object|undefined} data - Run data mapping runId → value
+   * @param {Function} setter - State setter function (stream, runId, value)
+   */
+  _applyRunData(stream, data, setter) {
+    if (!data) return;
+    for (const [runId, value] of Object.entries(data)) {
+      if (runId) setter.call(state, stream, runId, value);
+    }
+  }
+
+  /**
    * Update run-scoped metadata (instructions, usage, files, context) from message.
    * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
    * @param {string} stream - The stream to update
