@@ -104,82 +104,6 @@ export interface RunReflectionFlowResult {
 }
 
 // ============================================================================
-// Configuration Derivation
-// ============================================================================
-
-interface DerivedConfig {
-  useScratchpad: boolean;
-  shouldEnsureXmlStructure: boolean;
-  totalRounds: number;
-  outputExt: string;
-}
-
-/** XML structure mode lookup - explicit setting takes precedence. */
-const XML_STRUCTURE_MODE_MAP: Record<
-  NonNullable<AgentWorkflowSetting['xmlStructureMode']>,
-  boolean | 'scratchpad'
-> = {
-  always: true,
-  scratchpadOnly: 'scratchpad',
-  never: false,
-};
-
-/** Agent type defaults when xmlStructureMode is not set. */
-const AGENT_TYPE_XML_DEFAULTS: Record<string, boolean | 'scratchpad'> = {
-  CoT: true,
-  direct: 'scratchpad',
-};
-
-/** Determine if XML structure enforcement is needed based on settings and scratchpad usage. */
-function shouldEnforceXmlStructure(
-  setting: AgentWorkflowSetting,
-  useScratchpad: boolean,
-): boolean {
-  const mode =
-    setting.xmlStructureMode !== undefined
-      ? XML_STRUCTURE_MODE_MAP[setting.xmlStructureMode]
-      : (AGENT_TYPE_XML_DEFAULTS[setting.agentType] ?? false);
-
-  return mode === 'scratchpad' ? useScratchpad : mode;
-}
-
-/** Compute the total number of rounds based on settings and prompt. */
-function computeTotalRounds(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): number {
-  if (setting.maxRounds !== undefined) {
-    return setting.maxRounds;
-  }
-
-  if (setting.agentType === 'direct') {
-    return 1;
-  }
-
-  const requests = Array.isArray(prompt.userRequest)
-    ? prompt.userRequest
-    : prompt.userRequest
-      ? [prompt.userRequest]
-      : [];
-  return Math.max(setting.rounds ?? 2, requests.length);
-}
-
-/** Derive configuration values from settings and prompts. */
-function deriveConfig(
-  setting: AgentWorkflowSetting,
-  prompt: RunReflectionFlowInput['prompt'],
-): DerivedConfig {
-  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
-
-  return {
-    useScratchpad,
-    shouldEnsureXmlStructure: shouldEnforceXmlStructure(setting, useScratchpad),
-    totalRounds: computeTotalRounds(setting, prompt),
-    outputExt: useScratchpad ? 'xml' : setting.outputExt,
-  };
-}
-
-// ============================================================================
 // Flow Runner
 // ============================================================================
 
@@ -244,9 +168,45 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  // Derive configuration values
-  const { useScratchpad, shouldEnsureXmlStructure, totalRounds, outputExt } =
-    deriveConfig(setting, prompt);
+  // Derive configuration values inline (these helpers were only called once)
+  const useScratchpad = setting.prefills?.includes('<scratchpad>') ?? false;
+  const outputExt = useScratchpad ? 'xml' : setting.outputExt;
+
+  // Compute XML structure enforcement based on mode setting or agent type defaults
+  const xmlMode = setting.xmlStructureMode;
+  let shouldEnsureXmlStructure: boolean;
+  if (xmlMode === 'always') {
+    shouldEnsureXmlStructure = true;
+  } else if (xmlMode === 'never') {
+    shouldEnsureXmlStructure = false;
+  } else if (xmlMode === 'scratchpadOnly') {
+    shouldEnsureXmlStructure = useScratchpad;
+  } else {
+    // No explicit mode - use agent type defaults
+    const agentType = setting.agentType;
+    if (agentType === 'CoT') {
+      shouldEnsureXmlStructure = true;
+    } else if (agentType === 'direct') {
+      shouldEnsureXmlStructure = useScratchpad;
+    } else {
+      shouldEnsureXmlStructure = false;
+    }
+  }
+
+  // Compute total rounds
+  let totalRounds: number;
+  if (setting.maxRounds !== undefined) {
+    totalRounds = setting.maxRounds;
+  } else if (setting.agentType === 'direct') {
+    totalRounds = 1;
+  } else {
+    const requests = Array.isArray(prompt.userRequest)
+      ? prompt.userRequest
+      : prompt.userRequest
+        ? [prompt.userRequest]
+        : [];
+    totalRounds = Math.max(setting.rounds ?? 2, requests.length);
+  }
 
   // Create output file location getter
   const modelName = modelHandler.config.name;

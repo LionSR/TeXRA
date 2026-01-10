@@ -38,49 +38,6 @@ export interface ToolUseFlowContext<C = unknown> {
 }
 
 // ============================================================================
-// Tool Resolution
-// ============================================================================
-
-/**
- * Resolve tool definitions from agent settings, validating against registry.
- * Optionally injects the memory tool if enabled in user settings.
- */
-function resolveTools(
-  tools: AgentToolUseSetting['tools'],
-  toolRegistry: IToolRegistry,
-  logger: { warn: (msg: string) => void },
-): ToolDefinition[] {
-  const toolConfigs = Array.isArray(tools) ? tools : [];
-
-  const resolved: ToolDefinition[] = [];
-  const resolvedNames = new Set<string>();
-
-  for (const config of toolConfigs) {
-    const def = typeof config === 'string' ? { name: config } : config;
-
-    if (!toolRegistry.has(def.name)) {
-      logger.warn(`Tool "${def.name}" not found in registry`);
-      continue;
-    }
-
-    resolved.push(def);
-    resolvedNames.add(def.name);
-  }
-
-  // Auto-inject memory tool if enabled and not already configured
-  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
-    const memoryTool = toolRegistry.get('memory');
-    if (memoryTool) {
-      resolved.push(memoryTool.definition);
-    } else {
-      logger.warn('Memory tool not found in registry');
-    }
-  }
-
-  return resolved;
-}
-
-// ============================================================================
 // Factory Function
 // ============================================================================
 
@@ -93,7 +50,30 @@ export function createToolUseFlowContext<C = unknown>(
   const toolRegistry = init.toolRegistry ?? getDefaultToolRegistry();
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
 
-  const resolvedTools = resolveTools(setting.tools, toolRegistry, logger);
+  // Resolve tool definitions inline (previously a separate function called once)
+  const toolConfigs = Array.isArray(setting.tools) ? setting.tools : [];
+  const resolvedTools: ToolDefinition[] = [];
+  const resolvedNames = new Set<string>();
+
+  for (const config of toolConfigs) {
+    const def = typeof config === 'string' ? { name: config } : config;
+    if (!toolRegistry.has(def.name)) {
+      logger.warn(`Tool "${def.name}" not found in registry`);
+      continue;
+    }
+    resolvedTools.push(def);
+    resolvedNames.add(def.name);
+  }
+
+  // Auto-inject memory tool if enabled and not already configured
+  if (getToolUseMemoryEnabled() && !resolvedNames.has('memory')) {
+    const memoryTool = toolRegistry.get('memory');
+    if (memoryTool) {
+      resolvedTools.push(memoryTool.definition);
+    } else {
+      logger.warn('Memory tool not found in registry');
+    }
+  }
 
   const services: ToolUseServices<C> = {
     ...init,
