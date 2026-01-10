@@ -170,10 +170,13 @@ export class Status {
       statusIndicator.classList.add(cfg.className);
       statusIndicator.dataset.status = cfg.label;
 
+      // Filter to only buttons that exist in the current toolbar
+      const currentToolbarButtonIds = new Set(buttonIds);
       const elementsToEnable = cfg.enable
         .filter(
           (id) =>
-            this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id),
+            currentToolbarButtonIds.has(id) &&
+            (this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id)),
         )
         .map((id) => safeGetElementById(id))
         .filter(Boolean);
