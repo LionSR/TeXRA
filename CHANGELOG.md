@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.35.4] - 2026-01-08
+## [0.35.4] - 2026-01-10
 
 ### Features
 
@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - Added **context utilization display** showing percentage of context window used on each API call.
 - Added automatic conversation compaction for OpenAI Responses API to manage long sessions.
 - Added configurable context management with thinking block clearing for Anthropic models.
+- Added button to open progress view in a separate editor tab.
+- Chat mode is now the default session type with a simplified UI.
+- Memory tool is now enabled by default with a toolbar toggle.
+- Added diff syntax highlighting in tool output display.
+- Added cache token display (read and creation) in usage statistics.
+- Token counts now format as millions (M) when >= 100K for readability.
+- Model is now informed when users modify or reject suggested edits.
 
 ### Bug Fixes
 
@@ -20,6 +27,11 @@ All notable changes to this project will be documented in this file.
 - Fixed conversation messages not syncing after tool-use cycles.
 - Fixed log content clearing when falling back to default session kind.
 - Fixed abort errors not using correct SDK error type.
+- Fixed chat history clearing on follow-up after extension reload.
+- Fixed memory checkbox not being clickable.
+- Fixed thinking blocks clearing prematurely before token threshold was reached.
+- Fixed agent dropdown not syncing with session toggle.
+- Fixed cached tokens not being included in context measurement.
 
 ### Improvements
 
@@ -27,7 +39,8 @@ All notable changes to this project will be documented in this file.
 - Unified header styles across history, profile, and memory views.
 - Simplified run selector dropdown to show only timestamp.
 - Moved task-run temp storage from global to workspace storage for better isolation.
-- Updated dependencies: Supabase, MCP SDK.
+- Reduced token usage in tool results by using plain text instead of JSON.
+- Updated dependencies: Google GenAI, Supabase, VS Code types.
 
 ## [0.35.3] - 2026-01-05
 
