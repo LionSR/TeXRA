@@ -135,8 +135,11 @@ export async function handleClean(config: {
     return;
   }
 
-  const outputFiles = Array.isArray(config.outputFiles) ? config.outputFiles : [];
-  const useMultipleOutputs = config.useMultipleOutputs ?? outputFiles.length > 1;
+  const outputFiles = Array.isArray(config.outputFiles)
+    ? config.outputFiles
+    : [];
+  const useMultipleOutputs =
+    config.useMultipleOutputs ?? outputFiles.length > 1;
 
   const result =
     useMultipleOutputs && outputFiles.length > 0
