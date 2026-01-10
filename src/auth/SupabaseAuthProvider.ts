@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
+import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
@@ -40,6 +41,20 @@ const GitHubTokenExchangeSchema = z.object({
 });
 type GitHubTokenExchangeResponse = z.infer<typeof GitHubTokenExchangeSchema>;
 
+/** Schema for session data stored in VS Code SecretStorage. */
+const SupabaseSessionSchema = z.object({
+  id: z.string(),
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  account: z.object({
+    id: z.string(),
+    label: z.string(),
+  }),
+  expiresAt: z.number(),
+  useCustomRefresh: z.boolean().optional(),
+});
+type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
+
 /** Timeout for Edge Function requests (30 seconds) */
 const EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
@@ -51,22 +66,53 @@ const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
   ghs_: 'server-to-server token',
 };
 
-/** Session data stored in VS Code SecretStorage. */
-interface SupabaseSession {
-  id: string;
-  accessToken: string;
-  refreshToken: string;
-  account: {
-    id: string;
-    label: string; // email or user ID
+/**
+ * Parse and validate stored session data.
+ * Returns null if session data is missing or invalid.
+ * Logs warnings for corrupted data to help diagnose auth issues.
+ */
+function parseStoredSession(sessionData: string | undefined): SupabaseSession | null {
+  if (!sessionData) return null;
+  try {
+    const parsed = SupabaseSessionSchema.safeParse(JSON.parse(sessionData));
+    if (!parsed.success) {
+      logger.warn(
+        'SupabaseAuthProvider',
+        `Stored session has invalid schema: ${parsed.error.message}`,
+      );
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    logger.warn(
+      'SupabaseAuthProvider',
+      `Failed to parse stored session: ${toErrorMessage(error)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Convert Supabase's native Session to our storage format.
+ * Handles the snake_case → camelCase and seconds → milliseconds conversions.
+ */
+function toStorableSession(
+  nativeSession: SupabaseNativeSession,
+  options?: { useCustomRefresh?: boolean },
+): SupabaseSession {
+  return {
+    id: nativeSession.user.id,
+    accessToken: nativeSession.access_token,
+    refreshToken: nativeSession.refresh_token,
+    account: {
+      id: nativeSession.user.id,
+      label: nativeSession.user.email || nativeSession.user.id,
+    },
+    expiresAt: nativeSession.expires_at
+      ? nativeSession.expires_at * 1000
+      : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
+    useCustomRefresh: options?.useCustomRefresh,
   };
-  expiresAt: number; // timestamp
-  /**
-   * If true, use custom refresh endpoint instead of Supabase's auth.refreshSession().
-   * Sessions created via VS Code GitHub auth use custom refresh tokens stored in
-   * our sessions table, not Supabase's internal auth tables.
-   */
-  useCustomRefresh?: boolean;
 }
 
 /** Result of parsing auth callback URI */
@@ -125,6 +171,34 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
+   * Store session and notify listeners.
+   * Use for new logins where session change event should fire.
+   */
+  private async storeSessionAndNotify(session: SupabaseSession): Promise<void> {
+    await this.context.secrets.store(
+      SUPABASE_SESSION_KEY,
+      JSON.stringify(session),
+    );
+    getServerSideKeyService().clearAllCaches();
+    this._onDidChangeSessions.fire({
+      added: [this.toVSCodeSession(session)],
+      removed: [],
+      changed: [],
+    });
+  }
+
+  /**
+   * Store session quietly (no event).
+   * Use for session refresh where no session change notification is needed.
+   */
+  private async storeSession(session: SupabaseSession): Promise<void> {
+    await this.context.secrets.store(
+      SUPABASE_SESSION_KEY,
+      JSON.stringify(session),
+    );
+  }
+
+  /**
    * Ensure the access token is fresh, refreshing proactively if near expiry.
    * Called by SupabaseClient.getAccessToken() to avoid token expiration during
    * long-running operations (e.g., GPT-5 background mode).
@@ -134,11 +208,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async ensureFreshToken(): Promise<string | null> {
     try {
       const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-      if (!sessionData) {
+      const session = parseStoredSession(sessionData);
+      if (!session) {
         return null;
       }
 
-      const session: SupabaseSession = JSON.parse(sessionData);
       const timeUntilExpiry = session.expiresAt - Date.now();
 
       // Refresh proactively if token expires within threshold
@@ -212,8 +286,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     try {
       // Check if we already have a session (after claiming the lock)
-      const existingSession =
-        await this.context.secrets.get(SUPABASE_SESSION_KEY);
+      const existingSession = parseStoredSession(
+        await this.context.secrets.get(SUPABASE_SESSION_KEY),
+      );
       if (existingSession) {
         return;
       }
@@ -235,25 +310,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      // Store session and notify - wrapped in try to ensure cleanup on partial failure
+      // Store session and notify
       try {
-        await this.context.secrets.store(
-          SUPABASE_SESSION_KEY,
-          JSON.stringify(result.session),
-        );
-        // Clear server-side key access cache so it refetches with new auth state
-        getServerSideKeyService().clearAllCaches();
-
-        this._onDidChangeSessions.fire({
-          added: [this.toVSCodeSession(result.session)],
-          removed: [],
-          changed: [],
-        });
-
+        await this.storeSessionAndNotify(result.session);
         void vscode.window.showInformationMessage(
           `Signed in as ${result.session.account.label}`,
         );
-
         logger.info(
           'SupabaseAuthProvider',
           `Magic link sign-in successful for ${result.session.account.label}`,
@@ -360,13 +422,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
     const sessionData = await this.context.secrets.get(SUPABASE_SESSION_KEY);
-    if (!sessionData) {
+    const session = parseStoredSession(sessionData);
+    if (!session) {
       return [];
     }
 
     try {
-      const session: SupabaseSession = JSON.parse(sessionData);
-
       if (Date.now() >= session.expiresAt) {
         const refreshed = await this.refreshSession(session);
         if (!refreshed) {
@@ -559,26 +620,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         useCustomRefresh: true,
       };
 
-      // Store session
-      await this.context.secrets.store(
-        SUPABASE_SESSION_KEY,
-        JSON.stringify(session),
-      );
-
-      // Clear server-side key cache
-      getServerSideKeyService().clearAllCaches();
-
-      // Notify listeners
-      this._onDidChangeSessions.fire({
-        added: [this.toVSCodeSession(session)],
-        removed: [],
-        changed: [],
-      });
-
+      await this.storeSessionAndNotify(session);
       void vscode.window.showInformationMessage(
         `Signed in as ${session.account.label}`,
       );
-
       logger.info(
         'SupabaseAuthProvider',
         `VS Code GitHub auth successful for ${session.account.label}`,
@@ -704,18 +749,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               'Authentication cancelled or timed out. Try again.',
             );
           }
-          await this.context.secrets.store(
-            SUPABASE_SESSION_KEY,
-            JSON.stringify(session),
-          );
-          // Clear server-side key access cache so it refetches with new auth state
-          getServerSideKeyService().clearAllCaches();
-          this._onDidChangeSessions.fire({
-            added: [this.toVSCodeSession(session)],
-            removed: [],
-            changed: [],
-          });
-
+          await this.storeSessionAndNotify(session);
           return this.toVSCodeSession(session);
         },
       );
@@ -867,25 +901,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return null;
       }
 
-      const refreshed: SupabaseSession = {
-        id: data.session.user.id,
-        accessToken: data.session.access_token,
-        refreshToken: data.session.refresh_token,
-        account: {
-          id: data.session.user.id,
-          label: data.session.user.email || data.session.user.id,
-        },
-        expiresAt: data.session.expires_at
-          ? data.session.expires_at * 1000
-          : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-      };
-
-      // Update stored session
-      await this.context.secrets.store(
-        SUPABASE_SESSION_KEY,
-        JSON.stringify(refreshed),
-      );
-
+      const refreshed = toStorableSession(data.session);
+      await this.storeSession(refreshed);
       return refreshed;
     } catch (error) {
       logger.error(
@@ -905,29 +922,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        EDGE_FUNCTION_TIMEOUT_MS,
-      );
-
-      let response: Response;
-      try {
-        response = await fetch(GITHUB_TOKEN_REFRESH_URL, {
+      const response = await this.fetchWithTimeout(
+        GITHUB_TOKEN_REFRESH_URL,
+        {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: session.refreshToken }),
-          signal: controller.signal,
-        });
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          logger.warn('SupabaseAuthProvider', 'Token refresh timeout');
-          return null;
-        }
-        throw fetchError;
-      }
-      clearTimeout(timeoutId);
+        },
+        EDGE_FUNCTION_TIMEOUT_MS,
+        'Token refresh timeout',
+      );
 
       if (!response.ok) {
         logger.warn(
@@ -937,18 +941,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return null;
       }
 
-      // Parse and validate response (same schema as token exchange)
-      const rawData = await response.json();
-      const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
-      if (!parsed.success) {
-        logger.error(
-          'SupabaseAuthProvider',
-          `Token refresh response validation failed: ${parsed.error.message}`,
-        );
-        return null;
-      }
-
-      const data = parsed.data;
+      const data = await this.parseTokenExchangeResponse(response);
       const refreshed: SupabaseSession = {
         id: data.user.id,
         accessToken: data.access_token,
@@ -960,19 +953,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         expiresAt: data.expires_at
           ? data.expires_at * 1000
           : Date.now() + DEFAULT_SESSION_EXPIRY_MS,
-        useCustomRefresh: true, // Preserve flag
+        useCustomRefresh: true,
       };
 
-      // Update stored session
-      await this.context.secrets.store(
-        SUPABASE_SESSION_KEY,
-        JSON.stringify(refreshed),
-      );
-
-      logger.info(
-        'SupabaseAuthProvider',
-        'Token refreshed via custom endpoint',
-      );
+      await this.storeSession(refreshed);
+      logger.info('SupabaseAuthProvider', 'Token refreshed via custom endpoint');
       return refreshed;
     } catch (error) {
       logger.error(
