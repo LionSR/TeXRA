@@ -6,7 +6,6 @@ export {
   toPosixPath,
   getPathSegments,
   normalizeLatexPath,
-  getExtensionLowercase,
   hasExtension,
 } from './pathCore';
 export {
@@ -16,5 +15,5 @@ export {
   serializeError,
   type SerializedError,
 } from './stringCore';
-export { contentToString, isObject, type MessageContent } from './typeGuards';
+export { isObject } from './typeGuards';
 export { debounce, sleep, sleepWithAbort } from './async';

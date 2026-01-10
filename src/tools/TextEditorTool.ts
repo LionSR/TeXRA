@@ -26,16 +26,17 @@ import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { defineTool } from './core/define';
 import { ToolResult, ToolError } from './result';
 
-// Local imports - approval helpers
-
-// Local imports - logging
-
-// Local imports - filesystem utilities
-
 // Constants
 const CHANNEL = 'TextEditorTool';
 logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
+
+/** Maps API type versions to their corresponding tool names */
+const API_TYPE_TO_NAME = {
+  text_editor_20250429: 'str_replace_based_edit_tool',
+  text_editor_20250124: 'str_replace_editor',
+  text_editor_20241022: 'str_replace_editor',
+} as const;
 
 export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
@@ -81,10 +82,7 @@ export class TextEditorTool extends defineTool({
       | 'text_editor_20241022'
       | 'text_editor_20250429' = 'text_editor_20250124',
   ) {
-    const name =
-      apiType === 'text_editor_20250429'
-        ? 'str_replace_based_edit_tool'
-        : 'str_replace_editor';
+    const name = API_TYPE_TO_NAME[apiType];
     super({ name });
     this.apiType = apiType;
     this.name = name;
@@ -285,11 +283,8 @@ export class TextEditorTool extends defineTool({
         }
 
         initLine = startLine;
-        if (endLine === -1) {
-          fileContent = fileLines.slice(startLine - 1).join('\n');
-        } else {
-          fileContent = fileLines.slice(startLine - 1, endLine).join('\n');
-        }
+        const sliceEnd = endLine === -1 ? undefined : endLine;
+        fileContent = fileLines.slice(startLine - 1, sliceEnd).join('\n');
       }
 
       // Record read only after successful validation
@@ -360,7 +355,7 @@ export class TextEditorTool extends defineTool({
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        finalContent,
+        proposedContent,
         appliedContent,
       );
       const output = userDiffNote
@@ -478,7 +473,7 @@ export class TextEditorTool extends defineTool({
       // Prepare success message
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        newFileContent,
         finalContent,
       );
       const successIntro = `The file ${filePath} has been edited.`;
@@ -489,9 +484,10 @@ export class TextEditorTool extends defineTool({
       );
       const reviewMessage =
         'Review the changes and make sure they are as expected. Edit the file again if necessary.';
+      const baseMsg = `${successIntro} ${snippetOutput}${reviewMessage}`;
       const successMsg = userDiffNote
-        ? `${successIntro} ${snippetOutput}${reviewMessage}\n\n${userDiffNote}`
-        : `${successIntro} ${snippetOutput}${reviewMessage}`;
+        ? `${baseMsg}\n\n${userDiffNote}`
+        : baseMsg;
 
       return {
         summary: `Updated ${filePath}`,
@@ -597,24 +593,22 @@ export class TextEditorTool extends defineTool({
       const startLine = snippetStart + 1;
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        newFileContent,
         finalContent,
       );
 
       const successIntro = `The file ${filePath} has been edited.`;
+      const snippetOutput = this.makeOutput(
+        snippetText,
+        'a snippet of the edited file',
+        startLine,
+      );
       const reviewNote =
         'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
+      const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
       const successMsg = userDiffNote
-        ? `${successIntro} ${this.makeOutput(
-            snippetText,
-            'a snippet of the edited file',
-            startLine,
-          )}${reviewNote}\n\n${userDiffNote}`
-        : `${successIntro} ${this.makeOutput(
-            snippetText,
-            'a snippet of the edited file',
-            startLine,
-          )}${reviewNote}`;
+        ? `${baseMsg}\n\n${userDiffNote}`
+        : baseMsg;
 
       return {
         summary: `Inserted text into ${filePath}`,
@@ -688,7 +682,7 @@ export class TextEditorTool extends defineTool({
 
       const userDiffNote = formatUnifiedApprovalUserDiff(
         filePath,
-        approvedContent,
+        previousContent,
         finalContent,
       );
       const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;

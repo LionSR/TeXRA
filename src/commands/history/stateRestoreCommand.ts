@@ -40,28 +40,18 @@ async function restoreState(state: TaskState) {
       const webviewView = await getMainWebview(CHANNEL);
 
       if (webviewView) {
-        // Send the state directly to the webview
-        webviewView.webview.postMessage({
-          command: 'restoreState',
-          state,
-        });
-
-        logger.info(CHANNEL, 'State restored using direct webview access');
-        logger.info(CHANNEL, 'Main webview state restoration requested');
+        webviewView.webview.postMessage({ command: 'restoreState', state });
+        logger.info(CHANNEL, 'State restored via direct webview access');
         return;
-      } else {
-        await storeStateForLater(state);
       }
+      await storeStateForLater(state);
     } catch (error) {
       logger.warn(
         CHANNEL,
-        `Could not access webview directly: ${toErrorMessage(error)}`,
+        `Could not access webview: ${toErrorMessage(error)}`,
       );
-
       await storeStateForLater(state);
     }
-
-    logger.info(CHANNEL, 'Main webview state restoration requested');
   } catch (error) {
     await showLoggedErrorMessage(CHANNEL, 'Failed to restore state', error);
   }

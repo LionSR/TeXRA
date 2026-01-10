@@ -41,8 +41,5 @@ export function withToolFileInteractionContext<T>(
 export function getCurrentToolFileInteractionContext():
   | ToolFileInteractionContext
   | undefined {
-  if (contextStack.length === 0) {
-    return undefined;
-  }
   return contextStack.at(-1);
 }

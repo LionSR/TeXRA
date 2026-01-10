@@ -1,32 +1,26 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Type imports
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
-// Types
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-import { type StreamStatus } from '@common/constants/streamStatus';
-import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
+import type { StreamStatus } from '@common/constants/streamStatus';
+import type { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+import { AgentLogger } from '@logger/AgentLogger';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
+
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-
-// Internal imports
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { COMMANDS } from '@progressView/modules/constants.js';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
   RetryRequestPrompt,
   ToolEditApprovalPrompt,
 } from '@eventBus/types';
 import type { TodoItem, UpdateTaskGroupPayload } from '@eventBus/schemas';
-
-// Logger imports
-// Type imports
 
 /**
  * Manages webview updates for the progress view.
@@ -53,33 +47,14 @@ export class WebviewUpdater {
   static createInstructionUpdate(
     taskState?: TaskState,
   ): InstructionUpdate | undefined {
-    if (!taskState) {
+    const text = taskState?.agentConfig?.instruction?.trim();
+    if (!text) {
       return undefined;
     }
 
-    const text = taskState.agentConfig?.instruction ?? '';
-    const normalized = text.trim();
-    if (!normalized) {
-      return undefined;
-    }
-
-    const metadata = WebviewUpdater.computeInstructionMetadata(normalized);
-    const payload: InstructionUpdate = { text: normalized };
-    if (metadata) {
-      payload.metadata = metadata;
-    }
-    return payload;
-  }
-
-  private static computeInstructionMetadata(
-    text: string,
-  ): InstructionUpdate['metadata'] | undefined {
     const lineCount = text.split(/\r?\n/).length;
-    const shouldShowToggle = lineCount > 6 || text.length > 600;
-    if (!shouldShowToggle) {
-      return undefined;
-    }
-    return { showToggle: true };
+    const showToggle = lineCount > 6 || text.length > 600;
+    return showToggle ? { text, metadata: { showToggle: true } } : { text };
   }
 
   /**
@@ -100,9 +75,18 @@ export class WebviewUpdater {
 
   /**
    * Update log content for a specific stream.
-   * @param forceRebuild - Controls frontend DOM rebuild behavior:
-   *   - `true`: Full DOM rebuild (stream switch, data deletion, first load)
-   *   - `false`: Incremental update only (same stream, metadata changes)
+   *
+   * Action types:
+   * - `'render'` (default): Send data to display. Frontend detects stream switch
+   *   by comparing message.stream with its lastRenderedStream. If stream changed,
+   *   frontend clears and rebuilds. If same stream, frontend does incremental update.
+   * - `'clear'`: Explicitly clear DOM content (for stream deletion, no active stream).
+   *   Frontend always clears, even without messages.
+   *
+   * This design moves stream switch detection to the frontend (which tracks
+   * lastRenderedStream) and removes the need for backend to track render state.
+   *
+   * @param action - The action type: 'render' (default) or 'clear'
    */
   updateLogContent(
     stream: StreamTabId,
@@ -113,8 +97,13 @@ export class WebviewUpdater {
       activeRunId?: string | null;
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
+      contextState?: {
+        inputTokens: number;
+        contextWindow: number;
+        utilizationPercent: number;
+      };
     },
-    forceRebuild: boolean = false,
+    action: 'render' | 'clear' = 'render',
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -125,7 +114,8 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
-      forceRebuild,
+      contextState: extras?.contextState,
+      action,
     });
   }
 

@@ -2,24 +2,32 @@
 import { AgentLogger } from '@logger/AgentLogger';
 import { serializeError } from '@utils/core';
 
-/** Serialize an error for logging, preserving original error reference. */
-function serializeErrorForLog(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return { ...serializeError(error), error };
-  }
-  return { error };
-}
-
-// Shared logger for all event handlers - eliminates per-module logger instances
+// Shared logger for all event handlers
 const eventLogger = new AgentLogger('ProgressEvents');
 
+/** Serialize an error for logging, preserving original error reference. */
+function toErrorData(error: unknown): Record<string, unknown> {
+  return error instanceof Error
+    ? { ...serializeError(error), error }
+    : { error };
+}
+
+/** Check if a value is a thenable (has .catch method). */
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    typeof (value as PromiseLike<unknown>)?.then === 'function'
+  );
+}
+
+/** Log an error with module context. */
+function logError(moduleName: string, context: string, error: unknown): void {
+  eventLogger.error(`[${moduleName}] ${context}`, { data: toErrorData(error) });
+}
+
 /**
- * Wraps an async event handler with error logging.
- * Single source of truth for event error handling.
- *
- * @param moduleName - Module name for error context (e.g., 'LogEvents')
- * @param context - Error context message (e.g., 'failed to handle addLogMessage')
- * @param fn - The async handler function to wrap
+ * Wraps an event handler with error logging.
+ * Handles both sync and async handlers, logging any errors.
  */
 export function withEventErrorHandling(
   moduleName: string,
@@ -28,16 +36,12 @@ export function withEventErrorHandling(
 ): void {
   try {
     const result = fn();
-    if (result && typeof (result as Promise<unknown>).catch === 'function') {
-      void (result as Promise<unknown>).catch((error) => {
-        eventLogger.error(`[${moduleName}] ${context}`, {
-          data: serializeErrorForLog(error),
-        });
-      });
+    if (isThenable(result)) {
+      void Promise.resolve(result).catch((error) =>
+        logError(moduleName, context, error),
+      );
     }
   } catch (error) {
-    eventLogger.error(`[${moduleName}] ${context}`, {
-      data: serializeErrorForLog(error),
-    });
+    logError(moduleName, context, error);
   }
 }

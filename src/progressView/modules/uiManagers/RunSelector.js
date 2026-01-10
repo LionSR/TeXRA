@@ -16,71 +16,31 @@ export class RunSelector {
     this._changeHandler = this._handleChange.bind(this);
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
-    this._domReady = document.readyState !== 'loading';
-    this._initScheduled = false;
 
-    if (this._domReady) {
-      this._scheduleInitialize();
+    // Schedule initialization after DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this._initialize(), {
+        once: true,
+      });
     } else {
-      document.addEventListener(
-        'DOMContentLoaded',
-        () => {
-          this._domReady = true;
-          this.initialize();
-        },
-        { once: true },
-      );
+      queueMicrotask(() => this._initialize());
     }
   }
 
-  initialize() {
-    if (!this._domReady) {
-      this._initScheduled = false;
-      return;
-    }
-
-    this._initScheduled = false;
+  _initialize() {
     this._initializeDropdown();
     this._syncVisibility();
   }
 
-  _scheduleInitialize() {
-    if (this._initScheduled) {
-      return;
-    }
-
-    if (!this._domReady) {
-      return;
-    }
-
-    this._initScheduled = true;
-    queueMicrotask(() => {
-      if (!this._domReady) {
-        this._initScheduled = false;
-        return;
-      }
-      this.initialize();
-    });
-  }
-
   _initializeDropdown() {
-    if (!this._domReady) {
-      return;
-    }
-
     if (this._dropdown) {
       this._dropdown.removeEventListener('change', this._changeHandler);
       this._dropdown = null;
     }
 
-    const container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
-    if (container) {
-      this._container = container;
-    }
+    this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
-    if (!dropdown) {
-      return;
-    }
+    if (!dropdown) return;
 
     dropdown.addEventListener('change', this._changeHandler);
     this._dropdown = dropdown;
@@ -88,15 +48,7 @@ export class RunSelector {
   }
 
   _ensureDropdown() {
-    if (this._dropdown) {
-      return true;
-    }
-
-    if (!this._domReady) {
-      this._scheduleInitialize();
-      return false;
-    }
-
+    if (this._dropdown) return true;
     this._initializeDropdown();
     return Boolean(this._dropdown);
   }
@@ -251,25 +203,15 @@ export class RunSelector {
   }
 
   _getSortedRuns() {
+    const toTime = (val) => {
+      if (typeof val === 'number') return val;
+      if (!val) return 0;
+      const parsed = Date.parse(val);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
     return Array.from(this._runs.values()).sort((a, b) => {
-      const aTime =
-        typeof a.startTime === 'number'
-          ? a.startTime
-          : a.startTime
-            ? Date.parse(a.startTime)
-            : 0;
-      const bTime =
-        typeof b.startTime === 'number'
-          ? b.startTime
-          : b.startTime
-            ? Date.parse(b.startTime)
-            : 0;
-      const safeATime = Number.isNaN(aTime) ? 0 : aTime;
-      const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
-      if (safeATime === safeBTime) {
-        return a.id.localeCompare(b.id);
-      }
-      return safeATime - safeBTime;
+      const diff = toTime(a.startTime) - toTime(b.startTime);
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
     });
   }
 
@@ -301,13 +243,8 @@ export class RunSelector {
       this._ensureDropdown();
     }
 
-    if (!this._container && this._domReady) {
-      const containerElem = safeGetElementById(
-        ELEMENT_IDS.RUN_SELECTOR_CONTAINER,
-      );
-      if (containerElem) {
-        this._container = containerElem;
-      }
+    if (!this._container) {
+      this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     }
 
     const container = this._container;
@@ -339,6 +276,5 @@ export class RunSelector {
     this._onDidChange = null;
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
-    this._initScheduled = false;
   }
 }

@@ -29,6 +29,12 @@ const RECORDINGS_DIR = 'recordings';
 let activeRecordingProcess: Subprocess | null = null;
 let activeRecordingPath: string | null = null;
 
+/** Reset recording state to idle. */
+function resetRecordingState(): void {
+  activeRecordingProcess = null;
+  activeRecordingPath = null;
+}
+
 /**
  * Start recording audio from the microphone.
  * @param context Extension context for storage path access
@@ -113,14 +119,12 @@ export async function startRecording(
         } else {
           logger.info(CHANNEL, `Recording process completed successfully`);
         }
-        activeRecordingProcess = null;
-        activeRecordingPath = null;
+        resetRecordingState();
       })
       .catch((error) => {
         // This should not happen with reject: false, but handle it just in case
         logger.error(CHANNEL, `Sox process error: ${error.message}`);
-        activeRecordingProcess = null;
-        activeRecordingPath = null;
+        resetRecordingState();
       });
 
     // Capture stderr for debugging
@@ -134,8 +138,7 @@ export async function startRecording(
       CHANNEL,
       `Error in startRecording: ${getSdkErrorMessage(err)}`,
     );
-    activeRecordingProcess = null;
-    activeRecordingPath = null;
+    resetRecordingState();
     return { success: false, error: getSdkErrorMessage(err) };
   }
 }
@@ -161,8 +164,7 @@ export async function stopRecordingAndTranscribe(
 
     // Stop the recording process
     activeRecordingProcess.kill('SIGTERM');
-    activeRecordingProcess = null;
-    activeRecordingPath = null;
+    resetRecordingState();
 
     // Wait a bit for the file to be properly written
     await sleep(500);
@@ -205,8 +207,7 @@ export async function stopRecordingAndTranscribe(
       CHANNEL,
       `Error in stopRecordingAndTranscribe: ${getSdkErrorMessage(err)}`,
     );
-    activeRecordingProcess = null;
-    activeRecordingPath = null;
+    resetRecordingState();
     return { success: false, text: '', error: getSdkErrorMessage(err) };
   }
 }

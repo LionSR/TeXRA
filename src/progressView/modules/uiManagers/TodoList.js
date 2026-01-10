@@ -86,53 +86,49 @@ export class TodoList {
    * @returns {HTMLElement}
    */
   _createTodoItem(todo) {
+    const { status } = todo;
+    const isInProgress = status === TODO_STATUS.IN_PROGRESS;
+
     const item = document.createElement('div');
-    item.className = `todo-item ${STATUS_CLASSES[todo.status] || ''}`;
+    item.className = 'todo-item';
+    if (STATUS_CLASSES[status]) item.classList.add(STATUS_CLASSES[status]);
 
     const icon = document.createElement('i');
-    let iconClass = STATUS_ICONS[todo.status];
-    if (!iconClass) {
-      console.warn(
-        `[TodoList] Unknown todo status: "${todo.status}", using pending icon`,
-      );
-      iconClass = STATUS_ICONS[TODO_STATUS.PENDING];
-    }
-    // Add 'spin' as separate class for in-progress animation (codicon pattern)
-    const spinClass = todo.status === TODO_STATUS.IN_PROGRESS ? ' spin' : '';
-    icon.className = `codicon codicon-${iconClass}${spinClass} todo-item__icon`;
-    item.appendChild(icon);
+    icon.className = `codicon codicon-${STATUS_ICONS[status] ?? STATUS_ICONS[TODO_STATUS.PENDING]} todo-item__icon`;
+    if (isInProgress) icon.classList.add('spin');
 
     const content = document.createElement('span');
     content.className = 'todo-item__content';
-    content.textContent =
-      todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
-    item.appendChild(content);
+    content.textContent = isInProgress ? todo.activeForm : todo.content;
 
+    item.append(icon, content);
     return item;
+  }
+
+  /**
+   * Set container visibility state.
+   * @param {boolean} visible - Whether the container should be visible
+   * @private
+   */
+  _setVisible(visible) {
+    const elements = this._getElements();
+    if (elements) {
+      setVisibilityState(elements.container, visible);
+    }
   }
 
   /**
    * Show the todo list container (vscode-collapsible).
    */
   show() {
-    const elements = this._getElements();
-    if (!elements) {
-      return;
-    }
-
-    setVisibilityState(elements.container, true);
+    this._setVisible(true);
   }
 
   /**
    * Hide the todo list container (vscode-collapsible).
    */
   hide() {
-    const elements = this._getElements();
-    if (!elements) {
-      return;
-    }
-
-    setVisibilityState(elements.container, false);
+    this._setVisible(false);
   }
 
   /**

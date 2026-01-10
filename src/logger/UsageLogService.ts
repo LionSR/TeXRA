@@ -241,9 +241,8 @@ class UsageLogServiceImpl {
     this.config.enabled = false; // Prevent new entries during disposal
 
     // Wait for any in-flight flush to complete (max 5 seconds)
-    const maxWaitMs = 5000;
-    const startTime = Date.now();
-    while (this.isFlushing && Date.now() - startTime < maxWaitMs) {
+    const deadline = Date.now() + 5000;
+    while (this.isFlushing && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
 

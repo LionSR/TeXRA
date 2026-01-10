@@ -12,6 +12,7 @@ export const ELEMENT_IDS = {
   MEMORY_LIST: 'memoryList',
   REFRESH_MEMORY_BTN: 'refreshMemoryBtn',
   OPEN_MEMORY_FOLDER_BTN: 'openMemoryFolderBtn',
+  MEMORY_ENABLED_TOGGLE: 'memoryEnabledToggle',
 };
 
 // Text labels and messages

@@ -102,20 +102,16 @@ async function cleanupTempFiles(
 
 /**
  * Select the appropriate image processing tool
- * @returns Tool name ('magick' or 'gm') and command prefix
+ * @returns Tool name ('magick' or 'gm')
  */
-async function selectImageTool(): Promise<{ tool: string; prefix: string[] }> {
+async function selectImageTool(): Promise<'magick' | 'gm'> {
   const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
     ['magick', 'gm'],
     false,
   );
-  if (hasMagick) {
-    return { tool: 'magick', prefix: ['magick'] };
-  } else if (hasGm) {
-    return { tool: 'gm', prefix: ['gm'] };
-  } else {
-    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
-  }
+  if (hasMagick) return 'magick';
+  if (hasGm) return 'gm';
+  throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
 }
 
 /**
@@ -126,8 +122,8 @@ async function selectImageTool(): Promise<{ tool: string; prefix: string[] }> {
 async function getImageDimensions(
   imagePath: string,
 ): Promise<{ width: number; height: number }> {
-  const { prefix } = await selectImageTool();
-  const identifyArgs = [...prefix, 'identify', '-format', '%w %h', imagePath];
+  const tool = await selectImageTool();
+  const identifyArgs = [tool, 'identify', '-format', '%w %h', imagePath];
   const result = await executeCommand(identifyArgs, { channel: CHANNEL });
   if (!result.success || !result.stdout) {
     throw new Error(result.stderr || 'Failed to get image dimensions');
@@ -161,9 +157,11 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
     os.tmpdir(),
     `texra-resized-${crypto.randomUUID()}${ext}`,
   );
-  const { tool, prefix } = await selectImageTool();
+  const tool = await selectImageTool();
+  // ImageMagick v7+: use direct form (magick input -resize ... output)
+  // GraphicsMagick: requires 'convert' subcommand (gm convert input -resize ... output)
   const convertArgs = [
-    ...prefix,
+    tool,
     ...(tool === 'gm' ? ['convert'] : []),
     imagePath,
     '-resize',

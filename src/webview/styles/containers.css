@@ -14,9 +14,7 @@
 }
 
 .file-selection-group--disabled {
-  opacity: 0.6;
-  filter: grayscale(0.3);
-  pointer-events: none;
+  display: none;
 }
 
 /* LaTeX diffs section */

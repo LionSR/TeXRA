@@ -15,8 +15,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-// Local imports - logging
-
 const logger = new AgentLogger('TodoWriteTool');
 
 // Import todo schemas from single source of truth
@@ -26,6 +24,13 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@eventBus/schemas';
+
+/** Configuration for displaying todo status - icon and label for each status */
+const STATUS_DISPLAY: Record<TodoStatus, { icon: string; label: string }> = {
+  [TODO_STATUS.PENDING]: { icon: '○', label: 'PENDING' },
+  [TODO_STATUS.IN_PROGRESS]: { icon: '◐', label: 'IN PROGRESS' },
+  [TODO_STATUS.COMPLETED]: { icon: '●', label: 'COMPLETED' },
+};
 
 /**
  * Schema for the todo_write tool input.
@@ -133,42 +138,13 @@ Best practices:
 
     for (let i = 0; i < todos.length; i++) {
       const todo = todos[i];
-      const statusIcon = this.getStatusIcon(todo.status);
-      const statusLabel = this.getStatusLabel(todo.status);
-      lines.push(`${i + 1}. ${statusIcon} [${statusLabel}] ${todo.content}`);
+      const { icon, label } = STATUS_DISPLAY[todo.status];
+      lines.push(`${i + 1}. ${icon} [${label}] ${todo.content}`);
       if (todo.status === TODO_STATUS.IN_PROGRESS) {
         lines.push(`   → ${todo.activeForm}...`);
       }
     }
 
     return lines.join('\n');
-  }
-
-  /**
-   * Get a status icon for display.
-   */
-  private getStatusIcon(status: TodoStatus): string {
-    switch (status) {
-      case TODO_STATUS.PENDING:
-        return '○';
-      case TODO_STATUS.IN_PROGRESS:
-        return '◐';
-      case TODO_STATUS.COMPLETED:
-        return '●';
-    }
-  }
-
-  /**
-   * Get a human-readable status label.
-   */
-  private getStatusLabel(status: TodoStatus): string {
-    switch (status) {
-      case TODO_STATUS.PENDING:
-        return 'PENDING';
-      case TODO_STATUS.IN_PROGRESS:
-        return 'IN PROGRESS';
-      case TODO_STATUS.COMPLETED:
-        return 'COMPLETED';
-    }
   }
 }

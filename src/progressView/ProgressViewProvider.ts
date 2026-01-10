@@ -152,7 +152,6 @@ export class ProgressViewProvider
     super.cleanupView();
     this._sidebarReady = false;
     this._pendingUpdateOptions = null;
-    this.state.clearRenderedStreamTracking();
   }
 
   /**
@@ -187,8 +186,6 @@ export class ProgressViewProvider
 
     this._sidebarReady = false;
     this._pendingUpdateOptions = null;
-    // Clear rendered stream tracking to force rebuild - DOM state is stale after resolve
-    this.state.clearRenderedStreamTracking();
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -251,16 +248,18 @@ export class ProgressViewProvider
       theme,
     );
 
-    // Use state as single source of truth for stream switch detection
-    const isStreamSwitch = this.state.isStreamSwitch(activeStream);
-    const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
+    // Frontend detects stream switches using its own lastRenderedStream tracking.
+    // Backend just sends data with action: 'render', frontend decides if rebuild needed.
+    //
+    // Skip refresh when activeStream is empty but streams exist in state - this indicates
+    // a temporary filter mismatch (e.g., during resume flow race conditions).
+    // Calling refreshStreamSurface('') would send action: 'clear' and wipe the display.
+    const hasStreams = this.state.streamTabs.keys().length > 0;
+    const isFilterMismatch = !activeStream && hasStreams;
+    if (!isFilterMismatch) {
+      this.eventHandler.refreshStreamSurface(activeStream);
+    }
 
-    this.eventHandler.refreshStreamSurface(activeStream || '', {
-      forceRebuild: shouldForceRebuild,
-    });
-
-    // Mark stream as rendered for future switch detection
-    this.state.markStreamRendered(activeStream);
     this._pendingUpdateOptions = null;
   }
 
@@ -281,26 +280,32 @@ export class ProgressViewProvider
     this._pendingUpdateOptions = null;
     this.updateWebview({ forceRebuild: true });
 
-    if (this.webviewUpdater.isAvailable()) {
-      // Replay pending approval prompts
-      for (const prompt of this.pendingApprovalPrompts.values()) {
-        this.webviewUpdater.showToolEditApprovalPrompt(prompt);
-      }
-      this.webviewUpdater.updateToolEditApprovalState(
-        this.approvalBypassActive,
-      );
+    // Replay pending prompts and requests
+    this.replayPendingPrompts();
+  }
 
-      // Replay pending retry requests
-      for (const payload of this.pendingRetryRequests.values()) {
-        this.webviewUpdater.showRetryRequest(payload);
-      }
+  /**
+   * Replay pending approval prompts and retry requests to newly ready webview.
+   */
+  private replayPendingPrompts(): void {
+    if (!this.webviewUpdater.isAvailable()) {
+      return;
+    }
+
+    for (const prompt of this.pendingApprovalPrompts.values()) {
+      this.webviewUpdater.showToolEditApprovalPrompt(prompt);
+    }
+    this.webviewUpdater.updateToolEditApprovalState(this.approvalBypassActive);
+
+    for (const payload of this.pendingRetryRequests.values()) {
+      this.webviewUpdater.showRetryRequest(payload);
     }
   }
 
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.pendingApprovalPrompts.set(prompt.requestId, prompt);
 
-    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
+    if (this.canSendToWebview()) {
       this.webviewUpdater.showToolEditApprovalPrompt(prompt);
     }
   }
@@ -308,7 +313,7 @@ export class ProgressViewProvider
   public resolveToolEditApprovalPrompt(requestId: string): void {
     this.pendingApprovalPrompts.delete(requestId);
 
-    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
+    if (this.canSendToWebview()) {
       this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
     }
   }
@@ -316,7 +321,7 @@ export class ProgressViewProvider
   public updateToolEditApprovalBypassState(bypassActive: boolean): void {
     this.approvalBypassActive = bypassActive;
 
-    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
+    if (this.canSendToWebview()) {
       this.webviewUpdater.updateToolEditApprovalState(bypassActive);
     }
   }
@@ -326,7 +331,7 @@ export class ProgressViewProvider
   ): void {
     this.pendingRetryRequests.set(payload.streamId, payload);
 
-    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
+    if (this.canSendToWebview()) {
       this.webviewUpdater.showRetryRequest(payload);
     }
   }
@@ -334,9 +339,17 @@ export class ProgressViewProvider
   public resolveRetryRequest(streamId: string): void {
     this.pendingRetryRequests.delete(streamId);
 
-    if (this.isAnyViewReady() && this.webviewUpdater.isAvailable()) {
+    if (this.canSendToWebview()) {
       this.webviewUpdater.resolveRetryRequest(streamId);
     }
+  }
+
+  /**
+   * Check if webview is ready to receive messages.
+   * Combines readiness check with availability check.
+   */
+  private canSendToWebview(): boolean {
+    return this.isAnyViewReady() && this.webviewUpdater.isAvailable();
   }
 
   /**

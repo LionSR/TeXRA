@@ -96,6 +96,56 @@ export class FileLister {
     return this.workspacePath ?? null;
   }
 
+  /** Get file listing config for each file type */
+  private getListConfig(fileType: ListableFileType): {
+    extensions: string[];
+    ignoredExtensions: string[];
+    ignoredDirs: string[];
+    ignoredKeywords: string[];
+    ignoredFiles?: string[];
+  } | null {
+    switch (fileType) {
+      case 'input':
+        return {
+          extensions: getIncludedExtensions(fileType),
+          ignoredExtensions: this.ignoredFileExtensions,
+          ignoredDirs: [
+            ...this.ignoredDirectories,
+            ...this.ignoredInputDirectories,
+          ],
+          ignoredKeywords: this.ignoredKeywords,
+          ignoredFiles: this.ignoredInputFiles,
+        };
+      case 'reference':
+        return {
+          extensions: getIncludedExtensions(fileType),
+          ignoredExtensions: this.ignoredFileExtensions,
+          ignoredDirs: this.ignoredDirectories,
+          ignoredKeywords: this.ignoredKeywords,
+          ignoredFiles: this.ignoredInputFiles,
+        };
+      case 'auxiliary':
+        return {
+          extensions: getIncludedExtensions('auxiliary'),
+          ignoredExtensions: this.ignoredFileExtensions,
+          ignoredDirs: this.ignoredDirectories,
+          ignoredKeywords: [
+            ...this.ignoredKeywords,
+            ...this.ignoredAuxKeywords,
+          ],
+        };
+      case 'media':
+        return {
+          extensions: getIncludedExtensions('media'),
+          ignoredExtensions: [],
+          ignoredDirs: this.ignoredMediaDirs,
+          ignoredKeywords: this.ignoredKeywords,
+        };
+      case 'edited':
+        return null; // Handled separately by listEditedFiles
+    }
+  }
+
   public async list(fileType: ListableFileType): Promise<string[]> {
     const workspace = this.workspace;
     if (!workspace) {
@@ -103,49 +153,20 @@ export class FileLister {
       return [];
     }
 
-    switch (fileType) {
-      case 'input':
-        return getFilesRecursively(
-          workspace,
-          workspace,
-          getIncludedExtensions(fileType),
-          this.ignoredFileExtensions,
-          [...this.ignoredDirectories, ...this.ignoredInputDirectories],
-          this.ignoredKeywords,
-          this.ignoredInputFiles,
-        );
-      case 'reference':
-        return getFilesRecursively(
-          workspace,
-          workspace,
-          getIncludedExtensions(fileType),
-          this.ignoredFileExtensions,
-          this.ignoredDirectories,
-          this.ignoredKeywords,
-          this.ignoredInputFiles,
-        );
-      case 'auxiliary':
-        return getFilesRecursively(
-          workspace,
-          workspace,
-          getIncludedExtensions('auxiliary'),
-          this.ignoredFileExtensions,
-          this.ignoredDirectories,
-          [...this.ignoredKeywords, ...this.ignoredAuxKeywords],
-        );
-      case 'media':
-        return getFilesRecursively(
-          workspace,
-          workspace,
-          getIncludedExtensions('media'),
-          [],
-          this.ignoredMediaDirs,
-          this.ignoredKeywords,
-        );
-      case 'edited':
-        // Handled separately
-        return [];
+    const config = this.getListConfig(fileType);
+    if (!config) {
+      return [];
     }
+
+    return getFilesRecursively(
+      workspace,
+      workspace,
+      config.extensions,
+      config.ignoredExtensions,
+      config.ignoredDirs,
+      config.ignoredKeywords,
+      config.ignoredFiles,
+    );
   }
 
   public async listEditedFiles(baseFileName: string): Promise<string[]> {

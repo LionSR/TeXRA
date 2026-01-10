@@ -31,16 +31,22 @@ function isDefaultHiddenName(name: string): boolean {
   return DEFAULT_HIDDEN_NAMES.has(name);
 }
 
+function getFileTypeLabel(type: vscode.FileType): string {
+  switch (type) {
+    case vscode.FileType.Directory:
+      return 'dir';
+    case vscode.FileType.SymbolicLink:
+      return 'link';
+    case vscode.FileType.File:
+      return 'file';
+    default:
+      return 'other';
+  }
+}
+
 function formatEntry(name: string, type: vscode.FileType): string {
   const suffix = type === vscode.FileType.Directory ? '/' : '';
-  const label =
-    type === vscode.FileType.Directory
-      ? 'dir '
-      : type === vscode.FileType.SymbolicLink
-        ? 'link'
-        : type === vscode.FileType.File
-          ? 'file'
-          : 'other';
+  const label = getFileTypeLabel(type);
   return `${label.padEnd(4, ' ')} ${name}${suffix}`;
 }
 
@@ -65,11 +71,9 @@ export class LsTool extends defineTool({
     }
 
     const ignoreMatchers = input.ignore.map(createGlobMatcher);
-    const matchesCustomIgnore =
-      input.ignore.length === 0
-        ? () => false
-        : (entryPath: string) =>
-            ignoreMatchers.some((matcher) => matcher(entryPath));
+    // Empty array.some() returns false, so no special case needed
+    const matchesCustomIgnore = (entryPath: string): boolean =>
+      ignoreMatchers.some((matcher) => matcher(entryPath));
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(relative);
@@ -110,20 +114,17 @@ export class LsTool extends defineTool({
     }
 
     const entries = await WorkspaceFS.readDir(relative);
-    const filtered = entries.filter(([name, _type]) => {
-      const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
-      const entryRelative = resolvedChild.relative;
-      const entryPath = toPosixPath(entryRelative);
+    const filtered = entries.filter(([name]) => {
       if (isDefaultHiddenName(name)) {
         return false;
       }
-      if (gitignore.ignores(entryRelative)) {
-        return false;
-      }
-      if (matchesCustomIgnore(entryPath) || matchesCustomIgnore(name)) {
-        return false;
-      }
-      return true;
+      const resolvedChild = joinWorkspaceRelativePath(target.relative, name);
+      const entryPath = toPosixPath(resolvedChild.relative);
+      return (
+        !gitignore.ignores(resolvedChild.relative) &&
+        !matchesCustomIgnore(entryPath) &&
+        !matchesCustomIgnore(name)
+      );
     });
 
     const sorted = filtered.sort(([a], [b]) => a.localeCompare(b));

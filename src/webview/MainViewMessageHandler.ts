@@ -86,68 +86,68 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]:
         this.handleShowAgentHistory.bind(this),
 
-      // File selection commands
-      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m) =>
+      // File selection commands - delegated to FileManager
+      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: (m) =>
         this.fileManager.handleFileSelection(m),
-      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: async () =>
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
 
       // File selected commands
-      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: (m) =>
         this.fileManager.handleInputFileSelected(m),
-      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.MEDIA_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected(m),
-      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
         this.fileManager.handleGenericFileSelected(m),
 
       // Request file commands
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: (m) =>
         this.fileManager.handleRequestInputFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: (m) =>
         this.fileManager.handleRequestFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: (m) =>
         this.fileManager.handleRequestEditedFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: (m) =>
         this.fileManager.handleRequestBaseFile(m),
-      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: (m) =>
         this.fileManager.handleRequestDefaultOutputFiles(m),
 
       // Multiple file operations
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: (m) =>
         this.fileManager.handleSetMultipleFiles(m),
-      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: (m) =>
         this.fileManager.handleSelectMultipleFiles(m),
 
       // Other file operations
-      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
         this.fileManager.handleGetCurrentFile(m),
-      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
         this.fileManager.handleAddOpenedFiles(m.fileType),
 
       // Execution commands
-      [MAIN_VIEW_COMMANDS.MERGE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
         this.executionManager.handleFileOperation(m),
-      [MAIN_VIEW_COMMANDS.COMPARE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
         this.executionManager.handleFileOperation(m),
 
       // Settings commands
@@ -197,11 +197,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
       // Instruction commands
-      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m) =>
+      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
         this.instructionManager.handlePolishInstructionText(m),
-      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: async () =>
+      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: () =>
         this.instructionManager.handleTranscribeInstruction(),
-      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
         this.instructionManager.handleClipboardImage(m),
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
@@ -299,51 +299,51 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.recordingManager.stop(w),
 
       // File refresh and update operations
-      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async () =>
+      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
         this.fileManager.handleRefreshAllFiles(),
-      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
-      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: async (m) =>
+      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: (m) =>
         this.fileManager.handleUpdateFiles(m),
 
       // Git/diff operations
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m) =>
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: (m) =>
         this.diffManager.handleRequestRecentCommits(m),
-      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async () =>
+      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: () =>
         this.diffManager.handleRefreshCommits(),
-      [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
+      [MAIN_VIEW_COMMANDS.LATEXDIFF]: (m) =>
         this.diffManager.handleLatexdiff(m),
-      [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: async (m) =>
+      [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvc(m),
-      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: async (m) =>
+      [MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvcOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC]: (m) =>
         this.diffManager.handleLatexdiffvcOperation(m),
 
       // Housekeeping operations
-      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
         this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
         this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.INDENT_TEX]: async (m) =>
+      [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
         this.executionManager.handleHousekeeping(m),
-      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
         this.executionManager.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
         this.executionManager.handleSingleOperation(m),
-      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
         this.executionManager.handleMultipleOperation(m),
-      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: async (m) =>
+      [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
         this.executionManager.handleMultipleOperation(m),
 
       // Other operations
-      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: async (m) =>
+      [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
         this.executionManager.handleFileOperation(m),
     };
   }

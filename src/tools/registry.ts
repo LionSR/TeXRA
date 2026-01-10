@@ -1,6 +1,6 @@
 // Local imports - core types
 import type { IToolRegistry } from '@agent/core/ToolTypes';
-import { createToolRegistry } from '@agent/core/ToolTypes';
+import { MapToolRegistry } from '@agent/core/ToolTypes';
 
 // Local imports - model types
 import {
@@ -43,7 +43,7 @@ let defaultRegistryInstance: IToolRegistry | null = null;
  */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
-    defaultRegistryInstance = createToolRegistry({
+    defaultRegistryInstance = new MapToolRegistry({
       str_replace_editor: new TextEditorTool(),
       diagnostics: new DiagnosticsTool(),
       bash: new BashTool(),
@@ -115,31 +115,28 @@ export function resolveToolDefinitions(
   tools: RawToolConfig[],
   warnOnMissing?: (toolName: string) => void,
 ): ToolDefinition[] {
+  const registry = getDefaultToolRegistry();
+
   return tools.map((item): ToolDefinition => {
+    const name = typeof item === 'string' ? item : item.name;
+
+    if (!isValidToolName(name)) {
+      warnOnMissing?.(name);
+      return { name };
+    }
+
+    const tool = registry.get(name);
+    if (!tool) {
+      warnOnMissing?.(name);
+      if (typeof item === 'string') {
+        return { name };
+      }
+      return ToolDefinitionSchema.catch({ name }).parse(item);
+    }
+
     if (typeof item === 'string') {
-      // Validate tool name format - warn but preserve original name for debugging
-      if (!isValidToolName(item)) {
-        warnOnMissing?.(item);
-        return { name: item };
-      }
-      const registry = getDefaultToolRegistry();
-      const tool = registry.get(item);
-      if (!tool) {
-        warnOnMissing?.(item);
-        return { name: item };
-      }
       return tool.definition;
     }
-    // Validate tool name format for object form - warn but preserve original name
-    if (!isValidToolName(item.name)) {
-      warnOnMissing?.(item.name);
-      return { name: item.name };
-    }
-    const registry = getDefaultToolRegistry();
-    if (!registry.get(item.name)) {
-      warnOnMissing?.(item.name);
-    }
-    // Parse with fallback to minimal definition if validation fails
-    return ToolDefinitionSchema.catch({ name: item.name }).parse(item);
+    return ToolDefinitionSchema.catch({ name }).parse(item);
   });
 }

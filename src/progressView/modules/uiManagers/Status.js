@@ -8,6 +8,38 @@ import { progressViewState } from '../progressViewState.js';
 // Local imports - common helpers
 import { safeGetElementById, setElementsDisabled } from '@common/domUtils.js';
 
+// Buttons that require execution availability to be enabled
+const EXECUTION_DEPENDENT_BUTTONS = new Set([
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+  ELEMENT_IDS.RESUME_BTN,
+]);
+
+// Shared button sets to reduce duplication
+const ACTIVE_STREAM_BUTTONS = [
+  ELEMENT_IDS.STOP_STREAM_BTN,
+  ELEMENT_IDS.RESTORE_STATE_BTN,
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+];
+
+const IDLE_STREAM_BUTTONS = [
+  ELEMENT_IDS.RUN_NEW_BTN,
+  ELEMENT_IDS.RESUME_BTN,
+  ELEMENT_IDS.PACK_STREAM_BTN,
+  ELEMENT_IDS.CLEAN_STREAM_BTN,
+  ELEMENT_IDS.RESTORE_STATE_BTN,
+  ELEMENT_IDS.DIFF_STREAM_BTN,
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+];
+
+const READY_STREAM_BUTTONS = [
+  ELEMENT_IDS.RUN_NEW_BTN,
+  ELEMENT_IDS.PACK_STREAM_BTN,
+  ELEMENT_IDS.CLEAN_STREAM_BTN,
+  ELEMENT_IDS.RESTORE_STATE_BTN,
+  ELEMENT_IDS.DIFF_STREAM_BTN,
+  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+];
+
 /**
  * Manages status display and button states.
  */
@@ -17,67 +49,32 @@ export class Status {
       [STREAM_STATUS.RUNNING]: {
         className: 'is-running',
         label: 'Running',
-        enable: [
-          ELEMENT_IDS.STOP_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: ACTIVE_STREAM_BUTTONS,
       },
       [STREAM_STATUS.ERROR]: {
         className: 'is-error',
         label: 'Error',
-        enable: [
-          ELEMENT_IDS.RUN_NEW_BTN,
-          ELEMENT_IDS.RESUME_BTN,
-          ELEMENT_IDS.PACK_STREAM_BTN,
-          ELEMENT_IDS.CLEAN_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: IDLE_STREAM_BUTTONS,
       },
       [STREAM_STATUS.STOPPED]: {
         className: 'is-stopped',
         label: 'Stopped',
-        enable: [
-          ELEMENT_IDS.RUN_NEW_BTN,
-          ELEMENT_IDS.RESUME_BTN,
-          ELEMENT_IDS.PACK_STREAM_BTN,
-          ELEMENT_IDS.CLEAN_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: IDLE_STREAM_BUTTONS,
       },
       [STREAM_STATUS.READY]: {
         className: 'is-ready',
         label: 'Ready',
-        enable: [
-          ELEMENT_IDS.RUN_NEW_BTN,
-          ELEMENT_IDS.PACK_STREAM_BTN,
-          ELEMENT_IDS.CLEAN_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: READY_STREAM_BUTTONS,
       },
       [STREAM_STATUS.WAITING]: {
         className: 'is-waiting',
         label: 'Waiting for follow-up',
-        enable: [
-          ELEMENT_IDS.STOP_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: ACTIVE_STREAM_BUTTONS,
       },
       [STREAM_STATUS.RESUMING]: {
         className: 'is-resuming',
         label: 'Resuming',
-        enable: [
-          ELEMENT_IDS.STOP_STREAM_BTN,
-          ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-        ],
+        enable: ACTIVE_STREAM_BUTTONS,
       },
     };
 
@@ -92,27 +89,22 @@ export class Status {
   }
 
   _applyExecutionAvailability() {
-    const storageButton = safeGetElementById(ELEMENT_IDS.OPEN_TASK_STORAGE_BTN);
-    const resumeButton = safeGetElementById(ELEMENT_IDS.RESUME_BTN);
-
     const isAvailable = this._executionAvailable;
+    const buttonsToUpdate = [];
 
-    if (resumeButton) {
-      resumeButton.classList.toggle('toolbar-button--hidden', !isAvailable);
-      resumeButton.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+    for (const buttonId of EXECUTION_DEPENDENT_BUTTONS) {
+      const button = safeGetElementById(buttonId);
+      if (!button) continue;
+
+      button.classList.toggle('toolbar-button--hidden', !isAvailable);
+      button.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
       if (!isAvailable) {
-        setElementsDisabled([resumeButton], true);
+        buttonsToUpdate.push(button);
       }
     }
 
-    if (!storageButton) {
-      return;
-    }
-
-    storageButton.classList.toggle('toolbar-button--hidden', !isAvailable);
-    storageButton.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
-    if (!isAvailable) {
-      setElementsDisabled([storageButton], true);
+    if (buttonsToUpdate.length > 0) {
+      setElementsDisabled(buttonsToUpdate, true);
     }
   }
 
@@ -154,22 +146,13 @@ export class Status {
       statusIndicator.dataset.status = cfg.label;
 
       const elementsToEnable = cfg.enable
+        .filter(
+          (id) =>
+            this._executionAvailable || !EXECUTION_DEPENDENT_BUTTONS.has(id),
+        )
         .map((id) => safeGetElementById(id))
-        .filter((el) => {
-          if (!el) {
-            return false;
-          }
-          if (
-            el.id === ELEMENT_IDS.OPEN_TASK_STORAGE_BTN &&
-            !this._executionAvailable
-          ) {
-            return false;
-          }
-          if (el.id === ELEMENT_IDS.RESUME_BTN && !this._executionAvailable) {
-            return false;
-          }
-          return true;
-        });
+        .filter(Boolean);
+
       if (elementsToEnable.length > 0) {
         setElementsDisabled(elementsToEnable, false);
       }

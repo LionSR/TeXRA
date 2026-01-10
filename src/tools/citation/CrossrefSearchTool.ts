@@ -8,10 +8,12 @@ import {
 } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
-// Local imports - metadata
+// Local imports
 import { toErrorMessage } from '@common/errors';
-import { ToolError } from '@tools/result';
+// eslint-disable-next-line import/order -- grouped by semantic meaning
 import { defineTool } from '@tools/core/define';
+import { ToolError } from '@tools/result';
+import { pluralize } from '@tools/utils';
 
 // Local file imports
 import { CROSSREF_CONSTANTS } from './constants';
@@ -54,19 +56,13 @@ export class CrossrefSearchTool extends defineTool({
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
       rows: input.rows ?? CROSSREF_CONSTANTS.DEFAULT_ROWS,
+      ...(typeof input.offset === 'number' && { offset: input.offset }),
+      ...(input.sort && { sort: input.sort as WorkSortOptions }),
+      ...(input.order && {
+        order: input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC,
+      }),
+      ...(input.filter && { filter: input.filter }),
     };
-    if (typeof input.offset === 'number') {
-      options.offset = input.offset;
-    }
-    if (input.sort) {
-      options.sort = input.sort as WorkSortOptions;
-    }
-    if (input.order) {
-      options.order = input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC;
-    }
-    if (input.filter) {
-      options.filter = input.filter;
-    }
 
     let response: Awaited<ReturnType<typeof crossrefClient.works>>;
     try {
@@ -105,7 +101,7 @@ export class CrossrefSearchTool extends defineTool({
     };
 
     return {
-      summary: `Found ${results.length} Crossref result${results.length === 1 ? '' : 's'} for "${trimmedQuery}"`,
+      summary: `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
       output: JSON.stringify(payload, null, 2),
     };
   }

@@ -42,24 +42,11 @@ export function generateBackslashFixes(commands: string[]): {
 export function generateGroupedBackslashFixes(commandGroups: {
   [groupName: string]: string[];
 }): { [key: string]: string } {
-  const patterns: { [key: string]: string } = {};
-
-  // For each group, process all its commands
-  for (const [groupName, commands] of Object.entries(commandGroups)) {
-    // Add a comment for the group
-    if (commands.length > 0) {
-      // We're creating a fake pattern with a comment that will be visible
-      // when inspecting the patterns object, but won't affect replacements
-      patterns[`// == ${groupName} ==`] = `// ${commands.length} commands`;
-    }
-
-    // Add the actual patterns for this group
-    commands.forEach((cmd) => {
-      patterns[`\\\\${cmd}`] = `\\${cmd}`;
-    });
-  }
-
-  return patterns;
+  return Object.fromEntries(
+    Object.values(commandGroups)
+      .flat()
+      .map((cmd) => [`\\\\${cmd}`, `\\${cmd}`]),
+  );
 }
 
 /**

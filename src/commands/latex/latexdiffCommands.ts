@@ -127,9 +127,9 @@ async function openLatexdiffResult(
   return diffFilePath;
 }
 
-// Removed showLatexdiffError wrapper - using showLoggedMessageWithDocs directly
-
-export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
+export function registerLatexdiffCommands(
+  context: vscode.ExtensionContext,
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
     vscode.commands.registerCommand('texra.latexdiffvc', handleLatexdiffvc),

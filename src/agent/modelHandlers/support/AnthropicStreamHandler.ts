@@ -144,16 +144,18 @@ export class AnthropicStreamHandler {
    */
   private handleStreamEvent(event: BetaRawMessageStreamEvent): void {
     // Ignore events after finalization to prevent processing stale events
-    if (this.state.finalized) {
-      return;
-    }
+    if (this.state.finalized) return;
 
-    if (event.type === 'content_block_start') {
-      this.handleBlockStart(event);
-    } else if (event.type === 'content_block_delta') {
-      this.handleBlockDelta(event);
-    } else if (event.type === 'content_block_stop') {
-      this.handleBlockStop(event);
+    switch (event.type) {
+      case 'content_block_start':
+        this.handleBlockStart(event);
+        break;
+      case 'content_block_delta':
+        this.handleBlockDelta(event);
+        break;
+      case 'content_block_stop':
+        this.handleBlockStop(event);
+        break;
     }
   }
 
@@ -220,22 +222,26 @@ export class AnthropicStreamHandler {
   private handleBlockDelta(
     event: Extract<BetaRawMessageStreamEvent, { type: 'content_block_delta' }>,
   ): void {
-    if (event.delta.type === 'thinking_delta') {
-      this.thinkingStreams.get(event.index)?.append(event.delta.thinking);
-    } else if (event.delta.type === 'text_delta') {
-      this.state.outputStream?.append(event.delta.text);
-    } else if (event.delta.type === 'input_json_delta') {
-      // Accumulate input JSON for web search to get query (with size limit)
-      for (const [, searchData] of this.state.pendingSearches) {
-        if (searchData.index === event.index) {
-          // Apply size limit to prevent memory growth
-          if (searchData.input.length < MAX_SEARCH_INPUT_SIZE) {
-            const remaining = MAX_SEARCH_INPUT_SIZE - searchData.input.length;
-            searchData.input += event.delta.partial_json.slice(0, remaining);
+    switch (event.delta.type) {
+      case 'thinking_delta':
+        this.thinkingStreams.get(event.index)?.append(event.delta.thinking);
+        break;
+      case 'text_delta':
+        this.state.outputStream?.append(event.delta.text);
+        break;
+      case 'input_json_delta':
+        // Accumulate input JSON for web search to get query (with size limit)
+        for (const [, searchData] of this.state.pendingSearches) {
+          if (searchData.index === event.index) {
+            // Apply size limit to prevent memory growth
+            if (searchData.input.length < MAX_SEARCH_INPUT_SIZE) {
+              const remaining = MAX_SEARCH_INPUT_SIZE - searchData.input.length;
+              searchData.input += event.delta.partial_json.slice(0, remaining);
+            }
+            break;
           }
-          break;
         }
-      }
+        break;
     }
   }
 

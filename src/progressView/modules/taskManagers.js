@@ -24,48 +24,53 @@ export class TaskGroupDomManager {
 
   _createGroupElement(group) {
     const baseGroupElement = createFromTemplate('groupDetailsTemplate');
-    if (!baseGroupElement) {
-      return null;
-    }
+    if (!baseGroupElement) return null;
 
     const groupContainer = baseGroupElement.querySelector('.log-group-content');
-    if (!groupContainer) {
-      return null;
-    }
+    if (!groupContainer) return null;
+
     groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    let detailsElem;
+    // Root groups (runs) use the base element directly
     if (!group.parentGroupId) {
-      detailsElem = baseGroupElement;
-      detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-      detailsElem.classList.add('log-run');
-      detailsElem.dataset.runId = group.id;
-    } else {
-      const headerElement = this.headerFormatter.create(group);
-      if (!headerElement) {
-        return null;
-      }
-
-      detailsElem = document.createElement('details');
-      detailsElem.className = 'log-group';
-      detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-      detailsElem.appendChild(headerElement);
-      detailsElem.appendChild(groupContainer);
-
-      const isCollapsed = progressViewState.toggleStates.get(group.id);
-      detailsElem.open = isCollapsed !== true;
-
-      const toggleListener = () => {
-        progressViewState.toggleStates.set(group.id, !detailsElem.open);
-      };
-      detailsElem.addEventListener('toggle', toggleListener);
-      this.toggleListeners.set(group.id, toggleListener);
+      baseGroupElement.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+      baseGroupElement.classList.add('log-run');
+      baseGroupElement.dataset.runId = group.id;
+      this._registerGroupElement(group, baseGroupElement);
+      return baseGroupElement;
     }
 
-    progressViewState.taskGroups.set(group.id, group);
-    this.groupElements.set(group.id, detailsElem);
+    // Child groups need a header and collapsible details wrapper
+    const headerElement = this.headerFormatter.create(group);
+    if (!headerElement) return null;
 
+    const detailsElem = document.createElement('details');
+    detailsElem.className = 'log-group';
+    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+    detailsElem.appendChild(headerElement);
+    detailsElem.appendChild(groupContainer);
+
+    // Restore collapsed state: toggleStates stores whether collapsed (true = collapsed)
+    const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
+    detailsElem.open = !isCollapsed;
+    const toggleListener = () => {
+      progressViewState.toggleStates.set(group.id, !detailsElem.open);
+    };
+    detailsElem.addEventListener('toggle', toggleListener);
+    this.toggleListeners.set(group.id, toggleListener);
+
+    this._registerGroupElement(group, detailsElem);
     return detailsElem;
+  }
+
+  /**
+   * Register a group element in state and cache.
+   * @param {Object} group - Group data
+   * @param {HTMLElement} element - The DOM element
+   */
+  _registerGroupElement(group, element) {
+    progressViewState.taskGroups.set(group.id, group);
+    this.groupElements.set(group.id, element);
   }
 
   _resolveGroupContent(parentGroupId) {
@@ -337,26 +342,17 @@ export class TaskGroupDomManager {
     let latestTime = 0;
 
     for (const [id, element] of this.groupElements.entries()) {
-      if (!element) {
-        continue;
-      }
+      if (!element) continue;
 
       const group = progressViewState.taskGroups.get(id);
-      if (!group) {
-        continue;
-      }
+      if (!group) continue;
 
+      // Skip hidden root groups or collapsed child groups
       const isRootGroup = !group.parentGroupId;
-      if (isRootGroup) {
-        if (element.hidden) {
-          continue;
-        }
-      } else if (
-        !(element instanceof HTMLDetailsElement) ||
-        element.open !== true
-      ) {
-        continue;
-      }
+      const isVisible = isRootGroup
+        ? !element.hidden
+        : element instanceof HTMLDetailsElement && element.open === true;
+      if (!isVisible) continue;
 
       if (group.startTime > latestTime) {
         latestGroup = id;
