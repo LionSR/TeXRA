@@ -1364,10 +1364,407 @@ interface AgentInfo {
 
 ---
 
+## Component Mapping (vscode-elements)
+
+### Tab Layout
+```html
+<vscode-tabs>                   <!-- Tab container -->
+  <vscode-tab-header>           <!-- Tab buttons -->
+  <vscode-tab-panel>            <!-- Tab content panels -->
+</vscode-tabs>
+```
+
+### Form Components by Tab
+
+| UI Pattern | Component | Example Usage |
+|------------|-----------|---------------|
+| **Single selection** | `<vscode-single-select>` | Formatter dropdown, Math markup |
+| **Checkbox** | `<vscode-checkbox>` | Enable/disable toggles |
+| **Text input** | `<vscode-textfield>` | API keys, file paths |
+| **Multiline text** | `<vscode-textarea>` | TikZ template, agent instructions |
+| **Radio group** | `<vscode-radio-group>` | Routing mode, access mode |
+| **Collapsible section** | `<vscode-collapsible>` | Advanced options, provider details |
+| **Button** | `<vscode-button>` | Save, Browse, Create Agent |
+| **Badge** | `<vscode-badge>` | Category badges (workflow/toolUse) |
+
+### Form Layout Components
+```html
+<!-- Notion-style form row (no vscode-form-group for cleaner look) -->
+<div class="setting-row">
+  <span class="setting-label">Formatter</span>
+  <vscode-single-select>
+    <vscode-option value="latexindent">latexindent</vscode-option>
+    <vscode-option value="tex-fmt">tex-fmt</vscode-option>
+    <vscode-option value="none">none</vscode-option>
+  </vscode-single-select>
+</div>
+
+<!-- Checkbox row -->
+<div class="setting-row">
+  <vscode-checkbox id="showWarning">
+    Show warning if latexindent is not installed
+  </vscode-checkbox>
+</div>
+
+<!-- File path row with browse button -->
+<div class="setting-row">
+  <span class="setting-label">Config file</span>
+  <div class="setting-input-group">
+    <vscode-textfield placeholder="/path/to/config"></vscode-textfield>
+    <vscode-button appearance="secondary">Browse</vscode-button>
+  </div>
+</div>
+```
+
+### Models Tab Components
+- `<vscode-collapsible>` - Provider accordions (Anthropic, OpenAI, etc.)
+- `<vscode-checkbox>` - Model enable/disable
+- `<vscode-badge>` - Capability icons, status indicators
+
+### Agents Tab Components
+- `<vscode-checkbox>` - Agent enable/disable
+- `<vscode-badge>` - Category badges (workflow/toolUse), source badges
+- `<vscode-button>` - Create Agent, Edit, Delete
+- `<vscode-single-select>` - Category dropdown, inheritance dropdown
+- `<vscode-textarea>` - Agent instructions
+
+### LaTeX Tab Components
+- `<vscode-single-select>` - Formatter, math markup
+- `<vscode-checkbox>` - Boolean settings
+- `<vscode-textfield>` - File paths, regex patterns
+- `<vscode-textarea>` - TikZ template
+- `<vscode-collapsible>` - Advanced sections
+
+### Profile Tab Components
+- `<vscode-radio-group>` - Access mode, routing mode
+- `<vscode-textfield type="password">` - API keys
+- `<vscode-button>` - Sign In/Out, Configure, Save
+- `<vscode-collapsible>` - Provider details
+
+---
+
+## Code Reuse Patterns
+
+### Base Classes (Extend Existing Infrastructure)
+
+```
+src/settingsView/
+├── SettingsViewProvider.ts         # extends BaseWebviewProvider
+├── SettingsViewMessageHandler.ts   # extends BaseViewMessageHandler
+├── SettingsViewContentProvider.ts  # extends BaseViewContentProvider
+```
+
+### Provider Pattern
+```typescript
+// SettingsViewProvider.ts
+export class SettingsViewProvider extends BaseWebviewProvider
+    implements vscode.WebviewViewProvider {
+  public static readonly viewType = 'texra.settingsView';
+
+  protected contentProvider: SettingsViewContentProvider;
+  protected messageHandler: SettingsViewMessageHandler;
+
+  constructor(context: vscode.ExtensionContext) {
+    super(context);
+    this.contentProvider = new SettingsViewContentProvider(context);
+    this.messageHandler = new SettingsViewMessageHandler(context);
+  }
+
+  public resolveWebviewView(webviewView: vscode.WebviewView): void {
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: getSharedLocalResourceRoots(this.context, 'settingsView'),
+    };
+    super.resolveWebviewViewInternal(webviewView);
+  }
+
+  /** Open settings to specific tab */
+  public async showSettings(tab?: SettingsTab): Promise<void> {
+    const isNew = this.createOrShowPanel({
+      viewType: SettingsViewProvider.viewType,
+      title: 'TeXRA Settings',
+      viewPath: 'settingsView',
+    });
+    if (tab) {
+      await this.messageHandler.selectTab(this._view?.webview, tab);
+    }
+  }
+}
+```
+
+### Module Descriptors Pattern
+```typescript
+// SettingsViewContentProvider.ts
+const SETTINGS_VIEW_MODULES = [
+  { key: 'settingsViewStateUri', path: 'modules/settingsViewState.js' },
+  { key: 'modelsTabUri', path: 'modules/tabs/ModelsTab.js' },
+  { key: 'agentsTabUri', path: 'modules/tabs/AgentsTab.js' },
+  { key: 'latexTabUri', path: 'modules/tabs/LatexTab.js' },
+  { key: 'memoryTabUri', path: 'modules/tabs/MemoryTab.js' },
+  { key: 'historyTabUri', path: 'modules/tabs/HistoryTab.js' },
+  { key: 'profileTabUri', path: 'modules/tabs/ProfileTab.js' },
+] as const;
+
+export class SettingsViewContentProvider extends BaseViewContentProvider {
+  constructor(context: vscode.ExtensionContext) {
+    super(context, 'SettingsView', [...SETTINGS_VIEW_MODULES]);
+  }
+  protected getViewPath(): string { return 'settingsView'; }
+}
+```
+
+### Tab Manager Pattern (Frontend)
+```javascript
+// modules/tabs/BaseTab.js - Abstract base for all tabs
+export class BaseTab {
+  constructor(containerId) {
+    this.container = document.getElementById(containerId);
+  }
+
+  render(data) { throw new Error('Implement render()'); }
+
+  dispose() {
+    // Clean up event listeners
+  }
+
+  // Shared helpers
+  createSettingRow(label, control) {
+    const row = document.createElement('div');
+    row.className = 'setting-row';
+    row.innerHTML = `<span class="setting-label">${label}</span>`;
+    row.appendChild(control);
+    return row;
+  }
+
+  createCheckbox(id, label, checked) {
+    const checkbox = document.createElement('vscode-checkbox');
+    checkbox.id = id;
+    checkbox.checked = checked;
+    checkbox.textContent = label;
+    return checkbox;
+  }
+
+  createSelect(id, options, value) {
+    const select = document.createElement('vscode-single-select');
+    select.id = id;
+    options.forEach(opt => {
+      const option = document.createElement('vscode-option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      if (opt.value === value) option.selected = true;
+      select.appendChild(option);
+    });
+    return select;
+  }
+}
+```
+
+### Shared CSS Variables (extend common.css)
+```css
+/* settingsView/styles/index.css */
+@import '../../common/styles/common.css';
+
+/* Notion-style settings layout */
+.settings-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--spacing-large);
+}
+
+.section {
+  padding: var(--spacing-large) 0;
+}
+
+.section + .section {
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+.section-header {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: var(--spacing-medium);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-small) 0;
+  min-height: 32px;
+}
+
+.setting-label {
+  flex: 0 0 160px;
+  color: var(--vscode-foreground);
+}
+
+.setting-row vscode-single-select,
+.setting-row vscode-textfield {
+  flex: 1;
+  max-width: 300px;
+}
+
+.setting-input-group {
+  display: flex;
+  gap: var(--spacing-small);
+  flex: 1;
+  max-width: 400px;
+}
+
+.setting-input-group vscode-textfield {
+  flex: 1;
+}
+
+/* Hover actions (Notion-style) */
+.item-row .actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.item-row:hover .actions {
+  opacity: 1;
+}
+```
+
+### Message Handler Composition
+```typescript
+// SettingsViewMessageHandler.ts
+export class SettingsViewMessageHandler extends BaseViewMessageHandler<...> {
+  // Compose handlers from existing views where possible
+  private historyHandlers: HistoryHandlers;
+  private profileHandlers: ProfileHandlers;
+
+  constructor(context: vscode.ExtensionContext) {
+    super('SettingsView');
+    this.historyHandlers = new HistoryHandlers(context);
+    this.profileHandlers = new ProfileHandlers(context);
+  }
+
+  protected createHandlers(): Record<string, MessageHandler<...>> {
+    return {
+      // Models tab
+      [SETTINGS_COMMANDS.GET_MODELS_DATA]: this.handleGetModels.bind(this),
+      [SETTINGS_COMMANDS.SAVE_ENABLED_MODELS]: this.handleSaveModels.bind(this),
+
+      // Agents tab
+      [SETTINGS_COMMANDS.GET_AGENTS_DATA]: this.handleGetAgents.bind(this),
+      [SETTINGS_COMMANDS.SAVE_ENABLED_AGENTS]: this.handleSaveAgents.bind(this),
+
+      // LaTeX tab (direct VS Code config read/write)
+      [SETTINGS_COMMANDS.GET_LATEX_DATA]: this.handleGetLatex.bind(this),
+      [SETTINGS_COMMANDS.SAVE_LATEX_SETTING]: this.handleSaveLatex.bind(this),
+
+      // Delegate to existing handlers
+      ...this.historyHandlers.getHandlers(),
+      ...this.profileHandlers.getHandlers(),
+    };
+  }
+}
+```
+
+### Reducing Boilerplate: Setting Renderer Factory
+```javascript
+// modules/utils/SettingRenderer.js
+export const SettingRenderer = {
+  /** Render a dropdown setting row */
+  dropdown(id, label, options, value, onChange) {
+    return `
+      <div class="setting-row">
+        <span class="setting-label">${label}</span>
+        <vscode-single-select id="${id}" value="${value}">
+          ${options.map(o => `<vscode-option value="${o.value}">${o.label}</vscode-option>`).join('')}
+        </vscode-single-select>
+      </div>
+    `;
+  },
+
+  /** Render a checkbox setting row */
+  checkbox(id, label, checked, description) {
+    return `
+      <div class="setting-row setting-row--checkbox">
+        <vscode-checkbox id="${id}" ${checked ? 'checked' : ''}>
+          ${label}
+        </vscode-checkbox>
+        ${description ? `<span class="setting-description">${description}</span>` : ''}
+      </div>
+    `;
+  },
+
+  /** Render a file path setting row */
+  filePath(id, label, value, placeholder) {
+    return `
+      <div class="setting-row">
+        <span class="setting-label">${label}</span>
+        <div class="setting-input-group">
+          <vscode-textfield id="${id}" value="${value}" placeholder="${placeholder}"></vscode-textfield>
+          <vscode-button appearance="secondary" data-browse="${id}">Browse</vscode-button>
+        </div>
+      </div>
+    `;
+  },
+
+  /** Render a section with settings */
+  section(title, settingsHtml) {
+    return `
+      <div class="section">
+        <div class="section-header">${title}</div>
+        ${settingsHtml}
+      </div>
+    `;
+  }
+};
+```
+
+---
+
+## LaTeX Settings Grouping
+
+Based on actual `package.json` configuration (14 settings total):
+
+### Group 1: Formatter (4 settings)
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.formatter` | `<vscode-single-select>` (latexindent/tex-fmt/none) |
+| `texra.latex.latexindentConfig` | `<vscode-textfield>` + Browse |
+| `texra.latex.texfmtConfig` | `<vscode-textfield>` + Browse |
+| `texra.latex.showLatexindentWarning` | `<vscode-checkbox>` |
+
+### Group 2: LaTeXdiff (4 settings)
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latexdiff.mathMarkup` | `<vscode-single-select>` (off/whole/coarse/fine) |
+| `texra.latexdiff.timeoutMs` | `<vscode-textfield type="number">` |
+| `texra.latexdiff.pictureEnvironments` | `<vscode-textfield>` (regex) |
+| `texra.latexdiff.generateBetweenRoundDiffs` | `<vscode-checkbox>` |
+
+### Group 3: TikZ Figures (3 settings)
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.tikzInputDirectory` | `<vscode-textfield>` + Browse |
+| `texra.latex.includeWorkspaceInTexinputs` | `<vscode-checkbox>` |
+| `texra.latex.tikzTemplate` | `<vscode-collapsible>` + `<vscode-textarea>` |
+
+### Group 4: Replacements (5 settings) - Collapsible Advanced
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.wrapCritiqueInAlign` | `<vscode-checkbox>` |
+| `texra.latex.enabledReplacements` | Checkbox group (14 options) |
+| `texra.latex.enabledReplacementsRegex` | Checkbox group (6 options) |
+| `texra.latex.customReplacements` | `<vscode-collapsible>` + JSON editor |
+| `texra.latex.customReplacementsRegex` | `<vscode-collapsible>` + JSON editor |
+
+---
+
 ## References
 
 - VS Code Elements: `@vscode-elements/elements`
-  - `vscode-tabs`, `vscode-tab-header`, `vscode-tab-panel`
-  - `vscode-collapsible`, `vscode-checkbox`, `vscode-button`
+  - Tabs: `vscode-tabs`, `vscode-tab-header`, `vscode-tab-panel`
+  - Forms: `vscode-single-select`, `vscode-checkbox`, `vscode-textfield`, `vscode-textarea`
+  - Layout: `vscode-collapsible`, `vscode-form-group` (avoid for Notion-style)
+  - Actions: `vscode-button`, `vscode-badge`
+- Base Classes: `src/common/webview/Base*.ts`
+- Shared Styles: `src/common/styles/common.css`
 - LLM Zoo: Model metadata source
-- Existing views: `src/profileView/`, `src/historyView/`
+- Existing views: `src/profileView/`, `src/historyView/`, `src/memoryView/`
