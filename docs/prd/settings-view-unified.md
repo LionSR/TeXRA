@@ -271,62 +271,232 @@ const RECOMMENDED_MODELS = [
 
 ### Profile Tab
 
-**Purpose:** Account management and API keys.
+**Purpose:** Account management, API provider configuration, and routing settings.
 
-**Layout:**
+**Layout (Logged In):**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
+│  ACCOUNT                                                       │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  👤 user@example.com                        [Sign Out]  │    │
 │  │     Pro Plan • Ultra Tier                               │    │
 │  │     Access expires: Feb 15, 2026                        │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
-│  MODEL ACCESS                                                  │
+│  MODEL ACCESS MODE                                             │
 │  ─────────────────────────────────────────────────────────────  │
-│  ○ Use Included Access                                         │
+│  ● Use Included Access                                         │
 │    Works automatically. No setup needed.                       │
+│    ▶ View included providers & models                          │
 │                                                                 │
-│  ● Use My Own API Keys                                         │
-│    Provide your own API keys from providers.                   │
+│  ○ Use My Own API Keys                                         │
+│    Configure providers below.                                  │
 │                                                                 │
-│  ▶ View included providers & models                            │
-│                                                                 │
-│  API KEYS                                                      │
 │  ─────────────────────────────────────────────────────────────  │
-│  Anthropic    ●●●●●●●●sk-1234              [Edit] [Delete]    │
-│  OpenAI       ●●●●●●●●sk-5678              [Edit] [Delete]    │
-│  Google       Not configured                      [Add Key]    │
-│  DeepSeek     Not configured                      [Add Key]    │
 │                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-
-─── or if not logged in ───
-
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Sign in to sync settings and access premium features   │    │
-│  │                                         [Sign In]       │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  API KEYS (Local Mode)                                         │
+│  API PROVIDERS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
-│  Configure API keys to use AI models without an account.       │
+│  Configure API keys and endpoints for each provider.           │
 │                                                                 │
-│  Anthropic    Not configured                      [Add Key]    │
-│  OpenAI       Not configured                      [Add Key]    │
-│  ...                                                           │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Anthropic                                        [Edit]  │  │
+│  │ ✓ API Key configured                                     │  │
+│  │ Endpoint: default                                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ OpenAI                                           [Edit]  │  │
+│  │ ✓ API Key configured                                     │  │
+│  │ Endpoint: default                                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Google                                      [Configure]  │  │
+│  │ ✗ API Key not set                                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ OpenRouter                                  [Configure]  │  │
+│  │ ✗ API Key not set                                        │  │
+│  │ ℹ Route multiple providers through one API key           │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ▶ More providers (DeepSeek, xAI, Moonshot, DashScope)         │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ROUTING OPTIONS                                               │
+│  ─────────────────────────────────────────────────────────────  │
+│  ● Direct to providers (recommended)                           │
+│    Connect directly to each provider's API                     │
+│                                                                 │
+│  ○ Route all through OpenRouter                                │
+│    Use OpenRouter for unified billing (requires OpenRouter key)│
+│                                                                 │
+│  ○ Use connection proxy                                        │
+│    Route through proxy.texra.ai for improved connectivity      │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Features:**
-- Account info display
-- Model access mode toggle (included vs own keys)
-- API key management
+**Layout (Not Logged In):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  ACCOUNT                                                       │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Use TeXRA with your own API keys            [Sign In]  │    │
+│  │  Sign in to sync settings across devices                │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  API PROVIDERS                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  Configure API keys to use AI models.                          │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Anthropic                               [Configure]      │  │
+│  │ ✗ API Key not set                                        │  │
+│  │ Models: Claude Sonnet 4.5, Claude Opus 4.5, ...          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ OpenAI                                  [Configure]      │  │
+│  │ ✗ API Key not set                                        │  │
+│  │ Models: GPT-5.2, GPT-4.1, o4-mini, ...                   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ OpenRouter                              [Configure]      │  │
+│  │ ✗ API Key not set                                        │  │
+│  │ ℹ Access ALL providers with a single API key             │  │
+│  │   Get your key at openrouter.ai/keys                     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ▶ More providers (Google, DeepSeek, xAI, Moonshot, DashScope) │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  💡 TIP: Use OpenRouter to access all models with one key      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Provider Configuration Modal
+
+When clicking [Edit] or [Configure] on a provider:
+
+**Standard Provider (Anthropic, OpenAI, Google, etc.):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Configure Anthropic                                     [×]   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  API Key                                                       │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ sk-ant-api03-●●●●●●●●●●●●●●●●●●●●            [👁] [Clear] │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│  Get your key at: console.anthropic.com                        │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Alternative: Environment Variable                             │
+│  Set ANTHROPIC_API_KEY in your environment or .env file        │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ▶ Advanced Options                                            │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Custom Endpoint (optional)                                │  │
+│  │ ┌─────────────────────────────────────────────────────┐   │  │
+│  │ │                                                     │   │  │
+│  │ └─────────────────────────────────────────────────────┘   │  │
+│  │ Leave empty for default (api.anthropic.com)               │  │
+│  │ Use for: proxies, Azure OpenAI, self-hosted models        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                            [Cancel]   [Save]   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**OpenRouter (Special Case):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Configure OpenRouter                                    [×]   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  OpenRouter provides access to 200+ AI models from multiple    │
+│  providers through a single API key and unified billing.       │
+│                                                                 │
+│  API Key                                                       │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ sk-or-v1-●●●●●●●●●●●●●●●●●●●●●●●●            [👁] [Clear] │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│  Get your key at: openrouter.ai/keys                           │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Routing Mode                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ● OpenRouter-only models                                      │
+│    Only use OpenRouter for models that require it              │
+│    (marked with 🔀 in model list)                              │
+│                                                                 │
+│  ○ Route ALL models through OpenRouter                         │
+│    Use OpenRouter for every model request                      │
+│    Benefits: unified billing, usage tracking, fallbacks        │
+│    Note: Slightly higher latency, OpenRouter pricing applies   │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                            [Cancel]   [Save]   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Provider Status Indicators
+
+In the Models tab, show provider/routing status on each model:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ ☑ Claude Sonnet 4.5 T    $3/$15   200K   🧠👁  ✓ Ready       │  ← Key configured
+│ ☑ GPT-5.2                $2/$10   256K   🧠👁  ✓ Ready       │
+│ ☐ Gemini 3 Pro           $1.25/$5 1M     🧠👁  ⚠ No key      │  ← Missing key
+│ ☑ Llama 3 405B           $0.90/$0 128K   🧠    🔀 OpenRouter │  ← OpenRouter only
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Status Icons:**
+- `✓ Ready` - API key configured, model available
+- `⚠ No key` - Provider not configured (click to configure)
+- `🔀 OpenRouter` - Available via OpenRouter only
+- `🔒 Premium` - Requires subscription tier (if using included access)
+
+---
+
+### Features Summary
+
+**Profile Tab Features:**
+- Account info display (if logged in)
+- Model access mode toggle (included vs own keys) - only when logged in
+- Per-provider configuration cards
+- Provider modal with API key + custom endpoint
+- OpenRouter special configuration (routing mode)
+- Global routing options (direct/OpenRouter/proxy)
 - Sign in/out
+- Environment variable hints
+
+**Key UX Improvements:**
+1. **Works without login** - Configure API keys without account
+2. **Visual provider status** - See which providers are configured at a glance
+3. **Custom endpoints exposed** - No more hidden VS Code settings
+4. **OpenRouter simplified** - Clear explanation and routing options
+5. **Model availability feedback** - See which models are ready in Models tab
 
 ---
 
@@ -340,6 +510,21 @@ Shared across all workspaces, persists per machine.
 interface GlobalState {
   // Model preferences - same models everywhere
   enabledModels: string[];
+
+  // Provider configuration (non-secret parts)
+  providerConfig: {
+    [providerId: string]: {
+      customEndpoint?: string;   // Custom base URL (empty = default)
+      enabled: boolean;          // Show in provider list
+    };
+  };
+
+  // Routing preferences
+  routing: {
+    mode: 'direct' | 'openrouter' | 'proxy';  // Global routing strategy
+    openRouterMode: 'exclusive' | 'all';       // Only OR-models vs all
+    proxyDomain?: string;                      // Custom proxy domain
+  };
 
   // Version for migrations
   settingsVersion: number;
@@ -367,6 +552,46 @@ interface WorkspaceState {
 }
 ```
 
+### Secret Storage (`context.secrets`)
+
+Secure credential storage (VS Code SecretStorage API).
+
+```typescript
+// Keys stored in secrets (unchanged from current implementation)
+// apiKey.anthropic
+// apiKey.openai
+// apiKey.google
+// apiKey.openRouter
+// apiKey.deepseek
+// apiKey.xai
+// apiKey.moonshot
+// apiKey.dashscope
+
+// Access via SecretManager
+SecretManager.getApiKey('anthropic');
+SecretManager.setApiKey('anthropic', 'sk-...');
+SecretManager.deleteApiKey('anthropic');
+```
+
+### Environment Variable Fallback
+
+API keys can also be set via environment variables (existing behavior):
+
+```bash
+# In shell or .env file
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+OPENROUTER_API_KEY=sk-or-...
+DEEPSEEK_API_KEY=...
+XAI_API_KEY=...
+```
+
+**Priority order:**
+1. VS Code Secrets (highest)
+2. Environment variables
+3. `.env` file in workspace
+
 ### Defaults (Hardcoded)
 
 ```typescript
@@ -385,6 +610,64 @@ const DEFAULT_ENABLED_AGENTS = [
   'ask', 'chat', 'correct', 'draw', 'ocr',
   'paper2slide', 'paper2poster', 'polish', 'research', 'search'
 ];
+
+const DEFAULT_ROUTING = {
+  mode: 'direct',
+  openRouterMode: 'exclusive',
+};
+
+// Provider metadata (for display)
+const PROVIDERS = {
+  anthropic: {
+    name: 'Anthropic',
+    keyUrl: 'https://console.anthropic.com/settings/keys',
+    envVar: 'ANTHROPIC_API_KEY',
+    defaultEndpoint: 'https://api.anthropic.com',
+  },
+  openai: {
+    name: 'OpenAI',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    envVar: 'OPENAI_API_KEY',
+    defaultEndpoint: 'https://api.openai.com/v1',
+  },
+  google: {
+    name: 'Google',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    envVar: 'GOOGLE_API_KEY',
+    defaultEndpoint: 'https://generativelanguage.googleapis.com',
+  },
+  openRouter: {
+    name: 'OpenRouter',
+    keyUrl: 'https://openrouter.ai/keys',
+    envVar: 'OPENROUTER_API_KEY',
+    defaultEndpoint: 'https://openrouter.ai/api/v1',
+    description: 'Access 200+ models with a single API key',
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    envVar: 'DEEPSEEK_API_KEY',
+    defaultEndpoint: 'https://api.deepseek.com',
+  },
+  xai: {
+    name: 'xAI (Grok)',
+    keyUrl: 'https://console.x.ai',
+    envVar: 'XAI_API_KEY',
+    defaultEndpoint: 'https://api.x.ai/v1',
+  },
+  moonshot: {
+    name: 'Moonshot (Kimi)',
+    keyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    envVar: 'MOONSHOT_API_KEY',
+    defaultEndpoint: 'https://api.moonshot.cn/v1',
+  },
+  dashscope: {
+    name: 'DashScope (Qwen)',
+    keyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    envVar: 'DASHSCOPE_API_KEY',
+    defaultEndpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  },
+};
 ```
 
 ---
