@@ -35,105 +35,25 @@ Create a unified Settings View that consolidates model configuration, agent conf
 
 ---
 
-## Design Principles (Notion-Inspired)
+## Design Principles
 
-The Settings View follows Notion's design philosophy: minimal chrome, generous whitespace, and content-first hierarchy.
+The Settings View prioritizes simplicity and user-friendliness, inspired by Notion's philosophy of clean, uncluttered interfaces.
 
 ### Core Principles
 
-1. **Content over chrome** - No unnecessary borders, backgrounds, or decorations
-2. **Generous whitespace** - Let content breathe; padding > borders
-3. **Typography hierarchy** - Use font size/weight, not color, to establish importance
-4. **Invisible affordances** - Actions appear on hover, not by default
-5. **Grouped sections** - Clear visual separation using space, not lines
+1. **Simplicity first** - Use VS Code native components; avoid custom styling
+2. **Clear grouping** - Logical sections with clear headers
+3. **Progressive disclosure** - Hide advanced options in collapsibles
+4. **Immediate feedback** - Settings save automatically or with clear feedback
+5. **Familiar patterns** - Follow VS Code settings UI conventions
 
-### Visual Guidelines
+### Implementation Guidelines
 
-```css
-/* Typography hierarchy */
-.section-header {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--vscode-descriptionForeground);
-  margin-bottom: 12px;
-}
-
-.item-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--vscode-foreground);
-}
-
-.item-description {
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-}
-
-/* Spacing */
-.section {
-  padding: 16px 0;
-}
-
-.section + .section {
-  border-top: 1px solid var(--vscode-widget-border);
-}
-
-/* Hover actions (Notion-style) */
-.item-row .actions {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.item-row:hover .actions {
-  opacity: 1;
-}
-
-/* Cards - minimal borders */
-.card {
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-widget-border);
-  border-radius: 4px;
-  padding: 12px 16px;
-}
-
-/* Focus on content, not containers */
-.list-item {
-  padding: 8px 0;
-  /* No borders between items - use space */
-}
-```
-
-### Anti-Patterns to Avoid
-
-- ❌ Heavy borders and outlines everywhere
-- ❌ Colorful badges and status indicators
-- ❌ Multiple competing visual hierarchies
-- ❌ Actions always visible (clutter)
-- ❌ Compact, dense layouts
-- ❌ Deeply nested sections
-
-### Examples
-
-**Good (Notion-style):**
-```
-FORMATTER
-
-Formatter     latexindent ▼
-
-Config file   /path/to/config              Browse
-```
-
-**Bad (cluttered):**
-```
-┌─────────────────────────────────────────┐
-│ ⚙️ FORMATTER SETTINGS                   │
-├─────────────────────────────────────────┤
-│ [Formatter:] [latexindent ▼] [ℹ️]       │
-│ [Config:] [_______________] [📁 Browse] │
-└─────────────────────────────────────────┘
-```
+- Use `<vscode-form-group>` for all form layouts (native VS Code styling)
+- Use `<vscode-collapsible>` for advanced/optional sections
+- Keep actions visible (no hover-to-reveal complexity)
+- Use standard VS Code color variables
+- Follow existing webview patterns in the codebase
 
 ---
 
@@ -280,186 +200,72 @@ const RECOMMENDED_MODELS = [
 
 ### Agents Tab
 
-**Purpose:** Configure agents and create custom ones without YAML complexity.
+**Purpose:** View and enable/disable agents. Supersedes the FolderExplorer/agent explorer.
 
-**Design Philosophy:** Users should be able to create and modify agents through a simple UI, not by editing YAML files. The complexity is hidden; power users can access raw YAML if needed.
+**Scope (Phase 1):** View-only with enable/disable. Agent creation wizard deferred to Future Scope.
 
 **Agent Categories:**
 - `workflow` - Document-processing agents (input → output transformations)
 - `toolUse` - Interactive agents with tool capabilities (chat, research)
 
+**Agent Sources:**
+- `builtIn` - Shipped with extension (workflow agents)
+- `builtInToolUse` - Shipped with extension (tool-use agents)
+- `custom` - User-created YAML files in workspace
+- `remote` - Shared agents from team (requires login)
+
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Configure agents and create custom ones.                       │
+│  Select which agents appear in the dropdown.                    │
 │  Settings are saved per workspace.                              │
 │                                                                 │
-│  MY AGENTS                                    [+ Create Agent]  │
+│  BUILT-IN AGENTS                                               │
 │  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ chat        Interactive conversation  [toolUse] Built-in│  │
-│  │ ☑ correct     Fix typos & LaTeX errors  [workflow] Built-in│  │
-│  │ ☑ polish      Improve writing quality   [workflow] Built-in│  │
-│  │ ☑ research    Research with tools       [toolUse] Built-in│  │
-│  │ ☑ my-reviewer Reviews papers...         [workflow]  Custom │  │
-│  │                                          [Edit] [Delete] │  │
-│  │ ☐ draw        Create TikZ figures       [workflow] Built-in│  │
-│  │ ☐ ocr         Handwritten → LaTeX       [workflow] Built-in│  │
-│  │ ☐ paper2slide Paper → Beamer slides     [workflow] Built-in│  │
-│  │ ☐ paper2poster Paper → poster           [workflow] Built-in│  │
-│  │ ☐ transcribe  Audio transcription       [workflow] Built-in│  │
+│  │ ☑ chat        Interactive conversation         [toolUse] │  │
+│  │ ☑ correct     Fix typos & LaTeX errors        [workflow] │  │
+│  │ ☑ polish      Improve writing quality         [workflow] │  │
+│  │ ☑ research    Research with tools             [toolUse]  │  │
+│  │ ☐ draw        Create TikZ figures             [workflow] │  │
+│  │ ☐ ocr         Handwritten → LaTeX             [workflow] │  │
+│  │ ☐ paper2slide Paper → Beamer slides           [workflow] │  │
+│  │ ☐ paper2poster Paper → poster                 [workflow] │  │
+│  │ ☐ transcribe  Audio transcription             [workflow] │  │
 │  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  CUSTOM AGENTS                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ ☑ my-reviewer Reviews papers for clarity      [workflow] │  │
+│  │                                    [Open YAML] [Delete]  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│  📁 Custom agents are stored in: .texra/agents/                 │
 │                                                                 │
 │  REMOTE AGENTS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ team-reviewer   Team's paper reviewer  [workflow] Public │  │
-│  │ ☐ grant-writer    Grant proposal helper  [toolUse]  Team  │  │
+│  │ ☑ team-reviewer   Team's paper reviewer       [workflow] │  │
+│  │ ☐ grant-writer    Grant proposal helper       [toolUse]  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                        ─ or if not logged in ─                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  🔒 Sign in to access shared team agents       [Sign In]  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│  [Advanced: Open Agent Files]          ← Power users only      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Category Badge Styling:**
-```css
-.category-badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  text-transform: lowercase;
-}
-.category-badge--workflow {
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-}
-.category-badge--toolUse {
-  background: var(--vscode-statusBarItem-prominentBackground);
-  color: var(--vscode-statusBarItem-prominentForeground);
-}
-```
+**Category Badges:** Use `<vscode-badge>` for workflow/toolUse labels.
 
----
+**Custom Agent Actions:**
+- `[Open YAML]` - Opens agent YAML file in editor (for power users)
+- `[Delete]` - Deletes custom agent YAML file
 
-### Create Agent Wizard
-
-Click **[+ Create Agent]** → AI-assisted creation:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Create Custom Agent                                      [×]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  What should this agent do?                                    │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Review my paper drafts and suggest improvements for       │  │
-│  │ clarity, argument structure, and academic tone.           │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  Agent name: [paper-reviewer    ]                              │
-│                                                                 │
-│  Type:                                                         │
-│  ● Document processor (input → output)                         │
-│  ○ Interactive chat (conversation)                             │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│  💡 AI will generate the agent for you.                        │
-│                                                                 │
-│                                      [Cancel]  [Create Agent]  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Flow:**
-1. User describes what agent should do (plain English)
-2. AI generates YAML configuration behind the scenes
-3. Agent immediately appears in list, ready to use
-4. No YAML knowledge required
-
----
-
-### Edit Agent Form
-
-Click **[Edit]** on custom agent → Form-based editor:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Edit Agent: paper-reviewer                               [×]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  BASIC                                                         │
-│  ─────────────────────────────────────────────────────────────  │
-│  Name:        [paper-reviewer                ]                 │
-│  Description: [Reviews papers for clarity    ]                 │
-│  Category:    [workflow ▼]                                     │
-│  Based on:    [correct ▼] (inherit from built-in)              │
-│                                                                 │
-│  INSTRUCTIONS                                                  │
-│  ─────────────────────────────────────────────────────────────  │
-│  What the agent should do:                                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ You are an academic paper reviewer. Analyze the document  │  │
-│  │ for clarity, argument structure, and academic tone.       │  │
-│  │ Suggest specific improvements with examples.              │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▶ Advanced options (rounds, agentType, etc.)                  │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│  [View YAML]                       [Cancel]  [Test]  [Save]   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Form fields map to YAML transparently:**
-- Name → `name:`
-- Description → `description:`
-- Category → `agentCategory:` (workflow | toolUse)
-- Based on → `inherits:`
-- Instructions → `prompts.systemPrompt:`
-
----
-
-### Complexity Comparison
-
-| Task | Before (YAML) | After (UI) |
-|------|---------------|------------|
-| **Create agent** | Write YAML from scratch | Describe in English, AI generates |
-| **Edit agent** | Edit YAML syntax | Fill out form |
-| **Set inheritance** | `inherits: correct` | Dropdown: "Based on: correct" |
-| **Change category** | Edit `agentCategory: workflow` | Dropdown |
-| **View all agents** | File explorer + folders | Single flat list with category badges |
-
----
-
-### Data Flow
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   User Input    │────▶│   Form/Wizard   │────▶│   YAML File     │
-│  (plain text)   │     │   (abstracts)   │     │  (storage)      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌─────────────────┐
-                        │  Agent Registry │
-                        │  (runtime)      │
-                        └─────────────────┘
-```
-
-YAML files remain the source of truth, but users interact through forms.
-
----
-
-### Power User Escape Hatches
-
-1. **[View YAML]** button in edit form - opens raw YAML
-2. **[Advanced: Open Agent Files]** - opens file explorer
-3. YAML files still editable directly if preferred
+**Note:** Agent creation wizard and form-based editing are deferred to Future Scope. For now, users create agents by:
+1. Duplicating an existing YAML file in `.texra/agents/`
+2. Editing the YAML directly
+3. The agent appears automatically in the list
 
 **Storage:** `workspaceState.enabledAgents: string[]`
 
@@ -1322,14 +1128,15 @@ interface AgentInfo {
 - Implement Models tab with provider accordions
 - Wire up globalState for model preferences
 - Test graceful migration from VS Code config
-- Apply Notion-style CSS variables and spacing
+- Use vscode-form-group for all form layouts
 
-### Phase 2: Agents Tab
-- Implement Agents tab with local/custom/remote sections
-- Add category badges (workflow/toolUse)
+### Phase 2: Agents Tab (View-Only First)
+- Implement Agents tab with list of all agents
+- Show category badges (workflow/toolUse) and source (built-in/custom/remote)
 - Wire up workspaceState for agent preferences
 - Handle remote agents auth state
-- Implement AI-assisted agent creation wizard
+- Link to YAML files for editing (power users)
+- **Note:** Supersedes FolderExplorer/agent explorer view
 
 ### Phase 3: LaTeX Tab
 - Implement LaTeX tab with formatter, latexdiff, TikZ sections
@@ -1355,12 +1162,77 @@ interface AgentInfo {
 - Add routing options UI
 - Delete old profileView
 
-### Phase 7: Polish
+### Phase 7: Polish & Cleanup
 - Add main webview entry point (gear icon)
 - Deep link support (open to specific tab)
 - Verify graceful migration (no breaking existing setups)
 - Accessibility audit (keyboard navigation)
+- Remove deprecated views (profileView, historyView, memoryView)
+- Remove FolderExplorer/agent explorer (superseded by Agents tab)
 - Documentation
+
+### Future Scope (Deferred)
+- **Agent Creation Wizard** - AI-assisted agent creation from plain English description
+- **Agent Edit Form** - Form-based editing without YAML knowledge
+- **Agent Testing** - Test agent with sample input before saving
+
+---
+
+## Integration Surface Areas
+
+Key integration points that need updating when implementing the Settings View:
+
+### 1. Main Webview Entry Points
+| Location | Current Behavior | New Behavior |
+|----------|-----------------|--------------|
+| `src/webview/index.html` line 524 | Agent settings button → VS Code settings | → Settings View (Agents tab) |
+| `src/webview/index.html` line 552 | Model settings button → VS Code settings | → Settings View (Models tab) |
+| `src/webview/modules/uiManagers/SettingsButtonManager.js` | Opens VS Code settings | Opens Settings View |
+
+### 2. Commands to Update
+| Command | File | Change |
+|---------|------|--------|
+| `texra.openSettings` | `src/commands/system/` | Open Settings View instead of VS Code settings |
+| `texra.openAgentSettings` | `src/commands/system/` | Open Settings View → Agents tab |
+| `texra.openModelSettings` | `src/commands/system/` | Open Settings View → Models tab |
+
+### 3. Dropdown Options Computation
+| Function | File | Impact |
+|----------|------|--------|
+| `computeAgentOptions()` | `src/agent/index/agentRegistry.ts` | Read from workspaceState instead of VS Code config |
+| `computeModelOptions()` | `src/model/computeModelOptions.ts` | Read from globalState instead of VS Code config |
+
+### 4. Configuration Watchers
+`src/MainViewProvider.ts` (lines 84-120) watches for config changes. Update to:
+- Watch globalState/workspaceState changes instead
+- Or keep VS Code config watchers for backwards compatibility during migration
+
+### 5. View Registrations (package.json)
+| View | Current | After Implementation |
+|------|---------|---------------------|
+| `texra.profileView` | Registered in contributes.views | Remove after Phase 6 |
+| `texra.historyView` | Command-opened panel | Remove after Phase 5 |
+| `texra.memoryView` | Command-opened panel | Remove after Phase 4 |
+| `texra.agentExplorer` | TreeView in sidebar | Remove after Phase 2 |
+| `texra.settingsView` | N/A | Add new panel registration |
+
+### 6. Message Handlers to Migrate
+| Handler | From | To |
+|---------|------|-----|
+| `ProfileViewMessageHandler` | `src/profileView/` | `src/settingsView/` (compose) |
+| `HistoryViewMessageHandler` | `src/historyView/` | `src/settingsView/` (compose) |
+| `MemoryViewMessageHandler` | `src/memoryView/` | `src/settingsView/` (compose) |
+
+### 7. State Migration Points
+```typescript
+// Settings that move FROM VS Code config TO extension state:
+'texra.agents'           → workspaceState.enabledAgents
+'texra.toolUseAgents'    → workspaceState.enabledAgents (merge)
+'texra.models'           → globalState.enabledModels
+'texra.model.useOpenRouter'           → globalState.routing.mode
+'texra.model.useImprovedConnection'   → globalState.routing.mode
+'texra.model.improvedConnectionDomain' → globalState.routing.proxyDomain
+```
 
 ---
 
@@ -1389,31 +1261,32 @@ interface AgentInfo {
 
 ### Form Layout Components
 ```html
-<!-- Notion-style form row (no vscode-form-group for cleaner look) -->
-<div class="setting-row">
-  <span class="setting-label">Formatter</span>
+<!-- Standard form group with label -->
+<vscode-form-group>
+  <vscode-label>Formatter</vscode-label>
   <vscode-single-select>
     <vscode-option value="latexindent">latexindent</vscode-option>
     <vscode-option value="tex-fmt">tex-fmt</vscode-option>
     <vscode-option value="none">none</vscode-option>
   </vscode-single-select>
-</div>
+</vscode-form-group>
 
-<!-- Checkbox row -->
-<div class="setting-row">
-  <vscode-checkbox id="showWarning">
-    Show warning if latexindent is not installed
-  </vscode-checkbox>
-</div>
+<!-- Checkbox (self-labeled) -->
+<vscode-checkbox id="showWarning">
+  Show warning if latexindent is not installed
+</vscode-checkbox>
 
-<!-- File path row with browse button -->
-<div class="setting-row">
-  <span class="setting-label">Config file</span>
-  <div class="setting-input-group">
+<!-- File path with browse button -->
+<vscode-form-group>
+  <vscode-label>Config file</vscode-label>
+  <div class="input-with-button">
     <vscode-textfield placeholder="/path/to/config"></vscode-textfield>
     <vscode-button appearance="secondary">Browse</vscode-button>
   </div>
-</div>
+</vscode-form-group>
+
+<!-- Section header using vscode-label -->
+<vscode-label class="section-label">FORMATTER</vscode-label>
 ```
 
 ### Models Tab Components
@@ -1559,72 +1432,39 @@ export class BaseTab {
 }
 ```
 
-### Shared CSS Variables (extend common.css)
+### Minimal Custom CSS (extend common.css)
 ```css
 /* settingsView/styles/index.css */
-@import '../../common/styles/common.css';
+/* Rely on vscode-form-group and vscode-elements for layout */
+/* Only add minimal custom styles where needed */
 
-/* Notion-style settings layout */
 .settings-container {
   max-width: 720px;
   margin: 0 auto;
   padding: var(--spacing-large);
 }
 
-.section {
-  padding: var(--spacing-large) 0;
-}
-
+/* Section dividers */
 .section + .section {
   border-top: 1px solid var(--vscode-widget-border);
+  padding-top: var(--spacing-large);
+  margin-top: var(--spacing-large);
 }
 
-.section-header {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+/* Section labels (uppercase headers) */
+.section-label {
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--vscode-descriptionForeground);
   margin-bottom: var(--spacing-medium);
 }
 
-.setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-small) 0;
-  min-height: 32px;
-}
-
-.setting-label {
-  flex: 0 0 160px;
-  color: var(--vscode-foreground);
-}
-
-.setting-row vscode-single-select,
-.setting-row vscode-textfield {
-  flex: 1;
-  max-width: 300px;
-}
-
-.setting-input-group {
+/* Input + button combos */
+.input-with-button {
   display: flex;
   gap: var(--spacing-small);
+}
+.input-with-button vscode-textfield {
   flex: 1;
-  max-width: 400px;
-}
-
-.setting-input-group vscode-textfield {
-  flex: 1;
-}
-
-/* Hover actions (Notion-style) */
-.item-row .actions {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.item-row:hover .actions {
-  opacity: 1;
 }
 ```
 
