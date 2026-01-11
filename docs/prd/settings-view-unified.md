@@ -16,12 +16,12 @@ Create a unified Settings View that consolidates model configuration, agent conf
 ## Goals
 
 1. **Single source of truth** - All configuration in one place
-2. **Easy navigation** - Tab-based switching between Models, Agents, Tool-Use, LaTeX, Memory, History, Profile, UI, Misc
-3. **No auth required** - Most tabs work without login (except Profile features)
-4. **VS Code native** - Use `vscode-tabs`, `vscode-tab-header`, `vscode-tab-panel` components
+2. **Easy navigation** - Sidebar navigation (Cursor-style) with logical groupings
+3. **No auth required** - Most sections work without login (except account features)
+4. **VS Code native** - Use VS Code elements and styling patterns
 5. **Proper state management** - Global vs workspace state separation
 6. **Backwards compatible** - Extend getConfig rather than replacing it; graceful migration
-7. **Notion-style minimalism** - Clean, uncluttered interface with generous whitespace
+7. **Cursor-style clarity** - Clean sidebar + content layout, searchable settings
 
 ---
 
@@ -73,138 +73,245 @@ Single entry point from main webview:
 
 Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 
-### Tab Structure
+### Sidebar Navigation (Cursor-style)
+
+Instead of horizontal tabs, use a sidebar navigation like Cursor Settings for better organization
+and scalability.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  TeXRA Settings                                                       [×]   │
-├──────────────────────────────────────────────────────────────────────────────┤
-│  [Models]  Agents  Tool-Use  LaTeX  Memory  History  Profile  UI  Misc      │
-│  ═══════                                                                     │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│                              Tab content here                                │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+├────────────────────────┬─────────────────────────────────────────────────────┤
+│                        │                                                     │
+│  user@example.com      │  General                                            │
+│  Pro Plan              │  ─────────────────────────────────────────────────  │
+│                        │                                                     │
+│  ┌──────────────────┐  │  Manage Account                                     │
+│  │ Search ⌘F        │  │  Manage your account and billing            [Open]  │
+│  └──────────────────┘  │                                                     │
+│                        │  ─────────────────────────────────────────────────  │
+│  ⚙️ General            │                                                     │
+│  ∞ Agents              │  Preferences                                        │
+│    → Workflow          │  ─────────────────────────────────────────────────  │
+│    → Tool-Use          │                                                     │
+│  ◎ Models & Providers  │  ☑ Show quick pick for agent selection             │
+│  ⚡ Multi-Agent        │    Use VS Code quick pick instead of dropdown.      │
+│                        │                                                     │
+│  ─────────────────     │  ☑ Show quick pick for model selection             │
+│  📄 LaTeX              │    Use VS Code quick pick instead of dropdown.      │
+│  🧠 Memory             │                                                     │
+│  📜 History            │  Max image dimension: [2048 ▼]                      │
+│                        │    Options: 1024, 2048, 4096                        │
+│  ─────────────────     │                                                     │
+│  🔧 Advanced           │  Progress board sort: [Timestamp descending ▼]      │
+│                        │                                                     │
+│  ─────────────────     │                                                     │
+│  📖 Docs ↗             │                                                     │
+│                        │                                                     │
+└────────────────────────┴─────────────────────────────────────────────────────┘
 ```
 
-**Tab Purposes:**
-- **Models** - Model selection, provider status
-- **Agents** - Agent enable/disable, view metadata, remote agents
-- **Tool-Use** - Tool execution settings (edit approval, permissions)
-- **LaTeX** - Formatter, latexdiff, TikZ, replacements
-- **Memory** - Persistent memory files, active sessions
-- **History** - Execution history browser
-- **Profile** - Account, API keys, streaming settings, routing
-- **UI** - UI behavior settings
-- **Misc** - Miscellaneous settings
+**Navigation Structure:**
+```
+Account (top)
+  └── Email, Plan info
 
-### HTML Structure (using vscode-elements)
+Search settings ⌘F
+
+Section 1: Core
+├── General          - Account, UI preferences
+├── Agents           - Agent list and settings
+│   ├── Workflow     - Workflow agent output settings
+│   └── Tool-Use     - Tool-use agent settings (edit approval, compaction)
+├── Models & Providers - Combined model selection + API providers
+└── Multi-Agent      - Merge operations settings (future features noted)
+
+Section 2: Features
+├── LaTeX            - Formatter, latexdiff, TikZ
+├── Memory           - Memory files browser (expandable)
+└── History          - Execution history
+
+Section 3: System
+└── Advanced         - System paths, debug, retry settings
+
+Footer
+└── Docs ↗           - Link to documentation
+```
+
+### HTML Structure (sidebar layout)
 
 ```html
-<vscode-tabs id="settingsTabs" selected-index="0">
-  <vscode-tab-header slot="header">Models</vscode-tab-header>
-  <vscode-tab-header slot="header">Agents</vscode-tab-header>
-  <vscode-tab-header slot="header">Tool-Use</vscode-tab-header>
-  <vscode-tab-header slot="header">LaTeX</vscode-tab-header>
-  <vscode-tab-header slot="header">Memory</vscode-tab-header>
-  <vscode-tab-header slot="header">History</vscode-tab-header>
-  <vscode-tab-header slot="header">Profile</vscode-tab-header>
-  <vscode-tab-header slot="header">UI</vscode-tab-header>
-  <vscode-tab-header slot="header">Misc</vscode-tab-header>
+<div class="settings-container">
+  <aside class="settings-sidebar">
+    <div class="account-section">
+      <span class="user-email">user@example.com</span>
+      <span class="user-plan">Pro Plan</span>
+    </div>
 
-  <vscode-tab-panel id="modelsPanel"><!-- Models --></vscode-tab-panel>
-  <vscode-tab-panel id="agentsPanel"><!-- Agents --></vscode-tab-panel>
-  <vscode-tab-panel id="toolUsePanel"><!-- Tool-Use --></vscode-tab-panel>
-  <vscode-tab-panel id="latexPanel"><!-- LaTeX --></vscode-tab-panel>
-  <vscode-tab-panel id="memoryPanel"><!-- Memory --></vscode-tab-panel>
-  <vscode-tab-panel id="historyPanel"><!-- History --></vscode-tab-panel>
-  <vscode-tab-panel id="profilePanel"><!-- Profile --></vscode-tab-panel>
-  <vscode-tab-panel id="uiPanel"><!-- UI --></vscode-tab-panel>
-  <vscode-tab-panel id="miscPanel"><!-- Misc --></vscode-tab-panel>
-</vscode-tabs>
+    <vscode-textfield placeholder="Search settings ⌘F" class="search-input">
+    </vscode-textfield>
+
+    <nav class="settings-nav">
+      <div class="nav-section">
+        <a href="#general" class="nav-item active">$(settings-gear) General</a>
+        <a href="#agents" class="nav-item">$(symbol-misc) Agents</a>
+        <a href="#agents-workflow" class="nav-item nav-subitem">→ Workflow</a>
+        <a href="#agents-tooluse" class="nav-item nav-subitem">→ Tool-Use</a>
+        <a href="#models" class="nav-item">$(server) Models & Providers</a>
+        <a href="#multiagent" class="nav-item">$(combine) Multi-Agent</a>
+      </div>
+
+      <div class="nav-section">
+        <a href="#latex" class="nav-item">$(file-code) LaTeX</a>
+        <a href="#memory" class="nav-item">$(database) Memory</a>
+        <a href="#history" class="nav-item">$(history) History</a>
+      </div>
+
+      <div class="nav-section">
+        <a href="#advanced" class="nav-item">$(tools) Advanced</a>
+      </div>
+
+      <div class="nav-section nav-footer">
+        <a href="https://docs.texra.ai" class="nav-item">$(book) Docs ↗</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="settings-content">
+    <!-- Content for selected section -->
+  </main>
+</div>
 ```
 
 ---
 
-## Tab Specifications
+## Section Specifications
 
-### Models Tab
+### General Section
 
-**Purpose:** Configure which models appear in the model dropdown.
+**Purpose:** Account management and general UI preferences. Shown when user clicks "General" in sidebar.
 
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Configure which models appear in the model dropdown.           │
+│  General                                                        │
+│  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  ⭐ RECOMMENDED                                                 │
+│  Manage Account                                                 │
+│  Manage your account and billing                     [Open ↗]  │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Preferences                                                    │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ☑ Show quick pick for agent selection                          │
+│    Use VS Code quick pick instead of dropdown for agents.      │
+│                                                                 │
+│  ☑ Show quick pick for model selection                          │
+│    Use VS Code quick pick instead of dropdown for models.      │
+│                                                                 │
+│  Max image dimension: [2048 ▼]                                 │
+│    Larger images will be resized before sending to models.     │
+│    Options: 1024, 2048, 4096                                   │
+│                                                                 │
+│  Progress board sort: [Timestamp descending ▼]                 │
+│    Options: Timestamp ascending, Timestamp descending          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Settings Mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| Agent quick pick checkbox | `texra.ui.showAgentQuickPick` |
+| Model quick pick checkbox | `texra.ui.showModelQuickPick` |
+| Max image dimension dropdown | `texra.maxImageDimension` |
+| Progress board sort dropdown | `texra.progressBoard.streamSortOrder` |
+
+---
+
+### Models & Providers Section
+
+**Purpose:** Combined model selection and API provider configuration. Each provider shows API status + model selection together.
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Models & Providers                                             │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ROUTING                                                        │
+│  ─────────────────────────────────────────────────────────────  │
+│  ● Direct to providers (recommended)                            │
+│  ○ Route all through OpenRouter                                 │
+│  ○ Use connection proxy                                         │
+│                                                                 │
+│  ⭐ RECOMMENDED MODELS                                          │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ ☑ Claude Sonnet 4.5 T    Anthropic   $3/$15    200K  🧠👁 │  │
-│  │ ☑ Claude Opus 4.5 T      Anthropic   $15/$75   200K  🧠👁 │  │
 │  │ ☑ GPT-5.2                OpenAI      $2/$10    256K  🧠👁 │  │
 │  │ ☑ Gemini 3 Pro           Google      $1.25/$5  1M    🧠👁 │  │
-│  │ ☑ Grok 4                 xAI         $3/$15    256K  🧠👁 │  │
 │  │ ☑ DeepSeek R1            DeepSeek    $0.55/$2  64K   🧠   │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ALL MODELS                                                     │
+│  PROVIDERS                                                      │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  ▼ Anthropic (21)                                 [Enable All] │
+│  ▼ Anthropic                         ✓ API Key    [Configure]  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ Claude Sonnet 4.5 Thinking   200K   $3/$15    🧠👁📄    │  │
-│  │ ☑ Claude Opus 4.5 Thinking     200K   $15/$75   🧠👁📄🎧  │  │
-│  │ ☐ Claude Sonnet 4.5            200K   $3/$15    👁📄      │  │
-│  │ ☐ Claude Sonnet 4.0            200K   $3/$15    👁📄      │  │
-│  │ ☐ Claude Haiku 3.5             200K   $0.8/$4   👁        │  │
-│  │   ... more                                                │  │
+│  │ ☑ Claude Sonnet 4.5 T     200K   $3/$15    🧠👁📄         │  │
+│  │ ☑ Claude Opus 4.5 T       200K   $15/$75   🧠👁📄🎧       │  │
+│  │ ☐ Claude Sonnet 4.5       200K   $3/$15    👁📄           │  │
+│  │ ☐ Claude Haiku 3.5        200K   $0.8/$4   👁             │  │
+│  │   ... more (21 models)                      [Enable All]  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ▶ OpenAI (28)                                                 │
-│  ▶ Google (6)                                                  │
-│  ▶ DeepSeek (7)                                                │
-│  ▶ xAI (5)                                                     │
-│  ▶ Moonshot (8)                                                │
-│  ▶ DashScope (3)                                               │
+│  ▶ OpenAI (28)                       ✓ API Key    [Configure]  │
+│  ▶ Google (6)                        ✗ No Key     [Configure]  │
+│  ▶ DeepSeek (7)                      ✓ API Key    [Configure]  │
+│  ▶ xAI (5)                           ✗ No Key     [Configure]  │
+│  ▶ Moonshot (8)                      ✗ No Key     [Configure]  │
+│  ▶ DashScope (3)                     ✗ No Key     [Configure]  │
+│                                                                 │
+│  ▼ OpenRouter                        ✓ API Key    [Configure]  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ OpenRouter provides access to 200+ models with one key.   │  │
+│  │ Routing: ● OpenRouter-only  ○ Route ALL through OR        │  │
+│  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
-│  Selected: 12 models                              [Save Changes]│
+│  Selected: 12 models                                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Key Design:**
+- Each provider accordion shows: status indicator + [Configure] button + model list
+- Provider status: `✓ API Key`, `✗ No Key`, or `🔑 Env Var`
+- Clicking [Configure] opens provider modal (API key + endpoint + streaming toggle)
+- Models are listed under their provider for clear ownership
 
 **Data Source:** `llm-zoo` package (ModelRegistry)
 
 **Model Metadata Displayed:**
 - Name (display name)
-- Provider
-- Cost (input/output per 1M tokens)
 - Context window
+- Cost (input/output per 1M tokens)
 - Capabilities icons: 🧠 Reasoning, 👁 Vision, 📄 PDF, 🎧 Audio, 💬 Tools, ⚡ Cache
-
-**Sorting:**
-- Recommended section: hardcoded curated list
-- Provider sections: newest model families first within each provider
 
 **Recommended Models (hardcoded):**
 ```typescript
 const RECOMMENDED_MODELS = [
-  'sonnet45T',   // Claude Sonnet 4.5 Thinking
-  'opus45T',     // Claude Opus 4.5 Thinking
-  'gpt52',       // GPT-5.2
-  'gemini3p',    // Gemini 3 Pro
-  'grok4',       // Grok 4
-  'deepseekT',   // DeepSeek R1
-  'kimi2T',      // Kimi K2 Thinking
-  'qwen3max',    // Qwen 3 Max
+  'sonnet45T', 'opus45T', 'gpt52', 'gemini3p',
+  'grok4', 'deepseekT', 'kimi2T', 'qwen3max'
 ];
 ```
 
-**Storage:** `globalState.enabledModels: string[]`
+**Storage:** `globalState.enabledModels: string[]`, `globalState.providerConfig`
 
 ---
 
-### Agents Tab
+### Agents Section (Main)
 
 **Purpose:** View and enable/disable agents. Supersedes the FolderExplorer/agent explorer.
 
@@ -231,6 +338,8 @@ const RECOMMENDED_MODELS = [
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│  Agents                                                         │
+│  ─────────────────────────────────────────────────────────────  │
 │  Select which agents appear in the dropdown.                    │
 │  Settings are saved per workspace.                              │
 │                                                                 │
@@ -245,12 +354,6 @@ const RECOMMENDED_MODELS = [
 │  │                                                           │  │
 │  │ ☑ polish    Improve writing quality                       │  │
 │  │             $(lightbulb) CoT  ×2                          │  │
-│  │                                                           │  │
-│  │ ☑ research  Research with tools                           │  │
-│  │             $(tools) toolUse                              │  │
-│  │                                                           │  │
-│  │ ☐ draw      Create TikZ figures                           │  │
-│  │             $(zap) Direct                                 │  │
 │  │   ...                                                     │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
@@ -265,6 +368,7 @@ const RECOMMENDED_MODELS = [
 │                                                                 │
 │  REMOTE AGENTS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
+│  ☑ Auto-show remote agents if available                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ ☑ team-reviewer   Team's paper reviewer                   │  │
 │  │                   $(lightbulb) CoT  ×3                    │  │
@@ -276,6 +380,11 @@ const RECOMMENDED_MODELS = [
 │  │  🔒 Sign in to access shared team agents       [Sign In]  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
+│  ▶ Advanced                                                    │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Custom agents directory: [.texra/agents       ] [Browse]  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -283,24 +392,56 @@ const RECOMMENDED_MODELS = [
 - `[Source Code]` - Opens agent YAML file in editor
 - `[Delete]` - Deletes custom agent YAML file
 
-**Note:** Agent creation wizard and form-based editing are deferred to Future Scope. For now, users create agents by duplicating an existing YAML file in `.texra/agents/` and editing it directly.
+**Note:** Agent creation wizard and form-based editing are deferred to Future Scope.
+
+**Settings Mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| Auto-show remote agents | `texra.remoteAgents.autoShowIfAvailable` |
+| Custom agents directory | `texra.explorer.agentsDirectory` (Advanced) |
 
 **Storage:** `workspaceState.enabledAgents: string[]`
 
-**Remote Agent Settings (moved from VS Code config):**
-- `texra.remoteAgents.autoShowIfAvailable` → `workspaceState.remoteAgentsAutoShow`
-- `texra.remoteAgents.cacheTimeHours` → Remains in VS Code config (advanced)
-
 ---
 
-### Tool-Use Tab
+### Agents → Workflow (Subsection)
 
-**Purpose:** Configure tool execution behavior, edit approval, and permissions.
+**Purpose:** Settings specific to workflow agents (non-tool-use agents).
 
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Configure how tool-use agents interact with your workspace.    │
+│  Agents → Workflow                                              │
+│  ─────────────────────────────────────────────────────────────  │
+│  Settings for workflow agents (correct, polish, translate...).  │
+│                                                                 │
+│  OUTPUT STORAGE                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Storage mode: [Folder ▼]                                      │
+│    How to store agent outputs.                                 │
+│    Options: In-place (overwrite), Folder (texra-outputs/)      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Settings Mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| Storage mode dropdown | `texra.agentOutputs.storageMode` |
+
+---
+
+### Agents → Tool-Use (Subsection)
+
+**Purpose:** Settings specific to tool-use agents (chat, research, etc.).
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Agents → Tool-Use                                              │
+│  ─────────────────────────────────────────────────────────────  │
+│  Settings for tool-use agents (chat, research...).              │
 │                                                                 │
 │  EDIT APPROVAL                                                  │
 │  ─────────────────────────────────────────────────────────────  │
@@ -322,21 +463,12 @@ const RECOMMENDED_MODELS = [
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  ACTIVE SESSIONS                                                │
+│  CONTEXT MANAGEMENT                                             │
 │  ─────────────────────────────────────────────────────────────  │
-│  Tool-use sessions waiting for continuation.                    │
 │                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ research (chat)               Jan 11, 1:15 PM   WAITING   │  │
-│  │ "Help me analyze the survey results..."                   │  │
-│  │                                      [Resume] [Discard]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ paper-writing (chat)          Jan 10, 3:00 PM   WAITING   │  │
-│  │ "Continue editing section 3..."                           │  │
-│  │                                      [Resume] [Discard]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  Compaction threshold: [85 %]                                  │
+│    Compact context when usage exceeds this percentage.          │
+│    Range: 50-95%                                                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -347,12 +479,50 @@ const RECOMMENDED_MODELS = [
 | Require approval checkbox | `texra.toolUse.requireEditApproval` |
 | Persist sessions checkbox | `texra.toolUse.persistence.enabled` |
 | Session retention dropdown | `texra.toolUse.persistence.ttlHours` |
+| Compaction threshold | `texra.model.compactionThresholdPercent` |
 
 **Storage:** VS Code configuration (for backwards compatibility via extended getConfig)
 
 ---
 
-### LaTeX Tab
+### Multi-Agent Section
+
+**Purpose:** Configure multi-agent operations (merge, ensemble). Some features awaiting future development.
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Multi-Agent                                                    │
+│  ─────────────────────────────────────────────────────────────  │
+│  Configure multi-agent operations and ensemble runs.            │
+│                                                                 │
+│  MERGE SETTINGS                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Default merge model: [Claude Sonnet 4.5 ▼]                    │
+│    Model used for combining outputs from multiple agents.       │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  COMING SOON                                                    │
+│  ─────────────────────────────────────────────────────────────  │
+│  • Ensemble runs across multiple models                         │
+│  • Agent pipeline configurations                                │
+│  • Output voting and consensus                                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Settings Mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| Default merge model | `texra.merge.defaultModel` |
+
+**Note:** This section is included now but some features are awaiting multi-agent feature maturity.
+
+---
+
+### LaTeX Section
 
 **Purpose:** Configure LaTeX formatting, latexdiff, and TikZ compilation settings.
 
@@ -451,46 +621,52 @@ const RECOMMENDED_MODELS = [
 
 ---
 
-### Memory Tab
+### Memory Section
 
 **Purpose:** Browse and manage persistent memory files created by tool-use agents.
 
-**Note:** Tool-use settings (edit approval, session persistence) are in the Tool-Use Tab.
+**Note:** Tool-use settings (edit approval, session persistence) are in Agents → Tool-Use.
+
+**Key Design:** Show memory content on expand (like current memoryView implementation).
 
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│  Memory                                                         │
+│  ─────────────────────────────────────────────────────────────  │
 │  Memory files created by tool-use agents.                       │
 │                                                                 │
 │  MEMORY FILES                                     [Refresh]    │
 │  ─────────────────────────────────────────────────────────────  │
 │  Agent-created memory files stored in /memories                 │
 │                                                                 │
+│  ▼ 📄 project-notes.md           12 KB    Jan 11, 2:34 PM      │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 📄 project-notes.md           12 KB    Jan 11, 2:34 PM    │  │
-│  │    Project context and key decisions...                   │  │
-│  │                                         [View] [Delete]   │  │
+│  │ # Project Notes                                           │  │
+│  │                                                           │  │
+│  │ ## Key Decisions                                          │  │
+│  │ - Using XYZ framework for...                              │  │
+│  │ - Architecture follows...                                 │  │
+│  │                                        [View Full] [Delete]│  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 📄 research-findings.md       8 KB     Jan 10, 4:12 PM    │  │
-│  │    Literature review notes and citations...               │  │
-│  │                                         [View] [Delete]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  ▶ 📄 research-findings.md       8 KB     Jan 10, 4:12 PM      │
 │                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 📁 figures/                   3 files  Jan 9, 11:00 AM    │  │
-│  │                                         [Browse]          │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  ▶ 📄 citations.bib              2 KB     Jan 9, 3:00 PM       │
 │                                                                 │
+│  ▶ 📁 figures/                   3 files  Jan 9, 11:00 AM      │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
 │  Total: 5 files, 24 KB                        [Clear All]      │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Features:** (Migrated from memoryView)
-- Memory file browser (from existing memoryView)
-- File preview, delete actions
+- Memory file browser with expandable content preview
+- Click file to expand and show content preview (first ~20 lines)
+- [View Full] opens file in editor
+- [Delete] removes file
 - Directory browsing (2-level deep)
 - Storage usage display
 
@@ -501,7 +677,7 @@ const RECOMMENDED_MODELS = [
 
 ---
 
-### History Tab
+### History Section
 
 **Purpose:** Browse and restore previous agent executions.
 
@@ -758,71 +934,26 @@ In the Models tab, show provider/routing status on each model:
 
 ---
 
-### UI Tab
+### Advanced Section
 
-**Purpose:** Configure user interface behavior and display preferences.
-
-**Layout:**
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Configure TeXRA user interface settings.                       │
-│                                                                 │
-│  DISPLAY OPTIONS                                                │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  ☑ Show quick pick for agent selection                          │
-│    Use VS Code quick pick instead of dropdown for agents.      │
-│                                                                 │
-│  ☑ Show quick pick for model selection                          │
-│    Use VS Code quick pick instead of dropdown for models.      │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  PROGRESS BOARD                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  Stream sort order: [Timestamp descending ▼]                   │
-│    Options: Timestamp ascending, Timestamp descending          │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  IMAGE PROCESSING                                               │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  Max image dimension: [2048 ▼]                                 │
-│    Larger images will be resized before sending to models.     │
-│    Options: 1024, 2048, 4096                                   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Settings Mapping:**
-| UI Element | VS Code Setting |
-|------------|-----------------|
-| Agent quick pick checkbox | `texra.ui.showAgentQuickPick` |
-| Model quick pick checkbox | `texra.ui.showModelQuickPick` |
-| Stream sort order dropdown | `texra.progressBoard.streamSortOrder` |
-| Max image dimension dropdown | `texra.maxImageDimension` |
-
-**Storage:** VS Code configuration (backwards compatible)
-
----
-
-### Misc Tab
-
-**Purpose:** Miscellaneous settings that don't fit in other categories.
+**Purpose:** System-level settings, paths, retry behavior, and developer options.
 
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Miscellaneous settings.                                        │
+│  Advanced                                                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  System-level settings for advanced users.                      │
 │                                                                 │
-│  CONTEXT & COMPACTION                                           │
+│  RETRY BEHAVIOR                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  Compaction threshold: [85 %]                                  │
-│    Compact context when usage exceeds this percentage.          │
-│    Range: 50-95%                                                │
+│  Max retries: [3 ▼]                                            │
+│    Maximum number of retries for failed API requests.          │
+│    Options: 1, 2, 3, 5                                         │
+│                                                                 │
+│  Initial delay: [1000 ms]                                      │
+│    Initial delay before first retry (exponential backoff).     │
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
@@ -835,23 +966,18 @@ In the Models tab, show provider/routing status on each model:
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  AGENT OUTPUTS                                                  │
+│  SYSTEM PATHS                                                   │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  Storage mode: [Folder ▼]                                      │
-│    How to store agent outputs.                                 │
-│    Options: In-place, Folder                                   │
+│  Sox audio path: [/usr/bin/sox            ] [Browse]           │
+│    Path to sox executable for audio processing.                │
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  RETRY BEHAVIOR                                                 │
+│  DEBUG (Developer)                                              │
 │  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  Max retries: [3 ▼]                                            │
-│    Maximum number of retries for failed API requests.          │
-│                                                                 │
-│  Initial delay: [1000 ms]                                      │
-│    Initial delay before first retry (exponential backoff).     │
+│  ☐ Enable debug logging                                        │
+│  ☐ Enable verbose output                                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -859,27 +985,32 @@ In the Models tab, show provider/routing status on each model:
 **Settings Mapping:**
 | UI Element | VS Code Setting |
 |------------|-----------------|
-| Compaction threshold | `texra.model.compactionThresholdPercent` |
-| Commits to show | `texra.git.numberOfCommitsToShow` |
-| Agent outputs storage mode | `texra.agentOutputs.storageMode` |
 | Max retries | `texra.model.retry.maxRetries` |
 | Initial delay | `texra.model.retry.initialDelayMs` |
+| Commits to show | `texra.git.numberOfCommitsToShow` |
+| Sox audio path | `texra.audio.soxPath` |
+| Debug logging | `texra.debug.*` |
 
 **Storage:** VS Code configuration (backwards compatible)
 
 ---
 
-### Future: Multi-Agent Tab
-
-**Note:** The `texra.merge.defaultModel` setting is intended for a future Multi-Agent Tab that will configure multi-agent workflows (merge operations). This is deferred until the multi-agent feature set is more mature.
-
----
-
 ### Features Summary
 
-**Profile Tab Features:**
-- Account info display (if logged in)
-- Model access mode toggle (included vs own keys) - only when logged in
+**Sidebar Navigation Sections:**
+- **General** - Account info, UI preferences (quick picks, image dimension, sort order)
+- **Agents** (main) - Agent list enable/disable, remote agents, custom agents directory
+- **Agents → Workflow** - Workflow agent output storage settings
+- **Agents → Tool-Use** - Edit approval, session persistence, compaction threshold
+- **Models & Providers** - Combined model selection + provider configuration + routing
+- **Multi-Agent** - Merge settings (future ensemble features noted)
+- **LaTeX** - Formatter, latexdiff, TikZ settings
+- **Memory** - Memory file browser with expandable content preview
+- **History** - Execution history browser
+- **Advanced** - System paths, retry behavior, debug settings
+
+**Key Features:**
+- Account info display at sidebar top (if logged in)
 - Per-provider configuration cards
 - Provider modal with API key + custom endpoint
 - OpenRouter special configuration (routing mode)
@@ -1284,32 +1415,32 @@ src/
 │   ├── SettingsViewProvider.ts      # WebviewViewProvider
 │   ├── SettingsViewMessageHandler.ts
 │   ├── SettingsViewContentProvider.ts
-│   ├── index.html                   # Tabbed layout (9 tabs)
-│   ├── styles.css                   # VS Code native styling
+│   ├── index.html                   # Sidebar navigation layout
+│   ├── styles.css                   # Cursor-style sidebar styling
 │   └── modules/
 │       ├── main.js                  # Entry point
 │       ├── messageHandlers.js
 │       ├── settingsViewState.js
-│       ├── tabs/
-│       │   ├── ModelsTab.js         # Models tab logic
-│       │   ├── AgentsTab.js         # Agents tab (includes remote agents)
-│       │   ├── ToolUseTab.js        # Tool-use settings + sessions
-│       │   ├── LatexTab.js          # LaTeX settings tab
-│       │   ├── MemoryTab.js         # Memory files browser
-│       │   ├── HistoryTab.js        # History tab (migrated)
-│       │   ├── ProfileTab.js        # Profile tab (streaming, routing)
-│       │   ├── UITab.js             # UI preferences
-│       │   └── MiscTab.js           # Miscellaneous settings
+│       ├── sidebarNav.js            # Sidebar navigation logic
+│       ├── sections/
+│       │   ├── GeneralSection.js    # Account + UI preferences
+│       │   ├── AgentsSection.js     # Agent list (main)
+│       │   ├── AgentsWorkflow.js    # Agents → Workflow subsection
+│       │   ├── AgentsToolUse.js     # Agents → Tool-Use subsection
+│       │   ├── ModelsProviders.js   # Combined Models & Providers
+│       │   ├── MultiAgentSection.js # Multi-agent settings
+│       │   ├── LatexSection.js      # LaTeX settings
+│       │   ├── MemorySection.js     # Memory files browser
+│       │   ├── HistorySection.js    # History (migrated)
+│       │   └── AdvancedSection.js   # Advanced settings
 │       └── uiManagers/
+│           ├── SidebarRenderer.js
 │           ├── ModelListRenderer.js
+│           ├── ProviderRenderer.js
 │           ├── AgentListRenderer.js
-│           ├── ToolUseRenderer.js
 │           ├── LatexSettingsRenderer.js
 │           ├── MemoryRenderer.js    # From memoryView
-│           ├── HistoryRenderer.js   # From historyView
-│           ├── ProfileRenderer.js   # From profileView
-│           ├── UIRenderer.js
-│           └── MiscRenderer.js
+│           └── HistoryRenderer.js   # From historyView
 │
 ├── profileView/                     # DEPRECATED - merge into settingsView
 ├── historyView/                     # DEPRECATED - merge into settingsView
@@ -1320,11 +1451,11 @@ src/
 
 ```typescript
 // Register command to open settings view
-commands.registerCommand('texra.openSettings', (tab?: string) => {
+commands.registerCommand('texra.openSettings', (section?: string) => {
   settingsViewProvider.show();
-  if (tab) {
-    // 'models' | 'agents' | 'tooluse' | 'latex' | 'memory' | 'history' | 'profile' | 'ui' | 'misc'
-    settingsViewProvider.selectTab(tab);
+  if (section) {
+    // 'general' | 'agents' | 'agents-workflow' | 'agents-tooluse' | 'models' | 'multiagent' | 'latex' | 'memory' | 'history' | 'advanced'
+    settingsViewProvider.selectSection(section);
   }
 });
 
@@ -1391,81 +1522,75 @@ interface AgentInfo {
 ## Success Metrics
 
 1. Single entry point for all configuration
-2. Easy tab navigation (keyboard accessible)
+2. Cursor-style sidebar navigation (keyboard accessible)
 3. State properly persisted (models global, agents per-workspace)
 4. History search and restore working
-5. Profile/auth flow unchanged
+5. Profile/auth flow unchanged (account info in sidebar header)
 6. LaTeX settings functional and synced with VS Code config
-7. Notion-style minimalist appearance achieved
+7. Clean sidebar + content layout achieved
 
 ---
 
 ## Implementation Phases
 
 ### Phase 1: Core Structure + Extended getConfig
-- Create settingsView with tab navigation (9 tabs)
+- Create settingsView with Cursor-style sidebar navigation
 - Implement extended `getConfig()` with state awareness
-- Implement Models tab with provider accordions
+- Implement General section (account + UI preferences)
 - Wire up globalState for model preferences
 - Test graceful migration from VS Code config
-- Use vscode-form-group for all form layouts
 
-### Phase 2: Agents Tab (View-Only First)
-- Implement Agents tab with list of all agents
+### Phase 2: Models & Providers Section
+- Implement combined Models & Providers section
+- Provider accordions with API status + model list
+- Provider configuration modal (API key + endpoint + streaming toggle)
+- Routing options UI
+- Migrate provider config from old profileView
+
+### Phase 3: Agents Section (View-Only First)
+- Implement Agents section with list of all agents
 - Show category badges (workflow/toolUse) and source (built-in/custom/remote)
 - Wire up workspaceState for agent preferences
-- Include remote agents settings (autoShowIfAvailable)
-- Handle remote agents auth state
-- Link to YAML files for editing (power users)
+- Include remote agents settings + custom agents directory (Advanced)
 - **Note:** Supersedes FolderExplorer/agent explorer view
 
-### Phase 3: Tool-Use Tab
-- Implement Tool-Use tab with edit approval settings
-- Add session persistence settings UI
-- Add active sessions list with resume/discard
+### Phase 4: Agents Subsections
+- Implement Agents → Workflow subsection (output storage mode)
+- Implement Agents → Tool-Use subsection (edit approval, persistence, compaction)
 - Wire to VS Code config via extended getConfig
 
-### Phase 4: LaTeX Tab
-- Implement LaTeX tab with formatter, latexdiff, TikZ sections
+### Phase 5: Multi-Agent Section
+- Implement Multi-Agent section with merge settings
+- Add "Coming Soon" placeholder for future ensemble features
+
+### Phase 6: LaTeX Section
+- Implement LaTeX section with formatter, latexdiff, TikZ
 - Wire up to existing VS Code configuration
 - Add file browser for config paths
-- Add collapsible advanced sections (TikZ template, custom replacements)
 
-### Phase 5: Memory Tab
-- Migrate memoryView to Memory tab (file browser only)
-- Remove tool-use settings (moved to Tool-Use tab)
+### Phase 7: Memory Section
+- Migrate memoryView to Memory section
+- Implement expandable content preview
 - Delete old memoryView
 
-### Phase 6: Migrate History
-- Move history rendering to History tab
+### Phase 8: History Section
+- Move history rendering to History section
 - Preserve search, delete, restore, rerun functionality
 - Delete old historyView
 
-### Phase 7: Migrate Profile
-- Move profile/auth to Profile tab
-- Implement provider configuration cards
-- Implement provider modal (API key + endpoint + streaming toggle)
-- Add routing options UI
-- Delete old profileView
-
-### Phase 8: UI + Misc Tabs
-- Implement UI tab with display preferences
-- Implement Misc tab with advanced settings
-- Wire to VS Code config via extended getConfig
-
-### Phase 9: Polish & Cleanup
+### Phase 9: Advanced Section + Cleanup
+- Implement Advanced section (retry, git, system paths, debug)
 - Add main webview entry point (gear icon)
-- Deep link support (open to specific tab)
+- Deep link support (open to specific section)
 - Verify graceful migration (no breaking existing setups)
-- Accessibility audit (keyboard navigation)
 - Remove deprecated views (profileView, historyView, memoryView)
-- Remove FolderExplorer/agent explorer (superseded by Agents tab)
+- Remove FolderExplorer/agent explorer (superseded)
 - Documentation
 
 ### Future Scope (Deferred)
-- **Multi-Agent Tab** - Configure merge operations and `texra.merge.defaultModel`
 - **Agent Creation Wizard** - AI-assisted agent creation from plain English description
 - **Agent Edit Form** - Form-based editing without YAML knowledge
+- **Multi-Agent Ensemble** - Run across multiple models with voting/consensus
 
 ---
 
@@ -1473,35 +1598,29 @@ interface AgentInfo {
 
 Based on 79 total settings in package.json:
 
-### Now Covered by Settings View (46 settings)
+### Now Covered by Settings View (47 settings)
 
-| Tab | Settings Covered |
-|-----|------------------|
-| **Models** | `texra.models`, enabled model list |
-| **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShowIfAvailable` |
-| **Tool-Use** | `texra.toolUse.requireEditApproval`, `texra.toolUse.persistence.*` (2) |
+| Section | Settings Covered |
+|---------|------------------|
+| **General** | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
+| **Agents (main)** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShowIfAvailable`, `texra.explorer.agentsDirectory` |
+| **Agents → Workflow** | `texra.agentOutputs.storageMode` |
+| **Agents → Tool-Use** | `texra.toolUse.requireEditApproval`, `texra.toolUse.persistence.*` (2), `texra.model.compactionThresholdPercent` |
+| **Models & Providers** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek` |
+| **Multi-Agent** | `texra.merge.defaultModel` |
 | **LaTeX** | `texra.latex.*` (7), `texra.latexdiff.*` (4) |
 | **Memory** | Memory file browser (no config, file system) |
 | **History** | History browser (existing storage) |
-| **Profile** | `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek` |
-| **UI** | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
-| **Misc** | `texra.model.compactionThresholdPercent`, `texra.git.numberOfCommitsToShow`, `texra.agentOutputs.storageMode`, `texra.model.retry.*` (2) |
-
-### Deferred to Future Tabs (1 setting)
-| Setting | Future Tab | Notes |
-|---------|------------|-------|
-| `texra.merge.defaultModel` | Multi-Agent | Awaiting multi-agent feature maturity |
+| **Advanced** | `texra.model.retry.*` (2), `texra.git.numberOfCommitsToShow`, `texra.audio.soxPath`, `texra.debug.*` |
 
 ### Remain as VS Code Settings Only (32 settings)
 These are advanced/power-user settings that don't need UI exposure:
 
 - `texra.files.*` (16) - File type filtering patterns (power user)
-- `texra.logger.*`, `texra.debug.*` (3) - Development/debugging only
+- `texra.logger.*` (2) - Logging configuration
 - `texra.auth.*` (3) - System-level authentication endpoints
 - `texra.remoteAgents.cacheTimeHours` (1) - Advanced cache behavior
-- `texra.explorer.agentsDirectory` (1) - System path
-- `texra.audio.soxPath` (1) - System path for audio
-- Other system-level paths and debug flags (7)
+- Other system-level paths and debug flags (10)
 
 ---
 
