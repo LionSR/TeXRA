@@ -204,15 +204,23 @@ const RECOMMENDED_MODELS = [
 
 **Scope (Phase 1):** View-only with enable/disable. Agent creation wizard deferred to Future Scope.
 
-**Agent Categories:**
-- `workflow` - Document-processing agents (input → output transformations)
-- `toolUse` - Interactive agents with tool capabilities (chat, research)
+**Agent Metadata Displayed:**
+| Field | Source | Display |
+|-------|--------|---------|
+| Name | YAML `name` | Text |
+| Description | YAML `description` | Text (truncated) |
+| Category | `agentCategory` | Badge: `[workflow]` or `[toolUse]` |
+| Type | `settings.agentType` | Label: `CoT`, `Direct`, `Merge`, `Reflect` |
+| Rounds | `settings.rounds` | Label: `×2`, `×3` (if > 1) |
+| Inherits | `inherits` | Codicon: `$(extensions)` + parent name |
+| Source | File location | `Built-in`, `Custom`, `Remote` |
 
-**Agent Sources:**
-- `builtIn` - Shipped with extension (workflow agents)
-- `builtInToolUse` - Shipped with extension (tool-use agents)
-- `custom` - User-created YAML files in workspace
-- `remote` - Shared agents from team (requires login)
+**Agent Type Icons (codicons):**
+- `$(lightbulb)` CoT (Chain-of-Thought)
+- `$(zap)` Direct
+- `$(git-merge)` Merge
+- `$(sync)` Reflect
+- `$(tools)` Tool-Use
 
 **Layout:**
 ```
@@ -223,30 +231,39 @@ const RECOMMENDED_MODELS = [
 │  BUILT-IN AGENTS                                               │
 │  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ chat        Interactive conversation         [toolUse] │  │
-│  │ ☑ correct     Fix typos & LaTeX errors        [workflow] │  │
-│  │ ☑ polish      Improve writing quality         [workflow] │  │
-│  │ ☑ research    Research with tools             [toolUse]  │  │
-│  │ ☐ draw        Create TikZ figures             [workflow] │  │
-│  │ ☐ ocr         Handwritten → LaTeX             [workflow] │  │
-│  │ ☐ paper2slide Paper → Beamer slides           [workflow] │  │
-│  │ ☐ paper2poster Paper → poster                 [workflow] │  │
-│  │ ☐ transcribe  Audio transcription             [workflow] │  │
+│  │ ☑ chat      Interactive conversation                      │  │
+│  │             $(tools) toolUse                              │  │
+│  │                                                           │  │
+│  │ ☑ correct   Fix typos & LaTeX errors                      │  │
+│  │             $(lightbulb) CoT  ×2  $(extensions) polish    │  │
+│  │                                                           │  │
+│  │ ☑ polish    Improve writing quality                       │  │
+│  │             $(lightbulb) CoT  ×2                          │  │
+│  │                                                           │  │
+│  │ ☑ research  Research with tools                           │  │
+│  │             $(tools) toolUse                              │  │
+│  │                                                           │  │
+│  │ ☐ draw      Create TikZ figures                           │  │
+│  │             $(zap) Direct                                 │  │
+│  │   ...                                                     │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  CUSTOM AGENTS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ my-reviewer Reviews papers for clarity      [workflow] │  │
-│  │                                    [Open YAML] [Delete]  │  │
+│  │ ☑ my-reviewer   Reviews papers for clarity                │  │
+│  │                 $(lightbulb) CoT  $(extensions) correct   │  │
+│  │                              [Source Code] [Delete]       │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │  📁 Custom agents are stored in: .texra/agents/                 │
 │                                                                 │
 │  REMOTE AGENTS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ team-reviewer   Team's paper reviewer       [workflow] │  │
-│  │ ☐ grant-writer    Grant proposal helper       [toolUse]  │  │
+│  │ ☑ team-reviewer   Team's paper reviewer                   │  │
+│  │                   $(lightbulb) CoT  ×3                    │  │
+│  │ ☐ grant-writer    Grant proposal helper                   │  │
+│  │                   $(tools) toolUse                        │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                        ─ or if not logged in ─                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -256,16 +273,11 @@ const RECOMMENDED_MODELS = [
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Category Badges:** Use `<vscode-badge>` for workflow/toolUse labels.
-
 **Custom Agent Actions:**
-- `[Open YAML]` - Opens agent YAML file in editor (for power users)
+- `[Source Code]` - Opens agent YAML file in editor
 - `[Delete]` - Deletes custom agent YAML file
 
-**Note:** Agent creation wizard and form-based editing are deferred to Future Scope. For now, users create agents by:
-1. Duplicating an existing YAML file in `.texra/agents/`
-2. Editing the YAML directly
-3. The agent appears automatically in the list
+**Note:** Agent creation wizard and form-based editing are deferred to Future Scope. For now, users create agents by duplicating an existing YAML file in `.texra/agents/` and editing it directly.
 
 **Storage:** `workspaceState.enabledAgents: string[]`
 
@@ -379,8 +391,11 @@ const RECOMMENDED_MODELS = [
 ┌─────────────────────────────────────────────────────────────────┐
 │  Persistent memory storage for tool-use agents.                 │
 │                                                                 │
-│  CONVERSATION PERSISTENCE                                      │
+│  TOOL-USE SETTINGS                                             │
 │  ─────────────────────────────────────────────────────────────  │
+│  ☑ Require approval before file edits                          │
+│    Show diff preview and require confirmation for tool edits.  │
+│                                                                 │
 │  ☑ Persist conversations across VS Code restarts               │
 │    Sessions are saved and can be resumed later.                │
 │                                                                 │
@@ -444,7 +459,7 @@ const RECOMMENDED_MODELS = [
 **Data Sources:**
 - Memory files: `/memories` directory managed by MemoryTool
 - Active sessions: Tool-use session snapshots
-- Settings: `texra.toolUse.persistence.*`
+- Settings: `texra.toolUse.requireEditApproval`, `texra.toolUse.persistence.*`
 
 **Storage:** `workspaceState` for persistence settings
 
@@ -1174,7 +1189,35 @@ interface AgentInfo {
 ### Future Scope (Deferred)
 - **Agent Creation Wizard** - AI-assisted agent creation from plain English description
 - **Agent Edit Form** - Form-based editing without YAML knowledge
-- **Agent Testing** - Test agent with sample input before saving
+
+---
+
+## Uncovered Settings (Remain in VS Code Config)
+
+Based on 79 total settings in package.json, these remain as advanced VS Code settings:
+
+### Could Be Added Later (17 settings)
+| Setting | Suggested Tab | Priority |
+|---------|--------------|----------|
+| `texra.model.useStreaming*` (9) | Models → Advanced | Medium |
+| `texra.toolUse.requireEditApproval` | Memory | High |
+| `texra.merge.defaultModel` | Models or Agents | Low |
+| `texra.model.compactionThresholdPercent` | Models → Advanced | Low |
+| `texra.model.baseUrlDeepSeek` | Profile → Providers | Low |
+| `texra.maxImageDimension` | LaTeX or new Files tab | Low |
+| `texra.progressBoard.streamSortOrder` | New UI Preferences tab | Low |
+| `texra.model.retry.*` (2) | Models → Advanced | Low |
+
+### Should Remain as VS Code Settings (33 settings)
+- `texra.ui.*` (3) - UI behavior flags
+- `texra.files.*` (16) - File type filtering (power user)
+- `texra.logger.*`, `texra.debug.*` (3) - Development only
+- `texra.auth.*` (3) - System-level authentication
+- `texra.remoteAgents.*` (2) - Remote agent behavior
+- `texra.explorer.agentsDirectory` - System path
+- `texra.audio.soxPath` - System path
+- `texra.git.numberOfCommitsToShow` - Niche preference
+- `texra.agentOutputs.storageMode` - Advanced workflow
 
 ---
 
