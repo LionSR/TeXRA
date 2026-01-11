@@ -172,42 +172,38 @@ const RECOMMENDED_MODELS = [
 
 ### Agents Tab
 
-**Purpose:** Configure which agents appear in agent dropdowns.
+**Purpose:** Configure agents and create custom ones without YAML complexity.
+
+**Design Philosophy:** Users should be able to create and modify agents through a simple UI, not by editing YAML files. The complexity is hidden; power users can access raw YAML if needed.
 
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Configure which agents appear in the agent dropdowns.          │
+│  Configure agents and create custom ones.                       │
 │  Settings are saved per workspace.                              │
 │                                                                 │
-│  LOCAL AGENTS                                     [Enable All] │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ ask             Quick Q&A without tools                 │  │
-│  │ ☑ chat            Interactive chat with context           │  │
-│  │ ☑ correct         Corrects typos, grammar, LaTeX          │  │
-│  │ ☑ draw            Creates/polishes TikZ figures           │  │
-│  │ ☐ merge           Merges partial edits into document      │  │
-│  │ ☑ ocr             Handwritten math → LaTeX                │  │
-│  │ ☑ paper2poster    Paper → academic poster                 │  │
-│  │ ☑ paper2slide     Paper → Beamer presentation             │  │
-│  │ ☑ polish          Improves writing quality & clarity      │  │
-│  │ ☑ research        Research assistant with tools           │  │
-│  │ ☑ search          Search & retrieval                      │  │
-│  │ ☐ transcribe_audio Audio transcription                    │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  MY AGENTS                                    [+ Create Agent]  │
+│  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
-│  CUSTOM AGENTS                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  No custom agents in this workspace.        [Learn More]  │  │
+│  │ ☑ chat            Interactive conversation         Built-in│  │
+│  │ ☑ correct         Fix typos & LaTeX errors         Built-in│  │
+│  │ ☑ polish          Improve writing quality          Built-in│  │
+│  │ ☑ research        Research with tools              Built-in│  │
+│  │ ☑ my-reviewer     Reviews papers for clarity        Custom │  │
+│  │                                            [Edit] [Delete] │  │
+│  │ ☐ draw            Create TikZ figures              Built-in│  │
+│  │ ☐ ocr             Handwritten → LaTeX              Built-in│  │
+│  │ ☐ paper2slide     Paper → Beamer slides            Built-in│  │
+│  │ ☐ paper2poster    Paper → poster                   Built-in│  │
+│  │ ☐ transcribe      Audio transcription              Built-in│  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  REMOTE AGENTS                                                 │
+│  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ ☑ team-reviewer   Team's paper reviewer       [Public]    │  │
-│  │ ☑ grant-writer    Grant proposal helper       [Team]      │  │
-│  │ ☐ thesis-helper   Thesis writing assistant    [Private]   │  │
-│  │                                                           │  │
-│  │  ☐ Auto-show new remote agents                            │  │
+│  │ ☐ grant-writer    Grant proposal helper       [Team]      │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                        ─ or if not logged in ─                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -215,21 +211,130 @@ const RECOMMENDED_MODELS = [
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
-│  Selected: 12 agents                              [Save Changes]│
+│  [Advanced: Open Agent Files]          ← Power users only      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Data Source:** `agentRegistry` (built-in, custom, remote)
+---
 
-**Agent Metadata Displayed:**
-- Name
-- Description
-- Source badge (for remote: visibility)
+### Create Agent Wizard
 
-**Sections:**
-1. **Local Agents** - Built-in agents from `resources/agents/`
-2. **Custom Agents** - User-defined agents in workspace
-3. **Remote Agents** - Shared team agents (requires auth)
+Click **[+ Create Agent]** → AI-assisted creation:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Create Custom Agent                                      [×]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  What should this agent do?                                    │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Review my paper drafts and suggest improvements for       │  │
+│  │ clarity, argument structure, and academic tone.           │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  Agent name: [paper-reviewer    ]                              │
+│                                                                 │
+│  Type:                                                         │
+│  ● Document processor (input → output)                         │
+│  ○ Interactive chat (conversation)                             │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  💡 AI will generate the agent for you.                        │
+│                                                                 │
+│                                      [Cancel]  [Create Agent]  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Flow:**
+1. User describes what agent should do (plain English)
+2. AI generates YAML configuration behind the scenes
+3. Agent immediately appears in list, ready to use
+4. No YAML knowledge required
+
+---
+
+### Edit Agent Form
+
+Click **[Edit]** on custom agent → Form-based editor:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Edit Agent: paper-reviewer                               [×]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  BASIC                                                         │
+│  ─────────────────────────────────────────────────────────────  │
+│  Name:        [paper-reviewer                ]                 │
+│  Description: [Reviews papers for clarity    ]                 │
+│  Based on:    [correct ▼] (inherit from built-in)              │
+│                                                                 │
+│  BEHAVIOR                                                      │
+│  ─────────────────────────────────────────────────────────────  │
+│  Style:  ● Thorough (chain-of-thought)  ○ Quick (direct)       │
+│  Rounds: [2 ▼]                                                 │
+│                                                                 │
+│  INSTRUCTIONS                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│  What the agent should do:                                     │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ You are an academic paper reviewer. Analyze the document  │  │
+│  │ for clarity, argument structure, and academic tone.       │  │
+│  │ Suggest specific improvements with examples.              │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ▶ Advanced options                                            │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  [View YAML]                       [Cancel]  [Test]  [Save]   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Form fields map to YAML transparently:**
+- Name → `name:`
+- Description → `description:`
+- Based on → `inherits:`
+- Style → `settings.agentType:`
+- Rounds → `settings.rounds:`
+- Instructions → `prompts.systemPrompt:`
+
+---
+
+### Complexity Comparison
+
+| Task | Before (YAML) | After (UI) |
+|------|---------------|------------|
+| **Create agent** | Write YAML from scratch | Describe in English, AI generates |
+| **Edit agent** | Edit YAML syntax | Fill out form |
+| **Set inheritance** | `inherits: correct` | Dropdown: "Based on: correct" |
+| **Change rounds** | Edit `settings.rounds: 2` | Slider or dropdown |
+| **View all agents** | File explorer + folders | Single flat list |
+
+---
+
+### Data Flow
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   User Input    │────▶│   Form/Wizard   │────▶│   YAML File     │
+│  (plain text)   │     │   (abstracts)   │     │  (storage)      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │  Agent Registry │
+                        │  (runtime)      │
+                        └─────────────────┘
+```
+
+YAML files remain the source of truth, but users interact through forms.
+
+---
+
+### Power User Escape Hatches
+
+1. **[View YAML]** button in edit form - opens raw YAML
+2. **[Advanced: Open Agent Files]** - opens file explorer
+3. YAML files still editable directly if preferred
 
 **Storage:** `workspaceState.enabledAgents: string[]`
 
