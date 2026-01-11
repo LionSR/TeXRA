@@ -118,7 +118,7 @@ VS Code-native styling without custom CSS complexity.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Tab Structure (6 tabs):**
+**Tab Structure (5 tabs for v1):**
 ```
 Tab 1: Models
 ├── Routing options (radio: direct/openrouter/proxy)
@@ -146,7 +146,10 @@ Tab 4: Memory
 
 Tab 5: History
 └── Execution history browser (search, restore, rerun)
+```
 
+**Deferred to Future Release:**
+```
 Tab 6: Advanced
 ├── ▼ Multi-Agent (collapsible) - merge model, future ensemble
 ├── ▼ UI Preferences (collapsible) - reminders, image dimension, sort
@@ -181,7 +184,7 @@ Tab 6: Advanced
     <vscode-tab-header slot="header">LaTeX</vscode-tab-header>
     <vscode-tab-header slot="header">Memory</vscode-tab-header>
     <vscode-tab-header slot="header">History</vscode-tab-header>
-    <vscode-tab-header slot="header">Advanced</vscode-tab-header>
+    <!-- Advanced tab deferred to future release -->
 
     <!-- Models Tab -->
     <vscode-tab-panel>
@@ -254,30 +257,7 @@ Tab 6: Advanced
       </div>
     </vscode-tab-panel>
 
-    <!-- Advanced Tab -->
-    <vscode-tab-panel>
-      <div class="tab-content">
-        <vscode-collapsible title="Multi-Agent">
-          <!-- Merge model + coming soon -->
-        </vscode-collapsible>
-
-        <vscode-collapsible title="Retry Behavior">
-          <!-- Retry settings -->
-        </vscode-collapsible>
-
-        <vscode-collapsible title="Git Integration">
-          <!-- Git settings -->
-        </vscode-collapsible>
-
-        <vscode-collapsible title="System Paths">
-          <!-- Path settings -->
-        </vscode-collapsible>
-
-        <vscode-collapsible title="Debug">
-          <!-- Debug flags -->
-        </vscode-collapsible>
-      </div>
-    </vscode-tab-panel>
+    <!-- Advanced Tab - deferred to future release -->
   </vscode-tabs>
 </div>
 ```
@@ -830,7 +810,9 @@ In the Models tab, show provider/routing status on each model:
 
 ---
 
-### Advanced Tab
+### Advanced Tab (DEFERRED TO FUTURE RELEASE)
+
+> **Note:** This tab is not included in v1. Specifications kept for future reference.
 
 **Purpose:** Multi-agent settings, UI preferences, retry behavior, system paths, and developer options. Uses vscode-collapsible for organization.
 
@@ -916,13 +898,15 @@ In the Models tab, show provider/routing status on each model:
 
 ### Features Summary
 
-**Tab Layout with Header Bar:**
+**Tab Layout with Header Bar (v1 - 5 tabs):**
 - **Header Bar** - Account info, sign in/out, manage account (always visible)
 - **Models Tab** - Provider configuration, model selection, routing options
 - **Agents Tab** - Agent list, Workflow Settings (collapsible), Tool-Use Settings (collapsible)
 - **LaTeX Tab** - Formatter, latexdiff, TikZ (all as collapsibles)
 - **Memory Tab** - Memory file browser with expandable content preview
 - **History Tab** - Execution history browser
+
+**Deferred to Later Release:**
 - **Advanced Tab** - Multi-Agent, UI preferences, git, system paths, debug (all collapsibles)
 
 **Key Features:**
@@ -947,54 +931,48 @@ In the Models tab, show provider/routing status on each model:
 
 ## State Management
 
-### Global State (`context.globalState`)
+### VS Code Configuration (Primary)
 
-Shared across all workspaces, persists per machine.
+Settings View reads/writes directly to VS Code configuration using `ConfigurationTarget`:
 
 ```typescript
-interface GlobalState {
-  // Model preferences - same models everywhere
-  enabledModels: string[];
+const config = vscode.workspace.getConfiguration('texra');
 
-  // Provider configuration (non-secret parts)
-  providerConfig: {
-    [providerId: string]: {
-      customEndpoint?: string;   // Custom base URL (empty = default)
-      enabled: boolean;          // Show in provider list
-    };
-  };
+// Global settings (user-level, all workspaces)
+await config.update('models', enabledModels, ConfigurationTarget.Global);
+await config.update('maxImageDimension', 2048, ConfigurationTarget.Global);
 
-  // Routing preferences
-  routing: {
-    mode: 'direct' | 'openrouter' | 'proxy';  // Global routing strategy
-    openRouterMode: 'exclusive' | 'all';       // Only OR-models vs all
-    proxyDomain?: string;                      // Custom proxy domain
-  };
-
-  // Version for migrations
-  settingsVersion: number;
-}
+// Workspace settings (project-level, .vscode/settings.json)
+await config.update('agents', enabledAgents, ConfigurationTarget.Workspace);
+await config.update('agentOutputs.storageMode', 'folder', ConfigurationTarget.Workspace);
 ```
 
-### Workspace State (`context.workspaceState`)
+**Setting Scopes:**
+| Setting | ConfigurationTarget | Reason |
+|---------|---------------------|--------|
+| `texra.models` | Global | Same models everywhere |
+| `texra.maxImageDimension` | Global | User preference |
+| Provider endpoints | Global | Same API setup everywhere |
+| `texra.agents` | Workspace | Different projects need different agents |
+| `texra.agentOutputs.storageMode` | Workspace | Project-specific output location |
+| `texra.toolUse.*` | Global | Consistent behavior |
+| `texra.latex.*` | Global/Workspace | User choice |
 
-Per-workspace, different projects have different preferences.
+**Benefits of VS Code Config:**
+- No extension state migration needed
+- Works with VS Code Settings Sync automatically
+- Users can still edit settings.json directly
+- Respects VS Code conventions
+
+### Extension State (Minimal)
+
+Only for caching and truly ephemeral UI state:
 
 ```typescript
-interface WorkspaceState {
-  // Agent preferences - different per project
-  enabledAgents: string[];
+// globalState - only for caching
+context.globalState.get('modelMetadataCache');  // Cached llm-zoo data
 
-  // Last selections - restore on reopen
-  lastUsedAgent: string;
-  lastUsedModel: string;
-
-  // Remote agent settings
-  remoteAgentsAutoShow: boolean;
-
-  // Version for migrations
-  settingsVersion: number;
-}
+// No settings stored in extension state
 ```
 
 ### Secret Storage (`context.secrets`)
@@ -1136,190 +1114,25 @@ Users who have configured API keys will continue to work without any action.
 
 ---
 
-### Critical: Extend getConfig for Backwards Compatibility
+### No Migration Needed
 
-**Key Principle:** There is too much logic code using `getConfig()` throughout the codebase. We should NOT break that. Instead, we **extend** `getConfig` to be aware of the new state sources.
+Since Settings View reads/writes directly to VS Code configuration:
 
-**Current Pattern (scattered throughout codebase):**
+1. **Existing settings.json configurations continue to work unchanged**
+2. **No extension state migration required**
+3. **Settings View is just a GUI wrapper around existing VS Code settings**
+
 ```typescript
+// Settings View simply reads and writes VS Code config
 const config = vscode.workspace.getConfiguration('texra');
+
+// Read
 const models = config.get<string[]>('models');
-const useStreaming = config.get<boolean>('model.useStreamingAnthropic');
+
+// Write with appropriate scope
+await config.update('models', newModels, ConfigurationTarget.Global);
+await config.update('agents', newAgents, ConfigurationTarget.Workspace);
 ```
-
-**Extended getConfig Pattern:**
-```typescript
-import { getConfig } from '@common/config';
-
-// getConfig now checks extension state first, then falls back to VS Code config
-const models = getConfig<string[]>('models');           // → Reads globalState first
-const useStreaming = getConfig<boolean>('model.useStreamingAnthropic'); // → Reads providerConfig
-```
-
-**Implementation:**
-```typescript
-// src/common/config.ts
-
-/**
- * Extended configuration getter that supports both extension state and VS Code config.
- *
- * Priority for each setting type:
- * 1. Extension state (globalState/workspaceState) - for settings moved to new UI
- * 2. VS Code config - for backwards compatibility and advanced settings
- * 3. Default value
- *
- * This allows existing code using getConfig to continue working unchanged.
- */
-export function getConfig<T>(key: string, defaultValue?: T): T {
-  const context = getExtensionContext();
-
-  // Settings that have moved to extension state
-  const stateMapping: Record<string, () => T | undefined> = {
-    'models': () => context.globalState.get('enabledModels') as T,
-    'agents': () => context.workspaceState.get('enabledAgents') as T,
-    'toolUseAgents': () => context.workspaceState.get('enabledAgents') as T,
-    'model.useOpenRouter': () => {
-      const routing = context.globalState.get<RoutingConfig>('routing');
-      return (routing?.mode === 'openrouter') as unknown as T;
-    },
-    'model.useImprovedConnection': () => {
-      const routing = context.globalState.get<RoutingConfig>('routing');
-      return (routing?.mode === 'proxy') as unknown as T;
-    },
-    'model.improvedConnectionDomain': () => {
-      const routing = context.globalState.get<RoutingConfig>('routing');
-      return routing?.proxyDomain as T;
-    },
-    // Streaming settings now in provider config
-    'model.useStreamingAnthropic': () => getProviderStreaming('anthropic') as T,
-    'model.useStreamingOpenAI': () => getProviderStreaming('openai') as T,
-    'model.useStreamingGoogle': () => getProviderStreaming('google') as T,
-    // ... etc for all streaming settings
-  };
-
-  // Check extension state first
-  const stateGetter = stateMapping[key];
-  if (stateGetter) {
-    const fromState = stateGetter();
-    if (fromState !== undefined) {
-      return fromState;
-    }
-  }
-
-  // Fall back to VS Code config (existing behavior)
-  const config = vscode.workspace.getConfiguration('texra');
-  return config.get<T>(key, defaultValue as T);
-}
-
-function getProviderStreaming(providerId: string): boolean {
-  const context = getExtensionContext();
-  const providerConfig = context.globalState.get<ProviderConfigMap>('providerConfig');
-  return providerConfig?.[providerId]?.streaming ?? true; // Default: streaming enabled
-}
-```
-
-**Benefits:**
-1. **Zero breaking changes** - Existing `getConfig()` calls continue to work
-2. **Gradual migration** - Settings move to UI without code changes
-3. **Single source of truth** - UI writes to extension state, getConfig reads it
-4. **VS Code config fallback** - Power users can still override via settings.json
-
-**Migration Path:**
-1. Implement extended `getConfig()` with state awareness
-2. Build Settings UI that writes to extension state
-3. Existing code automatically picks up new values
-4. No mass refactoring of `getConfig()` calls needed
-
----
-
-### What Moves to Extension State
-
-| Setting | From | To | Reason |
-|---------|------|-----|--------|
-| `texra.models` | VS Code config | `globalState.enabledModels` | UI in Models tab |
-| `texra.agents` | VS Code config | `workspaceState.enabledAgents` | UI in Agents tab |
-| `texra.toolUseAgents` | VS Code config | `workspaceState.enabledAgents` | Merge with agents |
-| `texra.model.useOpenRouter` | VS Code config | `globalState.routing.mode` | UI in Models tab (routing section) |
-| `texra.model.useImprovedConnection` | VS Code config | `globalState.routing.mode` | UI in Models tab (routing section) |
-| `texra.model.improvedConnectionDomain` | VS Code config | `globalState.routing.proxyDomain` | UI in Models tab (routing section) |
-| `texra.toolUse.persistence.enabled` | VS Code config | `workspaceState.memorySettings` | UI in Memory tab |
-| `texra.toolUse.persistence.ttlHours` | VS Code config | `workspaceState.memorySettings` | UI in Memory tab |
-
-### What Stays in VS Code Config
-
-These remain in VS Code settings (advanced, rarely changed, or system paths):
-
-- `texra.model.useStreaming*` - Provider-specific streaming toggles
-- `texra.model.compactionThresholdPercent` - Advanced context management
-- `texra.model.baseUrlDeepSeek` - Custom endpoint (moved to globalState.providerConfig)
-- `texra.latex.*` - LaTeX formatter settings
-- `texra.files.*` - File handling patterns
-- `texra.latexdiff.*` - Diff settings
-- `texra.logger.*`, `texra.debug.*` - Development settings
-- `texra.audio.soxPath`, `texra.explorer.agentsDirectory` - System paths
-
-### Graceful Migration Strategy
-
-**Principle:** Read from new state first, fallback to VS Code config, never break existing setups.
-
-```typescript
-/**
- * Get enabled models with graceful migration.
- * Priority: globalState > VS Code config > defaults
- */
-function getEnabledModels(context: vscode.ExtensionContext): string[] {
-  // 1. Check new storage first
-  const fromState = context.globalState.get<string[]>('enabledModels');
-  if (fromState !== undefined) {
-    return fromState;
-  }
-
-  // 2. Fallback to VS Code config (existing users)
-  const config = vscode.workspace.getConfiguration('texra');
-  const fromConfig = config.get<string[]>('models');
-  if (fromConfig?.length) {
-    // Auto-migrate on first read
-    context.globalState.update('enabledModels', fromConfig);
-    return fromConfig;
-  }
-
-  // 3. Return defaults
-  return DEFAULT_ENABLED_MODELS;
-}
-
-/**
- * Get routing configuration with migration.
- */
-function getRoutingConfig(context: vscode.ExtensionContext): RoutingConfig {
-  const fromState = context.globalState.get<RoutingConfig>('routing');
-  if (fromState !== undefined) {
-    return fromState;
-  }
-
-  // Migrate from scattered VS Code settings
-  const config = vscode.workspace.getConfiguration('texra.model');
-  const useOpenRouter = config.get<boolean>('useOpenRouter', false);
-  const useProxy = config.get<boolean>('useImprovedConnection', false);
-  const proxyDomain = config.get<string>('improvedConnectionDomain');
-
-  const migrated: RoutingConfig = {
-    mode: useOpenRouter ? 'openrouter' : useProxy ? 'proxy' : 'direct',
-    openRouterMode: 'exclusive',
-    proxyDomain,
-  };
-
-  // Auto-migrate
-  context.globalState.update('routing', migrated);
-  return migrated;
-}
-```
-
-### Migration Timing
-
-1. **On extension activate:** Check and migrate settings lazily (on first read)
-2. **No forced migration:** Users can continue using VS Code config until they open Settings View
-3. **Settings View writes:** Once user saves in Settings View, new storage is used
-4. **VS Code config becomes secondary:** Still works for users who prefer it
 
 ---
 
@@ -1340,13 +1153,13 @@ src/
 │       ├── messageHandlers.js
 │       ├── settingsViewState.js
 │       ├── headerBar.js             # Account header bar logic
-│       ├── tabs/                    # Tab content modules
+│       ├── tabs/                    # Tab content modules (v1)
 │       │   ├── ModelsTab.js         # Models + providers + routing
 │       │   ├── AgentsTab.js         # Agents + collapsible settings
 │       │   ├── LatexTab.js          # LaTeX settings (collapsibles)
 │       │   ├── MemoryTab.js         # Memory files browser
-│       │   ├── HistoryTab.js        # History (migrated)
-│       │   └── AdvancedTab.js       # Multi-Agent, UI, retry, etc.
+│       │   └── HistoryTab.js        # History (migrated)
+│       │   # AdvancedTab.js - deferred to future release
 │       └── uiManagers/
 │           ├── ModelListRenderer.js
 │           ├── ProviderRenderer.js
@@ -1436,43 +1249,45 @@ interface AgentInfo {
 
 ## Success Metrics
 
-1. Single entry point for all configuration
+### v1 Release
+1. Single entry point for 5 core tabs (Models, Agents, LaTeX, Memory, History)
 2. Native vscode-tabs navigation (keyboard accessible)
-3. State properly persisted (models global, agents per-workspace)
+3. Settings properly scoped (models global, agents per-workspace via ConfigurationTarget)
 4. History search and restore working
 5. Account info visible in header bar (minimal custom CSS)
 6. LaTeX settings functional and synced with VS Code config
 7. vscode-collapsible used effectively for subsections
 8. Only header bar needs custom styling (everything else native)
+9. Existing settings.json configurations continue to work unchanged
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Core Structure + Extended getConfig
+### v1 Release (5 Tabs)
+
+#### Phase 1: Core Structure
 - Create settingsView with vscode-tabs + header bar
 - Implement header bar (account info, sign in/out - minimal custom CSS)
-- Implement extended `getConfig()` with state awareness
-- Wire up globalState for model preferences
-- Test graceful migration from VS Code config
+- Add main webview entry point (gear icon)
+- Deep link support (open to specific tab)
 
-### Phase 2: Models Tab
+#### Phase 2: Models Tab
 - Implement Models tab with provider collapsibles
 - Provider accordions with API status + model list
 - Provider configuration modal (API key + endpoint + streaming toggle)
 - Routing options (radio group at top)
 - Migrate provider config from old profileView
 
-### Phase 3: Agents Tab
+#### Phase 3: Agents Tab
 - Implement Agents tab with agent list
 - Show category badges (workflow/toolUse) and source (built-in/custom/remote)
-- Wire up workspaceState for agent preferences
 - Add Workflow Settings collapsible (output storage mode)
 - Add Tool-Use Settings collapsible (edit approval, persistence, compaction, retry behavior)
 - Include Advanced collapsible (custom agents directory)
 - **Note:** Supersedes FolderExplorer/agent explorer view
 
-### Phase 4: LaTeX Tab
+#### Phase 4: LaTeX Tab
 - Implement LaTeX tab with collapsible sections:
   - Formatter (collapsible)
   - LaTeXdiff (collapsible)
@@ -1481,34 +1296,34 @@ interface AgentInfo {
 - Wire up to existing VS Code configuration
 - Add file browser for config paths
 
-### Phase 5: Memory Tab
+#### Phase 5: Memory Tab
 - Migrate memoryView to Memory tab
 - Implement expandable content preview
 - Delete old memoryView
 
-### Phase 6: History Tab
+#### Phase 6: History Tab + v1 Cleanup
 - Move history rendering to History tab
 - Preserve search, delete, restore, rerun functionality
 - Delete old historyView
-
-### Phase 7: Advanced Tab + Cleanup
-- Implement Advanced tab with collapsible sections:
-  - Multi-Agent (merge model + "Coming Soon")
-  - UI Preferences (reminders, image dimension, sort order)
-  - Git Integration
-  - System Paths
-  - Debug
-- Add main webview entry point (gear icon)
-- Deep link support (open to specific tab)
-- Verify graceful migration (no breaking existing setups)
 - Remove deprecated views (profileView, historyView, memoryView)
 - Remove FolderExplorer/agent explorer (superseded)
 - Documentation
 
-### Future Scope (Deferred)
-- **Agent Creation Wizard** - AI-assisted agent creation from plain English description
-- **Agent Edit Form** - Form-based editing without YAML knowledge
-- **Multi-Agent Ensemble** - Run across multiple models with voting/consensus
+### Future Release (Deferred)
+
+#### Advanced Tab
+- Multi-Agent (merge model + ensemble features)
+- UI Preferences (reminders, image dimension, sort order)
+- Git Integration
+- System Paths
+- Debug
+
+#### Agent Creation Wizard
+- AI-assisted agent creation from plain English description
+- Form-based editing without YAML knowledge
+
+#### Multi-Agent Ensemble
+- Run across multiple models with voting/consensus
 
 ---
 
@@ -1516,29 +1331,33 @@ interface AgentInfo {
 
 Based on 79 total settings in package.json:
 
-### Now Covered by Settings View (47 settings)
+### v1 Release - Covered by Settings View
 
-| Section | Settings Covered |
-|---------|------------------|
-| **General** | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
-| **Agents (main)** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShowIfAvailable`, `texra.explorer.agentsDirectory` |
-| **Agents → Workflow** | `texra.agentOutputs.storageMode` |
-| **Agents → Tool-Use** | `texra.toolUse.requireEditApproval`, `texra.toolUse.persistence.*` (2), `texra.model.compactionThresholdPercent` |
-| **Models & Providers** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek` |
-| **Multi-Agent** | `texra.merge.defaultModel` |
+| Tab | Settings Covered |
+|-----|------------------|
+| **Models** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek` |
+| **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
 | **LaTeX** | `texra.latex.*` (7), `texra.latexdiff.*` (4) |
 | **Memory** | Memory file browser (no config, file system) |
 | **History** | History browser (existing storage) |
-| **Advanced** | `texra.model.retry.*` (2), `texra.git.numberOfCommitsToShow`, `texra.audio.soxPath`, `texra.debug.*` |
 
-### Remain as VS Code Settings Only (32 settings)
+### Deferred to Future Release (Advanced Tab)
+
+| Section | Settings |
+|---------|----------|
+| **Multi-Agent** | `texra.merge.defaultModel` |
+| **UI Preferences** | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
+| **Git Integration** | `texra.git.numberOfCommitsToShow` |
+| **System Paths** | `texra.audio.soxPath` |
+| **Debug** | `texra.debug.*`, `texra.logger.*` |
+
+### Remain as VS Code Settings Only
 These are advanced/power-user settings that don't need UI exposure:
 
 - `texra.files.*` (16) - File type filtering patterns (power user)
-- `texra.logger.*` (2) - Logging configuration
 - `texra.auth.*` (3) - System-level authentication endpoints
 - `texra.remoteAgents.cacheTimeHours` (1) - Advanced cache behavior
-- Other system-level paths and debug flags (10)
+- Other system-level paths and debug flags
 
 ---
 
@@ -1563,13 +1382,13 @@ Key integration points that need updating when implementing the Settings View:
 ### 3. Dropdown Options Computation
 | Function | File | Impact |
 |----------|------|--------|
-| `computeAgentOptions()` | `src/agent/index/agentRegistry.ts` | Read from workspaceState instead of VS Code config |
-| `computeModelOptions()` | `src/model/computeModelOptions.ts` | Read from globalState instead of VS Code config |
+| `computeAgentOptions()` | `src/agent/index/agentRegistry.ts` | No change - still reads VS Code config |
+| `computeModelOptions()` | `src/model/computeModelOptions.ts` | No change - still reads VS Code config |
 
 ### 4. Configuration Watchers
-`src/MainViewProvider.ts` (lines 84-120) watches for config changes. Update to:
-- Watch globalState/workspaceState changes instead
-- Or keep VS Code config watchers for backwards compatibility during migration
+`src/MainViewProvider.ts` (lines 84-120) watches for config changes.
+- No change needed - Settings View writes to VS Code config
+- Existing watchers will pick up changes automatically
 
 ### 5. View Registrations (package.json)
 | View | Current | After Implementation |
@@ -1587,16 +1406,8 @@ Key integration points that need updating when implementing the Settings View:
 | `HistoryViewMessageHandler` | `src/historyView/` | `src/settingsView/` (compose) |
 | `MemoryViewMessageHandler` | `src/memoryView/` | `src/settingsView/` (compose) |
 
-### 7. State Migration Points
-```typescript
-// Settings that move FROM VS Code config TO extension state:
-'texra.agents'           → workspaceState.enabledAgents
-'texra.toolUseAgents'    → workspaceState.enabledAgents (merge)
-'texra.models'           → globalState.enabledModels
-'texra.model.useOpenRouter'           → globalState.routing.mode
-'texra.model.useImprovedConnection'   → globalState.routing.mode
-'texra.model.improvedConnectionDomain' → globalState.routing.proxyDomain
-```
+### 7. No State Migration Needed
+Settings View reads/writes directly to VS Code configuration - no migration required.
 
 ---
 
