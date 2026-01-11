@@ -133,7 +133,7 @@ Tab 2: Agents
 ├── ▼ Workflow Settings (collapsible subsection)
 │   └── Output storage mode
 └── ▼ Tool-Use Settings (collapsible subsection)
-    └── Edit approval, persistence, compaction
+    └── Edit approval, persistence, compaction, retry behavior
 
 Tab 3: LaTeX
 ├── ▼ Formatter (collapsible)
@@ -149,7 +149,7 @@ Tab 5: History
 
 Tab 6: Advanced
 ├── ▼ Multi-Agent (collapsible) - merge model, future ensemble
-├── ▼ Retry Behavior (collapsible)
+├── ▼ UI Preferences (collapsible) - reminders, image dimension, sort
 ├── ▼ Git Integration (collapsible)
 ├── ▼ System Paths (collapsible)
 └── ▼ Debug (collapsible)
@@ -492,6 +492,14 @@ const RECOMMENDED_MODELS = [
 │  │                                                           │  │
 │  │ Compaction threshold: [85 %]                              │  │
 │  │   Compact context when usage exceeds this percentage.     │  │
+│  │                                                           │  │
+│  │ ─────────────────────────────────────────────────────────│  │
+│  │ Retry Behavior                                            │  │
+│  │ Max attempts: [3 ▼]                                       │  │
+│  │   Maximum retry attempts for failed API requests.         │  │
+│  │                                                           │  │
+│  │ Backoff delay: [1000 ms]                                  │  │
+│  │   Initial delay before retry (exponential backoff).       │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  ▶ Advanced                                                    │
@@ -511,12 +519,14 @@ const RECOMMENDED_MODELS = [
 **Settings Mapping:**
 | UI Element | VS Code Setting |
 |------------|-----------------|
-| Auto-show remote agents | `texra.remoteAgents.autoShowIfAvailable` |
+| Auto-show remote agents | `texra.remoteAgents.autoShow` |
 | Storage mode dropdown | `texra.agentOutputs.storageMode` |
 | Require approval checkbox | `texra.toolUse.requireEditApproval` |
 | Persist sessions checkbox | `texra.toolUse.persistence.enabled` |
 | Session retention dropdown | `texra.toolUse.persistence.ttlHours` |
 | Compaction threshold | `texra.model.compactionThresholdPercent` |
+| Max attempts | `texra.model.retry.maxAttempts` |
+| Backoff delay | `texra.model.retry.backoffMs` |
 | Custom agents directory | `texra.explorer.agentsDirectory` (Advanced collapsible) |
 
 **Storage:** `workspaceState.enabledAgents: string[]`, VS Code configuration for settings
@@ -847,11 +857,14 @@ In the Models tab, show provider/routing status on each model:
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ General interface preferences.                            │  │
 │  │                                                           │  │
-│  │ ☑ Show quick pick for agent selection                     │  │
-│  │   Use VS Code quick pick instead of dropdown for agents.  │  │
+│  │ ☑ Show API key reminders                                  │  │
+│  │   Show reminders when API keys are missing.               │  │
 │  │                                                           │  │
-│  │ ☑ Show quick pick for model selection                     │  │
-│  │   Use VS Code quick pick instead of dropdown for models.  │  │
+│  │ ☑ Show dependency reminders                               │  │
+│  │   Show reminders for missing dependencies (latexindent).  │  │
+│  │                                                           │  │
+│  │ ☑ Show login banner                                       │  │
+│  │   Show banner suggesting to sign in.                      │  │
 │  │                                                           │  │
 │  │ Max image dimension: [2048 ▼]                             │  │
 │  │   Larger images resized before sending to models.         │  │
@@ -859,12 +872,6 @@ In the Models tab, show provider/routing status on each model:
 │  │                                                           │  │
 │  │ Progress board sort: [Timestamp descending ▼]             │  │
 │  │   Options: Timestamp ascending, Timestamp descending      │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▶ Retry Behavior                                              │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Max retries: [3 ▼]                                        │  │
-│  │ Initial delay: [1000 ms]                                  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  ▶ Git Integration                                             │
@@ -890,19 +897,20 @@ In the Models tab, show provider/routing status on each model:
 | UI Element | VS Code Setting |
 |------------|-----------------|
 | Default merge model | `texra.merge.defaultModel` |
-| Agent quick pick | `texra.ui.showAgentQuickPick` |
-| Model quick pick | `texra.ui.showModelQuickPick` |
+| Show API key reminders | `texra.ui.showApiKeyReminders` |
+| Show dependency reminders | `texra.ui.showDependencyReminders` |
+| Show login banner | `texra.ui.showLoginBanner` |
 | Max image dimension | `texra.maxImageDimension` |
 | Progress board sort | `texra.progressBoard.streamSortOrder` |
-| Max retries | `texra.model.retry.maxRetries` |
-| Initial delay | `texra.model.retry.initialDelayMs` |
 | Commits to show | `texra.git.numberOfCommitsToShow` |
 | Sox audio path | `texra.audio.soxPath` |
-| Debug logging | `texra.debug.*` |
+| Debug mode | `texra.logger.debugMode` |
+| Save debug objects | `texra.debug.saveDebugObjects` |
+| Save input prompt | `texra.debug.saveInputPrompt` |
 
 **Storage:** VS Code configuration (backwards compatible)
 
-**Note:** Multi-Agent is included now, but ensemble features are awaiting multi-agent feature maturity.
+**Note:** Multi-Agent is included now, but ensemble features are awaiting multi-agent feature maturity. Retry settings are in the Agents tab (Tool-Use Settings).
 
 ---
 
@@ -915,7 +923,7 @@ In the Models tab, show provider/routing status on each model:
 - **LaTeX Tab** - Formatter, latexdiff, TikZ (all as collapsibles)
 - **Memory Tab** - Memory file browser with expandable content preview
 - **History Tab** - Execution history browser
-- **Advanced Tab** - Multi-Agent, UI preferences, retry, git, system paths, debug (all collapsibles)
+- **Advanced Tab** - Multi-Agent, UI preferences, git, system paths, debug (all collapsibles)
 
 **Key Features:**
 - Account info in header bar (minimal custom CSS, always visible)
@@ -1460,7 +1468,7 @@ interface AgentInfo {
 - Show category badges (workflow/toolUse) and source (built-in/custom/remote)
 - Wire up workspaceState for agent preferences
 - Add Workflow Settings collapsible (output storage mode)
-- Add Tool-Use Settings collapsible (edit approval, persistence, compaction)
+- Add Tool-Use Settings collapsible (edit approval, persistence, compaction, retry behavior)
 - Include Advanced collapsible (custom agents directory)
 - **Note:** Supersedes FolderExplorer/agent explorer view
 
@@ -1486,8 +1494,7 @@ interface AgentInfo {
 ### Phase 7: Advanced Tab + Cleanup
 - Implement Advanced tab with collapsible sections:
   - Multi-Agent (merge model + "Coming Soon")
-  - UI Preferences (quick picks, image dimension, sort order)
-  - Retry Behavior
+  - UI Preferences (reminders, image dimension, sort order)
   - Git Integration
   - System Paths
   - Debug
