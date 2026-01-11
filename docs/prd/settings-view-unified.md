@@ -393,7 +393,7 @@ const RECOMMENDED_MODELS = [
 |-------|--------|---------|
 | Name | YAML `name` | Text |
 | Description | YAML `description` | Text (truncated) |
-| Category | `agentCategory` | Badge: `[workflow]` or `[toolUse]` |
+| Category | Derived (see Agent Category Derivation) | Badge: `[workflow]` or `[toolUse]` |
 | Type | `settings.agentType` | Label: `CoT`, `Direct`, `Merge`, `Reflect` |
 | Rounds | `settings.rounds` | Label: `×2`, `×3` (if > 1) |
 | Inherits | `inherits` | Codicon: `$(extensions)` + parent name |
@@ -1227,11 +1227,11 @@ type SettingsAction =
 
 type SettingsTab = 'models' | 'agents' | 'latex' | 'memory' | 'history';
 
-// Agent info includes category (derived from YAML agentCategory field)
+// Agent info (mirrors AgentEntry from agentRegistry.ts)
 interface AgentInfo {
   name: string;
   description: string;
-  category: 'workflow' | 'toolUse';  // From YAML: agentCategory field
+  category: 'workflow' | 'toolUse';  // Derived from source/agentType (see Agent Category Derivation)
   agentType: 'cot' | 'direct' | 'merge' | 'reflect' | 'toolUse';  // From YAML: settings.agentType
   rounds?: number;  // From YAML: settings.rounds (if > 1)
   inherits?: string;  // From YAML: inherits field
@@ -1242,36 +1242,23 @@ interface AgentInfo {
 
 ### Agent Category Derivation
 
-Agent categories are determined from the YAML `agentCategory` field:
+Agent categories are determined by `agentRegistry.ts` logic:
 
-```yaml
-# Example agent YAML
-name: correct
-description: Fix typos & LaTeX errors
-agentCategory: workflow  # Explicit category: 'workflow' | 'toolUse'
-settings:
-  agentType: cot
-  rounds: 2
-inherits: polish
-```
-
-**Category Rules:**
-1. **Explicit**: Use `agentCategory` field if present in YAML
-2. **Inferred**: If missing, infer from `settings.agentType`:
-   - `toolUse` type → `toolUse` category
-   - All others (`cot`, `direct`, `merge`, `reflect`) → `workflow` category
-3. **Built-in tool-use agents**: Located in `resources/agents/toolUse/` directory
-
+**For local agents (built-in and custom):**
 ```typescript
-function deriveAgentCategory(yaml: AgentYaml): 'workflow' | 'toolUse' {
-  // Explicit category takes precedence
-  if (yaml.agentCategory) {
-    return yaml.agentCategory;
-  }
-  // Infer from agent type
-  return yaml.settings?.agentType === 'toolUse' ? 'toolUse' : 'workflow';
-}
+// From src/agent/index/agentRegistry.ts
+const category =
+  source === 'builtInToolUse' || agentType === AgentType.ToolUse
+    ? AgentCategory.ToolUse
+    : AgentCategory.Workflow;
 ```
+
+**For remote agents:**
+- Uses `agentCategory` field from remote agent definition
+
+**Config override:** Any agent can be marked as tool-use via `texra.toolUseAgents` setting.
+
+**Note:** Local agent YAML files don't have an `agentCategory` field - category is derived from source/agentType.
 
 ---
 
@@ -1400,7 +1387,6 @@ These are advanced/power-user settings that don't need UI exposure:
 
 - `texra.files.*` (16) - File type filtering patterns (power user)
 - `texra.auth.*` (3) - System-level authentication endpoints
-- `texra.remoteAgents.cacheTimeHours` (1) - Advanced cache behavior
 - Other system-level paths and debug flags
 
 ---
@@ -1420,8 +1406,10 @@ Key integration points that need updating when implementing the Settings View:
 | Command | File | Change |
 |---------|------|--------|
 | `texra.openSettings` | `src/commands/system/` | Open Settings View instead of VS Code settings |
-| `texra.openAgentSettings` | `src/commands/system/` | Open Settings View → Agents tab |
-| `texra.openModelSettings` | `src/commands/system/` | Open Settings View → Models tab |
+
+**New commands to add (shortcuts):**
+- `texra.openAgentSettings` → Opens Settings View → Agents tab
+- `texra.openModelSettings` → Opens Settings View → Models tab
 
 ### 3. Dropdown Options Computation
 | Function | File | Impact |
