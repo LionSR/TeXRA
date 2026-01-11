@@ -749,9 +749,21 @@ When clicking [Edit] or [Configure] on a provider:
 ```
 
 **Streaming Settings (per provider):**
-The `texra.model.useStreaming*` settings (9 total) are now configured per provider
-in the Advanced Options of each provider's configuration modal. This replaces the
-scattered VS Code settings with a unified UI.
+Each provider's modal streaming toggle maps to its specific setting:
+
+| Provider Modal | VS Code Setting |
+|----------------|-----------------|
+| Anthropic | `texra.model.useStreamingAnthropic` |
+| OpenAI | `texra.model.useStreamingOpenai` |
+| Google | `texra.model.useStreamingGoogle` |
+| DeepSeek | `texra.model.useStreamingDeepseek` |
+| xAI | `texra.model.useStreamingXai` |
+| Moonshot | `texra.model.useStreamingMoonshot` |
+| Dashscope | `texra.model.useStreamingDashscope` |
+| OpenRouter | `texra.model.useStreamingOpenrouter` |
+| (Global fallback) | `texra.model.useStreaming` |
+
+Per-provider settings override the global `useStreaming` setting.
 
 **OpenRouter (Special Case):**
 ```
@@ -786,6 +798,12 @@ scattered VS Code settings with a unified UI.
 │                                            [Cancel]   [Save]   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Settings mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| API Key | SecretStorage `openrouter` |
+| Routing Mode | `texra.model.useOpenRouter` (boolean: false = only required, true = all models) |
 
 ---
 
@@ -1175,36 +1193,81 @@ src/
 
 ### Commands
 
+**File:** `src/commands/settings/settingsCommands.ts`
+
+Follow existing pattern from `historyCommands.ts`:
+
 ```typescript
-// Register command to open settings view
-commands.registerCommand('texra.openSettings', (tab?: SettingsTab) => {
-  settingsViewProvider.show();
-  if (tab) {
-    // Tab index: 0=models, 1=agents, 2=latex, 3=memory, 4=history, 5=advanced
-    settingsViewProvider.selectTab(tab);
-  }
-});
+// src/commands/settings/settingsCommands.ts
+import * as vscode from 'vscode';
+import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import type { SettingsTab } from '@settingsView/schemas';
 
-type SettingsTab = 'models' | 'agents' | 'latex' | 'memory' | 'history' | 'advanced';
+export const settingsCommands = {
+  openSettings: 'texra.openSettings',
+  openModelSettings: 'texra.openModelSettings',
+  openAgentSettings: 'texra.openAgentSettings',
+  openLatexSettings: 'texra.openLatexSettings',
+} as const;
 
-// Shortcut commands
-commands.registerCommand('texra.openModelSettings', () =>
-  commands.executeCommand('texra.openSettings', 'models'));
-commands.registerCommand('texra.openAgentSettings', () =>
-  commands.executeCommand('texra.openSettings', 'agents'));
-commands.registerCommand('texra.openLatexSettings', () =>
-  commands.executeCommand('texra.openSettings', 'latex'));
+export function registerSettingsCommands(context: vscode.ExtensionContext) {
+  const settingsViewProvider = new SettingsViewProvider(context);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      settingsCommands.openSettings,
+      async (tab?: SettingsTab) => {
+        await settingsViewProvider.show();
+        if (tab) settingsViewProvider.selectTab(tab);
+      }
+    ),
+    vscode.commands.registerCommand(settingsCommands.openModelSettings, () =>
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'models')),
+    vscode.commands.registerCommand(settingsCommands.openAgentSettings, () =>
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'agents')),
+    vscode.commands.registerCommand(settingsCommands.openLatexSettings, () =>
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'latex')),
+  );
+
+  return { settingsViewProvider };
+}
 ```
 
+**Register in:** `src/commands/index.ts`
+
 ### Message Protocol (Zod-native)
+
+**File:** `src/settingsView/schemas.ts`
 
 Use Zod schemas as single source of truth. Reference existing types from the codebase.
 
 ```typescript
+// src/settingsView/schemas.ts
 import { z } from 'zod';
 import { ModelConfigSchema } from '@model/ModelConfig';           // From llm-zoo
 import { AgentSource } from '@agent/core/AgentDataclass';         // Zod enum
 import type { AgentEntry } from '@agent/index/agentRegistry';     // Existing interface
+
+// =============================================================================
+// Command Constants (following src/common/webview/commands.ts pattern)
+// =============================================================================
+
+export const SETTINGS_VIEW_COMMANDS = {
+  // Extension → Webview
+  SET_MODELS_DATA: 'SET_MODELS_DATA',
+  SET_AGENTS_DATA: 'SET_AGENTS_DATA',
+  SET_LATEX_DATA: 'SET_LATEX_DATA',
+  SELECT_TAB: 'SELECT_TAB',
+  // Webview → Extension
+  GET_INITIAL_DATA: 'GET_INITIAL_DATA',
+  TAB_CHANGED: 'TAB_CHANGED',
+  SAVE_ENABLED_MODELS: 'SAVE_ENABLED_MODELS',
+  SAVE_ENABLED_AGENTS: 'SAVE_ENABLED_AGENTS',
+  SAVE_SETTING: 'SAVE_SETTING',
+  SET_API_KEY: 'SET_API_KEY',
+  SIGN_IN: 'SIGN_IN',
+  SIGN_OUT: 'SIGN_OUT',
+} as const;
 
 // =============================================================================
 // Shared Schemas
@@ -1282,23 +1345,26 @@ export type SettingsAction = z.infer<typeof SettingsActionSchema>;
 
 ### Agent Category Derivation
 
-Agent categories are determined by `agentRegistry.ts` logic:
+**Use existing functions - do NOT re-implement:**
 
-**For local agents (built-in and custom):**
 ```typescript
-// From src/agent/index/agentRegistry.ts
-const category =
-  source === 'builtInToolUse' || agentType === AgentType.ToolUse
-    ? AgentCategory.ToolUse
-    : AgentCategory.Workflow;
+// Settings View should call these existing functions:
+import {
+  getWorkflowAgents,    // Returns AgentEntry[] with category already set
+  getToolUseAgents,     // Returns AgentEntry[] with category already set
+  buildAgentOptions,    // Returns HTML <option> elements (if needed)
+} from '@agent/index/agentRegistry';
+
+// Category is already derived in AgentEntry - just use it
+const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 ```
 
-**For remote agents:**
-- Uses `agentCategory` field from remote agent definition
+**Implementation detail (for reference only):**
+- Local agents: category derived from `source === 'builtInToolUse' || agentType === 'toolUse'`
+- Remote agents: uses `agentCategory` field from remote definition
+- Config override: `texra.toolUseAgents` setting can override any agent
 
-**Config override:** Any agent can be marked as tool-use via `texra.toolUseAgents` setting.
-
-**Note:** Local agent YAML files don't have an `agentCategory` field - category is derived from source/agentType.
+**Note:** Local agent YAML files don't have an `agentCategory` field.
 
 ---
 
@@ -1636,81 +1702,44 @@ export class SettingsViewContentProvider extends BaseViewContentProvider {
 
 ### Tab Manager Pattern (Frontend)
 
-Aligns with existing `BaseDomHandler.js` pattern using `containerSelector`:
+**Extend existing `BaseDomHandler.js`** - do not create a parallel hierarchy:
 
 ```javascript
-// modules/tabs/BaseTab.js - Abstract base for all tabs
-// Follows BaseDomHandler.js pattern from src/common/modules/
-export class BaseTab {
-  /**
-   * @param {string} containerSelector - CSS selector for tab container
-   */
+// modules/tabs/ModelsTab.js - Example tab extending BaseDomHandler
+import { BaseDomHandler } from '@common/modules/BaseDomHandler.js';
+
+export class ModelsTab extends BaseDomHandler {
   constructor(containerSelector) {
-    this.containerSelector = containerSelector;
+    super();  // BaseDomHandler provides addListener, removeListener, dispose
     this.container = document.querySelector(containerSelector);
-    this._eventListeners = [];
   }
 
-  render(data) { throw new Error('Implement render()'); }
+  render(data) {
+    this.container.innerHTML = `
+      <vscode-collapsible title="Recommended Models" open>
+        ${data.recommended.map(m => `
+          <vscode-checkbox id="model-${m.name}" ${m.enabled ? 'checked' : ''}>
+            ${m.fullName} - ${m.provider}
+          </vscode-checkbox>
+        `).join('')}
+      </vscode-collapsible>
+    `;
+    this.attachEventListeners();
+  }
 
-  dispose() {
-    // Clean up registered event listeners
-    this._eventListeners.forEach(({ element, event, handler }) => {
-      element.removeEventListener(event, handler);
+  attachEventListeners() {
+    // Use inherited addListener for automatic cleanup on dispose()
+    this.container.querySelectorAll('vscode-checkbox').forEach(cb => {
+      this.addListener(cb, 'change', () => this.handleModelToggle(cb));
     });
-    this._eventListeners = [];
-  }
-
-  // Register event listener with automatic cleanup
-  addListener(element, event, handler) {
-    element.addEventListener(event, handler);
-    this._eventListeners.push({ element, event, handler });
-  }
-
-  // Shared helpers for vscode-elements
-  createFormGroup(label, control, description) {
-    const group = document.createElement('vscode-form-group');
-    const labelEl = document.createElement('vscode-label');
-    labelEl.textContent = label;
-    group.appendChild(labelEl);
-    group.appendChild(control);
-    if (description) {
-      const helper = document.createElement('vscode-form-helper');
-      helper.textContent = description;
-      group.appendChild(helper);
-    }
-    return group;
-  }
-
-  createCheckbox(id, label, checked) {
-    const checkbox = document.createElement('vscode-checkbox');
-    checkbox.id = id;
-    checkbox.checked = checked;
-    checkbox.textContent = label;
-    return checkbox;
-  }
-
-  createSelect(id, options, value) {
-    const select = document.createElement('vscode-single-select');
-    select.id = id;
-    options.forEach(opt => {
-      const option = document.createElement('vscode-option');
-      option.value = opt.value;
-      option.textContent = opt.label;
-      if (opt.value === value) option.selected = true;
-      select.appendChild(option);
-    });
-    return select;
-  }
-
-  createCollapsible(title, open = false) {
-    const collapsible = document.createElement('vscode-collapsible');
-    collapsible.title = title;
-    if (open) collapsible.open = true;
-    return collapsible;
   }
 }
 ```
+
+**Key point:** `BaseDomHandler` already provides:
+- `addListener(element, event, handler)` - with automatic cleanup
+- `removeListener(element, event, handler)`
+- `dispose()` - cleans up all registered listeners
 
 ### Minimal Custom CSS (extend common.css)
 ```css
@@ -1901,15 +1930,15 @@ await vscode.workspace.applyEdit(edit);
 ```
 
 ### Event Listener Cleanup
-Always clean up event listeners to prevent memory leaks:
+Use `BaseDomHandler` for automatic cleanup:
 ```javascript
-// Pattern: Track listeners for cleanup
-class MyTab extends BaseTab {
-  init() {
-    // Use addListener from BaseTab for automatic cleanup
+// Extend BaseDomHandler - dispose() cleans up all listeners
+class ModelsTab extends BaseDomHandler {
+  attachEventListeners() {
     this.addListener(this.saveButton, 'click', this.handleSave.bind(this));
   }
 }
+// On tab switch: oldTab.dispose() removes all listeners automatically
 ```
 
 ### Error Handling
