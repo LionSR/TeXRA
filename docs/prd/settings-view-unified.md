@@ -1205,27 +1205,71 @@ type SettingsMessage =
   | { command: 'SET_AGENTS_DATA', agents: AgentInfo[], enabled: string[] }
   | { command: 'SET_LATEX_DATA', settings: LatexSettings }
   | { command: 'SET_HISTORY_DATA', items: HistoryItem[] }
+  | { command: 'SET_MEMORY_DATA', files: MemoryFileInfo[] }
   | { command: 'SET_PROFILE_DATA', profile: ProfileInfo | null }
-  | { command: 'SELECT_TAB', tab: string };
+  | { command: 'SELECT_TAB', tab: SettingsTab };
 
 // Webview → Extension
 type SettingsAction =
+  | { command: 'GET_INITIAL_DATA' }  // Request all tab data on load
+  | { command: 'TAB_CHANGED', tab: SettingsTab }  // Notify extension of tab switch
   | { command: 'SAVE_ENABLED_MODELS', models: string[] }
   | { command: 'SAVE_ENABLED_AGENTS', agents: string[] }
   | { command: 'SAVE_LATEX_SETTING', key: string, value: unknown }
+  | { command: 'SAVE_AGENT_SETTING', key: string, value: unknown }
   | { command: 'RESTORE_HISTORY', id: string }
   | { command: 'DELETE_HISTORY', id: string }
   | { command: 'SIGN_IN' }
   | { command: 'SIGN_OUT' }
-  | { command: 'SET_API_KEY', provider: string, key: string };
+  | { command: 'SET_API_KEY', provider: string, key: string }
+  | { command: 'OPEN_MEMORY_FILE', path: string }
+  | { command: 'DELETE_MEMORY_FILE', path: string };
 
-// Agent info includes category
+type SettingsTab = 'models' | 'agents' | 'latex' | 'memory' | 'history';
+
+// Agent info includes category (derived from YAML agentCategory field)
 interface AgentInfo {
   name: string;
   description: string;
-  category: 'workflow' | 'toolUse';
-  source: 'builtIn' | 'builtInToolUse' | 'custom' | 'remote';
+  category: 'workflow' | 'toolUse';  // From YAML: agentCategory field
+  agentType: 'cot' | 'direct' | 'merge' | 'reflect' | 'toolUse';  // From YAML: settings.agentType
+  rounds?: number;  // From YAML: settings.rounds (if > 1)
+  inherits?: string;  // From YAML: inherits field
+  source: 'builtIn' | 'custom' | 'remote';
   enabled: boolean;
+}
+```
+
+### Agent Category Derivation
+
+Agent categories are determined from the YAML `agentCategory` field:
+
+```yaml
+# Example agent YAML
+name: correct
+description: Fix typos & LaTeX errors
+agentCategory: workflow  # Explicit category: 'workflow' | 'toolUse'
+settings:
+  agentType: cot
+  rounds: 2
+inherits: polish
+```
+
+**Category Rules:**
+1. **Explicit**: Use `agentCategory` field if present in YAML
+2. **Inferred**: If missing, infer from `settings.agentType`:
+   - `toolUse` type → `toolUse` category
+   - All others (`cot`, `direct`, `merge`, `reflect`) → `workflow` category
+3. **Built-in tool-use agents**: Located in `resources/agents/toolUse/` directory
+
+```typescript
+function deriveAgentCategory(yaml: AgentYaml): 'workflow' | 'toolUse' {
+  // Explicit category takes precedence
+  if (yaml.agentCategory) {
+    return yaml.agentCategory;
+  }
+  // Infer from agent type
+  return yaml.settings?.agentType === 'toolUse' ? 'toolUse' : 'workflow';
 }
 ```
 
@@ -1563,26 +1607,51 @@ export class SettingsViewContentProvider extends BaseViewContentProvider {
 ```
 
 ### Tab Manager Pattern (Frontend)
+
+Aligns with existing `BaseDomHandler.js` pattern using `containerSelector`:
+
 ```javascript
 // modules/tabs/BaseTab.js - Abstract base for all tabs
+// Follows BaseDomHandler.js pattern from src/common/modules/
 export class BaseTab {
-  constructor(containerId) {
-    this.container = document.getElementById(containerId);
+  /**
+   * @param {string} containerSelector - CSS selector for tab container
+   */
+  constructor(containerSelector) {
+    this.containerSelector = containerSelector;
+    this.container = document.querySelector(containerSelector);
+    this._eventListeners = [];
   }
 
   render(data) { throw new Error('Implement render()'); }
 
   dispose() {
-    // Clean up event listeners
+    // Clean up registered event listeners
+    this._eventListeners.forEach(({ element, event, handler }) => {
+      element.removeEventListener(event, handler);
+    });
+    this._eventListeners = [];
   }
 
-  // Shared helpers
-  createSettingRow(label, control) {
-    const row = document.createElement('div');
-    row.className = 'setting-row';
-    row.innerHTML = `<span class="setting-label">${label}</span>`;
-    row.appendChild(control);
-    return row;
+  // Register event listener with automatic cleanup
+  addListener(element, event, handler) {
+    element.addEventListener(event, handler);
+    this._eventListeners.push({ element, event, handler });
+  }
+
+  // Shared helpers for vscode-elements
+  createFormGroup(label, control, description) {
+    const group = document.createElement('vscode-form-group');
+    const labelEl = document.createElement('vscode-label');
+    labelEl.textContent = label;
+    group.appendChild(labelEl);
+    group.appendChild(control);
+    if (description) {
+      const helper = document.createElement('vscode-form-helper');
+      helper.textContent = description;
+      group.appendChild(helper);
+    }
+    return group;
   }
 
   createCheckbox(id, label, checked) {
@@ -1604,6 +1673,13 @@ export class BaseTab {
       select.appendChild(option);
     });
     return select;
+  }
+
+  createCollapsible(title, open = false) {
+    const collapsible = document.createElement('vscode-collapsible');
+    collapsible.title = title;
+    if (open) collapsible.open = true;
+    return collapsible;
   }
 }
 ```
@@ -1770,6 +1846,74 @@ Based on actual `package.json` configuration (14 settings total):
 | `texra.latex.enabledReplacementsRegex` | Checkbox group (6 options) |
 | `texra.latex.customReplacements` | `<vscode-collapsible>` + JSON editor |
 | `texra.latex.customReplacementsRegex` | `<vscode-collapsible>` + JSON editor |
+
+---
+
+## General Implementation Guidelines
+
+### Code Style
+1. **Use TypeScript** for all backend code (`.ts` files)
+2. **Use JavaScript** for frontend webview modules (`.js` files) - no bundler
+3. **Follow existing patterns** in `src/common/` for base classes and utilities
+4. **Use path aliases** (`@settingsView/*`, `@common/*`) as defined in `tsconfig.json`
+
+### VS Code Configuration Best Practices
+```typescript
+// Always specify ConfigurationTarget explicitly
+await config.update(key, value, ConfigurationTarget.Global);    // User settings
+await config.update(key, value, ConfigurationTarget.Workspace); // .vscode/settings.json
+
+// Read with type safety
+const models = config.get<string[]>('models', []);  // Always provide default
+
+// Batch updates when possible (reduces config change events)
+const edit = new vscode.WorkspaceEdit();
+// ... multiple changes
+await vscode.workspace.applyEdit(edit);
+```
+
+### Event Listener Cleanup
+Always clean up event listeners to prevent memory leaks:
+```javascript
+// Pattern: Track listeners for cleanup
+class MyTab extends BaseTab {
+  init() {
+    // Use addListener from BaseTab for automatic cleanup
+    this.addListener(this.saveButton, 'click', this.handleSave.bind(this));
+  }
+}
+```
+
+### Error Handling
+```typescript
+// Backend: Use typed errors from @common/errors
+throw new TeXRAError('Provider not configured', { provider: providerId });
+
+// Frontend: Show user-friendly messages
+try {
+  await saveSettings();
+} catch (error) {
+  vscode.postMessage({ command: 'SHOW_ERROR', message: error.message });
+}
+```
+
+### Testing Considerations
+1. **Unit test** message handlers independently
+2. **Mock VS Code API** using existing test utilities
+3. **Test ConfigurationTarget** scoping (global vs workspace)
+4. **Verify backwards compatibility** - existing settings.json should work unchanged
+
+### Accessibility
+1. Use native vscode-elements (built-in keyboard navigation)
+2. Provide `aria-label` for icon-only buttons
+3. Ensure tab order is logical
+4. Test with keyboard-only navigation
+
+### Performance
+1. **Lazy load** tab content (don't render all tabs on initial load)
+2. **Debounce** settings saves (avoid rapid config updates)
+3. **Cache** model metadata from llm-zoo in globalState
+4. **Virtualize** long lists (agents, models) if > 50 items
 
 ---
 
