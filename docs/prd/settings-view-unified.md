@@ -1196,49 +1196,89 @@ commands.registerCommand('texra.openLatexSettings', () =>
   commands.executeCommand('texra.openSettings', 'latex'));
 ```
 
-### Message Protocol
+### Message Protocol (Zod-native)
+
+Use Zod schemas as single source of truth. Reference existing types from the codebase.
 
 ```typescript
-// Extension → Webview
-type SettingsMessage =
-  | { command: 'SET_MODELS_DATA', models: ModelInfo[], enabled: string[] }
-  | { command: 'SET_AGENTS_DATA', agents: AgentInfo[], enabled: string[] }
-  | { command: 'SET_LATEX_DATA', settings: LatexSettings }
-  | { command: 'SET_HISTORY_DATA', items: HistoryItem[] }
-  | { command: 'SET_MEMORY_DATA', files: MemoryFileInfo[] }
-  | { command: 'SET_PROFILE_DATA', profile: ProfileInfo | null }
-  | { command: 'SELECT_TAB', tab: SettingsTab };
+import { z } from 'zod';
+import { ModelConfigSchema } from '@model/ModelConfig';           // From llm-zoo
+import { AgentSource } from '@agent/core/AgentDataclass';         // Zod enum
+import type { AgentEntry } from '@agent/index/agentRegistry';     // Existing interface
 
-// Webview → Extension
-type SettingsAction =
-  | { command: 'GET_INITIAL_DATA' }  // Request all tab data on load
-  | { command: 'TAB_CHANGED', tab: SettingsTab }  // Notify extension of tab switch
-  | { command: 'SAVE_ENABLED_MODELS', models: string[] }
-  | { command: 'SAVE_ENABLED_AGENTS', agents: string[] }
-  | { command: 'SAVE_LATEX_SETTING', key: string, value: unknown }
-  | { command: 'SAVE_AGENT_SETTING', key: string, value: unknown }
-  | { command: 'RESTORE_HISTORY', id: string }
-  | { command: 'DELETE_HISTORY', id: string }
-  | { command: 'SIGN_IN' }
-  | { command: 'SIGN_OUT' }
-  | { command: 'SET_API_KEY', provider: string, key: string }
-  | { command: 'OPEN_MEMORY_FILE', path: string }
-  | { command: 'DELETE_MEMORY_FILE', path: string };
+// =============================================================================
+// Shared Schemas
+// =============================================================================
 
-type SettingsTab = 'models' | 'agents' | 'latex' | 'memory' | 'history';
+export const SettingsTabSchema = z.enum(['models', 'agents', 'latex', 'memory', 'history']);
+export type SettingsTab = z.infer<typeof SettingsTabSchema>;
 
-// Agent info (mirrors AgentEntry from agentRegistry.ts)
-interface AgentInfo {
-  name: string;
-  description: string;
-  category: 'workflow' | 'toolUse';  // Derived from source/agentType (see Agent Category Derivation)
-  agentType: 'cot' | 'direct' | 'merge' | 'reflect' | 'toolUse';  // From YAML: settings.agentType
-  rounds?: number;  // From YAML: settings.rounds (if > 1)
-  inherits?: string;  // From YAML: inherits field
-  source: 'builtIn' | 'custom' | 'remote';
-  enabled: boolean;
-}
+// =============================================================================
+// Extension → Webview Messages
+// =============================================================================
+
+export const SetModelsDataSchema = z.object({
+  command: z.literal('SET_MODELS_DATA'),
+  models: z.array(ModelConfigSchema),  // Use llm-zoo schema directly
+  enabled: z.array(z.string()),
+});
+
+export const SetAgentsDataSchema = z.object({
+  command: z.literal('SET_AGENTS_DATA'),
+  agents: z.array(z.object({           // Mirrors AgentEntry + enabled flag
+    name: z.string(),
+    source: AgentSource,
+    category: z.enum(['workflow', 'toolUse']),
+    agentType: z.enum(['CoT', 'direct', 'toolUse']),
+    description: z.string().optional(),
+    enabled: z.boolean(),
+  })),
+});
+
+export const SetLatexDataSchema = z.object({
+  command: z.literal('SET_LATEX_DATA'),
+  settings: z.record(z.unknown()),     // VS Code config snapshot
+});
+
+export const SelectTabSchema = z.object({
+  command: z.literal('SELECT_TAB'),
+  tab: SettingsTabSchema,
+});
+
+export const SettingsMessageSchema = z.discriminatedUnion('command', [
+  SetModelsDataSchema,
+  SetAgentsDataSchema,
+  SetLatexDataSchema,
+  SelectTabSchema,
+  // History, Memory, Profile use existing view schemas
+]);
+
+export type SettingsMessage = z.infer<typeof SettingsMessageSchema>;
+
+// =============================================================================
+// Webview → Extension Actions
+// =============================================================================
+
+export const SettingsActionSchema = z.discriminatedUnion('command', [
+  z.object({ command: z.literal('GET_INITIAL_DATA') }),
+  z.object({ command: z.literal('TAB_CHANGED'), tab: SettingsTabSchema }),
+  z.object({ command: z.literal('SAVE_ENABLED_MODELS'), models: z.array(z.string()) }),
+  z.object({ command: z.literal('SAVE_ENABLED_AGENTS'), agents: z.array(z.string()) }),
+  z.object({ command: z.literal('SAVE_SETTING'), key: z.string(), value: z.unknown() }),
+  z.object({ command: z.literal('SET_API_KEY'), provider: z.string(), key: z.string() }),
+  z.object({ command: z.literal('SIGN_IN') }),
+  z.object({ command: z.literal('SIGN_OUT') }),
+  // History/Memory actions reuse existing schemas
+]);
+
+export type SettingsAction = z.infer<typeof SettingsActionSchema>;
 ```
+
+**Key points:**
+- `ModelConfigSchema` from `@model/ModelConfig` (mirrors llm-zoo types)
+- `AgentSource` Zod enum from `@agent/core/AgentDataclass`
+- `AgentEntry` interface from `@agent/index/agentRegistry` (no duplication)
+- Use `z.discriminatedUnion` for type-safe message handling
 
 ### Agent Category Derivation
 
