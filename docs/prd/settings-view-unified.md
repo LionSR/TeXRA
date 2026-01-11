@@ -54,7 +54,7 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 ┌─────────────────────────────────────────────────────────────────┐
 │  TeXRA Settings                                          [×]   │
 ├─────────────────────────────────────────────────────────────────┤
-│  [Models]   Agents    History    Profile                        │
+│  [Models]   Agents    Memory    History    Profile              │
 │  ═══════                                                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
@@ -69,6 +69,7 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 <vscode-tabs id="settingsTabs" selected-index="0">
   <vscode-tab-header slot="header">Models</vscode-tab-header>
   <vscode-tab-header slot="header">Agents</vscode-tab-header>
+  <vscode-tab-header slot="header">Memory</vscode-tab-header>
   <vscode-tab-header slot="header">History</vscode-tab-header>
   <vscode-tab-header slot="header">Profile</vscode-tab-header>
 
@@ -77,6 +78,9 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
   </vscode-tab-panel>
   <vscode-tab-panel id="agentsPanel">
     <!-- Agents tab content -->
+  </vscode-tab-panel>
+  <vscode-tab-panel id="memoryPanel">
+    <!-- Memory tab content -->
   </vscode-tab-panel>
   <vscode-tab-panel id="historyPanel">
     <!-- History tab content -->
@@ -228,6 +232,86 @@ const RECOMMENDED_MODELS = [
 3. **Remote Agents** - Shared team agents (requires auth)
 
 **Storage:** `workspaceState.enabledAgents: string[]`
+
+---
+
+### Memory Tab
+
+**Purpose:** Manage persistent agent memory and conversation settings.
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Persistent memory storage for tool-use agents.                 │
+│                                                                 │
+│  CONVERSATION PERSISTENCE                                      │
+│  ─────────────────────────────────────────────────────────────  │
+│  ☑ Persist conversations across VS Code restarts               │
+│    Sessions are saved and can be resumed later.                │
+│                                                                 │
+│  Session retention: [72 hours ▼]                               │
+│    Options: 24h, 48h, 72h, 1 week, 2 weeks                     │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  MEMORY FILES                                     [Refresh]    │
+│  ─────────────────────────────────────────────────────────────  │
+│  Agent-created memory files stored in /memories                 │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 📄 project-notes.md           12 KB    Jan 11, 2:34 PM    │  │
+│  │    Project context and key decisions...                   │  │
+│  │                                         [View] [Delete]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 📄 research-findings.md       8 KB     Jan 10, 4:12 PM    │  │
+│  │    Literature review notes and citations...               │  │
+│  │                                         [View] [Delete]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 📁 figures/                   3 files  Jan 9, 11:00 AM    │  │
+│  │                                         [Browse]          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  Total: 5 files, 24 KB                        [Clear All]      │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ACTIVE SESSIONS                                               │
+│  ─────────────────────────────────────────────────────────────  │
+│  Tool-use sessions waiting for continuation.                    │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ research (chat)               Jan 11, 1:15 PM   WAITING   │  │
+│  │ "Help me analyze the survey results..."                   │  │
+│  │                                      [Resume] [Discard]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ paper-writing (chat)          Jan 10, 3:00 PM   WAITING   │  │
+│  │ "Continue editing section 3..."                           │  │
+│  │                                      [Resume] [Discard]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Features:** (Migrated from memoryView)
+- Conversation persistence toggle and TTL setting
+- Memory file browser (from existing memoryView)
+- File preview, delete actions
+- Directory browsing (2-level deep)
+- Active session list with resume/discard
+- Storage usage display
+
+**Data Sources:**
+- Memory files: `/memories` directory managed by MemoryTool
+- Active sessions: Tool-use session snapshots
+- Settings: `texra.toolUse.persistence.*`
+
+**Storage:** `workspaceState` for persistence settings
 
 ---
 
@@ -674,39 +758,111 @@ const PROVIDERS = {
 
 ## Migration Plan
 
-### From VS Code Config to State
+### Critical: API Keys Storage - NO CHANGE
 
-| Old (settings.json) | New (Extension State) |
-|---------------------|----------------------|
-| `texra.models` | `globalState.enabledModels` |
-| `texra.agents` | `workspaceState.enabledAgents` |
-| `texra.toolUseAgents` | `workspaceState.enabledAgents` |
-
-### Migration Logic
+**API keys remain in VS Code SecretStorage.** This is non-negotiable:
 
 ```typescript
-async function migrateSettings(context: vscode.ExtensionContext) {
+// UNCHANGED - Keys stay in VS Code Secrets
+context.secrets.get('apiKey.anthropic');
+context.secrets.store('apiKey.anthropic', 'sk-...');
+
+// Environment variable fallback also unchanged
+process.env.ANTHROPIC_API_KEY
+```
+
+Users who have configured API keys will continue to work without any action.
+
+---
+
+### What Moves to Extension State
+
+| Setting | From | To | Reason |
+|---------|------|-----|--------|
+| `texra.models` | VS Code config | `globalState.enabledModels` | UI in Models tab |
+| `texra.agents` | VS Code config | `workspaceState.enabledAgents` | UI in Agents tab |
+| `texra.toolUseAgents` | VS Code config | `workspaceState.enabledAgents` | Merge with agents |
+| `texra.model.useOpenRouter` | VS Code config | `globalState.routing.mode` | UI in Profile tab |
+| `texra.model.useImprovedConnection` | VS Code config | `globalState.routing.mode` | UI in Profile tab |
+| `texra.model.improvedConnectionDomain` | VS Code config | `globalState.routing.proxyDomain` | UI in Profile tab |
+| `texra.toolUse.persistence.enabled` | VS Code config | `workspaceState.memorySettings` | UI in Memory tab |
+| `texra.toolUse.persistence.ttlHours` | VS Code config | `workspaceState.memorySettings` | UI in Memory tab |
+
+### What Stays in VS Code Config
+
+These remain in VS Code settings (advanced, rarely changed, or system paths):
+
+- `texra.model.useStreaming*` - Provider-specific streaming toggles
+- `texra.model.compactionThresholdPercent` - Advanced context management
+- `texra.model.baseUrlDeepSeek` - Custom endpoint (moved to globalState.providerConfig)
+- `texra.latex.*` - LaTeX formatter settings
+- `texra.files.*` - File handling patterns
+- `texra.latexdiff.*` - Diff settings
+- `texra.logger.*`, `texra.debug.*` - Development settings
+- `texra.audio.soxPath`, `texra.explorer.agentsDirectory` - System paths
+
+### Graceful Migration Strategy
+
+**Principle:** Read from new state first, fallback to VS Code config, never break existing setups.
+
+```typescript
+/**
+ * Get enabled models with graceful migration.
+ * Priority: globalState > VS Code config > defaults
+ */
+function getEnabledModels(context: vscode.ExtensionContext): string[] {
+  // 1. Check new storage first
+  const fromState = context.globalState.get<string[]>('enabledModels');
+  if (fromState !== undefined) {
+    return fromState;
+  }
+
+  // 2. Fallback to VS Code config (existing users)
   const config = vscode.workspace.getConfiguration('texra');
-
-  // Migrate models (one-time)
-  if (!context.globalState.get('enabledModels')) {
-    const oldModels = config.get<string[]>('models');
-    if (oldModels?.length) {
-      await context.globalState.update('enabledModels', oldModels);
-    }
+  const fromConfig = config.get<string[]>('models');
+  if (fromConfig?.length) {
+    // Auto-migrate on first read
+    context.globalState.update('enabledModels', fromConfig);
+    return fromConfig;
   }
 
-  // Migrate agents (one-time per workspace)
-  if (!context.workspaceState.get('enabledAgents')) {
-    const oldAgents = config.get<string[]>('agents') ?? [];
-    const oldToolUse = config.get<string[]>('toolUseAgents') ?? [];
-    const combined = [...new Set([...oldAgents, ...oldToolUse])];
-    if (combined.length) {
-      await context.workspaceState.update('enabledAgents', combined);
-    }
+  // 3. Return defaults
+  return DEFAULT_ENABLED_MODELS;
+}
+
+/**
+ * Get routing configuration with migration.
+ */
+function getRoutingConfig(context: vscode.ExtensionContext): RoutingConfig {
+  const fromState = context.globalState.get<RoutingConfig>('routing');
+  if (fromState !== undefined) {
+    return fromState;
   }
+
+  // Migrate from scattered VS Code settings
+  const config = vscode.workspace.getConfiguration('texra.model');
+  const useOpenRouter = config.get<boolean>('useOpenRouter', false);
+  const useProxy = config.get<boolean>('useImprovedConnection', false);
+  const proxyDomain = config.get<string>('improvedConnectionDomain');
+
+  const migrated: RoutingConfig = {
+    mode: useOpenRouter ? 'openrouter' : useProxy ? 'proxy' : 'direct',
+    openRouterMode: 'exclusive',
+    proxyDomain,
+  };
+
+  // Auto-migrate
+  context.globalState.update('routing', migrated);
+  return migrated;
 }
 ```
+
+### Migration Timing
+
+1. **On extension activate:** Check and migrate settings lazily (on first read)
+2. **No forced migration:** Users can continue using VS Code config until they open Settings View
+3. **Settings View writes:** Once user saves in Settings View, new storage is used
+4. **VS Code config becomes secondary:** Still works for users who prefer it
 
 ---
 
@@ -729,16 +885,19 @@ src/
 │       ├── tabs/
 │       │   ├── ModelsTab.js         # Models tab logic
 │       │   ├── AgentsTab.js         # Agents tab logic
+│       │   ├── MemoryTab.js         # Memory tab logic (migrated)
 │       │   ├── HistoryTab.js        # History tab logic (migrated)
 │       │   └── ProfileTab.js        # Profile tab logic (migrated)
 │       └── uiManagers/
 │           ├── ModelListRenderer.js
 │           ├── AgentListRenderer.js
+│           ├── MemoryRenderer.js    # From memoryView
 │           ├── HistoryRenderer.js   # From historyView
 │           └── ProfileRenderer.js   # From profileView
 │
 ├── profileView/                     # DEPRECATED - merge into settingsView
 ├── historyView/                     # DEPRECATED - merge into settingsView
+├── memoryView/                      # DEPRECATED - merge into settingsView
 ```
 
 ### Commands
@@ -812,29 +971,38 @@ type SettingsAction =
 ## Implementation Phases
 
 ### Phase 1: Core Structure
-- Create settingsView with tab navigation
+- Create settingsView with tab navigation (5 tabs)
 - Implement Models tab with provider accordions
 - Wire up globalState for model preferences
+- Test graceful migration from VS Code config
 
 ### Phase 2: Agents Tab
 - Implement Agents tab with local/custom/remote sections
 - Wire up workspaceState for agent preferences
 - Handle remote agents auth state
 
-### Phase 3: Migrate History
+### Phase 3: Memory Tab
+- Migrate memoryView to Memory tab
+- Add conversation persistence settings UI
+- Add active sessions list with resume/discard
+- Delete old memoryView
+
+### Phase 4: Migrate History
 - Move history rendering to History tab
 - Preserve search, delete, restore, rerun functionality
 - Delete old historyView
 
-### Phase 4: Migrate Profile
+### Phase 5: Migrate Profile
 - Move profile/auth to Profile tab
-- Preserve API key management
+- Implement provider configuration cards
+- Implement provider modal (API key + endpoint)
+- Add routing options UI
 - Delete old profileView
 
-### Phase 5: Polish
+### Phase 6: Polish
 - Add main webview entry point (gear icon)
 - Deep link support (open to specific tab)
-- Migration from old VS Code config
+- Verify graceful migration (no breaking existing setups)
 - Documentation
 
 ---
