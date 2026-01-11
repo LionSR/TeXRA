@@ -16,10 +16,11 @@ Create a unified Settings View that consolidates model configuration, agent conf
 ## Goals
 
 1. **Single source of truth** - All configuration in one place
-2. **Easy navigation** - Tab-based switching between Models, Agents, History, Profile
-3. **No auth required** - Models, Agents, History tabs work without login
+2. **Easy navigation** - Tab-based switching between Models, Agents, LaTeX, Memory, History, Profile
+3. **No auth required** - Models, Agents, LaTeX, Memory, History tabs work without login
 4. **VS Code native** - Use `vscode-tabs`, `vscode-tab-header`, `vscode-tab-panel` components
 5. **Proper state management** - Global vs workspace state separation
+6. **Notion-style minimalism** - Clean, uncluttered interface with generous whitespace
 
 ---
 
@@ -30,6 +31,109 @@ Create a unified Settings View that consolidates model configuration, agent conf
 3. As a user, I want to browse execution history and restore previous sessions
 4. As a user, I want to manage my account and API keys in the same interface
 5. As a user, I want to easily switch between these configuration pages
+6. As a user, I want to configure LaTeX formatter, latexdiff, and TikZ settings in one place
+
+---
+
+## Design Principles (Notion-Inspired)
+
+The Settings View follows Notion's design philosophy: minimal chrome, generous whitespace, and content-first hierarchy.
+
+### Core Principles
+
+1. **Content over chrome** - No unnecessary borders, backgrounds, or decorations
+2. **Generous whitespace** - Let content breathe; padding > borders
+3. **Typography hierarchy** - Use font size/weight, not color, to establish importance
+4. **Invisible affordances** - Actions appear on hover, not by default
+5. **Grouped sections** - Clear visual separation using space, not lines
+
+### Visual Guidelines
+
+```css
+/* Typography hierarchy */
+.section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 12px;
+}
+
+.item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.item-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Spacing */
+.section {
+  padding: 16px 0;
+}
+
+.section + .section {
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+/* Hover actions (Notion-style) */
+.item-row .actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.item-row:hover .actions {
+  opacity: 1;
+}
+
+/* Cards - minimal borders */
+.card {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  padding: 12px 16px;
+}
+
+/* Focus on content, not containers */
+.list-item {
+  padding: 8px 0;
+  /* No borders between items - use space */
+}
+```
+
+### Anti-Patterns to Avoid
+
+- ❌ Heavy borders and outlines everywhere
+- ❌ Colorful badges and status indicators
+- ❌ Multiple competing visual hierarchies
+- ❌ Actions always visible (clutter)
+- ❌ Compact, dense layouts
+- ❌ Deeply nested sections
+
+### Examples
+
+**Good (Notion-style):**
+```
+FORMATTER
+
+Formatter     latexindent ▼
+
+Config file   /path/to/config              Browse
+```
+
+**Bad (cluttered):**
+```
+┌─────────────────────────────────────────┐
+│ ⚙️ FORMATTER SETTINGS                   │
+├─────────────────────────────────────────┤
+│ [Formatter:] [latexindent ▼] [ℹ️]       │
+│ [Config:] [_______________] [📁 Browse] │
+└─────────────────────────────────────────┘
+```
 
 ---
 
@@ -54,7 +158,7 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 ┌─────────────────────────────────────────────────────────────────┐
 │  TeXRA Settings                                          [×]   │
 ├─────────────────────────────────────────────────────────────────┤
-│  [Models]   Agents    Memory    History    Profile              │
+│  [Models]  Agents   LaTeX   Memory   History   Profile         │
 │  ═══════                                                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
@@ -69,6 +173,7 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
 <vscode-tabs id="settingsTabs" selected-index="0">
   <vscode-tab-header slot="header">Models</vscode-tab-header>
   <vscode-tab-header slot="header">Agents</vscode-tab-header>
+  <vscode-tab-header slot="header">LaTeX</vscode-tab-header>
   <vscode-tab-header slot="header">Memory</vscode-tab-header>
   <vscode-tab-header slot="header">History</vscode-tab-header>
   <vscode-tab-header slot="header">Profile</vscode-tab-header>
@@ -78,6 +183,9 @@ Clicking ⚙️ (codicon: `settings-gear`) opens the unified Settings View.
   </vscode-tab-panel>
   <vscode-tab-panel id="agentsPanel">
     <!-- Agents tab content -->
+  </vscode-tab-panel>
+  <vscode-tab-panel id="latexPanel">
+    <!-- LaTeX tab content -->
   </vscode-tab-panel>
   <vscode-tab-panel id="memoryPanel">
     <!-- Memory tab content -->
@@ -176,6 +284,10 @@ const RECOMMENDED_MODELS = [
 
 **Design Philosophy:** Users should be able to create and modify agents through a simple UI, not by editing YAML files. The complexity is hidden; power users can access raw YAML if needed.
 
+**Agent Categories:**
+- `workflow` - Document-processing agents (input → output transformations)
+- `toolUse` - Interactive agents with tool capabilities (chat, research)
+
 **Layout:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -186,24 +298,24 @@ const RECOMMENDED_MODELS = [
 │  ─────────────────────────────────────────────────────────────  │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ chat            Interactive conversation         Built-in│  │
-│  │ ☑ correct         Fix typos & LaTeX errors         Built-in│  │
-│  │ ☑ polish          Improve writing quality          Built-in│  │
-│  │ ☑ research        Research with tools              Built-in│  │
-│  │ ☑ my-reviewer     Reviews papers for clarity        Custom │  │
-│  │                                            [Edit] [Delete] │  │
-│  │ ☐ draw            Create TikZ figures              Built-in│  │
-│  │ ☐ ocr             Handwritten → LaTeX              Built-in│  │
-│  │ ☐ paper2slide     Paper → Beamer slides            Built-in│  │
-│  │ ☐ paper2poster    Paper → poster                   Built-in│  │
-│  │ ☐ transcribe      Audio transcription              Built-in│  │
+│  │ ☑ chat        Interactive conversation  [toolUse] Built-in│  │
+│  │ ☑ correct     Fix typos & LaTeX errors  [workflow] Built-in│  │
+│  │ ☑ polish      Improve writing quality   [workflow] Built-in│  │
+│  │ ☑ research    Research with tools       [toolUse] Built-in│  │
+│  │ ☑ my-reviewer Reviews papers...         [workflow]  Custom │  │
+│  │                                          [Edit] [Delete] │  │
+│  │ ☐ draw        Create TikZ figures       [workflow] Built-in│  │
+│  │ ☐ ocr         Handwritten → LaTeX       [workflow] Built-in│  │
+│  │ ☐ paper2slide Paper → Beamer slides     [workflow] Built-in│  │
+│  │ ☐ paper2poster Paper → poster           [workflow] Built-in│  │
+│  │ ☐ transcribe  Audio transcription       [workflow] Built-in│  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  REMOTE AGENTS                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ☑ team-reviewer   Team's paper reviewer       [Public]    │  │
-│  │ ☐ grant-writer    Grant proposal helper       [Team]      │  │
+│  │ ☑ team-reviewer   Team's paper reviewer  [workflow] Public │  │
+│  │ ☐ grant-writer    Grant proposal helper  [toolUse]  Team  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                        ─ or if not logged in ─                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -213,6 +325,24 @@ const RECOMMENDED_MODELS = [
 │  ─────────────────────────────────────────────────────────────  │
 │  [Advanced: Open Agent Files]          ← Power users only      │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+**Category Badge Styling:**
+```css
+.category-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: lowercase;
+}
+.category-badge--workflow {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.category-badge--toolUse {
+  background: var(--vscode-statusBarItem-prominentBackground);
+  color: var(--vscode-statusBarItem-prominentForeground);
+}
 ```
 
 ---
@@ -266,12 +396,8 @@ Click **[Edit]** on custom agent → Form-based editor:
 │  ─────────────────────────────────────────────────────────────  │
 │  Name:        [paper-reviewer                ]                 │
 │  Description: [Reviews papers for clarity    ]                 │
+│  Category:    [workflow ▼]                                     │
 │  Based on:    [correct ▼] (inherit from built-in)              │
-│                                                                 │
-│  BEHAVIOR                                                      │
-│  ─────────────────────────────────────────────────────────────  │
-│  Style:  ● Thorough (chain-of-thought)  ○ Quick (direct)       │
-│  Rounds: [2 ▼]                                                 │
 │                                                                 │
 │  INSTRUCTIONS                                                  │
 │  ─────────────────────────────────────────────────────────────  │
@@ -282,7 +408,7 @@ Click **[Edit]** on custom agent → Form-based editor:
 │  │ Suggest specific improvements with examples.              │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ▶ Advanced options                                            │
+│  ▶ Advanced options (rounds, agentType, etc.)                  │
 │                                                                 │
 │  ─────────────────────────────────────────────────────────────  │
 │  [View YAML]                       [Cancel]  [Test]  [Save]   │
@@ -292,9 +418,8 @@ Click **[Edit]** on custom agent → Form-based editor:
 **Form fields map to YAML transparently:**
 - Name → `name:`
 - Description → `description:`
+- Category → `agentCategory:` (workflow | toolUse)
 - Based on → `inherits:`
-- Style → `settings.agentType:`
-- Rounds → `settings.rounds:`
 - Instructions → `prompts.systemPrompt:`
 
 ---
@@ -306,8 +431,8 @@ Click **[Edit]** on custom agent → Form-based editor:
 | **Create agent** | Write YAML from scratch | Describe in English, AI generates |
 | **Edit agent** | Edit YAML syntax | Fill out form |
 | **Set inheritance** | `inherits: correct` | Dropdown: "Based on: correct" |
-| **Change rounds** | Edit `settings.rounds: 2` | Slider or dropdown |
-| **View all agents** | File explorer + folders | Single flat list |
+| **Change category** | Edit `agentCategory: workflow` | Dropdown |
+| **View all agents** | File explorer + folders | Single flat list with category badges |
 
 ---
 
@@ -337,6 +462,105 @@ YAML files remain the source of truth, but users interact through forms.
 3. YAML files still editable directly if preferred
 
 **Storage:** `workspaceState.enabledAgents: string[]`
+
+---
+
+### LaTeX Tab
+
+**Purpose:** Configure LaTeX formatting, latexdiff, and TikZ compilation settings.
+
+**Design Philosophy:** Consolidate scattered LaTeX-related VS Code settings into a visual, grouped interface. Settings remain in VS Code configuration for backwards compatibility.
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Configure LaTeX formatting and processing options.             │
+│                                                                 │
+│  FORMATTER                                                     │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Formatter:  [latexindent ▼]                                   │
+│              Options: latexindent, texfmt, none                 │
+│                                                                 │
+│  Config file (optional):                                       │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ /path/to/latexindent.yaml                       [Browse]  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ☑ Show warning if latexindent is not installed                │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  LATEXDIFF                                                     │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Timeout: [30000 ms ▼]                                         │
+│                                                                 │
+│  Math markup:  [fine ▼]                                        │
+│                Options: off, whole, coarse, fine                │
+│                                                                 │
+│  Picture environments (regex):                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ (?:picture|tikzpicture|scope|DIFnomarkup)[\w\d*@]*        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ☐ Generate diffs between rounds (multi-round agents)          │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  TIKZ FIGURES                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Extra input directory (TEXINPUTS):                            │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ /path/to/tikz/inputs                            [Browse]  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ☑ Include workspace root in TEXINPUTS                         │
+│                                                                 │
+│  ▶ TikZ template (advanced)                                    │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  REPLACEMENTS                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ☑ Wrap critique in align environment                          │
+│                                                                 │
+│  Enabled replacement categories:                               │
+│  ☑ latex_spacing      ☑ latex_forbidden_commands               │
+│  ☑ latex_xml          ☑ latex_document                         │
+│  ☐ latexdiff                                                   │
+│                                                                 │
+│  Enabled regex replacements:                                   │
+│  ☑ latexdiff_markup   ☐ (others)                               │
+│                                                                 │
+│  ▶ Custom replacements (advanced)                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Settings Mapping:**
+| UI Element | VS Code Setting |
+|------------|-----------------|
+| Formatter dropdown | `texra.latex.formatter` |
+| Config file path | `texra.latex.latexindentConfig` / `texra.latex.texfmtConfig` |
+| Show warning checkbox | `texra.latex.showLatexindentWarning` |
+| Timeout | `texra.latexdiff.timeoutMs` |
+| Math markup | `texra.latexdiff.mathMarkup` |
+| Picture environments | `texra.latexdiff.pictureEnvironments` |
+| Generate between-round diffs | `texra.latexdiff.generateBetweenRoundDiffs` |
+| TikZ input directory | `texra.latex.tikzInputDirectory` |
+| Include workspace | `texra.latex.includeWorkspaceInTexinputs` |
+| TikZ template | `texra.latex.tikzTemplate` |
+| Wrap critique | `texra.latex.wrapCritiqueInAlign` |
+| Replacement categories | `texra.latex.enabledReplacements` |
+| Regex replacements | `texra.latex.enabledReplacementsRegex` |
+| Custom replacements | `texra.latex.customReplacements` / `texra.latex.customReplacementsRegex` |
+
+**Storage:** VS Code configuration (`texra.latex.*`, `texra.latexdiff.*`)
+
+**Note:** Unlike other tabs that use globalState/workspaceState, LaTeX settings remain in VS Code configuration for backwards compatibility and to allow users to configure via settings.json if preferred.
 
 ---
 
@@ -982,20 +1206,22 @@ src/
 │   ├── SettingsViewMessageHandler.ts
 │   ├── SettingsViewContentProvider.ts
 │   ├── index.html                   # Tabbed layout
-│   ├── styles.css
+│   ├── styles.css                   # Notion-inspired styling
 │   └── modules/
 │       ├── main.js                  # Entry point
 │       ├── messageHandlers.js
 │       ├── settingsViewState.js
 │       ├── tabs/
 │       │   ├── ModelsTab.js         # Models tab logic
-│       │   ├── AgentsTab.js         # Agents tab logic
+│       │   ├── AgentsTab.js         # Agents tab logic (with categories)
+│       │   ├── LatexTab.js          # LaTeX settings tab
 │       │   ├── MemoryTab.js         # Memory tab logic (migrated)
 │       │   ├── HistoryTab.js        # History tab logic (migrated)
 │       │   └── ProfileTab.js        # Profile tab logic (migrated)
 │       └── uiManagers/
 │           ├── ModelListRenderer.js
 │           ├── AgentListRenderer.js
+│           ├── LatexSettingsRenderer.js
 │           ├── MemoryRenderer.js    # From memoryView
 │           ├── HistoryRenderer.js   # From historyView
 │           └── ProfileRenderer.js   # From profileView
@@ -1012,7 +1238,8 @@ src/
 commands.registerCommand('texra.openSettings', (tab?: string) => {
   settingsViewProvider.show();
   if (tab) {
-    settingsViewProvider.selectTab(tab); // 'models' | 'agents' | 'history' | 'profile'
+    // 'models' | 'agents' | 'latex' | 'memory' | 'history' | 'profile'
+    settingsViewProvider.selectTab(tab);
   }
 });
 
@@ -1021,6 +1248,8 @@ commands.registerCommand('texra.openModelSettings', () =>
   commands.executeCommand('texra.openSettings', 'models'));
 commands.registerCommand('texra.openAgentSettings', () =>
   commands.executeCommand('texra.openSettings', 'agents'));
+commands.registerCommand('texra.openLatexSettings', () =>
+  commands.executeCommand('texra.openSettings', 'latex'));
 ```
 
 ### Message Protocol
@@ -1030,6 +1259,7 @@ commands.registerCommand('texra.openAgentSettings', () =>
 type SettingsMessage =
   | { command: 'SET_MODELS_DATA', models: ModelInfo[], enabled: string[] }
   | { command: 'SET_AGENTS_DATA', agents: AgentInfo[], enabled: string[] }
+  | { command: 'SET_LATEX_DATA', settings: LatexSettings }
   | { command: 'SET_HISTORY_DATA', items: HistoryItem[] }
   | { command: 'SET_PROFILE_DATA', profile: ProfileInfo | null }
   | { command: 'SELECT_TAB', tab: string };
@@ -1038,11 +1268,21 @@ type SettingsMessage =
 type SettingsAction =
   | { command: 'SAVE_ENABLED_MODELS', models: string[] }
   | { command: 'SAVE_ENABLED_AGENTS', agents: string[] }
+  | { command: 'SAVE_LATEX_SETTING', key: string, value: unknown }
   | { command: 'RESTORE_HISTORY', id: string }
   | { command: 'DELETE_HISTORY', id: string }
   | { command: 'SIGN_IN' }
   | { command: 'SIGN_OUT' }
   | { command: 'SET_API_KEY', provider: string, key: string };
+
+// Agent info includes category
+interface AgentInfo {
+  name: string;
+  description: string;
+  category: 'workflow' | 'toolUse';
+  source: 'builtIn' | 'builtInToolUse' | 'custom' | 'remote';
+  enabled: boolean;
+}
 ```
 
 ---
@@ -1070,44 +1310,56 @@ type SettingsAction =
 3. State properly persisted (models global, agents per-workspace)
 4. History search and restore working
 5. Profile/auth flow unchanged
+6. LaTeX settings functional and synced with VS Code config
+7. Notion-style minimalist appearance achieved
 
 ---
 
 ## Implementation Phases
 
 ### Phase 1: Core Structure
-- Create settingsView with tab navigation (5 tabs)
+- Create settingsView with tab navigation (6 tabs)
 - Implement Models tab with provider accordions
 - Wire up globalState for model preferences
 - Test graceful migration from VS Code config
+- Apply Notion-style CSS variables and spacing
 
 ### Phase 2: Agents Tab
 - Implement Agents tab with local/custom/remote sections
+- Add category badges (workflow/toolUse)
 - Wire up workspaceState for agent preferences
 - Handle remote agents auth state
+- Implement AI-assisted agent creation wizard
 
-### Phase 3: Memory Tab
+### Phase 3: LaTeX Tab
+- Implement LaTeX tab with formatter, latexdiff, TikZ sections
+- Wire up to existing VS Code configuration
+- Add file browser for config paths
+- Add collapsible advanced sections (TikZ template, custom replacements)
+
+### Phase 4: Memory Tab
 - Migrate memoryView to Memory tab
 - Add conversation persistence settings UI
 - Add active sessions list with resume/discard
 - Delete old memoryView
 
-### Phase 4: Migrate History
+### Phase 5: Migrate History
 - Move history rendering to History tab
 - Preserve search, delete, restore, rerun functionality
 - Delete old historyView
 
-### Phase 5: Migrate Profile
+### Phase 6: Migrate Profile
 - Move profile/auth to Profile tab
 - Implement provider configuration cards
 - Implement provider modal (API key + endpoint)
 - Add routing options UI
 - Delete old profileView
 
-### Phase 6: Polish
+### Phase 7: Polish
 - Add main webview entry point (gear icon)
 - Deep link support (open to specific tab)
 - Verify graceful migration (no breaking existing setups)
+- Accessibility audit (keyboard navigation)
 - Documentation
 
 ---
