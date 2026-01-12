@@ -51,6 +51,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
   REFRESH_MEMORY: 'refreshMemory',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
 } as const;
 
 // =============================================================================
@@ -202,6 +203,8 @@ export interface MemoryFile {
   path: string;
   size: number;
   modified: string;
+  preview?: string;
+  lineCount?: number;
   isDirectory?: boolean;
   children?: MemoryFile[];
 }
@@ -211,6 +214,8 @@ export const MemoryFileSchema: z.ZodType<MemoryFile> = z.object({
   path: z.string(),
   size: z.number(),
   modified: z.string(),
+  preview: z.string().optional(),
+  lineCount: z.number().optional(),
   isDirectory: z.boolean().optional(),
   children: z.array(z.lazy(() => MemoryFileSchema)).optional(),
 });
@@ -225,8 +230,17 @@ export const HistoryItemSchema = z.object({
   agentName: z.string(),
   modelName: z.string(),
   inputFile: z.string().optional(),
-  outputFile: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+  referenceFile: z.string().nullable().optional(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFile: z.string().nullable().optional(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  mediaFile: z.string().nullable().optional(),
+  mediaFiles: z.array(z.string()).optional(),
   instruction: z.string().optional(),
+  sessionKind: z.enum(['workflow', 'tool-use']).optional(),
+  toolConfig: z.record(z.string(), z.boolean()).optional(),
 });
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
@@ -257,6 +271,9 @@ export const InitialDataSchema = z.object({
   enabledAgents: z.array(z.string()),
   enabledToolUseAgents: z.array(z.string()),
   latexSettings: LatexSettingsSchema,
+  memoryFiles: z.array(MemoryFileSchema).optional(),
+  memoryEnabled: z.boolean().optional(),
+  history: z.array(HistoryItemSchema).optional(),
   selectedTab: SettingsTabSchema.optional(),
 });
 export type InitialData = z.infer<typeof InitialDataSchema>;
@@ -349,4 +366,13 @@ export const MemoryActionSchema = z.object({
     SETTINGS_VIEW_COMMANDS.DELETE_MEMORY,
   ]),
   path: z.string(),
+});
+
+export const MemoryToggleActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED),
+  enabled: z.boolean(),
+});
+
+export const OpenMemoryFolderActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
 });

@@ -1,10 +1,28 @@
 // Third-party imports
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - common
 import { showLoggedErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
 import { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
+
+// Local imports - memory utilities
+import {
+  MEMORY_STORAGE_ROOT,
+  MAX_PREVIEW_LINES,
+  MAX_PREVIEW_CHARS,
+  shouldSkipEntry,
+} from '@tools/memory/constants';
+import {
+  relativeToDisplayPath,
+  resolveMemoryStoragePath,
+} from '@tools/memory/memoryUtils';
+import { StorageFS } from '@utils/files';
+import {
+  getToolUseMemoryEnabled,
+  setToolUseMemoryEnabled,
+} from '@utils/config/constants';
 
 // Local imports - agent
 import {
@@ -53,6 +71,8 @@ import {
   BrowseFileActionSchema,
   HistoryActionSchema,
   MemoryActionSchema,
+  MemoryToggleActionSchema,
+  type MemoryFile,
 } from './schemas';
 
 // Provider metadata
@@ -171,9 +191,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       // Memory
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]:
         this.handleOpenMemoryFile.bind(this),
+      [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
+        this.handleOpenMemoryFolder.bind(this),
       [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
       [SETTINGS_VIEW_COMMANDS.REFRESH_MEMORY]:
         this.handleRefreshMemory.bind(this),
+      [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
+        this.handleSetMemoryEnabled.bind(this),
     };
   }
 
@@ -531,12 +555,45 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.sendInitialData(view.webview);
   }
 
+  private async handleOpenMemoryFolder(): Promise<void> {
+    try {
+      await StorageFS.ensureDir(MEMORY_STORAGE_ROOT);
+      const absolutePath = StorageFS.fullPath(MEMORY_STORAGE_ROOT);
+      await vscode.commands.executeCommand(
+        'revealFileInOS',
+        vscode.Uri.file(absolutePath),
+      );
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        'Failed to open memory folder',
+        error,
+      );
+    }
+  }
+
+  private async handleSetMemoryEnabled(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      MemoryToggleActionSchema,
+      message,
+      'setMemoryEnabled',
+      async ({ enabled }) => {
+        await setToolUseMemoryEnabled(enabled);
+        // Confirm the update back to the webview
+        await this.sendInitialData(view.webview);
+      },
+    );
+  }
+
   // ===========================================================================
   // DATA COLLECTION
   // ===========================================================================
 
   private async collectInitialData(): Promise<InitialData> {
-    const [account, models, providers, agents, latexSettings, history] =
+    const [account, models, providers, agents, latexSettings, history, memory] =
       await Promise.all([
         this.collectAccountData(),
         this.collectModelsData(),
@@ -544,6 +601,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.collectAgentsData(),
         this.collectLatexSettings(),
         this.collectHistoryData(),
+        this.collectMemoryData(),
       ]);
 
     const enabledModels = getConfig<string[]>('texra.models', []);
@@ -559,6 +617,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       enabledAgents,
       enabledToolUseAgents,
       latexSettings,
+      memoryFiles: memory.files,
+      memoryEnabled: memory.enabled,
+      history,
     };
   }
 
@@ -747,14 +808,115 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async collectHistoryData(): Promise<HistoryItem[]> {
     const history = await AgentHistoryManager.getHistory();
 
-    return history.map((item) => ({
-      id: item.id,
-      timestamp: item.timestamp,
-      agentName: item.agentConfig.agent,
-      modelName: item.agentConfig.model,
-      inputFile: item.agentConfig.inputFile,
-      outputFile: item.agentConfig.outputFiles[0] || '',
-      instruction: item.agentConfig.instruction,
-    }));
+    return history.map((item) => {
+      const config = item.agentConfig;
+      const sessionKind =
+        config.session?.agentCategory === AgentCategory.ToolUse
+          ? 'tool-use'
+          : 'workflow';
+
+      return {
+        id: item.id,
+        timestamp: item.timestamp,
+        agentName: config.agent,
+        modelName: config.model,
+        inputFile: config.inputFile,
+        inputFiles: config.inputFiles,
+        outputFiles: config.outputFiles,
+        referenceFile: config.referenceFile,
+        referenceFiles: config.referenceFiles,
+        auxiliaryFile: config.auxiliaryFile,
+        auxiliaryFiles: config.auxiliaryFiles,
+        mediaFile: config.mediaFile,
+        mediaFiles: config.mediaFiles,
+        instruction: config.instruction,
+        sessionKind,
+        toolConfig: config.toolConfig,
+      };
+    });
+  }
+
+  private async collectMemoryData(): Promise<{
+    files: MemoryFile[];
+    enabled: boolean;
+  }> {
+    const enabled = getToolUseMemoryEnabled();
+    const exists = await StorageFS.exists(MEMORY_STORAGE_ROOT);
+
+    if (!exists) {
+      return { files: [], enabled };
+    }
+
+    const items = await this.walkMemoryDirectory(MEMORY_STORAGE_ROOT);
+    // Sort by modification time, newest first
+    items.sort((a, b) => b.modified.localeCompare(a.modified));
+
+    return { files: items, enabled };
+  }
+
+  private async walkMemoryDirectory(
+    storagePath: string,
+    relativeRoot = '',
+  ): Promise<MemoryFile[]> {
+    const entries = await StorageFS.readDir(storagePath);
+    const results: MemoryFile[] = [];
+
+    for (const [name, type] of entries) {
+      if (shouldSkipEntry(name)) {
+        continue;
+      }
+
+      const nextRelative = relativeRoot ? path.join(relativeRoot, name) : name;
+      const nextStoragePath = path.join(MEMORY_STORAGE_ROOT, nextRelative);
+
+      if (type === vscode.FileType.Directory) {
+        results.push(
+          ...(await this.walkMemoryDirectory(nextStoragePath, nextRelative)),
+        );
+        continue;
+      }
+
+      const stats = await StorageFS.stat(nextStoragePath);
+      const content = await StorageFS.read(nextStoragePath);
+      const previewData = this.buildPreview(content);
+      const displayPath = relativeToDisplayPath(nextRelative);
+
+      results.push({
+        name: displayPath,
+        path: nextStoragePath,
+        size: stats.size,
+        modified: new Date(stats.mtime).toISOString(),
+        preview: previewData.preview,
+        lineCount: previewData.lineCount,
+      });
+    }
+
+    return results;
+  }
+
+  private buildPreview(content: string): {
+    preview: string;
+    lineCount: number;
+  } {
+    const lines = content.split(/\r?\n/);
+    if (lines.length > 0 && lines.at(-1) === '') {
+      lines.pop();
+    }
+
+    const lineCount = lines.length;
+    const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
+    let preview = previewLines.join('\n');
+    let truncated = lineCount > MAX_PREVIEW_LINES;
+
+    if (preview.length > MAX_PREVIEW_CHARS) {
+      preview = preview.slice(0, MAX_PREVIEW_CHARS);
+      truncated = true;
+    }
+
+    if (truncated) {
+      preview = `${preview}\n...`;
+    }
+
+    return { preview, lineCount };
   }
 }

@@ -14,6 +14,8 @@ export class MemoryTab {
     this._elements = {
       memoryFilesList: document.getElementById(ELEMENT_IDS.MEMORY_FILES_LIST),
       refreshMemoryBtn: document.getElementById(ELEMENT_IDS.REFRESH_MEMORY_BTN),
+      openFolderBtn: document.getElementById('openMemoryFolderBtn'),
+      memoryEnabledToggle: document.getElementById('memoryEnabledToggle'),
       memoryStats: document.getElementById(ELEMENT_IDS.MEMORY_STATS),
       clearAllMemoryBtn: document.getElementById('clearAllMemoryBtn'),
     };
@@ -22,11 +24,32 @@ export class MemoryTab {
   }
 
   attachEventListeners() {
-    const { refreshMemoryBtn, clearAllMemoryBtn, memoryFilesList } = this._elements;
+    const {
+      refreshMemoryBtn,
+      openFolderBtn,
+      memoryEnabledToggle,
+      clearAllMemoryBtn,
+      memoryFilesList,
+    } = this._elements;
 
     if (refreshMemoryBtn) {
       refreshMemoryBtn.addEventListener('click', () => {
         vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.REFRESH_MEMORY });
+      });
+    }
+
+    if (openFolderBtn) {
+      openFolderBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER });
+      });
+    }
+
+    if (memoryEnabledToggle) {
+      memoryEnabledToggle.addEventListener('change', (e) => {
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
+          enabled: e.target.checked,
+        });
       });
     }
 
@@ -87,6 +110,14 @@ export class MemoryTab {
   render(state) {
     this.renderMemoryFiles(state.memoryFiles);
     this.updateStats(state.memoryFiles);
+    this.updateEnabledToggle(state.memoryEnabled);
+  }
+
+  updateEnabledToggle(enabled) {
+    const { memoryEnabledToggle } = this._elements;
+    if (memoryEnabledToggle) {
+      memoryEnabledToggle.checked = enabled ?? true;
+    }
   }
 
   renderMemoryFiles(files) {
@@ -131,12 +162,20 @@ export class MemoryTab {
         <div class="memory-file-header">
           <span class="codicon codicon-file"></span>
           <span class="memory-file-name">${file.name}</span>
-          <span class="memory-file-size">${this.formatSize(file.size)}</span>
-          <span class="memory-file-date">${this.formatDate(file.modified)}</span>
+          <span class="memory-file-meta">${this.formatSize(file.size)} · ${this.formatLineCount(file.lineCount)} · ${this.formatDate(file.modified)}</span>
         </div>
+        ${file.preview ? `
+        <vscode-collapsible title="Preview" open="false">
+          <pre class="memory-preview">${this.escapeHtml(file.preview)}</pre>
+        </vscode-collapsible>
+        ` : ''}
         <div class="memory-actions">
-          <vscode-button appearance="secondary" class="view-full-btn">View</vscode-button>
-          <vscode-button appearance="secondary" class="delete-memory-btn">Delete</vscode-button>
+          <vscode-button appearance="secondary" class="view-full-btn">
+            <span class="codicon codicon-go-to-file"></span> Open
+          </vscode-button>
+          <vscode-button appearance="secondary" class="delete-memory-btn">
+            <span class="codicon codicon-trash"></span> Delete
+          </vscode-button>
         </div>
       </div>
     `).join('');
@@ -191,5 +230,17 @@ export class MemoryTab {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  formatLineCount(count) {
+    if (!count && count !== 0) return '0 lines';
+    return `${count} line${count !== 1 ? 's' : ''}`;
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

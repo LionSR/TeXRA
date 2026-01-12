@@ -1312,9 +1312,27 @@
       },
       {
         "command": "texra.openSettings",
+        "title": "Open TeXRA Settings (Native)",
+        "category": "TeXRA",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "texra.openSettingsView",
         "title": "Open TeXRA Settings",
         "category": "TeXRA",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "texra.openModelsSettings",
+        "title": "Open Model Settings",
+        "category": "TeXRA",
+        "icon": "$(server)"
+      },
+      {
+        "command": "texra.openAgentsSettings",
+        "title": "Open Agent Settings",
+        "category": "TeXRA",
+        "icon": "$(robot)"
       },
       {
         "command": "texra.showProgressView",
@@ -1492,29 +1510,19 @@
           "group": "navigation@3"
         },
         {
-          "command": "texra.openSettings",
+          "command": "texra.openSettingsView",
           "when": "view == texra.progressView",
           "group": "navigation@4"
         },
         {
-          "command": "texra.showAgentHistory",
+          "command": "texra.auth.accountMenu",
           "when": "view == texra.progressView",
           "group": "navigation@5"
         },
         {
-          "command": "texra.showMemory",
-          "when": "view == texra.progressView",
-          "group": "navigation@6"
-        },
-        {
-          "command": "texra.auth.accountMenu",
-          "when": "view == texra.progressView",
-          "group": "navigation@7"
-        },
-        {
           "command": "texra.openProgressViewInTab",
           "when": "view == texra.progressView",
-          "group": "navigation@8"
+          "group": "navigation@6"
         },
         {
           "command": "texra.folderExplorer.newFile",
@@ -1537,24 +1545,14 @@
           "group": "navigation@0"
         },
         {
-          "command": "texra.openSettings",
+          "command": "texra.openSettingsView",
           "when": "view == texra.mainView",
           "group": "navigation@1"
         },
         {
-          "command": "texra.showAgentHistory",
-          "when": "view == texra.mainView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "texra.showMemory",
-          "when": "view == texra.mainView",
-          "group": "navigation@3"
-        },
-        {
           "command": "texra.auth.accountMenu",
           "when": "view == texra.mainView",
-          "group": "navigation@4"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

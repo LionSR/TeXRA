@@ -236,18 +236,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   OPEN_PROFILE: 'openProfile',
 };
 
-// History view specific commands
-export const HISTORY_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  GET_HISTORY_DATA: 'getHistoryData',
-  UPDATE_HISTORY: 'updateHistory',
-  CLEAR_HISTORY: 'clearHistory',
-  HISTORY_CLEARED: 'historyCleared',
-  RERUN_AGENT: 'rerunAgent',
-  RESTORE_AGENT: 'restoreAgent',
-  DELETE_AGENT: 'deleteAgent',
-};
-
 // Profile view specific commands
 export const PROFILE_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
@@ -258,19 +246,6 @@ export const PROFILE_VIEW_COMMANDS = {
   SIGN_OUT: 'signOut',
   // API access mode toggle (Ultra tier)
   SET_API_ACCESS_MODE: 'setApiAccessMode',
-};
-
-// Memory view specific commands
-export const MEMORY_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  GET_MEMORY_DATA: 'getMemoryData',
-  UPDATE_MEMORY: 'updateMemory',
-  OPEN_MEMORY_FILE: 'openMemoryFile',
-  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
-  DELETE_MEMORY: 'deleteMemory',
-  GET_MEMORY_ENABLED: 'getMemoryEnabled',
-  SET_MEMORY_ENABLED: 'setMemoryEnabled',
-  UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 };
 
 // Settings view specific commands
@@ -312,6 +287,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
   REFRESH_MEMORY: 'refreshMemory',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
 };
 
 // Export all commands in a single object for convenience
@@ -319,8 +295,6 @@ export const WEBVIEW_COMMANDS = {
   COMMON: COMMON_COMMANDS,
   MAIN_VIEW: MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
-  HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
   PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
-  MEMORY_VIEW: MEMORY_VIEW_COMMANDS,
   SETTINGS_VIEW: SETTINGS_VIEW_COMMANDS,
 };

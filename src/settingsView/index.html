@@ -374,12 +374,24 @@
               Memory files created by tool-use agents.
             </p>
 
+            <div class="settings-row">
+              <vscode-checkbox id="memoryEnabledToggle" checked>
+                Enable memory for chat agents
+              </vscode-checkbox>
+            </div>
+
             <div class="section-header">
               <vscode-label class="section-label">MEMORY FILES</vscode-label>
-              <vscode-button appearance="secondary" id="refreshMemoryBtn">
-                <span slot="start" class="codicon codicon-refresh"></span>
-                Refresh
-              </vscode-button>
+              <div class="section-actions">
+                <vscode-button appearance="secondary" id="refreshMemoryBtn">
+                  <span slot="start" class="codicon codicon-refresh"></span>
+                  Refresh
+                </vscode-button>
+                <vscode-button appearance="secondary" id="openMemoryFolderBtn">
+                  <span slot="start" class="codicon codicon-folder-opened"></span>
+                  Open Folder
+                </vscode-button>
+              </div>
             </div>
 
             <p class="info-text">

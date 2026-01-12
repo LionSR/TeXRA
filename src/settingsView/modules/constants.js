@@ -46,6 +46,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
   REFRESH_MEMORY: 'refreshMemory',
+  SET_MEMORY_ENABLED: 'setMemoryEnabled',
 };
 
 // Tab identifiers

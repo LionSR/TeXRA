@@ -1,32 +1,25 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import { HistoryViewProvider } from '@historyView/HistoryViewProvider';
-
 export const historyCommands = {
   showHistory: 'texra.showAgentHistory',
 };
 
 /**
- * Register the commands related to agent execution history
+ * Register the commands related to agent execution history.
+ * Legacy command that redirects to the unified Settings View.
  */
 export function registerHistoryCommands(context: vscode.ExtensionContext) {
-  // Create history view provider
-  const historyViewProvider = new HistoryViewProvider(context);
-
-  // Register show history command
+  // Register show history command - redirects to Settings View history tab
   const showHistoryCommand = vscode.commands.registerCommand(
     historyCommands.showHistory,
     async () => {
-      await historyViewProvider.showHistoryView();
+      await vscode.commands.executeCommand('texra.openSettingsView', 'history');
     },
   );
 
   // Add subscriptions
   context.subscriptions.push(showHistoryCommand);
 
-  return {
-    historyViewProvider,
-  };
+  return {};
 }

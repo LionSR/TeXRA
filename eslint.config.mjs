@@ -12,9 +12,7 @@ const INTERNAL_ALIAS_NAMES = [
   'agent',
   'common',
   'frontend',
-  'historyView',
   'logger',
-  'memoryView',
   'model',
   'progressView',
   'replacement',
@@ -160,16 +158,12 @@ export default tseslint.config(
   // Configuration for JavaScript view modules
   {
     files: [
-      'src/historyView/modules/**/*.js',
-      'src/memoryView/modules/**/*.js',
       'src/progressView/modules/**/*.js',
       'src/settingsView/modules/**/*.js',
       'src/webview/modules/**/*.js',
       'src/common/*.js',
       'src/common/modules/*.js',
       'src/common/webview/*.js',
-      'src/historyView/script.js',
-      'src/memoryView/script.js',
       'src/progressView/script.js',
       'src/settingsView/script.js',
       'src/webview/script.js',
