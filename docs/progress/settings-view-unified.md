@@ -60,6 +60,24 @@ The unified Settings View has been fully implemented and all legacy views have b
 
 ---
 
+## Phase 4: Code Quality Fixes ✅
+
+### Memory Leak Fix
+- [x] Moved replacement checkbox event listeners to `attachEventListeners()` in LatexTab.js
+- [x] Event delegation pattern prevents duplicate listeners on re-render
+
+### Missing Schemas Added
+- [x] SetModelsDataMessageSchema
+- [x] SetAgentsDataMessageSchema
+- [x] SetHistoryDataMessageSchema
+- [x] HistoryClearedMessageSchema
+- [x] RefreshMemoryActionSchema
+- [x] ClearHistoryActionSchema
+- [x] SignInActionSchema
+- [x] SignOutActionSchema
+
+---
+
 ## Build Status
 - TypeScript: ✅ Compiles without errors
 - ESLint: ✅ Only import order warnings
