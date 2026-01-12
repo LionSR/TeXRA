@@ -18,7 +18,9 @@ export class HeaderBar {
       signInBtn: document.getElementById(ELEMENT_IDS.SIGN_IN_BTN),
       signOutBtn: document.getElementById(ELEMENT_IDS.SIGN_OUT_BTN),
       manageBtn: document.getElementById(ELEMENT_IDS.MANAGE_BTN),
-      notLoggedInBanner: document.getElementById(ELEMENT_IDS.NOT_LOGGED_IN_BANNER),
+      notLoggedInBanner: document.getElementById(
+        ELEMENT_IDS.NOT_LOGGED_IN_BANNER,
+      ),
     };
 
     this.attachEventListeners();

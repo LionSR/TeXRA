@@ -242,7 +242,7 @@ vscode-tab-panel {
   background: var(--vscode-list-hoverBackground);
 }
 
-.radio-option input[type="radio"] {
+.radio-option input[type='radio'] {
   margin-top: 3px;
 }
 

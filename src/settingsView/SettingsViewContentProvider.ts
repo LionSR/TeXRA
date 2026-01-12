@@ -13,9 +13,18 @@ const SETTINGS_VIEW_MODULES = [
   { key: 'latexTabUri', path: 'modules/tabs/LatexTab.js' },
   { key: 'memoryTabUri', path: 'modules/tabs/MemoryTab.js' },
   { key: 'historyTabUri', path: 'modules/tabs/HistoryTab.js' },
-  { key: 'modelListRendererUri', path: 'modules/uiManagers/ModelListRenderer.js' },
-  { key: 'providerRendererUri', path: 'modules/uiManagers/ProviderRenderer.js' },
-  { key: 'agentListRendererUri', path: 'modules/uiManagers/AgentListRenderer.js' },
+  {
+    key: 'modelListRendererUri',
+    path: 'modules/uiManagers/ModelListRenderer.js',
+  },
+  {
+    key: 'providerRendererUri',
+    path: 'modules/uiManagers/ProviderRenderer.js',
+  },
+  {
+    key: 'agentListRendererUri',
+    path: 'modules/uiManagers/AgentListRenderer.js',
+  },
   { key: 'settingRendererUri', path: 'modules/uiManagers/SettingRenderer.js' },
   { key: 'tabManagerUri', path: 'modules/TabManager.js' },
 ] as const;

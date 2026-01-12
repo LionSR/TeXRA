@@ -3,7 +3,11 @@
  */
 import { vscode } from '@common/webviewContext.js';
 import { settingsViewState } from '../settingsViewState.js';
-import { SETTINGS_VIEW_COMMANDS, REPLACEMENT_CATEGORIES, REGEX_REPLACEMENTS } from '../constants.js';
+import {
+  SETTINGS_VIEW_COMMANDS,
+  REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENTS,
+} from '../constants.js';
 
 export class LatexTab {
   constructor() {
@@ -16,7 +20,9 @@ export class LatexTab {
       formatterSelect: document.getElementById('formatterSelect'),
       latexindentConfigRow: document.getElementById('latexindentConfigRow'),
       latexindentConfig: document.getElementById('latexindentConfig'),
-      browseLatexindentConfig: document.getElementById('browseLatexindentConfig'),
+      browseLatexindentConfig: document.getElementById(
+        'browseLatexindentConfig',
+      ),
       texfmtConfigRow: document.getElementById('texfmtConfigRow'),
       texfmtConfig: document.getElementById('texfmtConfig'),
       browseTexfmtConfig: document.getElementById('browseTexfmtConfig'),
@@ -26,12 +32,18 @@ export class LatexTab {
       latexdiffTimeout: document.getElementById('latexdiffTimeout'),
       mathMarkupSelect: document.getElementById('mathMarkupSelect'),
       pictureEnvironments: document.getElementById('pictureEnvironments'),
-      generateBetweenRoundDiffs: document.getElementById('generateBetweenRoundDiffs'),
+      generateBetweenRoundDiffs: document.getElementById(
+        'generateBetweenRoundDiffs',
+      ),
 
       // TikZ
       tikzInputDirectory: document.getElementById('tikzInputDirectory'),
-      browseTikzInputDirectory: document.getElementById('browseTikzInputDirectory'),
-      includeWorkspaceInTexinputs: document.getElementById('includeWorkspaceInTexinputs'),
+      browseTikzInputDirectory: document.getElementById(
+        'browseTikzInputDirectory',
+      ),
+      includeWorkspaceInTexinputs: document.getElementById(
+        'includeWorkspaceInTexinputs',
+      ),
       tikzTemplate: document.getElementById('tikzTemplate'),
 
       // Replacements
@@ -86,55 +98,77 @@ export class LatexTab {
     // Browse buttons
     if (browseLatexindentConfig) {
       browseLatexindentConfig.addEventListener('click', () => {
-        this.browseFile('latex.latexindentConfig', 'Select latexindent config file', {
-          'YAML': ['yaml', 'yml'],
-        });
+        this.browseFile(
+          'latex.latexindentConfig',
+          'Select latexindent config file',
+          {
+            YAML: ['yaml', 'yml'],
+          },
+        );
       });
     }
 
     if (browseTexfmtConfig) {
       browseTexfmtConfig.addEventListener('click', () => {
         this.browseFile('latex.texfmtConfig', 'Select tex-fmt config file', {
-          'TOML': ['toml'],
+          TOML: ['toml'],
         });
       });
     }
 
     if (browseTikzInputDirectory) {
       browseTikzInputDirectory.addEventListener('click', () => {
-        this.browseFile('latex.tikzInputDirectory', 'Select TikZ input directory');
+        this.browseFile(
+          'latex.tikzInputDirectory',
+          'Select TikZ input directory',
+        );
       });
     }
 
     // Checkboxes
     if (showLatexindentWarning) {
       showLatexindentWarning.addEventListener('change', () => {
-        this.saveSetting('latex.showLatexindentWarning', showLatexindentWarning.checked);
+        this.saveSetting(
+          'latex.showLatexindentWarning',
+          showLatexindentWarning.checked,
+        );
       });
     }
 
     if (generateBetweenRoundDiffs) {
       generateBetweenRoundDiffs.addEventListener('change', () => {
-        this.saveSetting('latexdiff.generateBetweenRoundDiffs', generateBetweenRoundDiffs.checked);
+        this.saveSetting(
+          'latexdiff.generateBetweenRoundDiffs',
+          generateBetweenRoundDiffs.checked,
+        );
       });
     }
 
     if (includeWorkspaceInTexinputs) {
       includeWorkspaceInTexinputs.addEventListener('change', () => {
-        this.saveSetting('latex.includeWorkspaceInTexinputs', includeWorkspaceInTexinputs.checked);
+        this.saveSetting(
+          'latex.includeWorkspaceInTexinputs',
+          includeWorkspaceInTexinputs.checked,
+        );
       });
     }
 
     if (wrapCritiqueInAlign) {
       wrapCritiqueInAlign.addEventListener('change', () => {
-        this.saveSetting('latex.wrapCritiqueInAlign', wrapCritiqueInAlign.checked);
+        this.saveSetting(
+          'latex.wrapCritiqueInAlign',
+          wrapCritiqueInAlign.checked,
+        );
       });
     }
 
     // LaTeXdiff settings
     if (latexdiffTimeout) {
       latexdiffTimeout.addEventListener('change', () => {
-        this.saveSetting('latexdiff.timeoutMs', parseInt(latexdiffTimeout.value, 10));
+        this.saveSetting(
+          'latexdiff.timeoutMs',
+          parseInt(latexdiffTimeout.value, 10),
+        );
       });
     }
 
@@ -146,7 +180,10 @@ export class LatexTab {
 
     if (pictureEnvironments) {
       pictureEnvironments.addEventListener('change', () => {
-        this.saveSetting('latexdiff.pictureEnvironments', pictureEnvironments.value);
+        this.saveSetting(
+          'latexdiff.pictureEnvironments',
+          pictureEnvironments.value,
+        );
       });
     }
 
@@ -170,7 +207,10 @@ export class LatexTab {
       replacementCategories.addEventListener('change', (e) => {
         const checkbox = e.target.closest('vscode-checkbox');
         if (checkbox && checkbox.dataset.category) {
-          this.handleReplacementCategoryChange(checkbox.dataset.category, checkbox.checked);
+          this.handleReplacementCategoryChange(
+            checkbox.dataset.category,
+            checkbox.checked,
+          );
         }
       });
     }
@@ -179,7 +219,10 @@ export class LatexTab {
       regexReplacements.addEventListener('change', (e) => {
         const checkbox = e.target.closest('vscode-checkbox');
         if (checkbox && checkbox.dataset.regex) {
-          this.handleRegexReplacementChange(checkbox.dataset.regex, checkbox.checked);
+          this.handleRegexReplacementChange(
+            checkbox.dataset.regex,
+            checkbox.checked,
+          );
         }
       });
     }
@@ -206,13 +249,15 @@ export class LatexTab {
   }
 
   updateFormatterVisibility() {
-    const { formatterSelect, latexindentConfigRow, texfmtConfigRow } = this._elements;
+    const { formatterSelect, latexindentConfigRow, texfmtConfigRow } =
+      this._elements;
     if (!formatterSelect) return;
 
     const formatter = formatterSelect.value;
 
     if (latexindentConfigRow) {
-      latexindentConfigRow.style.display = formatter === 'latexindent' ? 'flex' : 'none';
+      latexindentConfigRow.style.display =
+        formatter === 'latexindent' ? 'flex' : 'none';
     }
 
     if (texfmtConfigRow) {
@@ -234,11 +279,17 @@ export class LatexTab {
     this.setValue('latexdiffTimeout', settings.latexdiffTimeoutMs);
     this.setValue('mathMarkupSelect', settings.latexdiffMathMarkup);
     this.setValue('pictureEnvironments', settings.latexdiffPictureEnvironments);
-    this.setChecked('generateBetweenRoundDiffs', settings.latexdiffGenerateBetweenRoundDiffs);
+    this.setChecked(
+      'generateBetweenRoundDiffs',
+      settings.latexdiffGenerateBetweenRoundDiffs,
+    );
 
     // TikZ
     this.setValue('tikzInputDirectory', settings.tikzInputDirectory);
-    this.setChecked('includeWorkspaceInTexinputs', settings.includeWorkspaceInTexinputs);
+    this.setChecked(
+      'includeWorkspaceInTexinputs',
+      settings.includeWorkspaceInTexinputs,
+    );
     this.setValue('tikzTemplate', settings.tikzTemplate);
 
     // Replacements
@@ -266,32 +317,38 @@ export class LatexTab {
     // Render replacement categories
     if (replacementCategories) {
       const enabledCategories = new Set(settings.enabledReplacements || []);
-      replacementCategories.innerHTML = REPLACEMENT_CATEGORIES.map((cat) => `
+      replacementCategories.innerHTML = REPLACEMENT_CATEGORIES.map(
+        (cat) => `
         <vscode-checkbox
           data-category="${cat}"
           ${enabledCategories.has(cat) ? 'checked' : ''}
         >
           ${cat.replace(/_/g, ' ')}
         </vscode-checkbox>
-      `).join('');
+      `,
+      ).join('');
     }
 
     // Render regex replacements
     if (regexReplacements) {
       const enabledRegex = new Set(settings.enabledReplacementsRegex || []);
-      regexReplacements.innerHTML = REGEX_REPLACEMENTS.map((regex) => `
+      regexReplacements.innerHTML = REGEX_REPLACEMENTS.map(
+        (regex) => `
         <vscode-checkbox
           data-regex="${regex}"
           ${enabledRegex.has(regex) ? 'checked' : ''}
         >
           ${regex.replace(/_/g, ' ')}
         </vscode-checkbox>
-      `).join('');
+      `,
+      ).join('');
     }
   }
 
   handleReplacementCategoryChange(category, enabled) {
-    const current = new Set(settingsViewState.latexSettings.enabledReplacements || []);
+    const current = new Set(
+      settingsViewState.latexSettings.enabledReplacements || [],
+    );
     if (enabled) {
       current.add(category);
     } else {
@@ -301,7 +358,9 @@ export class LatexTab {
   }
 
   handleRegexReplacementChange(regex, enabled) {
-    const current = new Set(settingsViewState.latexSettings.enabledReplacementsRegex || []);
+    const current = new Set(
+      settingsViewState.latexSettings.enabledReplacementsRegex || [],
+    );
     if (enabled) {
       current.add(regex);
     } else {

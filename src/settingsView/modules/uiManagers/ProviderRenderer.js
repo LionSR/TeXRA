@@ -57,7 +57,11 @@ export function renderProviderHeader(provider) {
 /**
  * Render a provider collapsible section
  */
-export function renderProviderCollapsible(provider, modelsHtml, isOpen = false) {
+export function renderProviderCollapsible(
+  provider,
+  modelsHtml,
+  isOpen = false,
+) {
   const header = renderProviderHeader(provider);
 
   return `

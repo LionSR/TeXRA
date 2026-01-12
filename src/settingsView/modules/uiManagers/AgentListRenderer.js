@@ -20,7 +20,8 @@ export function renderAgentTypeBadge(agentType) {
  * Render agent category badge
  */
 export function renderCategoryBadge(category) {
-  const badgeClass = category === 'toolUse' ? 'badge-tooluse' : 'badge-workflow';
+  const badgeClass =
+    category === 'toolUse' ? 'badge-tooluse' : 'badge-workflow';
   const label = category === 'toolUse' ? 'Tool-Use' : 'Workflow';
   return `<span class="badge ${badgeClass}">${label}</span>`;
 }
@@ -99,7 +100,7 @@ export function renderAgentList(agents, enabledSet, showActions = false) {
 
   return agents
     .map((agent) =>
-      renderAgentItem(agent, enabledSet.has(agent.name), showActions)
+      renderAgentItem(agent, enabledSet.has(agent.name), showActions),
     )
     .join('');
 }

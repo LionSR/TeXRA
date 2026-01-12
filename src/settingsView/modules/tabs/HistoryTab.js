@@ -138,7 +138,10 @@ export class HistoryTab {
     // Highlight first match
     if (this._searchMatches.length > 0) {
       this._searchMatches[0].classList.add('search-current');
-      this._searchMatches[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      this._searchMatches[0].scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
     }
   }
 
@@ -215,7 +218,9 @@ export class HistoryTab {
   }
 
   renderHistoryItemsSimple(items) {
-    return items.map((item) => `
+    return items
+      .map(
+        (item) => `
       <div class="history-item" data-id="${item.id}">
         <div class="history-item-header">
           <span class="history-timestamp">${this.formatDate(item.timestamp)}</span>
@@ -232,25 +237,37 @@ export class HistoryTab {
           <span class="separator">-</span>
           <span class="history-model">${item.modelName}</span>
         </div>
-        ${item.inputFile || item.outputFile ? `
+        ${
+          item.inputFile || item.outputFile
+            ? `
           <div class="history-item-files">
             ${item.inputFile ? `<span class="history-input">${this.shortenPath(item.inputFile)}</span>` : ''}
             ${item.inputFile && item.outputFile ? '<span class="codicon codicon-arrow-right"></span>' : ''}
             ${item.outputFile ? `<span class="history-output">${this.shortenPath(item.outputFile)}</span>` : ''}
           </div>
-        ` : ''}
-        ${item.instruction ? `
+        `
+            : ''
+        }
+        ${
+          item.instruction
+            ? `
           <vscode-collapsible title="Show details" class="history-details">
             <div class="history-instruction">${this.escapeHtml(item.instruction)}</div>
           </vscode-collapsible>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
-    `).join('');
+    `,
+      )
+      .join('');
   }
 
   populateHistoryItem(itemEl, item) {
     itemEl.dataset.id = item.id;
-    itemEl.querySelector('.history-timestamp').textContent = this.formatDate(item.timestamp);
+    itemEl.querySelector('.history-timestamp').textContent = this.formatDate(
+      item.timestamp,
+    );
     itemEl.querySelector('.history-agent').textContent = item.agentName;
     itemEl.querySelector('.history-model').textContent = item.modelName;
 

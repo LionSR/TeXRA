@@ -40,7 +40,9 @@ export class MemoryTab {
 
     if (openFolderBtn) {
       openFolderBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER });
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+        });
       });
     }
 
@@ -157,18 +159,24 @@ export class MemoryTab {
   }
 
   renderMemoryFilesSimple(files) {
-    return files.map((file) => `
+    return files
+      .map(
+        (file) => `
       <div class="memory-file" data-path="${file.path}">
         <div class="memory-file-header">
           <span class="codicon codicon-file"></span>
           <span class="memory-file-name">${file.name}</span>
           <span class="memory-file-meta">${this.formatSize(file.size)} · ${this.formatLineCount(file.lineCount)} · ${this.formatDate(file.modified)}</span>
         </div>
-        ${file.preview ? `
+        ${
+          file.preview
+            ? `
         <vscode-collapsible title="Preview" open="false">
           <pre class="memory-preview">${this.escapeHtml(file.preview)}</pre>
         </vscode-collapsible>
-        ` : ''}
+        `
+            : ''
+        }
         <div class="memory-actions">
           <vscode-button appearance="secondary" class="view-full-btn">
             <span class="codicon codicon-go-to-file"></span> Open
@@ -178,14 +186,20 @@ export class MemoryTab {
           </vscode-button>
         </div>
       </div>
-    `).join('');
+    `,
+      )
+      .join('');
   }
 
   populateMemoryFileItem(item, file) {
     item.dataset.path = file.path;
     item.querySelector('.memory-file-name').textContent = file.name;
-    item.querySelector('.memory-file-size').textContent = this.formatSize(file.size);
-    item.querySelector('.memory-file-date').textContent = this.formatDate(file.modified);
+    item.querySelector('.memory-file-size').textContent = this.formatSize(
+      file.size,
+    );
+    item.querySelector('.memory-file-date').textContent = this.formatDate(
+      file.modified,
+    );
 
     // Load preview if available
     if (file.preview) {

@@ -27,9 +27,10 @@ export class TabManager {
   }
 
   handleTabChange(event) {
-    const tabIndex = event.detail?.selectedIndex ?? this._tabsElement.selectedIndex;
+    const tabIndex =
+      event.detail?.selectedIndex ?? this._tabsElement.selectedIndex;
     const tabName = Object.keys(TAB_INDICES).find(
-      (key) => TAB_INDICES[key] === tabIndex
+      (key) => TAB_INDICES[key] === tabIndex,
     );
 
     if (tabName) {

@@ -4,7 +4,11 @@
 import { vscode } from '@common/webviewContext.js';
 import { debounce } from '@common/debounce.js';
 import { settingsViewState } from '../settingsViewState.js';
-import { SETTINGS_VIEW_COMMANDS, ELEMENT_IDS, PROVIDERS } from '../constants.js';
+import {
+  SETTINGS_VIEW_COMMANDS,
+  ELEMENT_IDS,
+  PROVIDERS,
+} from '../constants.js';
 import { renderModelList } from '../uiManagers/ModelListRenderer.js';
 import {
   renderProviderCollapsible,
@@ -22,7 +26,9 @@ export class ModelsTab {
 
   initialize() {
     this._elements = {
-      recommendedModelsList: document.getElementById(ELEMENT_IDS.RECOMMENDED_MODELS_LIST),
+      recommendedModelsList: document.getElementById(
+        ELEMENT_IDS.RECOMMENDED_MODELS_LIST,
+      ),
       providersList: document.getElementById(ELEMENT_IDS.PROVIDERS_LIST),
       modelCount: document.getElementById(ELEMENT_IDS.MODEL_COUNT),
     };
@@ -86,7 +92,9 @@ export class ModelsTab {
   }
 
   openProviderModal(providerId) {
-    const provider = settingsViewState.providers.find((p) => p.id === providerId);
+    const provider = settingsViewState.providers.find(
+      (p) => p.id === providerId,
+    );
     if (!provider) return;
 
     // Get or create modal
@@ -101,13 +109,16 @@ export class ModelsTab {
 
     // Populate modal with provider data
     const meta = PROVIDERS[providerId] || {};
-    this._modal.querySelector('.provider-name').textContent = meta.name || providerId;
+    this._modal.querySelector('.provider-name').textContent =
+      meta.name || providerId;
     this._modal.querySelector('.key-url').textContent = meta.keyUrl || '';
     this._modal.querySelector('.key-url').href = meta.keyUrl || '#';
-    this._modal.querySelector('.env-var').textContent = meta.envVar || `${providerId.toUpperCase()}_API_KEY`;
+    this._modal.querySelector('.env-var').textContent =
+      meta.envVar || `${providerId.toUpperCase()}_API_KEY`;
     this._modal.querySelector('.api-key-input').value = '';
     this._modal.querySelector('.custom-endpoint').placeholder = '';
-    this._modal.querySelector('.streaming-enabled').checked = provider.streamingEnabled !== false;
+    this._modal.querySelector('.streaming-enabled').checked =
+      provider.streamingEnabled !== false;
 
     // Store provider ID for save action
     this._modal.dataset.providerId = providerId;
@@ -200,7 +211,7 @@ export class ModelsTab {
     const recommendedModels = state.getRecommendedModels();
     recommendedModelsList.innerHTML = renderModelList(
       recommendedModels,
-      state.enabledModels
+      state.enabledModels,
     );
   }
 

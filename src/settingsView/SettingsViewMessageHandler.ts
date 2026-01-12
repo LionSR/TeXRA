@@ -186,14 +186,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleRestoreAgent.bind(this),
       [SETTINGS_VIEW_COMMANDS.DELETE_HISTORY_ITEM]:
         this.handleDeleteHistoryItem.bind(this),
-      [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: this.handleClearHistory.bind(this),
+      [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]:
+        this.handleClearHistory.bind(this),
 
       // Memory
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]:
         this.handleOpenMemoryFile.bind(this),
       [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]:
         this.handleOpenMemoryFolder.bind(this),
-      [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]: this.handleDeleteMemory.bind(this),
+      [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]:
+        this.handleDeleteMemory.bind(this),
       [SETTINGS_VIEW_COMMANDS.REFRESH_MEMORY]:
         this.handleRefreshMemory.bind(this),
       [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
@@ -446,7 +448,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.withHistoryItem(message, 'rerunAgent', async (item) => {
-      await vscode.window.showInformationMessage('Rerunning agent from history');
+      await vscode.window.showInformationMessage(
+        'Rerunning agent from history',
+      );
       await runExecuteCommand(item.agentConfig);
     });
   }
@@ -675,11 +679,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     }));
   }
 
-  private async collectProviderStatuses(): Promise<Record<string, ProviderStatus>> {
+  private async collectProviderStatuses(): Promise<
+    Record<string, ProviderStatus>
+  > {
     const statuses: Record<string, ProviderStatus> = {};
 
     for (const providerId of Object.keys(PROVIDER_META) as ProviderId[]) {
-      const hasKey = await SecretManager.apiKeyExists(providerId as ApiProvider);
+      const hasKey = await SecretManager.apiKeyExists(
+        providerId as ApiProvider,
+      );
       if (hasKey) {
         // Check if it's from env or secret storage
         const secretKey = await SecretManager.get(
@@ -697,28 +705,34 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async collectProvidersData(): Promise<ProviderDisplayData[]> {
     const statuses = await this.collectProviderStatuses();
 
-    return (Object.entries(PROVIDER_META) as [ProviderId, typeof PROVIDER_META[ProviderId]][]).map(
-      ([id, meta]) => {
-        // Count models for this provider
-        const modelCount = Object.values(MODEL_CONFIGS).filter(
-          (m) => m.provider.toLowerCase() === id,
-        ).length;
+    return (
+      Object.entries(PROVIDER_META) as [
+        ProviderId,
+        (typeof PROVIDER_META)[ProviderId],
+      ][]
+    ).map(([id, meta]) => {
+      // Count models for this provider
+      const modelCount = Object.values(MODEL_CONFIGS).filter(
+        (m) => m.provider.toLowerCase() === id,
+      ).length;
 
-        // Get streaming setting
-        const streamingKey = `model.useStreaming${id.charAt(0).toUpperCase() + id.slice(1)}`;
-        const streamingEnabled = getConfig<boolean>(`texra.${streamingKey}`, true);
+      // Get streaming setting
+      const streamingKey = `model.useStreaming${id.charAt(0).toUpperCase() + id.slice(1)}`;
+      const streamingEnabled = getConfig<boolean>(
+        `texra.${streamingKey}`,
+        true,
+      );
 
-        return {
-          id,
-          name: meta.name,
-          status: statuses[id] || 'missing',
-          modelCount,
-          keyUrl: meta.keyUrl,
-          envVar: meta.envVar,
-          streamingEnabled,
-        };
-      },
-    );
+      return {
+        id,
+        name: meta.name,
+        status: statuses[id] || 'missing',
+        modelCount,
+        keyUrl: meta.keyUrl,
+        envVar: meta.envVar,
+        streamingEnabled,
+      };
+    });
   }
 
   private async collectAgentsData(): Promise<AgentDisplayData[]> {
@@ -736,7 +750,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     return allAgents.map((entry: AgentEntry) => ({
       name: entry.name,
       source: entry.source,
-      category: entry.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow',
+      category:
+        entry.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow',
       agentType: this.mapAgentType(entry.agentType),
       description: entry.description,
       enabled:
@@ -784,7 +799,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         'texra.latexdiff.generateBetweenRoundDiffs',
         false,
       ),
-      tikzInputDirectory: getConfig<string>('texra.latex.tikzInputDirectory', ''),
+      tikzInputDirectory: getConfig<string>(
+        'texra.latex.tikzInputDirectory',
+        '',
+      ),
       includeWorkspaceInTexinputs: getConfig<boolean>(
         'texra.latex.includeWorkspaceInTexinputs',
         true,

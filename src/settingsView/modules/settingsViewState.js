@@ -130,7 +130,7 @@ class SettingsViewState {
 
   getModelsByProvider(providerId) {
     return this._models.filter(
-      (m) => m.provider.toLowerCase() === providerId.toLowerCase()
+      (m) => m.provider.toLowerCase() === providerId.toLowerCase(),
     );
   }
 
@@ -264,7 +264,7 @@ class SettingsViewState {
     this.updateAgents(
       data.agents,
       data.enabledAgents,
-      data.enabledToolUseAgents
+      data.enabledToolUseAgents,
     );
     this.updateLatexSettings(data.latexSettings);
 

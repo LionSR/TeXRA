@@ -9,7 +9,7 @@ export function renderDropdown(id, label, options, value, description = '') {
   const optionsHtml = options
     .map(
       (opt) =>
-        `<vscode-option value="${opt.value}" ${opt.value === value ? 'selected' : ''}>${opt.label}</vscode-option>`
+        `<vscode-option value="${opt.value}" ${opt.value === value ? 'selected' : ''}>${opt.label}</vscode-option>`,
     )
     .join('');
 
@@ -41,7 +41,13 @@ export function renderCheckbox(id, label, checked, description = '') {
 /**
  * Render a text input setting
  */
-export function renderTextInput(id, label, value, placeholder = '', description = '') {
+export function renderTextInput(
+  id,
+  label,
+  value,
+  placeholder = '',
+  description = '',
+) {
   return `
     <div class="setting-row">
       <vscode-label>${label}</vscode-label>
@@ -58,7 +64,15 @@ export function renderTextInput(id, label, value, placeholder = '', description 
 /**
  * Render a number input setting
  */
-export function renderNumberInput(id, label, value, min, max, unit = '', description = '') {
+export function renderNumberInput(
+  id,
+  label,
+  value,
+  min,
+  max,
+  unit = '',
+  description = '',
+) {
   return `
     <div class="setting-row">
       <vscode-label>${label}</vscode-label>
@@ -80,7 +94,13 @@ export function renderNumberInput(id, label, value, min, max, unit = '', descrip
 /**
  * Render a file path setting with browse button
  */
-export function renderFilePath(id, label, value, placeholder = '', browseId = '') {
+export function renderFilePath(
+  id,
+  label,
+  value,
+  placeholder = '',
+  browseId = '',
+) {
   return `
     <div class="setting-row">
       <vscode-label>${label}</vscode-label>

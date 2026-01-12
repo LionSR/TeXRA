@@ -18,10 +18,14 @@ export class AgentsTab {
 
   initialize() {
     this._elements = {
-      builtInAgentsList: document.getElementById(ELEMENT_IDS.BUILT_IN_AGENTS_LIST),
+      builtInAgentsList: document.getElementById(
+        ELEMENT_IDS.BUILT_IN_AGENTS_LIST,
+      ),
       customAgentsList: document.getElementById(ELEMENT_IDS.CUSTOM_AGENTS_LIST),
       remoteAgentsList: document.getElementById(ELEMENT_IDS.REMOTE_AGENTS_LIST),
-      remoteAgentsSection: document.getElementById(ELEMENT_IDS.REMOTE_AGENTS_SECTION),
+      remoteAgentsSection: document.getElementById(
+        ELEMENT_IDS.REMOTE_AGENTS_SECTION,
+      ),
       autoShowRemoteAgents: document.getElementById('autoShowRemoteAgents'),
       agentsSignInBtn: document.getElementById('agentsSignInBtn'),
 
@@ -100,52 +104,63 @@ export class AgentsTab {
     };
 
     if (storageModeSelect) {
-      storageModeSelect.addEventListener('change', saveSettingHandler(
-        'texra.agent.storageMode',
-        (el) => el.value
-      ));
+      storageModeSelect.addEventListener(
+        'change',
+        saveSettingHandler('texra.agent.storageMode', (el) => el.value),
+      );
     }
 
     if (requireEditApproval) {
-      requireEditApproval.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.requireEditApproval',
-        (el) => el.checked
-      ));
+      requireEditApproval.addEventListener(
+        'change',
+        saveSettingHandler(
+          'texra.toolUse.requireEditApproval',
+          (el) => el.checked,
+        ),
+      );
     }
 
     if (persistSessions) {
-      persistSessions.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.persistSessions',
-        (el) => el.checked
-      ));
+      persistSessions.addEventListener(
+        'change',
+        saveSettingHandler('texra.toolUse.persistSessions', (el) => el.checked),
+      );
     }
 
     if (sessionRetentionSelect) {
-      sessionRetentionSelect.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.sessionRetentionHours',
-        (el) => parseInt(el.value, 10)
-      ));
+      sessionRetentionSelect.addEventListener(
+        'change',
+        saveSettingHandler('texra.toolUse.sessionRetentionHours', (el) =>
+          parseInt(el.value, 10),
+        ),
+      );
     }
 
     if (compactionThreshold) {
-      compactionThreshold.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.compactionThreshold',
-        (el) => parseInt(el.value, 10)
-      ));
+      compactionThreshold.addEventListener(
+        'change',
+        saveSettingHandler('texra.toolUse.compactionThreshold', (el) =>
+          parseInt(el.value, 10),
+        ),
+      );
     }
 
     if (maxRetryAttempts) {
-      maxRetryAttempts.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.maxRetryAttempts',
-        (el) => parseInt(el.value, 10)
-      ));
+      maxRetryAttempts.addEventListener(
+        'change',
+        saveSettingHandler('texra.toolUse.maxRetryAttempts', (el) =>
+          parseInt(el.value, 10),
+        ),
+      );
     }
 
     if (backoffDelay) {
-      backoffDelay.addEventListener('change', saveSettingHandler(
-        'texra.toolUse.backoffDelay',
-        (el) => parseInt(el.value, 10)
-      ));
+      backoffDelay.addEventListener(
+        'change',
+        saveSettingHandler('texra.toolUse.backoffDelay', (el) =>
+          parseInt(el.value, 10),
+        ),
+      );
     }
   }
 
@@ -163,7 +178,8 @@ export class AgentsTab {
 
   saveAgents() {
     const enabledAgents = settingsViewState.getEnabledAgentsArray();
-    const enabledToolUseAgents = settingsViewState.getEnabledToolUseAgentsArray();
+    const enabledToolUseAgents =
+      settingsViewState.getEnabledToolUseAgentsArray();
 
     vscode.postMessage({
       command: SETTINGS_VIEW_COMMANDS.SAVE_ENABLED_AGENTS,
@@ -211,7 +227,11 @@ export class AgentsTab {
       customAgentsList.innerHTML =
         '<p class="empty-state">No custom agents. Create them in <code>.texra/agents/</code></p>';
     } else {
-      customAgentsList.innerHTML = renderAgentList(customAgents, enabledSet, true);
+      customAgentsList.innerHTML = renderAgentList(
+        customAgents,
+        enabledSet,
+        true,
+      );
     }
   }
 

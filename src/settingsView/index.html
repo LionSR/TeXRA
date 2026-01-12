@@ -64,13 +64,25 @@
           <span id="userTier" class="user-tier badge"></span>
         </div>
         <div class="account-actions" id="accountActions">
-          <vscode-button id="manageBtn" appearance="secondary" style="display: none;">
+          <vscode-button
+            id="manageBtn"
+            appearance="secondary"
+            style="display: none"
+          >
             Manage
           </vscode-button>
-          <vscode-button id="signOutBtn" appearance="secondary" style="display: none;">
+          <vscode-button
+            id="signOutBtn"
+            appearance="secondary"
+            style="display: none"
+          >
             Sign Out
           </vscode-button>
-          <vscode-button id="signInBtn" appearance="primary" style="display: none;">
+          <vscode-button
+            id="signInBtn"
+            appearance="primary"
+            style="display: none"
+          >
             <span slot="start" class="codicon codicon-sign-in"></span>
             Sign In
           </vscode-button>
@@ -78,24 +90,37 @@
       </header>
 
       <!-- Not Logged In Banner -->
-      <div id="notLoggedInBanner" class="not-logged-in-banner" style="display: none;">
+      <div
+        id="notLoggedInBanner"
+        class="not-logged-in-banner"
+        style="display: none"
+      >
         <span class="codicon codicon-info"></span>
         <span>Use TeXRA with your own API keys</span>
       </div>
 
       <!-- Native vscode-tabs -->
       <vscode-tabs id="settingsTabs" selected-index="0">
-        <vscode-tab-header slot="header" id="tabModels">Models</vscode-tab-header>
-        <vscode-tab-header slot="header" id="tabAgents">Agents</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabModels"
+          >Models</vscode-tab-header
+        >
+        <vscode-tab-header slot="header" id="tabAgents"
+          >Agents</vscode-tab-header
+        >
         <vscode-tab-header slot="header" id="tabLatex">LaTeX</vscode-tab-header>
-        <vscode-tab-header slot="header" id="tabMemory">Memory</vscode-tab-header>
-        <vscode-tab-header slot="header" id="tabHistory">History</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabMemory"
+          >Memory</vscode-tab-header
+        >
+        <vscode-tab-header slot="header" id="tabHistory"
+          >History</vscode-tab-header
+        >
 
         <!-- Models Tab -->
         <vscode-tab-panel id="panelModels">
           <div class="tab-content" id="modelsTabContent">
             <p class="tab-description">
-              Configure model providers and select which models appear in the dropdown.
+              Configure model providers and select which models appear in the
+              dropdown.
             </p>
 
             <!-- Routing Options -->
@@ -103,17 +128,26 @@
               <vscode-label class="section-label">ROUTING</vscode-label>
               <div class="routing-options">
                 <label class="radio-option">
-                  <input type="radio" name="routingMode" value="direct" checked />
+                  <input
+                    type="radio"
+                    name="routingMode"
+                    value="direct"
+                    checked
+                  />
                   <span class="option-content">
                     <span class="option-title">Direct to providers</span>
-                    <span class="option-description">Recommended. Connect directly to each provider.</span>
+                    <span class="option-description"
+                      >Recommended. Connect directly to each provider.</span
+                    >
                   </span>
                 </label>
                 <label class="radio-option">
                   <input type="radio" name="routingMode" value="openrouter" />
                   <span class="option-content">
                     <span class="option-title">Route through OpenRouter</span>
-                    <span class="option-description">Use OpenRouter for all model requests.</span>
+                    <span class="option-description"
+                      >Use OpenRouter for all model requests.</span
+                    >
                   </span>
                 </label>
               </div>
@@ -121,7 +155,11 @@
 
             <!-- Recommended Models -->
             <div class="section">
-              <vscode-collapsible title="Recommended Models" open id="recommendedModelsCollapsible">
+              <vscode-collapsible
+                title="Recommended Models"
+                open
+                id="recommendedModelsCollapsible"
+              >
                 <div id="recommendedModelsList" class="model-list">
                   <!-- Populated by JS -->
                 </div>
@@ -147,7 +185,8 @@
         <vscode-tab-panel id="panelAgents">
           <div class="tab-content" id="agentsTabContent">
             <p class="tab-description">
-              Select which agents appear in the dropdown. Settings are saved per workspace.
+              Select which agents appear in the dropdown. Settings are saved per
+              workspace.
             </p>
 
             <!-- Built-in Agents -->
@@ -171,7 +210,7 @@
             </div>
 
             <!-- Remote Agents -->
-            <div class="section" id="remoteAgentsSection" style="display: none;">
+            <div class="section" id="remoteAgentsSection" style="display: none">
               <vscode-label class="section-label">REMOTE AGENTS</vscode-label>
               <vscode-checkbox id="autoShowRemoteAgents" checked>
                 Auto-show remote agents if available
@@ -179,37 +218,61 @@
               <div id="remoteAgentsList" class="agent-list">
                 <!-- Populated by JS -->
               </div>
-              <div id="remoteAgentsSignIn" class="sign-in-prompt" style="display: none;">
+              <div
+                id="remoteAgentsSignIn"
+                class="sign-in-prompt"
+                style="display: none"
+              >
                 <span class="codicon codicon-lock"></span>
                 <span>Sign in to access shared team agents</span>
-                <vscode-button appearance="secondary" id="agentsSignInBtn">Sign In</vscode-button>
+                <vscode-button appearance="secondary" id="agentsSignInBtn"
+                  >Sign In</vscode-button
+                >
               </div>
             </div>
 
             <!-- Workflow Settings -->
-            <vscode-collapsible title="Workflow Settings" id="workflowSettingsCollapsible">
+            <vscode-collapsible
+              title="Workflow Settings"
+              id="workflowSettingsCollapsible"
+            >
               <div class="settings-group">
-                <p class="settings-description">Settings for workflow agents (correct, polish, etc.)</p>
+                <p class="settings-description">
+                  Settings for workflow agents (correct, polish, etc.)
+                </p>
                 <div class="setting-row">
                   <vscode-label>Storage mode</vscode-label>
                   <vscode-single-select id="storageModeSelect">
-                    <vscode-option value="in-place">In-place (overwrite)</vscode-option>
-                    <vscode-option value="folder">Folder (texra-outputs/)</vscode-option>
+                    <vscode-option value="in-place"
+                      >In-place (overwrite)</vscode-option
+                    >
+                    <vscode-option value="folder"
+                      >Folder (texra-outputs/)</vscode-option
+                    >
                   </vscode-single-select>
-                  <span class="setting-description">How to store agent outputs.</span>
+                  <span class="setting-description"
+                    >How to store agent outputs.</span
+                  >
                 </div>
               </div>
             </vscode-collapsible>
 
             <!-- Tool-Use Settings -->
-            <vscode-collapsible title="Tool-Use Settings" id="toolUseSettingsCollapsible">
+            <vscode-collapsible
+              title="Tool-Use Settings"
+              id="toolUseSettingsCollapsible"
+            >
               <div class="settings-group">
-                <p class="settings-description">Settings for tool-use agents (chat, research, etc.)</p>
+                <p class="settings-description">
+                  Settings for tool-use agents (chat, research, etc.)
+                </p>
 
                 <vscode-checkbox id="requireEditApproval" checked>
                   Require approval before file edits
                 </vscode-checkbox>
-                <span class="setting-description">Show diff preview and require confirmation.</span>
+                <span class="setting-description"
+                  >Show diff preview and require confirmation.</span
+                >
 
                 <vscode-checkbox id="persistSessions" checked>
                   Persist sessions across VS Code restarts
@@ -226,14 +289,24 @@
 
                 <div class="setting-row">
                   <vscode-label>Compaction threshold:</vscode-label>
-                  <vscode-textfield id="compactionThreshold" type="number" value="85" min="50" max="100"></vscode-textfield>
+                  <vscode-textfield
+                    id="compactionThreshold"
+                    type="number"
+                    value="85"
+                    min="50"
+                    max="100"
+                  ></vscode-textfield>
                   <span class="unit">%</span>
-                  <span class="setting-description">Compact context when usage exceeds this percentage.</span>
+                  <span class="setting-description"
+                    >Compact context when usage exceeds this percentage.</span
+                  >
                 </div>
 
                 <hr class="setting-divider" />
 
-                <vscode-label class="subsection-label">Retry Behavior</vscode-label>
+                <vscode-label class="subsection-label"
+                  >Retry Behavior</vscode-label
+                >
                 <div class="setting-row inline">
                   <vscode-label>Max attempts:</vscode-label>
                   <vscode-single-select id="maxRetryAttempts">
@@ -245,9 +318,17 @@
                 </div>
                 <div class="setting-row">
                   <vscode-label>Backoff delay:</vscode-label>
-                  <vscode-textfield id="backoffDelay" type="number" value="1000" min="100" max="10000"></vscode-textfield>
+                  <vscode-textfield
+                    id="backoffDelay"
+                    type="number"
+                    value="1000"
+                    min="100"
+                    max="10000"
+                  ></vscode-textfield>
                   <span class="unit">ms</span>
-                  <span class="setting-description">Initial delay before retry (exponential backoff).</span>
+                  <span class="setting-description"
+                    >Initial delay before retry (exponential backoff).</span
+                  >
                 </div>
               </div>
             </vscode-collapsible>
@@ -262,12 +343,18 @@
             </p>
 
             <!-- Formatter -->
-            <vscode-collapsible title="Formatter" open id="formatterCollapsible">
+            <vscode-collapsible
+              title="Formatter"
+              open
+              id="formatterCollapsible"
+            >
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Formatter:</vscode-label>
                   <vscode-single-select id="formatterSelect">
-                    <vscode-option value="latexindent">latexindent</vscode-option>
+                    <vscode-option value="latexindent"
+                      >latexindent</vscode-option
+                    >
                     <vscode-option value="tex-fmt">tex-fmt</vscode-option>
                     <vscode-option value="none">none</vscode-option>
                   </vscode-single-select>
@@ -276,16 +363,34 @@
                 <div class="setting-row" id="latexindentConfigRow">
                   <vscode-label>Config file (optional):</vscode-label>
                   <div class="input-with-button">
-                    <vscode-textfield id="latexindentConfig" placeholder="/path/to/latexindent.yaml"></vscode-textfield>
-                    <vscode-button appearance="secondary" id="browseLatexindentConfig">Browse</vscode-button>
+                    <vscode-textfield
+                      id="latexindentConfig"
+                      placeholder="/path/to/latexindent.yaml"
+                    ></vscode-textfield>
+                    <vscode-button
+                      appearance="secondary"
+                      id="browseLatexindentConfig"
+                      >Browse</vscode-button
+                    >
                   </div>
                 </div>
 
-                <div class="setting-row" id="texfmtConfigRow" style="display: none;">
+                <div
+                  class="setting-row"
+                  id="texfmtConfigRow"
+                  style="display: none"
+                >
                   <vscode-label>Config file (optional):</vscode-label>
                   <div class="input-with-button">
-                    <vscode-textfield id="texfmtConfig" placeholder="/path/to/texfmt.toml"></vscode-textfield>
-                    <vscode-button appearance="secondary" id="browseTexfmtConfig">Browse</vscode-button>
+                    <vscode-textfield
+                      id="texfmtConfig"
+                      placeholder="/path/to/texfmt.toml"
+                    ></vscode-textfield>
+                    <vscode-button
+                      appearance="secondary"
+                      id="browseTexfmtConfig"
+                      >Browse</vscode-button
+                    >
                   </div>
                 </div>
 
@@ -300,7 +405,13 @@
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Timeout:</vscode-label>
-                  <vscode-textfield id="latexdiffTimeout" type="number" value="30000" min="1000" max="300000"></vscode-textfield>
+                  <vscode-textfield
+                    id="latexdiffTimeout"
+                    type="number"
+                    value="30000"
+                    min="1000"
+                    max="300000"
+                  ></vscode-textfield>
                   <span class="unit">ms</span>
                 </div>
 
@@ -316,7 +427,10 @@
 
                 <div class="setting-row">
                   <vscode-label>Picture environments (regex):</vscode-label>
-                  <vscode-textfield id="pictureEnvironments" placeholder="(?:picture|tikzpicture|scope)[\w\d*@]*"></vscode-textfield>
+                  <vscode-textfield
+                    id="pictureEnvironments"
+                    placeholder="(?:picture|tikzpicture|scope)[\w\d*@]*"
+                  ></vscode-textfield>
                 </div>
 
                 <vscode-checkbox id="generateBetweenRoundDiffs">
@@ -329,10 +443,19 @@
             <vscode-collapsible title="TikZ Figures" id="tikzCollapsible">
               <div class="settings-group">
                 <div class="setting-row">
-                  <vscode-label>Extra input directory (TEXINPUTS):</vscode-label>
+                  <vscode-label
+                    >Extra input directory (TEXINPUTS):</vscode-label
+                  >
                   <div class="input-with-button">
-                    <vscode-textfield id="tikzInputDirectory" placeholder="/path/to/tikz/inputs"></vscode-textfield>
-                    <vscode-button appearance="secondary" id="browseTikzInputDirectory">Browse</vscode-button>
+                    <vscode-textfield
+                      id="tikzInputDirectory"
+                      placeholder="/path/to/tikz/inputs"
+                    ></vscode-textfield>
+                    <vscode-button
+                      appearance="secondary"
+                      id="browseTikzInputDirectory"
+                      >Browse</vscode-button
+                    >
                   </div>
                 </div>
 
@@ -340,25 +463,39 @@
                   Include workspace root in TEXINPUTS
                 </vscode-checkbox>
 
-                <vscode-collapsible title="TikZ template (advanced)" id="tikzTemplateCollapsible">
-                  <vscode-textarea id="tikzTemplate" rows="10" placeholder="Custom TikZ template..."></vscode-textarea>
+                <vscode-collapsible
+                  title="TikZ template (advanced)"
+                  id="tikzTemplateCollapsible"
+                >
+                  <vscode-textarea
+                    id="tikzTemplate"
+                    rows="10"
+                    placeholder="Custom TikZ template..."
+                  ></vscode-textarea>
                 </vscode-collapsible>
               </div>
             </vscode-collapsible>
 
             <!-- Replacements -->
-            <vscode-collapsible title="Replacements" id="replacementsCollapsible">
+            <vscode-collapsible
+              title="Replacements"
+              id="replacementsCollapsible"
+            >
               <div class="settings-group">
                 <vscode-checkbox id="wrapCritiqueInAlign" checked>
                   Wrap critique in align environment
                 </vscode-checkbox>
 
-                <vscode-label class="subsection-label">Enabled replacement categories:</vscode-label>
+                <vscode-label class="subsection-label"
+                  >Enabled replacement categories:</vscode-label
+                >
                 <div id="replacementCategories" class="checkbox-grid">
                   <!-- Populated by JS -->
                 </div>
 
-                <vscode-label class="subsection-label">Enabled regex replacements:</vscode-label>
+                <vscode-label class="subsection-label"
+                  >Enabled regex replacements:</vscode-label
+                >
                 <div id="regexReplacements" class="checkbox-grid">
                   <!-- Populated by JS -->
                 </div>
@@ -388,7 +525,10 @@
                   Refresh
                 </vscode-button>
                 <vscode-button appearance="secondary" id="openMemoryFolderBtn">
-                  <span slot="start" class="codicon codicon-folder-opened"></span>
+                  <span
+                    slot="start"
+                    class="codicon codicon-folder-opened"
+                  ></span>
                   Open Folder
                 </vscode-button>
               </div>
@@ -404,7 +544,11 @@
 
             <div class="section-footer" id="memoryFooter">
               <span id="memoryStats">Total: 0 files, 0 KB</span>
-              <vscode-button appearance="secondary" id="clearAllMemoryBtn" disabled>
+              <vscode-button
+                appearance="secondary"
+                id="clearAllMemoryBtn"
+                disabled
+              >
                 Clear All
               </vscode-button>
             </div>
@@ -415,7 +559,11 @@
         <vscode-tab-panel id="panelHistory">
           <div class="tab-content" id="historyTabContent">
             <div class="search-bar">
-              <vscode-textfield id="historySearch" placeholder="Search history items..." class="search-input">
+              <vscode-textfield
+                id="historySearch"
+                placeholder="Search history items..."
+                class="search-input"
+              >
                 <span slot="start" class="codicon codicon-search"></span>
               </vscode-textfield>
               <div class="search-nav">
@@ -438,7 +586,11 @@
               <!-- Populated by JS -->
             </div>
 
-            <div id="noHistoryMessage" class="empty-state" style="display: none;">
+            <div
+              id="noHistoryMessage"
+              class="empty-state"
+              style="display: none"
+            >
               <span class="codicon codicon-history"></span>
               <p>No execution history yet.</p>
             </div>
@@ -452,7 +604,9 @@
       <div class="modal-backdrop">
         <div class="modal" role="dialog" aria-modal="true">
           <div class="modal-header">
-            <h2 class="modal-title">Configure <span class="provider-name"></span></h2>
+            <h2 class="modal-title">
+              Configure <span class="provider-name"></span>
+            </h2>
             <vscode-button appearance="icon" class="modal-close">
               <span class="codicon codicon-close"></span>
             </vscode-button>
@@ -461,11 +615,17 @@
             <div class="setting-row">
               <vscode-label>API Key</vscode-label>
               <div class="input-with-button">
-                <vscode-textfield type="password" class="api-key-input" placeholder="Enter API key..."></vscode-textfield>
+                <vscode-textfield
+                  type="password"
+                  class="api-key-input"
+                  placeholder="Enter API key..."
+                ></vscode-textfield>
                 <vscode-button appearance="icon" class="toggle-visibility">
                   <span class="codicon codicon-eye"></span>
                 </vscode-button>
-                <vscode-button appearance="secondary" class="clear-key">Clear</vscode-button>
+                <vscode-button appearance="secondary" class="clear-key"
+                  >Clear</vscode-button
+                >
               </div>
               <p class="help-text">
                 Get your key at: <a href="#" class="key-url"></a>
@@ -476,27 +636,41 @@
 
             <p class="info-text">
               <span class="codicon codicon-terminal"></span>
-              Alternative: Set <code class="env-var"></code> environment variable
+              Alternative: Set <code class="env-var"></code> environment
+              variable
             </p>
 
             <vscode-collapsible title="Advanced Options">
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Custom Endpoint (optional)</vscode-label>
-                  <vscode-textfield class="custom-endpoint" placeholder=""></vscode-textfield>
-                  <span class="setting-description">Leave empty for default. Use for proxies or self-hosted models.</span>
+                  <vscode-textfield
+                    class="custom-endpoint"
+                    placeholder=""
+                  ></vscode-textfield>
+                  <span class="setting-description"
+                    >Leave empty for default. Use for proxies or self-hosted
+                    models.</span
+                  >
                 </div>
 
                 <vscode-checkbox class="streaming-enabled" checked>
                   Enable streaming
                 </vscode-checkbox>
-                <span class="setting-description">Stream responses in real-time. Disable if experiencing issues.</span>
+                <span class="setting-description"
+                  >Stream responses in real-time. Disable if experiencing
+                  issues.</span
+                >
               </div>
             </vscode-collapsible>
           </div>
           <div class="modal-footer">
-            <vscode-button appearance="secondary" class="modal-cancel">Cancel</vscode-button>
-            <vscode-button appearance="primary" class="modal-save">Save</vscode-button>
+            <vscode-button appearance="secondary" class="modal-cancel"
+              >Cancel</vscode-button
+            >
+            <vscode-button appearance="primary" class="modal-save"
+              >Save</vscode-button
+            >
           </div>
         </div>
       </div>
@@ -549,8 +723,12 @@
         <vscode-collapsible title="Preview" class="memory-preview-collapsible">
           <pre class="memory-preview"></pre>
           <div class="memory-actions">
-            <vscode-button appearance="secondary" class="view-full-btn">View Full</vscode-button>
-            <vscode-button appearance="secondary" class="delete-memory-btn">Delete</vscode-button>
+            <vscode-button appearance="secondary" class="view-full-btn"
+              >View Full</vscode-button
+            >
+            <vscode-button appearance="secondary" class="delete-memory-btn"
+              >Delete</vscode-button
+            >
           </div>
         </vscode-collapsible>
       </div>
