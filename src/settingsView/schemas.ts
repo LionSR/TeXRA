@@ -297,6 +297,29 @@ export const SelectTabMessageSchema = z.object({
   tab: SettingsTabSchema,
 });
 
+export const SetModelsDataMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_MODELS_DATA),
+  models: z.array(ModelDisplayDataSchema),
+  enabledModels: z.array(z.string()),
+  providers: z.array(ProviderDisplayDataSchema),
+});
+
+export const SetAgentsDataMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_AGENTS_DATA),
+  agents: z.array(AgentDisplayDataSchema),
+  enabledAgents: z.array(z.string()),
+  enabledToolUseAgents: z.array(z.string()),
+});
+
+export const SetHistoryDataMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_HISTORY_DATA),
+  historyItems: z.array(HistoryItemSchema),
+});
+
+export const HistoryClearedMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED),
+});
+
 // =============================================================================
 // Action Schemas (Webview → Extension)
 // =============================================================================
@@ -375,4 +398,20 @@ export const MemoryToggleActionSchema = z.object({
 
 export const OpenMemoryFolderActionSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
+});
+
+export const RefreshMemoryActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.REFRESH_MEMORY),
+});
+
+export const ClearHistoryActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY),
+});
+
+export const SignInActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_IN),
+});
+
+export const SignOutActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT),
 });

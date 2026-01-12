@@ -162,6 +162,27 @@ export class LatexTab {
         this.saveSetting('latex.tikzTemplate', tikzTemplate.value);
       });
     }
+
+    // Replacement checkboxes (event delegation - listeners set once, not per-render)
+    const { replacementCategories, regexReplacements } = this._elements;
+
+    if (replacementCategories) {
+      replacementCategories.addEventListener('change', (e) => {
+        const checkbox = e.target.closest('vscode-checkbox');
+        if (checkbox && checkbox.dataset.category) {
+          this.handleReplacementCategoryChange(checkbox.dataset.category, checkbox.checked);
+        }
+      });
+    }
+
+    if (regexReplacements) {
+      regexReplacements.addEventListener('change', (e) => {
+        const checkbox = e.target.closest('vscode-checkbox');
+        if (checkbox && checkbox.dataset.regex) {
+          this.handleRegexReplacementChange(checkbox.dataset.regex, checkbox.checked);
+        }
+      });
+    }
   }
 
   saveSetting(key, value) {
@@ -253,14 +274,6 @@ export class LatexTab {
           ${cat.replace(/_/g, ' ')}
         </vscode-checkbox>
       `).join('');
-
-      // Attach change handlers
-      replacementCategories.addEventListener('change', (e) => {
-        const checkbox = e.target.closest('vscode-checkbox');
-        if (checkbox && checkbox.dataset.category) {
-          this.handleReplacementCategoryChange(checkbox.dataset.category, checkbox.checked);
-        }
-      });
     }
 
     // Render regex replacements
@@ -274,14 +287,6 @@ export class LatexTab {
           ${regex.replace(/_/g, ' ')}
         </vscode-checkbox>
       `).join('');
-
-      // Attach change handlers
-      regexReplacements.addEventListener('change', (e) => {
-        const checkbox = e.target.closest('vscode-checkbox');
-        if (checkbox && checkbox.dataset.regex) {
-          this.handleRegexReplacementChange(checkbox.dataset.regex, checkbox.checked);
-        }
-      });
     }
   }
 
