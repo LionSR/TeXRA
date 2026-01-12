@@ -37,6 +37,12 @@ class SettingsViewState {
     // UI state
     this._selectedTab = 'models';
     this._pendingChanges = false;
+
+    // Select options (from backend - single source of truth)
+    this._selectOptions = {};
+
+    // Custom agents directory
+    this._customAgentsDirectory = '';
   }
 
   /**
@@ -264,6 +270,37 @@ class SettingsViewState {
   }
 
   // ===========================================================================
+  // SELECT OPTIONS (from backend)
+  // ===========================================================================
+
+  get selectOptions() {
+    return this._selectOptions;
+  }
+
+  updateSelectOptions(options) {
+    this._selectOptions = options ?? {};
+  }
+
+  /**
+   * Get options for a specific dropdown
+   */
+  getSelectOptions(key) {
+    return this._selectOptions[key] ?? [];
+  }
+
+  // ===========================================================================
+  // CUSTOM AGENTS DIRECTORY
+  // ===========================================================================
+
+  get customAgentsDirectory() {
+    return this._customAgentsDirectory;
+  }
+
+  updateCustomAgentsDirectory(path) {
+    this._customAgentsDirectory = path ?? '';
+  }
+
+  // ===========================================================================
   // FULL STATE UPDATE
   // ===========================================================================
 
@@ -279,6 +316,8 @@ class SettingsViewState {
     this.updateMemoryFiles(data.memoryFiles);
     this.updateMemoryEnabled(data.memoryEnabled);
     this.updateHistoryItems(data.history);
+    this.updateSelectOptions(data.selectOptions);
+    this.updateCustomAgentsDirectory(data.customAgentsDirectory);
 
     if (data.selectedTab) {
       this._selectedTab = data.selectedTab;

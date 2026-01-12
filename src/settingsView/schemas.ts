@@ -263,6 +263,25 @@ export const AccountDataSchema = z.object({
 export type AccountData = z.infer<typeof AccountDataSchema>;
 
 // =============================================================================
+// Select Options Schema (dropdown options - single source of truth)
+// =============================================================================
+
+export const SelectOptionSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+});
+export type SelectOption = z.infer<typeof SelectOptionSchema>;
+
+export const SelectOptionsSchema = z.object({
+  storageMode: z.array(SelectOptionSchema),
+  sessionRetention: z.array(SelectOptionSchema),
+  maxRetryAttempts: z.array(SelectOptionSchema),
+  formatter: z.array(SelectOptionSchema),
+  mathMarkup: z.array(SelectOptionSchema),
+});
+export type SelectOptions = z.infer<typeof SelectOptionsSchema>;
+
+// =============================================================================
 // Initial Data Schema (sent on load)
 // =============================================================================
 
@@ -279,6 +298,8 @@ export const InitialDataSchema = z.object({
   memoryEnabled: z.boolean().optional(),
   history: z.array(HistoryItemSchema).optional(),
   selectedTab: SettingsTabSchema.optional(),
+  selectOptions: SelectOptionsSchema.optional(),
+  customAgentsDirectory: z.string().optional(),
 });
 export type InitialData = z.infer<typeof InitialDataSchema>;
 

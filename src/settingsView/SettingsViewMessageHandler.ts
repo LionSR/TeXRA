@@ -44,10 +44,12 @@ import { ULTRA_TIER, MAX_TIER } from '@auth/config';
 
 // Local imports - utils
 import { getConfig, updateConfig } from '@utils/config';
+import { SELECT_OPTIONS } from '@utils/config/settingsSchema';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import { agentConfigToTaskState } from '@utils/config/configConversion';
 import { HistoryIdMessageSchema } from '@webview/types/messages';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 
 // Local imports - settings view
 import {
@@ -720,16 +722,25 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async collectInitialData(
     selectedTab?: SettingsTab,
   ): Promise<InitialData> {
-    const [account, models, providers, agents, latexSettings, history, memory] =
-      await Promise.all([
-        this.collectAccountData(),
-        this.collectModelsData(),
-        this.collectProvidersData(),
-        this.collectAgentsData(),
-        this.collectLatexSettings(),
-        this.collectHistoryData(),
-        this.collectMemoryData(),
-      ]);
+    const [
+      account,
+      models,
+      providers,
+      agents,
+      latexSettings,
+      history,
+      memory,
+      customAgentsDirectory,
+    ] = await Promise.all([
+      this.collectAccountData(),
+      this.collectModelsData(),
+      this.collectProvidersData(),
+      this.collectAgentsData(),
+      this.collectLatexSettings(),
+      this.collectHistoryData(),
+      this.collectMemoryData(),
+      agentDirectories.custom(),
+    ]);
 
     const enabledModels = getConfig<string[]>('texra.models', []);
     const enabledAgents = getConfig<string[]>('texra.agents', []);
@@ -748,6 +759,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       memoryEnabled: memory.enabled,
       history,
       selectedTab,
+      selectOptions: SELECT_OPTIONS,
+      customAgentsDirectory,
     };
   }
 

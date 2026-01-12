@@ -7,7 +7,6 @@ import {
   SETTINGS_VIEW_COMMANDS,
   REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENTS,
-  SELECT_OPTIONS,
 } from '../constants.js';
 
 export class LatexTab {
@@ -58,11 +57,12 @@ export class LatexTab {
   }
 
   /**
-   * Populate select dropdowns with options from constants
+   * Populate select dropdowns with options from state (backend is single source of truth)
    */
   populateSelectOptions() {
-    this.populateSelect('formatterSelect', SELECT_OPTIONS.formatter);
-    this.populateSelect('mathMarkupSelect', SELECT_OPTIONS.mathMarkup);
+    const options = settingsViewState.selectOptions;
+    this.populateSelect('formatterSelect', options.formatter ?? []);
+    this.populateSelect('mathMarkupSelect', options.mathMarkup ?? []);
   }
 
   /**

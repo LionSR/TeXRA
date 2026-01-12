@@ -4,11 +4,7 @@
 import { vscode } from '@common/webviewContext.js';
 import { debounce } from '@common/debounce.js';
 import { settingsViewState } from '../settingsViewState.js';
-import {
-  SETTINGS_VIEW_COMMANDS,
-  ELEMENT_IDS,
-  SELECT_OPTIONS,
-} from '../constants.js';
+import { SETTINGS_VIEW_COMMANDS, ELEMENT_IDS } from '../constants.js';
 import {
   renderAgentList,
   filterAgentsBySource,
@@ -53,15 +49,16 @@ export class AgentsTab {
   }
 
   /**
-   * Populate select dropdowns with options from constants
+   * Populate select dropdowns with options from state (backend is single source of truth)
    */
   populateSelectOptions() {
-    this.populateSelect('storageModeSelect', SELECT_OPTIONS.storageMode);
+    const options = settingsViewState.selectOptions;
+    this.populateSelect('storageModeSelect', options.storageMode ?? []);
     this.populateSelect(
       'sessionRetentionSelect',
-      SELECT_OPTIONS.sessionRetention,
+      options.sessionRetention ?? [],
     );
-    this.populateSelect('maxRetryAttempts', SELECT_OPTIONS.maxRetryAttempts);
+    this.populateSelect('maxRetryAttempts', options.maxRetryAttempts ?? []);
   }
 
   /**
