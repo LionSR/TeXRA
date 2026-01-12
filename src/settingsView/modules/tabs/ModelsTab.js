@@ -190,9 +190,9 @@ export class ModelsTab {
       });
     });
 
-    // Backdrop click to close
-    modal.querySelector('.modal-backdrop')?.addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) {
+    // Backdrop click to close (modal element IS the backdrop)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
         modal.style.display = 'none';
       }
     });

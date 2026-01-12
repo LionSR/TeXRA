@@ -184,6 +184,26 @@ vscode-tab-panel {
   gap: var(--spacing-small);
 }
 
+.setting-row.compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: var(--spacing-small);
+}
+
+.directory-path {
+  flex: 1;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--vscode-textCodeBlock-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
 .setting-row vscode-label {
   font-weight: 500;
 }

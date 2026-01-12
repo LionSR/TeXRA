@@ -51,14 +51,11 @@ export class SettingsViewProvider
       viewPath: 'settingsView',
     });
 
-    // Send fresh data when revealing existing panel
+    // Send fresh data when revealing existing panel.
+    // Include tab in initial data to avoid race condition where selectTab
+    // arrives before DOM is ready.
     if (!isNew && this._view) {
-      await this.messageHandler.sendInitialData(this._view.webview);
-    }
-
-    // If a specific tab was requested, select it
-    if (tab && this._view) {
-      await this.messageHandler.selectTab(this._view.webview, tab);
+      await this.messageHandler.sendInitialData(this._view.webview, tab);
     }
   }
 }

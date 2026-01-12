@@ -217,10 +217,19 @@ export class HistoryTab {
     });
   }
 
+  getFirstFile(files, fallbackSingle) {
+    // Handle both array (inputFiles/outputFiles) and singular (inputFile/outputFile) formats
+    if (Array.isArray(files) && files.length > 0) return files[0];
+    if (fallbackSingle) return fallbackSingle;
+    return null;
+  }
+
   renderHistoryItemsSimple(items) {
     return items
-      .map(
-        (item) => `
+      .map((item) => {
+        const inputFile = this.getFirstFile(item.inputFiles, item.inputFile);
+        const outputFile = this.getFirstFile(item.outputFiles, item.outputFile);
+        return `
       <div class="history-item" data-id="${item.id}">
         <div class="history-item-header">
           <span class="history-timestamp">${this.formatDate(item.timestamp)}</span>
@@ -238,12 +247,12 @@ export class HistoryTab {
           <span class="history-model">${item.modelName}</span>
         </div>
         ${
-          item.inputFile || item.outputFile
+          inputFile || outputFile
             ? `
           <div class="history-item-files">
-            ${item.inputFile ? `<span class="history-input">${this.shortenPath(item.inputFile)}</span>` : ''}
-            ${item.inputFile && item.outputFile ? '<span class="codicon codicon-arrow-right"></span>' : ''}
-            ${item.outputFile ? `<span class="history-output">${this.shortenPath(item.outputFile)}</span>` : ''}
+            ${inputFile ? `<span class="history-input">${this.shortenPath(inputFile)}</span>` : ''}
+            ${inputFile && outputFile ? '<span class="codicon codicon-arrow-right"></span>' : ''}
+            ${outputFile ? `<span class="history-output">${this.shortenPath(outputFile)}</span>` : ''}
           </div>
         `
             : ''
@@ -251,15 +260,16 @@ export class HistoryTab {
         ${
           item.instruction
             ? `
-          <vscode-collapsible title="Show details" class="history-details">
+          <details class="history-details settings-details">
+            <summary>Show details</summary>
             <div class="history-instruction">${this.escapeHtml(item.instruction)}</div>
-          </vscode-collapsible>
+          </details>
         `
             : ''
         }
       </div>
-    `,
-      )
+    `;
+      })
       .join('');
   }
 
@@ -271,17 +281,20 @@ export class HistoryTab {
     itemEl.querySelector('.history-agent').textContent = item.agentName;
     itemEl.querySelector('.history-model').textContent = item.modelName;
 
+    const inputFile = this.getFirstFile(item.inputFiles, item.inputFile);
+    const outputFile = this.getFirstFile(item.outputFiles, item.outputFile);
+
     const inputEl = itemEl.querySelector('.history-input');
     const outputEl = itemEl.querySelector('.history-output');
     const filesEl = itemEl.querySelector('.history-item-files');
 
-    if (inputEl && item.inputFile) {
-      inputEl.textContent = this.shortenPath(item.inputFile);
+    if (inputEl && inputFile) {
+      inputEl.textContent = this.shortenPath(inputFile);
     }
-    if (outputEl && item.outputFile) {
-      outputEl.textContent = this.shortenPath(item.outputFile);
+    if (outputEl && outputFile) {
+      outputEl.textContent = this.shortenPath(outputFile);
     }
-    if (filesEl && !item.inputFile && !item.outputFile) {
+    if (filesEl && !inputFile && !outputFile) {
       filesEl.style.display = 'none';
     }
 

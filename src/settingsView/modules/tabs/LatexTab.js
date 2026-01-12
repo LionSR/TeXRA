@@ -7,6 +7,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
   REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENTS,
+  SELECT_OPTIONS,
 } from '../constants.js';
 
 export class LatexTab {
@@ -52,7 +53,35 @@ export class LatexTab {
       regexReplacements: document.getElementById('regexReplacements'),
     };
 
+    this.populateSelectOptions();
     this.attachEventListeners();
+  }
+
+  /**
+   * Populate select dropdowns with options from constants
+   */
+  populateSelectOptions() {
+    this.populateSelect('formatterSelect', SELECT_OPTIONS.formatter);
+    this.populateSelect('mathMarkupSelect', SELECT_OPTIONS.mathMarkup);
+  }
+
+  /**
+   * Populate a vscode-single-select with options
+   */
+  populateSelect(id, options) {
+    const select = this._elements[id];
+    if (!select) return;
+
+    // Clear existing options
+    select.innerHTML = '';
+
+    // Add options
+    options.forEach((opt) => {
+      const option = document.createElement('vscode-option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      select.appendChild(option);
+    });
   }
 
   attachEventListeners() {

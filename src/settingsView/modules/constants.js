@@ -51,6 +51,10 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Agent actions
   OPEN_AGENT_SOURCE: 'openAgentSource',
   DELETE_AGENT: 'deleteAgent',
+
+  // Custom agents directory
+  BROWSE_AGENTS_DIRECTORY: 'browseAgentsDirectory',
+  OPEN_AGENTS_DIRECTORY: 'openAgentsDirectory',
 };
 
 // Tab identifiers
@@ -161,6 +165,42 @@ export const REGEX_REPLACEMENTS = [
   'environments',
   'commands',
 ];
+
+// Dropdown options for settings
+export const SELECT_OPTIONS = {
+  // Workflow settings
+  storageMode: [
+    { value: 'in-place', label: 'In-place (overwrite)' },
+    { value: 'folder', label: 'Folder (texra-outputs/)' },
+  ],
+
+  // Tool-use settings
+  sessionRetention: [
+    { value: '24', label: '24 hours' },
+    { value: '48', label: '48 hours' },
+    { value: '72', label: '72 hours' },
+    { value: '168', label: '1 week' },
+  ],
+  maxRetryAttempts: [
+    { value: '1', label: '1' },
+    { value: '2', label: '2' },
+    { value: '3', label: '3' },
+    { value: '5', label: '5' },
+  ],
+
+  // LaTeX settings
+  formatter: [
+    { value: 'latexindent', label: 'latexindent' },
+    { value: 'tex-fmt', label: 'tex-fmt' },
+    { value: 'none', label: 'none' },
+  ],
+  mathMarkup: [
+    { value: 'off', label: 'off' },
+    { value: 'whole', label: 'whole' },
+    { value: 'coarse', label: 'coarse' },
+    { value: 'fine', label: 'fine' },
+  ],
+};
 
 // Element IDs
 export const ELEMENT_IDS = {

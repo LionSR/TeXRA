@@ -213,8 +213,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // PUBLIC METHODS
   // ===========================================================================
 
-  public async sendInitialData(webview: vscode.Webview): Promise<void> {
-    const data = await this.collectInitialData();
+  public async sendInitialData(
+    webview: vscode.Webview,
+    selectedTab?: SettingsTab,
+  ): Promise<void> {
+    const data = await this.collectInitialData(selectedTab);
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.SET_INITIAL_DATA,
       data,
@@ -528,8 +531,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       MemoryActionSchema,
       message,
       'openMemoryFile',
-      async ({ path }) => {
-        const uri = vscode.Uri.file(path);
+      async ({ path: storagePath }) => {
+        // Convert storage-relative path to absolute path
+        const absolutePath = StorageFS.fullPath(storagePath);
+        const uri = vscode.Uri.file(absolutePath);
         await vscode.window.showTextDocument(uri);
       },
     );
@@ -543,9 +548,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       MemoryActionSchema,
       message,
       'deleteMemory',
-      async ({ path }) => {
+      async ({ path: storagePath }) => {
         try {
-          await vscode.workspace.fs.delete(vscode.Uri.file(path));
+          // Convert storage-relative path to absolute path
+          const absolutePath = StorageFS.fullPath(storagePath);
+          await vscode.workspace.fs.delete(vscode.Uri.file(absolutePath));
           await this.sendInitialData(view.webview);
         } catch (error) {
           await showLoggedErrorMessage(
@@ -710,7 +717,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // DATA COLLECTION
   // ===========================================================================
 
-  private async collectInitialData(): Promise<InitialData> {
+  private async collectInitialData(
+    selectedTab?: SettingsTab,
+  ): Promise<InitialData> {
     const [account, models, providers, agents, latexSettings, history, memory] =
       await Promise.all([
         this.collectAccountData(),
@@ -738,6 +747,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       memoryFiles: memory.files,
       memoryEnabled: memory.enabled,
       history,
+      selectedTab,
     };
   }
 

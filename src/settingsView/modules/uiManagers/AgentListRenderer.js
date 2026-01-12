@@ -45,6 +45,7 @@ export function renderSourceBadge(source) {
  */
 export function renderAgentItem(agent, isEnabled, showActions = false) {
   const typeBadge = renderAgentTypeBadge(agent.agentType);
+  const categoryBadge = renderCategoryBadge(agent.category);
   const sourceBadge = renderSourceBadge(agent.source);
   const description = agent.description
     ? `<span class="agent-description">${agent.description}</span>`
@@ -79,6 +80,7 @@ export function renderAgentItem(agent, isEnabled, showActions = false) {
         <span class="agent-name">${agent.name}</span>
         ${description}
         <div class="agent-meta">
+          ${categoryBadge}
           ${typeBadge}
           ${sourceBadge}
           ${agent.rounds && agent.rounds > 1 ? `<span class="agent-rounds">x${agent.rounds}</span>` : ''}

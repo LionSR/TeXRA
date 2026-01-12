@@ -29,6 +29,7 @@ class SettingsViewState {
 
     // Memory state
     this._memoryFiles = [];
+    this._memoryEnabled = true;
 
     // History state
     this._historyItems = [];
@@ -209,8 +210,16 @@ class SettingsViewState {
     return this._memoryFiles;
   }
 
+  get memoryEnabled() {
+    return this._memoryEnabled;
+  }
+
   updateMemoryFiles(files) {
     this._memoryFiles = files ?? [];
+  }
+
+  updateMemoryEnabled(enabled) {
+    this._memoryEnabled = enabled ?? true;
   }
 
   // ===========================================================================
@@ -267,6 +276,9 @@ class SettingsViewState {
       data.enabledToolUseAgents,
     );
     this.updateLatexSettings(data.latexSettings);
+    this.updateMemoryFiles(data.memoryFiles);
+    this.updateMemoryEnabled(data.memoryEnabled);
+    this.updateHistoryItems(data.history);
 
     if (data.selectedTab) {
       this._selectedTab = data.selectedTab;

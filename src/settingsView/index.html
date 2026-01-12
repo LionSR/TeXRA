@@ -204,10 +204,27 @@
               <div id="customAgentsList" class="agent-list">
                 <!-- Populated by JS -->
               </div>
-              <p class="info-text">
+              <div class="setting-row compact">
                 <span class="codicon codicon-folder"></span>
-                Custom agents are stored in: <code>.texra/agents/</code>
-              </p>
+                <span>Directory:</span>
+                <code id="customAgentsPath" class="directory-path"
+                  >Loading...</code
+                >
+                <vscode-button
+                  appearance="secondary"
+                  id="browseCustomAgentsDir"
+                  title="Change custom agents directory"
+                >
+                  Browse
+                </vscode-button>
+                <vscode-button
+                  appearance="secondary"
+                  id="openCustomAgentsDir"
+                  title="Open custom agents folder in file explorer"
+                >
+                  <span class="codicon codicon-folder-opened"></span>
+                </vscode-button>
+              </div>
             </div>
 
             <!-- Remote Agents -->
@@ -241,14 +258,9 @@
                 </p>
                 <div class="setting-row">
                   <vscode-label>Storage mode</vscode-label>
-                  <vscode-single-select id="storageModeSelect">
-                    <vscode-option value="in-place"
-                      >In-place (overwrite)</vscode-option
-                    >
-                    <vscode-option value="folder"
-                      >Folder (texra-outputs/)</vscode-option
-                    >
-                  </vscode-single-select>
+                  <vscode-single-select
+                    id="storageModeSelect"
+                  ></vscode-single-select>
                   <span class="setting-description"
                     >How to store agent outputs.</span
                   >
@@ -276,12 +288,9 @@
                 </vscode-checkbox>
                 <div class="setting-row inline">
                   <vscode-label>Session retention:</vscode-label>
-                  <vscode-single-select id="sessionRetentionSelect">
-                    <vscode-option value="24">24 hours</vscode-option>
-                    <vscode-option value="48">48 hours</vscode-option>
-                    <vscode-option value="72">72 hours</vscode-option>
-                    <vscode-option value="168">1 week</vscode-option>
-                  </vscode-single-select>
+                  <vscode-single-select
+                    id="sessionRetentionSelect"
+                  ></vscode-single-select>
                 </div>
 
                 <div class="setting-row">
@@ -306,12 +315,9 @@
                 >
                 <div class="setting-row inline">
                   <vscode-label>Max attempts:</vscode-label>
-                  <vscode-single-select id="maxRetryAttempts">
-                    <vscode-option value="1">1</vscode-option>
-                    <vscode-option value="2">2</vscode-option>
-                    <vscode-option value="3">3</vscode-option>
-                    <vscode-option value="5">5</vscode-option>
-                  </vscode-single-select>
+                  <vscode-single-select
+                    id="maxRetryAttempts"
+                  ></vscode-single-select>
                 </div>
                 <div class="setting-row">
                   <vscode-label>Backoff delay:</vscode-label>
@@ -345,13 +351,9 @@
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Formatter:</vscode-label>
-                  <vscode-single-select id="formatterSelect">
-                    <vscode-option value="latexindent"
-                      >latexindent</vscode-option
-                    >
-                    <vscode-option value="tex-fmt">tex-fmt</vscode-option>
-                    <vscode-option value="none">none</vscode-option>
-                  </vscode-single-select>
+                  <vscode-single-select
+                    id="formatterSelect"
+                  ></vscode-single-select>
                 </div>
 
                 <div class="setting-row" id="latexindentConfigRow">
@@ -412,12 +414,9 @@
 
                 <div class="setting-row">
                   <vscode-label>Math markup:</vscode-label>
-                  <vscode-single-select id="mathMarkupSelect">
-                    <vscode-option value="off">off</vscode-option>
-                    <vscode-option value="whole">whole</vscode-option>
-                    <vscode-option value="coarse">coarse</vscode-option>
-                    <vscode-option value="fine">fine</vscode-option>
-                  </vscode-single-select>
+                  <vscode-single-select
+                    id="mathMarkupSelect"
+                  ></vscode-single-select>
                 </div>
 
                 <div class="setting-row">

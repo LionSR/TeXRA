@@ -4,7 +4,11 @@
 import { vscode } from '@common/webviewContext.js';
 import { debounce } from '@common/debounce.js';
 import { settingsViewState } from '../settingsViewState.js';
-import { SETTINGS_VIEW_COMMANDS, ELEMENT_IDS } from '../constants.js';
+import {
+  SETTINGS_VIEW_COMMANDS,
+  ELEMENT_IDS,
+  SELECT_OPTIONS,
+} from '../constants.js';
 import {
   renderAgentList,
   filterAgentsBySource,
@@ -29,6 +33,11 @@ export class AgentsTab {
       autoShowRemoteAgents: document.getElementById('autoShowRemoteAgents'),
       agentsSignInBtn: document.getElementById('agentsSignInBtn'),
 
+      // Custom agents directory
+      customAgentsPath: document.getElementById('customAgentsPath'),
+      browseCustomAgentsDir: document.getElementById('browseCustomAgentsDir'),
+      openCustomAgentsDir: document.getElementById('openCustomAgentsDir'),
+
       // Settings elements
       storageModeSelect: document.getElementById('storageModeSelect'),
       requireEditApproval: document.getElementById('requireEditApproval'),
@@ -39,7 +48,39 @@ export class AgentsTab {
       backoffDelay: document.getElementById('backoffDelay'),
     };
 
+    this.populateSelectOptions();
     this.attachEventListeners();
+  }
+
+  /**
+   * Populate select dropdowns with options from constants
+   */
+  populateSelectOptions() {
+    this.populateSelect('storageModeSelect', SELECT_OPTIONS.storageMode);
+    this.populateSelect(
+      'sessionRetentionSelect',
+      SELECT_OPTIONS.sessionRetention,
+    );
+    this.populateSelect('maxRetryAttempts', SELECT_OPTIONS.maxRetryAttempts);
+  }
+
+  /**
+   * Populate a vscode-single-select with options
+   */
+  populateSelect(id, options) {
+    const select = this._elements[id];
+    if (!select) return;
+
+    // Clear existing options
+    select.innerHTML = '';
+
+    // Add options
+    options.forEach((opt) => {
+      const option = document.createElement('vscode-option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      select.appendChild(option);
+    });
   }
 
   attachEventListeners() {
@@ -78,6 +119,23 @@ export class AgentsTab {
           key: 'texra.remoteAgents.autoShow',
           value: autoShowRemoteAgents.checked,
           target: 'global',
+        });
+      });
+    }
+
+    // Custom agents directory buttons
+    const { browseCustomAgentsDir, openCustomAgentsDir } = this._elements;
+    if (browseCustomAgentsDir) {
+      browseCustomAgentsDir.addEventListener('click', () => {
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.BROWSE_AGENTS_DIRECTORY,
+        });
+      });
+    }
+    if (openCustomAgentsDir) {
+      openCustomAgentsDir.addEventListener('click', () => {
+        vscode.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.OPEN_AGENTS_DIRECTORY,
         });
       });
     }
@@ -216,6 +274,19 @@ export class AgentsTab {
     this.renderBuiltInAgents(state);
     this.renderCustomAgents(state);
     this.renderRemoteAgents(state);
+    this.renderCustomAgentsDirectory(state);
+  }
+
+  renderCustomAgentsDirectory(state) {
+    const { customAgentsPath } = this._elements;
+    if (!customAgentsPath) return;
+
+    if (state.customAgentsDirectory) {
+      customAgentsPath.textContent = state.customAgentsDirectory;
+      customAgentsPath.title = state.customAgentsDirectory;
+    } else {
+      customAgentsPath.textContent = 'Default location';
+    }
   }
 
   renderBuiltInAgents(state) {
