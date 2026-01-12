@@ -114,7 +114,9 @@
   margin: 0;
   margin-right: var(--spacing-small);
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  transition: color 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
 }
 
 .tab-container:hover {
@@ -132,6 +134,11 @@
 .tab-delete::part(control) {
   padding: 0;
   border-radius: var(--border-radius-small);
+  background-color: color-mix(
+    in srgb,
+    var(--vscode-icon-foreground, var(--vscode-foreground)) 10%,
+    transparent
+  );
 }
 
 .tab-delete:hover::part(control),
