@@ -86,6 +86,44 @@ The unified Settings View has been fully implemented and all legacy views have b
 
 ---
 
+## Phase 5: UI Improvements and Legacy Removal ✅
+
+### Replaced vscode-collapsible with Native Details/Summary
+
+- [x] Recommended Models collapsible
+- [x] Workflow Settings collapsible
+- [x] Tool-Use Settings collapsible
+- [x] Formatter collapsible
+- [x] LaTeXdiff collapsible
+- [x] TikZ Figures collapsible (including nested TikZ template)
+- [x] Replacements collapsible
+- [x] Modal Advanced Options collapsible
+- [x] History item details
+- [x] Memory file preview
+- [x] Added comprehensive CSS styling for native details/summary
+
+### Removed ProfileView (Superseded by Settings View)
+
+- [x] Deleted src/profileView/ directory (12 files)
+- [x] Updated AUTH_COMMANDS.VIEW_PROFILE to open Settings View
+- [x] Removed profileView from .vscodeignore, tsconfig.json, webpack.config.js
+
+### Fixed Custom Agent Buttons
+
+- [x] Added OPEN_AGENT_SOURCE and DELETE_AGENT commands
+- [x] Added handleOpenAgentSource and handleDeleteAgent handlers
+- [x] Added click event delegation in AgentsTab.js
+- [x] Added OpenAgentSourceActionSchema and DeleteAgentActionSchema
+
+### Button Audit (All Verified ✓)
+
+- Models tab: 6 buttons - all handled
+- History tab: 7 buttons - all handled
+- Memory tab: 6 buttons - all handled
+- Agents tab: 3 buttons - all handled
+
+---
+
 ## Build Status
 
 - TypeScript: ✅ Compiles without errors
@@ -115,12 +153,13 @@ The unified Settings View has been fully implemented and all legacy views have b
 
 - `src/historyView/` - All files (14 files, ~1200 lines)
 - `src/memoryView/` - All files (12 files, ~800 lines)
+- `src/profileView/` - All files (12 files, ~1500 lines)
 
 ---
 
 ## Net Result
 
 - **Lines Added**: ~5500 (Settings View)
-- **Lines Removed**: ~2000 (Legacy views)
-- **Net Change**: +3500 lines
-- **Consolidated**: 2 separate views → 1 unified view with 5 tabs
+- **Lines Removed**: ~3500 (Legacy views: historyView, memoryView, profileView)
+- **Net Change**: +2000 lines
+- **Consolidated**: 3 separate views → 1 unified view with 5 tabs
