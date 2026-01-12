@@ -25,33 +25,50 @@ import { z } from 'zod';
 
 /**
  * Settings that have dropdown options.
- * The Zod enum defines the valid values; labels map provides display names.
- * Default values are the first enum value unless specified otherwise.
+ * The Zod enum defines the valid values with .describe() for UI descriptions.
+ * Default values are exported separately.
  */
 
-// Storage mode for agent outputs (matches package.json texra.agentOutputs.storageMode)
-export const StorageModeSchema = z.enum(['workspace', 'taskRunStorage']);
+// Storage mode for agent outputs
+export const StorageModeSchema = z
+  .enum(['workspace', 'taskRunStorage'])
+  .describe(
+    "Where agent-generated files are saved. Use 'workspace' to write beside the sources or 'taskRunStorage' to isolate artifacts inside the extension storage.",
+  );
 export type StorageMode = z.infer<typeof StorageModeSchema>;
 export const STORAGE_MODE_DEFAULT: StorageMode = 'workspace';
 
-// Session retention in hours (matches package.json texra.toolUse.persistence.ttlHours)
-export const SessionRetentionSchema = z.enum(['24', '48', '72', '168']);
+// Session retention in hours
+export const SessionRetentionSchema = z
+  .enum(['24', '48', '72', '168'])
+  .describe(
+    'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup.',
+  );
 export type SessionRetention = z.infer<typeof SessionRetentionSchema>;
 export const SESSION_RETENTION_DEFAULT: SessionRetention = '72';
 
-// Max retry attempts (matches package.json texra.model.retry.maxAttempts)
-// Note: '0' means manual retry only
-export const MaxRetryAttemptsSchema = z.enum(['0', '1', '2', '3', '5']);
+// Max retry attempts ('0' means manual retry only)
+export const MaxRetryAttemptsSchema = z
+  .enum(['0', '1', '2', '3', '5'])
+  .describe(
+    'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
+  );
 export type MaxRetryAttempts = z.infer<typeof MaxRetryAttemptsSchema>;
 export const MAX_RETRY_ATTEMPTS_DEFAULT: MaxRetryAttempts = '0';
 
-// LaTeX formatter (matches package.json texra.latex.formatter)
-export const FormatterSchema = z.enum(['latexindent', 'tex-fmt', 'none']);
+// LaTeX formatter
+export const FormatterSchema = z
+  .enum(['latexindent', 'tex-fmt', 'none'])
+  .describe("LaTeX formatter to use when formatting files ('none' to disable).");
 export type Formatter = z.infer<typeof FormatterSchema>;
 export const FORMATTER_DEFAULT: Formatter = 'latexindent';
 
-// Math markup granularity for latexdiff (matches package.json texra.latexdiff.mathMarkup)
-export const MathMarkupSchema = z.enum(['off', 'whole', 'coarse', 'fine']);
+// Math markup granularity for latexdiff
+export const MathMarkupSchema = z
+  .enum(['off', 'whole', 'coarse', 'fine'])
+  .describe(
+    'Determine granularity of markup in displayed math environments for latexdiff.',
+  );
 export type MathMarkup = z.infer<typeof MathMarkupSchema>;
 export const MATH_MARKUP_DEFAULT: MathMarkup = 'coarse';
 
@@ -98,23 +115,24 @@ export const SETTING_LABELS = {
 } as const;
 
 /**
- * Descriptions for settings (preserved from package.json for UI display).
+ * Extract description from a Zod schema (uses native .describe()).
+ */
+export function getSchemaDescription(
+  schema: z.ZodType<unknown>,
+): string | undefined {
+  return schema.description;
+}
+
+/**
+ * All schema descriptions, extracted from the schemas themselves.
+ * Use getSchemaDescription() for individual lookups.
  */
 export const SETTING_DESCRIPTIONS = {
-  storageMode:
-    "Where agent-generated files are saved. Use 'workspace' to write beside the sources or 'taskRunStorage' to isolate artifacts inside the extension storage.",
-  sessionRetention:
-    'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup.',
-  maxRetryAttempts:
-    'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
-  retryBackoffMs:
-    'Base backoff delay in milliseconds between retry attempts for model calls.',
-  persistSessions: 'Persist tool-use conversations across VS Code restarts.',
-  compactionThreshold:
-    'Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.',
-  formatter: "LaTeX formatter to use when formatting files ('none' to disable).",
-  mathMarkup:
-    'Determine granularity of markup in displayed math environments for latexdiff.',
+  storageMode: StorageModeSchema.description,
+  sessionRetention: SessionRetentionSchema.description,
+  maxRetryAttempts: MaxRetryAttemptsSchema.description,
+  formatter: FormatterSchema.description,
+  mathMarkup: MathMarkupSchema.description,
 } as const;
 
 // =============================================================================
