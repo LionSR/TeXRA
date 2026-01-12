@@ -16,11 +16,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
-import {
-  getConfig,
-  SETTING_DEFAULTS,
-  type StorageMode,
-} from '@utils/config';
+import { getConfig } from '@utils/config';
 
 // Local imports - core utilities
 import { getPathSegments } from '@utils/core';
@@ -284,14 +280,14 @@ export class TaskRunFileService {
   }
 
   private applyExecutionContext(executionId?: ExecutionId | null): void {
-    const storageMode = getConfig<StorageMode>(
+    const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
       'texra.agentOutputs.storageMode',
-      SETTING_DEFAULTS.storageMode,
+      'workspace',
     );
     const shouldUseRunStorage =
       storageMode === 'taskRunStorage' && Boolean(executionId);
 
-    const nextMode: StorageMode = shouldUseRunStorage
+    const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
       ? 'taskRunStorage'
       : 'workspace';
     const nextRunDirectory =

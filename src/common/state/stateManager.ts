@@ -16,6 +16,16 @@ export enum WorkspaceStateKey {
   USAGE_STATS = 'texra.usageStats',
   STREAM_SORT_ORDER = 'texra.streamSortOrder',
   STREAM_AGENT_FILTER = 'texra.streamAgentFilter',
+
+  // Settings (migrated from package.json config to storage)
+  STORAGE_MODE = 'texra.settings.storageMode',
+  SESSION_RETENTION = 'texra.settings.sessionRetention',
+  MAX_RETRY_ATTEMPTS = 'texra.settings.maxRetryAttempts',
+  RETRY_BACKOFF_MS = 'texra.settings.retryBackoffMs',
+  FORMATTER = 'texra.settings.formatter',
+  MATH_MARKUP = 'texra.settings.mathMarkup',
+  PERSIST_SESSIONS = 'texra.settings.persistSessions',
+  COMPACTION_THRESHOLD = 'texra.settings.compactionThreshold',
 }
 
 export enum GlobalStateKey {

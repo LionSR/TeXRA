@@ -97,6 +97,26 @@ export const SETTING_LABELS = {
   } satisfies Record<MathMarkup, string>,
 } as const;
 
+/**
+ * Descriptions for settings (preserved from package.json for UI display).
+ */
+export const SETTING_DESCRIPTIONS = {
+  storageMode:
+    "Where agent-generated files are saved. Use 'workspace' to write beside the sources or 'taskRunStorage' to isolate artifacts inside the extension storage.",
+  sessionRetention:
+    'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup.',
+  maxRetryAttempts:
+    'Number of automatic retry attempts before surfacing a manual retry option for model calls. Set to 0 for no automatic retries (manual retry button only).',
+  retryBackoffMs:
+    'Base backoff delay in milliseconds between retry attempts for model calls.',
+  persistSessions: 'Persist tool-use conversations across VS Code restarts.',
+  compactionThreshold:
+    'Percentage of context window to trigger automatic context management. For OpenAI, triggers conversation compaction. For Anthropic, triggers server-side clearing of tool uses and thinking blocks. Set to 0 to disable.',
+  formatter: "LaTeX formatter to use when formatting files ('none' to disable).",
+  mathMarkup:
+    'Determine granularity of markup in displayed math environments for latexdiff.',
+} as const;
+
 // =============================================================================
 // OPTION EXTRACTION UTILITIES
 // =============================================================================

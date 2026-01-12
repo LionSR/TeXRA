@@ -76,6 +76,11 @@ export const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 0;
 export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
 
+// =============================================================================
+// HELPER FUNCTIONS FOR SETTINGS
+// These use getConfig which now routes storage-based settings transparently
+// =============================================================================
+
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
   return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
@@ -89,7 +94,6 @@ export function getToolUsePersistenceTtlHours(): number {
   );
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 1) {
-    // Log a warning when invalid configuration is detected
     logger.warn(
       CHANNEL,
       `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
@@ -114,6 +118,7 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await globalSM?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
+/** Get the max retry attempts for model calls. */
 export function getModelRetryMaxAttempts(): number {
   return getConfig<number>(
     'texra.model.retry.maxAttempts',
@@ -121,6 +126,7 @@ export function getModelRetryMaxAttempts(): number {
   );
 }
 
+/** Get the backoff delay in ms for model retries. */
 export function getModelRetryBackoffMs(): number {
   return getConfig<number>(
     'texra.model.retry.backoffMs',
