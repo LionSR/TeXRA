@@ -150,28 +150,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
         this.executionManager.handleFileOperation(m),
 
-      // Settings commands
+      // Settings commands - now open unified Settings View
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
+        safeExecuteCommand('texra.openSettingsView', [], this.viewName),
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async () =>
         safeExecuteCommand(
-          'workbench.action.openSettings',
-          [SETTINGS_QUERY.EXTENSION],
+          'texra.openSettingsView',
+          ['agents'],
           this.viewName,
         ),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
-        const query =
-          m?.sessionType === 'toolUse'
-            ? SETTINGS_QUERY.TOOL_USE_AGENTS
-            : SETTINGS_QUERY.WORKFLOW_AGENTS;
-        return safeExecuteCommand(
-          'workbench.action.openSettings',
-          [query],
-          this.viewName,
-        );
-      },
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
         safeExecuteCommand(
-          'workbench.action.openSettings',
-          [SETTINGS_QUERY.MODELS],
+          'texra.openSettingsView',
+          ['models'],
           this.viewName,
         ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {

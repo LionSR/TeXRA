@@ -273,6 +273,47 @@ export const MEMORY_VIEW_COMMANDS = {
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
 };
 
+// Settings view specific commands
+export const SETTINGS_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+
+  // Extension → Webview
+  SET_INITIAL_DATA: 'setInitialData',
+  SET_MODELS_DATA: 'setModelsData',
+  SET_AGENTS_DATA: 'setAgentsData',
+  SET_LATEX_DATA: 'setLatexData',
+  SET_MEMORY_DATA: 'setMemoryData',
+  SET_HISTORY_DATA: 'setHistoryData',
+  SET_ACCOUNT_DATA: 'setAccountData',
+  SELECT_TAB: 'selectTab',
+  HISTORY_CLEARED: 'historyCleared',
+
+  // Webview → Extension
+  GET_INITIAL_DATA: 'getInitialData',
+  TAB_CHANGED: 'tabChanged',
+  SAVE_ENABLED_MODELS: 'saveEnabledModels',
+  SAVE_ENABLED_AGENTS: 'saveEnabledAgents',
+  SAVE_SETTING: 'saveSetting',
+  SET_API_KEY: 'setApiKey',
+  DELETE_API_KEY: 'deleteApiKey',
+  SIGN_IN: 'signIn',
+  SIGN_OUT: 'signOut',
+  OPEN_PROVIDER_URL: 'openProviderUrl',
+  BROWSE_FILE: 'browseFile',
+
+  // History tab
+  RERUN_AGENT: 'rerunAgent',
+  RESTORE_AGENT: 'restoreAgent',
+  DELETE_HISTORY_ITEM: 'deleteHistoryItem',
+  CLEAR_HISTORY: 'clearHistory',
+
+  // Memory tab
+  OPEN_MEMORY_FILE: 'openMemoryFile',
+  OPEN_MEMORY_FOLDER: 'openMemoryFolder',
+  DELETE_MEMORY: 'deleteMemory',
+  REFRESH_MEMORY: 'refreshMemory',
+};
+
 // Export all commands in a single object for convenience
 export const WEBVIEW_COMMANDS = {
   COMMON: COMMON_COMMANDS,
@@ -281,4 +322,5 @@ export const WEBVIEW_COMMANDS = {
   HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
   PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
   MEMORY_VIEW: MEMORY_VIEW_COMMANDS,
+  SETTINGS_VIEW: SETTINGS_VIEW_COMMANDS,
 };

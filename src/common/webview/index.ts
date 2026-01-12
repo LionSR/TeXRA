@@ -16,6 +16,7 @@ export {
   HISTORY_VIEW_COMMANDS,
   PROFILE_VIEW_COMMANDS,
   MEMORY_VIEW_COMMANDS,
+  SETTINGS_VIEW_COMMANDS,
   WEBVIEW_COMMANDS,
 } from './commands';
 export { getSharedLocalResourceRoots } from './resourceRoots';

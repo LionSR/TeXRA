@@ -18,6 +18,7 @@ const INTERNAL_ALIAS_NAMES = [
   'model',
   'progressView',
   'replacement',
+  'settingsView',
   'tools',
   'utils',
   'eventBus',
@@ -162,6 +163,7 @@ export default tseslint.config(
       'src/historyView/modules/**/*.js',
       'src/memoryView/modules/**/*.js',
       'src/progressView/modules/**/*.js',
+      'src/settingsView/modules/**/*.js',
       'src/webview/modules/**/*.js',
       'src/common/*.js',
       'src/common/modules/*.js',
@@ -169,6 +171,7 @@ export default tseslint.config(
       'src/historyView/script.js',
       'src/memoryView/script.js',
       'src/progressView/script.js',
+      'src/settingsView/script.js',
       'src/webview/script.js',
     ],
     // Disable TS type-checking rules for these JS files

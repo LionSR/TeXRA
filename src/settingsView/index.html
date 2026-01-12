@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${styleUri}" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
+    <title>TeXRA Settings</title>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "./modules/domHandlers.js": "${domHandlersUri}",
+          "./modules/constants.js": "${constantsUri}",
+          "./modules/settingsViewState.js": "${settingsViewStateUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "./modules/TabManager.js": "${tabManagerUri}",
+          "./modules/uiManagers/HeaderBar.js": "${headerBarUri}",
+          "./modules/tabs/ModelsTab.js": "${modelsTabUri}",
+          "./modules/tabs/AgentsTab.js": "${agentsTabUri}",
+          "./modules/tabs/LatexTab.js": "${latexTabUri}",
+          "./modules/tabs/MemoryTab.js": "${memoryTabUri}",
+          "./modules/tabs/HistoryTab.js": "${historyTabUri}",
+          "./modules/uiManagers/ModelListRenderer.js": "${modelListRendererUri}",
+          "./modules/uiManagers/ProviderRenderer.js": "${providerRendererUri}",
+          "./modules/uiManagers/AgentListRenderer.js": "${agentListRendererUri}",
+          "./modules/uiManagers/SettingRenderer.js": "${settingRendererUri}",
+          "@common/webviewState.js": "${webviewStateUri}",
+          "@common/webview/commands.js": "${commandsUri}",
+          "@common/webviewContext.js": "${webviewContextUri}",
+          "@common/domUtils.js": "${domUtilsUri}",
+          "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/htmlEncoding.js": "${htmlEncodingUri}",
+          "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
+          "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
+          "@common/debounce.js": "${debounceUri}"
+        }
+      }
+    </script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+  </head>
+
+  <body>
+    <div class="settings-container">
+      <!-- Header Bar -->
+      <header class="settings-header" id="settingsHeader">
+        <div class="account-info" id="accountInfo">
+          <span class="codicon codicon-account"></span>
+          <span id="userEmail" class="user-email">Loading...</span>
+          <span class="separator">-</span>
+          <span id="userTier" class="user-tier badge"></span>
+        </div>
+        <div class="account-actions" id="accountActions">
+          <vscode-button id="manageBtn" appearance="secondary" style="display: none;">
+            Manage
+          </vscode-button>
+          <vscode-button id="signOutBtn" appearance="secondary" style="display: none;">
+            Sign Out
+          </vscode-button>
+          <vscode-button id="signInBtn" appearance="primary" style="display: none;">
+            <span slot="start" class="codicon codicon-sign-in"></span>
+            Sign In
+          </vscode-button>
+        </div>
+      </header>
+
+      <!-- Not Logged In Banner -->
+      <div id="notLoggedInBanner" class="not-logged-in-banner" style="display: none;">
+        <span class="codicon codicon-info"></span>
+        <span>Use TeXRA with your own API keys</span>
+      </div>
+
+      <!-- Native vscode-tabs -->
+      <vscode-tabs id="settingsTabs" selected-index="0">
+        <vscode-tab-header slot="header" id="tabModels">Models</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabAgents">Agents</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabLatex">LaTeX</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabMemory">Memory</vscode-tab-header>
+        <vscode-tab-header slot="header" id="tabHistory">History</vscode-tab-header>
+
+        <!-- Models Tab -->
+        <vscode-tab-panel id="panelModels">
+          <div class="tab-content" id="modelsTabContent">
+            <p class="tab-description">
+              Configure model providers and select which models appear in the dropdown.
+            </p>
+
+            <!-- Routing Options -->
+            <div class="section">
+              <vscode-label class="section-label">ROUTING</vscode-label>
+              <div class="routing-options">
+                <label class="radio-option">
+                  <input type="radio" name="routingMode" value="direct" checked />
+                  <span class="option-content">
+                    <span class="option-title">Direct to providers</span>
+                    <span class="option-description">Recommended. Connect directly to each provider.</span>
+                  </span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="routingMode" value="openrouter" />
+                  <span class="option-content">
+                    <span class="option-title">Route through OpenRouter</span>
+                    <span class="option-description">Use OpenRouter for all model requests.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Recommended Models -->
+            <div class="section">
+              <vscode-collapsible title="Recommended Models" open id="recommendedModelsCollapsible">
+                <div id="recommendedModelsList" class="model-list">
+                  <!-- Populated by JS -->
+                </div>
+              </vscode-collapsible>
+            </div>
+
+            <!-- Provider Sections -->
+            <div class="section">
+              <vscode-label class="section-label">PROVIDERS</vscode-label>
+              <div id="providersList">
+                <!-- Provider collapsibles populated by JS -->
+              </div>
+            </div>
+
+            <!-- Model Count Footer -->
+            <div class="section-footer">
+              <span id="modelCount">Selected: 0 models</span>
+            </div>
+          </div>
+        </vscode-tab-panel>
+
+        <!-- Agents Tab -->
+        <vscode-tab-panel id="panelAgents">
+          <div class="tab-content" id="agentsTabContent">
+            <p class="tab-description">
+              Select which agents appear in the dropdown. Settings are saved per workspace.
+            </p>
+
+            <!-- Built-in Agents -->
+            <div class="section">
+              <vscode-label class="section-label">BUILT-IN AGENTS</vscode-label>
+              <div id="builtInAgentsList" class="agent-list">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+
+            <!-- Custom Agents -->
+            <div class="section">
+              <vscode-label class="section-label">CUSTOM AGENTS</vscode-label>
+              <div id="customAgentsList" class="agent-list">
+                <!-- Populated by JS -->
+              </div>
+              <p class="info-text">
+                <span class="codicon codicon-folder"></span>
+                Custom agents are stored in: <code>.texra/agents/</code>
+              </p>
+            </div>
+
+            <!-- Remote Agents -->
+            <div class="section" id="remoteAgentsSection" style="display: none;">
+              <vscode-label class="section-label">REMOTE AGENTS</vscode-label>
+              <vscode-checkbox id="autoShowRemoteAgents" checked>
+                Auto-show remote agents if available
+              </vscode-checkbox>
+              <div id="remoteAgentsList" class="agent-list">
+                <!-- Populated by JS -->
+              </div>
+              <div id="remoteAgentsSignIn" class="sign-in-prompt" style="display: none;">
+                <span class="codicon codicon-lock"></span>
+                <span>Sign in to access shared team agents</span>
+                <vscode-button appearance="secondary" id="agentsSignInBtn">Sign In</vscode-button>
+              </div>
+            </div>
+
+            <!-- Workflow Settings -->
+            <vscode-collapsible title="Workflow Settings" id="workflowSettingsCollapsible">
+              <div class="settings-group">
+                <p class="settings-description">Settings for workflow agents (correct, polish, etc.)</p>
+                <div class="setting-row">
+                  <vscode-label>Storage mode</vscode-label>
+                  <vscode-single-select id="storageModeSelect">
+                    <vscode-option value="in-place">In-place (overwrite)</vscode-option>
+                    <vscode-option value="folder">Folder (texra-outputs/)</vscode-option>
+                  </vscode-single-select>
+                  <span class="setting-description">How to store agent outputs.</span>
+                </div>
+              </div>
+            </vscode-collapsible>
+
+            <!-- Tool-Use Settings -->
+            <vscode-collapsible title="Tool-Use Settings" id="toolUseSettingsCollapsible">
+              <div class="settings-group">
+                <p class="settings-description">Settings for tool-use agents (chat, research, etc.)</p>
+
+                <vscode-checkbox id="requireEditApproval" checked>
+                  Require approval before file edits
+                </vscode-checkbox>
+                <span class="setting-description">Show diff preview and require confirmation.</span>
+
+                <vscode-checkbox id="persistSessions" checked>
+                  Persist sessions across VS Code restarts
+                </vscode-checkbox>
+                <div class="setting-row inline">
+                  <vscode-label>Session retention:</vscode-label>
+                  <vscode-single-select id="sessionRetentionSelect">
+                    <vscode-option value="24">24 hours</vscode-option>
+                    <vscode-option value="48">48 hours</vscode-option>
+                    <vscode-option value="72">72 hours</vscode-option>
+                    <vscode-option value="168">1 week</vscode-option>
+                  </vscode-single-select>
+                </div>
+
+                <div class="setting-row">
+                  <vscode-label>Compaction threshold:</vscode-label>
+                  <vscode-textfield id="compactionThreshold" type="number" value="85" min="50" max="100"></vscode-textfield>
+                  <span class="unit">%</span>
+                  <span class="setting-description">Compact context when usage exceeds this percentage.</span>
+                </div>
+
+                <hr class="setting-divider" />
+
+                <vscode-label class="subsection-label">Retry Behavior</vscode-label>
+                <div class="setting-row inline">
+                  <vscode-label>Max attempts:</vscode-label>
+                  <vscode-single-select id="maxRetryAttempts">
+                    <vscode-option value="1">1</vscode-option>
+                    <vscode-option value="2">2</vscode-option>
+                    <vscode-option value="3">3</vscode-option>
+                    <vscode-option value="5">5</vscode-option>
+                  </vscode-single-select>
+                </div>
+                <div class="setting-row">
+                  <vscode-label>Backoff delay:</vscode-label>
+                  <vscode-textfield id="backoffDelay" type="number" value="1000" min="100" max="10000"></vscode-textfield>
+                  <span class="unit">ms</span>
+                  <span class="setting-description">Initial delay before retry (exponential backoff).</span>
+                </div>
+              </div>
+            </vscode-collapsible>
+          </div>
+        </vscode-tab-panel>
+
+        <!-- LaTeX Tab -->
+        <vscode-tab-panel id="panelLatex">
+          <div class="tab-content" id="latexTabContent">
+            <p class="tab-description">
+              Configure LaTeX formatting and processing options.
+            </p>
+
+            <!-- Formatter -->
+            <vscode-collapsible title="Formatter" open id="formatterCollapsible">
+              <div class="settings-group">
+                <div class="setting-row">
+                  <vscode-label>Formatter:</vscode-label>
+                  <vscode-single-select id="formatterSelect">
+                    <vscode-option value="latexindent">latexindent</vscode-option>
+                    <vscode-option value="tex-fmt">tex-fmt</vscode-option>
+                    <vscode-option value="none">none</vscode-option>
+                  </vscode-single-select>
+                </div>
+
+                <div class="setting-row" id="latexindentConfigRow">
+                  <vscode-label>Config file (optional):</vscode-label>
+                  <div class="input-with-button">
+                    <vscode-textfield id="latexindentConfig" placeholder="/path/to/latexindent.yaml"></vscode-textfield>
+                    <vscode-button appearance="secondary" id="browseLatexindentConfig">Browse</vscode-button>
+                  </div>
+                </div>
+
+                <div class="setting-row" id="texfmtConfigRow" style="display: none;">
+                  <vscode-label>Config file (optional):</vscode-label>
+                  <div class="input-with-button">
+                    <vscode-textfield id="texfmtConfig" placeholder="/path/to/texfmt.toml"></vscode-textfield>
+                    <vscode-button appearance="secondary" id="browseTexfmtConfig">Browse</vscode-button>
+                  </div>
+                </div>
+
+                <vscode-checkbox id="showLatexindentWarning" checked>
+                  Show warning if latexindent is not installed
+                </vscode-checkbox>
+              </div>
+            </vscode-collapsible>
+
+            <!-- LaTeXdiff -->
+            <vscode-collapsible title="LaTeXdiff" id="latexdiffCollapsible">
+              <div class="settings-group">
+                <div class="setting-row">
+                  <vscode-label>Timeout:</vscode-label>
+                  <vscode-textfield id="latexdiffTimeout" type="number" value="30000" min="1000" max="300000"></vscode-textfield>
+                  <span class="unit">ms</span>
+                </div>
+
+                <div class="setting-row">
+                  <vscode-label>Math markup:</vscode-label>
+                  <vscode-single-select id="mathMarkupSelect">
+                    <vscode-option value="off">off</vscode-option>
+                    <vscode-option value="whole">whole</vscode-option>
+                    <vscode-option value="coarse">coarse</vscode-option>
+                    <vscode-option value="fine">fine</vscode-option>
+                  </vscode-single-select>
+                </div>
+
+                <div class="setting-row">
+                  <vscode-label>Picture environments (regex):</vscode-label>
+                  <vscode-textfield id="pictureEnvironments" placeholder="(?:picture|tikzpicture|scope)[\w\d*@]*"></vscode-textfield>
+                </div>
+
+                <vscode-checkbox id="generateBetweenRoundDiffs">
+                  Generate diffs between rounds (multi-round agents)
+                </vscode-checkbox>
+              </div>
+            </vscode-collapsible>
+
+            <!-- TikZ Figures -->
+            <vscode-collapsible title="TikZ Figures" id="tikzCollapsible">
+              <div class="settings-group">
+                <div class="setting-row">
+                  <vscode-label>Extra input directory (TEXINPUTS):</vscode-label>
+                  <div class="input-with-button">
+                    <vscode-textfield id="tikzInputDirectory" placeholder="/path/to/tikz/inputs"></vscode-textfield>
+                    <vscode-button appearance="secondary" id="browseTikzInputDirectory">Browse</vscode-button>
+                  </div>
+                </div>
+
+                <vscode-checkbox id="includeWorkspaceInTexinputs" checked>
+                  Include workspace root in TEXINPUTS
+                </vscode-checkbox>
+
+                <vscode-collapsible title="TikZ template (advanced)" id="tikzTemplateCollapsible">
+                  <vscode-textarea id="tikzTemplate" rows="10" placeholder="Custom TikZ template..."></vscode-textarea>
+                </vscode-collapsible>
+              </div>
+            </vscode-collapsible>
+
+            <!-- Replacements -->
+            <vscode-collapsible title="Replacements" id="replacementsCollapsible">
+              <div class="settings-group">
+                <vscode-checkbox id="wrapCritiqueInAlign" checked>
+                  Wrap critique in align environment
+                </vscode-checkbox>
+
+                <vscode-label class="subsection-label">Enabled replacement categories:</vscode-label>
+                <div id="replacementCategories" class="checkbox-grid">
+                  <!-- Populated by JS -->
+                </div>
+
+                <vscode-label class="subsection-label">Enabled regex replacements:</vscode-label>
+                <div id="regexReplacements" class="checkbox-grid">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+            </vscode-collapsible>
+          </div>
+        </vscode-tab-panel>
+
+        <!-- Memory Tab -->
+        <vscode-tab-panel id="panelMemory">
+          <div class="tab-content" id="memoryTabContent">
+            <p class="tab-description">
+              Memory files created by tool-use agents.
+            </p>
+
+            <div class="section-header">
+              <vscode-label class="section-label">MEMORY FILES</vscode-label>
+              <vscode-button appearance="secondary" id="refreshMemoryBtn">
+                <span slot="start" class="codicon codicon-refresh"></span>
+                Refresh
+              </vscode-button>
+            </div>
+
+            <p class="info-text">
+              Agent-created memory files stored in <code>/memories</code>
+            </p>
+
+            <div id="memoryFilesList" class="memory-files-list">
+              <!-- Populated by JS -->
+            </div>
+
+            <div class="section-footer" id="memoryFooter">
+              <span id="memoryStats">Total: 0 files, 0 KB</span>
+              <vscode-button appearance="secondary" id="clearAllMemoryBtn" disabled>
+                Clear All
+              </vscode-button>
+            </div>
+          </div>
+        </vscode-tab-panel>
+
+        <!-- History Tab -->
+        <vscode-tab-panel id="panelHistory">
+          <div class="tab-content" id="historyTabContent">
+            <div class="search-bar">
+              <vscode-textfield id="historySearch" placeholder="Search history items..." class="search-input">
+                <span slot="start" class="codicon codicon-search"></span>
+              </vscode-textfield>
+              <div class="search-nav">
+                <vscode-button appearance="icon" id="searchPrev" disabled>
+                  <span class="codicon codicon-chevron-left"></span>
+                </vscode-button>
+                <span id="searchCount">0 matches</span>
+                <vscode-button appearance="icon" id="searchNext" disabled>
+                  <span class="codicon codicon-chevron-right"></span>
+                </vscode-button>
+              </div>
+            </div>
+
+            <vscode-button appearance="secondary" id="clearHistoryBtn">
+              <span slot="start" class="codicon codicon-trash"></span>
+              Clear All History
+            </vscode-button>
+
+            <div id="historyList" class="history-list">
+              <!-- Populated by JS -->
+            </div>
+
+            <div id="noHistoryMessage" class="empty-state" style="display: none;">
+              <span class="codicon codicon-history"></span>
+              <p>No execution history yet.</p>
+            </div>
+          </div>
+        </vscode-tab-panel>
+      </vscode-tabs>
+    </div>
+
+    <!-- Provider Configuration Modal Template -->
+    <template id="providerModalTemplate">
+      <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+          <div class="modal-header">
+            <h2 class="modal-title">Configure <span class="provider-name"></span></h2>
+            <vscode-button appearance="icon" class="modal-close">
+              <span class="codicon codicon-close"></span>
+            </vscode-button>
+          </div>
+          <div class="modal-body">
+            <div class="setting-row">
+              <vscode-label>API Key</vscode-label>
+              <div class="input-with-button">
+                <vscode-textfield type="password" class="api-key-input" placeholder="Enter API key..."></vscode-textfield>
+                <vscode-button appearance="icon" class="toggle-visibility">
+                  <span class="codicon codicon-eye"></span>
+                </vscode-button>
+                <vscode-button appearance="secondary" class="clear-key">Clear</vscode-button>
+              </div>
+              <p class="help-text">
+                Get your key at: <a href="#" class="key-url"></a>
+              </p>
+            </div>
+
+            <hr class="setting-divider" />
+
+            <p class="info-text">
+              <span class="codicon codicon-terminal"></span>
+              Alternative: Set <code class="env-var"></code> environment variable
+            </p>
+
+            <vscode-collapsible title="Advanced Options">
+              <div class="settings-group">
+                <div class="setting-row">
+                  <vscode-label>Custom Endpoint (optional)</vscode-label>
+                  <vscode-textfield class="custom-endpoint" placeholder=""></vscode-textfield>
+                  <span class="setting-description">Leave empty for default. Use for proxies or self-hosted models.</span>
+                </div>
+
+                <vscode-checkbox class="streaming-enabled" checked>
+                  Enable streaming
+                </vscode-checkbox>
+                <span class="setting-description">Stream responses in real-time. Disable if experiencing issues.</span>
+              </div>
+            </vscode-collapsible>
+          </div>
+          <div class="modal-footer">
+            <vscode-button appearance="secondary" class="modal-cancel">Cancel</vscode-button>
+            <vscode-button appearance="primary" class="modal-save">Save</vscode-button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- History Item Template -->
+    <template id="historyItemTemplate">
+      <div class="history-item" data-id="">
+        <div class="history-item-header">
+          <span class="history-timestamp"></span>
+          <div class="history-actions">
+            <vscode-button appearance="icon" class="delete-btn" title="Delete">
+              <span class="codicon codicon-trash"></span>
+            </vscode-button>
+            <vscode-button appearance="secondary" class="restore-btn">
+              <span slot="start" class="codicon codicon-debug-restart"></span>
+              Restore
+            </vscode-button>
+            <vscode-button appearance="primary" class="rerun-btn">
+              <span slot="start" class="codicon codicon-play"></span>
+              Run
+            </vscode-button>
+          </div>
+        </div>
+        <div class="history-item-body">
+          <span class="history-agent"></span>
+          <span class="separator">-</span>
+          <span class="history-model"></span>
+        </div>
+        <div class="history-item-files">
+          <span class="history-input"></span>
+          <span class="codicon codicon-arrow-right"></span>
+          <span class="history-output"></span>
+        </div>
+        <vscode-collapsible title="Show details" class="history-details">
+          <div class="history-instruction"></div>
+        </vscode-collapsible>
+      </div>
+    </template>
+
+    <!-- Memory File Template -->
+    <template id="memoryFileTemplate">
+      <div class="memory-file" data-path="">
+        <div class="memory-file-header">
+          <span class="codicon codicon-file"></span>
+          <span class="memory-file-name"></span>
+          <span class="memory-file-size"></span>
+          <span class="memory-file-date"></span>
+        </div>
+        <vscode-collapsible title="Preview" class="memory-preview-collapsible">
+          <pre class="memory-preview"></pre>
+          <div class="memory-actions">
+            <vscode-button appearance="secondary" class="view-full-btn">View Full</vscode-button>
+            <vscode-button appearance="secondary" class="delete-memory-btn">Delete</vscode-button>
+          </div>
+        </vscode-collapsible>
+      </div>
+    </template>
+  </body>
+</html>
