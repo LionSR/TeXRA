@@ -8,9 +8,6 @@ import { AUTH_COMMANDS } from '@/auth/authCommands';
 export function registerAuthCommands(
   context: vscode.ExtensionContext,
 ): vscode.Disposable[] {
-  // Initialize the profile view provider
-  authCommands.initializeProfileViewProvider(context);
-
   const disposables = [
     vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, authCommands.signIn),
     vscode.commands.registerCommand(

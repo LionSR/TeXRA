@@ -72,6 +72,8 @@ import {
   HistoryActionSchema,
   MemoryActionSchema,
   MemoryToggleActionSchema,
+  OpenAgentSourceActionSchema,
+  DeleteAgentActionSchema,
   type MemoryFile,
 } from './schemas';
 
@@ -200,6 +202,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.handleRefreshMemory.bind(this),
       [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]:
         this.handleSetMemoryEnabled.bind(this),
+      // Agent actions
+      [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_SOURCE]:
+        this.handleOpenAgentSource.bind(this),
+      [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: this.handleDeleteAgent.bind(this),
     };
   }
 
@@ -588,6 +594,114 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         await setToolUseMemoryEnabled(enabled);
         // Confirm the update back to the webview
         await this.sendInitialData(view.webview);
+      },
+    );
+  }
+
+  private async handleOpenAgentSource(
+    message: unknown,
+    _view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      OpenAgentSourceActionSchema,
+      message,
+      'openAgentSource',
+      async ({ agentName }) => {
+        // Try custom agents directory first
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+          const customPath = vscode.Uri.joinPath(
+            workspaceFolders[0].uri,
+            '.texra',
+            'agents',
+            `${agentName}.yaml`,
+          );
+          try {
+            await vscode.workspace.fs.stat(customPath);
+            await vscode.commands.executeCommand('vscode.open', customPath);
+            return;
+          } catch {
+            // Try .yml extension
+            const customPathYml = vscode.Uri.joinPath(
+              workspaceFolders[0].uri,
+              '.texra',
+              'agents',
+              `${agentName}.yml`,
+            );
+            try {
+              await vscode.workspace.fs.stat(customPathYml);
+              await vscode.commands.executeCommand(
+                'vscode.open',
+                customPathYml,
+              );
+              return;
+            } catch {
+              // Not found in custom directory
+            }
+          }
+        }
+        void vscode.window.showWarningMessage(
+          `Agent source file not found: ${agentName}`,
+        );
+      },
+    );
+  }
+
+  private async handleDeleteAgent(
+    message: unknown,
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await this.withValidatedMessage(
+      DeleteAgentActionSchema,
+      message,
+      'deleteAgent',
+      async ({ agentName }) => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) {
+          void vscode.window.showErrorMessage('No workspace folder open');
+          return;
+        }
+
+        // Find the agent file
+        const extensions = ['.yaml', '.yml'];
+        let fileUri: vscode.Uri | undefined;
+        for (const ext of extensions) {
+          const path = vscode.Uri.joinPath(
+            workspaceFolders[0].uri,
+            '.texra',
+            'agents',
+            `${agentName}${ext}`,
+          );
+          try {
+            await vscode.workspace.fs.stat(path);
+            fileUri = path;
+            break;
+          } catch {
+            // Try next extension
+          }
+        }
+
+        if (!fileUri) {
+          void vscode.window.showErrorMessage(
+            `Agent file not found: ${agentName}`,
+          );
+          return;
+        }
+
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete agent "${agentName}"?`,
+          { modal: true },
+          'Delete',
+        );
+
+        if (confirm === 'Delete') {
+          await vscode.workspace.fs.delete(fileUri);
+          void vscode.window.showInformationMessage(
+            `Agent "${agentName}" deleted`,
+          );
+          // Refresh agent list
+          await this.sendInitialData(view.webview);
+        }
       },
     );
   }

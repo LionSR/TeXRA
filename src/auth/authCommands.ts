@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
@@ -14,22 +13,6 @@ export const AUTH_COMMANDS = {
   VIEW_PROFILE: 'texra.auth.viewProfile',
   ACCOUNT_MENU: 'texra.auth.accountMenu',
 } as const;
-
-// Singleton instance of ProfileViewProvider
-let profileViewProvider: ProfileViewProvider | null = null;
-
-/**
- * Initialize the profile view provider.
- * Must be called during extension activation.
- */
-export function initializeProfileViewProvider(
-  context: vscode.ExtensionContext,
-): ProfileViewProvider {
-  if (!profileViewProvider) {
-    profileViewProvider = new ProfileViewProvider(context);
-  }
-  return profileViewProvider;
-}
 
 /** Auth method type including OAuth providers, browser variants, and email */
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
@@ -242,18 +225,12 @@ export async function signOut(): Promise<void> {
 
 /**
  * Command to view profile and account status.
- * Uses the ProfileViewProvider for consistent webview architecture.
+ * Opens the unified Settings View which includes account info.
  */
 export async function viewProfile(): Promise<void> {
-  if (!profileViewProvider) {
-    void vscode.window.showErrorMessage(
-      'Profile view not initialized. Please reload the extension.',
-    );
-    return;
-  }
-
   try {
-    await profileViewProvider.showProfileView();
+    // Open Settings View - account info is shown in the header
+    await vscode.commands.executeCommand('texra.openSettingsView');
   } catch (error) {
     void vscode.window.showErrorMessage(
       `Failed to load profile: ${toErrorMessage(error)}`,

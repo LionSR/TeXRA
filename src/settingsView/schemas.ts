@@ -52,6 +52,10 @@ export const SETTINGS_VIEW_COMMANDS = {
   DELETE_MEMORY: 'deleteMemory',
   REFRESH_MEMORY: 'refreshMemory',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
+
+  // Agents tab actions
+  OPEN_AGENT_SOURCE: 'openAgentSource',
+  DELETE_AGENT: 'deleteAgent',
 } as const;
 
 // =============================================================================
@@ -414,4 +418,14 @@ export const SignInActionSchema = z.object({
 
 export const SignOutActionSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT),
+});
+
+export const OpenAgentSourceActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_SOURCE),
+  agentName: z.string(),
+});
+
+export const DeleteAgentActionSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT),
+  agentName: z.string(),
 });

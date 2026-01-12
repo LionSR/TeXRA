@@ -155,15 +155,16 @@
 
             <!-- Recommended Models -->
             <div class="section">
-              <vscode-collapsible
-                title="Recommended Models"
+              <details
                 open
                 id="recommendedModelsCollapsible"
+                class="settings-details"
               >
+                <summary>Recommended Models</summary>
                 <div id="recommendedModelsList" class="model-list">
                   <!-- Populated by JS -->
                 </div>
-              </vscode-collapsible>
+              </details>
             </div>
 
             <!-- Provider Sections -->
@@ -232,10 +233,8 @@
             </div>
 
             <!-- Workflow Settings -->
-            <vscode-collapsible
-              title="Workflow Settings"
-              id="workflowSettingsCollapsible"
-            >
+            <details id="workflowSettingsCollapsible" class="settings-details">
+              <summary>Workflow Settings</summary>
               <div class="settings-group">
                 <p class="settings-description">
                   Settings for workflow agents (correct, polish, etc.)
@@ -255,13 +254,11 @@
                   >
                 </div>
               </div>
-            </vscode-collapsible>
+            </details>
 
             <!-- Tool-Use Settings -->
-            <vscode-collapsible
-              title="Tool-Use Settings"
-              id="toolUseSettingsCollapsible"
-            >
+            <details id="toolUseSettingsCollapsible" class="settings-details">
+              <summary>Tool-Use Settings</summary>
               <div class="settings-group">
                 <p class="settings-description">
                   Settings for tool-use agents (chat, research, etc.)
@@ -331,7 +328,7 @@
                   >
                 </div>
               </div>
-            </vscode-collapsible>
+            </details>
           </div>
         </vscode-tab-panel>
 
@@ -343,11 +340,8 @@
             </p>
 
             <!-- Formatter -->
-            <vscode-collapsible
-              title="Formatter"
-              open
-              id="formatterCollapsible"
-            >
+            <details open id="formatterCollapsible" class="settings-details">
+              <summary>Formatter</summary>
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Formatter:</vscode-label>
@@ -398,10 +392,11 @@
                   Show warning if latexindent is not installed
                 </vscode-checkbox>
               </div>
-            </vscode-collapsible>
+            </details>
 
             <!-- LaTeXdiff -->
-            <vscode-collapsible title="LaTeXdiff" id="latexdiffCollapsible">
+            <details id="latexdiffCollapsible" class="settings-details">
+              <summary>LaTeXdiff</summary>
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Timeout:</vscode-label>
@@ -437,10 +432,11 @@
                   Generate diffs between rounds (multi-round agents)
                 </vscode-checkbox>
               </div>
-            </vscode-collapsible>
+            </details>
 
             <!-- TikZ Figures -->
-            <vscode-collapsible title="TikZ Figures" id="tikzCollapsible">
+            <details id="tikzCollapsible" class="settings-details">
+              <summary>TikZ Figures</summary>
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label
@@ -463,24 +459,23 @@
                   Include workspace root in TEXINPUTS
                 </vscode-checkbox>
 
-                <vscode-collapsible
-                  title="TikZ template (advanced)"
+                <details
                   id="tikzTemplateCollapsible"
+                  class="settings-details nested"
                 >
+                  <summary>TikZ template (advanced)</summary>
                   <vscode-textarea
                     id="tikzTemplate"
                     rows="10"
                     placeholder="Custom TikZ template..."
                   ></vscode-textarea>
-                </vscode-collapsible>
+                </details>
               </div>
-            </vscode-collapsible>
+            </details>
 
             <!-- Replacements -->
-            <vscode-collapsible
-              title="Replacements"
-              id="replacementsCollapsible"
-            >
+            <details id="replacementsCollapsible" class="settings-details">
+              <summary>Replacements</summary>
               <div class="settings-group">
                 <vscode-checkbox id="wrapCritiqueInAlign" checked>
                   Wrap critique in align environment
@@ -500,7 +495,7 @@
                   <!-- Populated by JS -->
                 </div>
               </div>
-            </vscode-collapsible>
+            </details>
           </div>
         </vscode-tab-panel>
 
@@ -640,7 +635,8 @@
               variable
             </p>
 
-            <vscode-collapsible title="Advanced Options">
+            <details class="settings-details">
+              <summary>Advanced Options</summary>
               <div class="settings-group">
                 <div class="setting-row">
                   <vscode-label>Custom Endpoint (optional)</vscode-label>
@@ -662,7 +658,7 @@
                   issues.</span
                 >
               </div>
-            </vscode-collapsible>
+            </details>
           </div>
           <div class="modal-footer">
             <vscode-button appearance="secondary" class="modal-cancel"
@@ -705,9 +701,10 @@
           <span class="codicon codicon-arrow-right"></span>
           <span class="history-output"></span>
         </div>
-        <vscode-collapsible title="Show details" class="history-details">
+        <details class="history-details settings-details">
+          <summary>Show details</summary>
           <div class="history-instruction"></div>
-        </vscode-collapsible>
+        </details>
       </div>
     </template>
 
@@ -720,7 +717,8 @@
           <span class="memory-file-size"></span>
           <span class="memory-file-date"></span>
         </div>
-        <vscode-collapsible title="Preview" class="memory-preview-collapsible">
+        <details class="memory-preview-collapsible settings-details">
+          <summary>Preview</summary>
           <pre class="memory-preview"></pre>
           <div class="memory-actions">
             <vscode-button appearance="secondary" class="view-full-btn"
@@ -730,7 +728,7 @@
               >Delete</vscode-button
             >
           </div>
-        </vscode-collapsible>
+        </details>
       </div>
     </template>
   </body>

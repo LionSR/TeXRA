@@ -761,3 +761,103 @@ vscode-tab-panel {
   background: var(--vscode-charts-blue);
   color: white;
 }
+
+/* =============================================================================
+   NATIVE DETAILS/SUMMARY (replaces vscode-collapsible)
+   ============================================================================= */
+
+.settings-details {
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  margin-bottom: var(--spacing-medium);
+}
+
+.settings-details > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  background: var(--vscode-sideBarSectionHeader-background);
+  cursor: pointer;
+  font-weight: 500;
+  list-style: none;
+  user-select: none;
+}
+
+.settings-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-details > summary::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--vscode-foreground);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.settings-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-details > summary:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.settings-details > summary:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.settings-details > :not(summary) {
+  padding: var(--spacing-medium);
+}
+
+/* Nested details (e.g., TikZ template inside TikZ section) */
+.settings-details.nested {
+  margin-top: var(--spacing-medium);
+  border-color: var(--vscode-widget-border);
+}
+
+.settings-details.nested > summary {
+  background: transparent;
+  font-weight: normal;
+  font-size: 12px;
+}
+
+/* History details styling */
+.history-details.settings-details {
+  border: none;
+  margin-bottom: 0;
+}
+
+.history-details.settings-details > summary {
+  background: transparent;
+  padding: var(--spacing-tiny) 0;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--vscode-textLink-foreground);
+}
+
+.history-details.settings-details > summary:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+/* Memory preview details styling */
+.memory-preview-collapsible.settings-details {
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+}
+
+.memory-preview-collapsible.settings-details > summary {
+  background: var(--vscode-sideBarSectionHeader-background);
+  border-top: 1px solid var(--vscode-widget-border);
+  font-size: 12px;
+  font-weight: normal;
+}

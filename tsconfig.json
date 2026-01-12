@@ -23,7 +23,6 @@
       "@housekeeping": ["src/housekeeping"],
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["src/progressView/*"],
-      "@profileView/*": ["src/profileView/*"],
       "@settingsView/*": ["src/settingsView/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],

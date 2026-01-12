@@ -51,11 +51,14 @@ export class AgentsTab {
       autoShowRemoteAgents,
     } = this._elements;
 
-    // Agent checkbox changes for each list
+    // Agent checkbox changes and button clicks for each list
     [builtInAgentsList, customAgentsList, remoteAgentsList].forEach((list) => {
       if (list) {
         list.addEventListener('change', (e) => {
           this.handleAgentToggle(e);
+        });
+        list.addEventListener('click', (e) => {
+          this.handleAgentAction(e);
         });
       }
     });
@@ -174,6 +177,26 @@ export class AgentsTab {
 
     settingsViewState.toggleAgent(agentName, category, isEnabled);
     this._debouncedSave();
+  }
+
+  handleAgentAction(event) {
+    const button = event.target.closest('vscode-button');
+    if (!button || !button.dataset.action) return;
+
+    const agentName = button.dataset.agent;
+    const action = button.dataset.action;
+
+    if (action === 'source') {
+      vscode.postMessage({
+        command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_SOURCE,
+        agentName,
+      });
+    } else if (action === 'delete') {
+      vscode.postMessage({
+        command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+        agentName,
+      });
+    }
   }
 
   saveAgents() {

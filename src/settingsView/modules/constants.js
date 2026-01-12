@@ -47,6 +47,10 @@ export const SETTINGS_VIEW_COMMANDS = {
   DELETE_MEMORY: 'deleteMemory',
   REFRESH_MEMORY: 'refreshMemory',
   SET_MEMORY_ENABLED: 'setMemoryEnabled',
+
+  // Agent actions
+  OPEN_AGENT_SOURCE: 'openAgentSource',
+  DELETE_AGENT: 'deleteAgent',
 };
 
 // Tab identifiers
