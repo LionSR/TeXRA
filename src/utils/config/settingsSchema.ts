@@ -2,12 +2,19 @@
  * Settings Schema - Single Source of Truth
  *
  * This module defines the schema for settings that have dropdown options.
- * The options are defined here (not in package.json or frontend constants)
+ * The options and defaults are defined here (not in package.json or frontend constants)
  * and can be consumed by both backend and frontend.
  *
  * For storage, settings continue to use:
  * - VS Code configuration (getConfig/updateConfig) for settings in package.json
  * - StateManager (globalSM/workspaceSM) for extension state
+ *
+ * Config paths (for getConfig/updateConfig):
+ * - storageMode: 'texra.agentOutputs.storageMode'
+ * - sessionRetention: 'texra.toolUse.persistence.ttlHours'
+ * - maxRetryAttempts: 'texra.model.retry.maxAttempts'
+ * - formatter: 'texra.latex.formatter'
+ * - mathMarkup: 'texra.latexdiff.mathMarkup'
  */
 
 import { z } from 'zod';
@@ -19,22 +26,34 @@ import { z } from 'zod';
 /**
  * Settings that have dropdown options.
  * The Zod enum defines the valid values; labels map provides display names.
+ * Default values are the first enum value unless specified otherwise.
  */
 
-export const StorageModeSchema = z.enum(['in-place', 'folder']);
+// Storage mode for agent outputs (matches package.json texra.agentOutputs.storageMode)
+export const StorageModeSchema = z.enum(['workspace', 'taskRunStorage']);
 export type StorageMode = z.infer<typeof StorageModeSchema>;
+export const STORAGE_MODE_DEFAULT: StorageMode = 'workspace';
 
+// Session retention in hours (matches package.json texra.toolUse.persistence.ttlHours)
 export const SessionRetentionSchema = z.enum(['24', '48', '72', '168']);
 export type SessionRetention = z.infer<typeof SessionRetentionSchema>;
+export const SESSION_RETENTION_DEFAULT: SessionRetention = '72';
 
-export const MaxRetryAttemptsSchema = z.enum(['1', '2', '3', '5']);
+// Max retry attempts (matches package.json texra.model.retry.maxAttempts)
+// Note: '0' means manual retry only
+export const MaxRetryAttemptsSchema = z.enum(['0', '1', '2', '3', '5']);
 export type MaxRetryAttempts = z.infer<typeof MaxRetryAttemptsSchema>;
+export const MAX_RETRY_ATTEMPTS_DEFAULT: MaxRetryAttempts = '0';
 
+// LaTeX formatter (matches package.json texra.latex.formatter)
 export const FormatterSchema = z.enum(['latexindent', 'tex-fmt', 'none']);
 export type Formatter = z.infer<typeof FormatterSchema>;
+export const FORMATTER_DEFAULT: Formatter = 'latexindent';
 
+// Math markup granularity for latexdiff (matches package.json texra.latexdiff.mathMarkup)
 export const MathMarkupSchema = z.enum(['off', 'whole', 'coarse', 'fine']);
 export type MathMarkup = z.infer<typeof MathMarkupSchema>;
+export const MATH_MARKUP_DEFAULT: MathMarkup = 'coarse';
 
 // =============================================================================
 // HUMAN-READABLE LABELS
@@ -45,8 +64,8 @@ export type MathMarkup = z.infer<typeof MathMarkupSchema>;
  */
 export const SETTING_LABELS = {
   storageMode: {
-    'in-place': 'In-place (overwrite)',
-    folder: 'Folder (texra-outputs/)',
+    workspace: 'Workspace (beside sources)',
+    taskRunStorage: 'Task storage (isolated)',
   } satisfies Record<StorageMode, string>,
 
   sessionRetention: {
@@ -57,6 +76,7 @@ export const SETTING_LABELS = {
   } satisfies Record<SessionRetention, string>,
 
   maxRetryAttempts: {
+    '0': 'Manual only',
     '1': '1',
     '2': '2',
     '3': '3',
@@ -66,14 +86,14 @@ export const SETTING_LABELS = {
   formatter: {
     latexindent: 'latexindent',
     'tex-fmt': 'tex-fmt',
-    none: 'none',
+    none: 'None (disabled)',
   } satisfies Record<Formatter, string>,
 
   mathMarkup: {
-    off: 'off',
-    whole: 'whole',
-    coarse: 'coarse',
-    fine: 'fine',
+    off: 'Off (no math markup)',
+    whole: 'Whole equations',
+    coarse: 'Coarse (default)',
+    fine: 'Fine (detailed)',
   } satisfies Record<MathMarkup, string>,
 } as const;
 
@@ -84,15 +104,15 @@ export const SETTING_LABELS = {
 type SelectOption = { value: string; label: string };
 
 /**
- * Extract options from a Zod enum schema.
+ * Extract options from an array of string values with optional labels.
  */
-function extractEnumOptions<T extends z.ZodEnum<[string, ...string[]]>>(
-  schema: T,
-  labels?: Record<string, string>,
+function createOptions(
+  values: readonly string[],
+  labels: Record<string, string> | undefined,
 ): SelectOption[] {
-  return schema.options.map((value) => ({
+  return [...values].map((value) => ({
     value,
-    label: labels?.[value] ?? value,
+    label: (labels && labels[value]) ?? value,
   }));
 }
 
@@ -101,20 +121,20 @@ function extractEnumOptions<T extends z.ZodEnum<[string, ...string[]]>>(
  * Use this in frontend to populate select elements.
  */
 export const SELECT_OPTIONS = {
-  storageMode: extractEnumOptions(
-    StorageModeSchema,
+  storageMode: createOptions(
+    StorageModeSchema.options,
     SETTING_LABELS.storageMode,
   ),
-  sessionRetention: extractEnumOptions(
-    SessionRetentionSchema,
+  sessionRetention: createOptions(
+    SessionRetentionSchema.options,
     SETTING_LABELS.sessionRetention,
   ),
-  maxRetryAttempts: extractEnumOptions(
-    MaxRetryAttemptsSchema,
+  maxRetryAttempts: createOptions(
+    MaxRetryAttemptsSchema.options,
     SETTING_LABELS.maxRetryAttempts,
   ),
-  formatter: extractEnumOptions(FormatterSchema, SETTING_LABELS.formatter),
-  mathMarkup: extractEnumOptions(MathMarkupSchema, SETTING_LABELS.mathMarkup),
+  formatter: createOptions(FormatterSchema.options, SETTING_LABELS.formatter),
+  mathMarkup: createOptions(MathMarkupSchema.options, SETTING_LABELS.mathMarkup),
 } as const;
 
 export type SelectOptionKey = keyof typeof SELECT_OPTIONS;
@@ -125,3 +145,31 @@ export type SelectOptionKey = keyof typeof SELECT_OPTIONS;
 export function getSelectOptions(key: SelectOptionKey): SelectOption[] {
   return SELECT_OPTIONS[key];
 }
+
+// =============================================================================
+// CONFIG KEY MAPPING
+// =============================================================================
+
+/**
+ * Maps schema keys to VS Code config paths.
+ * Use this to look up the correct config key for a schema setting.
+ */
+export const CONFIG_KEYS = {
+  storageMode: 'texra.agentOutputs.storageMode',
+  sessionRetention: 'texra.toolUse.persistence.ttlHours',
+  maxRetryAttempts: 'texra.model.retry.maxAttempts',
+  formatter: 'texra.latex.formatter',
+  mathMarkup: 'texra.latexdiff.mathMarkup',
+} as const;
+
+/**
+ * Consolidated defaults for all schema-defined settings.
+ * Use these when calling getConfig() to ensure consistency.
+ */
+export const SETTING_DEFAULTS = {
+  storageMode: STORAGE_MODE_DEFAULT,
+  sessionRetention: SESSION_RETENTION_DEFAULT,
+  maxRetryAttempts: MAX_RETRY_ATTEMPTS_DEFAULT,
+  formatter: FORMATTER_DEFAULT,
+  mathMarkup: MATH_MARKUP_DEFAULT,
+} as const;

@@ -164,7 +164,7 @@ export class AgentsTab {
     if (storageModeSelect) {
       storageModeSelect.addEventListener(
         'change',
-        saveSettingHandler('texra.agent.storageMode', (el) => el.value),
+        saveSettingHandler('texra.agentOutputs.storageMode', (el) => el.value),
       );
     }
 
@@ -181,14 +181,17 @@ export class AgentsTab {
     if (persistSessions) {
       persistSessions.addEventListener(
         'change',
-        saveSettingHandler('texra.toolUse.persistSessions', (el) => el.checked),
+        saveSettingHandler(
+          'texra.toolUse.persistence.enabled',
+          (el) => el.checked,
+        ),
       );
     }
 
     if (sessionRetentionSelect) {
       sessionRetentionSelect.addEventListener(
         'change',
-        saveSettingHandler('texra.toolUse.sessionRetentionHours', (el) =>
+        saveSettingHandler('texra.toolUse.persistence.ttlHours', (el) =>
           parseInt(el.value, 10),
         ),
       );
@@ -197,7 +200,7 @@ export class AgentsTab {
     if (compactionThreshold) {
       compactionThreshold.addEventListener(
         'change',
-        saveSettingHandler('texra.toolUse.compactionThreshold', (el) =>
+        saveSettingHandler('texra.model.compactionThresholdPercent', (el) =>
           parseInt(el.value, 10),
         ),
       );
@@ -206,7 +209,7 @@ export class AgentsTab {
     if (maxRetryAttempts) {
       maxRetryAttempts.addEventListener(
         'change',
-        saveSettingHandler('texra.toolUse.maxRetryAttempts', (el) =>
+        saveSettingHandler('texra.model.retry.maxAttempts', (el) =>
           parseInt(el.value, 10),
         ),
       );
@@ -215,7 +218,7 @@ export class AgentsTab {
     if (backoffDelay) {
       backoffDelay.addEventListener(
         'change',
-        saveSettingHandler('texra.toolUse.backoffDelay', (el) =>
+        saveSettingHandler('texra.model.retry.backoffMs', (el) =>
           parseInt(el.value, 10),
         ),
       );
