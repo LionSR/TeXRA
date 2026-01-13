@@ -3,12 +3,17 @@ import * as path from 'path';
 
 /** Extract base name from filename using round pattern */
 function extractBaseName(filename: string, includeRound: boolean): string {
-  const pattern = includeRound ? /^(.*?_r\d+)/ : /^(.*?)_r\d+/;
-  const match = path.parse(filename).name.match(pattern);
-  if (!match) {
+  const name = path.parse(filename).name;
+  // Find the LAST _rN_ pattern position
+  const matches = [...name.matchAll(/_r(\d+)_/g)];
+  const lastMatch = matches.at(-1);
+  if (!lastMatch || lastMatch.index === undefined) {
     throw new Error('Failed to extract base name from edited file');
   }
-  return match[1];
+  // Return everything up to (or including) the last _rN
+  return includeRound
+    ? name.slice(0, lastMatch.index + lastMatch[0].length - 1) // include _rN but not trailing _
+    : name.slice(0, lastMatch.index);
 }
 
 export class DiffFileNameManager {
@@ -19,8 +24,9 @@ export class DiffFileNameManager {
   ): string {
     const editedFileName = path.basename(editedFile);
     // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
-    const inputMatches = [...path.basename(inputFile).matchAll(/_r(\d+)_([^.]+)/g)];
-    const editedMatches = [...editedFileName.matchAll(/_r(\d+)_([^.]+)/g)];
+    // Use [^_.]+ to stop at underscores, allowing multiple matches
+    const inputMatches = [...path.basename(inputFile).matchAll(/_r(\d+)_([^_.]+)/g)];
+    const editedMatches = [...editedFileName.matchAll(/_r(\d+)_([^_.]+)/g)];
     const inputRoundMatch = inputMatches.at(-1);
     const editedRoundMatch = editedMatches.at(-1);
 
