@@ -1,18 +1,19 @@
 // Standard library imports
 import * as path from 'path';
 
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
+
 /** Extract base name from filename using round pattern */
 function extractBaseName(filename: string, includeRound: boolean): string {
   const name = path.parse(filename).name;
-  // Find the LAST _rN_ pattern position
-  const matches = [...name.matchAll(/_r(\d+)_/g)];
-  const lastMatch = matches.at(-1);
+  const lastMatch = extractLastRoundMatch(name);
   if (!lastMatch || lastMatch.index === undefined) {
     throw new Error('Failed to extract base name from edited file');
   }
   // Return everything up to (or including) the last _rN
+  // The -1 excludes the trailing underscore from _rN_ when includeRound is true
   return includeRound
-    ? name.slice(0, lastMatch.index + lastMatch[0].length - 1) // include _rN but not trailing _
+    ? name.slice(0, lastMatch.index + lastMatch[0].length - 1)
     : name.slice(0, lastMatch.index);
 }
 

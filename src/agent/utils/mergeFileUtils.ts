@@ -4,6 +4,28 @@
  */
 
 /**
+ * Round pattern regex for matching _rN_ in filenames.
+ * Use with matchAll and .at(-1) to get the last occurrence.
+ */
+export const ROUND_PATTERN = /_r(\d+)_/g;
+
+/**
+ * Extracts the last _rN_ match from a filename.
+ * Use this to correctly handle nested filenames where the base contains its own _rN_ pattern.
+ *
+ * @param filename The filename or path to extract from
+ * @returns The last RegExpMatchArray or null if no match found
+ *
+ * @example
+ * extractLastRoundMatch('main_enhance_r1_gpt52_criticize_r0_gpt52.tex')
+ * // Returns match for '_r0_' (the last occurrence), not '_r1_'
+ */
+export function extractLastRoundMatch(filename: string): RegExpMatchArray | null {
+  // Must create new regex instance since global regexes are stateful
+  return [...filename.matchAll(/_r(\d+)_/g)].at(-1) ?? null;
+}
+
+/**
  * Parsed components from a merge filename.
  */
 export type FilenameParts = {
@@ -27,9 +49,7 @@ export type FilenameParts = {
  * @throws Error if filename components cannot be extracted
  */
 export function parseFilenameParts(editedBase: string): FilenameParts {
-  // Find the LAST _rN_ pattern (base filename may contain its own _rN_ pattern)
-  const roundMatches = [...editedBase.matchAll(/_r(\d+)_/g)];
-  const lastRoundMatch = roundMatches.at(-1);
+  const lastRoundMatch = extractLastRoundMatch(editedBase);
   if (!lastRoundMatch || lastRoundMatch.index === undefined) {
     throw new Error(
       `Could not extract round number from edited base: ${editedBase}`,
