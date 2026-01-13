@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports
 import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
-import { parseFilenameParts } from './mergeFileUtils';
+import { parseFilenameParts, extractLastRoundMatch } from './mergeFileUtils';
 
 /**
  * Generates an output filename incorporating model and round information.
@@ -33,8 +33,8 @@ export function getOutputFileName(
 
   let newRound = currRound;
   if (editedFile) {
-    const match = editedFile.match(/_r(\d+)_/);
-    const editedRound = match ? parseInt(match[1]) : 0;
+    const lastMatch = extractLastRoundMatch(editedFile);
+    const editedRound = lastMatch ? parseInt(lastMatch[1]) : 0;
     newRound += editedRound + 1;
   }
 
