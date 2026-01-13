@@ -452,6 +452,8 @@ async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
 type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
 
 const TEXRA_TEMP_DIR = '.texra-temp';
+/** Length of UUID prefix for temp file names (8 chars = 4 billion combinations, sufficient for uniqueness) */
+const UUID_PREFIX_LENGTH = 8;
 
 function registerWorkspaceTempCleanup(
   entry: PendingApprovalEntry,
@@ -487,7 +489,7 @@ async function createWorkspaceTempFile(
 
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
-  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
+  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, UUID_PREFIX_LENGTH)}${ext}`;
 
   const isWorkspaceTemp = location === 'workspaceTemp';
   let tempDir: string;
@@ -532,7 +534,9 @@ async function previewProposedLatex(
 
   try {
     // Read current content from proposed file (user may have edited it)
-    const content = await fs.readFile(entry.proposedUri.fsPath, 'utf8');
+    const content = await fs
+      .readFile(entry.proposedUri.fsPath, 'utf8')
+      .catch(() => entry.proposedContent);
 
     // Create temp file in workspace for proper dependency resolution
     const { tempPath, cleanup } = await createWorkspaceTempFile(
@@ -574,8 +578,12 @@ async function runLatexdiffForApproval(
 
   try {
     // Read current content from files (user may have edited proposed in diff view)
-    const originalContent = await fs.readFile(entry.originalUri.fsPath, 'utf8');
-    const proposedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf8');
+    const originalContent = await fs
+      .readFile(entry.originalUri.fsPath, 'utf8')
+      .catch(() => entry.originalContent);
+    const proposedContent = await fs
+      .readFile(entry.proposedUri.fsPath, 'utf8')
+      .catch(() => entry.proposedContent);
 
     // Create temp files in workspace for proper dependency resolution
     const original = await createWorkspaceTempFile(
@@ -753,11 +761,9 @@ async function nativeRequestApproval(
     await cleanupTempFile(originalUri);
     await cleanupTempFile(proposedUri);
 
-    // Clean up any workspace temp files created by preview/latexdiff
+    // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
     if (entry?.workspaceTempCleanup.length) {
-      for (const cleanup of entry.workspaceTempCleanup) {
-        await cleanup().catch(() => {});
-      }
+      await Promise.all(entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})));
     }
 
     resolveProgressViewApprovalPrompt(requestId);
