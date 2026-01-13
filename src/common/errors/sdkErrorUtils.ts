@@ -58,6 +58,11 @@ export interface ProviderHttpErrorDetails {
   retryable: boolean;
   /** Request ID from the provider, useful for debugging with support. */
   requestId?: string;
+  /**
+   * Raw error body from the provider API response.
+   * Useful for debugging relay errors where the error contains additional context.
+   */
+  rawErrorBody?: unknown;
 }
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
@@ -228,14 +233,10 @@ function matchNativeMessageError(
   };
 }
 
-/** Status codes that are retryable (5xx server errors, rate limits, timeouts) */
-const RETRYABLE_STATUS_CODES = new Set([
-  StatusCodes.REQUEST_TIMEOUT,
-  StatusCodes.TOO_MANY_REQUESTS,
-  StatusCodes.INTERNAL_SERVER_ERROR,
-  StatusCodes.BAD_GATEWAY,
-  StatusCodes.SERVICE_UNAVAILABLE,
-  StatusCodes.GATEWAY_TIMEOUT,
+/** 4xx status codes that are retryable (most 4xx are not) */
+const RETRYABLE_4XX_CODES = new Set([
+  StatusCodes.REQUEST_TIMEOUT, // 408
+  StatusCodes.TOO_MANY_REQUESTS, // 429
 ]);
 
 function isRetryableStatusCode(statusCode?: number): boolean {
@@ -246,7 +247,7 @@ function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
     return true;
   }
-  return RETRYABLE_STATUS_CODES.has(statusCode);
+  return RETRYABLE_4XX_CODES.has(statusCode);
 }
 
 function matchNativeHttpError(
@@ -391,47 +392,101 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  // OpenAI SDK: request_id property
-  if (isString(candidate.request_id) && candidate.request_id) {
-    return candidate.request_id;
-  }
-
-  // Alternative casing
-  if (isString(candidate.requestId) && candidate.requestId) {
-    return candidate.requestId;
-  }
-
-  // Try headers (x-request-id is common)
-  if (candidate.headers?.get) {
-    const headerRequestId = candidate.headers.get('x-request-id');
-    if (headerRequestId) {
-      return headerRequestId;
-    }
-  }
-
-  return undefined;
+  // Try property names, then headers
+  return (
+    (isString(candidate.request_id) && candidate.request_id) ||
+    (isString(candidate.requestId) && candidate.requestId) ||
+    candidate.headers?.get?.('x-request-id') ||
+    undefined
+  );
 }
 
 /**
- * Formats SDK errors from model providers into a consistent message so agent logs
- * can surface status codes alongside concise descriptions.
- *
- * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
- * Google responses. When the error is not a known class, it inspects common
- * HTTP-shaped fields and falls back to a best-effort summary.
- *
- * Abort detection:
- * - SDK-specific: OpenAI/Anthropic APIUserAbortError via matchNativeMessageError()
- * - Generic: DOMException with name 'AbortError' (for providers without SDK abort errors)
+ * Extracts the raw error body from SDK errors.
+ * OpenAI SDK stores the parsed JSON response in an `error` property.
+ * Useful for debugging relay errors where the body contains additional context.
  */
+function detectRawErrorBody(err: unknown): unknown {
+  if (!isObject(err)) {
+    return undefined;
+  }
+
+  const candidate = err as {
+    error?: unknown;
+    body?: unknown;
+    data?: unknown;
+    response?: { data?: unknown };
+  };
+
+  // Try common SDK property names in order of likelihood
+  return (
+    candidate.error ?? // OpenAI SDK
+    candidate.body ??
+    candidate.data ??
+    candidate.response?.data
+  );
+}
+
+/**
+ * Anthropic error type strings (no dedicated SDK classes for these).
+ * @see https://docs.anthropic.com/en/api/errors
+ */
+const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
+const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
+
+/**
+ * Checks if the error body indicates a relay error.
+ * Relay errors include `_relay` version field and should generally be retryable
+ * so users can fix issues (refresh auth, switch API keys, etc.) and retry.
+ */
+function isRelayError(rawErrorBody: unknown): boolean {
+  return isObject(rawErrorBody) && '_relay' in rawErrorBody;
+}
+
+/**
+ * Determines if an error is retryable based on status code and error content.
+ *
+ * Provider-specific overrides:
+ * - Anthropic: "overloaded_error" and "timeout_error" are retryable (no dedicated SDK classes)
+ * - Relay: errors with `_relay` field are retryable (user can fix and retry)
+ */
+function determineRetryable(
+  err: unknown,
+  statusCode?: number,
+  rawErrorBody?: unknown,
+): boolean {
+  // Relay errors should be retryable - user can fix (refresh auth, switch keys) and retry
+  if (isRelayError(rawErrorBody)) {
+    return true;
+  }
+
+  if (err instanceof Error) {
+    const msg = err.message;
+    // Anthropic: overloaded_error and timeout_error should be retryable
+    if (
+      msg.includes(ANTHROPIC_OVERLOADED_ERROR) ||
+      msg.includes(ANTHROPIC_TIMEOUT_ERROR)
+    ) {
+      return true;
+    }
+  }
+  return isRetryableStatusCode(statusCode);
+}
+
 export function formatProviderHttpError(
   err: unknown,
 ): ProviderHttpErrorDetails {
+  // Extract raw error body for all paths - useful for debugging relay errors
+  const rawErrorBody = detectRawErrorBody(err);
+
   const nativeMessage = matchNativeMessageError(err);
   if (nativeMessage) {
-    // Add requestId even for message-only errors
+    // Add requestId and rawErrorBody even for message-only errors
+    // Also check if this should be retryable due to relay/overloaded error
     const requestId = detectRequestId(err);
-    return requestId ? { ...nativeMessage, requestId } : nativeMessage;
+    const retryable =
+      determineRetryable(err, undefined, rawErrorBody) || nativeMessage.retryable;
+    return { ...nativeMessage, retryable, requestId, rawErrorBody };
   }
 
   // Detect DOMException AbortError (from AbortController.abort())
@@ -440,12 +495,18 @@ export function formatProviderHttpError(
     return {
       message: 'Request aborted',
       retryable: false,
+      rawErrorBody,
     };
   }
 
   const nativeHttp = matchNativeHttpError(err);
   if (nativeHttp) {
-    return nativeHttp;
+    // Add rawErrorBody to native HTTP errors
+    // Also check if this should be retryable due to relay/overloaded error
+    const retryable =
+      determineRetryable(err, nativeHttp.statusCode, rawErrorBody) ||
+      nativeHttp.retryable;
+    return { ...nativeHttp, retryable, rawErrorBody };
   }
 
   const statusCode = detectStatusCode(err);
@@ -469,6 +530,7 @@ export function formatProviderHttpError(
       provider,
       retryable: true,
       requestId,
+      rawErrorBody,
     };
   }
 
@@ -478,8 +540,9 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
-    retryable: isRetryableStatusCode(statusCode),
+    retryable: determineRetryable(err, statusCode, rawErrorBody),
     requestId,
+    rawErrorBody,
   };
 }
 
@@ -555,6 +618,50 @@ export function isMissingFinishReasonError(err: unknown): boolean {
     return false;
   }
   return err.message.includes('missing finish_reason');
+}
+
+// ============================================================================
+// Previous Response ID Error Detection (OpenAI Responses API)
+// ============================================================================
+
+/**
+ * Checks if an error indicates the previous_response_id is invalid.
+ *
+ * OpenAI Responses API: When the `previous_response_id` parameter references
+ * a response that doesn't exist or has expired, the error message will contain
+ * "previous_response_id".
+ *
+ * When this returns true, the caller should:
+ * 1. Clear the previousResponseId
+ * 2. Rebuild the conversation from local message history
+ * 3. Retry without previous_response_id
+ */
+export function isPreviousResponseIdError(err: unknown): boolean {
+  // OpenAI Responses API: errors referencing the previous_response_id parameter
+  return err instanceof Error && err.message.includes('previous_response_id');
+}
+
+/**
+ * Checks if an error indicates the server is overloaded.
+ *
+ * Anthropic: Returns `{"type":"error","error":{"type":"overloaded_error",...}}`
+ * when servers are at capacity. This error type doesn't have a dedicated SDK
+ * class and comes through as a generic API error.
+ */
+export function isOverloadedError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR);
+}
+
+/**
+ * Checks if an error indicates a server-side timeout.
+ *
+ * Anthropic: Returns `{"type":"error","error":{"type":"timeout_error",...}}`
+ * when the request times out on the server. This is different from connection
+ * timeouts (which are client-side). This error type doesn't have a dedicated
+ * SDK class and comes through as a generic API error.
+ */
+export function isTimeoutError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes(ANTHROPIC_TIMEOUT_ERROR);
 }
 
 /**
