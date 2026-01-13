@@ -34,6 +34,18 @@ export class RetryRequests extends BaseUIRequestManager {
       btn.dataset.streamId = request.streamId;
     });
 
+    const detailsElem = element.querySelector('.retry-request__error-details');
+    if (detailsElem) {
+      detailsElem.addEventListener('toggle', () => {
+        const icon = detailsElem.querySelector('.toggle-icon');
+        if (icon) {
+          icon.className = detailsElem.open
+            ? 'codicon codicon-chevron-down toggle-icon'
+            : 'codicon codicon-chevron-right toggle-icon';
+        }
+      });
+    }
+
     this._updateRequestElement(element, request);
     return element;
   }
@@ -75,29 +87,29 @@ export class RetryRequests extends BaseUIRequestManager {
     const bodyElem = element.querySelector('.retry-request__error-body');
     if (detailsElem && bodyElem) {
       const details = request.errorDetails;
-      if (details && (details.provider || details.statusCode || details.rawErrorBody)) {
+      if (
+        details &&
+        (details.provider != null ||
+          details.statusCode != null ||
+          details.rawErrorBody != null)
+      ) {
         const lines = [];
         if (details.provider) lines.push(`provider: ${details.provider}`);
-        if (details.statusCode) lines.push(`statusCode: ${details.statusCode}`);
+        if (details.statusCode != null) {
+          lines.push(`statusCode: ${details.statusCode}`);
+        }
         if (details.rawErrorBody) {
-          const bodyStr = typeof details.rawErrorBody === 'object'
-            ? JSON.stringify(details.rawErrorBody, null, 2)
-            : String(details.rawErrorBody);
+          const bodyStr =
+            typeof details.rawErrorBody === 'object'
+              ? JSON.stringify(details.rawErrorBody, null, 2)
+              : String(details.rawErrorBody);
           lines.push(`rawErrorBody: ${bodyStr}`);
         }
+        // Use textContent to avoid HTML injection from provider payloads.
         bodyElem.textContent = lines.join('\n');
         detailsElem.hidden = false;
-
-        // Toggle icon on open/close
-        detailsElem.addEventListener('toggle', () => {
-          const icon = detailsElem.querySelector('.toggle-icon');
-          if (icon) {
-            icon.className = detailsElem.open
-              ? 'codicon codicon-chevron-down toggle-icon'
-              : 'codicon codicon-chevron-right toggle-icon';
-          }
-        });
       } else {
+        detailsElem.open = false;
         detailsElem.hidden = true;
       }
     }

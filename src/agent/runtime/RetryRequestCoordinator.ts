@@ -19,6 +19,7 @@
 
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { RetryErrorDetails } from '@eventBus/types';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
@@ -32,18 +33,6 @@ export type RetryResult =
   | { action: 'retry' }
   | { action: 'cancel' }
   | { action: 'timeout' };
-
-/**
- * Structured error details for display in retry UI.
- */
-export interface RetryErrorDetails {
-  /** Provider that returned the error (e.g., "openai", "anthropic") */
-  provider?: string;
-  /** HTTP status code if applicable */
-  statusCode?: number;
-  /** Raw error body from provider/relay for debugging */
-  rawErrorBody?: unknown;
-}
 
 /**
  * Options for initiating a retry request.
