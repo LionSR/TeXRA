@@ -102,6 +102,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const metaElem = element.querySelector('.approval-request__meta');
     const bypassButton = element.querySelector('[data-action="approveAll"]');
     const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
+    const previewMenuItem = element.querySelector('.preview-menu-item');
     const latexdiffMenuItem = element.querySelector('.latexdiff-menu-item');
     element.dataset.streamId = request.streamId || '';
 
@@ -119,9 +120,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
       setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
 
-    // Show/hide dropdown trigger and menu item based on whether file is LaTeX
+    // Show/hide dropdown trigger and set requestIds on menu items for LaTeX files
     if (dropdownTrigger) {
       dropdownTrigger.toggleAttribute('hidden', !request.isLatex);
+    }
+    if (previewMenuItem) {
+      previewMenuItem.dataset.requestId = request.requestId;
     }
     if (latexdiffMenuItem) {
       latexdiffMenuItem.dataset.requestId = request.requestId;
@@ -213,6 +217,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
       approveAll: 'approveAll',
       reject: 'reject',
       showLatexdiff: 'showLatexdiff',
+      previewProposed: 'previewProposed',
     };
 
     const mappedAction = actionMap[action];
