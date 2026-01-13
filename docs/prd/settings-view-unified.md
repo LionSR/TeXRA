@@ -107,7 +107,6 @@ VS Code-native styling without custom CSS complexity.
 ```
 
 **Not Logged In State:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  Use TeXRA with your own API keys                         [Sign In]    [×]  │
@@ -120,7 +119,6 @@ VS Code-native styling without custom CSS complexity.
 ```
 
 **Tab Structure (5 tabs for v1):**
-
 ```
 Tab 1: Models
 ├── Routing options (radio: direct/openrouter/proxy)
@@ -151,7 +149,6 @@ Tab 5: History
 ```
 
 **Deferred to Future Release:**
-
 ```
 Tab 6: Advanced
 ├── ▼ Multi-Agent (collapsible) - merge model, future ensemble
@@ -310,7 +307,6 @@ Tab 6: Advanced
 **Purpose:** Combined model selection and API provider configuration. Each provider shows API status + model selection together.
 
 **Layout:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Models & Providers                                             │
@@ -361,7 +357,6 @@ Tab 6: Advanced
 ```
 
 **Key Design:**
-
 - Each provider accordion shows: status indicator + [Configure] button + model list
 - Provider status: `✓ API Key`, `✗ No Key`, or `🔑 Env Var`
 - Clicking [Configure] opens provider modal (API key + endpoint + streaming toggle)
@@ -370,24 +365,16 @@ Tab 6: Advanced
 **Data Source:** `llm-zoo` package (ModelRegistry)
 
 **Model Metadata Displayed:**
-
 - Name (display name)
 - Context window
 - Cost (input/output per 1M tokens)
 - Capabilities icons: 🧠 Reasoning, 👁 Vision, 📄 PDF, 🎧 Audio, 💬 Tools, ⚡ Cache
 
 **Recommended Models (hardcoded):**
-
 ```typescript
 const RECOMMENDED_MODELS = [
-  'sonnet45T',
-  'opus45T',
-  'gpt52',
-  'gemini3p',
-  'grok4',
-  'deepseekT',
-  'kimi2T',
-  'qwen3max',
+  'sonnet45T', 'opus45T', 'gpt52', 'gemini3p',
+  'grok4', 'deepseekT', 'kimi2T', 'qwen3max'
 ];
 ```
 
@@ -413,7 +400,6 @@ const RECOMMENDED_MODELS = [
 | Source | File location | `Built-in`, `Custom`, `Remote` |
 
 **Agent Type Icons (codicons):**
-
 - `$(lightbulb)` CoT (Chain-of-Thought)
 - `$(zap)` Direct
 - `$(git-merge)` Merge
@@ -421,7 +407,6 @@ const RECOMMENDED_MODELS = [
 - `$(tools)` Tool-Use
 
 **Layout:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Select which agents appear in the dropdown.                    │
@@ -506,7 +491,6 @@ const RECOMMENDED_MODELS = [
 ```
 
 **Custom Agent Actions:**
-
 - `[Source Code]` - Opens agent YAML file in editor
 - `[Delete]` - Deletes custom agent YAML file
 
@@ -536,7 +520,6 @@ const RECOMMENDED_MODELS = [
 **Design Philosophy:** Consolidate scattered LaTeX-related VS Code settings into a visual, grouped interface. Settings remain in VS Code configuration for backwards compatibility.
 
 **Layout:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Configure LaTeX formatting and processing options.             │
@@ -638,7 +621,6 @@ const RECOMMENDED_MODELS = [
 **Key Design:** Show memory content on expand (like current memoryView implementation).
 
 **Layout:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Memory                                                         │
@@ -672,7 +654,6 @@ const RECOMMENDED_MODELS = [
 ```
 
 **Features:** (Migrated from memoryView)
-
 - Memory file browser with expandable content preview
 - Click file to expand and show content preview (first ~20 lines)
 - [View Full] opens file in editor
@@ -681,7 +662,6 @@ const RECOMMENDED_MODELS = [
 - Storage usage display
 
 **Data Sources:**
-
 - Memory files: `/memories` directory managed by MemoryTool
 
 **Storage:** File system (no extension state needed)
@@ -693,7 +673,6 @@ const RECOMMENDED_MODELS = [
 **Purpose:** Browse and restore previous agent executions.
 
 **Layout:** (Migrated from existing historyView)
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -719,7 +698,6 @@ const RECOMMENDED_MODELS = [
 ```
 
 **Features:** (Same as current historyView)
-
 - Search with highlighting (mark.js)
 - Delete, Restore, Rerun actions
 - Collapsible details per item
@@ -733,7 +711,6 @@ const RECOMMENDED_MODELS = [
 When clicking [Edit] or [Configure] on a provider:
 
 **Standard Provider (Anthropic, OpenAI, Google, etc.):**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Configure Anthropic                                     [×]   │
@@ -774,22 +751,21 @@ When clicking [Edit] or [Configure] on a provider:
 **Streaming Settings (per provider):**
 Each provider's modal streaming toggle maps to its specific setting:
 
-| Provider Modal    | VS Code Setting                      |
-| ----------------- | ------------------------------------ |
-| Anthropic         | `texra.model.useStreamingAnthropic`  |
-| OpenAI            | `texra.model.useStreamingOpenai`     |
-| Google            | `texra.model.useStreamingGoogle`     |
-| DeepSeek          | `texra.model.useStreamingDeepseek`   |
-| xAI               | `texra.model.useStreamingXai`        |
-| Moonshot          | `texra.model.useStreamingMoonshot`   |
-| Dashscope         | `texra.model.useStreamingDashscope`  |
-| OpenRouter        | `texra.model.useStreamingOpenrouter` |
-| (Global fallback) | `texra.model.useStreaming`           |
+| Provider Modal | VS Code Setting |
+|----------------|-----------------|
+| Anthropic | `texra.model.useStreamingAnthropic` |
+| OpenAI | `texra.model.useStreamingOpenai` |
+| Google | `texra.model.useStreamingGoogle` |
+| DeepSeek | `texra.model.useStreamingDeepseek` |
+| xAI | `texra.model.useStreamingXai` |
+| Moonshot | `texra.model.useStreamingMoonshot` |
+| Dashscope | `texra.model.useStreamingDashscope` |
+| OpenRouter | `texra.model.useStreamingOpenrouter` |
+| (Global fallback) | `texra.model.useStreaming` |
 
 Per-provider settings override the global `useStreaming` setting.
 
 **OpenRouter (Special Case):**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Configure OpenRouter                                    [×]   │
@@ -845,7 +821,6 @@ In the Models tab, show provider/routing status on each model:
 ```
 
 **Status Icons:**
-
 - `✓ Ready` - API key configured, model available
 - `⚠ No key` - Provider not configured (click to configure)
 - `🔀 OpenRouter` - Available via OpenRouter only
@@ -860,7 +835,6 @@ In the Models tab, show provider/routing status on each model:
 **Purpose:** Multi-agent settings, UI preferences, retry behavior, system paths, and developer options. Uses vscode-collapsible for organization.
 
 **Layout:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Advanced settings and system configuration.                    │
@@ -943,7 +917,6 @@ In the Models tab, show provider/routing status on each model:
 ### Features Summary
 
 **Tab Layout with Header Bar (v1 - 5 tabs):**
-
 - **Header Bar** - Account info, sign in/out, manage account (always visible)
 - **Models Tab** - Provider configuration, model selection, routing options
 - **Agents Tab** - Agent list, Workflow Settings (collapsible), Tool-Use Settings (collapsible)
@@ -952,11 +925,9 @@ In the Models tab, show provider/routing status on each model:
 - **History Tab** - Execution history browser
 
 **Deferred to Later Release:**
-
 - **Advanced Tab** - Multi-Agent, UI preferences, git, system paths, debug (all collapsibles)
 
 **Key Features:**
-
 - Account info in header bar (minimal custom CSS, always visible)
 - Native vscode-tabs for navigation (no custom styling)
 - vscode-collapsible for subsections within tabs
@@ -967,7 +938,6 @@ In the Models tab, show provider/routing status on each model:
 - Environment variable hints
 
 **Key UX Improvements:**
-
 1. **Works without login** - Configure API keys without account
 2. **Visual provider status** - See which providers are configured at a glance
 3. **Custom endpoints exposed** - No more hidden VS Code settings
@@ -992,11 +962,7 @@ await config.update('maxImageDimension', 2048, ConfigurationTarget.Global);
 
 // Workspace settings (project-level, .vscode/settings.json)
 await config.update('agents', enabledAgents, ConfigurationTarget.Workspace);
-await config.update(
-  'agentOutputs.storageMode',
-  'folder',
-  ConfigurationTarget.Workspace,
-);
+await config.update('agentOutputs.storageMode', 'folder', ConfigurationTarget.Workspace);
 ```
 
 **Setting Scopes:**
@@ -1011,7 +977,6 @@ await config.update(
 | `texra.latex.*` | Global/Workspace | User choice |
 
 **Benefits of VS Code Config:**
-
 - No extension state migration needed
 - Works with VS Code Settings Sync automatically
 - Users can still edit settings.json directly
@@ -1023,7 +988,7 @@ Only for caching and truly ephemeral UI state:
 
 ```typescript
 // globalState - only for caching
-context.globalState.get('modelMetadataCache'); // Cached llm-zoo data
+context.globalState.get('modelMetadataCache');  // Cached llm-zoo data
 
 // No settings stored in extension state
 ```
@@ -1064,7 +1029,6 @@ XAI_API_KEY=...
 ```
 
 **Priority order:**
-
 1. VS Code Secrets (highest)
 2. Environment variables
 3. `.env` file in workspace
@@ -1073,42 +1037,19 @@ XAI_API_KEY=...
 
 ```typescript
 const RECOMMENDED_MODELS = [
-  'sonnet45T',
-  'opus45T',
-  'gpt52',
-  'gemini3p',
-  'grok4',
-  'deepseekT',
-  'kimi2T',
-  'qwen3max',
+  'sonnet45T', 'opus45T', 'gpt52', 'gemini3p',
+  'grok4', 'deepseekT', 'kimi2T', 'qwen3max'
 ];
 
 const DEFAULT_ENABLED_MODELS = [
-  'sonnet45T',
-  'opus45T',
-  'gpt52',
-  'gpt52pro',
-  'gpt41',
-  'gemini3p',
-  'gemini3f',
-  'grok4',
-  'deepseekT',
-  'kimi2T',
-  'kimi2',
-  'qwen3max',
+  'sonnet45T', 'opus45T', 'gpt52', 'gpt52pro', 'gpt41',
+  'gemini3p', 'gemini3f', 'grok4', 'deepseekT',
+  'kimi2T', 'kimi2', 'qwen3max'
 ];
 
 const DEFAULT_ENABLED_AGENTS = [
-  'ask',
-  'chat',
-  'correct',
-  'draw',
-  'ocr',
-  'paper2slide',
-  'paper2poster',
-  'polish',
-  'research',
-  'search',
+  'ask', 'chat', 'correct', 'draw', 'ocr',
+  'paper2slide', 'paper2poster', 'polish', 'research', 'search'
 ];
 
 const DEFAULT_ROUTING = {
@@ -1184,7 +1125,7 @@ context.secrets.get('apiKey.anthropic');
 context.secrets.store('apiKey.anthropic', 'sk-...');
 
 // Environment variable fallback also unchanged
-process.env.ANTHROPIC_API_KEY;
+process.env.ANTHROPIC_API_KEY
 ```
 
 Users who have configured API keys will continue to work without any action.
@@ -1278,17 +1219,14 @@ export function registerSettingsCommands(context: vscode.ExtensionContext) {
       async (tab?: SettingsTab) => {
         await settingsViewProvider.show();
         if (tab) settingsViewProvider.selectTab(tab);
-      },
+      }
     ),
     vscode.commands.registerCommand(settingsCommands.openModelSettings, () =>
-      vscode.commands.executeCommand(settingsCommands.openSettings, 'models'),
-    ),
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'models')),
     vscode.commands.registerCommand(settingsCommands.openAgentSettings, () =>
-      vscode.commands.executeCommand(settingsCommands.openSettings, 'agents'),
-    ),
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'agents')),
     vscode.commands.registerCommand(settingsCommands.openLatexSettings, () =>
-      vscode.commands.executeCommand(settingsCommands.openSettings, 'latex'),
-    ),
+      vscode.commands.executeCommand(settingsCommands.openSettings, 'latex')),
   );
 
   return { settingsViewProvider };
@@ -1306,9 +1244,9 @@ Use Zod schemas as single source of truth. Reference existing types from the cod
 ```typescript
 // src/settingsView/schemas.ts
 import { z } from 'zod';
-import { ModelConfigSchema } from '@model/ModelConfig'; // From llm-zoo
-import { AgentSource } from '@agent/core/AgentDataclass'; // Zod enum
-import type { AgentEntry } from '@agent/index/agentRegistry'; // Existing interface
+import { ModelConfigSchema } from '@model/ModelConfig';           // From llm-zoo
+import { AgentSource } from '@agent/core/AgentDataclass';         // Zod enum
+import type { AgentEntry } from '@agent/index/agentRegistry';     // Existing interface
 
 // =============================================================================
 // Command Constants (following src/common/webview/commands.ts pattern)
@@ -1335,13 +1273,7 @@ export const SETTINGS_VIEW_COMMANDS = {
 // Shared Schemas
 // =============================================================================
 
-export const SettingsTabSchema = z.enum([
-  'models',
-  'agents',
-  'latex',
-  'memory',
-  'history',
-]);
+export const SettingsTabSchema = z.enum(['models', 'agents', 'latex', 'memory', 'history']);
 export type SettingsTab = z.infer<typeof SettingsTabSchema>;
 
 // =============================================================================
@@ -1350,28 +1282,25 @@ export type SettingsTab = z.infer<typeof SettingsTabSchema>;
 
 export const SetModelsDataSchema = z.object({
   command: z.literal('SET_MODELS_DATA'),
-  models: z.array(ModelConfigSchema), // Use llm-zoo schema directly
+  models: z.array(ModelConfigSchema),  // Use llm-zoo schema directly
   enabled: z.array(z.string()),
 });
 
 export const SetAgentsDataSchema = z.object({
   command: z.literal('SET_AGENTS_DATA'),
-  agents: z.array(
-    z.object({
-      // Mirrors AgentEntry + enabled flag
-      name: z.string(),
-      source: AgentSource,
-      category: z.enum(['workflow', 'toolUse']),
-      agentType: z.enum(['CoT', 'direct', 'toolUse']),
-      description: z.string().optional(),
-      enabled: z.boolean(),
-    }),
-  ),
+  agents: z.array(z.object({           // Mirrors AgentEntry + enabled flag
+    name: z.string(),
+    source: AgentSource,
+    category: z.enum(['workflow', 'toolUse']),
+    agentType: z.enum(['CoT', 'direct', 'toolUse']),
+    description: z.string().optional(),
+    enabled: z.boolean(),
+  })),
 });
 
 export const SetLatexDataSchema = z.object({
   command: z.literal('SET_LATEX_DATA'),
-  settings: z.record(z.unknown()), // VS Code config snapshot
+  settings: z.record(z.unknown()),     // VS Code config snapshot
 });
 
 export const SelectTabSchema = z.object({
@@ -1396,24 +1325,10 @@ export type SettingsMessage = z.infer<typeof SettingsMessageSchema>;
 export const SettingsActionSchema = z.discriminatedUnion('command', [
   z.object({ command: z.literal('GET_INITIAL_DATA') }),
   z.object({ command: z.literal('TAB_CHANGED'), tab: SettingsTabSchema }),
-  z.object({
-    command: z.literal('SAVE_ENABLED_MODELS'),
-    models: z.array(z.string()),
-  }),
-  z.object({
-    command: z.literal('SAVE_ENABLED_AGENTS'),
-    agents: z.array(z.string()),
-  }),
-  z.object({
-    command: z.literal('SAVE_SETTING'),
-    key: z.string(),
-    value: z.unknown(),
-  }),
-  z.object({
-    command: z.literal('SET_API_KEY'),
-    provider: z.string(),
-    key: z.string(),
-  }),
+  z.object({ command: z.literal('SAVE_ENABLED_MODELS'), models: z.array(z.string()) }),
+  z.object({ command: z.literal('SAVE_ENABLED_AGENTS'), agents: z.array(z.string()) }),
+  z.object({ command: z.literal('SAVE_SETTING'), key: z.string(), value: z.unknown() }),
+  z.object({ command: z.literal('SET_API_KEY'), provider: z.string(), key: z.string() }),
   z.object({ command: z.literal('SIGN_IN') }),
   z.object({ command: z.literal('SIGN_OUT') }),
   // History/Memory actions reuse existing schemas
@@ -1423,7 +1338,6 @@ export type SettingsAction = z.infer<typeof SettingsActionSchema>;
 ```
 
 **Key points:**
-
 - `ModelConfigSchema` from `@model/ModelConfig` (mirrors llm-zoo types)
 - `AgentSource` Zod enum from `@agent/core/AgentDataclass`
 - `AgentEntry` interface from `@agent/index/agentRegistry` (no duplication)
@@ -1436,9 +1350,9 @@ export type SettingsAction = z.infer<typeof SettingsActionSchema>;
 ```typescript
 // Settings View should call these existing functions:
 import {
-  getWorkflowAgents, // Returns AgentEntry[] with category already set
-  getToolUseAgents, // Returns AgentEntry[] with category already set
-  buildAgentOptions, // Returns HTML <option> elements (if needed)
+  getWorkflowAgents,    // Returns AgentEntry[] with category already set
+  getToolUseAgents,     // Returns AgentEntry[] with category already set
+  buildAgentOptions,    // Returns HTML <option> elements (if needed)
 } from '@agent/index/agentRegistry';
 
 // Category is already derived in AgentEntry - just use it
@@ -1446,7 +1360,6 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 ```
 
 **Implementation detail (for reference only):**
-
 - Local agents: category derived from `source === 'builtInToolUse' || agentType === 'toolUse'`
 - Remote agents: uses `agentCategory` field from remote definition
 - Config override: `texra.toolUseAgents` setting can override any agent
@@ -1474,7 +1387,6 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 ## Success Metrics
 
 ### v1 Release
-
 1. Single entry point for 5 core tabs (Models, Agents, LaTeX, Memory, History)
 2. Native vscode-tabs navigation (keyboard accessible)
 3. Settings properly scoped (models global, agents per-workspace via ConfigurationTarget)
@@ -1492,14 +1404,12 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 ### v1 Release (5 Tabs)
 
 #### Phase 1: Core Structure
-
 - Create settingsView with vscode-tabs + header bar
 - Implement header bar (account info, sign in/out - minimal custom CSS)
 - Add main webview entry point (gear icon)
 - Deep link support (open to specific tab)
 
 #### Phase 2: Models Tab
-
 - Implement Models tab with provider collapsibles
 - Provider accordions with API status + model list
 - Provider configuration modal (API key + endpoint + streaming toggle)
@@ -1507,7 +1417,6 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 - Migrate provider config from old profileView
 
 #### Phase 3: Agents Tab
-
 - Implement Agents tab with agent list
 - Show category badges (workflow/toolUse) and source (built-in/custom/remote)
 - Add Workflow Settings collapsible (output storage mode)
@@ -1516,7 +1425,6 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 - **Note:** Supersedes FolderExplorer/agent explorer view
 
 #### Phase 4: LaTeX Tab
-
 - Implement LaTeX tab with collapsible sections:
   - Formatter (collapsible)
   - LaTeXdiff (collapsible)
@@ -1526,13 +1434,11 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 - Add file browser for config paths
 
 #### Phase 5: Memory Tab
-
 - Migrate memoryView to Memory tab
 - Implement expandable content preview
 - Delete old memoryView
 
 #### Phase 6: History Tab + v1 Cleanup
-
 - Move history rendering to History tab
 - Preserve search, delete, restore, rerun functionality
 - Delete old historyView
@@ -1543,7 +1449,6 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 ### Future Release (Deferred)
 
 #### Advanced Tab
-
 - Multi-Agent (merge model + ensemble features)
 - UI Preferences (reminders, image dimension, sort order)
 - Git Integration
@@ -1551,12 +1456,10 @@ const agents = [...getWorkflowAgents(), ...getToolUseAgents()];
 - Debug
 
 #### Agent Creation Wizard
-
 - AI-assisted agent creation from plain English description
 - Form-based editing without YAML knowledge
 
 #### Multi-Agent Ensemble
-
 - Run across multiple models with voting/consensus
 
 ---
@@ -1567,26 +1470,25 @@ Based on 79 total settings in package.json:
 
 ### v1 Release - Covered by Settings View
 
-| Tab         | Settings Covered                                                                                                                                                                                                                     |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Models**  | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek`                                             |
-| **Agents**  | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
-| **LaTeX**   | `texra.latex.*` (7), `texra.latexdiff.*` (4)                                                                                                                                                                                         |
-| **Memory**  | Memory file browser (no config, file system)                                                                                                                                                                                         |
-| **History** | History browser (existing storage)                                                                                                                                                                                                   |
+| Tab | Settings Covered |
+|-----|------------------|
+| **Models** | `texra.models`, `texra.model.useStreaming*` (9), `texra.model.useOpenRouter`, `texra.model.useImprovedConnection`, `texra.model.improvedConnectionDomain`, `texra.model.baseUrlDeepSeek` |
+| **Agents** | `texra.agents`, `texra.toolUseAgents`, `texra.remoteAgents.autoShow`, `texra.explorer.agentsDirectory`, `texra.agentOutputs.storageMode`, `texra.toolUse.*` (3), `texra.model.compactionThresholdPercent`, `texra.model.retry.*` (2) |
+| **LaTeX** | `texra.latex.*` (7), `texra.latexdiff.*` (4) |
+| **Memory** | Memory file browser (no config, file system) |
+| **History** | History browser (existing storage) |
 
 ### Deferred to Future Release (Advanced Tab)
 
-| Section             | Settings                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| **Multi-Agent**     | `texra.merge.defaultModel`                                                         |
-| **UI Preferences**  | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
-| **Git Integration** | `texra.git.numberOfCommitsToShow`                                                  |
-| **System Paths**    | `texra.audio.soxPath`                                                              |
-| **Debug**           | `texra.debug.*`, `texra.logger.*`                                                  |
+| Section | Settings |
+|---------|----------|
+| **Multi-Agent** | `texra.merge.defaultModel` |
+| **UI Preferences** | `texra.ui.*` (3), `texra.progressBoard.streamSortOrder`, `texra.maxImageDimension` |
+| **Git Integration** | `texra.git.numberOfCommitsToShow` |
+| **System Paths** | `texra.audio.soxPath` |
+| **Debug** | `texra.debug.*`, `texra.logger.*` |
 
 ### Remain as VS Code Settings Only
-
 These are advanced/power-user settings that don't need UI exposure:
 
 - `texra.files.*` (16) - File type filtering patterns (power user)
@@ -1600,58 +1502,49 @@ These are advanced/power-user settings that don't need UI exposure:
 Key integration points that need updating when implementing the Settings View:
 
 ### 1. Main Webview Entry Points
-
-| Location                                                  | Current Behavior                         | New Behavior                 |
-| --------------------------------------------------------- | ---------------------------------------- | ---------------------------- |
-| `src/webview/index.html` line 524                         | Agent settings button → VS Code settings | → Settings View (Agents tab) |
-| `src/webview/index.html` line 552                         | Model settings button → VS Code settings | → Settings View (Models tab) |
-| `src/webview/modules/uiManagers/SettingsButtonManager.js` | Opens VS Code settings                   | Opens Settings View          |
+| Location | Current Behavior | New Behavior |
+|----------|-----------------|--------------|
+| `src/webview/index.html` line 524 | Agent settings button → VS Code settings | → Settings View (Agents tab) |
+| `src/webview/index.html` line 552 | Model settings button → VS Code settings | → Settings View (Models tab) |
+| `src/webview/modules/uiManagers/SettingsButtonManager.js` | Opens VS Code settings | Opens Settings View |
 
 ### 2. Commands to Update
-
-| Command              | File                   | Change                                         |
-| -------------------- | ---------------------- | ---------------------------------------------- |
+| Command | File | Change |
+|---------|------|--------|
 | `texra.openSettings` | `src/commands/system/` | Open Settings View instead of VS Code settings |
 
 **New commands to add (shortcuts):**
-
 - `texra.openAgentSettings` → Opens Settings View → Agents tab
 - `texra.openModelSettings` → Opens Settings View → Models tab
 
 ### 3. Dropdown Options Computation
-
-| Function                | File                               | Impact                                 |
-| ----------------------- | ---------------------------------- | -------------------------------------- |
+| Function | File | Impact |
+|----------|------|--------|
 | `computeAgentOptions()` | `src/agent/index/agentRegistry.ts` | No change - still reads VS Code config |
 | `computeModelOptions()` | `src/model/computeModelOptions.ts` | No change - still reads VS Code config |
 
 ### 4. Configuration Watchers
-
 `src/MainViewProvider.ts` (lines 84-120) watches for config changes.
-
 - No change needed - Settings View writes to VS Code config
 - Existing watchers will pick up changes automatically
 
 ### 5. View Registrations (package.json)
-
-| View                  | Current                         | After Implementation       |
-| --------------------- | ------------------------------- | -------------------------- |
-| `texra.profileView`   | Registered in contributes.views | Remove after Phase 6       |
-| `texra.historyView`   | Command-opened panel            | Remove after Phase 5       |
-| `texra.memoryView`    | Command-opened panel            | Remove after Phase 4       |
-| `texra.agentExplorer` | TreeView in sidebar             | Remove after Phase 2       |
-| `texra.settingsView`  | N/A                             | Add new panel registration |
+| View | Current | After Implementation |
+|------|---------|---------------------|
+| `texra.profileView` | Registered in contributes.views | Remove after Phase 6 |
+| `texra.historyView` | Command-opened panel | Remove after Phase 5 |
+| `texra.memoryView` | Command-opened panel | Remove after Phase 4 |
+| `texra.agentExplorer` | TreeView in sidebar | Remove after Phase 2 |
+| `texra.settingsView` | N/A | Add new panel registration |
 
 ### 6. Message Handlers to Migrate
-
-| Handler                     | From               | To                            |
-| --------------------------- | ------------------ | ----------------------------- |
+| Handler | From | To |
+|---------|------|-----|
 | `ProfileViewMessageHandler` | `src/profileView/` | `src/settingsView/` (compose) |
 | `HistoryViewMessageHandler` | `src/historyView/` | `src/settingsView/` (compose) |
-| `MemoryViewMessageHandler`  | `src/memoryView/`  | `src/settingsView/` (compose) |
+| `MemoryViewMessageHandler` | `src/memoryView/` | `src/settingsView/` (compose) |
 
 ### 7. No State Migration Needed
-
 Settings View reads/writes directly to VS Code configuration - no migration required.
 
 ---
@@ -1659,7 +1552,6 @@ Settings View reads/writes directly to VS Code configuration - no migration requ
 ## Component Mapping (vscode-elements)
 
 ### Tab Layout
-
 ```html
 <vscode-tabs>                   <!-- Tab container -->
   <vscode-tab-header>           <!-- Tab buttons -->
@@ -1669,19 +1561,18 @@ Settings View reads/writes directly to VS Code configuration - no migration requ
 
 ### Form Components by Tab
 
-| UI Pattern              | Component                | Example Usage                      |
-| ----------------------- | ------------------------ | ---------------------------------- |
-| **Single selection**    | `<vscode-single-select>` | Formatter dropdown, Math markup    |
-| **Checkbox**            | `<vscode-checkbox>`      | Enable/disable toggles             |
-| **Text input**          | `<vscode-textfield>`     | API keys, file paths               |
-| **Multiline text**      | `<vscode-textarea>`      | TikZ template, agent instructions  |
-| **Radio group**         | `<vscode-radio-group>`   | Routing mode, access mode          |
-| **Collapsible section** | `<vscode-collapsible>`   | Advanced options, provider details |
-| **Button**              | `<vscode-button>`        | Save, Browse, Create Agent         |
-| **Badge**               | `<vscode-badge>`         | Category badges (workflow/toolUse) |
+| UI Pattern | Component | Example Usage |
+|------------|-----------|---------------|
+| **Single selection** | `<vscode-single-select>` | Formatter dropdown, Math markup |
+| **Checkbox** | `<vscode-checkbox>` | Enable/disable toggles |
+| **Text input** | `<vscode-textfield>` | API keys, file paths |
+| **Multiline text** | `<vscode-textarea>` | TikZ template, agent instructions |
+| **Radio group** | `<vscode-radio-group>` | Routing mode, access mode |
+| **Collapsible section** | `<vscode-collapsible>` | Advanced options, provider details |
+| **Button** | `<vscode-button>` | Save, Browse, Create Agent |
+| **Badge** | `<vscode-badge>` | Category badges (workflow/toolUse) |
 
 ### Form Layout Components
-
 ```html
 <!-- Standard form group with label -->
 <vscode-form-group>
@@ -1712,13 +1603,11 @@ Settings View reads/writes directly to VS Code configuration - no migration requ
 ```
 
 ### Models Tab Components
-
 - `<vscode-collapsible>` - Provider accordions (Anthropic, OpenAI, etc.)
 - `<vscode-checkbox>` - Model enable/disable
 - `<vscode-badge>` - Capability icons, status indicators
 
 ### Agents Tab Components
-
 - `<vscode-checkbox>` - Agent enable/disable
 - `<vscode-badge>` - Category badges (workflow/toolUse), source badges
 - `<vscode-button>` - Create Agent, Edit, Delete
@@ -1726,7 +1615,6 @@ Settings View reads/writes directly to VS Code configuration - no migration requ
 - `<vscode-textarea>` - Agent instructions
 
 ### LaTeX Tab Components
-
 - `<vscode-single-select>` - Formatter, math markup
 - `<vscode-checkbox>` - Boolean settings
 - `<vscode-textfield>` - File paths, regex patterns
@@ -1734,7 +1622,6 @@ Settings View reads/writes directly to VS Code configuration - no migration requ
 - `<vscode-collapsible>` - Advanced sections
 
 ### Header Bar + Provider Modal Components
-
 - `<vscode-button>` - Manage, Sign In/Out
 - `<vscode-textfield type="password">` - API keys (in modal)
 - `<vscode-radio-group>` - Routing mode (in Models tab)
@@ -1754,13 +1641,10 @@ src/settingsView/
 ```
 
 ### Provider Pattern
-
 ```typescript
 // SettingsViewProvider.ts
-export class SettingsViewProvider
-  extends BaseWebviewProvider
-  implements vscode.WebviewViewProvider
-{
+export class SettingsViewProvider extends BaseWebviewProvider
+    implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.settingsView';
 
   protected contentProvider: SettingsViewContentProvider;
@@ -1775,10 +1659,7 @@ export class SettingsViewProvider
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: getSharedLocalResourceRoots(
-        this.context,
-        'settingsView',
-      ),
+      localResourceRoots: getSharedLocalResourceRoots(this.context, 'settingsView'),
     };
     super.resolveWebviewViewInternal(webviewView);
   }
@@ -1798,7 +1679,6 @@ export class SettingsViewProvider
 ```
 
 ### Module Descriptors Pattern
-
 ```typescript
 // SettingsViewContentProvider.ts
 const SETTINGS_VIEW_MODULES = [
@@ -1816,9 +1696,7 @@ export class SettingsViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
     super(context, 'SettingsView', [...SETTINGS_VIEW_MODULES]);
   }
-  protected getViewPath(): string {
-    return 'settingsView';
-  }
+  protected getViewPath(): string { return 'settingsView'; }
 }
 ```
 
@@ -1832,22 +1710,18 @@ import { BaseDomHandler } from '@common/modules/BaseDomHandler.js';
 
 export class ModelsTab extends BaseDomHandler {
   constructor(containerSelector) {
-    super(); // BaseDomHandler provides addListener, removeListener, dispose
+    super();  // BaseDomHandler provides addListener, removeListener, dispose
     this.container = document.querySelector(containerSelector);
   }
 
   render(data) {
     this.container.innerHTML = `
       <vscode-collapsible title="Recommended Models" open>
-        ${data.recommended
-          .map(
-            (m) => `
+        ${data.recommended.map(m => `
           <vscode-checkbox id="model-${m.name}" ${m.enabled ? 'checked' : ''}>
             ${m.fullName} - ${m.provider}
           </vscode-checkbox>
-        `,
-          )
-          .join('')}
+        `).join('')}
       </vscode-collapsible>
     `;
     this.attachEventListeners();
@@ -1855,7 +1729,7 @@ export class ModelsTab extends BaseDomHandler {
 
   attachEventListeners() {
     // Use inherited addListener for automatic cleanup on dispose()
-    this.container.querySelectorAll('vscode-checkbox').forEach((cb) => {
+    this.container.querySelectorAll('vscode-checkbox').forEach(cb => {
       this.addListener(cb, 'change', () => this.handleModelToggle(cb));
     });
   }
@@ -1863,13 +1737,11 @@ export class ModelsTab extends BaseDomHandler {
 ```
 
 **Key point:** `BaseDomHandler` already provides:
-
 - `addListener(element, event, handler)` - with automatic cleanup
 - `removeListener(element, event, handler)`
 - `dispose()` - cleans up all registered listeners
 
 ### Minimal Custom CSS (extend common.css)
-
 ```css
 /* settingsView/styles/index.css */
 /* Rely on vscode-form-group and vscode-elements for layout */
@@ -1906,7 +1778,6 @@ export class ModelsTab extends BaseDomHandler {
 ```
 
 ### Message Handler Composition
-
 ```typescript
 // SettingsViewMessageHandler.ts
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<...> {
@@ -1943,7 +1814,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<...> {
 ```
 
 ### Reducing Boilerplate: Setting Renderer Factory
-
 ```javascript
 // modules/utils/SettingRenderer.js
 export const SettingRenderer = {
@@ -1953,7 +1823,7 @@ export const SettingRenderer = {
       <div class="setting-row">
         <span class="setting-label">${label}</span>
         <vscode-single-select id="${id}" value="${value}">
-          ${options.map((o) => `<vscode-option value="${o.value}">${o.label}</vscode-option>`).join('')}
+          ${options.map(o => `<vscode-option value="${o.value}">${o.label}</vscode-option>`).join('')}
         </vscode-single-select>
       </div>
     `;
@@ -1992,7 +1862,7 @@ export const SettingRenderer = {
         ${settingsHtml}
       </div>
     `;
-  },
+  }
 };
 ```
 
@@ -2003,61 +1873,55 @@ export const SettingRenderer = {
 Based on actual `package.json` configuration (14 settings total):
 
 ### Group 1: Formatter (4 settings)
-
-| Setting                              | UI Component                                        |
-| ------------------------------------ | --------------------------------------------------- |
-| `texra.latex.formatter`              | `<vscode-single-select>` (latexindent/tex-fmt/none) |
-| `texra.latex.latexindentConfig`      | `<vscode-textfield>` + Browse                       |
-| `texra.latex.texfmtConfig`           | `<vscode-textfield>` + Browse                       |
-| `texra.latex.showLatexindentWarning` | `<vscode-checkbox>`                                 |
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.formatter` | `<vscode-single-select>` (latexindent/tex-fmt/none) |
+| `texra.latex.latexindentConfig` | `<vscode-textfield>` + Browse |
+| `texra.latex.texfmtConfig` | `<vscode-textfield>` + Browse |
+| `texra.latex.showLatexindentWarning` | `<vscode-checkbox>` |
 
 ### Group 2: LaTeXdiff (4 settings)
-
-| Setting                                     | UI Component                                     |
-| ------------------------------------------- | ------------------------------------------------ |
-| `texra.latexdiff.mathMarkup`                | `<vscode-single-select>` (off/whole/coarse/fine) |
-| `texra.latexdiff.timeoutMs`                 | `<vscode-textfield type="number">`               |
-| `texra.latexdiff.pictureEnvironments`       | `<vscode-textfield>` (regex)                     |
-| `texra.latexdiff.generateBetweenRoundDiffs` | `<vscode-checkbox>`                              |
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latexdiff.mathMarkup` | `<vscode-single-select>` (off/whole/coarse/fine) |
+| `texra.latexdiff.timeoutMs` | `<vscode-textfield type="number">` |
+| `texra.latexdiff.pictureEnvironments` | `<vscode-textfield>` (regex) |
+| `texra.latexdiff.generateBetweenRoundDiffs` | `<vscode-checkbox>` |
 
 ### Group 3: TikZ Figures (3 settings)
-
-| Setting                                   | UI Component                                 |
-| ----------------------------------------- | -------------------------------------------- |
-| `texra.latex.tikzInputDirectory`          | `<vscode-textfield>` + Browse                |
-| `texra.latex.includeWorkspaceInTexinputs` | `<vscode-checkbox>`                          |
-| `texra.latex.tikzTemplate`                | `<vscode-collapsible>` + `<vscode-textarea>` |
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.tikzInputDirectory` | `<vscode-textfield>` + Browse |
+| `texra.latex.includeWorkspaceInTexinputs` | `<vscode-checkbox>` |
+| `texra.latex.tikzTemplate` | `<vscode-collapsible>` + `<vscode-textarea>` |
 
 ### Group 4: Replacements (5 settings) - Collapsible Advanced
-
-| Setting                                | UI Component                         |
-| -------------------------------------- | ------------------------------------ |
-| `texra.latex.wrapCritiqueInAlign`      | `<vscode-checkbox>`                  |
-| `texra.latex.enabledReplacements`      | Checkbox group (14 options)          |
-| `texra.latex.enabledReplacementsRegex` | Checkbox group (6 options)           |
-| `texra.latex.customReplacements`       | `<vscode-collapsible>` + JSON editor |
-| `texra.latex.customReplacementsRegex`  | `<vscode-collapsible>` + JSON editor |
+| Setting | UI Component |
+|---------|--------------|
+| `texra.latex.wrapCritiqueInAlign` | `<vscode-checkbox>` |
+| `texra.latex.enabledReplacements` | Checkbox group (14 options) |
+| `texra.latex.enabledReplacementsRegex` | Checkbox group (6 options) |
+| `texra.latex.customReplacements` | `<vscode-collapsible>` + JSON editor |
+| `texra.latex.customReplacementsRegex` | `<vscode-collapsible>` + JSON editor |
 
 ---
 
 ## General Implementation Guidelines
 
 ### Code Style
-
 1. **Use TypeScript** for all backend code (`.ts` files)
 2. **Use JavaScript** for frontend webview modules (`.js` files) - no bundler
 3. **Follow existing patterns** in `src/common/` for base classes and utilities
 4. **Use path aliases** (`@settingsView/*`, `@common/*`) as defined in `tsconfig.json`
 
 ### VS Code Configuration Best Practices
-
 ```typescript
 // Always specify ConfigurationTarget explicitly
-await config.update(key, value, ConfigurationTarget.Global); // User settings
+await config.update(key, value, ConfigurationTarget.Global);    // User settings
 await config.update(key, value, ConfigurationTarget.Workspace); // .vscode/settings.json
 
 // Read with type safety
-const models = config.get<string[]>('models', []); // Always provide default
+const models = config.get<string[]>('models', []);  // Always provide default
 
 // Batch updates when possible (reduces config change events)
 const edit = new vscode.WorkspaceEdit();
@@ -2066,9 +1930,7 @@ await vscode.workspace.applyEdit(edit);
 ```
 
 ### Event Listener Cleanup
-
 Use `BaseDomHandler` for automatic cleanup:
-
 ```javascript
 // Extend BaseDomHandler - dispose() cleans up all listeners
 class ModelsTab extends BaseDomHandler {
@@ -2080,7 +1942,6 @@ class ModelsTab extends BaseDomHandler {
 ```
 
 ### Error Handling
-
 ```typescript
 // Backend: Use typed errors from @common/errors
 throw new TeXRAError('Provider not configured', { provider: providerId });
@@ -2094,21 +1955,18 @@ try {
 ```
 
 ### Testing Considerations
-
 1. **Unit test** message handlers independently
 2. **Mock VS Code API** using existing test utilities
 3. **Test ConfigurationTarget** scoping (global vs workspace)
 4. **Verify backwards compatibility** - existing settings.json should work unchanged
 
 ### Accessibility
-
 1. Use native vscode-elements (built-in keyboard navigation)
 2. Provide `aria-label` for icon-only buttons
 3. Ensure tab order is logical
 4. Test with keyboard-only navigation
 
 ### Performance
-
 1. **Lazy load** tab content (don't render all tabs on initial load)
 2. **Debounce** settings saves (avoid rapid config updates)
 3. **Cache** model metadata from llm-zoo in globalState
