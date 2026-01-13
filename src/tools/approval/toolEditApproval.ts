@@ -656,7 +656,7 @@ async function nativeRequestApproval(
           return;
         }
         settled = true;
-        pendingApprovals.delete(requestId);
+        // Note: Don't delete from pendingApprovals here - finally block handles cleanup
         resolve(value);
       };
 
