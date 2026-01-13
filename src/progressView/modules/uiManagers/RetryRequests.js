@@ -69,6 +69,38 @@ export class RetryRequests extends BaseUIRequestManager {
         errorElem.hidden = true;
       }
     }
+
+    // Populate expandable error details if available
+    const detailsElem = element.querySelector('.retry-request__error-details');
+    const bodyElem = element.querySelector('.retry-request__error-body');
+    if (detailsElem && bodyElem) {
+      const details = request.errorDetails;
+      if (details && (details.provider || details.statusCode || details.rawErrorBody)) {
+        const lines = [];
+        if (details.provider) lines.push(`provider: ${details.provider}`);
+        if (details.statusCode) lines.push(`statusCode: ${details.statusCode}`);
+        if (details.rawErrorBody) {
+          const bodyStr = typeof details.rawErrorBody === 'object'
+            ? JSON.stringify(details.rawErrorBody, null, 2)
+            : String(details.rawErrorBody);
+          lines.push(`rawErrorBody: ${bodyStr}`);
+        }
+        bodyElem.textContent = lines.join('\n');
+        detailsElem.hidden = false;
+
+        // Toggle icon on open/close
+        detailsElem.addEventListener('toggle', () => {
+          const icon = detailsElem.querySelector('.toggle-icon');
+          if (icon) {
+            icon.className = detailsElem.open
+              ? 'codicon codicon-chevron-down toggle-icon'
+              : 'codicon codicon-chevron-right toggle-icon';
+          }
+        });
+      } else {
+        detailsElem.hidden = true;
+      }
+    }
   }
 
   /** @override */

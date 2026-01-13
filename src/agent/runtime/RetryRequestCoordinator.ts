@@ -34,6 +34,18 @@ export type RetryResult =
   | { action: 'timeout' };
 
 /**
+ * Structured error details for display in retry UI.
+ */
+export interface RetryErrorDetails {
+  /** Provider that returned the error (e.g., "openai", "anthropic") */
+  provider?: string;
+  /** HTTP status code if applicable */
+  statusCode?: number;
+  /** Raw error body from provider/relay for debugging */
+  rawErrorBody?: unknown;
+}
+
+/**
  * Options for initiating a retry request.
  */
 export interface RetryRequestOptions {
@@ -47,6 +59,8 @@ export interface RetryRequestOptions {
   logger: AgentLogger;
   /** Timeout in milliseconds (defaults to 5 minutes) */
   timeoutMs?: number;
+  /** Structured error details for expandable display */
+  errorDetails?: RetryErrorDetails;
 }
 
 /**
@@ -94,7 +108,8 @@ class RetryRequestCoordinatorImpl {
     streamId: string,
     options: RetryRequestOptions,
   ): Promise<RetryResult> {
-    const { logger, operation, errorMessage, model, timeoutMs } = options;
+    const { logger, operation, errorMessage, model, timeoutMs, errorDetails } =
+      options;
 
     // If there's an existing pending request for this stream, cancel it first.
     // This prevents stale timeouts from resolving the wrong request.
@@ -138,6 +153,7 @@ class RetryRequestCoordinatorImpl {
         operation,
         model,
         errorMessage,
+        errorDetails,
       });
     });
   }

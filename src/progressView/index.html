@@ -471,6 +471,13 @@
                 <div class="retry-request__operation"></div>
                 <div class="retry-request__meta"></div>
                 <div class="retry-request__error"></div>
+                <details class="retry-request__error-details" hidden>
+                  <summary class="retry-request__error-summary">
+                    <i class="codicon codicon-chevron-right toggle-icon"></i>
+                    <span>Details</span>
+                  </summary>
+                  <pre class="retry-request__error-body"></pre>
+                </details>
               </div>
               <vscode-toolbar-container class="retry-request__actions">
                 <vscode-toolbar-button
