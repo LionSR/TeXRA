@@ -18,8 +18,11 @@ export class DiffFileNameManager {
     suffix: string,
   ): string {
     const editedFileName = path.basename(editedFile);
-    const inputRoundMatch = path.basename(inputFile).match(/_r(\d+)_([^.]+)/);
-    const editedRoundMatch = editedFileName.match(/_r(\d+)_([^.]+)/);
+    // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
+    const inputMatches = [...path.basename(inputFile).matchAll(/_r(\d+)_([^.]+)/g)];
+    const editedMatches = [...editedFileName.matchAll(/_r(\d+)_([^.]+)/g)];
+    const inputRoundMatch = inputMatches.at(-1);
+    const editedRoundMatch = editedMatches.at(-1);
 
     if (inputRoundMatch && editedRoundMatch) {
       return this.generateRoundBasedFileName(
