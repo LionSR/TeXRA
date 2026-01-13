@@ -68,10 +68,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
-    // Check interruption before expensive operation for responsive cancellation
-    if (this.services.checkInterruption()) {
-      return null;
-    }
     if (!prepRes.supportsVision || prepRes.files.length === 0) {
       return null;
     }
