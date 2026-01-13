@@ -978,8 +978,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.logger.logProgress(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
         );
-      }
-      if (useBackgroundResponses) {
         response = await this.waitForBackgroundCompletion(
           client,
           response,
