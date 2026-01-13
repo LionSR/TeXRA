@@ -47,7 +47,6 @@ import {
   handleInvocationResult,
 } from './RetryState';
 import {
-  finalizeRound,
   type ResponseCycleParams,
   type ResponseCycleServices,
 } from './CycleServices';
@@ -748,17 +747,18 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
   }
 
   /**
-   * Finalize the round using the shared helper.
+   * Finalize the round by recording stats and invoking callback.
    *
    * This is the SINGLE finalization point for ResponseCycleFlow.
    * The parent ResponseCycleNode must pass onRoundFinalized
    * to services for this to work correctly.
-   *
-   * PocketFlow compliance: exec() receives prepRes, returns compute result.
    */
   async exec(_prepRes: void): Promise<void> {
-    // Use shared helper for consistent finalization (single source of truth)
-    await finalizeRound(this.services);
+    const { round, run, onRoundFinalized } = this.services;
+    run.recordRound(round);
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
   }
 
   /**
