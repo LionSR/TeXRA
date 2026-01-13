@@ -435,8 +435,9 @@ async function closeApprovalEditors(
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 /**
- * Create a temporary file in the workspace for LaTeX compilation.
- * Files created in the workspace can resolve \input{}, \include{}, and packages.
+ * Create a temporary file in the same directory as the original for LaTeX compilation.
+ * Placing the temp file alongside the original ensures \input{}, \include{}, and
+ * relative paths resolve correctly (they're relative to the file's directory).
  * Returns the temp file path and a cleanup function.
  */
 async function createWorkspaceTempFile(
@@ -449,13 +450,19 @@ async function createWorkspaceTempFile(
     throw new Error('No workspace folder open');
   }
 
+  // Resolve the original path relative to workspace
+  const absoluteOriginal = path.isAbsolute(originalPath)
+    ? originalPath
+    : path.join(workspacePath, originalPath);
+
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
-  const tempDir = path.join(workspacePath, '.texra-temp');
-  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
-  const tempPath = path.join(tempDir, tempFileName);
+  const originalDir = path.dirname(absoluteOriginal);
 
-  await fs.mkdir(tempDir, { recursive: true });
+  // Create temp file in the SAME directory as original so relative paths work
+  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
+  const tempPath = path.join(originalDir, tempFileName);
+
   await fs.writeFile(tempPath, content, 'utf8');
 
   const cleanup = async () => {
@@ -467,8 +474,6 @@ async function createWorkspaceTempFile(
       for (const tempExt of TEMP_EXTENSIONS) {
         await fs.unlink(basePathNoExt + tempExt).catch(() => {});
       }
-      // Try to remove temp dir if empty
-      await fs.rmdir(tempDir).catch(() => {});
     } catch {
       // Ignore cleanup errors
     }
@@ -478,8 +483,8 @@ async function createWorkspaceTempFile(
 }
 
 /**
- * Preview the proposed LaTeX document by creating a temp file in the workspace.
- * This allows \input{}, \include{}, and packages to be resolved properly.
+ * Preview the proposed LaTeX document by creating a temp file in the same directory.
+ * This ensures \input{}, \include{}, and relative paths resolve correctly.
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
 async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> {
@@ -508,7 +513,7 @@ async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> 
 
 /**
  * Run latexdiff on the original and proposed content.
- * Creates temp files in the workspace for proper dependency resolution.
+ * Creates temp files in the same directory as the original for proper path resolution.
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
 async function runLatexdiffForApproval(
