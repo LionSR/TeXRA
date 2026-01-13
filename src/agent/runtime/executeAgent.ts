@@ -394,9 +394,14 @@ async function runFlowWithLifecycle(
   try {
     const flowStatus = await runner();
     ctx.runStage.end(flowStatus);
-    // Update stream status, preserving WAITING state for tool-use flows awaiting follow-up
+    // Update stream status, preserving WAITING and STOPPED states:
+    // - WAITING: tool-use flows awaiting follow-up
+    // - STOPPED: user explicitly stopped the agent (don't overwrite with ERROR)
     const currentStatus = StreamStatusService.get(streamTabId);
-    if (currentStatus !== STREAM_STATUS.WAITING) {
+    if (
+      currentStatus !== STREAM_STATUS.WAITING &&
+      currentStatus !== STREAM_STATUS.STOPPED
+    ) {
       StreamStatusService.set(
         streamTabId,
         flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
