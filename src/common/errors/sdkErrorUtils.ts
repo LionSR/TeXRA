@@ -233,14 +233,10 @@ function matchNativeMessageError(
   };
 }
 
-/** Status codes that are retryable (5xx server errors, rate limits, timeouts) */
-const RETRYABLE_STATUS_CODES = new Set([
-  StatusCodes.REQUEST_TIMEOUT,
-  StatusCodes.TOO_MANY_REQUESTS,
-  StatusCodes.INTERNAL_SERVER_ERROR,
-  StatusCodes.BAD_GATEWAY,
-  StatusCodes.SERVICE_UNAVAILABLE,
-  StatusCodes.GATEWAY_TIMEOUT,
+/** 4xx status codes that are retryable (most 4xx are not) */
+const RETRYABLE_4XX_CODES = new Set([
+  StatusCodes.REQUEST_TIMEOUT, // 408
+  StatusCodes.TOO_MANY_REQUESTS, // 429
 ]);
 
 function isRetryableStatusCode(statusCode?: number): boolean {
@@ -251,7 +247,7 @@ function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
     return true;
   }
-  return RETRYABLE_STATUS_CODES.has(statusCode);
+  return RETRYABLE_4XX_CODES.has(statusCode);
 }
 
 function matchNativeHttpError(
@@ -396,25 +392,13 @@ function detectRequestId(err: unknown): string | undefined {
     headers?: { get?: (key: string) => string | null };
   };
 
-  // OpenAI SDK: request_id property
-  if (isString(candidate.request_id) && candidate.request_id) {
-    return candidate.request_id;
-  }
-
-  // Alternative casing
-  if (isString(candidate.requestId) && candidate.requestId) {
-    return candidate.requestId;
-  }
-
-  // Try headers (x-request-id is common)
-  if (candidate.headers?.get) {
-    const headerRequestId = candidate.headers.get('x-request-id');
-    if (headerRequestId) {
-      return headerRequestId;
-    }
-  }
-
-  return undefined;
+  // Try property names, then headers
+  return (
+    (isString(candidate.request_id) && candidate.request_id) ||
+    (isString(candidate.requestId) && candidate.requestId) ||
+    candidate.headers?.get?.('x-request-id') ||
+    undefined
+  );
 }
 
 /**
@@ -443,6 +427,14 @@ function detectRawErrorBody(err: unknown): unknown | undefined {
   );
 }
 
+/** Anthropic error type for server overload (no dedicated SDK class) */
+const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
+
+/** Check if error message contains the Anthropic overloaded pattern */
+function hasOverloadedError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR);
+}
+
 /**
  * Determines if an error is retryable based on status code and error content.
  *
@@ -450,8 +442,7 @@ function detectRawErrorBody(err: unknown): unknown | undefined {
  * - Anthropic: "overloaded_error" is retryable (no dedicated SDK class)
  */
 function determineRetryable(err: unknown, statusCode?: number): boolean {
-  // Anthropic: "overloaded_error" should be retryable
-  if (err instanceof Error && err.message.includes('overloaded_error')) {
+  if (hasOverloadedError(err)) {
     return true;
   }
   return isRetryableStatusCode(statusCode);
@@ -622,10 +613,6 @@ export function isPreviousResponseIdError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('previous_response_id');
 }
 
-// ============================================================================
-// Overloaded Error Detection (Anthropic)
-// ============================================================================
-
 /**
  * Checks if an error indicates the server is overloaded.
  *
@@ -636,8 +623,7 @@ export function isPreviousResponseIdError(err: unknown): boolean {
  * Overloaded errors should always be retryable.
  */
 export function isOverloadedError(err: unknown): boolean {
-  // Anthropic: "overloaded_error" in the error type field
-  return err instanceof Error && err.message.includes('overloaded_error');
+  return hasOverloadedError(err);
 }
 
 /**
