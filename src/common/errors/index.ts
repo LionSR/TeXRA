@@ -18,6 +18,8 @@ export {
   formatProviderHttpError,
   getSdkErrorMessage,
   isContextWindowError,
+  isPreviousResponseIdError,
+  isOverloadedError,
   enrichError,
   buildErrorLogData,
 } from './sdkErrorUtils';

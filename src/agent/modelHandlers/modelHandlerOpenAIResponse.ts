@@ -15,7 +15,10 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  isPreviousResponseIdError,
+} from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { ModelConfig } from '@model';
@@ -829,6 +832,56 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       params.reasoning = reasoning;
     }
 
+    // Wrap execution in try-catch to handle previousResponseId errors
+    // When an error indicates the response ID is invalid, we clear it so
+    // the retry logic can recover by starting a fresh conversation.
+    try {
+      return await this.executeResponseRequest(
+        client,
+        params,
+        effectiveMessages,
+        compactedThisCall,
+        useStreaming,
+        useBackgroundResponses,
+        signal,
+      );
+    } catch (error) {
+      // Log diagnostic info about the previousResponseId state
+      if (this.previousResponseId) {
+        this.logger.warn(
+          `Request failed with previousResponseId=${this.previousResponseId}. ` +
+            `Error: ${getSdkErrorMessage(error)}`,
+        );
+      }
+
+      // If the error indicates the response ID is invalid, clear it
+      // This allows retry logic to recover by starting a fresh conversation
+      if (isPreviousResponseIdError(error)) {
+        this.logger.info(
+          'Clearing previousResponseId due to invalid/expired response - ' +
+            'next retry will rebuild conversation from local history',
+        );
+        this.previousResponseId = null;
+        this.resetConversationState();
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Execute the response request (streaming or non-streaming).
+   * Extracted from createResponse to allow wrapping with error handling.
+   */
+  private async executeResponseRequest(
+    client: OpenAI,
+    params: ResponseCreateParamsBase,
+    effectiveMessages: ResponseInputItem[],
+    compactedThisCall: boolean,
+    useStreaming: boolean,
+    useBackgroundResponses: boolean,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     if (useStreaming) {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
