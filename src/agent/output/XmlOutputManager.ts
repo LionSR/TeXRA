@@ -282,7 +282,10 @@ export class XmlOutputManager {
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    const roundMatch = outputLocation.absolutePath.match(/_r(\d+)_/);
+    // Extract round from the correct position: {base}_{agent}_r{round}_{model}.{ext}
+    // Using position-based extraction (at -2) to avoid matching _rN_ from the base filename
+    const roundPart = outputParts.at(-2) ?? '';
+    const roundMatch = roundPart.match(/^r(\d+)$/);
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
