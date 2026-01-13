@@ -596,12 +596,14 @@ async function runLatexdiffForApproval(
     const originalLocation = pathToLocation(original.tempPath);
     const proposedLocation = pathToLocation(proposed.tempPath);
 
+    const workspacePath = WorkspaceFS.getPath();
     const result = await latexdiffService.runDiff(
       originalLocation,
       proposedLocation,
       '_diff',
       false, // don't run indent
       'coarse', // default math markup
+      { cwd: workspacePath ?? path.dirname(original.tempPath) },
     );
 
     if (!result.success || !result.diffFileName) {
