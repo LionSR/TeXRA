@@ -17,10 +17,12 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { type ToolResult, type LineChanges } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { WorkspaceFS, pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
+import { LaTeXdiffService } from '@latex/latexdiff';
 
 // Local file imports
 
@@ -65,6 +67,7 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'openDiff',
   'approveAll',
   'resumeApprovals',
+  'showLatexdiff',
 ] as const;
 
 export type ProgressViewApprovalAction =
@@ -179,6 +182,11 @@ export function setToolEditApprovalHandler(
   customHandler = handler;
 }
 
+function isLatexFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === '.tex' || ext === '.ltx' || ext === '.latex';
+}
+
 async function showProgressViewApprovalPrompt(
   requestId: string,
   request: ToolEditApprovalRequest,
@@ -195,6 +203,7 @@ async function showProgressViewApprovalPrompt(
     streamId: request.streamId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
+    isLatex: isLatexFile(request.path),
   });
 }
 
@@ -420,6 +429,57 @@ async function closeApprovalEditors(
 
   if (tabsToClose.length > 0) {
     await vscode.window.tabGroups.close(tabsToClose);
+  }
+}
+
+const latexdiffService = new LaTeXdiffService('ToolEditApproval');
+
+/**
+ * Run latexdiff on the original and proposed temp files for an approval entry.
+ * Opens the result in the LaTeX build preview (compiles to PDF).
+ *
+ * The temp files are stored in extension storage, but we execute latexdiff
+ * from the workspace directory so that \input{}, \include{}, and package
+ * dependencies can be resolved properly.
+ */
+async function runLatexdiffForApproval(
+  entry: PendingApprovalEntry,
+): Promise<void> {
+  try {
+    const originalLocation = pathToLocation(entry.originalUri.fsPath);
+    const proposedLocation = pathToLocation(entry.proposedUri.fsPath);
+
+    // Get workspace path for executing latexdiff - this ensures dependencies
+    // like \input{} and \include{} can be resolved from the workspace
+    const workspacePath = WorkspaceFS.getPath();
+
+    // Run latexdiff on the temp files with workspace as working directory
+    const result = await latexdiffService.runDiff(
+      originalLocation,
+      proposedLocation,
+      '_diff',
+      false, // don't run indent
+      'coarse', // default math markup
+      { cwd: workspacePath || path.dirname(entry.originalUri.fsPath) },
+    );
+
+    if (!result.success || !result.diffFileName) {
+      vscode.window.showErrorMessage(
+        result.message ?? 'Failed to generate LaTeXdiff',
+      );
+      return;
+    }
+
+    // Open the generated diff file in the LaTeX build preview
+    const diffFilePath = path.join(
+      path.dirname(entry.originalUri.fsPath),
+      result.diffFileName,
+    );
+    const diffLocation = pathToLocation(diffFilePath);
+    await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`LaTeXdiff failed: ${message}`);
   }
 }
 
@@ -700,6 +760,16 @@ export async function handleProgressViewToolEditApprovalAction(
       entry.originalContent,
       entry.proposedContent,
     );
+    return;
+  }
+
+  if (payload.action === 'showLatexdiff') {
+    if (entry.isSettled()) {
+      return;
+    }
+
+    // Run latexdiff on the original and proposed temp files
+    await runLatexdiffForApproval(entry);
     return;
   }
 

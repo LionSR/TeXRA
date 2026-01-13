@@ -23,6 +23,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
     });
     this.isBypassActive = false;
     this._handleToggle = this._handleToggle.bind(this);
+    this._handleDropdownToggle = this._handleDropdownToggle.bind(this);
+    this._handleClickOutside = this._handleClickOutside.bind(this);
   }
 
   /** @override */
@@ -34,14 +36,28 @@ export class ApprovalRequests extends BaseUIRequestManager {
         this._handleToggle,
         true,
       );
+      addEventListenerSafely(
+        this.container,
+        'click',
+        this._handleDropdownToggle,
+        true,
+      );
     }
+    // Listen for clicks outside to close dropdown menus
+    document.addEventListener('click', this._handleClickOutside, true);
   }
 
   /** @override */
   _cleanupAdditionalListeners() {
     if (this.container) {
       this.container.removeEventListener('change', this._handleToggle, true);
+      this.container.removeEventListener(
+        'click',
+        this._handleDropdownToggle,
+        true,
+      );
     }
+    document.removeEventListener('click', this._handleClickOutside, true);
   }
 
   /** @override */
@@ -85,6 +101,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
     const bypassButton = element.querySelector('[data-action="approveAll"]');
+    const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
+    const latexdiffMenuItem = element.querySelector('.latexdiff-menu-item');
     element.dataset.streamId = request.streamId || '';
 
     if (pathElem) {
@@ -99,6 +117,14 @@ export class ApprovalRequests extends BaseUIRequestManager {
       const allowBypass = request.allowBypass !== false;
       bypassButton.toggleAttribute('disabled', !allowBypass);
       setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
+    }
+
+    // Show/hide dropdown trigger and menu item based on whether file is LaTeX
+    if (dropdownTrigger) {
+      dropdownTrigger.toggleAttribute('hidden', !request.isLatex);
+    }
+    if (latexdiffMenuItem) {
+      latexdiffMenuItem.dataset.requestId = request.requestId;
     }
   }
 
@@ -186,6 +212,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
       approve: 'approve',
       approveAll: 'approveAll',
       reject: 'reject',
+      showLatexdiff: 'showLatexdiff',
     };
 
     const mappedAction = actionMap[action];
@@ -232,5 +259,77 @@ export class ApprovalRequests extends BaseUIRequestManager {
       requestId,
       action,
     });
+  }
+
+  /**
+   * Handle dropdown trigger clicks to toggle menu visibility.
+   * @private
+   */
+  _handleDropdownToggle(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const trigger = event.target.closest('.diff-dropdown-trigger');
+    if (!trigger) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const dropdown = trigger.closest('.diff-dropdown');
+    if (!dropdown) {
+      return;
+    }
+
+    const menu = dropdown.querySelector('.diff-dropdown-menu');
+    if (!menu) {
+      return;
+    }
+
+    // Close other open menus first
+    this._closeAllDropdowns();
+
+    // Toggle this menu
+    const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+    menu.show = !isExpanded;
+    trigger.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+  }
+
+  /**
+   * Handle clicks outside dropdown menus to close them.
+   * @private
+   */
+  _handleClickOutside(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    // If click is inside a dropdown, don't close
+    if (event.target.closest('.diff-dropdown')) {
+      return;
+    }
+
+    this._closeAllDropdowns();
+  }
+
+  /**
+   * Close all open dropdown menus.
+   * @private
+   */
+  _closeAllDropdowns() {
+    if (!this.container) {
+      return;
+    }
+
+    const triggers = this.container.querySelectorAll('.diff-dropdown-trigger');
+    for (const trigger of triggers) {
+      const dropdown = trigger.closest('.diff-dropdown');
+      const menu = dropdown?.querySelector('.diff-dropdown-menu');
+      if (menu) {
+        menu.show = false;
+      }
+      trigger.setAttribute('aria-expanded', 'false');
+    }
   }
 }
