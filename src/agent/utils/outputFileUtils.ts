@@ -33,8 +33,10 @@ export function getOutputFileName(
 
   let newRound = currRound;
   if (editedFile) {
-    const match = editedFile.match(/_r(\d+)_/);
-    const editedRound = match ? parseInt(match[1]) : 0;
+    // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
+    const matches = [...editedFile.matchAll(/_r(\d+)_/g)];
+    const lastMatch = matches.at(-1);
+    const editedRound = lastMatch ? parseInt(lastMatch[1]) : 0;
     newRound += editedRound + 1;
   }
 
