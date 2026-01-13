@@ -16,13 +16,19 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { isLatexFile } from '@common/files/fileTypeUtils';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { type ToolResult, type LineChanges } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
+import {
+  type LatexPreviewEntry,
+  previewProposedLatex,
+  runLatexdiff,
+} from './latexPreview';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -45,16 +51,11 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 const REVEAL_TIMEOUT_MS = 1500;
 
-interface PendingApprovalEntry {
+interface PendingApprovalEntry extends LatexPreviewEntry {
   request: ToolEditApprovalRequest;
-  originalUri: vscode.Uri;
-  proposedUri: vscode.Uri;
-  originalContent: string;
-  proposedContent: string;
   title: string;
   streamId?: StreamTabId;
   lineChanges: LineChanges;
-  isSettled: () => boolean;
   settle: (result: ToolEditApprovalResult) => void;
 }
 
@@ -65,6 +66,8 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'openDiff',
   'approveAll',
   'resumeApprovals',
+  'showLatexdiff',
+  'previewProposed',
 ] as const;
 
 export type ProgressViewApprovalAction =
@@ -195,6 +198,7 @@ async function showProgressViewApprovalPrompt(
     streamId: request.streamId ?? '',
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
+    isLatex: isLatexFile(request.path),
   });
 }
 
@@ -443,25 +447,17 @@ async function nativeRequestApproval(
     originalContent,
     proposedContent,
   );
-  const totalChanged = Math.max(lineChanges.added + lineChanges.removed, 0);
-  const changeSummaryParts: string[] = [];
-  if (lineChanges.added > 0) {
-    changeSummaryParts.push(`+${lineChanges.added}`);
-  }
-  if (lineChanges.removed > 0) {
-    changeSummaryParts.push(`-${lineChanges.removed}`);
-  }
-  const changeSummary =
-    changeSummaryParts.length > 0
-      ? `${changeSummaryParts.join(' / ')} ${
-          totalChanged === 1 ? 'line' : 'lines'
-        }`
-      : undefined;
-
-  const titleDetails = changeSummary
-    ? `${description} · ${changeSummary}`
-    : description;
-  const title = `Tool edit (${sourceTool}): ${titleDetails}`;
+  const { added, removed } = lineChanges;
+  const totalChanged = added + removed;
+  const changeParts = [
+    ...(added > 0 ? [`+${added}`] : []),
+    ...(removed > 0 ? [`-${removed}`] : []),
+  ];
+  const changeSuffix =
+    changeParts.length > 0
+      ? ` · ${changeParts.join(' / ')} ${totalChanged === 1 ? 'line' : 'lines'}`
+      : '';
+  const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
@@ -481,7 +477,7 @@ async function nativeRequestApproval(
           return;
         }
         settled = true;
-        pendingApprovals.delete(requestId);
+        // Note: Don't delete from pendingApprovals here - finally block handles cleanup
         resolve(value);
       };
 
@@ -496,6 +492,8 @@ async function nativeRequestApproval(
         lineChanges,
         isSettled: () => settled,
         settle,
+        workspaceTempCleanup: [],
+        latexOperationInProgress: false,
       };
 
       pendingApprovals.set(requestId, entry);
@@ -529,10 +527,20 @@ async function nativeRequestApproval(
       lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
+    // Get entry before deleting to access workspace temp cleanup functions
+    const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
     await cleanupTempFile(originalUri);
     await cleanupTempFile(proposedUri);
+
+    // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
+    if (entry?.workspaceTempCleanup.length) {
+      await Promise.all(
+        entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
+      );
+    }
+
     resolveProgressViewApprovalPrompt(requestId);
   }
 }
@@ -609,8 +617,6 @@ export function getApprovedContent(
 ): string {
   return approval.appliedContent ?? fallback;
 }
-
-// (legacy formatting removed; use formatUnifiedApprovalUserDiff instead)
 
 /**
  * Render a human-readable, line-numbered unified diff for user adjustments.
@@ -703,21 +709,37 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
+  if (payload.action === 'showLatexdiff') {
+    if (entry.isSettled()) {
+      return;
+    }
+
+    // Run latexdiff on the original and proposed temp files
+    await runLatexdiff(entry);
+    return;
+  }
+
+  if (payload.action === 'previewProposed') {
+    if (entry.isSettled()) {
+      return;
+    }
+
+    // Compile and preview the proposed LaTeX document in workspace context
+    await previewProposedLatex(entry);
+    return;
+  }
+
   if (entry.isSettled()) {
     return;
   }
 
-  if (payload.action === 'approve') {
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
-    entry.settle({ accepted: true, appliedContent });
-    return;
-  }
-
-  if (payload.action === 'approveAll') {
-    enableSessionApprovalBypass();
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+  if (payload.action === 'approve' || payload.action === 'approveAll') {
+    if (payload.action === 'approveAll') {
+      enableSessionApprovalBypass();
+    }
+    const appliedContent = await fs
+      .readFile(entry.proposedUri.fsPath, 'utf-8')
+      .catch(() => entry.proposedContent);
     entry.settle({ accepted: true, appliedContent });
     return;
   }
