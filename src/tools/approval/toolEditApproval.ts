@@ -448,11 +448,14 @@ async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
   }
 }
 
+/** Temp file location options */
+type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
+
 /**
- * Create a temporary file in the same directory as the original for LaTeX compilation.
- * Placing the temp file alongside the original ensures \input{}, \include{}, and
- * relative paths resolve correctly (they're relative to the file's directory).
- * Returns the temp file path and a cleanup function.
+ * Create a temporary file for LaTeX compilation.
+ * Location is controlled by texra.latexdiff.tempFileLocation setting:
+ * - sameDirectory: Same directory as original (best for \input{} paths)
+ * - workspaceTemp: .texra-temp directory (keeps source clean)
  */
 async function createWorkspaceTempFile(
   originalPath: string,
@@ -464,32 +467,46 @@ async function createWorkspaceTempFile(
     throw new Error('No workspace folder open');
   }
 
-  // Resolve the original path relative to workspace
-  const absoluteOriginal = path.isAbsolute(originalPath)
-    ? originalPath
-    : path.join(workspacePath, originalPath);
+  const location = getConfig<TempFileLocation>(
+    'texra.latexdiff.tempFileLocation',
+    'sameDirectory',
+  );
 
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
-  const originalDir = path.dirname(absoluteOriginal);
-
-  // Create temp file in the SAME directory as original so relative paths work
   const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
-  const tempPath = path.join(originalDir, tempFileName);
 
+  let tempDir: string;
+  if (location === 'workspaceTemp') {
+    tempDir = path.join(workspacePath, '.texra-temp');
+    await fs.mkdir(tempDir, { recursive: true });
+  } else {
+    // sameDirectory: place alongside original for correct path resolution
+    const absoluteOriginal = path.isAbsolute(originalPath)
+      ? originalPath
+      : path.join(workspacePath, originalPath);
+    tempDir = path.dirname(absoluteOriginal);
+  }
+
+  const tempPath = path.join(tempDir, tempFileName);
   await fs.writeFile(tempPath, content, 'utf8');
 
   const cleanup = async () => {
     await fs.unlink(tempPath).catch(() => {});
     await cleanupLatexAuxFiles(tempPath);
+    // Try to remove .texra-temp if empty (only relevant for workspaceTemp mode)
+    if (location === 'workspaceTemp') {
+      const texraTempDir = path.join(workspacePath, '.texra-temp');
+      await fs.rmdir(texraTempDir).catch(() => {});
+    }
   };
 
   return { tempPath, cleanup };
 }
 
 /**
- * Preview the proposed LaTeX document by creating a temp file in the same directory.
- * This ensures \input{}, \include{}, and relative paths resolve correctly.
+ * Preview the proposed LaTeX document by creating a temp file.
+ * Location is controlled by texra.latexdiff.tempFileLocation setting.
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
 async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> {
@@ -526,7 +543,7 @@ async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> 
 
 /**
  * Run latexdiff on the original and proposed content.
- * Creates temp files in the same directory as the original for proper path resolution.
+ * Temp file location is controlled by texra.latexdiff.tempFileLocation setting.
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
 async function runLatexdiffForApproval(
