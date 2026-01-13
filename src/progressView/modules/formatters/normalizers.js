@@ -53,10 +53,7 @@ export function stringifyForDisplay(value) {
   }
 
   try {
-    const yamlString = yaml.stringify(value, {
-      lineWidth: 0, // Disable line wrapping to avoid block scalar indicators
-      blockQuote: false, // Prefer inline strings over block scalars
-    });
+    const yamlString = yaml.stringify(value);
     return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
   } catch {
     return String(value);
