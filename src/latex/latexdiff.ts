@@ -16,6 +16,7 @@ import { runLatexFormatter } from './texFormatter';
 import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 
 // Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
@@ -325,11 +326,8 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
-      const firstMatches = [...firstLocation.absolutePath.matchAll(/_r(\d+)_/g)];
-      const secondMatches = [...secondLocation.absolutePath.matchAll(/_r(\d+)_/g)];
-      const firstRoundMatch = firstMatches.at(-1);
-      const secondRoundMatch = secondMatches.at(-1);
+      const firstRoundMatch = extractLastRoundMatch(firstLocation.absolutePath);
+      const secondRoundMatch = extractLastRoundMatch(secondLocation.absolutePath);
 
       if (!firstRoundMatch || !secondRoundMatch) {
         const message = 'Could not extract round numbers from file names';
