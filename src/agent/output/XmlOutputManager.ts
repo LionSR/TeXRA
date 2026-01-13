@@ -9,6 +9,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -282,8 +283,8 @@ export class XmlOutputManager {
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    const roundMatch = outputLocation.absolutePath.match(/_r(\d+)_/);
-    const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+    const lastRoundMatch = extractLastRoundMatch(outputLocation.absolutePath);
+    const currRound = lastRoundMatch ? parseInt(lastRoundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
