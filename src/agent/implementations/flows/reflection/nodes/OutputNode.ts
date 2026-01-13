@@ -91,6 +91,21 @@ export class OutputNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
+    // Check interruption before expensive operations for responsive cancellation
+    if (this.services.checkInterruption()) {
+      return {
+        round: prepRes.currentRound,
+        rawOutput: null,
+        outputs: [],
+        xmlSummary: {
+          tagContents: {},
+          documents: [],
+          singleOutputFile: null,
+          sourceLocation: null,
+        },
+      };
+    }
+
     const { outputHandler, setting, logger } = this.services;
     const {
       currentRound,

@@ -308,6 +308,12 @@ export class RoundPersistedFlow<
         // Use the shared state returned by stepWithResult (authoritative)
         currentShared = stepResult.shared;
 
+        // Check interruption before round transition for responsive cancellation
+        if (hooks?.checkInterruption?.()) {
+          currentShared.continueRounds = false;
+          break;
+        }
+
         // Handle round transition if signaled (manages stage context internally)
         if (stepResult.action === FlowTransition.CONTINUE_NEXT_ROUND) {
           await this.handleContinueToNextRound(currentShared);
