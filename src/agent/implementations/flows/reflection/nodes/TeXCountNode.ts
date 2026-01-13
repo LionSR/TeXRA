@@ -51,10 +51,6 @@ export class TeXCountNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<string | null> {
-    // Check interruption before expensive operation for responsive cancellation
-    if (this.services.checkInterruption()) {
-      return null;
-    }
     if (!prepRes.attachTeXCount || prepRes.files.length === 0) {
       return null;
     }
