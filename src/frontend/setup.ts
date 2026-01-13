@@ -226,6 +226,8 @@ export async function configureLatexSettings() {
       // Define all settings to configure
       const settings: Array<[string, unknown]> = [
         // LaTeX Workshop build settings
+        // Run builds from workspace folder so relative paths resolve consistently
+        ['latex-workshop.latex.build.fromWorkspaceFolder', true],
         [
           'latex-workshop.latex.external.build.args',
           ['--output-directory=build', '-f', '-pdf'],
