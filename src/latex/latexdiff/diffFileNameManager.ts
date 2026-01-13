@@ -1,14 +1,17 @@
 // Standard library imports
 import * as path from 'path';
 
-import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
+import {
+  extractLastRoundMatch,
+  extractLastRoundModelMatch,
+} from '@agent/utils/mergeFileUtils';
 
 /** Extract base name from filename using round pattern */
 function extractBaseName(filename: string, includeRound: boolean): string {
   const name = path.parse(filename).name;
   const lastMatch = extractLastRoundMatch(name);
   if (!lastMatch || lastMatch.index === undefined) {
-    throw new Error('Failed to extract base name from edited file');
+    throw new Error(`Failed to extract base name from edited file: ${filename}`);
   }
   // Return everything up to (or including) the last _rN
   // The -1 excludes the trailing underscore from _rN_ when includeRound is true
@@ -17,9 +20,6 @@ function extractBaseName(filename: string, includeRound: boolean): string {
     : name.slice(0, lastMatch.index);
 }
 
-/** Pattern to extract round and model: _r{N}_{model} where model stops at underscore or dot */
-const ROUND_MODEL_PATTERN = /_r(\d+)_([^_.]+)/g;
-
 export class DiffFileNameManager {
   generateDiffFileName(
     inputFile: string,
@@ -27,9 +27,8 @@ export class DiffFileNameManager {
     suffix: string,
   ): string {
     const editedFileName = path.basename(editedFile);
-    // Find the LAST _rN_model pattern (base filename may contain its own _rN_)
-    const inputRoundMatch = [...path.basename(inputFile).matchAll(ROUND_MODEL_PATTERN)].at(-1);
-    const editedRoundMatch = [...editedFileName.matchAll(ROUND_MODEL_PATTERN)].at(-1);
+    const inputRoundMatch = extractLastRoundModelMatch(path.basename(inputFile));
+    const editedRoundMatch = extractLastRoundModelMatch(editedFileName);
 
     if (inputRoundMatch && editedRoundMatch) {
       return this.generateRoundBasedFileName(
