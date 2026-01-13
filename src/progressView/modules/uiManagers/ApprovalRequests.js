@@ -220,6 +220,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
       previewProposed: 'previewProposed',
     };
 
+    // Close dropdown if action is from menu item
+    const dropdownActions = ['showLatexdiff', 'previewProposed'];
+    if (dropdownActions.includes(action)) {
+      this._closeAllDropdowns();
+    }
+
     const mappedAction = actionMap[action];
     if (mappedAction) {
       vscode.postMessage({
