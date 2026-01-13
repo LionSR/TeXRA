@@ -20,7 +20,6 @@ import { isNonEmptyString } from '@utils/core';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
-import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
@@ -149,14 +148,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
     if (useStreaming) {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
-      const stream = await executeRequest(
-        {
-          model: this.config.name,
-          operation: 'openrouter.chat.completions.stream',
-          signal,
-        },
-        () => client.chat.completions.stream(kwargs, { signal }),
-      );
+      const stream = await client.chat.completions.stream(kwargs, { signal });
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
@@ -187,16 +179,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       const finalOutput = response.choices?.[0]?.message?.content ?? '';
       if (output) output.finalize(finalOutput);
       return response;
-    } else {
-      return executeRequest(
-        {
-          model: this.config.name,
-          operation: 'openrouter.chat.completions.create',
-          signal,
-        },
-        () => client.chat.completions.create(kwargs, { signal }),
-      );
     }
+
+    return client.chat.completions.create(kwargs, { signal });
   }
 
   /**

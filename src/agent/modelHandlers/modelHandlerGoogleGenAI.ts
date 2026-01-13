@@ -73,7 +73,6 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
 import {
   computeReducedMaxTokens,
@@ -288,20 +287,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         this.logger.debug(
           `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
         );
-        const uploadResult: File = await executeRequest(
-          {
-            model: this.config.name,
-            operation: `google.files.upload:${fileName}`,
+        const uploadResult: File = await client.files.upload({
+          file: uploadPath,
+          config: {
+            mimeType,
+            displayName: fileName,
           },
-          () =>
-            client.files.upload({
-              file: uploadPath,
-              config: {
-                mimeType,
-                displayName: fileName,
-              },
-            }),
-        );
+        });
         const fileUri = uploadResult.uri;
 
         if (!fileUri) {
@@ -453,19 +445,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // history, so append the final user message that will be sent next.
         countContents.push(createUserContent([...lastMessageParts]));
 
-        const responseTokenCount = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'google.models.countTokens',
-            signal,
-          },
-          () =>
-            client.models.countTokens({
-              model: this.config.fullName,
-              contents: countContents,
-              config: { abortSignal: signal },
-            }),
-        );
+        const responseTokenCount = await client.models.countTokens({
+          model: this.config.fullName,
+          contents: countContents,
+          config: { abortSignal: signal },
+        });
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
         if (totalTokens > this.config.contextWindow) {
@@ -530,14 +514,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           message: [...lastMessageParts],
           config: { ...generationConfig, abortSignal: signal },
         };
-        const stream = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'google.chat.sendMessageStream',
-            signal,
-          },
-          () => chat.sendMessageStream(streamParams),
-        );
+        const stream = await chat.sendMessageStream(streamParams);
 
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
@@ -658,16 +635,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         message: [...lastMessageParts],
         config: { ...generationConfig, abortSignal: signal },
       };
-      const result = await executeRequest(
-        {
-          model: this.config.name,
-          operation: 'google.chat.sendMessage',
-          signal,
-        },
-        () => chat.sendMessage(sendParams),
-      );
 
-      return result;
+      return chat.sendMessage(sendParams);
     } catch (error) {
       // Error logging follows "log at the boundary" principle - Node's retryPrompt
       // or execFallback will log the error once. We only add debug diagnostics here
