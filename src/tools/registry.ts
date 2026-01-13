@@ -34,6 +34,12 @@ import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
 import { LeanCheckTool, LakeBuildTool, LeanGoalTool } from './lean';
+import {
+  LeanLspGoalTool,
+  LeanHoverTool,
+  LeanCompletionsTool,
+  LeanTermGoalTool,
+} from './lean';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -73,6 +79,11 @@ export function getDefaultToolRegistry(): IToolRegistry {
       lean_check: new LeanCheckTool(),
       lake_build: new LakeBuildTool(),
       lean_goal: new LeanGoalTool(),
+      // LSP-based Lean tools
+      lean_lsp_goal: new LeanLspGoalTool(),
+      lean_hover: new LeanHoverTool(),
+      lean_completions: new LeanCompletionsTool(),
+      lean_term_goal: new LeanTermGoalTool(),
     });
   }
   return defaultRegistryInstance;

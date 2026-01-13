@@ -5,9 +5,16 @@ settings:
   agentType: toolUse
   tools:
     - todo_write
+    # CLI-based Lean tools (compile to check)
     - lean_check
     - lean_goal
     - lake_build
+    # LSP-based Lean tools (real-time via language server)
+    - lean_lsp_goal
+    - lean_hover
+    - lean_completions
+    - lean_term_goal
+    # General tools
     - bash
     - read_file
     - write_file
@@ -47,18 +54,35 @@ prompts:
 
     ## Lean 4 Execution
 
-    Use dedicated tools for Lean verification:
-    - **lean_check**: Check a single .lean file for errors (preferred)
+    ### CLI Tools (compile file to check)
+    - **lean_check**: Check a single .lean file for errors
       - `lean_check(file: "path/to/file.lean")` - Basic check
       - `lean_check(file: "path/to/file.lean", useProjectContext: true)` - With project imports
       - Returns structured output with goal states extracted and formatted
-    - **lean_goal**: Get proof goal state at a specific line
+    - **lean_goal**: Get proof goal state from compiler output
       - `lean_goal(file: "path/to/file.lean", line: 42)` - Get goals at line 42
-      - Useful for understanding what needs to be proved at a point
-    - **lake_build**: Build entire project with dependencies
+    - **lake_build**: Build entire project
       - `lake_build()` - Build all targets
       - `lake_build(target: "MyLib", json: true)` - Build with JSON output
-    - **bash**: Use for other commands like `lake update`, `lake exe cache get`, etc.
+
+    ### LSP Tools (real-time via language server)
+    These tools communicate with Lean's language server for instant feedback without recompiling.
+    The first call starts `lake serve` which may take a moment.
+
+    - **lean_lsp_goal**: Real-time proof goal state
+      - `lean_lsp_goal(file: "path/to/file.lean", line: 42, column: 10)` - Get goals at position
+      - Faster than lean_goal, works without full compilation
+    - **lean_hover**: Get documentation and type info
+      - `lean_hover(file: "path/to/file.lean", line: 10, column: 15)` - Hover info at position
+      - Shows type signatures, documentation, and theorem statements
+    - **lean_completions**: Get auto-completion suggestions
+      - `lean_completions(file: "path/to/file.lean", line: 42, column: 10)` - Completions at position
+      - Useful for discovering available tactics or lemma names
+    - **lean_term_goal**: Get expected type in term mode
+      - `lean_term_goal(file: "path/to/file.lean", line: 42, column: 10)` - Expected type at position
+
+    ### Other Commands
+    Use **bash** for: `lake update`, `lake exe cache get`, `elan` commands, etc.
 
     For Mathlib-dependent proofs, ensure `lakefile.lean` has Mathlib dependency and run `lake exe cache get` to fetch prebuilt oleans.
 
