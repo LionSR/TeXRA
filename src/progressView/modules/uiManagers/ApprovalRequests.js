@@ -101,7 +101,9 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
     const bypassButton = element.querySelector('[data-action="approveAll"]');
+    const mainDiffButton = element.querySelector('.diff-main-button');
     const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
+    const dropdownMenu = element.querySelector('.diff-dropdown-menu');
     const previewMenuItem = element.querySelector('.preview-menu-item');
     const latexdiffMenuItem = element.querySelector('.latexdiff-menu-item');
     element.dataset.streamId = request.streamId || '';
@@ -120,9 +122,17 @@ export class ApprovalRequests extends BaseUIRequestManager {
       setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
 
+    if (mainDiffButton) {
+      mainDiffButton.dataset.requestId = request.requestId;
+    }
+
     // Show/hide dropdown trigger and set requestIds on menu items for LaTeX files
     if (dropdownTrigger) {
       dropdownTrigger.toggleAttribute('hidden', !request.isLatex);
+      dropdownTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (dropdownMenu) {
+      dropdownMenu.show = false;
     }
     if (previewMenuItem) {
       previewMenuItem.dataset.requestId = request.requestId;

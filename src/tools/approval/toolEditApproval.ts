@@ -453,6 +453,17 @@ type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
 
 const TEXRA_TEMP_DIR = '.texra-temp';
 
+function registerWorkspaceTempCleanup(
+  entry: PendingApprovalEntry,
+  cleanup: () => Promise<void>,
+): void {
+  if (entry.isSettled()) {
+    void cleanup().catch(() => {});
+    return;
+  }
+  entry.workspaceTempCleanup.push(cleanup);
+}
+
 /**
  * Create a temporary file for LaTeX compilation.
  * Location is controlled by texra.latexdiff.tempFileLocation setting:
@@ -510,7 +521,9 @@ async function createWorkspaceTempFile(
  * Location is controlled by texra.latexdiff.tempFileLocation setting.
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
-async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> {
+async function previewProposedLatex(
+  entry: PendingApprovalEntry,
+): Promise<void> {
   // Guard against multiple concurrent operations
   if (entry.latexOperationInProgress) {
     return;
@@ -529,7 +542,10 @@ async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> 
     );
 
     // Register cleanup to run when approval is resolved
-    entry.workspaceTempCleanup.push(cleanup);
+    registerWorkspaceTempCleanup(entry, cleanup);
+    if (entry.isSettled()) {
+      return;
+    }
 
     // Open and build the temp file
     const tempLocation = pathToLocation(tempPath);
@@ -567,14 +583,14 @@ async function runLatexdiffForApproval(
       originalContent,
       '_original',
     );
-    entry.workspaceTempCleanup.push(original.cleanup);
+    registerWorkspaceTempCleanup(entry, original.cleanup);
 
     const proposed = await createWorkspaceTempFile(
       entry.request.path,
       proposedContent,
       '_proposed',
     );
-    entry.workspaceTempCleanup.push(proposed.cleanup);
+    registerWorkspaceTempCleanup(entry, proposed.cleanup);
 
     // Run latexdiff on the workspace temp files
     const originalLocation = pathToLocation(original.tempPath);
@@ -596,18 +612,30 @@ async function runLatexdiffForApproval(
     }
 
     // Open the generated diff file in the LaTeX build preview
+    if (
+      result.diffFileName.includes('/') ||
+      result.diffFileName.includes('\\') ||
+      result.diffFileName.includes('..')
+    ) {
+      vscode.window.showErrorMessage(
+        'LaTeXdiff failed: invalid output filename',
+      );
+      return;
+    }
+
     const diffFilePath = path.join(
       path.dirname(original.tempPath),
       result.diffFileName,
     );
-    const diffLocation = pathToLocation(diffFilePath);
-    await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
-
-    // Register cleanup for diff file and its aux files
-    entry.workspaceTempCleanup.push(async () => {
+    registerWorkspaceTempCleanup(entry, async () => {
       await fs.unlink(diffFilePath).catch(() => {});
       await cleanupLatexAuxFiles(diffFilePath);
     });
+    if (entry.isSettled()) {
+      return;
+    }
+    const diffLocation = pathToLocation(diffFilePath);
+    await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`LaTeXdiff failed: ${message}`);
@@ -935,7 +963,10 @@ export async function handleProgressViewToolEditApprovalAction(
   if (payload.action === 'approve') {
     // Read the current content from the proposed file - user may have modified it in the diff view
     try {
-      const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+      const appliedContent = await fs.readFile(
+        entry.proposedUri.fsPath,
+        'utf-8',
+      );
       entry.settle({ accepted: true, appliedContent });
     } catch {
       // Fall back to original proposed content if file read fails
@@ -948,7 +979,10 @@ export async function handleProgressViewToolEditApprovalAction(
     enableSessionApprovalBypass();
     // Read the current content from the proposed file - user may have modified it in the diff view
     try {
-      const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+      const appliedContent = await fs.readFile(
+        entry.proposedUri.fsPath,
+        'utf-8',
+      );
       entry.settle({ accepted: true, appliedContent });
     } catch {
       // Fall back to original proposed content if file read fails
