@@ -6,6 +6,7 @@ settings:
   tools:
     - todo_write
     - lean_check
+    - lean_goal
     - lake_build
     - bash
     - read_file
@@ -50,9 +51,13 @@ prompts:
     - **lean_check**: Check a single .lean file for errors (preferred)
       - `lean_check(file: "path/to/file.lean")` - Basic check
       - `lean_check(file: "path/to/file.lean", useProjectContext: true)` - With project imports
+      - Returns structured output with goal states extracted and formatted
+    - **lean_goal**: Get proof goal state at a specific line
+      - `lean_goal(file: "path/to/file.lean", line: 42)` - Get goals at line 42
+      - Useful for understanding what needs to be proved at a point
     - **lake_build**: Build entire project with dependencies
       - `lake_build()` - Build all targets
-      - `lake_build(target: "MyLib")` - Build specific target
+      - `lake_build(target: "MyLib", json: true)` - Build with JSON output
     - **bash**: Use for other commands like `lake update`, `lake exe cache get`, etc.
 
     For Mathlib-dependent proofs, ensure `lakefile.lean` has Mathlib dependency and run `lake exe cache get` to fetch prebuilt oleans.
