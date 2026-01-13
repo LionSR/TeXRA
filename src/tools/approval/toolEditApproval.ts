@@ -666,25 +666,17 @@ async function nativeRequestApproval(
     originalContent,
     proposedContent,
   );
-  const totalChanged = Math.max(lineChanges.added + lineChanges.removed, 0);
-  const changeSummaryParts: string[] = [];
-  if (lineChanges.added > 0) {
-    changeSummaryParts.push(`+${lineChanges.added}`);
-  }
-  if (lineChanges.removed > 0) {
-    changeSummaryParts.push(`-${lineChanges.removed}`);
-  }
-  const changeSummary =
-    changeSummaryParts.length > 0
-      ? `${changeSummaryParts.join(' / ')} ${
-          totalChanged === 1 ? 'line' : 'lines'
-        }`
-      : undefined;
-
-  const titleDetails = changeSummary
-    ? `${description} · ${changeSummary}`
-    : description;
-  const title = `Tool edit (${sourceTool}): ${titleDetails}`;
+  const { added, removed } = lineChanges;
+  const totalChanged = added + removed;
+  const changeParts = [
+    ...(added > 0 ? [`+${added}`] : []),
+    ...(removed > 0 ? [`-${removed}`] : []),
+  ];
+  const changeSuffix =
+    changeParts.length > 0
+      ? ` · ${changeParts.join(' / ')} ${totalChanged === 1 ? 'line' : 'lines'}`
+      : '';
+  const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
   let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
@@ -845,8 +837,6 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-// (legacy formatting removed; use formatUnifiedApprovalUserDiff instead)
-
 /**
  * Render a human-readable, line-numbered unified diff for user adjustments.
  * Uses difflib to compute a unified diff between the suggested and applied
@@ -962,34 +952,14 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
-  if (payload.action === 'approve') {
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    try {
-      const appliedContent = await fs.readFile(
-        entry.proposedUri.fsPath,
-        'utf-8',
-      );
-      entry.settle({ accepted: true, appliedContent });
-    } catch {
-      // Fall back to original proposed content if file read fails
-      entry.settle({ accepted: true, appliedContent: entry.proposedContent });
+  if (payload.action === 'approve' || payload.action === 'approveAll') {
+    if (payload.action === 'approveAll') {
+      enableSessionApprovalBypass();
     }
-    return;
-  }
-
-  if (payload.action === 'approveAll') {
-    enableSessionApprovalBypass();
-    // Read the current content from the proposed file - user may have modified it in the diff view
-    try {
-      const appliedContent = await fs.readFile(
-        entry.proposedUri.fsPath,
-        'utf-8',
-      );
-      entry.settle({ accepted: true, appliedContent });
-    } catch {
-      // Fall back to original proposed content if file read fails
-      entry.settle({ accepted: true, appliedContent: entry.proposedContent });
-    }
+    const appliedContent = await fs
+      .readFile(entry.proposedUri.fsPath, 'utf-8')
+      .catch(() => entry.proposedContent);
+    entry.settle({ accepted: true, appliedContent });
     return;
   }
 
