@@ -78,180 +78,99 @@ type ErrorConstructor<T extends Error = Error> = abstract new (
   ...args: never[]
 ) => T;
 
-interface NativeMessageErrorEntry {
+/**
+ * Unified SDK error entry. Provider is detected from class name.
+ * - message: For connection/abort errors (no HTTP status)
+ * - fallbackStatusCode: For HTTP errors when status not in error object
+ * - retryable: Override (else derived from status code)
+ */
+interface SdkErrorEntry {
   ctor: ErrorConstructor;
-  provider: string;
   message?: string;
-  /** Whether this error type is retryable (e.g., connection errors are, user aborts are not) */
-  retryable: boolean;
-}
-
-interface NativeHttpErrorEntry {
-  ctor: ErrorConstructor;
-  provider: string;
   fallbackStatusCode?: number;
+  retryable?: boolean;
 }
 
-const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
+const SDK_ERRORS: SdkErrorEntry[] = [
+  // Connection errors (retryable)
   {
     ctor: OpenAIConnectionTimeoutError,
-    provider: 'openai',
     message: 'Connection timed out',
     retryable: true,
   },
   {
     ctor: AnthropicConnectionTimeoutError,
-    provider: 'anthropic',
     message: 'Connection timed out',
     retryable: true,
   },
-  {
-    ctor: OpenAIConnectionError,
-    provider: 'openai',
-    message: 'Connection error',
-    retryable: true,
-  },
+  { ctor: OpenAIConnectionError, message: 'Connection error', retryable: true },
   {
     ctor: AnthropicConnectionError,
-    provider: 'anthropic',
     message: 'Connection error',
     retryable: true,
   },
-  {
-    ctor: OpenAIUserAbortError,
-    provider: 'openai',
-    message: 'Request aborted',
-    retryable: false,
-  },
+  // Abort errors (not retryable)
+  { ctor: OpenAIUserAbortError, message: 'Request aborted', retryable: false },
   {
     ctor: AnthropicUserAbortError,
-    provider: 'anthropic',
     message: 'Request aborted',
     retryable: false,
   },
-];
-
-const NATIVE_HTTP_ERRORS: NativeHttpErrorEntry[] = [
-  {
-    ctor: OpenAIBadRequestError,
-    provider: 'openai',
-    fallbackStatusCode: StatusCodes.BAD_REQUEST,
-  },
+  // HTTP errors (retryable derived from status code)
+  { ctor: OpenAIBadRequestError, fallbackStatusCode: StatusCodes.BAD_REQUEST },
   {
     ctor: AnthropicBadRequestError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
   },
   {
     ctor: OpenAIAuthenticationError,
-    provider: 'openai',
     fallbackStatusCode: StatusCodes.UNAUTHORIZED,
   },
   {
     ctor: AnthropicAuthenticationError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.UNAUTHORIZED,
   },
   {
     ctor: OpenAIPermissionDeniedError,
-    provider: 'openai',
     fallbackStatusCode: StatusCodes.FORBIDDEN,
   },
   {
     ctor: AnthropicPermissionDeniedError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.FORBIDDEN,
   },
-  {
-    ctor: OpenAINotFoundError,
-    provider: 'openai',
-    fallbackStatusCode: StatusCodes.NOT_FOUND,
-  },
-  {
-    ctor: AnthropicNotFoundError,
-    provider: 'anthropic',
-    fallbackStatusCode: StatusCodes.NOT_FOUND,
-  },
-  {
-    ctor: OpenAIConflictError,
-    provider: 'openai',
-    fallbackStatusCode: StatusCodes.CONFLICT,
-  },
-  {
-    ctor: AnthropicConflictError,
-    provider: 'anthropic',
-    fallbackStatusCode: StatusCodes.CONFLICT,
-  },
+  { ctor: OpenAINotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
+  { ctor: AnthropicNotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
+  { ctor: OpenAIConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
+  { ctor: AnthropicConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
   {
     ctor: OpenAIUnprocessableEntityError,
-    provider: 'openai',
     fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
   },
   {
     ctor: AnthropicUnprocessableEntityError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
   },
   {
     ctor: OpenAIRateLimitError,
-    provider: 'openai',
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
   },
   {
     ctor: AnthropicRateLimitError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
   },
   {
     ctor: OpenAIInternalServerError,
-    provider: 'openai',
     fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
   },
   {
     ctor: AnthropicInternalServerError,
-    provider: 'anthropic',
     fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
   },
-  { ctor: OpenAIAPIError, provider: 'openai' },
-  { ctor: AnthropicAPIError, provider: 'anthropic' },
-  { ctor: GoogleGenAIApiError, provider: 'google' },
+  // Generic API errors (no fallback)
+  { ctor: OpenAIAPIError },
+  { ctor: AnthropicAPIError },
+  { ctor: GoogleGenAIApiError },
 ];
-
-function normalizeMessage(message: string): string {
-  return message.trim().toLowerCase();
-}
-
-function matchNativeMessageError(
-  err: unknown,
-): ProviderHttpErrorDetails | undefined {
-  const entry = NATIVE_MESSAGE_ERRORS.find(({ ctor }) => err instanceof ctor);
-  if (!entry) {
-    return undefined;
-  }
-
-  // Include actual error message for additional context when available
-  const actualMessage = extractErrorMessage(err);
-  const baseMessage = entry.message ?? 'Provider request failed';
-  // If actual message provides more context than base message, append it
-  const normalizedBase = normalizeMessage(baseMessage);
-  const normalizedActual = actualMessage
-    ? normalizeMessage(actualMessage)
-    : undefined;
-  const shouldAppend =
-    normalizedActual &&
-    normalizedActual !== normalizedBase &&
-    !normalizedActual.includes(normalizedBase) &&
-    !normalizedBase.includes(normalizedActual);
-  const message = shouldAppend
-    ? `${baseMessage}: ${actualMessage}`
-    : baseMessage;
-
-  return {
-    message,
-    provider: entry.provider,
-    retryable: entry.retryable,
-  };
-}
 
 /** 4xx status codes that are retryable (most 4xx are not) */
 const RETRYABLE_4XX_CODES = new Set([
@@ -270,17 +189,32 @@ function isRetryableStatusCode(statusCode?: number): boolean {
   return RETRYABLE_4XX_CODES.has(statusCode);
 }
 
-function matchNativeHttpError(
-  err: unknown,
-): ProviderHttpErrorDetails | undefined {
-  const entry = NATIVE_HTTP_ERRORS.find(({ ctor }) => err instanceof ctor);
+/**
+ * Matches known SDK error types and returns structured error details.
+ * Handles both message-only errors (connection/abort) and HTTP errors.
+ */
+function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
+  const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
   }
 
+  const provider = detectProvider(err);
+  const requestId = detectRequestId(err);
+
+  // Message-only errors (connection, abort) - use the entry's message
+  if (entry.message !== undefined) {
+    return {
+      message: entry.message,
+      provider,
+      retryable: entry.retryable ?? false,
+      requestId,
+    };
+  }
+
+  // HTTP errors - detect status code and build formatted message
   const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
   const statusText = detectStatusText(err, statusCode);
-  const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
@@ -294,7 +228,7 @@ function matchNativeHttpError(
     // unrecognized errors without status codes as retryable (likely network errors).
     return {
       message: finalMessage,
-      provider: entry.provider,
+      provider,
       retryable: false,
       requestId,
     };
@@ -305,7 +239,7 @@ function matchNativeHttpError(
     message: `${prefix} – ${finalMessage}`,
     statusCode,
     statusText,
-    provider: entry.provider,
+    provider,
     retryable: isRetryableStatusCode(statusCode),
     requestId,
   };
@@ -499,17 +433,6 @@ export function formatProviderHttpError(
   // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
 
-  const nativeMessage = matchNativeMessageError(err);
-  if (nativeMessage) {
-    // Add requestId and rawErrorBody even for message-only errors
-    // Also check if this should be retryable due to relay/overloaded error
-    const requestId = detectRequestId(err);
-    const retryable =
-      determineRetryable(err, undefined, rawErrorBody) ||
-      nativeMessage.retryable;
-    return { ...nativeMessage, retryable, requestId, rawErrorBody };
-  }
-
   // Detect DOMException AbortError (from AbortController.abort())
   // This covers providers without SDK-specific abort error classes (e.g., Google)
   if (err instanceof DOMException && err.name === 'AbortError') {
@@ -520,16 +443,17 @@ export function formatProviderHttpError(
     };
   }
 
-  const nativeHttp = matchNativeHttpError(err);
-  if (nativeHttp) {
-    // Add rawErrorBody to native HTTP errors
-    // Also check if this should be retryable due to relay/overloaded error
+  // Try to match known SDK error types
+  const sdkMatch = matchSdkError(err);
+  if (sdkMatch) {
+    // Check if this should be retryable due to relay/overloaded error
     const retryable =
-      determineRetryable(err, nativeHttp.statusCode, rawErrorBody) ||
-      nativeHttp.retryable;
-    return { ...nativeHttp, retryable, rawErrorBody };
+      determineRetryable(err, sdkMatch.statusCode, rawErrorBody) ||
+      sdkMatch.retryable;
+    return { ...sdkMatch, retryable, rawErrorBody };
   }
 
+  // Fallback for unrecognized errors
   const statusCode = detectStatusCode(err);
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
@@ -544,7 +468,7 @@ export function formatProviderHttpError(
   if (!statusCode) {
     // Unrecognized errors without status codes reached the fallback path.
     // These are likely network/connection errors (not SDK-typed) and should
-    // be retryable. Note: This differs from matchNativeHttpError which is
+    // be retryable. Note: This differs from matchSdkError which is
     // conservative for known SDK types missing status codes.
     return {
       message: finalMessage,
@@ -663,31 +587,6 @@ export function isPreviousResponseIdError(err: unknown): boolean {
 }
 
 /**
- * Checks if an error indicates the server is overloaded.
- *
- * Anthropic: Returns `{"type":"error","error":{"type":"overloaded_error",...}}`
- * when servers are at capacity. This error type doesn't have a dedicated SDK
- * class and comes through as a generic API error.
- */
-export function isOverloadedError(err: unknown): boolean {
-  return (
-    err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR)
-  );
-}
-
-/**
- * Checks if an error indicates a server-side timeout.
- *
- * Anthropic: Returns `{"type":"error","error":{"type":"timeout_error",...}}`
- * when the request times out on the server. This is different from connection
- * timeouts (which are client-side). This error type doesn't have a dedicated
- * SDK class and comes through as a generic API error.
- */
-export function isTimeoutError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes(ANTHROPIC_TIMEOUT_ERROR);
-}
-
-/**
  * Context for building error log data.
  */
 export interface ErrorLogContext {
@@ -695,44 +594,6 @@ export interface ErrorLogContext {
   operation?: string;
   /** The model being used when the error occurred. */
   model?: string;
-}
-
-// ============================================================================
-// Error Enrichment
-// ============================================================================
-
-/**
- * WeakMap to store operation context on error objects without modifying them.
- * This allows us to track where errors originated as they propagate up the stack.
- */
-const errorContextMap = new WeakMap<object, ErrorLogContext>();
-
-/**
- * Enriches an error with operation context without logging.
- * The context is stored in a WeakMap and can be extracted later when the error
- * is finally logged at the boundary (e.g., in Node's retryPrompt or execFallback).
- *
- * This follows the "log at the boundary" principle:
- * - Middle layers enrich errors with context
- * - Only the final handler logs, with full context
- *
- * @param error - The error to enrich
- * @param context - Operation context (operation name, model)
- * @returns The same error (for throw chaining)
- */
-export function enrichError<T>(error: T, context: ErrorLogContext): T {
-  if (error && typeof error === 'object') {
-    // Merge with any existing context (inner operations are preserved)
-    const existing = errorContextMap.get(error) ?? {};
-    errorContextMap.set(error, {
-      ...context,
-      // Keep the innermost operation if already set (more specific)
-      operation: existing.operation ?? context.operation,
-      // Keep the model if already set
-      model: existing.model ?? context.model,
-    });
-  }
-  return error;
 }
 
 /**
