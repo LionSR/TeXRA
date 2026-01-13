@@ -211,23 +211,23 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    const actionMap = {
-      open: 'openDiff',
-      approve: 'approve',
-      approveAll: 'approveAll',
-      reject: 'reject',
-      showLatexdiff: 'showLatexdiff',
-      previewProposed: 'previewProposed',
-    };
-
     // Close dropdown if action is from menu item
-    const dropdownActions = ['showLatexdiff', 'previewProposed'];
-    if (dropdownActions.includes(action)) {
+    if (action === 'showLatexdiff' || action === 'previewProposed') {
       this._closeAllDropdowns();
     }
 
-    const mappedAction = actionMap[action];
-    if (mappedAction) {
+    // Map action names (only 'open' differs from its mapped value)
+    const mappedAction = action === 'open' ? 'openDiff' : action;
+    const validActions = [
+      'openDiff',
+      'approve',
+      'approveAll',
+      'reject',
+      'showLatexdiff',
+      'previewProposed',
+    ];
+
+    if (validActions.includes(mappedAction)) {
       vscode.postMessage({
         command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
         requestId,
