@@ -14,6 +14,7 @@ export const ToolEditApprovalPromptSchema = z.strictObject({
   streamId: z.union([StreamTabIdSchema, z.literal('')]),
   addedLines: z.int().nonnegative(),
   removedLines: z.int().nonnegative(),
+  isLatex: z.boolean(),
 });
 export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
