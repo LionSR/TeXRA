@@ -406,7 +406,7 @@ function detectRequestId(err: unknown): string | undefined {
  * OpenAI SDK stores the parsed JSON response in an `error` property.
  * Useful for debugging relay errors where the body contains additional context.
  */
-function detectRawErrorBody(err: unknown): unknown | undefined {
+function detectRawErrorBody(err: unknown): unknown {
   if (!isObject(err)) {
     return undefined;
   }

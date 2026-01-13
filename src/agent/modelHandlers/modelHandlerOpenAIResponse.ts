@@ -218,6 +218,43 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
+   * Finalize response state after a successful API call.
+   * Updates previousResponseId, conversation state, and token counts.
+   */
+  private finalizeResponse(
+    response: Response,
+    effectiveMessagesCount: number,
+    compactedThisCall: boolean,
+  ): void {
+    // Apply compaction state if compaction happened this call
+    if (compactedThisCall) {
+      this.applyCompactionState();
+    }
+
+    // Only chain from completed responses - failed/incomplete can't be used
+    if (response.status === 'completed') {
+      this.previousResponseId = response.id;
+    } else {
+      this.logger.warn(
+        `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+      );
+      this.previousResponseId = null;
+    }
+
+    this.conversationState.sentMessages = effectiveMessagesCount;
+
+    // Set cumulative input tokens from actual usage (not additive - this IS the total)
+    // The response's input_tokens reflects the full context including server-side history
+    if (response.usage?.input_tokens) {
+      this.conversationState.cumulativeInputTokens =
+        response.usage.input_tokens;
+    }
+
+    // Reset compacted flag after successful request (ready for next compaction if needed)
+    this.conversationState.isCompacted = false;
+  }
+
+  /**
    * Manually set the previous response ID to resume a conversation.
    * Call with `null` to reset the stored ID.
    */
@@ -905,29 +942,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Emit any web searches not yet emitted (fallback for edge cases)
         this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
-        // Apply compaction state if compaction happened this call
-        if (compactedThisCall) {
-          this.applyCompactionState();
-        }
-
-        // Only chain from completed responses - failed/incomplete can't be used
-        if (response.status === 'completed') {
-          this.previousResponseId = response.id;
-        } else {
-          this.logger.warn(
-            `Response ${response.id} has status "${response.status}" - not safe for chaining`,
-          );
-          this.previousResponseId = null;
-        }
-        this.conversationState.sentMessages = effectiveMessages.length;
-        // Set cumulative input tokens from actual usage (not additive - this IS the total)
-        // The response's input_tokens reflects the full context including server-side history
-        if (response.usage?.input_tokens) {
-          this.conversationState.cumulativeInputTokens =
-            response.usage.input_tokens;
-        }
-        // Reset compacted flag after successful request (ready for next compaction if needed)
-        this.conversationState.isCompacted = false;
+        this.finalizeResponse(response, effectiveMessages.length, compactedThisCall);
         return response;
       }
 
@@ -971,48 +986,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      // Apply compaction state if compaction happened this call
-      if (compactedThisCall) {
-        this.applyCompactionState();
-      }
-
-      // Only chain from completed responses - failed/incomplete can't be used
-      if (response.status === 'completed') {
-        this.previousResponseId = response.id;
-      } else {
-        this.logger.warn(
-          `Response ${response.id} has status "${response.status}" - not safe for chaining`,
-        );
-        this.previousResponseId = null;
-      }
-      this.conversationState.sentMessages = effectiveMessages.length;
-      // Set cumulative input tokens from actual usage (not additive - this IS the total)
-      // The response's input_tokens reflects the full context including server-side history
-      if (response.usage?.input_tokens) {
-        this.conversationState.cumulativeInputTokens =
-          response.usage.input_tokens;
-      }
-      // Reset compacted flag after successful request (ready for next compaction if needed)
-      this.conversationState.isCompacted = false;
+      this.finalizeResponse(response, effectiveMessages.length, compactedThisCall);
       return response;
     } catch (error) {
-      // Log diagnostic info about the previousResponseId state
-      if (this.previousResponseId) {
-        this.logger.warn(
-          `Request failed with previousResponseId=${this.previousResponseId}. ` +
-            `Error: ${getSdkErrorMessage(error)}`,
-        );
-      }
-
       // OpenAI: If the error indicates the response ID is invalid, clear it
       // This allows retry logic to recover by starting a fresh conversation
       if (isPreviousResponseIdError(error)) {
         this.logger.info(
-          'Clearing previousResponseId due to invalid/expired response - ' +
+          `Clearing previousResponseId=${this.previousResponseId} due to invalid/expired response - ` +
             'next retry will rebuild conversation from local history',
         );
         this.previousResponseId = null;
         this.resetConversationState();
+      } else if (this.previousResponseId) {
+        // Log diagnostic info for other errors when chaining was active
+        this.logger.warn(
+          `Request failed with previousResponseId=${this.previousResponseId}. ` +
+            `Error: ${getSdkErrorMessage(error)}`,
+        );
       }
 
       throw error;
