@@ -236,7 +236,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    if (mappedAction === 'showLatexdiff' || mappedAction === 'previewProposed') {
+    if (
+      mappedAction === 'showLatexdiff' ||
+      mappedAction === 'previewProposed'
+    ) {
       this._closeAllDropdowns();
     }
 
@@ -293,7 +296,9 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     event.stopPropagation();
 
-    const menu = trigger.closest('.diff-dropdown')?.querySelector('.diff-dropdown-menu');
+    const menu = trigger
+      .closest('.diff-dropdown')
+      ?.querySelector('.diff-dropdown-menu');
     if (!menu) {
       return;
     }

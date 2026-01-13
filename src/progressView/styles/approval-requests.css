@@ -70,7 +70,8 @@
   padding: 0;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  border-left: 1px solid var(--vscode-button-separator, var(--vscode-input-border));
+  border-left: 1px solid
+    var(--vscode-button-separator, var(--vscode-input-border));
 }
 
 .approval-request__actions .diff-dropdown .diff-dropdown-menu {
@@ -100,6 +101,8 @@
 }
 
 /* Chevron rotation for dropdown */
-.approval-request__actions .diff-dropdown-trigger[aria-expanded='true'] .codicon-chevron-down {
+.approval-request__actions
+  .diff-dropdown-trigger[aria-expanded='true']
+  .codicon-chevron-down {
   transform: rotate(180deg);
 }
