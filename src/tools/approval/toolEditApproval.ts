@@ -480,12 +480,8 @@ async function createWorkspaceTempFile(
   await fs.writeFile(tempPath, content, 'utf8');
 
   const cleanup = async () => {
-    try {
-      await fs.unlink(tempPath).catch(() => {});
-      await cleanupLatexAuxFiles(tempPath);
-    } catch {
-      // Ignore cleanup errors
-    }
+    await fs.unlink(tempPath).catch(() => {});
+    await cleanupLatexAuxFiles(tempPath);
   };
 
   return { tempPath, cleanup };
