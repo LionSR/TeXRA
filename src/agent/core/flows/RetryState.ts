@@ -29,8 +29,6 @@ import {
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
-/** Timeout for manual retry wait (5 minutes) - used by retryPrompt implementations */
-const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Minimum retry count for background mode.
@@ -385,14 +383,14 @@ export abstract class RetryableInvocationNode<
     // Emit waiting status to UI via single source of truth
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
 
-    // Wait for user action via the Promise-based coordinator
+    // Wait for user action via the Promise-based coordinator (no timeout - wait indefinitely)
     const result: RetryResult = await retryCoordinator.waitForUserAction(
       streamId,
       {
         operation: operationName,
         errorMessage: formatted.message,
         logger,
-        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
+        errorDetails: formatted,
       },
     );
 
@@ -405,7 +403,11 @@ export abstract class RetryableInvocationNode<
     // User cancelled or timeout - preserve WAITING status so user can resume
     // from last successful breakpoint. The flow record is NOT deleted when
     // userCancelled is true, enabling resume capability.
-    logger.info('Retry cancelled by user', {
+    const message =
+      result.action === 'timeout'
+        ? 'Retry timed out (no response)'
+        : 'Retry cancelled by user';
+    logger.info(message, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
     StreamStatusService.set(streamId, STREAM_STATUS.WAITING);

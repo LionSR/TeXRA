@@ -72,8 +72,8 @@ export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 export const DEFAULT_TOOL_USE_MEMORY_ENABLED = true;
 
 // Retry defaults
-// Default to 0 automatic retries - users must click retry button
-export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 0;
+// Default to 1 automatic retry before showing manual retry dialog
+export const DEFAULT_MODEL_RETRY_MAX_ATTEMPTS = 1;
 export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
 
 /** Determine whether tool-use session persistence is enabled. */
