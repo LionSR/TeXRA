@@ -451,6 +451,8 @@ async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
 /** Temp file location options */
 type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
 
+const TEXRA_TEMP_DIR = '.texra-temp';
+
 /**
  * Create a temporary file for LaTeX compilation.
  * Location is controlled by texra.latexdiff.tempFileLocation setting:
@@ -476,12 +478,13 @@ async function createWorkspaceTempFile(
   const basename = path.basename(originalPath, ext);
   const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
 
+  const isWorkspaceTemp = location === 'workspaceTemp';
   let tempDir: string;
-  if (location === 'workspaceTemp') {
-    tempDir = path.join(workspacePath, '.texra-temp');
+
+  if (isWorkspaceTemp) {
+    tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
     await fs.mkdir(tempDir, { recursive: true });
   } else {
-    // sameDirectory: place alongside original for correct path resolution
     const absoluteOriginal = path.isAbsolute(originalPath)
       ? originalPath
       : path.join(workspacePath, originalPath);
@@ -494,10 +497,8 @@ async function createWorkspaceTempFile(
   const cleanup = async () => {
     await fs.unlink(tempPath).catch(() => {});
     await cleanupLatexAuxFiles(tempPath);
-    // Try to remove .texra-temp if empty (only relevant for workspaceTemp mode)
-    if (location === 'workspaceTemp') {
-      const texraTempDir = path.join(workspacePath, '.texra-temp');
-      await fs.rmdir(texraTempDir).catch(() => {});
+    if (isWorkspaceTemp) {
+      await fs.rmdir(tempDir).catch(() => {});
     }
   };
 
