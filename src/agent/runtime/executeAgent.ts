@@ -245,28 +245,22 @@ async function resolveAgentBase(
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };
-  const modelConfig = {
+  const modelHandler = ModelFactory.createHandler({
     ...MODEL_CONFIGS[fullConfig.model],
     toolConfig: config.toolConfig,
-  };
-  const modelHandler = ModelFactory.createHandler(modelConfig);
+  });
 
   // 3. Create execution context
   // Compute stream ID, applying override for resume scenarios
-  const computedStreamTabId = getStreamTabId(
-    config.agent,
-    fullConfig.model,
-    config.inputFile,
-    {
+  const streamId =
+    options?.streamTabIdOverride ??
+    getStreamTabId(config.agent, fullConfig.model, config.inputFile, {
       agentType: setting.agentType,
       executionId,
       useMultipleOutputs: config.useMultipleOutputs,
-    },
-  );
-  // Use override if provided (resume uses snapshot's streamId)
-  const streamId = options?.streamTabIdOverride ?? computedStreamTabId;
+    });
 
-  // 3. Create logger and usage reporter directly (no AgentExecutionContext wrapper)
+  // 4. Create logger and usage reporter directly (no AgentExecutionContext wrapper)
   const agentLogger = new AgentLogger(streamId, true);
   const usageReporter = new AgentUsageReporter(
     agentLogger,
@@ -290,7 +284,7 @@ async function resolveAgentBase(
     hasMultipleOutputs: fullConfig.useMultipleOutputs,
   });
 
-  // 4. Define mutable storage key with callbacks
+  // 5. Define mutable storage key with callbacks
   // Initial value is executionId (normalized); updated to runStage.id after stage creation
   const initialStorageKey = normalizeRunId(executionId);
   let storageKey: StorageKey = initialStorageKey;
@@ -305,7 +299,7 @@ async function resolveAgentBase(
     storageKey = key;
   };
 
-  // 5. Create Run stage FIRST - this is the single top-level session group.
+  // 6. Create Run stage FIRST - this is the single top-level session group.
   // Both Init and round stages (r0, r1, etc.) will be children of this stage.
   // This ensures the Sessions dropdown shows only ONE entry per execution.
   const runStage = await agentLogger.stage(`Run: ${config.agent}`);
@@ -315,7 +309,7 @@ async function resolveAgentBase(
     updateStorageKey(normalizeRunId(runStage.id));
   }
 
-  // 6. Build user variable channels (replaces agent.init() logic)
+  // 7. Build user variable channels (replaces agent.init() logic)
   // For workflow agents: wrap in Init stage so file loading logs are properly grouped.
   // For tool-use agents: skip Init stage (no file loading to show).
   const buildVars = () =>
@@ -341,7 +335,7 @@ async function resolveAgentBase(
     transient: { ...baseVars },
   };
 
-  // 7. Create usage monitor for tracking API usage
+  // 8. Create usage monitor for tracking API usage
   // Pass only the minimal model info needed (capabilities + config subset)
   const isMultipleOutput =
     setting.agentCategory === AgentCategory.Workflow
@@ -451,18 +445,9 @@ function createUsageRecorder(
  * Sets the stream status to RUNNING. Note: setActiveStream is emitted
  * in resolveAgentBase BEFORE Init stage creation to ensure correct
  * ordering of task group events.
- *
- * @param ctx - Resolved agent base containing execution context
- * @param streamTabIdOverride - Optional override for stream ID (used in resume scenarios
- *                              where the snapshot's stream ID should be used instead of
- *                              the regenerated one from ctx)
  */
-function setupFlowUIState(
-  ctx: ResolvedAgentBase,
-  streamTabIdOverride?: StreamTabId,
-): void {
-  const streamTabId = streamTabIdOverride ?? ctx.streamId;
-  StreamStatusService.set(streamTabId, STREAM_STATUS.RUNNING);
+function setupFlowUIState(ctx: ResolvedAgentBase): void {
+  StreamStatusService.set(ctx.streamId, STREAM_STATUS.RUNNING);
 }
 
 type FlowRunner = () => Promise<EndGroupStatus>;
@@ -476,19 +461,21 @@ async function runFlowWithLifecycle(
   try {
     const flowStatus = await runner();
     ctx.runStage.end(flowStatus);
+
     // Update stream status, preserving WAITING and STOPPED states:
     // - WAITING: tool-use flows awaiting follow-up
     // - STOPPED: user explicitly stopped the agent (don't overwrite with ERROR)
     const currentStatus = StreamStatusService.get(streamTabId);
-    if (
-      currentStatus !== STREAM_STATUS.WAITING &&
-      currentStatus !== STREAM_STATUS.STOPPED
-    ) {
-      StreamStatusService.set(
-        streamTabId,
-        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED,
-      );
+    const shouldPreserveStatus =
+      currentStatus === STREAM_STATUS.WAITING ||
+      currentStatus === STREAM_STATUS.STOPPED;
+
+    if (!shouldPreserveStatus) {
+      const newStatus =
+        flowStatus === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
+      StreamStatusService.set(streamTabId, newStatus);
     }
+
     logger.debug(`Task completed with status: ${flowStatus}`);
   } catch (error) {
     ctx.runStage.end(END_GROUP_STATUS.ERROR);
@@ -506,9 +493,11 @@ function showAgentNotification(config: AgentConfig): void {
   const inputName = config.inputFile
     ? path.basename(config.inputFile)
     : 'selected input';
+
+  const outputCount = config.outputFiles?.length ?? 0;
   const outputInfo =
-    config.useMultipleOutputs && (config.outputFiles?.length ?? 0) > 1
-      ? `to ${config.outputFiles!.length} files`
+    config.useMultipleOutputs && outputCount > 1
+      ? `to ${outputCount} files`
       : config.outputFiles?.[0]
         ? `to ${path.basename(config.outputFiles[0])}`
         : '';
