@@ -469,12 +469,12 @@ function detectRawErrorBody(err: unknown): unknown | undefined {
  */
 /**
  * Helper to determine if an error is retryable based on status code and content.
- * Specifically handles Anthropic's overloaded_error which should be retryable
- * but doesn't have a dedicated SDK error class.
+ *
+ * Provider-specific overrides:
+ * - Anthropic: "overloaded_error" is retryable (no dedicated SDK class)
  */
 function determineRetryable(err: unknown, statusCode?: number): boolean {
-  // Anthropic's overloaded_error is retryable but comes through as generic error
-  // Example: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+  // Anthropic: "overloaded_error" should be retryable
   if (err instanceof Error && err.message.includes('overloaded_error')) {
     return true;
   }
@@ -626,76 +626,41 @@ export function isMissingFinishReasonError(err: unknown): boolean {
 }
 
 // ============================================================================
-// Previous Response ID Error Detection
+// Previous Response ID Error Detection (OpenAI Responses API)
 // ============================================================================
 
 /**
- * Patterns that indicate a previous_response_id is invalid or not found.
- * These errors occur when:
- * - The response ID references a session that has expired or was never created
- * - Relay returned an error before a valid response was established
- * - The OpenAI server-side conversation state was lost
- *
- * When detected, the caller should clear previousResponseId and allow recovery
- * by starting a fresh conversation.
- */
-const PREVIOUS_RESPONSE_ID_PATTERNS = [
-  'previous_response_id',
-  'response not found',
-  'response id not found',
-  'invalid response id',
-  'no response found',
-  'conversation not found',
-] as const;
-
-/**
  * Checks if an error indicates the previous_response_id is invalid.
- * This can happen when:
- * - Server-side conversation state was lost (session expired, server restart)
- * - A relay error prevented establishing a valid response
- * - The response ID was never properly stored
+ *
+ * OpenAI Responses API: When the `previous_response_id` parameter references
+ * a response that doesn't exist or has expired, the error message will contain
+ * "previous_response_id".
  *
  * When this returns true, the caller should:
  * 1. Clear the previousResponseId
  * 2. Rebuild the conversation from local message history
  * 3. Retry without previous_response_id
- *
- * @example
- * ```ts
- * try {
- *   await createResponse(params);
- * } catch (err) {
- *   if (isPreviousResponseIdError(err)) {
- *     this.previousResponseId = null;
- *     // Rebuild and retry without previous_response_id
- *   }
- *   throw err;
- * }
- * ```
  */
 export function isPreviousResponseIdError(err: unknown): boolean {
-  if (!(err instanceof Error)) {
-    return false;
-  }
-  const message = err.message.toLowerCase();
-  return PREVIOUS_RESPONSE_ID_PATTERNS.some((pattern) =>
-    message.includes(pattern),
-  );
+  // OpenAI Responses API: errors referencing the previous_response_id parameter
+  return err instanceof Error && err.message.includes('previous_response_id');
 }
 
 // ============================================================================
-// Overloaded Error Detection
+// Overloaded Error Detection (Anthropic)
 // ============================================================================
 
 /**
- * Checks if an error indicates the server is overloaded (Anthropic's overloaded_error).
- * Overloaded errors should always be retryable.
+ * Checks if an error indicates the server is overloaded.
  *
- * This specifically handles Anthropic's overloaded_error which doesn't have
- * a dedicated SDK error class and comes through as a generic API error.
- * Example: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+ * Anthropic: Returns `{"type":"error","error":{"type":"overloaded_error",...}}`
+ * when servers are at capacity. This error type doesn't have a dedicated SDK
+ * class and comes through as a generic API error.
+ *
+ * Overloaded errors should always be retryable.
  */
 export function isOverloadedError(err: unknown): boolean {
+  // Anthropic: "overloaded_error" in the error type field
   return err instanceof Error && err.message.includes('overloaded_error');
 }
 
