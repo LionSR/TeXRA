@@ -510,7 +510,8 @@ export function formatProviderHttpError(
   if (nativeHttp) {
     // Add rawErrorBody to native HTTP errors
     // Also check if this should be retryable due to overloaded error
-    const retryable = determineRetryable(err, nativeHttp.statusCode) || nativeHttp.retryable;
+    const retryable =
+      determineRetryable(err, nativeHttp.statusCode) || nativeHttp.retryable;
     return { ...nativeHttp, retryable, rawErrorBody };
   }
 
