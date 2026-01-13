@@ -47,11 +47,10 @@ import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import {
-  finalizeToolUseCycle,
-  type ToolUseCycleOptions,
-  type ToolUseCycleServices,
-  type ToolUseCycleParams,
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleServices,
+  ToolUseCycleParams,
 } from './CycleServices';
 import {
   type InvocationResult,
@@ -576,14 +575,15 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    // Finalize cycle using direct values (no round object needed)
-    await finalizeToolUseCycle(
+    // Finalize cycle by recording metrics and invoking callback
+    run.recordCycleMetrics(
       shared.cycleIndex,
       shared.cycleResponseTimeMs,
       shared.cycleNormalizedUsage ?? null,
-      run,
-      onRoundFinalized,
     );
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
     run.incrementRounds();
 
     shared.stopReason = execRes.stopReason;
