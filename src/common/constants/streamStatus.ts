@@ -10,6 +10,7 @@ export const STREAM_STATUS = {
   READY: 'ready',
   WAITING: 'waiting',
   RESUMING: 'resuming',
+  INITIALIZING: 'initializing',
 } as const;
 
 export const StreamStatusSchema = z.enum([
@@ -19,6 +20,7 @@ export const StreamStatusSchema = z.enum([
   STREAM_STATUS.READY,
   STREAM_STATUS.WAITING,
   STREAM_STATUS.RESUMING,
+  STREAM_STATUS.INITIALIZING,
 ]);
 
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
