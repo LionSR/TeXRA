@@ -306,10 +306,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     // Toggle this menu (only open if it wasn't already expanded)
     if (!wasExpanded) {
-      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering
-      // Setting data to undefined allows slotted children to render
-      if (menu.data !== undefined) {
+      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering.
+      // Setting data to undefined allows slotted children to render.
+      // Must call requestUpdate() to force Lit element to re-render.
+      if (Array.isArray(menu.data) && menu.data.length === 0) {
         menu.data = undefined;
+        menu.requestUpdate?.();
       }
       menu.show = true;
       trigger.setAttribute('aria-expanded', 'true');
