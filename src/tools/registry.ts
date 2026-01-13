@@ -33,7 +33,7 @@ import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 import { TodoWriteTool } from './todo';
 import { MemoryTool } from './memory';
-import { LeanCheckTool, LakeBuildTool } from './lean';
+import { LeanCheckTool, LakeBuildTool, LeanGoalTool } from './lean';
 
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
@@ -72,6 +72,7 @@ export function getDefaultToolRegistry(): IToolRegistry {
       memory: new MemoryTool(),
       lean_check: new LeanCheckTool(),
       lake_build: new LakeBuildTool(),
+      lean_goal: new LeanGoalTool(),
     });
   }
   return defaultRegistryInstance;
