@@ -45,7 +45,6 @@ import {
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
@@ -369,14 +368,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     try {
-      const compactedResponse: CompactedResponse = await executeRequest(
-        {
-          model: this.config.name,
-          operation: 'openai.responses.compact',
-          signal,
-        },
-        () => client.responses.compact(compactParams),
-      );
+      const compactedResponse: CompactedResponse =
+        await client.responses.compact(compactParams);
 
       const tokensAfter = compactedResponse.usage.input_tokens;
       const utilizationAfter = (tokensAfter / contextWindow) * 100;
@@ -679,17 +672,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           : fileData;
 
       buffer = Buffer.from(payload, 'base64');
-      const uploadedFile = await executeRequest(
-        {
-          model: this.config.name,
-          operation: `openai.files.create:${filename}`,
-        },
-        async () =>
-          client.files.create({
-            file: await toFile(buffer!, filename),
-            purpose: 'assistants',
-          }),
-      );
+      const uploadedFile = await client.files.create({
+        file: await toFile(buffer!, filename),
+        purpose: 'assistants',
+      });
 
       content.file_id = uploadedFile.id;
       delete content.file_data;
@@ -877,14 +863,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (useStreaming) {
         const { stream: _stream, ...rest } = params;
         const streamParams: ResponseStreamParams = { ...rest, stream: true };
-        const stream = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'openai.responses.stream',
-            signal,
-          },
-          () => client.responses.stream(streamParams, { signal }),
-        );
+        const stream = await client.responses.stream(streamParams, { signal });
 
         // State for handling interleaved thinking and web search
         // GPT can: think → web_search → think more → web_search → text
@@ -943,7 +922,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Emit any web searches not yet emitted (fallback for edge cases)
         this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
-        this.finalizeResponse(response, effectiveMessages.length, compactedThisCall);
+        this.finalizeResponse(
+          response,
+          effectiveMessages.length,
+          compactedThisCall,
+        );
         return response;
       }
 
@@ -954,14 +937,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ...nonStreamRest,
         stream: false,
       };
-      let response = await executeRequest(
-        {
-          model: this.config.name,
-          operation: 'openai.responses.create',
-          signal,
-        },
-        () => client.responses.create(nonStreamingParams, { signal }),
-      );
+      let response = await client.responses.create(nonStreamingParams, {
+        signal,
+      });
       if (useBackgroundResponses) {
         this.logger.debug(
           `Background response ${response.id} created with status ${
@@ -985,7 +963,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      this.finalizeResponse(response, effectiveMessages.length, compactedThisCall);
+      this.finalizeResponse(
+        response,
+        effectiveMessages.length,
+        compactedThisCall,
+      );
       return response;
     } catch (error) {
       // Extract error details for diagnostics (useful for relay errors)
@@ -1248,13 +1230,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const requestOptions = signal ? { signal } : undefined;
-      current = await executeRequest(
-        {
-          model: this.config.name,
-          operation: `openai.responses.retrieve:${responseId}`,
-          signal,
-        },
-        () => client.responses.retrieve(responseId, undefined, requestOptions),
+      current = await client.responses.retrieve(
+        responseId,
+        undefined,
+        requestOptions,
       );
 
       this.logger.debug(
@@ -1816,17 +1795,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             : 'attachment';
         const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
-        const uploadedFile = await executeRequest(
-          {
-            model: this.config.name,
-            operation: `openai.files.create:${filename}`,
-          },
-          async () =>
-            client.files.create({
-              file: await toFile(buffer!, filename, { type: mimeType }),
-              purpose: 'assistants',
-            }),
-        );
+        const uploadedFile = await client.files.create({
+          file: await toFile(buffer!, filename, { type: mimeType }),
+          purpose: 'assistants',
+        });
 
         uploaded.push({
           attachment,

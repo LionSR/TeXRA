@@ -86,33 +86,47 @@ export class RetryRequests extends BaseUIRequestManager {
     const detailsElem = element.querySelector('.retry-request__error-details');
     const bodyElem = element.querySelector('.retry-request__error-body');
     if (detailsElem && bodyElem) {
-      const details = request.errorDetails;
-      if (
-        details &&
-        (details.provider != null ||
-          details.statusCode != null ||
-          details.rawErrorBody != null)
-      ) {
-        const lines = [];
-        if (details.provider) lines.push(`provider: ${details.provider}`);
-        if (details.statusCode != null) {
-          lines.push(`statusCode: ${details.statusCode}`);
-        }
-        if (details.rawErrorBody) {
-          const bodyStr =
-            typeof details.rawErrorBody === 'object'
-              ? JSON.stringify(details.rawErrorBody, null, 2)
-              : String(details.rawErrorBody);
-          lines.push(`rawErrorBody: ${bodyStr}`);
-        }
+      const detailsText = this._formatErrorDetails(request.errorDetails);
+      if (detailsText) {
         // Use textContent to avoid HTML injection from provider payloads.
-        bodyElem.textContent = lines.join('\n');
+        bodyElem.textContent = detailsText;
         detailsElem.hidden = false;
       } else {
         detailsElem.open = false;
         detailsElem.hidden = true;
       }
     }
+  }
+
+  /**
+   * Formats error details into a displayable string.
+   * @param {Object|undefined} details - Error details object
+   * @returns {string|null} Formatted details string, or null if no details
+   */
+  _formatErrorDetails(details) {
+    if (!details) {
+      return null;
+    }
+
+    const lines = [];
+
+    if (details.provider) {
+      lines.push(`provider: ${details.provider}`);
+    }
+
+    if (details.statusCode != null) {
+      lines.push(`statusCode: ${details.statusCode}`);
+    }
+
+    if (details.rawErrorBody != null) {
+      const bodyStr =
+        typeof details.rawErrorBody === 'object'
+          ? JSON.stringify(details.rawErrorBody, null, 2)
+          : String(details.rawErrorBody);
+      lines.push(`rawErrorBody: ${bodyStr}`);
+    }
+
+    return lines.length > 0 ? lines.join('\n') : null;
   }
 
   /** @override */

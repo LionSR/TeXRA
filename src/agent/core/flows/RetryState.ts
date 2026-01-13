@@ -393,11 +393,7 @@ export abstract class RetryableInvocationNode<
         errorMessage: formatted.message,
         logger,
         timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
-        errorDetails: {
-          provider: formatted.provider,
-          statusCode: formatted.statusCode,
-          rawErrorBody: formatted.rawErrorBody,
-        },
+        errorDetails: formatted,
       },
     );
 
