@@ -146,10 +146,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
   }
 
-  /**
-   * Update the meta element with diff information.
-   * @private
-   */
+  /** @private */
   _updateMetaElement(metaElem, request) {
     const toCount = (v) => (Number.isFinite(v) ? Math.max(0, v) : 0);
     const added = toCount(request.addedLines);
@@ -162,10 +159,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
       parts.push(`Requested by ${request.sourceTool}`);
     }
 
-    // Build diff summary
-    const diffParts = [];
-    if (added > 0) diffParts.push(`+${added}`);
-    if (removed > 0) diffParts.push(`-${removed}`);
+    const diffParts = [
+      ...(added > 0 ? [`+${added}`] : []),
+      ...(removed > 0 ? [`-${removed}`] : []),
+    ];
     const tooltip =
       diffParts.length > 0
         ? `${diffParts.join(' / ')} ${lineLabel} changed`
@@ -225,35 +222,32 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    // Close dropdown if action is from menu item
-    if (action === 'showLatexdiff' || action === 'previewProposed') {
-      this._closeAllDropdowns();
-    }
-
-    // Map action names (only 'open' differs from its mapped value)
     const mappedAction = action === 'open' ? 'openDiff' : action;
-    const validActions = [
+    const validActions = new Set([
       'openDiff',
       'approve',
       'approveAll',
       'reject',
       'showLatexdiff',
       'previewProposed',
-    ];
+    ]);
 
-    if (validActions.includes(mappedAction)) {
-      vscode.postMessage({
-        command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId,
-        action: mappedAction,
-      });
+    if (!validActions.has(mappedAction)) {
+      return;
     }
+
+    if (mappedAction === 'showLatexdiff' || mappedAction === 'previewProposed') {
+      this._closeAllDropdowns();
+    }
+
+    vscode.postMessage({
+      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId,
+      action: mappedAction,
+    });
   }
 
-  /**
-   * Handle toggle button changes.
-   * @private
-   */
+  /** @private */
   _handleToggle(event) {
     if (!(event.target instanceof Element)) {
       return;
@@ -286,10 +280,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
     });
   }
 
-  /**
-   * Handle dropdown trigger clicks to toggle menu visibility.
-   * @private
-   */
+  /** @private */
   _handleDropdownToggle(event) {
     if (!(event.target instanceof Element)) {
       return;
@@ -302,27 +293,16 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
     event.stopPropagation();
 
-    const dropdown = trigger.closest('.diff-dropdown');
-    if (!dropdown) {
-      return;
-    }
-
-    const menu = dropdown.querySelector('.diff-dropdown-menu');
+    const menu = trigger.closest('.diff-dropdown')?.querySelector('.diff-dropdown-menu');
     if (!menu) {
       return;
     }
 
-    // Capture expanded state BEFORE closing all dropdowns
     const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
-
-    // Close other open menus first
     this._closeAllDropdowns();
 
-    // Toggle this menu (only open if it wasn't already expanded)
     if (!wasExpanded) {
-      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering.
-      // Setting data to undefined allows slotted children to render.
-      // Must call requestUpdate() to force Lit element to re-render.
+      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering
       if (Array.isArray(menu.data) && menu.data.length === 0) {
         menu.data = undefined;
         menu.requestUpdate?.();
@@ -332,27 +312,17 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
   }
 
-  /**
-   * Handle clicks outside dropdown menus to close them.
-   * @private
-   */
+  /** @private */
   _handleClickOutside(event) {
     if (!(event.target instanceof Element)) {
       return;
     }
-
-    // If click is inside a dropdown, don't close
-    if (event.target.closest('.diff-dropdown')) {
-      return;
+    if (!event.target.closest('.diff-dropdown')) {
+      this._closeAllDropdowns();
     }
-
-    this._closeAllDropdowns();
   }
 
-  /**
-   * Close all open dropdown menus.
-   * @private
-   */
+  /** @private */
   _closeAllDropdowns() {
     if (!this.container) {
       return;
