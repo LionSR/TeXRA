@@ -18,63 +18,43 @@ export type FilenameParts = {
 };
 
 /**
- * Extracts agent name from filename parts handling multiple formats.
- * @param parts Array of filename parts split by underscore
- * @param underscoreCount Total number of underscores in filename
- * @returns Agent name or null if not found
- */
-export function extractAgentName(
-  parts: string[],
-  underscoreCount: number,
-): string | null {
-  if (underscoreCount === 3 && parts.length >= 2) {
-    // Standard format
-    return parts[1];
-  }
-
-  // Complex format - find round number index and join parts before it
-  const partsAfterBase = parts.slice(1);
-  const roundIndex = partsAfterBase.findIndex(
-    (part) => part.startsWith('r') && /^\d+$/.test(part.slice(1)),
-  );
-
-  return roundIndex !== -1
-    ? partsAfterBase.slice(0, roundIndex).join('_')
-    : null;
-}
-
-/**
  * Extracts components from edited filename for merge operations.
+ * Works backwards from the LAST _rN_ pattern to correctly handle nested filenames
+ * like "main_enhance_r1_gpt52_criticize_r0_gpt52".
+ *
  * @param editedBase Base name of edited file without extension
  * @returns Parsed filename components
  * @throws Error if filename components cannot be extracted
  */
 export function parseFilenameParts(editedBase: string): FilenameParts {
-  const parts = editedBase.split('_');
-  const underscoreCount = parts.length - 1;
-  const base = parts[0];
+  // Find the LAST _rN_ pattern (base filename may contain its own _rN_ pattern)
+  const roundMatches = [...editedBase.matchAll(/_r(\d+)_/g)];
+  const lastRoundMatch = roundMatches.at(-1);
+  if (!lastRoundMatch || lastRoundMatch.index === undefined) {
+    throw new Error(
+      `Could not extract round number from edited base: ${editedBase}`,
+    );
+  }
 
-  // Extract agent name
-  const agent = extractAgentName(parts, underscoreCount);
-  if (!agent) {
+  const roundNum = parseInt(lastRoundMatch[1], 10);
+  const roundIndex = lastRoundMatch.index;
+
+  // Model is everything after _rN_
+  const model = editedBase.slice(roundIndex + lastRoundMatch[0].length);
+
+  // Everything before _rN_ is base + agent
+  const beforeRound = editedBase.slice(0, roundIndex);
+
+  // Agent is the part after the last underscore before _rN_
+  const lastUnderscoreIndex = beforeRound.lastIndexOf('_');
+  if (lastUnderscoreIndex === -1) {
     throw new Error(
       `Could not extract agent name from edited base: ${editedBase}`,
     );
   }
 
-  // Extract round number from the LAST _rN_ pattern
-  // (base filename may contain its own _rN_ pattern)
-  const roundMatches = [...editedBase.matchAll(/_r(\d+)_/g)];
-  const lastRoundMatch = roundMatches.at(-1);
-  if (!lastRoundMatch) {
-    throw new Error(
-      `Could not extract round number from edited base: ${editedBase}`,
-    );
-  }
-  const roundNum = parseInt(lastRoundMatch[1], 10);
-
-  // Get model name (last part)
-  const model = parts.at(-1) || '';
+  const base = beforeRound.slice(0, lastUnderscoreIndex);
+  const agent = beforeRound.slice(lastUnderscoreIndex + 1);
 
   return { base, agent, roundNum, model };
 }
