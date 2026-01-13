@@ -377,6 +377,9 @@ export abstract class RetryableInvocationNode<
       message: formatted.message,
       statusCode: formatted.statusCode,
       retryable: formatted.retryable,
+      ...(formatted.rawErrorBody !== undefined && {
+        rawErrorBody: formatted.rawErrorBody,
+      }),
     });
 
     // Emit waiting status to UI via single source of truth
@@ -434,6 +437,9 @@ export abstract class RetryableInvocationNode<
           message: formatted.message,
           statusCode: formatted.statusCode,
           retryable: formatted.retryable,
+          ...(formatted.rawErrorBody !== undefined && {
+            rawErrorBody: formatted.rawErrorBody,
+          }),
         },
       );
     }

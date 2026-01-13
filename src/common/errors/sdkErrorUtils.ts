@@ -435,12 +435,31 @@ const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
 const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
 
 /**
+ * Checks if the error body indicates a relay error.
+ * Relay errors include `_relay` version field and should generally be retryable
+ * so users can fix issues (refresh auth, switch API keys, etc.) and retry.
+ */
+function isRelayError(rawErrorBody: unknown): boolean {
+  return isObject(rawErrorBody) && '_relay' in rawErrorBody;
+}
+
+/**
  * Determines if an error is retryable based on status code and error content.
  *
  * Provider-specific overrides:
  * - Anthropic: "overloaded_error" and "timeout_error" are retryable (no dedicated SDK classes)
+ * - Relay: errors with `_relay` field are retryable (user can fix and retry)
  */
-function determineRetryable(err: unknown, statusCode?: number): boolean {
+function determineRetryable(
+  err: unknown,
+  statusCode?: number,
+  rawErrorBody?: unknown,
+): boolean {
+  // Relay errors should be retryable - user can fix (refresh auth, switch keys) and retry
+  if (isRelayError(rawErrorBody)) {
+    return true;
+  }
+
   if (err instanceof Error) {
     const msg = err.message;
     // Anthropic: overloaded_error and timeout_error should be retryable
@@ -463,9 +482,10 @@ export function formatProviderHttpError(
   const nativeMessage = matchNativeMessageError(err);
   if (nativeMessage) {
     // Add requestId and rawErrorBody even for message-only errors
-    // Also check if this should be retryable due to overloaded error
+    // Also check if this should be retryable due to relay/overloaded error
     const requestId = detectRequestId(err);
-    const retryable = determineRetryable(err) || nativeMessage.retryable;
+    const retryable =
+      determineRetryable(err, undefined, rawErrorBody) || nativeMessage.retryable;
     return { ...nativeMessage, retryable, requestId, rawErrorBody };
   }
 
@@ -482,9 +502,10 @@ export function formatProviderHttpError(
   const nativeHttp = matchNativeHttpError(err);
   if (nativeHttp) {
     // Add rawErrorBody to native HTTP errors
-    // Also check if this should be retryable due to overloaded error
+    // Also check if this should be retryable due to relay/overloaded error
     const retryable =
-      determineRetryable(err, nativeHttp.statusCode) || nativeHttp.retryable;
+      determineRetryable(err, nativeHttp.statusCode, rawErrorBody) ||
+      nativeHttp.retryable;
     return { ...nativeHttp, retryable, rawErrorBody };
   }
 
@@ -519,7 +540,7 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
-    retryable: determineRetryable(err, statusCode),
+    retryable: determineRetryable(err, statusCode, rawErrorBody),
     requestId,
     rawErrorBody,
   };
