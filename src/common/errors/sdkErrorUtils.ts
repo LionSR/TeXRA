@@ -225,9 +225,17 @@ function matchNativeMessageError(
     return undefined;
   }
 
+  // Include actual error message for additional context when available
+  const actualMessage = extractErrorMessage(err);
+  const baseMessage = entry.message ?? 'Provider request failed';
+  // If actual message provides more context than base message, append it
+  const message =
+    actualMessage && actualMessage !== baseMessage
+      ? `${baseMessage}: ${actualMessage}`
+      : baseMessage;
+
   return {
-    message:
-      entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
+    message,
     provider: entry.provider,
     retryable: entry.retryable,
   };
