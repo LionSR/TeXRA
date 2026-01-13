@@ -720,8 +720,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const assistantText = prepRes.text ?? '';
 
     // Execute all tool calls and collect results
+    // Check for interruption before each tool call to enable responsive cancellation
     const execResults: ToolExecutionResult[] = [];
     for (const call of prepRes.toolCalls) {
+      // Check interruption at start of each iteration for responsive cancellation
+      if (services.checkInterruption()) {
+        break;
+      }
       const execResult = await this.executeToolCall(
         call,
         services,
@@ -729,6 +734,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
         todoState,
       );
       execResults.push(execResult);
+    }
+
+    // If interrupted before any tools executed, return as interrupted
+    if (execResults.length === 0 && services.checkInterruption()) {
+      return { kind: 'skipped', interrupted: true };
     }
 
     return {
@@ -892,7 +902,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const { execResults, assistantText } = execRes;
 
     // Step 1: Log each tool execution and process media files
+    // Check interruption between iterations for responsive cancellation
     for (const execResult of execResults) {
+      if (services.checkInterruption()) {
+        shared.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
       await this.logAndProcessMediaFiles(execResult, services, workspace);
     }
 
@@ -928,7 +943,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
       shared.messages.push(...followUpMsgs);
     } else {
       // Individual: Process each call separately (original behavior)
+      // Check interruption between iterations for responsive cancellation
       for (const [index, execResult] of execResults.entries()) {
+        if (services.checkInterruption()) {
+          shared.shouldStop = true;
+          return FlowTransition.COMPLETE;
+        }
         const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
           await services.modelHandler.createToolUseFollowUpMessages(
@@ -944,7 +964,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
 
     // Step 3: Handle user instructions from tool results
+    // Check interruption between iterations for responsive cancellation
     for (const execResult of execResults) {
+      if (services.checkInterruption()) {
+        shared.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
       if (isNonEmptyString(execResult.result.userInstruction)) {
         await services.modelHandler.createUserFollowUpMessages(
           shared.messages,
