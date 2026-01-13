@@ -497,13 +497,37 @@
                 <div class="approval-request__meta"></div>
               </div>
               <vscode-toolbar-container class="approval-request__actions">
-                <vscode-toolbar-button
-                  icon="diff"
-                  label="Open diff"
-                  title="Open diff"
-                  data-action="open"
-                  >Open diff</vscode-toolbar-button
-                >
+                <div class="dropdown-container dropdown-left diff-dropdown">
+                  <vscode-toolbar-button
+                    icon="diff"
+                    label="Open diff"
+                    title="Open diff (click arrow for more options)"
+                    data-action="open"
+                    class="diff-main-button"
+                    >Open diff</vscode-toolbar-button
+                  >
+                  <vscode-toolbar-button
+                    icon="chevron-down"
+                    title="More diff options"
+                    class="diff-dropdown-trigger"
+                    toggleable
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    hidden
+                  ></vscode-toolbar-button>
+                  <vscode-context-menu class="dropdown-menu diff-dropdown-menu">
+                    <div class="dropdown-menu-content">
+                      <vscode-toolbar-button
+                        icon="file-pdf"
+                        label="LaTeXdiff"
+                        title="Show LaTeXdiff (compiles to PDF)"
+                        data-action="showLatexdiff"
+                        class="latexdiff-menu-item"
+                        >LaTeXdiff (PDF)</vscode-toolbar-button
+                      >
+                    </div>
+                  </vscode-context-menu>
+                </div>
                 <vscode-toolbar-button
                   icon="check"
                   label="Approve"
