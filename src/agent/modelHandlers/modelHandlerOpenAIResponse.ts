@@ -16,6 +16,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {
+  formatProviderHttpError,
   getSdkErrorMessage,
   isPreviousResponseIdError,
 } from '@common/errors/sdkErrorUtils';
@@ -989,6 +990,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.finalizeResponse(response, effectiveMessages.length, compactedThisCall);
       return response;
     } catch (error) {
+      // Extract error details for diagnostics (useful for relay errors)
+      const { rawErrorBody } = formatProviderHttpError(error);
+      if (rawErrorBody) {
+        this.logger.debug('Raw error body from provider', {
+          data: { rawErrorBody },
+        });
+      }
+
       // OpenAI: If the error indicates the response ID is invalid, clear it
       // This allows retry logic to recover by starting a fresh conversation
       if (isPreviousResponseIdError(error)) {

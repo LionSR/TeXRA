@@ -475,6 +475,7 @@ export function formatProviderHttpError(
     return {
       message: 'Request aborted',
       retryable: false,
+      rawErrorBody,
     };
   }
 
