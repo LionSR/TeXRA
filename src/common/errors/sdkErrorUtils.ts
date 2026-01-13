@@ -58,6 +58,11 @@ export interface ProviderHttpErrorDetails {
   retryable: boolean;
   /** Request ID from the provider, useful for debugging with support. */
   requestId?: string;
+  /**
+   * Raw error body from the provider API response.
+   * Useful for debugging relay errors where the error contains additional context.
+   */
+  rawErrorBody?: unknown;
 }
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
@@ -413,6 +418,44 @@ function detectRequestId(err: unknown): string | undefined {
 }
 
 /**
+ * Extracts the raw error body from SDK errors.
+ * OpenAI SDK stores the parsed JSON response in an `error` property.
+ * This is useful for debugging relay errors where the body contains additional context.
+ */
+function detectRawErrorBody(err: unknown): unknown | undefined {
+  if (!isObject(err)) {
+    return undefined;
+  }
+
+  const candidate = err as {
+    error?: unknown;
+    body?: unknown;
+    data?: unknown;
+    response?: { data?: unknown };
+  };
+
+  // OpenAI SDK: error property contains the parsed error body
+  if (candidate.error !== undefined && candidate.error !== null) {
+    return candidate.error;
+  }
+
+  // Alternative property names used by other SDKs
+  if (candidate.body !== undefined && candidate.body !== null) {
+    return candidate.body;
+  }
+
+  if (candidate.data !== undefined && candidate.data !== null) {
+    return candidate.data;
+  }
+
+  if (candidate.response?.data !== undefined) {
+    return candidate.response.data;
+  }
+
+  return undefined;
+}
+
+/**
  * Formats SDK errors from model providers into a consistent message so agent logs
  * can surface status codes alongside concise descriptions.
  *
@@ -424,14 +467,34 @@ function detectRequestId(err: unknown): string | undefined {
  * - SDK-specific: OpenAI/Anthropic APIUserAbortError via matchNativeMessageError()
  * - Generic: DOMException with name 'AbortError' (for providers without SDK abort errors)
  */
+/**
+ * Helper to determine if an error is retryable based on status code and content.
+ * Specifically handles Anthropic's overloaded_error which should be retryable
+ * but doesn't have a dedicated SDK error class.
+ */
+function determineRetryable(err: unknown, statusCode?: number): boolean {
+  // Anthropic's overloaded_error is retryable but comes through as generic error
+  // Example: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+  if (err instanceof Error && err.message.includes('overloaded_error')) {
+    return true;
+  }
+
+  return isRetryableStatusCode(statusCode);
+}
+
 export function formatProviderHttpError(
   err: unknown,
 ): ProviderHttpErrorDetails {
+  // Extract raw error body for all paths - useful for debugging relay errors
+  const rawErrorBody = detectRawErrorBody(err);
+
   const nativeMessage = matchNativeMessageError(err);
   if (nativeMessage) {
-    // Add requestId even for message-only errors
+    // Add requestId and rawErrorBody even for message-only errors
+    // Also check if this should be retryable due to overloaded error
     const requestId = detectRequestId(err);
-    return requestId ? { ...nativeMessage, requestId } : nativeMessage;
+    const retryable = determineRetryable(err) || nativeMessage.retryable;
+    return { ...nativeMessage, retryable, requestId, rawErrorBody };
   }
 
   // Detect DOMException AbortError (from AbortController.abort())
@@ -445,7 +508,10 @@ export function formatProviderHttpError(
 
   const nativeHttp = matchNativeHttpError(err);
   if (nativeHttp) {
-    return nativeHttp;
+    // Add rawErrorBody to native HTTP errors
+    // Also check if this should be retryable due to overloaded error
+    const retryable = determineRetryable(err, nativeHttp.statusCode) || nativeHttp.retryable;
+    return { ...nativeHttp, retryable, rawErrorBody };
   }
 
   const statusCode = detectStatusCode(err);
@@ -469,6 +535,7 @@ export function formatProviderHttpError(
       provider,
       retryable: true,
       requestId,
+      rawErrorBody,
     };
   }
 
@@ -478,8 +545,9 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
-    retryable: isRetryableStatusCode(statusCode),
+    retryable: determineRetryable(err, statusCode),
     requestId,
+    rawErrorBody,
   };
 }
 
@@ -555,6 +623,80 @@ export function isMissingFinishReasonError(err: unknown): boolean {
     return false;
   }
   return err.message.includes('missing finish_reason');
+}
+
+// ============================================================================
+// Previous Response ID Error Detection
+// ============================================================================
+
+/**
+ * Patterns that indicate a previous_response_id is invalid or not found.
+ * These errors occur when:
+ * - The response ID references a session that has expired or was never created
+ * - Relay returned an error before a valid response was established
+ * - The OpenAI server-side conversation state was lost
+ *
+ * When detected, the caller should clear previousResponseId and allow recovery
+ * by starting a fresh conversation.
+ */
+const PREVIOUS_RESPONSE_ID_PATTERNS = [
+  'previous_response_id',
+  'response not found',
+  'response id not found',
+  'invalid response id',
+  'no response found',
+  'conversation not found',
+] as const;
+
+/**
+ * Checks if an error indicates the previous_response_id is invalid.
+ * This can happen when:
+ * - Server-side conversation state was lost (session expired, server restart)
+ * - A relay error prevented establishing a valid response
+ * - The response ID was never properly stored
+ *
+ * When this returns true, the caller should:
+ * 1. Clear the previousResponseId
+ * 2. Rebuild the conversation from local message history
+ * 3. Retry without previous_response_id
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await createResponse(params);
+ * } catch (err) {
+ *   if (isPreviousResponseIdError(err)) {
+ *     this.previousResponseId = null;
+ *     // Rebuild and retry without previous_response_id
+ *   }
+ *   throw err;
+ * }
+ * ```
+ */
+export function isPreviousResponseIdError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  const message = err.message.toLowerCase();
+  return PREVIOUS_RESPONSE_ID_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  );
+}
+
+// ============================================================================
+// Overloaded Error Detection
+// ============================================================================
+
+/**
+ * Checks if an error indicates the server is overloaded (Anthropic's overloaded_error).
+ * Overloaded errors should always be retryable.
+ *
+ * This specifically handles Anthropic's overloaded_error which doesn't have
+ * a dedicated SDK error class and comes through as a generic API error.
+ * Example: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+ */
+export function isOverloadedError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('overloaded_error');
 }
 
 /**
