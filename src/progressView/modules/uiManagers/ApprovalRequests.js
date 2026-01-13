@@ -302,7 +302,9 @@ export class ApprovalRequests extends BaseUIRequestManager {
     this._closeAllDropdowns();
 
     if (!wasExpanded) {
-      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering
+      // Workaround: vscode-context-menu constructor sets _data=[] which prevents slot rendering.
+      // See: node_modules/@vscode-elements/elements/dist/vscode-context-menu/vscode-context-menu.js
+      // render() returns this.data ? data.map(...) : <slot>, so empty array skips slot.
       if (Array.isArray(menu.data) && menu.data.length === 0) {
         menu.data = undefined;
         menu.requestUpdate?.();
