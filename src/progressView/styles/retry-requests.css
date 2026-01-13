@@ -42,6 +42,10 @@
   font-size: var(--font-size-xs);
 }
 
+.retry-request__error-details[hidden] {
+  display: none;
+}
+
 .retry-request__error-summary {
   cursor: pointer;
   color: var(--vscode-descriptionForeground);

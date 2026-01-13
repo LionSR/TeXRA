@@ -217,6 +217,10 @@ const NATIVE_HTTP_ERRORS: NativeHttpErrorEntry[] = [
   { ctor: GoogleGenAIApiError, provider: 'google' },
 ];
 
+function normalizeMessage(message: string): string {
+  return message.trim().toLowerCase();
+}
+
 function matchNativeMessageError(
   err: unknown,
 ): ProviderHttpErrorDetails | undefined {
@@ -229,10 +233,18 @@ function matchNativeMessageError(
   const actualMessage = extractErrorMessage(err);
   const baseMessage = entry.message ?? 'Provider request failed';
   // If actual message provides more context than base message, append it
-  const message =
-    actualMessage && actualMessage !== baseMessage
-      ? `${baseMessage}: ${actualMessage}`
-      : baseMessage;
+  const normalizedBase = normalizeMessage(baseMessage);
+  const normalizedActual = actualMessage
+    ? normalizeMessage(actualMessage)
+    : undefined;
+  const shouldAppend =
+    normalizedActual &&
+    normalizedActual !== normalizedBase &&
+    !normalizedActual.includes(normalizedBase) &&
+    !normalizedBase.includes(normalizedActual);
+  const message = shouldAppend
+    ? `${baseMessage}: ${actualMessage}`
+    : baseMessage;
 
   return {
     message,
@@ -493,7 +505,8 @@ export function formatProviderHttpError(
     // Also check if this should be retryable due to relay/overloaded error
     const requestId = detectRequestId(err);
     const retryable =
-      determineRetryable(err, undefined, rawErrorBody) || nativeMessage.retryable;
+      determineRetryable(err, undefined, rawErrorBody) ||
+      nativeMessage.retryable;
     return { ...nativeMessage, retryable, requestId, rawErrorBody };
   }
 
@@ -657,7 +670,9 @@ export function isPreviousResponseIdError(err: unknown): boolean {
  * class and comes through as a generic API error.
  */
 export function isOverloadedError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR);
+  return (
+    err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR)
+  );
 }
 
 /**
