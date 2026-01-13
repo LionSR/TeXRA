@@ -388,6 +388,49 @@ async function resolveAgentBase(
 // ============================================================================
 
 /**
+ * Acquire stream for execution or throw if already in use.
+ * Must be called before expensive resolution to prevent race conditions.
+ *
+ * @param streamId - The stream ID to acquire
+ * @param taskType - Type descriptor for error message (e.g., "Task", "Merge task")
+ * @throws Error if stream is already initializing or running
+ */
+function acquireStreamOrThrow(
+  streamId: StreamTabId,
+  taskType: string = 'Task',
+): void {
+  if (!StreamStatusService.tryAcquire(streamId)) {
+    const currentStatus = StreamStatusService.get(streamId);
+    const statusMsg =
+      currentStatus === STREAM_STATUS.INITIALIZING
+        ? 'already launching'
+        : 'already running';
+    throw new Error(
+      `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+    );
+  }
+}
+
+/**
+ * Validate that config has session metadata, releasing stream on failure.
+ *
+ * @param config - Agent configuration to validate
+ * @param streamId - Stream ID to release if validation fails
+ * @param agentType - Type descriptor for error message (e.g., "Agent", "Merge agent")
+ * @throws Error if session metadata is missing
+ */
+function ensureSessionMetadata(
+  config: AgentConfig,
+  streamId: StreamTabId,
+  agentType: string = 'Agent',
+): void {
+  if (!config.session) {
+    StreamStatusService.releaseIfInitializing(streamId);
+    throw new Error(`${agentType} configuration is missing session metadata.`);
+  }
+}
+
+/**
  * Create a usage recorder callback for flow execution.
  *
  * This callback is invoked when a round is finalized and records usage
@@ -550,16 +593,7 @@ export async function executeAgent(
     configPayload,
     executionId,
   );
-  if (!StreamStatusService.tryAcquire(preliminaryStreamId)) {
-    const currentStatus = StreamStatusService.get(preliminaryStreamId);
-    const statusMsg =
-      currentStatus === STREAM_STATUS.INITIALIZING
-        ? 'already launching'
-        : 'already running';
-    throw new Error(
-      `Task "${preliminaryStreamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
-    );
-  }
+  acquireStreamOrThrow(preliminaryStreamId);
 
   // Resolve agent and prepare base context
   // Wrapped in try-catch to display agent loading errors to users
@@ -583,10 +617,7 @@ export async function executeAgent(
   const { setting, streamId: streamTabId, config } = ctx;
   const agentName = config.agent;
 
-  if (!config.session) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    throw new Error('Agent configuration is missing session metadata.');
-  }
+  ensureSessionMetadata(config, preliminaryStreamId);
 
   // Verify stream IDs match (paranoid check for ID computation consistency)
   if (streamTabId !== preliminaryStreamId) {
@@ -687,16 +718,7 @@ export async function executeMergeAgent(
     model,
     inputFile,
   });
-  if (!StreamStatusService.tryAcquire(preliminaryStreamId)) {
-    const currentStatus = StreamStatusService.get(preliminaryStreamId);
-    const statusMsg =
-      currentStatus === STREAM_STATUS.INITIALIZING
-        ? 'already launching'
-        : 'already running';
-    throw new Error(
-      `Merge task "${preliminaryStreamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
-    );
-  }
+  acquireStreamOrThrow(preliminaryStreamId, 'Merge task');
 
   // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
   let ctx: ResolvedAgentBase;
@@ -714,10 +736,7 @@ export async function executeMergeAgent(
 
   const { streamId: streamTabId, config, executionId } = ctx;
 
-  if (!config.session) {
-    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
-    throw new Error('Merge agent configuration is missing session metadata.');
-  }
+  ensureSessionMetadata(config, preliminaryStreamId, 'Merge agent');
 
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
     setupFlowUIState(ctx);
