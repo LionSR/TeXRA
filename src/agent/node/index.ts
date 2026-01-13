@@ -180,6 +180,12 @@ class Node<
         this.currentRetry < effectiveMaxRetries;
         this.currentRetry++
       ) {
+        // Check abort at start of each retry for responsive cancellation
+        // This ensures we don't attempt exec when the user has already cancelled
+        if (this.signal?.aborted) {
+          const cancelError = new Error('Operation cancelled by user');
+          return await this.execFallback(prepRes, cancelError);
+        }
         try {
           return await this.exec(prepRes);
         } catch (e) {
@@ -199,7 +205,13 @@ class Node<
             }
             return await this.execFallback(prepRes, e as Error);
           }
-          if (this.wait > 0) await sleep(this.wait * 1000);
+          if (this.wait > 0) {
+            await sleep(this.wait * 1000);
+            // Check abort after sleep to exit quickly if cancelled during wait
+            if (this.signal?.aborted) {
+              return await this.execFallback(prepRes, e as Error);
+            }
+          }
         }
       }
       // If we broke from inner loop, continue outer loop to restart auto-retries
@@ -219,7 +231,11 @@ class BatchNode<
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
     const results = [];
-    for (const item of items) results.push(await super._exec(item));
+    for (const item of items) {
+      // Check abort signal before each batch item for responsive cancellation
+      if (this.signal?.aborted) break;
+      results.push(await super._exec(item));
+    }
     return results;
   }
 }
@@ -230,7 +246,11 @@ class ParallelBatchNode<
 > extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
-    return Promise.all(items.map((item) => super._exec(item)));
+    // Check abort signal before starting parallel execution
+    if (this.signal?.aborted) return [];
+    const results = await Promise.all(items.map((item) => super._exec(item)));
+    // Note: Can't abort mid-execution, but at least we check before starting
+    return results;
   }
 }
 class Flow<

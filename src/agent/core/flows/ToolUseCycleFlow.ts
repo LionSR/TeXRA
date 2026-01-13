@@ -47,11 +47,10 @@ import { formatContent } from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-import {
-  finalizeToolUseCycle,
-  type ToolUseCycleOptions,
-  type ToolUseCycleServices,
-  type ToolUseCycleParams,
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleServices,
+  ToolUseCycleParams,
 } from './CycleServices';
 import {
   type InvocationResult,
@@ -576,14 +575,15 @@ class ToolUseProcessNode<C> extends BaseNode<
       shared.cycleNormalizedUsage = execRes.normalizedUsage;
     }
 
-    // Finalize cycle using direct values (no round object needed)
-    await finalizeToolUseCycle(
+    // Finalize cycle by recording metrics and invoking callback
+    run.recordCycleMetrics(
       shared.cycleIndex,
       shared.cycleResponseTimeMs,
       shared.cycleNormalizedUsage ?? null,
-      run,
-      onRoundFinalized,
     );
+    if (onRoundFinalized) {
+      await onRoundFinalized(run);
+    }
     run.incrementRounds();
 
     shared.stopReason = execRes.stopReason;
@@ -720,8 +720,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const assistantText = prepRes.text ?? '';
 
     // Execute all tool calls and collect results
+    // Check for interruption before each tool call to enable responsive cancellation
     const execResults: ToolExecutionResult[] = [];
     for (const call of prepRes.toolCalls) {
+      // Check interruption at start of each iteration for responsive cancellation
+      if (services.checkInterruption()) {
+        break;
+      }
       const execResult = await this.executeToolCall(
         call,
         services,
@@ -729,6 +734,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
         todoState,
       );
       execResults.push(execResult);
+    }
+
+    // If interrupted before any tools executed, return as interrupted
+    if (execResults.length === 0 && services.checkInterruption()) {
+      return { kind: 'skipped', interrupted: true };
     }
 
     return {
