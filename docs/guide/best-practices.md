@@ -169,6 +169,19 @@ Implement validation checks as part of your workflow:
 - Verify bibliography entries
 - Check for consistent terminology and notation
 
+### Lean Verification Workflows
+
+For Lean-based formalization tasks, state-of-the-art practice favors a
+human-first outline followed by tight proof-check cycles:
+
+1. Write an informal proof sketch that fixes the core idea and key lemmas.
+2. Map the sketch into Lean structure (`theorem`, `by`, `calc`, helper lemmas).
+3. Keep proofs small and reusable; extract lemmas instead of repeating tactics.
+4. Use automation tactically (`simp`, `linarith`, `aesop`, `omega`) and confirm
+   each step still matches the informal argument.
+5. Run Lean early and often (`lake build` or `lake env lean <file>`) and iterate
+   on compiler errors to converge on a verified result.
+
 ### Comparison Review
 
 Use comparison tools to evaluate changes:
