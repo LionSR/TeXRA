@@ -68,6 +68,7 @@ export const PROGRESS_VIEW_APPROVAL_ACTIONS = [
   'approveAll',
   'resumeApprovals',
   'showLatexdiff',
+  'previewProposed',
 ] as const;
 
 export type ProgressViewApprovalAction =
@@ -770,6 +771,17 @@ export async function handleProgressViewToolEditApprovalAction(
 
     // Run latexdiff on the original and proposed temp files
     await runLatexdiffForApproval(entry);
+    return;
+  }
+
+  if (payload.action === 'previewProposed') {
+    if (entry.isSettled()) {
+      return;
+    }
+
+    // Compile and preview the proposed LaTeX document
+    const proposedLocation = pathToLocation(entry.proposedUri.fsPath);
+    await openBuildDisplayIfTex(proposedLocation, { preserveFocus: true });
     return;
   }
 
