@@ -133,6 +133,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
     if (dropdownMenu) {
       dropdownMenu.show = false;
+      if (Array.isArray(dropdownMenu.data) && dropdownMenu.data.length === 0) {
+        dropdownMenu.data = undefined;
+        dropdownMenu.requestUpdate?.();
+      }
     }
     if (previewMenuItem) {
       previewMenuItem.dataset.requestId = request.requestId;
