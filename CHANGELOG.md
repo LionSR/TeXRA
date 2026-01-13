@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Added cache token display (read and creation) in usage statistics.
 - Token counts now format as millions (M) when >= 100K for readability.
 - Model is now informed when users modify or reject suggested edits.
+- Added a `lean_proof` tool-use agent for informal-to-formal Lean verification workflows.
 
 ### Bug Fixes
 

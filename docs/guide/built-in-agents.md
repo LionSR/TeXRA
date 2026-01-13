@@ -39,6 +39,29 @@ commands.
 Pick this agent when you want to look up details in the repository without the
 risk of accidental edits.
 
+## Formal Methods Agents
+
+### `lean_proof`
+
+The `lean_proof` agent helps translate informal proofs into Lean 4, iterating
+with Lean verification to resolve errors.
+
+**Purpose:** Produce Lean-verified proofs from informal reasoning.
+
+**Best for:**
+
+- Formalizing math proofs in Lean 4 projects
+- Iterative debugging of Lean proof scripts
+- Building reusable helper lemmas alongside core proofs
+
+**Example instruction:**
+
+```
+Formalize the proof of the theorem in `Proofs/GroupTheory.lean`. Start with an
+informal outline, then produce Lean code and iterate with `lake build` until it
+passes.
+```
+
 ## Correction & Polishing Agents
 
 ### `correct`
