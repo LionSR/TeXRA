@@ -282,11 +282,13 @@ export class XmlOutputManager {
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    // Extract round from the correct position: {base}_{agent}_r{round}_{model}.{ext}
-    // Using position-based extraction (at -2) to avoid matching _rN_ from the base filename
-    const roundPart = outputParts.at(-2) ?? '';
-    const roundMatch = roundPart.match(/^r(\d+)$/);
-    const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
+    // Extract round from the LAST _rN_ pattern in the filename
+    // The base filename may contain _rN_ patterns (e.g., main_enhance_r1_gpt52_criticize_r0_gpt52.tex)
+    // so we need to find all matches and take the last one
+    const outputBasename = path.basename(outputLocation.absolutePath);
+    const roundMatches = [...outputBasename.matchAll(/_r(\d+)_/g)];
+    const lastRoundMatch = roundMatches.at(-1);
+    const currRound = lastRoundMatch ? parseInt(lastRoundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
       if (!doc.name || doc.name === 'unknown' || !doc.content) {
