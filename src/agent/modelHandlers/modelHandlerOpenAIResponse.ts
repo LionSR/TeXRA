@@ -910,7 +910,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           this.applyCompactionState();
         }
 
-        this.previousResponseId = response.id;
+        // Only chain from completed responses - failed/incomplete can't be used
+        if (response.status === 'completed') {
+          this.previousResponseId = response.id;
+        } else {
+          this.logger.warn(
+            `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+          );
+          this.previousResponseId = null;
+        }
         this.conversationState.sentMessages = effectiveMessages.length;
         // Set cumulative input tokens from actual usage (not additive - this IS the total)
         // The response's input_tokens reflects the full context including server-side history
@@ -968,7 +976,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         this.applyCompactionState();
       }
 
-      this.previousResponseId = response.id;
+      // Only chain from completed responses - failed/incomplete can't be used
+      if (response.status === 'completed') {
+        this.previousResponseId = response.id;
+      } else {
+        this.logger.warn(
+          `Response ${response.id} has status "${response.status}" - not safe for chaining`,
+        );
+        this.previousResponseId = null;
+      }
       this.conversationState.sentMessages = effectiveMessages.length;
       // Set cumulative input tokens from actual usage (not additive - this IS the total)
       // The response's input_tokens reflects the full context including server-side history
