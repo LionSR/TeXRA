@@ -893,16 +893,26 @@ export async function handleProgressViewToolEditApprovalAction(
 
   if (payload.action === 'approve') {
     // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
-    entry.settle({ accepted: true, appliedContent });
+    try {
+      const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+      entry.settle({ accepted: true, appliedContent });
+    } catch {
+      // Fall back to original proposed content if file read fails
+      entry.settle({ accepted: true, appliedContent: entry.proposedContent });
+    }
     return;
   }
 
   if (payload.action === 'approveAll') {
     enableSessionApprovalBypass();
     // Read the current content from the proposed file - user may have modified it in the diff view
-    const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
-    entry.settle({ accepted: true, appliedContent });
+    try {
+      const appliedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf-8');
+      entry.settle({ accepted: true, appliedContent });
+    } catch {
+      // Fall back to original proposed content if file read fails
+      entry.settle({ accepted: true, appliedContent: entry.proposedContent });
+    }
     return;
   }
 
