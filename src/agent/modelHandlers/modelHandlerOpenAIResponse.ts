@@ -836,120 +836,132 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // When an error indicates the response ID is invalid, we clear it so
     // the retry logic can recover by starting a fresh conversation.
     try {
-      return await this.executeResponseRequest(
-        client,
-        params,
-        effectiveMessages,
-        compactedThisCall,
-        useStreaming,
-        useBackgroundResponses,
-        signal,
-      );
-    } catch (error) {
-      // Log diagnostic info about the previousResponseId state
-      if (this.previousResponseId) {
-        this.logger.warn(
-          `Request failed with previousResponseId=${this.previousResponseId}. ` +
-            `Error: ${getSdkErrorMessage(error)}`,
+      if (useStreaming) {
+        const { stream: _stream, ...rest } = params;
+        const streamParams: ResponseStreamParams = { ...rest, stream: true };
+        const stream = await executeRequest(
+          {
+            model: this.config.name,
+            operation: 'openai.responses.stream',
+            signal,
+          },
+          () => client.responses.stream(streamParams, { signal }),
         );
-      }
 
-      // If the error indicates the response ID is invalid, clear it
-      // This allows retry logic to recover by starting a fresh conversation
-      if (isPreviousResponseIdError(error)) {
-        this.logger.info(
-          'Clearing previousResponseId due to invalid/expired response - ' +
-            'next retry will rebuild conversation from local history',
-        );
-        this.previousResponseId = null;
-        this.resetConversationState();
-      }
+        // State for handling interleaved thinking and web search
+        // GPT can: think → web_search → think more → web_search → text
+        const state = {
+          thinkingStream: this.createThinkingStream(),
+          outputStream: this.isOutputStreamingEnabled()
+            ? this.createOutputStream()
+            : null,
+          emittedWebSearchIds: new Set<string>(),
+          hasThinkingContent: false,
+        };
 
-      throw error;
-    }
-  }
-
-  /**
-   * Execute the response request (streaming or non-streaming).
-   * Extracted from createResponse to allow wrapping with error handling.
-   */
-  private async executeResponseRequest(
-    client: OpenAI,
-    params: ResponseCreateParamsBase,
-    effectiveMessages: ResponseInputItem[],
-    compactedThisCall: boolean,
-    useStreaming: boolean,
-    useBackgroundResponses: boolean,
-    signal?: AbortSignal,
-  ): Promise<Response> {
-    if (useStreaming) {
-      const { stream: _stream, ...rest } = params;
-      const streamParams: ResponseStreamParams = { ...rest, stream: true };
-      const stream = await executeRequest(
-        {
-          model: this.config.name,
-          operation: 'openai.responses.stream',
-          signal,
-        },
-        () => client.responses.stream(streamParams, { signal }),
-      );
-
-      // State for handling interleaved thinking and web search
-      // GPT can: think → web_search → think more → web_search → text
-      const state = {
-        thinkingStream: this.createThinkingStream(),
-        outputStream: this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : null,
-        emittedWebSearchIds: new Set<string>(),
-        hasThinkingContent: false,
-      };
-
-      for await (const event of stream) {
-        if (this.isReasoningDeltaEvent(event)) {
-          state.thinkingStream.append(event.delta);
-          state.hasThinkingContent = true;
-        } else if (this.isTextDeltaEvent(event)) {
-          state.outputStream?.append(event.delta);
-        } else if (this.isWebSearchInProgressEvent(event)) {
-          // Web search starting - finalize current thinking stream
-          // Don't emit placeholder here - wait for output_item.done with full data
-          if (state.hasThinkingContent) {
-            state.thinkingStream.finalize();
-            state.hasThinkingContent = false;
-            // Create new thinking stream for potential continuation after search
-            state.thinkingStream = this.createThinkingStream();
-          }
-        } else if (this.isOutputItemDoneEvent(event)) {
-          // When output item is done, we can get the full web search data
-          const item = event.item;
-          if (
-            this.isWebSearchItem(item) &&
-            !state.emittedWebSearchIds.has(item.id) &&
-            hasOpenAIWebSearchData(item)
-          ) {
-            // Finalize thinking if we have content (in case in_progress didn't fire)
+        for await (const event of stream) {
+          if (this.isReasoningDeltaEvent(event)) {
+            state.thinkingStream.append(event.delta);
+            state.hasThinkingContent = true;
+          } else if (this.isTextDeltaEvent(event)) {
+            state.outputStream?.append(event.delta);
+          } else if (this.isWebSearchInProgressEvent(event)) {
+            // Web search starting - finalize current thinking stream
+            // Don't emit placeholder here - wait for output_item.done with full data
             if (state.hasThinkingContent) {
               state.thinkingStream.finalize();
               state.hasThinkingContent = false;
+              // Create new thinking stream for potential continuation after search
               state.thinkingStream = this.createThinkingStream();
             }
-            this.emitOpenAIWebSearch(item);
-            state.emittedWebSearchIds.add(item.id);
+          } else if (this.isOutputItemDoneEvent(event)) {
+            // When output item is done, we can get the full web search data
+            const item = event.item;
+            if (
+              this.isWebSearchItem(item) &&
+              !state.emittedWebSearchIds.has(item.id) &&
+              hasOpenAIWebSearchData(item)
+            ) {
+              // Finalize thinking if we have content (in case in_progress didn't fire)
+              if (state.hasThinkingContent) {
+                state.thinkingStream.finalize();
+                state.hasThinkingContent = false;
+                state.thinkingStream = this.createThinkingStream();
+              }
+              this.emitOpenAIWebSearch(item);
+              state.emittedWebSearchIds.add(item.id);
+            }
           }
         }
+
+        const response = await stream.finalResponse();
+        // Finalize any remaining thinking content (only if there's actual content)
+        if (state.hasThinkingContent) {
+          state.thinkingStream.finalize();
+        }
+        const { response: finalText } = this.extractResponse(response, '');
+        if (state.outputStream) state.outputStream.finalize(finalText);
+
+        // Emit any web searches not yet emitted (fallback for edge cases)
+        this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+
+        // Apply compaction state if compaction happened this call
+        if (compactedThisCall) {
+          this.applyCompactionState();
+        }
+
+        this.previousResponseId = response.id;
+        this.conversationState.sentMessages = effectiveMessages.length;
+        // Set cumulative input tokens from actual usage (not additive - this IS the total)
+        // The response's input_tokens reflects the full context including server-side history
+        if (response.usage?.input_tokens) {
+          this.conversationState.cumulativeInputTokens =
+            response.usage.input_tokens;
+        }
+        // Reset compacted flag after successful request (ready for next compaction if needed)
+        this.conversationState.isCompacted = false;
+        return response;
       }
 
-      const response = await stream.finalResponse();
-      // Finalize any remaining thinking content (only if there's actual content)
-      if (state.hasThinkingContent) {
-        state.thinkingStream.finalize();
+      // Non-streaming path
+      // Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+      const { stream: _nonStream, ...nonStreamRest } = params;
+      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+        ...nonStreamRest,
+        stream: false,
+      };
+      let response = await executeRequest(
+        {
+          model: this.config.name,
+          operation: 'openai.responses.create',
+          signal,
+        },
+        () => client.responses.create(nonStreamingParams, { signal }),
+      );
+      if (useBackgroundResponses) {
+        this.logger.debug(
+          `Background response ${response.id} created with status ${
+            response.status ?? 'unknown'
+          }`,
+          {
+            data: {
+              responseId: response.id,
+              status: response.status,
+              usage: response.usage ?? undefined,
+            },
+          },
+        );
+        this.logger.logProgress(
+          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+        );
       }
-      const { response: finalText } = this.extractResponse(response, '');
-      if (state.outputStream) state.outputStream.finalize(finalText);
-
-      // Emit any web searches not yet emitted (fallback for edge cases)
-      this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
+      if (useBackgroundResponses) {
+        response = await this.waitForBackgroundCompletion(
+          client,
+          response,
+          signal,
+        );
+      }
 
       // Apply compaction state if compaction happened this call
       if (compactedThisCall) {
@@ -967,64 +979,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // Reset compacted flag after successful request (ready for next compaction if needed)
       this.conversationState.isCompacted = false;
       return response;
-    }
+    } catch (error) {
+      // Log diagnostic info about the previousResponseId state
+      if (this.previousResponseId) {
+        this.logger.warn(
+          `Request failed with previousResponseId=${this.previousResponseId}. ` +
+            `Error: ${getSdkErrorMessage(error)}`,
+        );
+      }
 
-    // Non-streaming path
-    // Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
-    const { stream: _nonStream, ...nonStreamRest } = params;
-    const nonStreamingParams: ResponseCreateParamsNonStreaming = {
-      ...nonStreamRest,
-      stream: false,
-    };
-    let response = await executeRequest(
-      {
-        model: this.config.name,
-        operation: 'openai.responses.create',
-        signal,
-      },
-      () => client.responses.create(nonStreamingParams, { signal }),
-    );
-    if (useBackgroundResponses) {
-      this.logger.debug(
-        `Background response ${response.id} created with status ${
-          response.status ?? 'unknown'
-        }`,
-        {
-          data: {
-            responseId: response.id,
-            status: response.status,
-            usage: response.usage ?? undefined,
-          },
-        },
-      );
-      this.logger.logProgress(
-        `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-      );
-    }
-    if (useBackgroundResponses) {
-      response = await this.waitForBackgroundCompletion(
-        client,
-        response,
-        signal,
-      );
-    }
+      // OpenAI: If the error indicates the response ID is invalid, clear it
+      // This allows retry logic to recover by starting a fresh conversation
+      if (isPreviousResponseIdError(error)) {
+        this.logger.info(
+          'Clearing previousResponseId due to invalid/expired response - ' +
+            'next retry will rebuild conversation from local history',
+        );
+        this.previousResponseId = null;
+        this.resetConversationState();
+      }
 
-    // Apply compaction state if compaction happened this call
-    if (compactedThisCall) {
-      this.applyCompactionState();
+      throw error;
     }
-
-    this.previousResponseId = response.id;
-    this.conversationState.sentMessages = effectiveMessages.length;
-    // Set cumulative input tokens from actual usage (not additive - this IS the total)
-    // The response's input_tokens reflects the full context including server-side history
-    if (response.usage?.input_tokens) {
-      this.conversationState.cumulativeInputTokens =
-        response.usage.input_tokens;
-    }
-    // Reset compacted flag after successful request (ready for next compaction if needed)
-    this.conversationState.isCompacted = false;
-    return response;
   }
 
   /**
