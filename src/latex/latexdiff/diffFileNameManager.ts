@@ -17,6 +17,9 @@ function extractBaseName(filename: string, includeRound: boolean): string {
     : name.slice(0, lastMatch.index);
 }
 
+/** Pattern to extract round and model: _r{N}_{model} where model stops at underscore or dot */
+const ROUND_MODEL_PATTERN = /_r(\d+)_([^_.]+)/g;
+
 export class DiffFileNameManager {
   generateDiffFileName(
     inputFile: string,
@@ -24,12 +27,9 @@ export class DiffFileNameManager {
     suffix: string,
   ): string {
     const editedFileName = path.basename(editedFile);
-    // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
-    // Use [^_.]+ to stop at underscores, allowing multiple matches
-    const inputMatches = [...path.basename(inputFile).matchAll(/_r(\d+)_([^_.]+)/g)];
-    const editedMatches = [...editedFileName.matchAll(/_r(\d+)_([^_.]+)/g)];
-    const inputRoundMatch = inputMatches.at(-1);
-    const editedRoundMatch = editedMatches.at(-1);
+    // Find the LAST _rN_model pattern (base filename may contain its own _rN_)
+    const inputRoundMatch = [...path.basename(inputFile).matchAll(ROUND_MODEL_PATTERN)].at(-1);
+    const editedRoundMatch = [...editedFileName.matchAll(ROUND_MODEL_PATTERN)].at(-1);
 
     if (inputRoundMatch && editedRoundMatch) {
       return this.generateRoundBasedFileName(
