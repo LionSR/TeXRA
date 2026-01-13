@@ -22,7 +22,13 @@ import { ZodError } from 'zod';
 
 // Local imports - agent components (types only - no agent class instantiation)
 import type { IModelHandler } from '@agent/modelHandlers';
-import { resolveAgent, isRemoteAgent } from '@agent/index';
+import {
+  resolveAgent,
+  isRemoteAgent,
+  getAgent,
+  getCleanAgentName,
+  getMultipleName,
+} from '@agent/index';
 import type { ResolvedAgent } from '@agent/index';
 import { createMergeOutputFileLocationGetter } from '@agent/utils/outputFileUtils';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -108,6 +114,39 @@ interface ResolvedAgentBase extends StorageKeyManager {
   usageMonitor: UsageMonitor;
   /** Parent stage for flow execution. Init stage is a child of this. */
   runStage: AgentLogStage;
+}
+
+// ============================================================================
+// Early Stream ID Computation (Race Condition Prevention)
+// ============================================================================
+
+/**
+ * Compute a preliminary stream ID from config parameters BEFORE expensive resolution.
+ * Used for early duplicate detection to prevent race conditions.
+ *
+ * This mirrors the logic in getStreamTabId() but uses the agent registry cache
+ * to get agentType synchronously, avoiding the need for YAML loading.
+ */
+function computePreliminaryStreamId(
+  configPayload: Partial<AgentConfig>,
+  executionId?: ExecutionId,
+): StreamTabId {
+  const { agent, model, inputFile, useMultipleOutputs } = configPayload;
+
+  if (!agent || !model) {
+    throw new Error('Missing required fields: model and/or agent');
+  }
+
+  // Get agent type from registry cache (fast synchronous lookup)
+  const agentEntry = getAgent(agent);
+  const agentType = agentEntry?.agentType ?? AgentType.CoT;
+
+  // Delegate to canonical implementation
+  return getStreamTabId(agent, model, inputFile ?? '', {
+    agentType,
+    executionId,
+    useMultipleOutputs,
+  });
 }
 
 // ============================================================================
@@ -505,6 +544,23 @@ export async function executeAgent(
     throw new Error('Missing required fields: model and/or agent');
   }
 
+  // Early acquisition to prevent race conditions.
+  // Compute preliminary stream ID and atomically acquire before expensive resolution.
+  const preliminaryStreamId = computePreliminaryStreamId(
+    configPayload,
+    executionId,
+  );
+  if (!StreamStatusService.tryAcquire(preliminaryStreamId)) {
+    const currentStatus = StreamStatusService.get(preliminaryStreamId);
+    const statusMsg =
+      currentStatus === STREAM_STATUS.INITIALIZING
+        ? 'already launching'
+        : 'already running';
+    throw new Error(
+      `Task "${preliminaryStreamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+    );
+  }
+
   // Resolve agent and prepare base context
   // Wrapped in try-catch to display agent loading errors to users
   let ctx: ResolvedAgentBase;
@@ -515,6 +571,8 @@ export async function executeAgent(
       executionId,
     );
   } catch (err) {
+    // Release acquisition on resolution failure
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     // Show error to user unless it's a ZodError (handled by executeCommand.ts)
     if (!(err instanceof ZodError)) {
       void vscode.window.showErrorMessage(toErrorMessage(err));
@@ -526,14 +584,15 @@ export async function executeAgent(
   const agentName = config.agent;
 
   if (!config.session) {
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     throw new Error('Agent configuration is missing session metadata.');
   }
 
-  // Check if already running before any state modifications
-  const currentStatus = StreamStatusService.get(streamTabId);
-  if (currentStatus === STREAM_STATUS.RUNNING) {
-    throw new Error(
-      `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
+  // Verify stream IDs match (paranoid check for ID computation consistency)
+  if (streamTabId !== preliminaryStreamId) {
+    logger.warn(
+      `Stream ID mismatch: preliminary=${preliminaryStreamId}, resolved=${streamTabId}. ` +
+        'This may indicate a bug in stream ID computation.',
     );
   }
 
@@ -622,26 +681,42 @@ export async function executeMergeAgent(
   inputFile: string,
   editedFile: string,
 ): Promise<void> {
-  // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
-  const ctx = await resolveAgentBase('merge', {
+  // Early acquisition to prevent race conditions
+  const preliminaryStreamId = computePreliminaryStreamId({
     agent: 'merge',
     model,
     inputFile,
-    editedFile,
   });
+  if (!StreamStatusService.tryAcquire(preliminaryStreamId)) {
+    const currentStatus = StreamStatusService.get(preliminaryStreamId);
+    const statusMsg =
+      currentStatus === STREAM_STATUS.INITIALIZING
+        ? 'already launching'
+        : 'already running';
+    throw new Error(
+      `Merge task "${preliminaryStreamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+    );
+  }
+
+  // Flow errors handled by runFlowWithLifecycle; validation errors propagate to VS Code
+  let ctx: ResolvedAgentBase;
+  try {
+    ctx = await resolveAgentBase('merge', {
+      agent: 'merge',
+      model,
+      inputFile,
+      editedFile,
+    });
+  } catch (err) {
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
+    throw err;
+  }
 
   const { streamId: streamTabId, config, executionId } = ctx;
 
   if (!config.session) {
+    StreamStatusService.releaseIfInitializing(preliminaryStreamId);
     throw new Error('Merge agent configuration is missing session metadata.');
-  }
-
-  // Check if already running
-  const currentStatus = StreamStatusService.get(streamTabId);
-  if (currentStatus === STREAM_STATUS.RUNNING) {
-    throw new Error(
-      `Merge task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
-    );
   }
 
   await runFlowWithLifecycle(ctx, streamTabId, 'merge', async () => {
