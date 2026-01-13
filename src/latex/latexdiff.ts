@@ -325,8 +325,11 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      const firstRoundMatch = firstLocation.absolutePath.match(/_r(\d+)_/);
-      const secondRoundMatch = secondLocation.absolutePath.match(/_r(\d+)_/);
+      // Find the LAST _rN_ pattern (base filename may contain its own _rN_)
+      const firstMatches = [...firstLocation.absolutePath.matchAll(/_r(\d+)_/g)];
+      const secondMatches = [...secondLocation.absolutePath.matchAll(/_r(\d+)_/g)];
+      const firstRoundMatch = firstMatches.at(-1);
+      const secondRoundMatch = secondMatches.at(-1);
 
       if (!firstRoundMatch || !secondRoundMatch) {
         const message = 'Could not extract round numbers from file names';

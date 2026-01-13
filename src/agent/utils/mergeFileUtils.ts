@@ -62,14 +62,16 @@ export function parseFilenameParts(editedBase: string): FilenameParts {
     );
   }
 
-  // Extract round number
-  const roundMatch = editedBase.match(/_r(\d+)_/);
-  if (!roundMatch) {
+  // Extract round number from the LAST _rN_ pattern
+  // (base filename may contain its own _rN_ pattern)
+  const roundMatches = [...editedBase.matchAll(/_r(\d+)_/g)];
+  const lastRoundMatch = roundMatches.at(-1);
+  if (!lastRoundMatch) {
     throw new Error(
       `Could not extract round number from edited base: ${editedBase}`,
     );
   }
-  const roundNum = parseInt(roundMatch[1], 10);
+  const roundNum = parseInt(lastRoundMatch[1], 10);
 
   // Get model name (last part)
   const model = parts.at(-1) || '';
