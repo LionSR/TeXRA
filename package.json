@@ -808,6 +808,20 @@
             "default": false,
             "description": "Generate diffs between consecutive agent rounds in addition to comparing each round to the original input.",
             "order": 4
+          },
+          "texra.latexdiff.tempFileLocation": {
+            "type": "string",
+            "enum": [
+              "sameDirectory",
+              "workspaceTemp"
+            ],
+            "enumDescriptions": [
+              "Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.",
+              "Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths."
+            ],
+            "default": "sameDirectory",
+            "description": "Where to create temporary files for LaTeX preview and diff operations during tool edit approval.",
+            "order": 5
           }
         }
       },

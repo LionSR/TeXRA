@@ -48,3 +48,61 @@
   font-size: var(--font-size-xs);
   opacity: 0.9;
 }
+
+/* Diff dropdown button group styling */
+.approval-request__actions .diff-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 12rem;
+}
+
+.approval-request__actions .diff-dropdown .diff-main-button {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.approval-request__actions .diff-dropdown .diff-dropdown-trigger {
+  flex: 0 0 auto;
+  width: 20px;
+  min-width: 20px;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid
+    var(--vscode-button-separator, var(--vscode-input-border));
+}
+
+.approval-request__actions .diff-dropdown .diff-dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-tiny));
+  left: 0;
+  z-index: 100;
+  min-width: 150px;
+}
+
+.approval-request__actions .diff-dropdown .dropdown-menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--spacing-tiny);
+}
+
+.approval-request__actions .diff-dropdown .preview-menu-item,
+.approval-request__actions .diff-dropdown .latexdiff-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.approval-request__actions .diff-dropdown .preview-menu-item:hover,
+.approval-request__actions .diff-dropdown .latexdiff-menu-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* Chevron rotation for dropdown */
+.approval-request__actions
+  .diff-dropdown-trigger[aria-expanded='true']
+  .codicon-chevron-down {
+  transform: rotate(180deg);
+}
