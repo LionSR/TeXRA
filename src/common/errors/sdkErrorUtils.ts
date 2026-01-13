@@ -420,7 +420,7 @@ function detectRequestId(err: unknown): string | undefined {
 /**
  * Extracts the raw error body from SDK errors.
  * OpenAI SDK stores the parsed JSON response in an `error` property.
- * This is useful for debugging relay errors where the body contains additional context.
+ * Useful for debugging relay errors where the body contains additional context.
  */
 function detectRawErrorBody(err: unknown): unknown | undefined {
   if (!isObject(err)) {
@@ -434,41 +434,17 @@ function detectRawErrorBody(err: unknown): unknown | undefined {
     response?: { data?: unknown };
   };
 
-  // OpenAI SDK: error property contains the parsed error body
-  if (candidate.error !== undefined && candidate.error !== null) {
-    return candidate.error;
-  }
-
-  // Alternative property names used by other SDKs
-  if (candidate.body !== undefined && candidate.body !== null) {
-    return candidate.body;
-  }
-
-  if (candidate.data !== undefined && candidate.data !== null) {
-    return candidate.data;
-  }
-
-  if (candidate.response?.data !== undefined) {
-    return candidate.response.data;
-  }
-
-  return undefined;
+  // Try common SDK property names in order of likelihood
+  return (
+    candidate.error ?? // OpenAI SDK
+    candidate.body ??
+    candidate.data ??
+    candidate.response?.data
+  );
 }
 
 /**
- * Formats SDK errors from model providers into a consistent message so agent logs
- * can surface status codes alongside concise descriptions.
- *
- * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
- * Google responses. When the error is not a known class, it inspects common
- * HTTP-shaped fields and falls back to a best-effort summary.
- *
- * Abort detection:
- * - SDK-specific: OpenAI/Anthropic APIUserAbortError via matchNativeMessageError()
- * - Generic: DOMException with name 'AbortError' (for providers without SDK abort errors)
- */
-/**
- * Helper to determine if an error is retryable based on status code and content.
+ * Determines if an error is retryable based on status code and error content.
  *
  * Provider-specific overrides:
  * - Anthropic: "overloaded_error" is retryable (no dedicated SDK class)
@@ -478,7 +454,6 @@ function determineRetryable(err: unknown, statusCode?: number): boolean {
   if (err instanceof Error && err.message.includes('overloaded_error')) {
     return true;
   }
-
   return isRetryableStatusCode(statusCode);
 }
 
