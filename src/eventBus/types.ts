@@ -20,10 +20,18 @@ export type ToolEditApprovalPrompt = z.infer<
 >;
 
 /** Manual retry request prompt */
+export const RetryErrorDetailsSchema = z.strictObject({
+  provider: z.string().optional(),
+  statusCode: z.int().optional(),
+  rawErrorBody: z.unknown().optional(),
+});
+export type RetryErrorDetails = z.infer<typeof RetryErrorDetailsSchema>;
+
 export const RetryRequestPromptSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
+  errorDetails: RetryErrorDetailsSchema.optional(),
 });
 export type RetryRequestPrompt = z.infer<typeof RetryRequestPromptSchema>;
