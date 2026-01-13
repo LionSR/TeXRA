@@ -97,6 +97,7 @@ const ERROR_DETAIL_FIELDS = [
   'retryable',
   'rawMessage',
   'requestId',
+  'rawErrorBody',
 ];
 
 /**
@@ -120,7 +121,15 @@ export function formatError(message) {
     const value = structured[key];
     // Skip null/undefined values and message if it duplicates summary
     return value != null && !(key === 'message' && value === summaryText);
-  }).map((key) => `${key}: ${structured[key]}`);
+  }).map((key) => {
+    const value = structured[key];
+    // Format objects (like rawErrorBody) as indented JSON
+    const displayValue =
+      typeof value === 'object'
+        ? JSON.stringify(value, null, 2)
+        : String(value);
+    return `${key}: ${displayValue}`;
+  });
 
   const detailText = detailLines.join('\n');
 
