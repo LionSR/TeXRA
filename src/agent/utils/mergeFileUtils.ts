@@ -4,6 +4,13 @@
  */
 
 /**
+ * Helper to extract the last match of a pattern from text.
+ */
+function extractLastMatch(text: string, pattern: RegExp): RegExpMatchArray | null {
+  return [...text.matchAll(pattern)].at(-1) ?? null;
+}
+
+/**
  * Extracts the last _rN_ match from a filename.
  * Use this to correctly handle nested filenames where the base contains its own _rN_ pattern.
  *
@@ -15,7 +22,7 @@
  * // Returns match for '_r0_' (the last occurrence), not '_r1_'
  */
 export function extractLastRoundMatch(filename: string): RegExpMatchArray | null {
-  return [...filename.matchAll(/_r(\d+)_/g)].at(-1) ?? null;
+  return extractLastMatch(filename, /_r(\d+)_/g);
 }
 
 /**
@@ -32,7 +39,7 @@ export function extractLastRoundMatch(filename: string): RegExpMatchArray | null
 export function extractLastRoundModelMatch(
   filename: string,
 ): RegExpMatchArray | null {
-  return [...filename.matchAll(/_r(\d+)_([^_.]+)/g)].at(-1) ?? null;
+  return extractLastMatch(filename, /_r(\d+)_([^_.]+)/g);
 }
 
 /**
@@ -51,7 +58,7 @@ export type FilenameParts = {
 
 /**
  * Extracts components from edited filename for merge operations.
- * Works backwards from the LAST _rN_ pattern to correctly handle nested filenames
+ * Works backwards from the LAST _rN_model pattern to correctly handle nested filenames
  * like "main_enhance_r1_gpt52_criticize_r0_gpt52".
  *
  * @param editedBase Base name of edited file without extension
@@ -59,23 +66,20 @@ export type FilenameParts = {
  * @throws Error if filename components cannot be extracted
  */
 export function parseFilenameParts(editedBase: string): FilenameParts {
-  const lastRoundMatch = extractLastRoundMatch(editedBase);
-  if (!lastRoundMatch || lastRoundMatch.index === undefined) {
+  const lastMatch = extractLastRoundModelMatch(editedBase);
+  if (!lastMatch || lastMatch.index === undefined) {
     throw new Error(
-      `Could not extract round number from edited base: ${editedBase}`,
+      `Could not extract filename components from edited base: ${editedBase}`,
     );
   }
 
-  const roundNum = parseInt(lastRoundMatch[1], 10);
-  const roundIndex = lastRoundMatch.index;
+  const roundNum = parseInt(lastMatch[1], 10);
+  const model = lastMatch[2];
 
-  // Model is everything after _rN_
-  const model = editedBase.slice(roundIndex + lastRoundMatch[0].length);
+  // Everything before _rN_model is base + agent
+  const beforeRound = editedBase.slice(0, lastMatch.index);
 
-  // Everything before _rN_ is base + agent
-  const beforeRound = editedBase.slice(0, roundIndex);
-
-  // Agent is the part after the last underscore before _rN_
+  // Agent is the part after the last underscore before _rN_model
   const lastUnderscoreIndex = beforeRound.lastIndexOf('_');
   if (lastUnderscoreIndex === -1) {
     throw new Error(
