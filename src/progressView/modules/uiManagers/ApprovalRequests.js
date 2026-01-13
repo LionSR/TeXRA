@@ -23,6 +23,8 @@ export class ApprovalRequests extends BaseUIRequestManager {
     });
     this.isBypassActive = false;
     this._handleToggle = this._handleToggle.bind(this);
+    this._handleDropdownToggle = this._handleDropdownToggle.bind(this);
+    this._handleClickOutside = this._handleClickOutside.bind(this);
   }
 
   /** @override */
@@ -34,14 +36,28 @@ export class ApprovalRequests extends BaseUIRequestManager {
         this._handleToggle,
         true,
       );
+      addEventListenerSafely(
+        this.container,
+        'click',
+        this._handleDropdownToggle,
+        true,
+      );
     }
+    // Listen for clicks outside to close dropdown menus
+    document.addEventListener('click', this._handleClickOutside, true);
   }
 
   /** @override */
-  _cleanupAdditionalListeners() {
+  _disposeAdditionalListeners() {
     if (this.container) {
       this.container.removeEventListener('change', this._handleToggle, true);
+      this.container.removeEventListener(
+        'click',
+        this._handleDropdownToggle,
+        true,
+      );
     }
+    document.removeEventListener('click', this._handleClickOutside, true);
   }
 
   /** @override */
@@ -85,6 +101,11 @@ export class ApprovalRequests extends BaseUIRequestManager {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
     const bypassButton = element.querySelector('[data-action="approveAll"]');
+    const mainDiffButton = element.querySelector('.diff-main-button');
+    const dropdownTrigger = element.querySelector('.diff-dropdown-trigger');
+    const dropdownMenu = element.querySelector('.diff-dropdown-menu');
+    const previewMenuItem = element.querySelector('.preview-menu-item');
+    const latexdiffMenuItem = element.querySelector('.latexdiff-menu-item');
     element.dataset.streamId = request.streamId || '';
 
     if (pathElem) {
@@ -100,12 +121,32 @@ export class ApprovalRequests extends BaseUIRequestManager {
       bypassButton.toggleAttribute('disabled', !allowBypass);
       setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
+
+    if (mainDiffButton) {
+      mainDiffButton.dataset.requestId = request.requestId;
+    }
+
+    // Show/hide dropdown trigger and set requestIds on menu items for LaTeX files
+    if (dropdownTrigger) {
+      dropdownTrigger.toggleAttribute('hidden', !request.isLatex);
+      dropdownTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (dropdownMenu) {
+      dropdownMenu.show = false;
+      if (Array.isArray(dropdownMenu.data) && dropdownMenu.data.length === 0) {
+        dropdownMenu.data = undefined;
+        dropdownMenu.requestUpdate?.();
+      }
+    }
+    if (previewMenuItem) {
+      previewMenuItem.dataset.requestId = request.requestId;
+    }
+    if (latexdiffMenuItem) {
+      latexdiffMenuItem.dataset.requestId = request.requestId;
+    }
   }
 
-  /**
-   * Update the meta element with diff information.
-   * @private
-   */
+  /** @private */
   _updateMetaElement(metaElem, request) {
     const toCount = (v) => (Number.isFinite(v) ? Math.max(0, v) : 0);
     const added = toCount(request.addedLines);
@@ -118,10 +159,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
       parts.push(`Requested by ${request.sourceTool}`);
     }
 
-    // Build diff summary
-    const diffParts = [];
-    if (added > 0) diffParts.push(`+${added}`);
-    if (removed > 0) diffParts.push(`-${removed}`);
+    const diffParts = [
+      ...(added > 0 ? [`+${added}`] : []),
+      ...(removed > 0 ? [`-${removed}`] : []),
+    ];
     const tooltip =
       diffParts.length > 0
         ? `${diffParts.join(' / ')} ${lineLabel} changed`
@@ -181,27 +222,35 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
-    const actionMap = {
-      open: 'openDiff',
-      approve: 'approve',
-      approveAll: 'approveAll',
-      reject: 'reject',
-    };
+    const mappedAction = action === 'open' ? 'openDiff' : action;
+    const validActions = new Set([
+      'openDiff',
+      'approve',
+      'approveAll',
+      'reject',
+      'showLatexdiff',
+      'previewProposed',
+    ]);
 
-    const mappedAction = actionMap[action];
-    if (mappedAction) {
-      vscode.postMessage({
-        command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId,
-        action: mappedAction,
-      });
+    if (!validActions.has(mappedAction)) {
+      return;
     }
+
+    if (
+      mappedAction === 'showLatexdiff' ||
+      mappedAction === 'previewProposed'
+    ) {
+      this._closeAllDropdowns();
+    }
+
+    vscode.postMessage({
+      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId,
+      action: mappedAction,
+    });
   }
 
-  /**
-   * Handle toggle button changes.
-   * @private
-   */
+  /** @private */
   _handleToggle(event) {
     if (!(event.target instanceof Element)) {
       return;
@@ -232,5 +281,68 @@ export class ApprovalRequests extends BaseUIRequestManager {
       requestId,
       action,
     });
+  }
+
+  /** @private */
+  _handleDropdownToggle(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const trigger = event.target.closest('.diff-dropdown-trigger');
+    if (!trigger) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const menu = trigger
+      .closest('.diff-dropdown')
+      ?.querySelector('.diff-dropdown-menu');
+    if (!menu) {
+      return;
+    }
+
+    const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
+    this._closeAllDropdowns();
+
+    if (!wasExpanded) {
+      // Workaround: vscode-context-menu constructor sets _data=[] which prevents slot rendering.
+      // See: node_modules/@vscode-elements/elements/dist/vscode-context-menu/vscode-context-menu.js
+      // render() returns this.data ? data.map(...) : <slot>, so empty array skips slot.
+      if (Array.isArray(menu.data) && menu.data.length === 0) {
+        menu.data = undefined;
+        menu.requestUpdate?.();
+      }
+      menu.show = true;
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  /** @private */
+  _handleClickOutside(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    if (!event.target.closest('.diff-dropdown')) {
+      this._closeAllDropdowns();
+    }
+  }
+
+  /** @private */
+  _closeAllDropdowns() {
+    if (!this.container) {
+      return;
+    }
+
+    const triggers = this.container.querySelectorAll('.diff-dropdown-trigger');
+    for (const trigger of triggers) {
+      const dropdown = trigger.closest('.diff-dropdown');
+      const menu = dropdown?.querySelector('.diff-dropdown-menu');
+      if (menu) {
+        menu.show = false;
+      }
+      trigger.setAttribute('aria-expanded', 'false');
+    }
   }
 }
