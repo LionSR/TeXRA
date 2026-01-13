@@ -32,6 +32,39 @@ export const StreamStatusService = {
   },
 
   /**
+   * Attempt to acquire a stream for execution.
+   * Returns true if acquired (sets INITIALIZING), false if already running/initializing.
+   *
+   * This is an atomic check-and-set to prevent race conditions when launching
+   * workflows concurrently.
+   */
+  tryAcquire(stream: StreamTabId): boolean {
+    const current = statusMemory.get(stream);
+
+    // Block if already running or initializing
+    if (
+      current === STREAM_STATUS.RUNNING ||
+      current === STREAM_STATUS.INITIALIZING
+    ) {
+      return false;
+    }
+
+    // Acquire by setting INITIALIZING
+    this.set(stream, STREAM_STATUS.INITIALIZING);
+    return true;
+  },
+
+  /**
+   * Release an INITIALIZING stream on error.
+   * Only clears if current status is still INITIALIZING.
+   */
+  releaseIfInitializing(stream: StreamTabId): void {
+    if (statusMemory.get(stream) === STREAM_STATUS.INITIALIZING) {
+      this.clear(stream);
+    }
+  },
+
+  /**
    * Set the status for a stream.
    * @param stream - Stream identifier
    * @param status - New status (READY clears the status)
