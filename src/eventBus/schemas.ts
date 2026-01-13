@@ -22,8 +22,10 @@ import { TaskStateSchema, type TaskState } from '@logger/TaskState';
  * (progressView cannot import types.ts directly due to other deps)
  */
 export {
+  RetryErrorDetailsSchema,
   ToolEditApprovalPromptSchema,
   RetryRequestPromptSchema,
+  type RetryErrorDetails,
   type ToolEditApprovalPrompt,
   type RetryRequestPrompt,
 } from './types';
