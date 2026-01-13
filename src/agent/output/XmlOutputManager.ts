@@ -9,6 +9,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -282,12 +283,7 @@ export class XmlOutputManager {
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    // Extract round from the LAST _rN_ pattern in the filename
-    // The base filename may contain _rN_ patterns (e.g., main_enhance_r1_gpt52_criticize_r0_gpt52.tex)
-    // so we need to find all matches and take the last one
-    const outputBasename = path.basename(outputLocation.absolutePath);
-    const roundMatches = [...outputBasename.matchAll(/_r(\d+)_/g)];
-    const lastRoundMatch = roundMatches.at(-1);
+    const lastRoundMatch = extractLastRoundMatch(outputLocation.absolutePath);
     const currRound = lastRoundMatch ? parseInt(lastRoundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
