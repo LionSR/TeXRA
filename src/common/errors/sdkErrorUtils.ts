@@ -427,23 +427,29 @@ function detectRawErrorBody(err: unknown): unknown | undefined {
   );
 }
 
-/** Anthropic error type for server overload (no dedicated SDK class) */
+/**
+ * Anthropic error type strings (no dedicated SDK classes for these).
+ * @see https://docs.anthropic.com/en/api/errors
+ */
 const ANTHROPIC_OVERLOADED_ERROR = 'overloaded_error';
-
-/** Check if error message contains the Anthropic overloaded pattern */
-function hasOverloadedError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR);
-}
+const ANTHROPIC_TIMEOUT_ERROR = 'timeout_error';
 
 /**
  * Determines if an error is retryable based on status code and error content.
  *
  * Provider-specific overrides:
- * - Anthropic: "overloaded_error" is retryable (no dedicated SDK class)
+ * - Anthropic: "overloaded_error" and "timeout_error" are retryable (no dedicated SDK classes)
  */
 function determineRetryable(err: unknown, statusCode?: number): boolean {
-  if (hasOverloadedError(err)) {
-    return true;
+  if (err instanceof Error) {
+    const msg = err.message;
+    // Anthropic: overloaded_error and timeout_error should be retryable
+    if (
+      msg.includes(ANTHROPIC_OVERLOADED_ERROR) ||
+      msg.includes(ANTHROPIC_TIMEOUT_ERROR)
+    ) {
+      return true;
+    }
   }
   return isRetryableStatusCode(statusCode);
 }
@@ -619,11 +625,21 @@ export function isPreviousResponseIdError(err: unknown): boolean {
  * Anthropic: Returns `{"type":"error","error":{"type":"overloaded_error",...}}`
  * when servers are at capacity. This error type doesn't have a dedicated SDK
  * class and comes through as a generic API error.
- *
- * Overloaded errors should always be retryable.
  */
 export function isOverloadedError(err: unknown): boolean {
-  return hasOverloadedError(err);
+  return err instanceof Error && err.message.includes(ANTHROPIC_OVERLOADED_ERROR);
+}
+
+/**
+ * Checks if an error indicates a server-side timeout.
+ *
+ * Anthropic: Returns `{"type":"error","error":{"type":"timeout_error",...}}`
+ * when the request times out on the server. This is different from connection
+ * timeouts (which are client-side). This error type doesn't have a dedicated
+ * SDK class and comes through as a generic API error.
+ */
+export function isTimeoutError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes(ANTHROPIC_TIMEOUT_ERROR);
 }
 
 /**

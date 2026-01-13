@@ -20,6 +20,7 @@ export {
   isContextWindowError,
   isPreviousResponseIdError,
   isOverloadedError,
+  isTimeoutError,
   enrichError,
   buildErrorLogData,
 } from './sdkErrorUtils';
