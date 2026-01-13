@@ -19,6 +19,7 @@
 
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { RetryErrorDetails } from '@eventBus/types';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // ============================================================================
@@ -47,6 +48,8 @@ export interface RetryRequestOptions {
   logger: AgentLogger;
   /** Timeout in milliseconds (defaults to 5 minutes) */
   timeoutMs?: number;
+  /** Structured error details for expandable display */
+  errorDetails?: RetryErrorDetails;
 }
 
 /**
@@ -57,18 +60,11 @@ type RetryRequestState =
   | {
       status: 'pending';
       resolve: (result: RetryResult) => void;
-      timeoutId: NodeJS.Timeout;
+      timeoutId?: NodeJS.Timeout;
       logger: AgentLogger;
       operation: string;
     }
   | { status: 'resolved' };
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Default timeout for manual retry wait (5 minutes) */
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
 // Coordinator Implementation
@@ -94,7 +90,8 @@ class RetryRequestCoordinatorImpl {
     streamId: string,
     options: RetryRequestOptions,
   ): Promise<RetryResult> {
-    const { logger, operation, errorMessage, model, timeoutMs } = options;
+    const { logger, operation, errorMessage, model, timeoutMs, errorDetails } =
+      options;
 
     // If there's an existing pending request for this stream, cancel it first.
     // This prevents stale timeouts from resolving the wrong request.
@@ -110,18 +107,20 @@ class RetryRequestCoordinatorImpl {
     );
 
     return new Promise<RetryResult>((resolve) => {
-      const actualTimeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const timeoutId = setTimeout(() => {
-        // Check if this request is still pending (wasn't resolved by user action)
-        const req = this.requests.get(streamId);
-        if (req?.status === 'pending' && req.resolve === resolve) {
-          const timeoutMinutes = Math.round(actualTimeoutMs / 60000);
-          logger.warn(
-            `Manual retry wait timed out after ${timeoutMinutes} minutes`,
-          );
-          this.resolveRequest(streamId, { action: 'timeout' });
-        }
-      }, actualTimeoutMs);
+      // Only set timeout if explicitly requested (wait indefinitely by default)
+      let timeoutId: NodeJS.Timeout | undefined;
+      if (timeoutMs && timeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          const req = this.requests.get(streamId);
+          if (req?.status === 'pending' && req.resolve === resolve) {
+            const timeoutMinutes = Math.round(timeoutMs / 60000);
+            logger.warn(
+              `Manual retry wait timed out after ${timeoutMinutes} minutes`,
+            );
+            this.resolveRequest(streamId, { action: 'timeout' });
+          }
+        }, timeoutMs);
+      }
 
       // Store pending state
       this.requests.set(streamId, {
@@ -138,6 +137,7 @@ class RetryRequestCoordinatorImpl {
         operation,
         model,
         errorMessage,
+        errorDetails,
       });
     });
   }
