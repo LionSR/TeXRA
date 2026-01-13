@@ -292,13 +292,22 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
+    // Capture expanded state BEFORE closing all dropdowns
+    const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
+
     // Close other open menus first
     this._closeAllDropdowns();
 
-    // Toggle this menu
-    const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-    menu.show = !isExpanded;
-    trigger.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+    // Toggle this menu (only open if it wasn't already expanded)
+    if (!wasExpanded) {
+      // Workaround: vscode-context-menu defaults data to [] which prevents slot rendering
+      // Setting data to undefined allows slotted children to render
+      if (menu.data !== undefined) {
+        menu.data = undefined;
+      }
+      menu.show = true;
+      trigger.setAttribute('aria-expanded', 'true');
+    }
   }
 
   /**

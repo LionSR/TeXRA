@@ -16,6 +16,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { isLatexFile } from '@common/files/fileTypeUtils';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { type ToolResult, type LineChanges } from '@tools/result';
@@ -181,11 +182,6 @@ export function setToolEditApprovalHandler(
   ) => Promise<ToolEditApprovalResult>,
 ): void {
   customHandler = handler;
-}
-
-function isLatexFile(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return ext === '.tex' || ext === '.ltx' || ext === '.latex';
 }
 
 async function showProgressViewApprovalPrompt(
@@ -436,32 +432,123 @@ async function closeApprovalEditors(
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 /**
- * Run latexdiff on the original and proposed temp files for an approval entry.
- * Opens the result in the LaTeX build preview (compiles to PDF).
- *
- * The temp files are stored in extension storage, but we execute latexdiff
- * from the workspace directory so that \input{}, \include{}, and package
- * dependencies can be resolved properly.
+ * Create a temporary file in the workspace for LaTeX compilation.
+ * Files created in the workspace can resolve \input{}, \include{}, and packages.
+ * Returns the temp file path and a cleanup function.
+ */
+async function createWorkspaceTempFile(
+  originalPath: string,
+  content: string,
+  suffix: string,
+): Promise<{ tempPath: string; cleanup: () => Promise<void> }> {
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    throw new Error('No workspace folder open');
+  }
+
+  const ext = path.extname(originalPath);
+  const basename = path.basename(originalPath, ext);
+  const tempDir = path.join(workspacePath, '.texra-temp');
+  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, 8)}${ext}`;
+  const tempPath = path.join(tempDir, tempFileName);
+
+  await fs.mkdir(tempDir, { recursive: true });
+  await fs.writeFile(tempPath, content, 'utf8');
+
+  const cleanup = async () => {
+    try {
+      await fs.unlink(tempPath).catch(() => {});
+      // Also clean up any generated aux files
+      const auxFiles = ['.aux', '.log', '.pdf', '.synctex.gz', '.fls', '.fdb_latexmk'];
+      for (const auxExt of auxFiles) {
+        const auxPath = tempPath.replace(ext, auxExt);
+        await fs.unlink(auxPath).catch(() => {});
+      }
+      // Try to remove temp dir if empty
+      await fs.rmdir(tempDir).catch(() => {});
+    } catch {
+      // Ignore cleanup errors
+    }
+  };
+
+  return { tempPath, cleanup };
+}
+
+/**
+ * Preview the proposed LaTeX document by creating a temp file in the workspace.
+ * This allows \input{}, \include{}, and packages to be resolved properly.
+ */
+async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> {
+  let cleanup: (() => Promise<void>) | undefined;
+
+  try {
+    // Read current content from proposed file (user may have edited it)
+    const content = await fs.readFile(entry.proposedUri.fsPath, 'utf8');
+
+    // Create temp file in workspace for proper dependency resolution
+    const { tempPath, cleanup: cleanupFn } = await createWorkspaceTempFile(
+      entry.request.path,
+      content,
+      '_preview',
+    );
+    cleanup = cleanupFn;
+
+    // Open and build the temp file
+    const tempLocation = pathToLocation(tempPath);
+    await openBuildDisplayIfTex(tempLocation, { preserveFocus: true });
+
+    // Delay cleanup to allow build to complete
+    setTimeout(() => {
+      void cleanup?.();
+    }, 30000); // 30 seconds should be enough for most builds
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Preview failed: ${message}`);
+    await cleanup?.();
+  }
+}
+
+/**
+ * Run latexdiff on the original and proposed content.
+ * Creates temp files in the workspace for proper dependency resolution.
  */
 async function runLatexdiffForApproval(
   entry: PendingApprovalEntry,
 ): Promise<void> {
+  let cleanupOriginal: (() => Promise<void>) | undefined;
+  let cleanupProposed: (() => Promise<void>) | undefined;
+  let cleanupDiff: (() => Promise<void>) | undefined;
+
   try {
-    const originalLocation = pathToLocation(entry.originalUri.fsPath);
-    const proposedLocation = pathToLocation(entry.proposedUri.fsPath);
+    // Read current content from files (user may have edited proposed in diff view)
+    const originalContent = await fs.readFile(entry.originalUri.fsPath, 'utf8');
+    const proposedContent = await fs.readFile(entry.proposedUri.fsPath, 'utf8');
 
-    // Get workspace path for executing latexdiff - this ensures dependencies
-    // like \input{} and \include{} can be resolved from the workspace
-    const workspacePath = WorkspaceFS.getPath();
+    // Create temp files in workspace for proper dependency resolution
+    const original = await createWorkspaceTempFile(
+      entry.request.path,
+      originalContent,
+      '_original',
+    );
+    cleanupOriginal = original.cleanup;
 
-    // Run latexdiff on the temp files with workspace as working directory
+    const proposed = await createWorkspaceTempFile(
+      entry.request.path,
+      proposedContent,
+      '_proposed',
+    );
+    cleanupProposed = proposed.cleanup;
+
+    // Run latexdiff on the workspace temp files
+    const originalLocation = pathToLocation(original.tempPath);
+    const proposedLocation = pathToLocation(proposed.tempPath);
+
     const result = await latexdiffService.runDiff(
       originalLocation,
       proposedLocation,
       '_diff',
       false, // don't run indent
       'coarse', // default math markup
-      { cwd: workspacePath || path.dirname(entry.originalUri.fsPath) },
     );
 
     if (!result.success || !result.diffFileName) {
@@ -473,14 +560,34 @@ async function runLatexdiffForApproval(
 
     // Open the generated diff file in the LaTeX build preview
     const diffFilePath = path.join(
-      path.dirname(entry.originalUri.fsPath),
+      path.dirname(original.tempPath),
       result.diffFileName,
     );
     const diffLocation = pathToLocation(diffFilePath);
     await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
+
+    // Setup cleanup for diff file
+    cleanupDiff = async () => {
+      const ext = path.extname(diffFilePath);
+      const auxFiles = ['.aux', '.log', '.pdf', '.synctex.gz', '.fls', '.fdb_latexmk', ''];
+      for (const auxExt of auxFiles) {
+        const auxPath = auxExt ? diffFilePath.replace(ext, auxExt) : diffFilePath;
+        await fs.unlink(auxPath).catch(() => {});
+      }
+    };
+
+    // Delay cleanup to allow build to complete
+    setTimeout(() => {
+      void cleanupOriginal?.();
+      void cleanupProposed?.();
+      void cleanupDiff?.();
+    }, 30000);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`LaTeXdiff failed: ${message}`);
+    await cleanupOriginal?.();
+    await cleanupProposed?.();
+    await cleanupDiff?.();
   }
 }
 
@@ -779,9 +886,8 @@ export async function handleProgressViewToolEditApprovalAction(
       return;
     }
 
-    // Compile and preview the proposed LaTeX document
-    const proposedLocation = pathToLocation(entry.proposedUri.fsPath);
-    await openBuildDisplayIfTex(proposedLocation, { preserveFocus: true });
+    // Compile and preview the proposed LaTeX document in workspace context
+    await previewProposedLatex(entry);
     return;
   }
 
