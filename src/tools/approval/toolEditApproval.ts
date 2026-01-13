@@ -17,14 +17,14 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - utils
 import { getCurrentToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { TEMP_EXTENSIONS } from '@housekeeping/constants';
-import { LaTeXdiffService } from '@latex/latexdiff';
 import { type ToolResult, type LineChanges } from '@tools/result';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, pathToLocation } from '@utils/files';
+import { bus } from '@eventBus/ProgressEventBus';
+import { LaTeXdiffService } from '@latex/latexdiff';
+import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 
 // Local file imports
 
@@ -62,6 +62,8 @@ interface PendingApprovalEntry {
   settle: (result: ToolEditApprovalResult) => void;
   /** Cleanup functions for workspace temp files created by preview/latexdiff */
   workspaceTempCleanup: Array<() => Promise<void>>;
+  /** Guard to prevent multiple concurrent preview/diff operations */
+  latexOperationInProgress: boolean;
 }
 
 /** All valid approval actions for tool edit prompts */
@@ -435,6 +437,18 @@ async function closeApprovalEditors(
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
 /**
+ * Clean up LaTeX auxiliary files for a given base path.
+ * Uses TEMP_EXTENSIONS from housekeeping constants.
+ */
+async function cleanupLatexAuxFiles(filePath: string): Promise<void> {
+  const ext = path.extname(filePath);
+  const basePathNoExt = filePath.slice(0, -ext.length);
+  for (const tempExt of TEMP_EXTENSIONS) {
+    await fs.unlink(basePathNoExt + tempExt).catch(() => {});
+  }
+}
+
+/**
  * Create a temporary file in the same directory as the original for LaTeX compilation.
  * Placing the temp file alongside the original ensures \input{}, \include{}, and
  * relative paths resolve correctly (they're relative to the file's directory).
@@ -467,13 +481,8 @@ async function createWorkspaceTempFile(
 
   const cleanup = async () => {
     try {
-      // Clean up the main temp file
       await fs.unlink(tempPath).catch(() => {});
-      // Clean up all LaTeX auxiliary files using shared TEMP_EXTENSIONS
-      const basePathNoExt = tempPath.slice(0, -ext.length);
-      for (const tempExt of TEMP_EXTENSIONS) {
-        await fs.unlink(basePathNoExt + tempExt).catch(() => {});
-      }
+      await cleanupLatexAuxFiles(tempPath);
     } catch {
       // Ignore cleanup errors
     }
@@ -488,6 +497,12 @@ async function createWorkspaceTempFile(
  * Cleanup is registered with the entry and executed when approval is resolved.
  */
 async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> {
+  // Guard against multiple concurrent operations
+  if (entry.latexOperationInProgress) {
+    return;
+  }
+  entry.latexOperationInProgress = true;
+
   try {
     // Read current content from proposed file (user may have edited it)
     const content = await fs.readFile(entry.proposedUri.fsPath, 'utf8');
@@ -508,6 +523,8 @@ async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`Preview failed: ${message}`);
+  } finally {
+    entry.latexOperationInProgress = false;
   }
 }
 
@@ -519,6 +536,12 @@ async function previewProposedLatex(entry: PendingApprovalEntry): Promise<void> 
 async function runLatexdiffForApproval(
   entry: PendingApprovalEntry,
 ): Promise<void> {
+  // Guard against multiple concurrent operations
+  if (entry.latexOperationInProgress) {
+    return;
+  }
+  entry.latexOperationInProgress = true;
+
   try {
     // Read current content from files (user may have edited proposed in diff view)
     const originalContent = await fs.readFile(entry.originalUri.fsPath, 'utf8');
@@ -567,17 +590,15 @@ async function runLatexdiffForApproval(
     await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
 
     // Register cleanup for diff file and its aux files
-    const ext = path.extname(diffFilePath);
-    const diffBasePathNoExt = diffFilePath.slice(0, -ext.length);
     entry.workspaceTempCleanup.push(async () => {
       await fs.unlink(diffFilePath).catch(() => {});
-      for (const tempExt of TEMP_EXTENSIONS) {
-        await fs.unlink(diffBasePathNoExt + tempExt).catch(() => {});
-      }
+      await cleanupLatexAuxFiles(diffFilePath);
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`LaTeXdiff failed: ${message}`);
+  } finally {
+    entry.latexOperationInProgress = false;
   }
 }
 
@@ -655,6 +676,7 @@ async function nativeRequestApproval(
         isSettled: () => settled,
         settle,
         workspaceTempCleanup: [],
+        latexOperationInProgress: false,
       };
 
       pendingApprovals.set(requestId, entry);
@@ -696,7 +718,7 @@ async function nativeRequestApproval(
     await cleanupTempFile(proposedUri);
 
     // Clean up any workspace temp files created by preview/latexdiff
-    if (entry?.workspaceTempCleanup) {
+    if (entry?.workspaceTempCleanup.length) {
       for (const cleanup of entry.workspaceTempCleanup) {
         await cleanup().catch(() => {});
       }
