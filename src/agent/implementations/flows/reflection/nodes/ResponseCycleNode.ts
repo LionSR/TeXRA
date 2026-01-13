@@ -37,10 +37,7 @@ import {
   interpretCycleCompletion,
   type CycleCompletionResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import {
-  finalizeRound,
-  type CycleStateSlices,
-} from '@agent/core/flows/CycleServices';
+import type { CycleStateSlices } from '@agent/core/flows/CycleServices';
 import type { AgentFileLocation } from '@utils/files';
 
 import {
@@ -203,12 +200,10 @@ export class ResponseCycleNode<C = unknown> extends Node<
       };
     } catch (error) {
       // Error path: finalize round on unexpected errors
-      await finalizeRound({
-        round: prepRes.round,
-        run: prepRes.run,
-        workspace: prepRes.workspace,
-        onRoundFinalized,
-      });
+      prepRes.run.recordRound(prepRes.round);
+      if (onRoundFinalized) {
+        await onRoundFinalized(prepRes.run);
+      }
       return {
         kind: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
