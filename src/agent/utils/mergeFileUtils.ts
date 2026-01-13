@@ -4,12 +4,6 @@
  */
 
 /**
- * Round pattern regex for matching _rN_ in filenames.
- * Use with matchAll and .at(-1) to get the last occurrence.
- */
-export const ROUND_PATTERN = /_r(\d+)_/g;
-
-/**
  * Extracts the last _rN_ match from a filename.
  * Use this to correctly handle nested filenames where the base contains its own _rN_ pattern.
  *
@@ -21,7 +15,6 @@ export const ROUND_PATTERN = /_r(\d+)_/g;
  * // Returns match for '_r0_' (the last occurrence), not '_r1_'
  */
 export function extractLastRoundMatch(filename: string): RegExpMatchArray | null {
-  // Must create new regex instance since global regexes are stateful
   return [...filename.matchAll(/_r(\d+)_/g)].at(-1) ?? null;
 }
 
