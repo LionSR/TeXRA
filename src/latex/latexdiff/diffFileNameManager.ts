@@ -15,9 +15,8 @@ function extractBaseName(filename: string, includeRound: boolean): string {
   }
   // Return everything up to (or including) the last _rN
   // The -1 excludes the trailing underscore from _rN_ when includeRound is true
-  return includeRound
-    ? name.slice(0, lastMatch.index + lastMatch[0].length - 1)
-    : name.slice(0, lastMatch.index);
+  const endIndex = lastMatch.index + (includeRound ? lastMatch[0].length - 1 : 0);
+  return name.slice(0, endIndex);
 }
 
 export class DiffFileNameManager {
@@ -48,14 +47,10 @@ export class DiffFileNameManager {
   ): string {
     const firstRound = inputRoundMatch[1];
     const secondRound = editedRoundMatch[1];
-    const firstModel = inputRoundMatch[2];
-    const secondModel = editedRoundMatch[2];
-
-    const sameModel = firstModel === secondModel;
+    const sameModel = inputRoundMatch[2] === editedRoundMatch[2];
     const baseName = extractBaseName(editedFileName, sameModel);
+    const modelSuffix = sameModel ? `_${editedRoundMatch[2]}` : '';
 
-    return sameModel
-      ? `${baseName}_${secondModel}_diffr${secondRound}r${firstRound}.tex`
-      : `${baseName}_diffr${secondRound}r${firstRound}.tex`;
+    return `${baseName}${modelSuffix}_diffr${secondRound}r${firstRound}.tex`;
   }
 }
