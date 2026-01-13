@@ -48,7 +48,7 @@ export class ApprovalRequests extends BaseUIRequestManager {
   }
 
   /** @override */
-  _cleanupAdditionalListeners() {
+  _disposeAdditionalListeners() {
     if (this.container) {
       this.container.removeEventListener('change', this._handleToggle, true);
       this.container.removeEventListener(
