@@ -62,7 +62,6 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
 import {
   computeReducedMaxTokens,
@@ -297,84 +296,63 @@ export class ModelHandlerOpenAI<
       ? this.createOutputStream()
       : undefined;
 
-    const markRetryAttempt = (attempt: number): void => {
-      if (attempt === 1) {
-        return;
-      }
-
-      const retryNotice = `\n[Retrying request: attempt ${attempt}]`;
-      thinking.append(retryNotice);
-      output?.append(retryNotice);
-    };
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
       stream: true,
       stream_options: { include_usage: true },
     };
 
-    return executeRequest(
-      {
-        model: this.config.name,
-        operation: 'openai.chat.completions.stream',
-        signal,
-        onAttemptStart: (nextAttempt) => {
-          markRetryAttempt(nextAttempt);
-        },
-      },
-      async () => {
-        const stream = await client.chat.completions.stream(streamParams, {
-          signal,
-        });
-        const streamingAggregator = this.createStreamingAggregator();
+    const stream = await client.chat.completions.stream(streamParams, {
+      signal,
+    });
+    const streamingAggregator = this.createStreamingAggregator();
 
-        const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
-          if (!delta) {
-            return;
-          }
-          output?.append(delta);
-          streamingAggregator?.appendContent(delta);
-        };
+    const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
+      if (!delta) {
+        return;
+      }
+      output?.append(delta);
+      streamingAggregator?.appendContent(delta);
+    };
 
-        const onChunk = (chunk: ChatCompletionChunk): void => {
-          streamingAggregator?.consumeChunk(chunk);
-          const reasoningDelta = extractReasoningDelta(chunk);
-          if (reasoningDelta) {
-            thinking.append(reasoningDelta);
-            streamingAggregator?.appendReasoning(reasoningDelta);
-          }
-        };
+    const onChunk = (chunk: ChatCompletionChunk): void => {
+      streamingAggregator?.consumeChunk(chunk);
+      const reasoningDelta = extractReasoningDelta(chunk);
+      if (reasoningDelta) {
+        thinking.append(reasoningDelta);
+        streamingAggregator?.appendReasoning(reasoningDelta);
+      }
+    };
 
-        stream.on('content.delta', onContentDelta);
-        stream.on('chunk', onChunk);
+    stream.on('content.delta', onContentDelta);
+    stream.on('chunk', onChunk);
 
-        const cleanup = (): void => {
-          stream.off('content.delta', onContentDelta);
-          stream.off('chunk', onChunk);
-        };
+    const cleanup = (): void => {
+      stream.off('content.delta', onContentDelta);
+      stream.off('chunk', onChunk);
+    };
 
+    try {
+      let finalResponse = await this.awaitFinalResponse(
+        stream,
+        streamingAggregator,
+      );
+
+      // Ensure usage is captured - use SDK's totalUsage() as fallback
+      if (!finalResponse.usage) {
         try {
-          let finalResponse = await this.awaitFinalResponse(
-            stream,
-            streamingAggregator,
-          );
-
-          // Ensure usage is captured - use SDK's totalUsage() as fallback
-          if (!finalResponse.usage) {
-            try {
-              const totalUsage = await stream.totalUsage();
-              finalResponse = { ...finalResponse, usage: totalUsage };
-            } catch (_err) {
-              // totalUsage() may fail if stream ended abnormally
-            }
-          }
-
-          this.finalizeStreams(thinking, output ?? undefined, finalResponse);
-          return finalResponse;
-        } finally {
-          cleanup();
+          const totalUsage = await stream.totalUsage();
+          finalResponse = { ...finalResponse, usage: totalUsage };
+        } catch (_err) {
+          // totalUsage() may fail if stream ended abnormally
         }
-      },
-    );
+      }
+
+      this.finalizeStreams(thinking, output ?? undefined, finalResponse);
+      return finalResponse;
+    } finally {
+      cleanup();
+    }
   }
 
   protected async executeNonStreamingChat(
@@ -382,20 +360,12 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    return executeRequest(
+    return client.chat.completions.create(
       {
-        model: this.config.name,
-        operation: 'openai.chat.completions.create',
-        signal,
+        ...baseParams,
+        stream: false,
       },
-      () =>
-        client.chat.completions.create(
-          {
-            ...baseParams,
-            stream: false,
-          },
-          { signal },
-        ),
+      { signal },
     );
   }
 
