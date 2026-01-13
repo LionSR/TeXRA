@@ -29,7 +29,6 @@ import {
   getModelRetryMaxAttempts,
 } from '@utils/config';
 
-
 /**
  * Minimum retry count for background mode.
  * This is the minimum value for maxRetries (total attempts = 1 initial + N-1 retries).
