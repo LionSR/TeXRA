@@ -536,7 +536,9 @@ async function nativeRequestApproval(
 
     // Clean up any workspace temp files created by preview/latexdiff (parallel for performance)
     if (entry?.workspaceTempCleanup.length) {
-      await Promise.all(entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})));
+      await Promise.all(
+        entry.workspaceTempCleanup.map((fn) => fn().catch(() => {})),
+      );
     }
 
     resolveProgressViewApprovalPrompt(requestId);
