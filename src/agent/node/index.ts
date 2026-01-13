@@ -231,7 +231,11 @@ class BatchNode<
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
     const results = [];
-    for (const item of items) results.push(await super._exec(item));
+    for (const item of items) {
+      // Check abort signal before each batch item for responsive cancellation
+      if (this.signal?.aborted) break;
+      results.push(await super._exec(item));
+    }
     return results;
   }
 }
@@ -242,7 +246,11 @@ class ParallelBatchNode<
 > extends Node<S, P, Svc> {
   async _exec(items: unknown[]): Promise<unknown[]> {
     if (!items || !Array.isArray(items)) return [];
-    return Promise.all(items.map((item) => super._exec(item)));
+    // Check abort signal before starting parallel execution
+    if (this.signal?.aborted) return [];
+    const results = await Promise.all(items.map((item) => super._exec(item)));
+    // Note: Can't abort mid-execution, but at least we check before starting
+    return results;
   }
 }
 class Flow<
