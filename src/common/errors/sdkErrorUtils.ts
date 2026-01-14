@@ -91,81 +91,67 @@ interface SdkErrorEntry {
   retryable?: boolean;
 }
 
+/** Creates SDK error entry pairs for OpenAI and Anthropic error classes. */
+function createErrorPair(
+  openAiCtor: ErrorConstructor,
+  anthropicCtor: ErrorConstructor,
+  config: Omit<SdkErrorEntry, 'ctor'>,
+): SdkErrorEntry[] {
+  return [
+    { ctor: openAiCtor, ...config },
+    { ctor: anthropicCtor, ...config },
+  ];
+}
+
 const SDK_ERRORS: SdkErrorEntry[] = [
   // Connection errors (retryable)
-  {
-    ctor: OpenAIConnectionTimeoutError,
-    message: 'Connection timed out',
-    retryable: true,
-  },
-  {
-    ctor: AnthropicConnectionTimeoutError,
-    message: 'Connection timed out',
-    retryable: true,
-  },
-  { ctor: OpenAIConnectionError, message: 'Connection error', retryable: true },
-  {
-    ctor: AnthropicConnectionError,
+  ...createErrorPair(
+    OpenAIConnectionTimeoutError,
+    AnthropicConnectionTimeoutError,
+    { message: 'Connection timed out', retryable: true },
+  ),
+  ...createErrorPair(OpenAIConnectionError, AnthropicConnectionError, {
     message: 'Connection error',
     retryable: true,
-  },
+  }),
   // Abort errors (not retryable)
-  { ctor: OpenAIUserAbortError, message: 'Request aborted', retryable: false },
-  {
-    ctor: AnthropicUserAbortError,
+  ...createErrorPair(OpenAIUserAbortError, AnthropicUserAbortError, {
     message: 'Request aborted',
     retryable: false,
-  },
+  }),
   // HTTP errors (retryable derived from status code)
-  { ctor: OpenAIBadRequestError, fallbackStatusCode: StatusCodes.BAD_REQUEST },
-  {
-    ctor: AnthropicBadRequestError,
+  ...createErrorPair(OpenAIBadRequestError, AnthropicBadRequestError, {
     fallbackStatusCode: StatusCodes.BAD_REQUEST,
-  },
-  {
-    ctor: OpenAIAuthenticationError,
-    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  },
-  {
-    ctor: AnthropicAuthenticationError,
-    fallbackStatusCode: StatusCodes.UNAUTHORIZED,
-  },
-  {
-    ctor: OpenAIPermissionDeniedError,
-    fallbackStatusCode: StatusCodes.FORBIDDEN,
-  },
-  {
-    ctor: AnthropicPermissionDeniedError,
-    fallbackStatusCode: StatusCodes.FORBIDDEN,
-  },
-  { ctor: OpenAINotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
-  { ctor: AnthropicNotFoundError, fallbackStatusCode: StatusCodes.NOT_FOUND },
-  { ctor: OpenAIConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
-  { ctor: AnthropicConflictError, fallbackStatusCode: StatusCodes.CONFLICT },
-  {
-    ctor: OpenAIUnprocessableEntityError,
-    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
-  },
-  {
-    ctor: AnthropicUnprocessableEntityError,
-    fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY,
-  },
-  {
-    ctor: OpenAIRateLimitError,
+  }),
+  ...createErrorPair(
+    OpenAIAuthenticationError,
+    AnthropicAuthenticationError,
+    { fallbackStatusCode: StatusCodes.UNAUTHORIZED },
+  ),
+  ...createErrorPair(
+    OpenAIPermissionDeniedError,
+    AnthropicPermissionDeniedError,
+    { fallbackStatusCode: StatusCodes.FORBIDDEN },
+  ),
+  ...createErrorPair(OpenAINotFoundError, AnthropicNotFoundError, {
+    fallbackStatusCode: StatusCodes.NOT_FOUND,
+  }),
+  ...createErrorPair(OpenAIConflictError, AnthropicConflictError, {
+    fallbackStatusCode: StatusCodes.CONFLICT,
+  }),
+  ...createErrorPair(
+    OpenAIUnprocessableEntityError,
+    AnthropicUnprocessableEntityError,
+    { fallbackStatusCode: StatusCodes.UNPROCESSABLE_ENTITY },
+  ),
+  ...createErrorPair(OpenAIRateLimitError, AnthropicRateLimitError, {
     fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  },
-  {
-    ctor: AnthropicRateLimitError,
-    fallbackStatusCode: StatusCodes.TOO_MANY_REQUESTS,
-  },
-  {
-    ctor: OpenAIInternalServerError,
-    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  },
-  {
-    ctor: AnthropicInternalServerError,
-    fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-  },
+  }),
+  ...createErrorPair(
+    OpenAIInternalServerError,
+    AnthropicInternalServerError,
+    { fallbackStatusCode: StatusCodes.INTERNAL_SERVER_ERROR },
+  ),
   // Generic API errors (no fallback)
   { ctor: OpenAIAPIError },
   { ctor: AnthropicAPIError },
@@ -315,20 +301,8 @@ function detectProvider(err: unknown): string | undefined {
   }
 
   const lowered = name.toLowerCase();
-  if (lowered.includes('openai')) {
-    return 'openai';
-  }
-  if (lowered.includes('anthropic')) {
-    return 'anthropic';
-  }
-  if (lowered.includes('google')) {
-    return 'google';
-  }
-  if (lowered.includes('kimi')) {
-    return 'kimi';
-  }
-
-  return undefined;
+  const providers = ['openai', 'anthropic', 'google', 'kimi'] as const;
+  return providers.find((p) => lowered.includes(p));
 }
 
 /**
