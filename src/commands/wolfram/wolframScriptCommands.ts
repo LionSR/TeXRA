@@ -312,10 +312,4 @@ export function registerWolframScriptCommands(
     wolframScriptExecuteCommand,
     wolframScriptRunFileCommand,
   );
-
-  return {
-    testWolframScriptCommand,
-    wolframScriptExecuteCommand,
-    wolframScriptRunFileCommand,
-  };
 }
