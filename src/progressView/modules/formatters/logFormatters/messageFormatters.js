@@ -115,9 +115,8 @@ export function formatError(message) {
 
   const structured = normalizedPayload.structured ?? {};
   const isRelayError = structured.isRelayError === true;
-  const retryable = structured.retryable === true;
 
-  // Build summary text with relay/retryable indicators
+  // Build summary text with relay indicator
   let summaryText =
     (normalizedPayload.decodedText || message.text || '').trim() ||
     'Error occurred';
