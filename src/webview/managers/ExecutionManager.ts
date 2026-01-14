@@ -46,9 +46,7 @@ export class ExecutionManager {
       ? { agentType: AgentType.ToolUse, agentCategory: AgentCategory.ToolUse }
       : { agentCategory: AgentCategory.Workflow };
 
-    const outputFiles: string[] = isToolUse
-      ? []
-      : (message.outputFiles ?? []);
+    const outputFiles: string[] = isToolUse ? [] : (message.outputFiles ?? []);
     const useMultipleOutputs = isToolUse
       ? false
       : Boolean(message.outputFilesActive) || outputFiles.length > 1;

@@ -17,9 +17,8 @@ export function registerHistoryCommands(
   const historyViewProvider = new HistoryViewProvider(context);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      historyCommands.showHistory,
-      () => historyViewProvider.showHistoryView(),
+    vscode.commands.registerCommand(historyCommands.showHistory, () =>
+      historyViewProvider.showHistoryView(),
     ),
   );
 }
