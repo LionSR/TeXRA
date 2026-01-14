@@ -72,6 +72,4 @@ export function registerSampleProjectCommands(
   );
 
   context.subscriptions.push(createSampleProjectCommand);
-
-  return { createSampleProjectCommand };
 }

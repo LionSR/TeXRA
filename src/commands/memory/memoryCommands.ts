@@ -25,8 +25,4 @@ export function registerMemoryCommands(context: vscode.ExtensionContext) {
 
   // Add subscriptions
   context.subscriptions.push(showMemoryCommand);
-
-  return {
-    memoryViewProvider,
-  };
 }
