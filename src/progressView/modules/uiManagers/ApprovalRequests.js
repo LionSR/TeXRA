@@ -87,10 +87,10 @@ export class ApprovalRequests extends BaseUIRequestManager {
     }
 
     // Set request ID on element and all action buttons
-    element.dataset.requestId = request.requestId;
-    element.querySelectorAll('[data-action]').forEach((btn) => {
-      btn.dataset.requestId = request.requestId;
-    });
+    this._setRequestId(
+      [element, ...element.querySelectorAll('[data-action]')],
+      request.requestId,
+    );
 
     this._updateRequestElement(element, request);
     return element;
@@ -122,11 +122,13 @@ export class ApprovalRequests extends BaseUIRequestManager {
       setElementCheckedState(bypassButton, Boolean(this.isBypassActive));
     }
 
-    if (mainDiffButton) {
-      mainDiffButton.dataset.requestId = request.requestId;
-    }
+    // Set requestId on all diff-related elements
+    this._setRequestId(
+      [mainDiffButton, previewMenuItem, latexdiffMenuItem],
+      request.requestId,
+    );
 
-    // Show/hide dropdown trigger and set requestIds on menu items for LaTeX files
+    // Show/hide dropdown trigger for LaTeX files
     if (dropdownTrigger) {
       dropdownTrigger.toggleAttribute('hidden', !request.isLatex);
       dropdownTrigger.setAttribute('aria-expanded', 'false');
@@ -137,12 +139,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
         dropdownMenu.data = undefined;
         dropdownMenu.requestUpdate?.();
       }
-    }
-    if (previewMenuItem) {
-      previewMenuItem.dataset.requestId = request.requestId;
-    }
-    if (latexdiffMenuItem) {
-      latexdiffMenuItem.dataset.requestId = request.requestId;
     }
   }
 
@@ -172,23 +168,26 @@ export class ApprovalRequests extends BaseUIRequestManager {
     diffContainer.className = 'approval-request__diff';
     diffContainer.title = tooltip;
 
-    if (added > 0) {
+    const createDiffSpan = (className, text) => {
       const span = document.createElement('span');
-      span.className = 'approval-request__diff-added';
-      span.textContent = `+${added}`;
-      diffContainer.appendChild(span);
+      span.className = className;
+      span.textContent = text;
+      return span;
+    };
+
+    if (added > 0) {
+      diffContainer.appendChild(
+        createDiffSpan('approval-request__diff-added', `+${added}`),
+      );
     }
     if (removed > 0) {
-      const span = document.createElement('span');
-      span.className = 'approval-request__diff-removed';
-      span.textContent = `-${removed}`;
-      diffContainer.appendChild(span);
+      diffContainer.appendChild(
+        createDiffSpan('approval-request__diff-removed', `-${removed}`),
+      );
     }
-
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'approval-request__diff-label';
-    labelSpan.textContent = `${total} ${lineLabel}`;
-    diffContainer.appendChild(labelSpan);
+    diffContainer.appendChild(
+      createDiffSpan('approval-request__diff-label', `${total} ${lineLabel}`),
+    );
 
     // Build final meta content
     metaElem.textContent = '';
@@ -222,17 +221,17 @@ export class ApprovalRequests extends BaseUIRequestManager {
       return;
     }
 
+    // Map and validate action
     const mappedAction = action === 'open' ? 'openDiff' : action;
-    const validActions = new Set([
+    const validActions = [
       'openDiff',
       'approve',
       'approveAll',
       'reject',
       'showLatexdiff',
       'previewProposed',
-    ]);
-
-    if (!validActions.has(mappedAction)) {
+    ];
+    if (!validActions.includes(mappedAction)) {
       return;
     }
 
@@ -344,5 +343,15 @@ export class ApprovalRequests extends BaseUIRequestManager {
       }
       trigger.setAttribute('aria-expanded', 'false');
     }
+  }
+
+  /**
+   * Sets requestId on multiple elements.
+   * @private
+   * @param {(Element | null | undefined)[]} elements
+   * @param {string} requestId
+   */
+  _setRequestId(elements, requestId) {
+    elements.forEach((el) => el && (el.dataset.requestId = requestId));
   }
 }

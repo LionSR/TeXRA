@@ -61,6 +61,29 @@ function registerCleanup(
 }
 
 /**
+ * Execute a LaTeX operation with standard error handling and progress tracking.
+ */
+async function withLatexOperation(
+  entry: LatexPreviewEntry,
+  operationName: string,
+  operation: () => Promise<void>,
+): Promise<void> {
+  if (entry.latexOperationInProgress) {
+    return;
+  }
+  entry.latexOperationInProgress = true;
+
+  try {
+    await operation();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`${operationName} failed: ${message}`);
+  } finally {
+    entry.latexOperationInProgress = false;
+  }
+}
+
+/**
  * Create a temporary file for LaTeX compilation.
  * Location is controlled by texra.latexdiff.tempFileLocation setting.
  */
@@ -83,17 +106,17 @@ async function createTempFile(
   const basename = path.basename(originalPath, ext);
   const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, UUID_PREFIX_LENGTH)}${ext}`;
 
-  const isWorkspaceTemp = location === 'workspaceTemp';
-  let tempDir: string;
+  const tempDir =
+    location === 'workspaceTemp'
+      ? path.join(workspacePath, TEXRA_TEMP_DIR)
+      : path.dirname(
+          path.isAbsolute(originalPath)
+            ? originalPath
+            : path.join(workspacePath, originalPath),
+        );
 
-  if (isWorkspaceTemp) {
-    tempDir = path.join(workspacePath, TEXRA_TEMP_DIR);
+  if (location === 'workspaceTemp') {
     await fs.mkdir(tempDir, { recursive: true });
-  } else {
-    const absoluteOriginal = path.isAbsolute(originalPath)
-      ? originalPath
-      : path.join(workspacePath, originalPath);
-    tempDir = path.dirname(absoluteOriginal);
   }
 
   const tempPath = path.join(tempDir, tempFileName);
@@ -102,7 +125,7 @@ async function createTempFile(
   const cleanup = async () => {
     await fs.unlink(tempPath).catch(() => {});
     await cleanupLatexAuxFiles(tempPath);
-    if (isWorkspaceTemp) {
+    if (location === 'workspaceTemp') {
       await fs.rmdir(tempDir).catch(() => {});
     }
   };
@@ -116,12 +139,7 @@ async function createTempFile(
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
 ): Promise<void> {
-  if (entry.latexOperationInProgress) {
-    return;
-  }
-  entry.latexOperationInProgress = true;
-
-  try {
+  await withLatexOperation(entry, 'Preview', async () => {
     const content = await fs
       .readFile(entry.proposedUri.fsPath, 'utf8')
       .catch(() => entry.proposedContent);
@@ -139,24 +157,14 @@ export async function previewProposedLatex(
 
     const tempLocation = pathToLocation(tempPath);
     await openBuildDisplayIfTex(tempLocation, { preserveFocus: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`Preview failed: ${message}`);
-  } finally {
-    entry.latexOperationInProgress = false;
-  }
+  });
 }
 
 /**
  * Run latexdiff on the original and proposed content.
  */
 export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
-  if (entry.latexOperationInProgress) {
-    return;
-  }
-  entry.latexOperationInProgress = true;
-
-  try {
+  await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const originalContent = await fs
       .readFile(entry.originalUri.fsPath, 'utf8')
       .catch(() => entry.originalContent);
@@ -225,10 +233,5 @@ export async function runLatexdiff(entry: LatexPreviewEntry): Promise<void> {
 
     const diffLocation = pathToLocation(diffFilePath);
     await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`LaTeXdiff failed: ${message}`);
-  } finally {
-    entry.latexOperationInProgress = false;
-  }
+  });
 }
