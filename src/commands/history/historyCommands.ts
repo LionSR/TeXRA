@@ -11,16 +11,15 @@ export const historyCommands = {
 /**
  * Register the commands related to agent execution history
  */
-export function registerHistoryCommands(context: vscode.ExtensionContext) {
-  // Create history view provider
+export function registerHistoryCommands(
+  context: vscode.ExtensionContext,
+): void {
   const historyViewProvider = new HistoryViewProvider(context);
 
-  // Register show history command
-  const showHistoryCommand = vscode.commands.registerCommand(
-    historyCommands.showHistory,
-    () => historyViewProvider.showHistoryView(),
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      historyCommands.showHistory,
+      () => historyViewProvider.showHistoryView(),
+    ),
   );
-
-  // Add subscriptions
-  context.subscriptions.push(showHistoryCommand);
 }
