@@ -237,10 +237,11 @@ export type ApprovalActionMessage = z.infer<typeof ApprovalActionMessageSchema>;
 /** Followup task message from progress view */
 export const FollowupTaskMessageSchema = z.object({
   stream: z.string().min(1),
-  mode: z.enum(['workflow', 'merge']),
+  mode: z.enum(['chat', 'workflow', 'merge']),
   agent: z.string().min(1),
   model: z.string().min(1),
   includeInstruction: z.boolean().optional(),
+  initialQuestion: z.string().optional(),
 });
 
 export type FollowupTaskMessage = z.infer<typeof FollowupTaskMessageSchema>;
