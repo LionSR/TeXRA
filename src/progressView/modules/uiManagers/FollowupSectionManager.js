@@ -220,9 +220,7 @@ export class FollowupSectionManager {
     agentSelect.innerHTML = agents
       .map((agent) => {
         // Extract display name from source:name format
-        const displayName = agent.includes(':')
-          ? agent.split(':')[1]
-          : agent;
+        const displayName = agent.includes(':') ? agent.split(':')[1] : agent;
         const isSelected = isCurrentValid && agent === currentValue;
         return `<vscode-option value="${agent}"${isSelected ? ' selected' : ''}>${displayName}</vscode-option>`;
       })
@@ -282,13 +280,7 @@ export class FollowupSectionManager {
    * @private
    */
   _handleSetup() {
-    const payload = this._buildFollowupPayload();
-    if (!payload) return;
-
-    this.vscode.postMessage({
-      command: COMMANDS.SETUP_FOLLOWUP,
-      ...payload,
-    });
+    this._sendFollowupCommand(COMMANDS.SETUP_FOLLOWUP);
   }
 
   /**
@@ -297,13 +289,18 @@ export class FollowupSectionManager {
    * @private
    */
   _handleRun() {
+    this._sendFollowupCommand(COMMANDS.RUN_FOLLOWUP);
+  }
+
+  /**
+   * Send a followup command with the current payload.
+   * @private
+   */
+  _sendFollowupCommand(command) {
     const payload = this._buildFollowupPayload();
     if (!payload) return;
 
-    this.vscode.postMessage({
-      command: COMMANDS.RUN_FOLLOWUP,
-      ...payload,
-    });
+    this.vscode.postMessage({ command, ...payload });
   }
 
   /**

@@ -1133,7 +1133,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * @param {{ workflowAgents: string[], toolUseAgents: string[], models: string[], defaultMergeModel: string }} message
    */
   handleSetFollowupOptions(message) {
-    const { workflowAgents, toolUseAgents, models, defaultMergeModel } = message;
+    const { workflowAgents, toolUseAgents, models, defaultMergeModel } =
+      message;
     dom.followupSection?.setOptions?.({
       workflowAgents,
       toolUseAgents,
@@ -1166,7 +1167,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ? state.getRunInstruction(activeStream, runId)
       : null;
     const instructionPreview = instruction?.text
-      ? instruction.text.slice(0, 100) + (instruction.text.length > 100 ? '...' : '')
+      ? instruction.text.slice(0, 100) +
+        (instruction.text.length > 100 ? '...' : '')
       : null;
 
     // Count output files
@@ -1203,19 +1205,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const files = state.getRunFiles(activeStream, runId);
     if (!files) return false;
 
-    // Check if any round has files with actual content
-    const hasFiles = Object.values(files).some(
+    return Object.values(files).some(
       (roundFiles) => Array.isArray(roundFiles) && roundFiles.length > 0,
     );
-
-    console.log('[ProgressView] _hasOutputFilesForActiveStream:', {
-      activeStream,
-      runId,
-      hasFiles,
-      fileRounds: Object.keys(files).length,
-    });
-
-    return hasFiles;
   }
 }
 

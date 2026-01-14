@@ -2,25 +2,33 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage, toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   getMainWebview,
   safeExecuteCommand,
 } from '@frontend/system/commandUtils';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
-import { createFileMapping } from '@utils/files/fileMappingUtils';
-import { pathToLocation, WorkspaceFS } from '@utils/files';
 import * as logger from '@logger/logUtils';
+import { pathToLocation, WorkspaceFS } from '@utils/files';
+import { createFileMapping } from '@utils/files/fileMappingUtils';
 
 /**
- * Convert an absolute path to a relative workspace path if possible.
- * Returns the relative path if the file is within the workspace, otherwise returns the absolute path.
+ * Convert an absolute path to a workspace-relative path if possible.
+ * WorkspaceFS.relativePath returns the absolute path if not in workspace.
  */
-function preferRelativePath(absolutePath: string): string {
+function toRelativePath(absolutePath: string): string {
   if (!absolutePath) return absolutePath;
-  const relativePath = WorkspaceFS.relativePath(absolutePath);
-  // relativePath returns the absolute path if not in workspace
-  return relativePath;
+  return WorkspaceFS.relativePath(absolutePath);
+}
+
+/**
+ * Collect all input files from payload (primary + additional).
+ */
+function getAllInputFiles(payload: FollowupPayload): string[] {
+  return [
+    payload.originalInputFile,
+    ...(payload.originalInputFiles ?? []),
+  ].filter(Boolean);
 }
 
 const CHANNEL = 'followupTaskCommand';
@@ -75,10 +83,7 @@ async function setupFollowupTask(payload: FollowupPayload): Promise<void> {
 
   try {
     // Build file mapping from original inputs to outputs
-    const originalInputs = [
-      payload.originalInputFile,
-      ...(payload.originalInputFiles ?? []),
-    ].filter(Boolean);
+    const originalInputs = getAllInputFiles(payload);
 
     const outputLocations = payload.outputFiles.map((p) => pathToLocation(p));
     const inputLocations = originalInputs.map((p) => pathToLocation(p));
@@ -161,11 +166,7 @@ function buildFollowupConfig(
 
   if (mode === 'merge') {
     // Build list of all file pairs to merge
-    const allInputFiles = [
-      payload.originalInputFile,
-      ...(payload.originalInputFiles ?? []),
-    ].filter(Boolean);
-
+    const allInputFiles = getAllInputFiles(payload);
     const filePairs: Array<{ baseFile: string; editedFile: string }> = [];
     for (const inputFile of allInputFiles) {
       const outputForInput = fileMapping.get(inputFile);
@@ -230,16 +231,16 @@ function buildFollowupConfig(
     mode: 'workflow',
     agent,
     model,
-    inputFile: preferRelativePath(newInputFile),
-    inputFiles: newInputFiles.map(preferRelativePath),
+    inputFile: toRelativePath(newInputFile),
+    inputFiles: newInputFiles.map(toRelativePath),
     referenceFile: payload.originalReferenceFile
-      ? preferRelativePath(payload.originalReferenceFile)
+      ? toRelativePath(payload.originalReferenceFile)
       : undefined,
-    referenceFiles: payload.originalReferenceFiles?.map(preferRelativePath),
+    referenceFiles: payload.originalReferenceFiles?.map(toRelativePath),
     auxiliaryFile: payload.originalAuxiliaryFile
-      ? preferRelativePath(payload.originalAuxiliaryFile)
+      ? toRelativePath(payload.originalAuxiliaryFile)
       : undefined,
-    auxiliaryFiles: payload.originalAuxiliaryFiles?.map(preferRelativePath),
+    auxiliaryFiles: payload.originalAuxiliaryFiles?.map(toRelativePath),
     instruction: instruction ?? '',
   };
 }
@@ -297,39 +298,26 @@ async function executeFollowupImmediately(
 
   if (payload.mode === 'merge') {
     await executeMergeDirectly(config);
-  } else if (payload.mode === 'chat') {
-    // Execute chat agent with context
-    await safeExecuteCommand('texra.execute', [
-      {
-        config: {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFile,
-          inputFiles: config.inputFiles,
-          referenceFile: config.referenceFile,
-          referenceFiles: config.referenceFiles,
-          instruction: config.instruction,
-        },
-      },
-    ]);
-  } else {
-    // Execute workflow agent
-    await safeExecuteCommand('texra.execute', [
-      {
-        config: {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFile,
-          inputFiles: config.inputFiles,
-          referenceFile: config.referenceFile,
-          referenceFiles: config.referenceFiles,
-          auxiliaryFile: config.auxiliaryFile,
-          auxiliaryFiles: config.auxiliaryFiles,
-          instruction: config.instruction,
-        },
-      },
-    ]);
+    return;
   }
+
+  // Chat and workflow modes share the same execution pattern
+  // (chat mode simply omits auxiliary files)
+  await safeExecuteCommand('texra.execute', [
+    {
+      config: {
+        agent: config.agent,
+        model: config.model,
+        inputFile: config.inputFile,
+        inputFiles: config.inputFiles,
+        referenceFile: config.referenceFile,
+        referenceFiles: config.referenceFiles,
+        auxiliaryFile: config.auxiliaryFile,
+        auxiliaryFiles: config.auxiliaryFiles,
+        instruction: config.instruction,
+      },
+    },
+  ]);
 }
 
 /**
@@ -364,18 +352,14 @@ function buildChatConfig(
   contextSections.push('');
   contextSections.push('## Files');
 
-  const inputFiles = [
-    payload.originalInputFile,
-    ...(payload.originalInputFiles ?? []),
-  ].filter(Boolean);
-
+  const inputFiles = getAllInputFiles(payload);
   if (inputFiles.length > 0) {
-    const inputPaths = inputFiles.map((f) => toWorkspaceRelative(f));
+    const inputPaths = inputFiles.map(toRelativePath);
     contextSections.push(`- **Input files**: ${inputPaths.join(', ')}`);
   }
 
   if (payload.outputFiles.length > 0) {
-    const outputPaths = payload.outputFiles.map((f) => toWorkspaceRelative(f));
+    const outputPaths = payload.outputFiles.map(toRelativePath);
     contextSections.push(`- **Generated outputs**: ${outputPaths.join(', ')}`);
   }
 
@@ -400,26 +384,12 @@ function buildChatConfig(
     mode: 'chat',
     agent,
     model,
-    inputFile: preferRelativePath(newInputFile),
-    inputFiles: newInputFiles.map(preferRelativePath),
+    inputFile: toRelativePath(newInputFile),
+    inputFiles: newInputFiles.map(toRelativePath),
     referenceFile: payload.originalReferenceFile
-      ? preferRelativePath(payload.originalReferenceFile)
+      ? toRelativePath(payload.originalReferenceFile)
       : undefined,
-    referenceFiles: payload.originalReferenceFiles?.map(preferRelativePath),
+    referenceFiles: payload.originalReferenceFiles?.map(toRelativePath),
     instruction: fullInstruction,
   };
-}
-
-/**
- * Convert an absolute path to workspace-relative if possible.
- */
-function toWorkspaceRelative(absolutePath: string): string {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (workspaceFolder) {
-    const workspaceRoot = workspaceFolder.uri.fsPath;
-    if (absolutePath.startsWith(workspaceRoot)) {
-      return absolutePath.slice(workspaceRoot.length + 1); // +1 for the separator
-    }
-  }
-  return absolutePath;
 }
