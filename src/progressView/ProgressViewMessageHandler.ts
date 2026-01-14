@@ -815,11 +815,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       model: string;
       includeInstruction?: boolean;
       initialQuestion?: string;
+      workflowContext?: {
+        agentName?: string;
+        instructionPreview?: string;
+        fileCount?: number;
+      };
     },
     executeImmediately: boolean,
   ): Promise<void> {
-    const { stream, mode, agent, model, includeInstruction, initialQuestion } =
-      data;
+    const {
+      stream,
+      mode,
+      agent,
+      model,
+      includeInstruction,
+      initialQuestion,
+      workflowContext,
+    } = data;
 
     const streamId = stream as StreamTabId;
     const taskState = this.provider.state.getTaskState(streamId);
@@ -881,6 +893,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       originalAgent: originalConfig.agent,
       originalAgentDescription: originalAgentEntry?.description,
       originalModel: originalConfig.model,
+      // Multiple outputs flag from original config
+      useMultipleOutputs: originalConfig.useMultipleOutputs,
+      // Workflow context for display in main webview instruction
+      workflowContext,
     };
 
     try {

@@ -55,6 +55,14 @@ interface FollowupPayload {
   originalAgent?: string;
   originalAgentDescription?: string;
   originalModel?: string;
+  // Multiple outputs flag from original config
+  useMultipleOutputs?: boolean;
+  // Workflow context for display in main webview
+  workflowContext?: {
+    agentName?: string;
+    instructionPreview?: string;
+    fileCount?: number;
+  };
 }
 
 /**
@@ -242,6 +250,10 @@ function buildFollowupConfig(
       : undefined,
     auxiliaryFiles: payload.originalAuxiliaryFiles?.map(toRelativePath),
     instruction: instruction ?? '',
+    // Preserve original multiple outputs setting
+    useMultipleOutputs: payload.useMultipleOutputs,
+    // Workflow context for instruction display
+    workflowContext: payload.workflowContext,
   };
 }
 
@@ -391,5 +403,7 @@ function buildChatConfig(
       : undefined,
     referenceFiles: payload.originalReferenceFiles?.map(toRelativePath),
     instruction: fullInstruction,
+    // Workflow context for instruction display
+    workflowContext: payload.workflowContext,
   };
 }

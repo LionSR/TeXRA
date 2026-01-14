@@ -31,6 +31,7 @@ import {
   updateModelApiKeyBanner,
 } from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
+import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import {
   safeSetElementValue,
   safeSetElementChecked,
@@ -1383,6 +1384,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       baseFile,
       editedFile,
       workflowContext,
+      useMultipleOutputs,
     } = message;
 
     // Block saves during setup to avoid partial state persistence
@@ -1471,12 +1473,22 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         savedState.referenceFiles = referenceFiles || [];
         savedState.auxiliaryFile = auxiliaryFile || '';
         savedState.auxiliaryFiles = auxiliaryFiles || [];
+        // Preserve multiple outputs setting from previous workflow
+        if (useMultipleOutputs !== undefined) {
+          savedState.outputFilesActive = useMultipleOutputs;
+        }
       }
 
       mainViewState.set(savedState);
 
       // Apply session type UI (shows workflow dropdown, updates radio buttons)
       mainViewState.applySessionType(sessionType, { skipSave: true });
+
+      // Initialize output files container based on state (for Multiple Outputs)
+      if (mode !== 'merge' && useMultipleOutputs !== undefined) {
+        // Import is at module level, access via outputFilesManager
+        outputFilesManager.initializeOutputContainer();
+      }
     } finally {
       mainViewState.unblockSave();
     }

@@ -150,6 +150,18 @@ export class FollowupSectionManager {
 
     if (shouldShow) {
       this._requestFollowupOptions();
+
+      // Restore the saved mode for this stream, or use default
+      const activeStream = progressViewState.activeStream;
+      const savedMode = activeStream
+        ? progressViewState.streamFollowupMode.get(activeStream)
+        : null;
+      const modeToSet = savedMode || 'chat';
+      if (this._mode !== modeToSet) {
+        this._setMode(modeToSet, { persist: false });
+      }
+      // Sync radio group visual state
+      this._syncRadioGroup();
     }
   }
 
@@ -245,9 +257,21 @@ export class FollowupSectionManager {
    * Set the mode (chat, workflow, or merge) and update UI.
    * CSS handles visibility based on data-mode attribute.
    * @private
+   * @param {string} mode - The mode to set
+   * @param {Object} [options] - Optional configuration
+   * @param {boolean} [options.persist=true] - Whether to persist the mode for this stream
    */
-  _setMode(mode) {
+  _setMode(mode, options = {}) {
+    const { persist = true } = options;
     this._mode = mode;
+
+    // Persist mode for this stream
+    if (persist) {
+      const activeStream = progressViewState.activeStream;
+      if (activeStream) {
+        progressViewState.streamFollowupMode.set(activeStream, mode);
+      }
+    }
 
     // Sync radio group visual state
     const modeGroup = safeGetElementById('followupModeGroup');
