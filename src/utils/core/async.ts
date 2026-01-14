@@ -16,7 +16,6 @@ export async function sleep(ms: number): Promise<void> {
 /**
  * Wait for the specified duration with support for AbortSignal cancellation.
  * If the signal is aborted before the timeout completes, throws an AbortError.
- * Uses AbortSignal.timeout() when available for better performance.
  *
  * @param ms Number of milliseconds to wait
  * @param signal Optional AbortSignal to allow cancellation
@@ -27,46 +26,24 @@ export async function sleepWithAbort(
   signal?: AbortSignal,
 ): Promise<void> {
   if (!signal) {
-    await sleep(ms);
-    return;
+    return sleep(ms);
   }
 
   if (signal.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError');
   }
 
-  const supportsAbortTimeout = typeof AbortSignal.timeout === 'function';
-
-  await new Promise<void>((resolve, reject) => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let timeoutSignal: AbortSignal | undefined;
-
-    const cleanup = () => {
+  return new Promise<void>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
       signal.removeEventListener('abort', onAbort);
-      timeoutSignal?.removeEventListener('abort', onTimeout);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-    };
+      resolve();
+    }, ms);
 
     const onAbort = () => {
-      cleanup();
+      clearTimeout(timeoutId);
       reject(new DOMException('The operation was aborted.', 'AbortError'));
     };
 
-    const onTimeout = () => {
-      cleanup();
-      resolve();
-    };
-
     signal.addEventListener('abort', onAbort, { once: true });
-
-    if (supportsAbortTimeout) {
-      timeoutSignal = AbortSignal.timeout(ms);
-      timeoutSignal.addEventListener('abort', onTimeout, { once: true });
-    } else {
-      timeoutId = setTimeout(onTimeout, ms);
-    }
   });
 }

@@ -155,9 +155,3 @@ export async function handleClean(config: {
     bus.emit('clearMissingOutputs', { stream: streamId });
   }
 }
-
-export const cleanCommands = {
-  handleCleanSingle,
-  handleCleanMultiple,
-  handleClean,
-};
