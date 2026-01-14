@@ -5,7 +5,6 @@ import Transport from 'winston-transport';
 
 // Internal imports
 import {
-  ContextManagementDataSchema,
   ContextStateDataSchema,
   type ContextStateData,
 } from '@logger/AgentLogger';
@@ -147,44 +146,29 @@ export class VSCodeTransport extends Transport {
   }
 
   /**
-   * Parse and emit context state for CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
-   * Each message type uses a different schema and derivation logic.
+   * Emit context state for CONTEXT_STATE messages only.
+   *
+   * CONTEXT_STATE messages contain actual API token counts from responses,
+   * which are accurate. CONTEXT_MANAGEMENT messages contain pre-request
+   * estimates (e.g., from gpt-tokenizer) which can differ significantly
+   * from actual counts, especially for OpenAI models.
+   *
+   * By only emitting from CONTEXT_STATE, the UI always shows actual token
+   * counts rather than potentially inaccurate estimates.
    */
   private maybeEmitContextState(messageType: MessageType, data: unknown): void {
-    if (!data) return;
+    // Only emit context state from CONTEXT_STATE messages (actual API tokens)
+    // Skip CONTEXT_MANAGEMENT to avoid overwriting actual counts with estimates
+    if (messageType !== MESSAGE_TYPES.CONTEXT_STATE || !data) return;
 
-    switch (messageType) {
-      case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
-        const parseResult = ContextManagementDataSchema.safeParse(data);
-        if (!parseResult.success) return;
+    const parseResult = ContextStateDataSchema.safeParse(data);
+    if (!parseResult.success) return;
 
-        const contextData = parseResult.data;
-        const inputTokens =
-          contextData.tokensAfter ?? contextData.tokensBefore ?? 0;
-        const utilizationPercent =
-          contextData.utilizationAfter ??
-          (inputTokens / contextData.contextWindow) * 100;
-
-        this.emitContextState({
-          inputTokens,
-          contextWindow: contextData.contextWindow,
-          utilizationPercent,
-        });
-        break;
-      }
-      case MESSAGE_TYPES.CONTEXT_STATE: {
-        const parseResult = ContextStateDataSchema.safeParse(data);
-        if (!parseResult.success) return;
-
-        this.emitContextState(parseResult.data);
-        break;
-      }
-    }
+    this.emitContextState(parseResult.data);
   }
 
   /**
    * Emit context state to the progress view event bus.
-   * Shared helper for both CONTEXT_MANAGEMENT and CONTEXT_STATE messages.
    */
   private emitContextState(contextState: ContextStateData): void {
     bus.emit('updateContextState', {
