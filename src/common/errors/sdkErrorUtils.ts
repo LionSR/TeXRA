@@ -165,7 +165,7 @@ function isRetryableStatusCode(statusCode?: number): boolean {
  * Matches known SDK error types and returns structured error details.
  * Handles both message-only errors (connection/abort) and HTTP errors.
  */
-function matchSdkError(err: unknown): ProviderHttpErrorDetails | undefined {
+function matchSdkError(err: unknown): ProviderError | undefined {
   const entry = SDK_ERRORS.find(({ ctor }) => err instanceof ctor);
   if (!entry) {
     return undefined;
@@ -398,9 +398,7 @@ function determineRetryable(
   return isRetryableStatusCode(statusCode);
 }
 
-export function formatProviderHttpError(
-  err: unknown,
-): ProviderHttpErrorDetails {
+export function formatProviderHttpError(err: unknown): ProviderError {
   // Extract raw error body for all paths - useful for debugging relay errors
   const rawErrorBody = detectRawErrorBody(err);
 

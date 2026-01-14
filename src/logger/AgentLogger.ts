@@ -6,10 +6,8 @@ import { z } from 'zod';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
-import {
-  buildErrorLogData,
-  type ErrorLogContext,
-} from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
+import { type ErrorContext } from '@common/errors/schemas';
 import { sleep } from '@utils/core';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -280,7 +278,7 @@ export class AgentLogger {
   logError(
     message: string,
     err: unknown,
-    context?: ErrorLogContext,
+    context?: ErrorContext,
     groupId?: string,
   ): void {
     const errorData = buildErrorLogData(err, context);
@@ -301,7 +299,7 @@ export class AgentLogger {
    */
   logProgress(
     message: string,
-    context?: ErrorLogContext,
+    context?: ErrorContext,
     groupId?: string,
   ): void {
     this.info(message, {
